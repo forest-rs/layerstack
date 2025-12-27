@@ -1,0 +1,19 @@
+[package]
+name = "layerstack_conformance"
+description = "Conformance harness and golden tests for the layerstack crate."
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["composition", "usd", "conformance", "tests"]
+categories = ["development-tools::testing"]
+
+[lints]
+workspace = true
+
+[dependencies]
+layerstack = { path = "../layerstack" }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"

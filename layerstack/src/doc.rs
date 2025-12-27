@@ -1,0 +1,189 @@
+//! Document model: layers, prim specs, and composition arcs.
+//!
+//! Spec: AOUSD Core §6–§7 (scene description data model and opinions), plus §10
+//! for arc-related fields (variants/references).
+
+use alloc::{string::String, sync::Arc, vec::Vec};
+
+use hashbrown::HashMap;
+
+use crate::{
+    interner::TokenId,
+    interner::TokenInterner,
+    listop::ListOp,
+    path::{PathId, PathInterner},
+};
+
+/// Identifies a layer by stable ID.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct LayerId(pub u64);
+
+/// A plain value that can be resolved by the kernel.
+///
+/// Domain-specific types should typically be encoded as `Opaque` values in a
+/// higher-level profile crate.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Value {
+    /// No value.
+    Null,
+    /// A boolean.
+    Bool(bool),
+    /// An integer.
+    Int(i64),
+    /// A float.
+    Float(f64),
+    /// A UTF-8 string.
+    String(Arc<str>),
+    /// A token (interned string).
+    Token(TokenId),
+    /// Opaque bytes tagged with a type name.
+    Opaque {
+        /// The (interned) type name for these bytes.
+        type_name: TokenId,
+        /// The opaque payload.
+        bytes: Arc<[u8]>,
+    },
+}
+
+/// A field value stored on a prim spec.
+#[derive(Clone, Debug, PartialEq)]
+pub enum FieldValue {
+    /// A scalar (strongest wins).
+    Value(Value),
+    /// A list-op field over tokens (resolved by chaining).
+    TokenListOp(ListOp<TokenId>),
+    /// A list-op field over paths (resolved by chaining).
+    ///
+    /// This is used for relationship targets and other path-valued list fields.
+    ///
+    /// Spec: AOUSD Core §12.4 (`ListOps`), applied to path lists.
+    PathListOp(ListOp<PathId>),
+}
+
+/// A composition reference arc.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Reference {
+    /// The referenced layer/document.
+    pub layer: LayerId,
+    /// The referenced prim path within that layer/document.
+    pub prim_path: PathId,
+    /// Optional debug name / URI.
+    pub asset: Option<String>,
+}
+
+/// Opinions for a variant branch.
+#[derive(Clone, Debug, Default)]
+pub struct VariantSpec {
+    /// Authored fields within this variant.
+    pub fields: HashMap<TokenId, FieldValue>,
+}
+
+/// A variant set: a named collection of variants.
+#[derive(Clone, Debug, Default)]
+pub struct VariantSetSpec {
+    /// Variants keyed by variant name.
+    pub variants: HashMap<TokenId, VariantSpec>,
+}
+
+/// Opinions for a prim at a path.
+#[derive(Clone, Debug, Default)]
+pub struct PrimSpec {
+    /// Authored fields.
+    pub fields: HashMap<TokenId, FieldValue>,
+    /// Authored child prim names in this layer, in file order.
+    ///
+    /// This is used as a deterministic baseline for child ordering. Child
+    /// ordering is then further refined by applying `prim_order` (`reorder
+    /// nameChildren`) opinions across the prim stack.
+    ///
+    /// Spec: AOUSD Core §11 (stage population) and supplemental suite child
+    /// ordering tests (e.g. `BasicListEditingWithInherits_root`).
+    pub authored_children: Vec<TokenId>,
+    /// Authored variant selections (set -> chosen variant).
+    pub variant_selections: HashMap<TokenId, TokenId>,
+    /// Authored variant sets available at this prim.
+    pub variant_sets: HashMap<TokenId, VariantSetSpec>,
+    /// References arcs (a `ListOp` chain across the layer stack).
+    pub references: ListOp<Reference>,
+    /// Inherits arcs (a `ListOp` chain across the layer stack).
+    ///
+    /// Spec: AOUSD Core §10 (inherits arc), with ordering via §12.4 (`ListOps`).
+    pub inherits: ListOp<PathId>,
+    /// Optional child ordering (aka `primOrder` in the supplemental suite).
+    ///
+    /// This is used during stage population to produce deterministic, authored
+    /// child ordering (rather than purely lexicographic ordering).
+    ///
+    /// Spec: AOUSD Core §11 (stage population), plus the supplemental
+    /// parser’s `primOrder` field (`reorder nameChildren = [...]`).
+    pub prim_order: Option<Vec<TokenId>>,
+}
+
+/// A document layer.
+#[derive(Clone, Debug)]
+pub struct Layer {
+    /// Stable identifier for this layer.
+    pub id: LayerId,
+    /// Ordered sublayer includes. The layer itself is always stronger than its sublayers.
+    pub sublayers: Vec<LayerId>,
+    /// Prim specs keyed by prim path.
+    pub prims: HashMap<PathId, PrimSpec>,
+}
+
+/// A store for accessing layers and shared interners.
+pub trait LayerStore {
+    /// Returns a layer, if present.
+    fn layer(&self, id: LayerId) -> Option<&Layer>;
+
+    /// Returns the shared token interner.
+    fn tokens(&self) -> &TokenInterner;
+
+    /// Returns the shared token interner mutably, allowing interning of additional tokens.
+    fn tokens_mut(&mut self) -> &mut TokenInterner;
+
+    /// Returns the shared path interner.
+    fn paths(&self) -> &PathInterner;
+
+    /// Returns the shared path interner mutably, allowing interning of derived paths.
+    fn paths_mut(&mut self) -> &mut PathInterner;
+}
+
+/// A simple in-memory [`LayerStore`] implementation.
+#[derive(Debug, Default)]
+pub struct InMemoryStore {
+    /// Shared token interner for all layers in the store.
+    pub tokens: TokenInterner,
+    /// Shared path interner for all layers in the store.
+    pub paths: PathInterner,
+    /// Layers keyed by [`LayerId`].
+    pub layers: HashMap<LayerId, Layer>,
+}
+
+impl InMemoryStore {
+    /// Inserts (or replaces) a layer.
+    pub fn insert_layer(&mut self, layer: Layer) {
+        self.layers.insert(layer.id, layer);
+    }
+}
+
+impl LayerStore for InMemoryStore {
+    fn layer(&self, id: LayerId) -> Option<&Layer> {
+        self.layers.get(&id)
+    }
+
+    fn tokens(&self) -> &TokenInterner {
+        &self.tokens
+    }
+
+    fn tokens_mut(&mut self) -> &mut TokenInterner {
+        &mut self.tokens
+    }
+
+    fn paths(&self) -> &PathInterner {
+        &self.paths
+    }
+
+    fn paths_mut(&mut self) -> &mut PathInterner {
+        &mut self.paths
+    }
+}

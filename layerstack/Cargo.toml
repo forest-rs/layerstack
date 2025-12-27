@@ -1,0 +1,21 @@
+[package]
+name = "layerstack"
+description = "AOUSD-aligned, no_std-friendly composition kernel (layer stacks, variants, references, list ops)."
+readme = "../README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["composition", "layering", "usd", "variants", "no-std"]
+categories = ["data-structures"]
+
+[features]
+default = []
+std = []
+
+[lints]
+workspace = true
+
+[dependencies]
+hashbrown = { workspace = true }

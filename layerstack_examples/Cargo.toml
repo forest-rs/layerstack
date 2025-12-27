@@ -1,0 +1,17 @@
+[package]
+name = "layerstack_examples"
+description = "Runnable examples for the layerstack composition kernel."
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["composition", "layering", "usd", "examples"]
+categories = ["development-tools::testing"]
+
+[lints]
+workspace = true
+
+[dependencies]
+layerstack = { path = "../layerstack" }

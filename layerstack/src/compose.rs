@@ -1606,6 +1606,55 @@ fn add_specializes_edge_opinions(
             );
         }
     }
+
+    // Propagate references from the specialized class.
+    //
+    // When a specialized class references other prims, those referenced
+    // opinions propagate at specializes strength. This handles cases like
+    // ShinyPlastic_BlueShinyPlastic specializes ShinyPlastic which
+    // references ShinyPlasticLook.
+    //
+    // Spec: AOUSD Core §10 (specializes propagation through all arcs).
+    for &(remote_path_id, dest_path_id) in &mapping {
+        let refs = resolve_references_for_prim(store, local_stack, remote_path_id);
+        for (ref_index, reference) in refs.into_iter().enumerate() {
+            let ref_index = u16::try_from(ref_index).unwrap_or(u16::MAX);
+            let namespace_depth =
+                u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
+
+            // Follow the reference: map prims from the reference target
+            // to the destination prim, adding opinions at specializes strength.
+            add_specializes_edge_opinions(
+                store,
+                local_stack,
+                dest_path_id,
+                reference.prim_path,
+                outer_arc_kind,
+                namespace_depth,
+                ref_index,
+                out,
+                visited,
+                prim_order_out,
+                authored_children_out,
+            );
+
+            // Also try via the reference's own layer stack.
+            let ref_stack = LayerStack::gather(store, reference.layer);
+            add_specializes_edge_opinions(
+                store,
+                &ref_stack,
+                dest_path_id,
+                reference.prim_path,
+                outer_arc_kind,
+                namespace_depth,
+                ref_index,
+                out,
+                visited,
+                prim_order_out,
+                authored_children_out,
+            );
+        }
+    }
 }
 
 fn apply_child_order(

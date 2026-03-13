@@ -331,7 +331,6 @@ fn basic_specializes_and_inherits_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires specializes propagation through reference arcs"]
 fn basic_specializes_and_references_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("BasicSpecializesAndReferences_root");
     assert_layer_stack_matches(&loaded, &pcp_path);

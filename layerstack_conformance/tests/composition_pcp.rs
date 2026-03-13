@@ -370,7 +370,7 @@ fn basic_payload_diamond_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires specializes propagation through reference arcs"]
+#[ignore = "requires reference propagation inside specializes arcs"]
 fn tricky_nested_specializes_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("TrickyNestedSpecializes_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
@@ -386,7 +386,6 @@ fn tricky_nested_classes_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires specializes propagation through inherits arcs"]
 fn tricky_specializes_and_inherits_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("TrickySpecializesAndInherits_root");
     assert_layer_stack_matches(&loaded, &pcp_path);

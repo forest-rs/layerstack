@@ -283,6 +283,7 @@ fn add_inherit_opinions(
 ) {
     // Spec: AOUSD Core §10 (inherits arc).
     let mut visited: HashSet<(PathId, PathId)> = HashSet::new();
+    let mut visited_specializes: HashSet<(PathId, PathId)> = HashSet::new();
     for dest_root in paths.iter().copied() {
         let inherits = resolve_inherits_for_prim(store, local_stack, dest_root);
         for (arc_list_index, inherited_root) in inherits.into_iter().enumerate() {
@@ -299,6 +300,7 @@ fn add_inherit_opinions(
                 arc_list_index,
                 out,
                 &mut visited,
+                &mut visited_specializes,
                 prim_order_out,
                 authored_children_out,
             );
@@ -316,6 +318,7 @@ fn add_inherit_edge_opinions(
     arc_list_index: u16,
     out: &mut HashMap<PathId, PrimIndex>,
     visited: &mut HashSet<(PathId, PathId)>,
+    visited_specializes: &mut HashSet<(PathId, PathId)>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
 ) {
@@ -490,6 +493,7 @@ fn add_inherit_edge_opinions(
                     nested_index,
                     out,
                     visited,
+                    visited_specializes,
                     prim_order_out,
                     authored_children_out,
                 );
@@ -520,6 +524,7 @@ fn add_inherit_edge_opinions(
                         nested_index,
                         out,
                         visited,
+                        visited_specializes,
                         prim_order_out,
                         authored_children_out,
                     );
@@ -535,6 +540,77 @@ fn add_inherit_edge_opinions(
                 nested_index,
                 out,
                 visited,
+                visited_specializes,
+                prim_order_out,
+                authored_children_out,
+            );
+        }
+
+        // Propagate specializes from the inherited class.
+        //
+        // When an inherited class specializes another class, those opinions
+        // propagate at specializes strength. This completes the LIVERPS chain
+        // for inherits: inherits sees the full composition of the inherited
+        // namespace including its specializes.
+        //
+        // Spec: AOUSD Core §10 (LIVERPS composition ordering).
+        let nested_specializes =
+            resolve_specializes_for_prim(store, local_stack, remote_path_id);
+        for (spec_index, specialized) in nested_specializes.into_iter().enumerate() {
+            let spec_index = u16::try_from(spec_index).unwrap_or(u16::MAX);
+            let namespace_depth =
+                u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
+
+            let translated =
+                remap_path_id(store, &base_path, &inherited_path, specialized);
+            if translated != specialized {
+                add_specializes_edge_opinions(
+                    store,
+                    local_stack,
+                    dest_path_id,
+                    translated,
+                    outer_arc_kind,
+                    namespace_depth,
+                    spec_index,
+                    out,
+                    visited_specializes,
+                    prim_order_out,
+                    authored_children_out,
+                );
+            }
+
+            if let (Some(base_parent), Some(inherited_parent)) =
+                (base_path.parent(), inherited_path.parent())
+            {
+                let parent_translated =
+                    remap_path_id(store, &base_parent, &inherited_parent, specialized);
+                if parent_translated != translated && parent_translated != specialized {
+                    add_specializes_edge_opinions(
+                        store,
+                        local_stack,
+                        dest_path_id,
+                        parent_translated,
+                        outer_arc_kind,
+                        namespace_depth,
+                        spec_index,
+                        out,
+                        visited_specializes,
+                        prim_order_out,
+                        authored_children_out,
+                    );
+                }
+            }
+
+            add_specializes_edge_opinions(
+                store,
+                local_stack,
+                dest_path_id,
+                specialized,
+                outer_arc_kind,
+                namespace_depth,
+                spec_index,
+                out,
+                visited_specializes,
                 prim_order_out,
                 authored_children_out,
             );
@@ -771,6 +847,7 @@ fn add_reference_edge_opinions(
                     inherit_index,
                     out,
                     visited_inherits,
+                    visited_specializes,
                     prim_order_out,
                     authored_children_out,
                 );
@@ -786,6 +863,7 @@ fn add_reference_edge_opinions(
                 inherit_index,
                 out,
                 visited_inherits,
+                visited_specializes,
                 prim_order_out,
                 authored_children_out,
             );
@@ -1096,6 +1174,7 @@ fn add_payload_edge_opinions(
                     inherit_index,
                     out,
                     visited_inherits,
+                    visited_specializes,
                     prim_order_out,
                     authored_children_out,
                 );
@@ -1111,6 +1190,7 @@ fn add_payload_edge_opinions(
                 inherit_index,
                 out,
                 visited_inherits,
+                visited_specializes,
                 prim_order_out,
                 authored_children_out,
             );
@@ -1411,29 +1491,31 @@ fn add_specializes_edge_opinions(
                     prim_order_out,
                     authored_children_out,
                 );
+            }
 
-                if let (Some(base_parent), Some(specialized_parent)) =
-                    (base_path.parent(), specialized_path.parent())
-                {
-                    let parent_translated =
-                        remap_path_id(store, &base_parent, &specialized_parent, nested);
-                    if parent_translated != translated && parent_translated != nested {
-                        add_specializes_edge_opinions(
-                            store,
-                            local_stack,
-                            dest_path_id,
-                            parent_translated,
-                            outer_arc_kind,
-                            namespace_depth,
-                            nested_index,
-                            out,
-                            visited,
-                            prim_order_out,
-                            authored_children_out,
-                        );
-                    }
+            // Parent-level remap for sibling specializes targets.
+            if let (Some(base_parent), Some(specialized_parent)) =
+                (base_path.parent(), specialized_path.parent())
+            {
+                let parent_translated =
+                    remap_path_id(store, &base_parent, &specialized_parent, nested);
+                if parent_translated != translated && parent_translated != nested {
+                    add_specializes_edge_opinions(
+                        store,
+                        local_stack,
+                        dest_path_id,
+                        parent_translated,
+                        outer_arc_kind,
+                        namespace_depth,
+                        nested_index,
+                        out,
+                        visited,
+                        prim_order_out,
+                        authored_children_out,
+                    );
                 }
             }
+
             add_specializes_edge_opinions(
                 store,
                 local_stack,

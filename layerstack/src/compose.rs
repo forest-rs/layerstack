@@ -493,34 +493,36 @@ fn add_inherit_edge_opinions(
                     prim_order_out,
                     authored_children_out,
                 );
+            }
 
-                // Also allow translation relative to the parent mapping site.
-                // This is needed for fixtures where the inherited namespace
-                // provides local class opinions under the destination prim’s
-                // parent (e.g. local `_class_*` prims).
-                //
-                // Spec: AOUSD Core §10 (inherits arc) and supplemental fixtures
-                // involving nested classes (e.g. `BasicLocalAndGlobalClassCombination_root`).
-                if let (Some(base_parent), Some(inherited_parent)) =
-                    (base_path.parent(), inherited_path.parent())
-                {
-                    let parent_translated =
-                        remap_path_id(store, &base_parent, &inherited_parent, nested);
-                    if parent_translated != translated && parent_translated != nested {
-                        add_inherit_edge_opinions(
-                            store,
-                            local_stack,
-                            dest_path_id,
-                            parent_translated,
-                            outer_arc_kind,
-                            namespace_depth,
-                            nested_index,
-                            out,
-                            visited,
-                            prim_order_out,
-                            authored_children_out,
-                        );
-                    }
+            // Also allow translation relative to the parent mapping site.
+            // This handles cases where the inherited class’s own inherits
+            // target is a sibling rather than a descendant (e.g. /Looks/Metal
+            // inherits /Looks/Material which inherits /Looks/BaseMaterial —
+            // the parent remap /Looks → /Model/Looks correctly translates
+            // /Looks/BaseMaterial → /Model/Looks/BaseMaterial).
+            //
+            // Spec: AOUSD Core §10 (inherits arc) and supplemental fixtures
+            // involving nested classes (e.g. `BasicLocalAndGlobalClassCombination_root`).
+            if let (Some(base_parent), Some(inherited_parent)) =
+                (base_path.parent(), inherited_path.parent())
+            {
+                let parent_translated =
+                    remap_path_id(store, &base_parent, &inherited_parent, nested);
+                if parent_translated != translated && parent_translated != nested {
+                    add_inherit_edge_opinions(
+                        store,
+                        local_stack,
+                        dest_path_id,
+                        parent_translated,
+                        outer_arc_kind,
+                        namespace_depth,
+                        nested_index,
+                        out,
+                        visited,
+                        prim_order_out,
+                        authored_children_out,
+                    );
                 }
             }
             add_inherit_edge_opinions(
@@ -1387,7 +1389,7 @@ fn add_specializes_edge_opinions(
     }
 
     // Handle nested specializes arcs.
-    for (remote_path_id, dest_path_id) in mapping {
+    for &(remote_path_id, dest_path_id) in &mapping {
         let nested_specializes = resolve_specializes_for_prim(store, local_stack, remote_path_id);
         for (nested_index, nested) in nested_specializes.into_iter().enumerate() {
             let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
@@ -1437,6 +1439,81 @@ fn add_specializes_edge_opinions(
                 local_stack,
                 dest_path_id,
                 nested,
+                outer_arc_kind,
+                namespace_depth,
+                nested_index,
+                out,
+                visited,
+                prim_order_out,
+                authored_children_out,
+            );
+        }
+    }
+
+    // Propagate inherits from the specialized class.
+    //
+    // Specializes propagates through all levels of referencing per the spec.
+    // When a specialized class inherits from other classes, those classes
+    // form a hierarchy that is also propagated. Their opinions remain weaker
+    // than the specialized class but still participate.
+    //
+    // Spec: AOUSD Core §10 (specializes arc propagation).
+    for &(remote_path_id, dest_path_id) in &mapping {
+        let nested_inherits = resolve_inherits_for_prim(store, local_stack, remote_path_id);
+        for (nested_index, inherited) in nested_inherits.into_iter().enumerate() {
+            let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
+            let namespace_depth =
+                u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
+
+            let translated = remap_path_id(store, &base_path, &specialized_path, inherited);
+            if translated != inherited {
+                add_specializes_edge_opinions(
+                    store,
+                    local_stack,
+                    dest_path_id,
+                    translated,
+                    outer_arc_kind,
+                    namespace_depth,
+                    nested_index,
+                    out,
+                    visited,
+                    prim_order_out,
+                    authored_children_out,
+                );
+            }
+
+            // Also try parent-level remap. This handles the case where
+            // an inherited class is a sibling of the specialized class (e.g.
+            // /Looks/Metal specializes, /Looks/Material inherited — they share
+            // /Looks). The parent remap uses the reference namespace mapping
+            // to find the correct translated path (e.g. /Model/Looks/Material).
+            if let (Some(base_parent), Some(specialized_parent)) =
+                (base_path.parent(), specialized_path.parent())
+            {
+                let parent_translated =
+                    remap_path_id(store, &base_parent, &specialized_parent, inherited);
+                if parent_translated != translated && parent_translated != inherited {
+                    add_specializes_edge_opinions(
+                        store,
+                        local_stack,
+                        dest_path_id,
+                        parent_translated,
+                        outer_arc_kind,
+                        namespace_depth,
+                        nested_index,
+                        out,
+                        visited,
+                        prim_order_out,
+                        authored_children_out,
+                    );
+                }
+            }
+
+            add_specializes_edge_opinions(
+                store,
+                local_stack,
+                dest_path_id,
+                inherited,
                 outer_arc_kind,
                 namespace_depth,
                 nested_index,

@@ -510,18 +510,30 @@ fn parse_reference_rhs(rhs: &str) -> Option<Vec<ReferenceSpec>> {
 
 fn parse_reference_spec(spec: &str) -> Option<ReferenceSpec> {
     let spec = spec.trim();
-    let first_at = spec.find('@')?;
-    let rest = &spec[first_at + 1..];
-    let second_at = rest.find('@')?;
-    let asset = &rest[..second_at];
 
-    let rest = &rest[second_at + 1..];
-    let lt = rest.find('<')?;
-    let gt = rest.find('>')?;
-    let prim_path = rest[lt + 1..gt].trim();
+    // Try asset reference first: @asset@</Path>
+    if let Some(first_at) = spec.find('@') {
+        let rest = &spec[first_at + 1..];
+        let second_at = rest.find('@')?;
+        let asset = &rest[..second_at];
 
+        let rest = &rest[second_at + 1..];
+        let lt = rest.find('<')?;
+        let gt = rest.find('>')?;
+        let prim_path = rest[lt + 1..gt].trim();
+
+        return Some(ReferenceSpec {
+            asset: asset.to_string(),
+            prim_path: prim_path.to_string(),
+        });
+    }
+
+    // Internal reference: </Path> (no asset)
+    let lt = spec.find('<')?;
+    let gt = spec.find('>')?;
+    let prim_path = spec[lt + 1..gt].trim();
     Some(ReferenceSpec {
-        asset: asset.to_string(),
+        asset: String::new(),
         prim_path: prim_path.to_string(),
     })
 }
@@ -692,6 +704,7 @@ fn resolve_references(
     references: &ReferencesDef,
     base_dir: &Path,
     root_dir: &Path,
+    current_layer_id: LayerId,
     store: &mut InMemoryStore,
     next_layer_id: &mut u64,
     by_path: &mut std::collections::BTreeMap<PathBuf, LayerId>,
@@ -706,6 +719,7 @@ fn resolve_references(
                         spec,
                         base_dir,
                         root_dir,
+                        current_layer_id,
                         store,
                         next_layer_id,
                         by_path,
@@ -722,6 +736,7 @@ fn resolve_references(
                     spec,
                     base_dir,
                     root_dir,
+                    current_layer_id,
                     store,
                     next_layer_id,
                     by_path,
@@ -737,6 +752,7 @@ fn resolve_references(
                     spec,
                     base_dir,
                     root_dir,
+                    current_layer_id,
                     store,
                     next_layer_id,
                     by_path,
@@ -807,12 +823,27 @@ fn resolve_reference_spec(
     spec: &ReferenceSpec,
     base_dir: &Path,
     root_dir: &Path,
+    current_layer_id: LayerId,
     store: &mut InMemoryStore,
     next_layer_id: &mut u64,
     by_path: &mut std::collections::BTreeMap<PathBuf, LayerId>,
     layer_names: &mut std::collections::BTreeMap<LayerId, String>,
 ) -> Reference {
     let asset = spec.asset.trim();
+
+    let prim =
+        LsPath::parse_absolute(spec.prim_path.trim(), &mut store.tokens).expect("reference path");
+    let prim_path = store.paths.intern(prim);
+
+    // Internal reference (no asset path) — same layer.
+    if asset.is_empty() {
+        return Reference {
+            layer: current_layer_id,
+            prim_path,
+            asset: None,
+        };
+    }
+
     let asset_rel = asset.strip_prefix("./").unwrap_or(asset);
     let asset_path = base_dir.join(asset_rel);
 
@@ -824,10 +855,6 @@ fn resolve_reference_spec(
         by_path,
         layer_names,
     );
-
-    let prim =
-        LsPath::parse_absolute(spec.prim_path.trim(), &mut store.tokens).expect("reference path");
-    let prim_path = store.paths.intern(prim);
 
     Reference {
         layer,
@@ -926,6 +953,7 @@ fn load_layer_with_prims(
             &prim.references,
             path.parent().unwrap_or(Path::new(".")),
             root_dir,
+            id,
             store,
             next_layer_id,
             by_path,
@@ -941,6 +969,7 @@ fn load_layer_with_prims(
             },
             path.parent().unwrap_or(Path::new(".")),
             root_dir,
+            id,
             store,
             next_layer_id,
             by_path,

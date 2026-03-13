@@ -322,3 +322,73 @@ fn basic_nested_payload_root_layer_stack_matches() {
     assert_layer_stack_matches(&loaded, &pcp_path);
     assert_pcp_composing(&mut loaded, &pcp_path);
 }
+
+#[test]
+fn basic_specializes_and_inherits_root_layer_stack_matches() {
+    let (mut loaded, pcp_path) = load_fixture("BasicSpecializesAndInherits_root");
+    assert_layer_stack_matches(&loaded, &pcp_path);
+    assert_pcp_composing(&mut loaded, &pcp_path);
+}
+
+#[test]
+#[ignore = "requires specializes propagation through reference arcs"]
+fn basic_specializes_and_references_root_layer_stack_matches() {
+    let (mut loaded, pcp_path) = load_fixture("BasicSpecializesAndReferences_root");
+    assert_layer_stack_matches(&loaded, &pcp_path);
+    assert_pcp_composing(&mut loaded, &pcp_path);
+}
+
+#[test]
+#[ignore = "requires specializes propagation through variant arcs"]
+fn basic_specializes_and_variants_root_layer_stack_matches() {
+    let (mut loaded, pcp_path) = load_fixture("BasicSpecializesAndVariants_root");
+    assert_layer_stack_matches(&loaded, &pcp_path);
+    assert_pcp_composing(&mut loaded, &pcp_path);
+}
+
+#[test]
+#[ignore = "requires nested variant sets within variant branches"]
+fn basic_nested_variants_root_layer_stack_matches() {
+    let (mut loaded, pcp_path) = load_fixture("BasicNestedVariants_root");
+    assert_layer_stack_matches(&loaded, &pcp_path);
+    assert_pcp_composing(&mut loaded, &pcp_path);
+}
+
+#[test]
+#[ignore = "requires nested variant sets within variant branches"]
+fn basic_nested_variants_with_same_name_root_layer_stack_matches() {
+    let (mut loaded, pcp_path) = load_fixture("BasicNestedVariantsWithSameName_root");
+    assert_layer_stack_matches(&loaded, &pcp_path);
+    assert_pcp_composing(&mut loaded, &pcp_path);
+}
+
+#[test]
+fn basic_payload_diamond_root_layer_stack_matches() {
+    let (mut loaded, pcp_path) = load_fixture("BasicPayloadDiamond_root");
+    assert_layer_stack_matches(&loaded, &pcp_path);
+    assert_pcp_composing(&mut loaded, &pcp_path);
+}
+
+#[test]
+#[ignore = "requires specializes propagation through reference arcs"]
+fn tricky_nested_specializes_root_layer_stack_matches() {
+    let (mut loaded, pcp_path) = load_fixture("TrickyNestedSpecializes_root");
+    assert_layer_stack_matches(&loaded, &pcp_path);
+    assert_pcp_composing(&mut loaded, &pcp_path);
+}
+
+#[test]
+#[ignore = "requires inherits child ordering fix"]
+fn tricky_nested_classes_root_layer_stack_matches() {
+    let (mut loaded, pcp_path) = load_fixture("TrickyNestedClasses_root");
+    assert_layer_stack_matches(&loaded, &pcp_path);
+    assert_pcp_composing(&mut loaded, &pcp_path);
+}
+
+#[test]
+#[ignore = "requires specializes propagation through inherits arcs"]
+fn tricky_specializes_and_inherits_root_layer_stack_matches() {
+    let (mut loaded, pcp_path) = load_fixture("TrickySpecializesAndInherits_root");
+    assert_layer_stack_matches(&loaded, &pcp_path);
+    assert_pcp_composing(&mut loaded, &pcp_path);
+}

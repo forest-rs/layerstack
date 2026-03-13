@@ -518,3 +518,135 @@ fn token_listop_prepend_and_append_match_supplemental_list_editing_order() {
         ]
     );
 }
+
+#[test]
+fn specifier_resolution_follows_strongest_defining() {
+    use layerstack::Specifier;
+
+    let mut store = InMemoryStore::default();
+    let prim = path(&mut store, "/P");
+
+    // Layer 1 (strongest): over — non-defining
+    let mut root_layer = Layer {
+        id: LayerId(1),
+        sublayers: vec![LayerId(2), LayerId(3)],
+        prims: HashMap::new(),
+    };
+    let root_spec = PrimSpec {
+        specifier: Some(Specifier::Over),
+        ..PrimSpec::default()
+    };
+    root_layer.prims.insert(prim, root_spec);
+    store.insert_layer(root_layer);
+
+    // Layer 2: def — strongest defining opinion
+    let mut sub1 = Layer {
+        id: LayerId(2),
+        sublayers: vec![],
+        prims: HashMap::new(),
+    };
+    let sub1_spec = PrimSpec {
+        specifier: Some(Specifier::Def),
+        ..PrimSpec::default()
+    };
+    sub1.prims.insert(prim, sub1_spec);
+    store.insert_layer(sub1);
+
+    // Layer 3: class — weaker defining opinion
+    let mut sub2 = Layer {
+        id: LayerId(3),
+        sublayers: vec![],
+        prims: HashMap::new(),
+    };
+    let sub2_spec = PrimSpec {
+        specifier: Some(Specifier::Class),
+        ..PrimSpec::default()
+    };
+    sub2.prims.insert(prim, sub2_spec);
+    store.insert_layer(sub2);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    // Strongest defining opinion is def from layer 2.
+    assert_eq!(
+        stage.resolve_specifier(prim, &store),
+        Some(Specifier::Def)
+    );
+    assert!(stage.is_defined(prim, &store));
+    assert!(!stage.is_abstract(prim, &store));
+}
+
+#[test]
+fn specifier_all_over_is_undefining() {
+    use layerstack::Specifier;
+
+    let mut store = InMemoryStore::default();
+    let prim = path(&mut store, "/P");
+
+    let mut root_layer = Layer {
+        id: LayerId(1),
+        sublayers: vec![LayerId(2)],
+        prims: HashMap::new(),
+    };
+    root_layer.prims.insert(
+        prim,
+        PrimSpec {
+            specifier: Some(Specifier::Over),
+            ..PrimSpec::default()
+        },
+    );
+    store.insert_layer(root_layer);
+
+    let mut sub = Layer {
+        id: LayerId(2),
+        sublayers: vec![],
+        prims: HashMap::new(),
+    };
+    sub.prims.insert(
+        prim,
+        PrimSpec {
+            specifier: Some(Specifier::Over),
+            ..PrimSpec::default()
+        },
+    );
+    store.insert_layer(sub);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    assert_eq!(
+        stage.resolve_specifier(prim, &store),
+        Some(Specifier::Over)
+    );
+    assert!(!stage.is_defined(prim, &store));
+}
+
+#[test]
+fn specifier_class_is_abstract() {
+    use layerstack::Specifier;
+
+    let mut store = InMemoryStore::default();
+    let prim = path(&mut store, "/P");
+
+    let mut root_layer = Layer {
+        id: LayerId(1),
+        sublayers: vec![],
+        prims: HashMap::new(),
+    };
+    root_layer.prims.insert(
+        prim,
+        PrimSpec {
+            specifier: Some(Specifier::Class),
+            ..PrimSpec::default()
+        },
+    );
+    store.insert_layer(root_layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    assert_eq!(
+        stage.resolve_specifier(prim, &store),
+        Some(Specifier::Class)
+    );
+    assert!(stage.is_defined(prim, &store));
+    assert!(stage.is_abstract(prim, &store));
+}

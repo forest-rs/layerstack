@@ -7,7 +7,7 @@ use alloc::{vec, vec::Vec};
 use hashbrown::HashMap;
 
 use crate::{
-    doc::{FieldValue, LayerId, LayerStore, Value},
+    doc::{FieldValue, LayerId, LayerStore, Specifier, Value},
     interner::TokenId,
     listop::{ListOp, resolve_list_chain},
     path::PathId,
@@ -234,6 +234,66 @@ impl Stage {
     #[must_use]
     pub fn has_prim(&self, path: PathId) -> bool {
         self.prims.contains_key(&path)
+    }
+
+    /// Resolves the specifier for a composed prim.
+    ///
+    /// Specifier resolution follows special rules per §12.2.1:
+    /// - If all contributing opinions are `over`, the prim is *undefining* → `Over`.
+    /// - If the strongest defining opinion is `class`, the prim is *abstractly defining* → `Class`.
+    /// - If the strongest defining opinion is `def`, the prim is *concretely defining* → `Def`.
+    ///
+    /// Spec: AOUSD Core §12.2.1 (specifier resolution), §7.6.
+    #[must_use]
+    pub fn resolve_specifier(
+        &self,
+        prim: PathId,
+        store: &dyn LayerStore,
+    ) -> Option<Specifier> {
+        let index = self.prims.get(&prim)?;
+        let mut strongest_defining: Option<Specifier> = None;
+
+        // Walk sources in strength order (strongest first) and find the
+        // strongest defining opinion (def or class).
+        for key in &index.sources {
+            let Some(layer) = store.layer(key.layer_id) else {
+                continue;
+            };
+            let Some(spec) = layer.prims.get(&key.spec_path) else {
+                continue;
+            };
+            match spec.specifier {
+                Some(Specifier::Def) | Some(Specifier::Class) => {
+                    if strongest_defining.is_none() {
+                        strongest_defining = spec.specifier;
+                    }
+                }
+                Some(Specifier::Over) | None => {}
+            }
+        }
+
+        Some(strongest_defining.unwrap_or(Specifier::Over))
+    }
+
+    /// Returns `true` if the prim is *defined* per §11.5.
+    ///
+    /// A prim is defined if its resolved specifier is `def` or `class`
+    /// (i.e. not purely `over`).
+    #[must_use]
+    pub fn is_defined(&self, prim: PathId, store: &dyn LayerStore) -> bool {
+        matches!(
+            self.resolve_specifier(prim, store),
+            Some(Specifier::Def) | Some(Specifier::Class)
+        )
+    }
+
+    /// Returns `true` if the prim is *abstract* (specifier resolves to `class`).
+    #[must_use]
+    pub fn is_abstract(&self, prim: PathId, store: &dyn LayerStore) -> bool {
+        matches!(
+            self.resolve_specifier(prim, store),
+            Some(Specifier::Class)
+        )
     }
 
     fn provenance_for(&self, field: TokenId, strongest: &Opinion) -> Option<Provenance> {

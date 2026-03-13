@@ -18,6 +18,20 @@ use crate::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LayerId(pub u64);
 
+/// Prim specifier: determines how a prim spec contributes to composition.
+///
+/// Spec: AOUSD Core §7.6 (specifier field), §12.2.1 (specifier resolution).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Specifier {
+    /// Concretely defining (`def`). The prim is fully defined.
+    Def,
+    /// Non-defining (`over`). Provides opinions without defining a new prim.
+    Over,
+    /// Abstractly defining (`class`). Defines a prim template not meant for
+    /// direct use.
+    Class,
+}
+
 /// A plain value that can be resolved by the kernel.
 ///
 /// Domain-specific types should typically be encoded as `Opaque` values in a
@@ -88,6 +102,10 @@ pub struct VariantSetSpec {
 /// Opinions for a prim at a path.
 #[derive(Clone, Debug, Default)]
 pub struct PrimSpec {
+    /// The prim specifier (`def`, `over`, or `class`).
+    ///
+    /// Spec: AOUSD Core §7.6 (specifier field), §12.2.1 (specifier resolution).
+    pub specifier: Option<Specifier>,
     /// Authored fields.
     pub fields: HashMap<TokenId, FieldValue>,
     /// Authored child prim names in this layer, in file order.

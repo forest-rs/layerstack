@@ -126,6 +126,7 @@ pub fn load_entry_usda_sublayers_only(entry: &Path) -> LoadedStage {
 #[derive(Debug)]
 struct PrimDef {
     path: String,
+    specifier: layerstack::doc::Specifier,
     custom_double_attrs: Vec<String>,
     string_attrs: Vec<String>,
     references: ReferencesDef,
@@ -181,6 +182,7 @@ struct TargetsDef {
 #[derive(Clone, Debug)]
 struct PendingPrim {
     name: String,
+    specifier: layerstack::doc::Specifier,
     references: ReferencesDef,
     inherits: InheritsDef,
     specializes: SpecializesDef,
@@ -253,8 +255,16 @@ fn parse_prim_defs(text: &str) -> Vec<PrimDef> {
         if (line.starts_with("def ") || line.starts_with("over ") || line.starts_with("class "))
             && let Some(name) = parse_prim_name(line)
         {
+            let specifier = if line.starts_with("def ") {
+                layerstack::doc::Specifier::Def
+            } else if line.starts_with("class ") {
+                layerstack::doc::Specifier::Class
+            } else {
+                layerstack::doc::Specifier::Over
+            };
             pending = Some(PendingPrim {
                 name: name.to_string(),
+                specifier,
                 references: ReferencesDef::default(),
                 inherits: InheritsDef::default(),
                 specializes: SpecializesDef::default(),
@@ -384,6 +394,7 @@ fn parse_prim_defs(text: &str) -> Vec<PrimDef> {
                         brace_stack.push(true);
                         out.push(PrimDef {
                             path: format!("/{}", scope.join("/")),
+                            specifier: pending.specifier,
                             custom_double_attrs: Vec::new(),
                             string_attrs: Vec::new(),
                             references: pending.references,
@@ -897,6 +908,7 @@ fn load_layer_with_prims(
 
     for (prim_path, prim) in prim_defs_with_ids {
         let mut spec = PrimSpec {
+            specifier: Some(prim.specifier),
             authored_children: children_by_parent.remove(&prim_path).unwrap_or_default(),
             ..PrimSpec::default()
         };

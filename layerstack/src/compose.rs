@@ -813,6 +813,7 @@ fn add_inherit_opinions(
                 &mut visited_refs,
                 prim_order_out,
                 authored_children_out,
+                None,
             );
         }
     }
@@ -832,6 +833,8 @@ fn add_inherit_edge_opinions(
     visited_refs: &mut HashSet<(PathId, LayerId, PathId)>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
+    // Optional reference namespace for remapping field values (dest, src).
+    ref_remap: Option<(&crate::path::Path, &crate::path::Path)>,
 ) {
     if !visited.insert((dest_root, inherited_root)) {
         return;
@@ -1006,7 +1009,11 @@ fn add_inherit_edge_opinions(
         }
 
         for (dest_path_id, remote_path_id, field, value) in pending {
-            let value = remap_field_value_paths(store, &base_path, &inherited_path, value);
+            let mut value = remap_field_value_paths(store, &base_path, &inherited_path, value);
+            // Also apply reference namespace remapping if within a reference context.
+            if let Some((ref_dest, ref_src)) = ref_remap {
+                value = remap_field_value_paths(store, ref_dest, ref_src, value);
+            }
             out.get_mut(&dest_path_id)
                 .expect("path exists")
                 .add_opinion(Opinion {
@@ -1116,6 +1123,7 @@ fn add_inherit_edge_opinions(
                     visited_refs,
                     prim_order_out,
                     authored_children_out,
+                    ref_remap,
                 );
             }
 
@@ -1148,6 +1156,7 @@ fn add_inherit_edge_opinions(
                         visited_refs,
                         prim_order_out,
                         authored_children_out,
+                        ref_remap,
                     );
                 }
             }
@@ -1165,6 +1174,7 @@ fn add_inherit_edge_opinions(
                 visited_refs,
                 prim_order_out,
                 authored_children_out,
+                ref_remap,
             );
         }
 
@@ -1379,10 +1389,39 @@ fn remap_path_id(
         let p = store.paths().resolve(path);
         p.strip_prefix(src_root).map(<[_]>::to_vec)
     };
-    let Some(rel) = rel else {
-        return path;
-    };
-    store.paths_mut().intern(dest_root.join(&rel))
+    if let Some(rel) = rel {
+        return store.paths_mut().intern(dest_root.join(&rel));
+    }
+
+    // Handle property paths like /Model.prop where src_root is /Model.
+    // The path segment "Model.prop" doesn't match "Model" directly, but
+    // the prim portion should still be remapped.
+    let p = store.paths().resolve(path).clone();
+    let src_depth = src_root.depth();
+    if p.depth() >= 1 && src_depth >= 1 && p.depth() == src_depth {
+        // Check if parent paths match.
+        let p_parent = p.parent();
+        let src_parent = src_root.parent();
+        if p_parent == src_parent {
+            let p_leaf_tok = p.leaf().unwrap();
+            let src_leaf_tok = src_root.leaf().unwrap();
+            let p_leaf = store.tokens().resolve(p_leaf_tok);
+            let src_leaf = store.tokens().resolve(src_leaf_tok);
+            if let Some(suffix) = p_leaf.strip_prefix(src_leaf) {
+                if suffix.starts_with('.') {
+                    // Remap: dest_root's leaf + property suffix.
+                    let dest_leaf = store.tokens().resolve(dest_root.leaf().unwrap());
+                    let new_leaf_str = alloc::format!("{}{}", dest_leaf, suffix);
+                    let new_leaf_tok = store.tokens_mut().intern(&new_leaf_str);
+                    // Build dest path = dest_root's parent + new_leaf_tok.
+                    let dest_parent = dest_root.parent().unwrap_or_else(crate::path::Path::root);
+                    return store.paths_mut().intern(dest_parent.join(&[new_leaf_tok]));
+                }
+            }
+        }
+    }
+
+    path
 }
 
 fn add_reference_edge_opinions(
@@ -1454,43 +1493,31 @@ fn add_reference_edge_opinions(
         };
 
         let mut pending_sources = Vec::new();
+        let mut pending_fields: Vec<(PathId, TokenId, OpinionKey, FieldValue)> = Vec::new();
         for (remote_path_id, dest_path_id) in &mapping {
             let Some(remote_spec) = remote_layer.prims.get(remote_path_id) else {
                 continue;
             };
-            pending_sources.push((
-                *dest_path_id,
-                OpinionKey {
-                    is_local: false,
-                    arc_kind: ArcKind::References,
-                    nested_arc_kind: None,
-                    namespace_depth,
-                    authored: true,
-                    arc_list_index,
-                    layer_strength,
-                    layer_id: remote_layer_id,
-                    spec_path: *remote_path_id,
-                },
-            ));
+            let base_key = OpinionKey {
+                is_local: false,
+                arc_kind: ArcKind::References,
+                nested_arc_kind: None,
+                namespace_depth,
+                authored: true,
+                arc_list_index,
+                layer_strength,
+                layer_id: remote_layer_id,
+                spec_path: *remote_path_id,
+            };
+            pending_sources.push((*dest_path_id, base_key.clone()));
 
             for (field, value) in &remote_spec.fields {
-                out.get_mut(dest_path_id)
-                    .expect("path exists")
-                    .add_opinion(Opinion {
-                        key: OpinionKey {
-                            is_local: false,
-                            arc_kind: ArcKind::References,
-                            nested_arc_kind: None,
-                            namespace_depth,
-                            authored: true,
-                            arc_list_index,
-                            layer_strength,
-                            layer_id: remote_layer_id,
-                            spec_path: *remote_path_id,
-                        },
-                        field: *field,
-                        value: value.clone(),
-                    });
+                pending_fields.push((
+                    *dest_path_id,
+                    *field,
+                    base_key.clone(),
+                    value.clone(),
+                ));
             }
 
             // Forward variant opinions from selected variants.
@@ -1504,23 +1531,22 @@ fn add_reference_edge_opinions(
                         && let Some(variant_spec) = set_spec.variants.get(selected)
                     {
                         for (field, value) in &variant_spec.fields {
-                            out.get_mut(dest_path_id)
-                                .expect("path exists")
-                                .add_opinion(Opinion {
-                                    key: OpinionKey {
-                                        is_local: false,
-                                        arc_kind: ArcKind::References,
-                                        nested_arc_kind: Some(ArcKind::Variants),
-                                        namespace_depth,
-                                        authored: true,
-                                        arc_list_index,
-                                        layer_strength,
-                                        layer_id: remote_layer_id,
-                                        spec_path: *remote_path_id,
-                                    },
-                                    field: *field,
-                                    value: value.clone(),
-                                });
+                            pending_fields.push((
+                                *dest_path_id,
+                                *field,
+                                OpinionKey {
+                                    is_local: false,
+                                    arc_kind: ArcKind::References,
+                                    nested_arc_kind: Some(ArcKind::Variants),
+                                    namespace_depth,
+                                    authored: true,
+                                    arc_list_index,
+                                    layer_strength,
+                                    layer_id: remote_layer_id,
+                                    spec_path: *remote_path_id,
+                                },
+                                value.clone(),
+                            ));
                         }
 
                         // Forward child_authored_children as authored_children
@@ -1565,23 +1591,22 @@ fn add_reference_edge_opinions(
                                     )
                                     .unwrap_or(u16::MAX);
                                     for (field, value) in child_fields {
-                                        out.get_mut(&child_path_id)
-                                            .expect("path exists")
-                                            .add_opinion(Opinion {
-                                                key: OpinionKey {
-                                                    is_local: false,
-                                                    arc_kind: ArcKind::References,
-                                                    nested_arc_kind: Some(ArcKind::Variants),
-                                                    namespace_depth: child_ns,
-                                                    authored: true,
-                                                    arc_list_index,
-                                                    layer_strength,
-                                                    layer_id: remote_layer_id,
-                                                    spec_path: child_path_id,
-                                                },
-                                                field: *field,
-                                                value: value.clone(),
-                                            });
+                                        pending_fields.push((
+                                            child_path_id,
+                                            *field,
+                                            OpinionKey {
+                                                is_local: false,
+                                                arc_kind: ArcKind::References,
+                                                nested_arc_kind: Some(ArcKind::Variants),
+                                                namespace_depth: child_ns,
+                                                authored: true,
+                                                arc_list_index,
+                                                layer_strength,
+                                                layer_id: remote_layer_id,
+                                                spec_path: child_path_id,
+                                            },
+                                            value.clone(),
+                                        ));
                                     }
                                     out.get_mut(&child_path_id)
                                         .expect("path exists")
@@ -1646,9 +1671,19 @@ fn add_reference_edge_opinions(
                 .expect("path exists")
                 .add_source(key);
         }
+        for (dest_path_id, field, key, value) in pending_fields {
+            let value = remap_field_value_paths(store, &dest_root_path, &target_root, value);
+            out.get_mut(&dest_path_id)
+                .expect("path exists")
+                .add_opinion(Opinion {
+                    key,
+                    field,
+                    value,
+                });
+        }
     }
 
-    for (remote_path_id, dest_path_id) in mapping {
+    for &(remote_path_id, dest_path_id) in &mapping {
         let inherits = resolve_inherits_for_prim(store, &remote_stack, remote_path_id);
         for (inherit_index, inherited_root) in inherits.into_iter().enumerate() {
             let inherit_index = u16::try_from(inherit_index).unwrap_or(u16::MAX);
@@ -1662,6 +1697,7 @@ fn add_reference_edge_opinions(
             // Spec: AOUSD Core §10 (references/inherits), via path translation
             // into the referencing namespace.
             let translated = remap_path_id(store, &dest_root_path, &target_root, inherited_root);
+            let ref_remap = Some((&dest_root_path, &target_root));
             if translated != inherited_root {
                 add_inherit_edge_opinions(
                     store,
@@ -1677,6 +1713,7 @@ fn add_reference_edge_opinions(
                     visited,
                     prim_order_out,
                     authored_children_out,
+                    ref_remap,
                 );
             }
 
@@ -1694,6 +1731,7 @@ fn add_reference_edge_opinions(
                 visited,
                 prim_order_out,
                 authored_children_out,
+                ref_remap,
             );
         }
 
@@ -1803,6 +1841,28 @@ fn add_reference_edge_opinions(
                 prim_order_out,
                 authored_children_out,
             );
+        }
+    }
+
+    // Post-process: remap any PathListOp values in opinions on mapped
+    // dest prims that still reference the source namespace. This covers
+    // field values brought in by nested arcs (inherits, nested references)
+    // within this reference context.
+    for (_, dest_path_id) in &mapping {
+        let Some(index) = out.get_mut(dest_path_id) else {
+            continue;
+        };
+        for opinions in index.opinions_by_field.values_mut() {
+            for opinion in opinions.iter_mut() {
+                if matches!(opinion.value, FieldValue::PathListOp(_)) {
+                    let old = core::mem::replace(
+                        &mut opinion.value,
+                        FieldValue::Value(crate::doc::Value::Null),
+                    );
+                    opinion.value =
+                        remap_field_value_paths(store, &dest_root_path, &target_root, old);
+                }
+            }
         }
     }
 }
@@ -2008,6 +2068,7 @@ fn add_payload_edge_opinions(
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
 
             let translated = remap_path_id(store, &dest_root_path, &target_root, inherited_root);
+            let ref_remap = Some((&dest_root_path, &target_root));
             if translated != inherited_root {
                 add_inherit_edge_opinions(
                     store,
@@ -2023,6 +2084,7 @@ fn add_payload_edge_opinions(
                     visited,
                     prim_order_out,
                     authored_children_out,
+                    ref_remap,
                 );
             }
 
@@ -2040,6 +2102,7 @@ fn add_payload_edge_opinions(
                 visited,
                 prim_order_out,
                 authored_children_out,
+                ref_remap,
             );
         }
 

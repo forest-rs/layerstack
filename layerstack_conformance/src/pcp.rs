@@ -35,6 +35,9 @@ pub struct PcpPrim {
 
     #[serde(rename = "Relationship targets")]
     pub relationship_targets: Option<BTreeMap<String, Vec<String>>>,
+
+    #[serde(rename = "Attribute connections")]
+    pub attribute_connections: Option<BTreeMap<String, Vec<String>>>,
 }
 
 pub fn load_pcp_json(path: &std::path::Path) -> Pcp {

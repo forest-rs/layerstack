@@ -243,6 +243,32 @@ fn assert_pcp_composing(loaded: &mut LoadedStage, pcp_path: &Path) {
                 );
             }
         }
+
+        if let Some(connections) = expectations.attribute_connections {
+            for (prop_path, expected) in connections {
+                let suffix = prop_path
+                    .strip_prefix(&format!("{prim_path}."))
+                    .unwrap_or_else(|| panic!("unexpected connection key {prop_path}"));
+                let field = loaded.store.tokens.intern(suffix);
+
+                let resolved = stage
+                    .resolve_path_list(prim_id, field)
+                    .unwrap_or_else(|| panic!("missing attribute connections for {prop_path}"));
+
+                let expected_ids: Vec<_> = expected
+                    .into_iter()
+                    .map(|p| {
+                        let path = layerstack::Path::parse_absolute(&p, &mut loaded.store.tokens)
+                            .expect("path");
+                        loaded.store.paths.intern(path)
+                    })
+                    .collect();
+                assert_eq!(
+                    resolved.value, expected_ids,
+                    "attribute connection mismatch for {prop_path}"
+                );
+            }
+        }
     }
 }
 
@@ -530,7 +556,6 @@ fn tricky_variant_weaker_selection4_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires connection field parsing in variant branches"]
 fn basic_variant_with_connections_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("BasicVariantWithConnections_root");
     assert_layer_stack_matches(&loaded, &pcp_path);

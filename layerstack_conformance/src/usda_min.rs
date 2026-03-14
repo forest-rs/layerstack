@@ -136,6 +136,10 @@ struct PrimDef {
     payloads: PayloadsDef,
     targets: TargetsDef,
     declares_targets: bool,
+    /// Named relationships: (rel_name, op, target_paths).
+    named_rels: Vec<(String, TargetOp, Vec<String>)>,
+    /// Attribute connections: (attr_name, op, target_paths).
+    connections: Vec<(String, TargetOp, Vec<String>)>,
     prim_order: Option<Vec<String>>,
     variant_selections: Vec<(String, String)>,
     variant_set_names: Vec<String>,
@@ -530,6 +534,34 @@ fn parse_prim_defs(text: &str) -> Vec<PrimDef> {
             }
         }
 
+        // Parse named relationship lines: `add rel controls = </path>`
+        if let Some((name, op, specs)) = parse_named_rel_line(line)
+            && let Some(last) = out.last_mut()
+            && !scope.is_empty()
+        {
+            let current_path = format!("/{}", scope.join("/"));
+            if last.path == current_path {
+                if !last.attrs.contains(&name) {
+                    last.attrs.push(name.clone());
+                }
+                last.named_rels.push((name, op, specs));
+            }
+        }
+
+        // Parse connection lines: `add double focalLength.connect = </path>`
+        if let Some((name, op, specs)) = parse_connection_line(line)
+            && let Some(last) = out.last_mut()
+            && !scope.is_empty()
+        {
+            let current_path = format!("/{}", scope.join("/"));
+            if last.path == current_path {
+                if !last.attrs.contains(&name) {
+                    last.attrs.push(name.clone());
+                }
+                last.connections.push((name, op, specs));
+            }
+        }
+
         if let Some(order) = parse_reorder_name_children(line)
             && let Some(last) = out.last_mut()
             && !scope.is_empty()
@@ -686,6 +718,8 @@ fn parse_prim_defs(text: &str) -> Vec<PrimDef> {
                             payloads: pending.payloads,
                             targets: TargetsDef::default(),
                             declares_targets: false,
+                            named_rels: Vec::new(),
+                            connections: Vec::new(),
                             prim_order: None,
                             variant_selections: pending.variant_selections,
                             variant_set_names: pending.variant_set_names,
@@ -1016,6 +1050,68 @@ fn parse_rel_targets_line(line: &str) -> Option<(TargetOp, Vec<String>)> {
     let rhs = rest.split_once('=').map(|(_, rhs)| rhs.trim())?;
     let specs = parse_path_list_rhs(rhs)?;
     Some((op, specs))
+}
+
+/// Parses named relationship lines like `add rel controls = </path>`.
+fn parse_named_rel_line(line: &str) -> Option<(String, TargetOp, Vec<String>)> {
+    let line = line.trim().trim_end_matches(',').trim();
+    // Must contain "rel " but NOT be a "rel targets" line.
+    let (op, rest) = if let Some(rest) = line.strip_prefix("add rel ") {
+        (TargetOp::Append, rest)
+    } else if let Some(rest) = line.strip_prefix("prepend rel ") {
+        (TargetOp::Prepend, rest)
+    } else if let Some(rest) = line.strip_prefix("append rel ") {
+        (TargetOp::Append, rest)
+    } else if let Some(rest) = line.strip_prefix("custom rel ") {
+        // `custom rel name` without `=` just declares the rel.
+        if !rest.contains('=') {
+            return None;
+        }
+        (TargetOp::Explicit, rest)
+    } else if let Some(rest) = line.strip_prefix("rel ") {
+        (TargetOp::Explicit, rest)
+    } else {
+        return None;
+    };
+    // Skip "targets" — handled by parse_rel_targets_line.
+    if rest.starts_with("targets") {
+        return None;
+    }
+    let (name, rhs) = rest.split_once('=')?;
+    let name = name.trim().to_string();
+    let specs = parse_path_list_rhs(rhs.trim())?;
+    Some((name, op, specs))
+}
+
+/// Parses connection lines like `add double focalLength.connect = </path>`.
+fn parse_connection_line(line: &str) -> Option<(String, TargetOp, Vec<String>)> {
+    let line = line.trim().trim_end_matches(',').trim();
+    if !line.contains(".connect") {
+        return None;
+    }
+    // Strip optional list-op prefix.
+    let (op, rest) = if let Some(rest) = line.strip_prefix("add ") {
+        (TargetOp::Append, rest)
+    } else if let Some(rest) = line.strip_prefix("prepend ") {
+        (TargetOp::Prepend, rest)
+    } else if let Some(rest) = line.strip_prefix("append ") {
+        (TargetOp::Append, rest)
+    } else {
+        (TargetOp::Explicit, line)
+    };
+    // Strip optional type prefix.
+    let rest = ATTR_TYPE_PREFIXES
+        .iter()
+        .find_map(|prefix| rest.strip_prefix(prefix))
+        .unwrap_or(rest)
+        .trim();
+    // Find "name.connect".
+    let dot_pos = rest.find(".connect")?;
+    let name = rest[..dot_pos].trim().to_string();
+    let after = &rest[dot_pos + ".connect".len()..];
+    let rhs = after.split_once('=')?.1.trim();
+    let specs = parse_path_list_rhs(rhs)?;
+    Some((name, op, specs))
 }
 
 fn parse_specializes_line(line: &str) -> Option<(InheritOp, Vec<String>)> {
@@ -1672,6 +1768,65 @@ fn load_layer_with_prims(
                 targets_token,
                 FieldValue::PathListOp(resolve_path_listop(&prim.targets, store)),
             );
+        }
+
+        // Process named relationships (e.g. `add rel controls = </path>`).
+        for (name, op, specs) in &prim.named_rels {
+            let targets = match op {
+                TargetOp::Explicit => TargetsDef {
+                    explicit: Some(specs.clone()),
+                    ..Default::default()
+                },
+                TargetOp::Prepend => TargetsDef {
+                    prepend: specs.clone(),
+                    ..Default::default()
+                },
+                TargetOp::Append => TargetsDef {
+                    append: specs.clone(),
+                    ..Default::default()
+                },
+            };
+            let tok = store.tokens.intern(name);
+            let list_op = resolve_path_listop(&targets, store);
+            // Merge with existing if present.
+            if let Some(FieldValue::PathListOp(existing)) = spec.fields.get_mut(&tok) {
+                existing.prepend.extend(list_op.prepend);
+                existing.append.extend(list_op.append);
+                if list_op.explicit.is_some() {
+                    existing.explicit = list_op.explicit;
+                }
+            } else {
+                spec.fields.insert(tok, FieldValue::PathListOp(list_op));
+            }
+        }
+
+        // Process attribute connections (e.g. `add double focalLength.connect = </path>`).
+        for (name, op, specs) in &prim.connections {
+            let targets = match op {
+                TargetOp::Explicit => TargetsDef {
+                    explicit: Some(specs.clone()),
+                    ..Default::default()
+                },
+                TargetOp::Prepend => TargetsDef {
+                    prepend: specs.clone(),
+                    ..Default::default()
+                },
+                TargetOp::Append => TargetsDef {
+                    append: specs.clone(),
+                    ..Default::default()
+                },
+            };
+            let tok = store.tokens.intern(name);
+            let list_op = resolve_path_listop(&targets, store);
+            if let Some(FieldValue::PathListOp(existing)) = spec.fields.get_mut(&tok) {
+                existing.prepend.extend(list_op.prepend);
+                existing.append.extend(list_op.append);
+                if list_op.explicit.is_some() {
+                    existing.explicit = list_op.explicit;
+                }
+            } else {
+                spec.fields.insert(tok, FieldValue::PathListOp(list_op));
+            }
         }
 
         // Process variant selections.

@@ -14,8 +14,8 @@ use hashbrown::{HashMap, HashSet};
 use crate::{
     arcs::{
         resolve_inherits_for_prim, resolve_payloads_for_prim, resolve_references_for_prim,
-        resolve_specializes_for_prim, resolve_variant_child_references,
-        resolve_variant_selections_for_prim,
+        resolve_specializes_for_prim, resolve_variant_branch_references,
+        resolve_variant_child_references, resolve_variant_selections_for_prim,
     },
     doc::{FieldValue, LayerId, LayerStore, Reference},
     interner::TokenId,
@@ -493,6 +493,16 @@ fn resolve_full_variant_selections(
     path: PathId,
 ) -> HashMap<TokenId, TokenId> {
     let mut selections = resolve_variant_selections_for_prim(store, local_stack, path);
+
+    // Also gather selections from inherit targets (weaker than local, per LIVERPS).
+    let inherits = resolve_inherits_for_prim(store, local_stack, path);
+    for inherit_target in inherits {
+        let inherit_selections =
+            resolve_variant_selections_for_prim(store, local_stack, inherit_target);
+        for (set, variant) in inherit_selections {
+            selections.entry(set).or_insert(variant);
+        }
+    }
 
     // Also gather selections from reference targets (weaker).
     let refs = {
@@ -1608,7 +1618,18 @@ fn add_reference_edge_opinions(
             &combined_stack,
             remote_path_id,
         );
-        let all_nested = nested.into_iter().chain(variant_child_refs);
+        // Also resolve variant branch-level references (arcs on the variant
+        // branch header itself, e.g. `"full" (add references = ...) {}`).
+        let variant_branch_refs = resolve_variant_branch_references(
+            store,
+            &remote_stack,
+            &combined_stack,
+            remote_path_id,
+        );
+        let all_nested = nested
+            .into_iter()
+            .chain(variant_child_refs)
+            .chain(variant_branch_refs);
         for (nested_index, nested_ref) in all_nested.enumerate() {
             let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
             let namespace_depth =

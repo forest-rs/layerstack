@@ -11,8 +11,9 @@ use hashbrown::{HashMap, HashSet};
 
 use crate::{
     arcs::{
-        collect_all_variant_child_references, resolve_inherits_for_prim,
-        resolve_payloads_for_prim, resolve_references_for_prim, resolve_specializes_for_prim,
+        collect_all_variant_branch_references, collect_all_variant_child_references,
+        resolve_inherits_for_prim, resolve_payloads_for_prim, resolve_references_for_prim,
+        resolve_specializes_for_prim,
     },
     doc::LayerStore,
     doc::{LayerId, Reference},
@@ -91,6 +92,21 @@ fn gather_populated_paths(
         // are discovered during population.
         let variant_refs = collect_all_variant_child_references(store, local_stack, path);
         for reference in variant_refs {
+            expand_reference_paths(
+                store,
+                path,
+                reference,
+                &mut paths,
+                &mut queue,
+                &mut visited_refs,
+                &mut visited_inherits,
+            );
+        }
+
+        // Expand references from variant branch headers of this prim itself.
+        // E.g. `"full" (add references = @...@) {}` on the prim's variant set.
+        let branch_refs = collect_all_variant_branch_references(store, local_stack, path);
+        for reference in branch_refs {
             expand_reference_paths(
                 store,
                 path,

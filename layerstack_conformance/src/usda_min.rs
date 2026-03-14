@@ -146,6 +146,9 @@ struct PrimDef {
     /// Composition arcs on child prims inside variant branches of this prim.
     /// (set_name, branch_name, child_name, references, inherits, specializes, payloads).
     variant_child_arcs: Vec<VariantChildArc>,
+    /// Composition arcs on variant branch headers (e.g. `"full" (add references = ...) {}`).
+    /// These apply to the prim itself when the variant is selected.
+    variant_branch_arcs: Vec<VariantBranchArc>,
 }
 
 #[derive(Clone, Debug)]
@@ -153,6 +156,16 @@ struct VariantChildArc {
     set_name: String,
     branch_name: String,
     child_name: String,
+    references: ReferencesDef,
+    inherits: InheritsDef,
+    specializes: SpecializesDef,
+    payloads: PayloadsDef,
+}
+
+#[derive(Clone, Debug)]
+struct VariantBranchArc {
+    set_name: String,
+    branch_name: String,
     references: ReferencesDef,
     inherits: InheritsDef,
     specializes: SpecializesDef,
@@ -529,7 +542,7 @@ fn parse_prim_defs(text: &str) -> Vec<PrimDef> {
 
         // Detect `variantSet "name" = {` before generic brace handling.
         let variant_set_name = parse_variant_set_start(line);
-        // Detect `"branchName" {` inside a variant set.
+        // Detect `"branchName" {` or `"branchName" (metadata) {` inside a variant set.
         let variant_branch_name = if variant_set_name.is_none()
             && pending.is_none()
             && brace_stack.last().map_or(false, |k| matches!(k, BraceKind::VariantSet(_)))
@@ -538,6 +551,121 @@ fn parse_prim_defs(text: &str) -> Vec<PrimDef> {
         } else {
             None
         };
+
+        // Parse variant branch header metadata: `"branchName" (add references = ...) {`
+        if let Some(ref branch_name) = variant_branch_name
+            && line.contains('(')
+        {
+            let set_name = match brace_stack.last() {
+                Some(BraceKind::VariantSet(s)) => s.clone(),
+                _ => String::new(),
+            };
+            let owning_path = format!("/{}", scope.join("/"));
+            let mut meta_lines: Vec<String> = Vec::new();
+
+            // Check for inline metadata `"branch" (... metadata ...) {`
+            if let (Some(open), Some(close)) = (line.find('('), line.rfind(')')) {
+                if close > open {
+                    let inline = line[open + 1..close].trim();
+                    if !inline.is_empty() {
+                        meta_lines.push(inline.to_string());
+                    }
+                }
+            } else {
+                // Multi-line metadata: read until `)`
+                let mut accumulator: Option<String> = None;
+                while let Some(spec_line) = lines.peek() {
+                    let spec_line = spec_line.trim();
+                    if spec_line.starts_with(')') {
+                        lines.next();
+                        break;
+                    }
+                    let consumed = lines.next().unwrap().trim().to_string();
+                    if let Some(ref mut acc) = accumulator {
+                        acc.push(' ');
+                        acc.push_str(&consumed);
+                        if consumed.contains(']') || consumed.contains('}') {
+                            meta_lines.push(acc.clone());
+                            accumulator = None;
+                        }
+                    } else if (consumed.contains('[') && !consumed.contains(']'))
+                        || (consumed.starts_with("variants")
+                            && consumed.contains('{')
+                            && !consumed.contains('}'))
+                    {
+                        accumulator = Some(consumed);
+                    } else {
+                        meta_lines.push(consumed);
+                    }
+                }
+                if let Some(acc) = accumulator {
+                    meta_lines.push(acc);
+                }
+            }
+
+            let mut branch_refs = ReferencesDef::default();
+            let mut branch_inherits = InheritsDef::default();
+            let mut branch_specializes = SpecializesDef::default();
+            let mut branch_payloads = PayloadsDef::default();
+
+            for meta_line in &meta_lines {
+                if let Some((op, specs)) = parse_references_line(meta_line) {
+                    match op {
+                        RefOp::Explicit => branch_refs.explicit = Some(specs),
+                        RefOp::Prepend => branch_refs.prepend.extend(specs),
+                        RefOp::Append => branch_refs.append.extend(specs),
+                    }
+                }
+                if let Some((op, specs)) = parse_inherits_line(meta_line) {
+                    match op {
+                        InheritOp::Explicit => branch_inherits.explicit = Some(specs),
+                        InheritOp::Prepend => branch_inherits.prepend.extend(specs),
+                        InheritOp::Append => branch_inherits.append.extend(specs),
+                    }
+                }
+                if let Some((op, specs)) = parse_specializes_line(meta_line) {
+                    match op {
+                        InheritOp::Explicit => branch_specializes.explicit = Some(specs),
+                        InheritOp::Prepend => branch_specializes.prepend.extend(specs),
+                        InheritOp::Append => branch_specializes.append.extend(specs),
+                    }
+                }
+                if let Some((op, specs)) = parse_payloads_line(meta_line) {
+                    match op {
+                        RefOp::Explicit => branch_payloads.explicit = Some(specs),
+                        RefOp::Prepend => branch_payloads.prepend.extend(specs),
+                        RefOp::Append => branch_payloads.append.extend(specs),
+                    }
+                }
+            }
+
+            let has_arcs = branch_refs.explicit.is_some()
+                || !branch_refs.prepend.is_empty()
+                || !branch_refs.append.is_empty()
+                || branch_inherits.explicit.is_some()
+                || !branch_inherits.prepend.is_empty()
+                || !branch_inherits.append.is_empty()
+                || branch_specializes.explicit.is_some()
+                || !branch_specializes.prepend.is_empty()
+                || !branch_specializes.append.is_empty()
+                || branch_payloads.explicit.is_some()
+                || !branch_payloads.prepend.is_empty()
+                || !branch_payloads.append.is_empty();
+
+            if has_arcs {
+                // Find the owning prim's PrimDef and add the variant branch arcs.
+                if let Some(owner_def) = out.iter_mut().rev().find(|d| d.path == owning_path) {
+                    owner_def.variant_branch_arcs.push(VariantBranchArc {
+                        set_name,
+                        branch_name: branch_name.clone(),
+                        references: branch_refs,
+                        inherits: branch_inherits,
+                        specializes: branch_specializes,
+                        payloads: branch_payloads,
+                    });
+                }
+            }
+        }
 
         for ch in line.chars() {
             match ch {
@@ -564,6 +692,7 @@ fn parse_prim_defs(text: &str) -> Vec<PrimDef> {
                             variant_parent,
                             variant_fields: Vec::new(),
                             variant_child_arcs: Vec::new(),
+                            variant_branch_arcs: Vec::new(),
                         });
                     } else if let Some(ref set_name) = variant_set_name {
                         brace_stack.push(BraceKind::VariantSet(set_name.clone()));
@@ -671,8 +800,8 @@ fn parse_variant_branch_name(line: &str) -> Option<String> {
     let end = rest.find('"')?;
     let name = &rest[..end];
     let after = rest[end + 1..].trim();
-    // Should be followed by `{` (possibly with whitespace)
-    if after.starts_with('{') || after.is_empty() {
+    // Should be followed by `{`, `(` (metadata), or be at end of line.
+    if after.starts_with('{') || after.starts_with('(') || after.is_empty() {
         Some(name.to_string())
     } else {
         None
@@ -1089,11 +1218,29 @@ fn resolve_path_listop(list: &TargetsDef, store: &mut InMemoryStore) -> ListOp<l
 fn resolve_inherits_listop(
     list: &InheritsDef,
     store: &mut InMemoryStore,
+    prim_path: &str,
 ) -> ListOp<layerstack::PathId> {
+    // Resolve relative paths (e.g. `../SymEyeRig`) relative to the prim path.
+    let resolved = InheritsDef {
+        explicit: list
+            .explicit
+            .as_ref()
+            .map(|v| v.iter().map(|p| resolve_relative_path(p, prim_path)).collect()),
+        prepend: list
+            .prepend
+            .iter()
+            .map(|p| resolve_relative_path(p, prim_path))
+            .collect(),
+        append: list
+            .append
+            .iter()
+            .map(|p| resolve_relative_path(p, prim_path))
+            .collect(),
+    };
     let targets = TargetsDef {
-        explicit: list.explicit.clone(),
-        prepend: list.prepend.clone(),
-        append: list.append.clone(),
+        explicit: resolved.explicit,
+        prepend: resolved.prepend,
+        append: resolved.append,
     };
     resolve_path_listop(&targets, store)
 }
@@ -1101,13 +1248,52 @@ fn resolve_inherits_listop(
 fn resolve_specializes_listop(
     list: &SpecializesDef,
     store: &mut InMemoryStore,
+    prim_path: &str,
 ) -> ListOp<layerstack::PathId> {
+    let resolved = SpecializesDef {
+        explicit: list
+            .explicit
+            .as_ref()
+            .map(|v| v.iter().map(|p| resolve_relative_path(p, prim_path)).collect()),
+        prepend: list
+            .prepend
+            .iter()
+            .map(|p| resolve_relative_path(p, prim_path))
+            .collect(),
+        append: list
+            .append
+            .iter()
+            .map(|p| resolve_relative_path(p, prim_path))
+            .collect(),
+    };
     let targets = TargetsDef {
-        explicit: list.explicit.clone(),
-        prepend: list.prepend.clone(),
-        append: list.append.clone(),
+        explicit: resolved.explicit,
+        prepend: resolved.prepend,
+        append: resolved.append,
     };
     resolve_path_listop(&targets, store)
+}
+
+/// Resolves a potentially relative path (e.g. `../Foo`) against a prim path.
+fn resolve_relative_path(path: &str, base_prim_path: &str) -> String {
+    if path.starts_with('/') {
+        return path.to_string();
+    }
+    // Split base prim path into segments, go up for each `..`
+    let mut segments: Vec<&str> = base_prim_path
+        .split('/')
+        .filter(|s| !s.is_empty())
+        .collect();
+    for component in path.split('/') {
+        match component {
+            ".." => {
+                segments.pop();
+            }
+            "." | "" => {}
+            name => segments.push(name),
+        }
+    }
+    format!("/{}", segments.join("/"))
 }
 
 fn resolve_reference_spec(
@@ -1428,8 +1614,8 @@ fn load_layer_with_prims(
             by_path,
             layer_names,
         );
-        spec.inherits = resolve_inherits_listop(&prim.inherits, store);
-        spec.specializes = resolve_specializes_listop(&prim.specializes, store);
+        spec.inherits = resolve_inherits_listop(&prim.inherits, store, &prim.path);
+        spec.specializes = resolve_specializes_listop(&prim.specializes, store, &prim.path);
         spec.payloads = resolve_references(
             &ReferencesDef {
                 explicit: prim.payloads.explicit,
@@ -1493,6 +1679,11 @@ fn load_layer_with_prims(
                 all_set_names.push(set.clone());
             }
         }
+        for arc in &prim.variant_branch_arcs {
+            if !all_set_names.contains(&arc.set_name) {
+                all_set_names.push(arc.set_name.clone());
+            }
+        }
 
         for set_name in &all_set_names {
             let set_tok = store.tokens.intern(set_name);
@@ -1550,7 +1741,10 @@ fn load_layer_with_prims(
                             variant_spec.child_references.insert(child_tok, child_refs);
                         }
 
-                        let child_inherits = resolve_inherits_listop(&arc.inherits, store);
+                        let child_prim_path =
+                            format!("{}/{}", prim.path, arc.child_name);
+                        let child_inherits =
+                            resolve_inherits_listop(&arc.inherits, store, &child_prim_path);
                         if !child_inherits.prepend.is_empty()
                             || !child_inherits.append.is_empty()
                             || child_inherits.explicit.is_some()
@@ -1559,7 +1753,7 @@ fn load_layer_with_prims(
                         }
 
                         let child_specializes =
-                            resolve_specializes_listop(&arc.specializes, store);
+                            resolve_specializes_listop(&arc.specializes, store, &child_prim_path);
                         if !child_specializes.prepend.is_empty()
                             || !child_specializes.append.is_empty()
                             || child_specializes.explicit.is_some()
@@ -1650,6 +1844,44 @@ fn load_layer_with_prims(
                             }
                         }
                     }
+                }
+            }
+
+            // Add variant branch-level composition arcs (arcs on the variant
+            // branch header itself, e.g. `"full" (add references = ...) {}`).
+            for arc in &prim.variant_branch_arcs {
+                if arc.set_name == *set_name {
+                    let branch_tok = store.tokens.intern(&arc.branch_name);
+                    let variant_spec = set_spec.variants.entry(branch_tok).or_default();
+
+                    variant_spec.references = resolve_references(
+                        &arc.references,
+                        path.parent().unwrap_or(Path::new(".")),
+                        root_dir,
+                        id,
+                        store,
+                        next_layer_id,
+                        by_path,
+                        layer_names,
+                    );
+                    variant_spec.inherits =
+                        resolve_inherits_listop(&arc.inherits, store, &prim.path);
+                    variant_spec.specializes =
+                        resolve_specializes_listop(&arc.specializes, store, &prim.path);
+                    variant_spec.payloads = resolve_references(
+                        &ReferencesDef {
+                            explicit: arc.payloads.explicit.clone(),
+                            prepend: arc.payloads.prepend.clone(),
+                            append: arc.payloads.append.clone(),
+                        },
+                        path.parent().unwrap_or(Path::new(".")),
+                        root_dir,
+                        id,
+                        store,
+                        next_layer_id,
+                        by_path,
+                        layer_names,
+                    );
                 }
             }
         }

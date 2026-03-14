@@ -563,7 +563,6 @@ fn tricky_inherits_in_variants_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires inherits arc parsing inside variant branches"]
 fn tricky_inherits_in_variants2_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("TrickyInheritsInVariants2_root");
     assert_layer_stack_matches(&loaded, &pcp_path);

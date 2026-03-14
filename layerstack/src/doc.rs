@@ -149,6 +149,20 @@ pub struct VariantSpec {
     /// variant branch defines field values, they are recorded here keyed by the
     /// child prim name. These opinions apply only when this variant is selected.
     pub child_fields: HashMap<TokenId, HashMap<TokenId, FieldValue>>,
+    /// References arcs on this variant branch itself.
+    ///
+    /// When a variant branch header includes composition arcs
+    /// (e.g. `"full" (add references = @...@) { ... }`), those arcs apply
+    /// to the prim owning the variant set when this variant is selected.
+    ///
+    /// Spec: AOUSD Core §10.5 (variant arcs).
+    pub references: ListOp<Reference>,
+    /// Inherits arcs on this variant branch itself.
+    pub inherits: ListOp<PathId>,
+    /// Specializes arcs on this variant branch itself.
+    pub specializes: ListOp<PathId>,
+    /// Payloads on this variant branch itself.
+    pub payloads: ListOp<Reference>,
 }
 
 /// A variant set: a named collection of variants.

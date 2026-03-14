@@ -391,7 +391,6 @@ fn basic_nested_variants_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires nested variant sets within variant branches"]
 fn basic_nested_variants_with_same_name_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("BasicNestedVariantsWithSameName_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
@@ -406,7 +405,6 @@ fn basic_payload_diamond_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires reference propagation inside specializes arcs"]
 fn tricky_nested_specializes_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("TrickyNestedSpecializes_root");
     assert_layer_stack_matches(&loaded, &pcp_path);

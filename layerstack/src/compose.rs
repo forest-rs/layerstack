@@ -1676,6 +1676,24 @@ fn add_specializes_edge_opinions(
                 for (field, value) in &spec.fields {
                     pending.push((*dest_path_id, *remote_path_id, *field, value.clone()));
                 }
+
+                // Forward variant opinions from selected variants through specializes.
+                let spec_selections =
+                    resolve_variant_selections_for_prim(store, local_stack, *remote_path_id);
+                for (set, selected) in &spec_selections {
+                    if let Some(set_spec) = spec.variant_sets.get(set)
+                        && let Some(variant_spec) = set_spec.variants.get(selected)
+                    {
+                        for (field, value) in &variant_spec.fields {
+                            pending.push((
+                                *dest_path_id,
+                                *remote_path_id,
+                                *field,
+                                value.clone(),
+                            ));
+                        }
+                    }
+                }
             }
         }
 

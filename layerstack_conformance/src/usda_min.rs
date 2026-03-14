@@ -1370,7 +1370,19 @@ fn load_layer_with_prims(
         .replace('\\', "/");
     layer_names.insert(id, relative);
 
-    let text = std::fs::read_to_string(path).expect("read usda");
+    let text = match std::fs::read_to_string(path) {
+        Ok(t) => t,
+        Err(_) => {
+            // Missing referenced layer file — create an empty layer.
+            let layer = Layer {
+                id,
+                sublayers: Vec::new(),
+                prims: layerstack::HashMap::new(),
+            };
+            store.insert_layer(layer);
+            return id;
+        }
+    };
     let sublayers = parse_sublayers(&text, path.parent().unwrap_or(Path::new(".")));
     let mut layer = Layer {
         id,
@@ -1454,18 +1466,33 @@ fn load_layer_with_prims(
         (String, String, String, String),
         Vec<String>,
     > = std::collections::HashMap::new();
-    // Build a set of paths that have variant_parent (used to detect grandchildren).
-    let paths_with_variant_parent: std::collections::HashSet<String> = prim_defs_with_ids
-        .iter()
-        .filter(|(_, p)| p.variant_parent.is_some())
-        .map(|(_, p)| p.path.clone())
-        .collect();
+    // Build a map of paths → variant set names from their variant_parent.
+    // A path may appear multiple times (e.g. `over "Class"` in both "high"
+    // and "low" branches), so we collect all variant set names.
+    let mut variant_sets_by_path: std::collections::HashMap<String, std::collections::HashSet<String>> =
+        std::collections::HashMap::new();
+    for (_, p) in &prim_defs_with_ids {
+        if let Some((_, set, _)) = &p.variant_parent {
+            variant_sets_by_path
+                .entry(p.path.clone())
+                .or_default()
+                .insert(set.clone());
+        }
+    }
     for (_, prim) in &prim_defs_with_ids {
         if let Some((parent_path, set, branch)) = &prim.variant_parent {
             let leaf = prim.path.rsplit('/').next().unwrap_or("");
-            if paths_with_variant_parent.contains(parent_path) {
-                // parent_path is itself a variant-scoped prim → this is a
-                // grandchild. Find the variant set owner by walking up.
+            // A prim is a "grandchild" when its parent_path is itself a
+            // variant-scoped prim in the SAME variant set. If the variant
+            // sets differ, the prim is a direct child of its parent's OWN
+            // variant set (e.g. a nested variant set defined on a prim that
+            // itself lives inside an outer variant branch).
+            let is_grandchild = variant_sets_by_path
+                .get(parent_path)
+                .map_or(false, |parent_sets| parent_sets.contains(set));
+            if is_grandchild {
+                // parent_path is itself a variant-scoped prim with the same
+                // variant context → this is a grandchild.
                 let child_leaf = parent_path.rsplit('/').next().unwrap_or("");
                 // Find the variant set owner: the parent of parent_path
                 let owner_path = if let Some(idx) = parent_path.rfind('/') {

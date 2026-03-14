@@ -383,7 +383,6 @@ fn basic_specializes_and_variants_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires nested variant sets within variant branches"]
 fn basic_nested_variants_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("BasicNestedVariants_root");
     assert_layer_stack_matches(&loaded, &pcp_path);

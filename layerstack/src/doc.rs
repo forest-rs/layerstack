@@ -79,6 +79,27 @@ pub enum FieldValue {
     ///
     /// Spec: AOUSD Core §12.4 (`ListOps`), applied to path lists.
     PathListOp(ListOp<PathId>),
+    /// Time-varying samples: sorted `(timeCode, value)` pairs.
+    ///
+    /// TimeSamples take priority over default values per §12.3.
+    /// Interpolation between samples uses the layer's interpolation type
+    /// (Held or Linear, §12.5).
+    ///
+    /// Spec: AOUSD Core §12.3.2.2 (timeSamples metadata).
+    TimeSamples(Vec<(f64, Value)>),
+}
+
+/// Interpolation method for time-varying attribute resolution.
+///
+/// Spec: AOUSD Core §12.5 (interpolation).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
+pub enum InterpolationType {
+    /// Step function — value holds until the next time sample.
+    #[default]
+    Held,
+    /// Linearly interpolate between bracketing samples.
+    /// Non-numeric types fall back to held.
+    Linear,
 }
 
 /// A composition reference arc.

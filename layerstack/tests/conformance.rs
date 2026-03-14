@@ -722,3 +722,234 @@ fn value_blocked_only_affects_blocked_field() {
         Value::Int(99)
     );
 }
+
+#[test]
+fn time_samples_held_interpolation() {
+    use layerstack::InterpolationType;
+
+    let mut store = InMemoryStore::default();
+    let field = store.tokens.intern("x");
+    let p = path(&mut store, "/P");
+
+    let mut layer = Layer {
+        id: LayerId(1),
+        sublayers: vec![],
+        prims: HashMap::new(),
+    };
+    let mut spec = PrimSpec::default();
+    spec.fields.insert(
+        field,
+        FieldValue::TimeSamples(vec![
+            (1.0, Value::Float(10.0)),
+            (3.0, Value::Float(30.0)),
+            (5.0, Value::Float(50.0)),
+        ]),
+    );
+    layer.prims.insert(p, spec);
+    store.insert_layer(layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    // Exact samples.
+    assert_eq!(
+        stage.resolve_value_at_time(p, field, 1.0, InterpolationType::Held).unwrap().value,
+        Value::Float(10.0)
+    );
+    assert_eq!(
+        stage.resolve_value_at_time(p, field, 3.0, InterpolationType::Held).unwrap().value,
+        Value::Float(30.0)
+    );
+
+    // Between samples: held returns earlier value.
+    assert_eq!(
+        stage.resolve_value_at_time(p, field, 2.0, InterpolationType::Held).unwrap().value,
+        Value::Float(10.0)
+    );
+    assert_eq!(
+        stage.resolve_value_at_time(p, field, 4.0, InterpolationType::Held).unwrap().value,
+        Value::Float(30.0)
+    );
+
+    // Before first sample: return first value.
+    assert_eq!(
+        stage.resolve_value_at_time(p, field, 0.0, InterpolationType::Held).unwrap().value,
+        Value::Float(10.0)
+    );
+
+    // After last sample: return last value.
+    assert_eq!(
+        stage.resolve_value_at_time(p, field, 100.0, InterpolationType::Held).unwrap().value,
+        Value::Float(50.0)
+    );
+}
+
+#[test]
+fn time_samples_linear_interpolation() {
+    use layerstack::InterpolationType;
+
+    let mut store = InMemoryStore::default();
+    let field = store.tokens.intern("x");
+    let p = path(&mut store, "/P");
+
+    let mut layer = Layer {
+        id: LayerId(1),
+        sublayers: vec![],
+        prims: HashMap::new(),
+    };
+    let mut spec = PrimSpec::default();
+    spec.fields.insert(
+        field,
+        FieldValue::TimeSamples(vec![
+            (0.0, Value::Float(0.0)),
+            (10.0, Value::Float(100.0)),
+        ]),
+    );
+    layer.prims.insert(p, spec);
+    store.insert_layer(layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    // Midpoint: linear interpolation.
+    assert_eq!(
+        stage.resolve_value_at_time(p, field, 5.0, InterpolationType::Linear).unwrap().value,
+        Value::Float(50.0)
+    );
+
+    // Quarter point.
+    assert_eq!(
+        stage.resolve_value_at_time(p, field, 2.5, InterpolationType::Linear).unwrap().value,
+        Value::Float(25.0)
+    );
+
+    // Exact sample.
+    assert_eq!(
+        stage.resolve_value_at_time(p, field, 0.0, InterpolationType::Linear).unwrap().value,
+        Value::Float(0.0)
+    );
+
+    // Beyond range: clamp.
+    assert_eq!(
+        stage.resolve_value_at_time(p, field, -1.0, InterpolationType::Linear).unwrap().value,
+        Value::Float(0.0)
+    );
+    assert_eq!(
+        stage.resolve_value_at_time(p, field, 20.0, InterpolationType::Linear).unwrap().value,
+        Value::Float(100.0)
+    );
+}
+
+#[test]
+fn time_samples_linear_int_interpolation() {
+    use layerstack::InterpolationType;
+
+    let mut store = InMemoryStore::default();
+    let field = store.tokens.intern("x");
+    let p = path(&mut store, "/P");
+
+    let mut layer = Layer {
+        id: LayerId(1),
+        sublayers: vec![],
+        prims: HashMap::new(),
+    };
+    let mut spec = PrimSpec::default();
+    spec.fields.insert(
+        field,
+        FieldValue::TimeSamples(vec![
+            (0.0, Value::Int(0)),
+            (10.0, Value::Int(100)),
+        ]),
+    );
+    layer.prims.insert(p, spec);
+    store.insert_layer(layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    // Midpoint: linear interpolation, rounded to nearest int.
+    assert_eq!(
+        stage.resolve_value_at_time(p, field, 5.0, InterpolationType::Linear).unwrap().value,
+        Value::Int(50)
+    );
+}
+
+#[test]
+fn time_samples_non_numeric_falls_back_to_held() {
+    use layerstack::InterpolationType;
+
+    let mut store = InMemoryStore::default();
+    let field = store.tokens.intern("name");
+    let p = path(&mut store, "/P");
+
+    let mut layer = Layer {
+        id: LayerId(1),
+        sublayers: vec![],
+        prims: HashMap::new(),
+    };
+    let mut spec = PrimSpec::default();
+    spec.fields.insert(
+        field,
+        FieldValue::TimeSamples(vec![
+            (1.0, Value::String("hello".into())),
+            (5.0, Value::String("world".into())),
+        ]),
+    );
+    layer.prims.insert(p, spec);
+    store.insert_layer(layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    // Linear on non-numeric falls back to held (earlier value).
+    assert_eq!(
+        stage.resolve_value_at_time(p, field, 3.0, InterpolationType::Linear).unwrap().value,
+        Value::String("hello".into())
+    );
+}
+
+#[test]
+fn time_samples_override_default_value() {
+    use layerstack::InterpolationType;
+
+    let mut store = InMemoryStore::default();
+    let field = store.tokens.intern("x");
+    let p = path(&mut store, "/P");
+
+    // Root layer: timeSamples.
+    let mut root = Layer {
+        id: LayerId(1),
+        sublayers: vec![LayerId(2)],
+        prims: HashMap::new(),
+    };
+    let mut root_spec = PrimSpec::default();
+    root_spec.fields.insert(
+        field,
+        FieldValue::TimeSamples(vec![
+            (1.0, Value::Float(10.0)),
+        ]),
+    );
+    root.prims.insert(p, root_spec);
+    store.insert_layer(root);
+
+    // Sublayer: default value.
+    let mut sub = Layer {
+        id: LayerId(2),
+        sublayers: vec![],
+        prims: HashMap::new(),
+    };
+    let mut sub_spec = PrimSpec::default();
+    sub_spec.fields.insert(field, FieldValue::Value(Value::Float(999.0)));
+    sub.prims.insert(p, sub_spec);
+    store.insert_layer(sub);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    // TimeSamples from stronger layer takes priority.
+    assert_eq!(
+        stage.resolve_value_at_time(p, field, 1.0, InterpolationType::Held).unwrap().value,
+        Value::Float(10.0)
+    );
+
+    // Default resolve (no time) returns the stronger timeSamples, which yields None
+    // since we don't have a time context. But resolve_value checks the *first* opinion
+    // which is TimeSamples, so it returns None. The weaker default is not reached.
+    // For the default value, the user should use resolve_value_at_time.
+    assert!(stage.resolve_value(p, field).is_none());
+}

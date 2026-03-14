@@ -32,8 +32,8 @@ pub mod prim_index;
 pub mod stage;
 
 pub use doc::{
-    FieldValue, InMemoryStore, Layer, LayerId, PrimSpec, Reference, Specifier, Value,
-    VariantSetSpec, VariantSpec,
+    FieldValue, InMemoryStore, InterpolationType, Layer, LayerId, PrimSpec, Reference, Specifier,
+    Value, VariantSetSpec, VariantSpec,
 };
 pub use interner::{TokenId, TokenInterner};
 pub use layer_stack::LayerStack;

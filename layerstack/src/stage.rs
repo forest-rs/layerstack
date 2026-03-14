@@ -7,7 +7,7 @@ use alloc::{vec, vec::Vec};
 use hashbrown::HashMap;
 
 use crate::{
-    doc::{FieldValue, LayerId, LayerStore, Specifier, Value},
+    doc::{FieldValue, InterpolationType, LayerId, LayerStore, Specifier, Value},
     interner::TokenId,
     listop::{ListOp, resolve_list_chain},
     path::PathId,
@@ -162,7 +162,7 @@ impl Stage {
                     .iter()
                     .filter_map(|op| match &op.value {
                         FieldValue::TokenListOp(list) => Some(list.clone()),
-                        FieldValue::Value(_) | FieldValue::PathListOp(_) => None,
+                        _ => None,
                     })
                     .collect();
                 Some(Resolved {
@@ -175,7 +175,7 @@ impl Stage {
                     .iter()
                     .filter_map(|op| match &op.value {
                         FieldValue::PathListOp(list) => Some(list.clone()),
-                        FieldValue::Value(_) | FieldValue::TokenListOp(_) => None,
+                        _ => None,
                     })
                     .collect();
                 Some(Resolved {
@@ -183,7 +183,61 @@ impl Stage {
                     provenance: self.provenance_for(field, strongest),
                 })
             }
+            FieldValue::TimeSamples(_) => {
+                // When resolved without a time, timeSamples return no scalar value.
+                // Use resolve_value_at_time() for time-varying queries.
+                None
+            }
         }
+    }
+
+    /// Resolves a time-varying field on a prim at a specific time.
+    ///
+    /// TimeSamples take priority over default values per §12.3. The strongest
+    /// opinion with timeSamples is used. If no timeSamples exist, falls back to
+    /// `resolve_value`.
+    ///
+    /// Spec: AOUSD Core §12.3.2.2 (timeSamples), §12.5 (interpolation).
+    #[must_use]
+    pub fn resolve_value_at_time(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        time: f64,
+        interp: InterpolationType,
+    ) -> Option<Resolved<Value>> {
+        let index = self.prims.get(&prim)?;
+        let opinions = index.opinions_by_field.get(&field)?;
+
+        // Per §12.3: check each spec in strength order for timeSamples first,
+        // then fall back to default value.
+        for opinion in opinions {
+            match &opinion.value {
+                FieldValue::Value(Value::Blocked) => return None,
+                FieldValue::TimeSamples(samples) => {
+                    let value = interpolate_samples(samples, time, interp);
+                    return value.map(|v| Resolved {
+                        value: v,
+                        provenance: self.provenance_for(field, opinion),
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        // No timeSamples found: fall back to scalar default.
+        for opinion in opinions {
+            if let FieldValue::Value(v) = &opinion.value
+                && *v != Value::Blocked
+            {
+                return Some(Resolved {
+                    value: v.clone(),
+                    provenance: self.provenance_for(field, opinion),
+                });
+            }
+        }
+
+        None
     }
 
     /// Returns the sorted opinion stack for `(prim, field)` (strongest-first).
@@ -337,5 +391,79 @@ impl Iterator for Traverse<'_> {
             }
         }
         Some(next)
+    }
+}
+
+/// Interpolates a value from sorted timeSamples at the given time.
+///
+/// Spec: AOUSD Core §12.5 (interpolation methods).
+fn interpolate_samples(
+    samples: &[(f64, Value)],
+    time: f64,
+    interp: InterpolationType,
+) -> Option<Value> {
+    if samples.is_empty() {
+        return None;
+    }
+
+    // Binary search for the bracketing samples.
+    match samples.binary_search_by(|(t, _)| t.partial_cmp(&time).unwrap_or(core::cmp::Ordering::Equal)) {
+        // Exact match.
+        Ok(idx) => Some(samples[idx].1.clone()),
+        // Between or outside samples.
+        Err(idx) => {
+            if idx == 0 {
+                // Before first sample: return first sample's value.
+                Some(samples[0].1.clone())
+            } else if idx >= samples.len() {
+                // After last sample: return last sample's value.
+                Some(samples.last().unwrap().1.clone())
+            } else {
+                // Between two samples.
+                match interp {
+                    InterpolationType::Held => {
+                        // Step function: return the earlier sample's value.
+                        Some(samples[idx - 1].1.clone())
+                    }
+                    InterpolationType::Linear => {
+                        lerp_values(
+                            &samples[idx - 1].1,
+                            &samples[idx].1,
+                            samples[idx - 1].0,
+                            samples[idx].0,
+                            time,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Linear interpolation between two values. Falls back to held for
+/// non-numeric types.
+fn lerp_values(a: &Value, b: &Value, t_a: f64, t_b: f64, t: f64) -> Option<Value> {
+    let alpha = if (t_b - t_a).abs() < f64::EPSILON {
+        0.0
+    } else {
+        (t - t_a) / (t_b - t_a)
+    };
+
+    match (a, b) {
+        (Value::Float(va), Value::Float(vb)) => Some(Value::Float(va + (vb - va) * alpha)),
+        (Value::Int(va), Value::Int(vb)) => {
+            let result = *va as f64 + (*vb as f64 - *va as f64) * alpha;
+            // Round to nearest (no_std-compatible), clamped to i64 range.
+            let rounded = if result >= 0.0 {
+                result + 0.5
+            } else {
+                result - 0.5
+            };
+            #[allow(clippy::cast_possible_truncation, reason = "clamped by f64 range")]
+            let i = rounded as i64;
+            Some(Value::Int(i))
+        }
+        // Non-interpolable types fall back to held (earlier sample).
+        _ => Some(a.clone()),
     }
 }

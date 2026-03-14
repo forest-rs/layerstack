@@ -792,6 +792,7 @@ fn add_inherit_opinions(
     // Spec: AOUSD Core §10 (inherits arc).
     let mut visited: HashSet<(PathId, PathId)> = HashSet::new();
     let mut visited_specializes: HashSet<(PathId, PathId)> = HashSet::new();
+    let mut visited_refs: HashSet<(PathId, LayerId, PathId)> = HashSet::new();
     for dest_root in paths.iter().copied() {
         let inherits = resolve_inherits_for_prim(store, local_stack, dest_root);
         for (arc_list_index, inherited_root) in inherits.into_iter().enumerate() {
@@ -809,6 +810,7 @@ fn add_inherit_opinions(
                 out,
                 &mut visited,
                 &mut visited_specializes,
+                &mut visited_refs,
                 prim_order_out,
                 authored_children_out,
             );
@@ -827,6 +829,7 @@ fn add_inherit_edge_opinions(
     out: &mut HashMap<PathId, PrimIndex>,
     visited: &mut HashSet<(PathId, PathId)>,
     visited_specializes: &mut HashSet<(PathId, PathId)>,
+    visited_refs: &mut HashSet<(PathId, LayerId, PathId)>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
 ) {
@@ -1024,6 +1027,59 @@ fn add_inherit_edge_opinions(
         }
     }
 
+    // Propagate already-accumulated PrimIndex sources from mapped source
+    // paths to dest paths. This handles cases where the source path has
+    // opinions from other composition arcs (e.g., references) that were
+    // added by earlier processing. Without this, opinions from layers using
+    // different namespace roots (as in reference contexts) would be missed.
+    for &(remote_path_id, dest_path_id) in &mapping {
+        let src_index = out.get(&remote_path_id).cloned();
+        if let Some(src_index) = src_index {
+            for source in &src_index.sources {
+                if source.arc_kind == ArcKind::Local {
+                    continue;
+                }
+                out.get_mut(&dest_path_id)
+                    .expect("path exists")
+                    .add_source(OpinionKey {
+                        is_local: false,
+                        arc_kind,
+                        nested_arc_kind: Some(source.arc_kind),
+                        namespace_depth,
+                        authored: true,
+                        arc_list_index,
+                        layer_strength: source.layer_strength,
+                        layer_id: source.layer_id,
+                        spec_path: source.spec_path,
+                    });
+            }
+            for (field, opinions) in &src_index.opinions_by_field {
+                for opinion in opinions {
+                    if opinion.key.arc_kind == ArcKind::Local {
+                        continue;
+                    }
+                    out.get_mut(&dest_path_id)
+                        .expect("path exists")
+                        .add_opinion(Opinion {
+                            key: OpinionKey {
+                                is_local: false,
+                                arc_kind,
+                                nested_arc_kind: Some(opinion.key.arc_kind),
+                                namespace_depth,
+                                authored: true,
+                                arc_list_index,
+                                layer_strength: opinion.key.layer_strength,
+                                layer_id: opinion.key.layer_id,
+                                spec_path: opinion.key.spec_path,
+                            },
+                            field: *field,
+                            value: opinion.value.clone(),
+                        });
+                }
+            }
+        }
+    }
+
     for &(remote_path_id, dest_path_id) in &mapping {
         let nested_inherits = resolve_inherits_for_prim(store, local_stack, remote_path_id);
         for (nested_index, nested) in nested_inherits.into_iter().enumerate() {
@@ -1057,6 +1113,7 @@ fn add_inherit_edge_opinions(
                     out,
                     visited,
                     visited_specializes,
+                    visited_refs,
                     prim_order_out,
                     authored_children_out,
                 );
@@ -1088,6 +1145,7 @@ fn add_inherit_edge_opinions(
                         out,
                         visited,
                         visited_specializes,
+                        visited_refs,
                         prim_order_out,
                         authored_children_out,
                     );
@@ -1104,6 +1162,7 @@ fn add_inherit_edge_opinions(
                 out,
                 visited,
                 visited_specializes,
+                visited_refs,
                 prim_order_out,
                 authored_children_out,
             );
@@ -1173,6 +1232,34 @@ fn add_inherit_edge_opinions(
                 namespace_depth,
                 spec_index,
                 out,
+                visited_specializes,
+                prim_order_out,
+                authored_children_out,
+            );
+        }
+
+        // Propagate references from the inherited class.
+        //
+        // When an inherited class has references, those reference opinions
+        // propagate through the inherits arc. This completes the LIVERPS chain
+        // for inherits: the inherited namespace's references contribute opinions.
+        //
+        // Spec: AOUSD Core §10 (LIVERPS composition ordering).
+        let nested_refs = resolve_references_for_prim(store, local_stack, remote_path_id);
+        for (ref_index, nested_ref) in nested_refs.into_iter().enumerate() {
+            let ref_index = u16::try_from(ref_index).unwrap_or(u16::MAX);
+            let namespace_depth =
+                u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
+            add_reference_edge_opinions(
+                store,
+                local_stack,
+                dest_path_id,
+                nested_ref,
+                namespace_depth,
+                ref_index,
+                out,
+                visited_refs,
+                visited,
                 visited_specializes,
                 prim_order_out,
                 authored_children_out,
@@ -1587,6 +1674,7 @@ fn add_reference_edge_opinions(
                     out,
                     visited_inherits,
                     visited_specializes,
+                    visited,
                     prim_order_out,
                     authored_children_out,
                 );
@@ -1603,6 +1691,7 @@ fn add_reference_edge_opinions(
                 out,
                 visited_inherits,
                 visited_specializes,
+                visited,
                 prim_order_out,
                 authored_children_out,
             );
@@ -1931,6 +2020,7 @@ fn add_payload_edge_opinions(
                     out,
                     visited_inherits,
                     visited_specializes,
+                    visited,
                     prim_order_out,
                     authored_children_out,
                 );
@@ -1947,6 +2037,7 @@ fn add_payload_edge_opinions(
                 out,
                 visited_inherits,
                 visited_specializes,
+                visited,
                 prim_order_out,
                 authored_children_out,
             );
@@ -2239,6 +2330,56 @@ fn add_specializes_edge_opinions(
                     field,
                     value,
                 });
+        }
+    }
+
+    // Propagate already-accumulated PrimIndex sources from mapped source
+    // paths to dest paths — mirrors the same logic in add_inherit_edge_opinions.
+    for &(remote_path_id, dest_path_id) in &mapping {
+        let src_index = out.get(&remote_path_id).cloned();
+        if let Some(src_index) = src_index {
+            for source in &src_index.sources {
+                if source.arc_kind == ArcKind::Local {
+                    continue;
+                }
+                out.get_mut(&dest_path_id)
+                    .expect("path exists")
+                    .add_source(OpinionKey {
+                        is_local: false,
+                        arc_kind,
+                        nested_arc_kind: Some(source.arc_kind),
+                        namespace_depth,
+                        authored: true,
+                        arc_list_index,
+                        layer_strength: source.layer_strength,
+                        layer_id: source.layer_id,
+                        spec_path: source.spec_path,
+                    });
+            }
+            for (field, opinions) in &src_index.opinions_by_field {
+                for opinion in opinions {
+                    if opinion.key.arc_kind == ArcKind::Local {
+                        continue;
+                    }
+                    out.get_mut(&dest_path_id)
+                        .expect("path exists")
+                        .add_opinion(Opinion {
+                            key: OpinionKey {
+                                is_local: false,
+                                arc_kind,
+                                nested_arc_kind: Some(opinion.key.arc_kind),
+                                namespace_depth,
+                                authored: true,
+                                arc_list_index,
+                                layer_strength: opinion.key.layer_strength,
+                                layer_id: opinion.key.layer_id,
+                                spec_path: opinion.key.spec_path,
+                            },
+                            field: *field,
+                            value: opinion.value.clone(),
+                        });
+                }
+            }
         }
     }
 

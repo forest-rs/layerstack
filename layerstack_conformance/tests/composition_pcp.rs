@@ -531,7 +531,6 @@ fn tricky_nested_specializes2_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires payload arc with variant selection chaining across referenced layers"]
 fn tricky_variant_selection_in_variant_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("TrickyVariantSelectionInVariant_root");
     assert_layer_stack_matches(&loaded, &pcp_path);

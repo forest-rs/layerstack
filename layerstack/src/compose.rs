@@ -308,7 +308,7 @@ fn filter_variant_children(
             continue;
         };
 
-        // Resolve grandparent's variant selections.
+        // Resolve grandparent's variant selections (with chaining).
         let mut gp_selections: HashMap<TokenId, TokenId> = HashMap::new();
         for source in &gp_index.sources {
             let Some(layer) = store.layer(source.layer_id) else {
@@ -320,6 +320,33 @@ fn filter_variant_children(
             for (set, variant) in &spec.variant_selections {
                 gp_selections.entry(*set).or_insert(*variant);
             }
+        }
+        // Chain through variant branches to discover transitive selections.
+        loop {
+            let mut new_sels = HashMap::new();
+            for source in &gp_index.sources {
+                let Some(layer) = store.layer(source.layer_id) else {
+                    continue;
+                };
+                let Some(spec) = layer.prims.get(&source.spec_path) else {
+                    continue;
+                };
+                for (set, selected_variant) in &gp_selections {
+                    if let Some(set_spec) = spec.variant_sets.get(set)
+                        && let Some(variant_spec) = set_spec.variants.get(selected_variant)
+                    {
+                        for (inner_set, inner_variant) in &variant_spec.variant_selections {
+                            if !gp_selections.contains_key(inner_set) {
+                                new_sels.entry(*inner_set).or_insert(*inner_variant);
+                            }
+                        }
+                    }
+                }
+            }
+            if new_sels.is_empty() {
+                break;
+            }
+            gp_selections.extend(new_sels);
         }
 
         // Collect all and selected grandchild authored children.
@@ -545,6 +572,7 @@ fn resolve_full_variant_selections(
     }
 
     // Also gather selections from reference targets (weaker).
+    // Collect reference stacks for use in the chaining loop below.
     let refs = {
         let mut ops = Vec::new();
         for layer_id in &local_stack.layers {
@@ -559,6 +587,7 @@ fn resolve_full_variant_selections(
         crate::listop::resolve_list_chain::<Reference>(&[], ops)
     };
 
+    let mut ref_stacks: Vec<(LayerStack, PathId)> = Vec::new();
     for reference in refs {
         let ref_stack = LayerStack::gather(store, reference.layer);
         let ref_selections =
@@ -566,18 +595,20 @@ fn resolve_full_variant_selections(
         for (set, variant) in ref_selections {
             selections.entry(set).or_insert(variant);
         }
+        ref_stacks.push((ref_stack, reference.prim_path));
     }
 
     // Gather variant selections from within selected variant branches.
     // A stronger variant branch can provide selections for weaker variant sets.
     // Iterate until no new selections are discovered (handles chaining).
-    // Check variant sets from the prim itself AND from inherit targets,
-    // since variant sets can be inherited (e.g. a class defines the selector
-    // variant set while the inheriting prim authors the selection).
+    // Check variant sets from the prim itself AND from inherit targets
+    // AND from reference targets, since variant sets can be defined in
+    // referenced layers (e.g. modelInterface defines the variant set while
+    // another sibling reference needs the chained selection).
     let inherits = resolve_inherits_for_prim(store, local_stack, path);
     loop {
         let mut new_selections = HashMap::new();
-        // Check specs for the prim path and all inherit targets.
+        // Check specs for the prim path and all inherit targets in local_stack.
         let check_paths = core::iter::once(path).chain(inherits.iter().copied());
         for check_path in check_paths {
             for layer_id in &local_stack.layers {
@@ -585,6 +616,28 @@ fn resolve_full_variant_selections(
                     continue;
                 };
                 let Some(spec) = layer.prims.get(&check_path) else {
+                    continue;
+                };
+                for (set, selected_variant) in &selections {
+                    if let Some(set_spec) = spec.variant_sets.get(set)
+                        && let Some(variant_spec) = set_spec.variants.get(selected_variant)
+                    {
+                        for (inner_set, inner_variant) in &variant_spec.variant_selections {
+                            if !selections.contains_key(inner_set) {
+                                new_selections.entry(*inner_set).or_insert(*inner_variant);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Also check variant sets from reference targets' layers.
+        for (ref_stack, ref_path) in &ref_stacks {
+            for layer_id in &ref_stack.layers {
+                let Some(layer) = store.layer(*layer_id) else {
+                    continue;
+                };
+                let Some(spec) = layer.prims.get(ref_path) else {
                     continue;
                 };
                 for (set, selected_variant) in &selections {
@@ -1607,7 +1660,7 @@ fn add_reference_edge_opinions(
             // (referencing layer selections take precedence).
             {
                 let selections =
-                    resolve_variant_selections_for_prim(store, &combined_stack, *remote_path_id);
+                    resolve_full_variant_selections(store, &combined_stack, *remote_path_id);
                 for (set, selected) in &selections {
                     if let Some(set_spec) = remote_spec.variant_sets.get(set)
                         && let Some(variant_spec) = set_spec.variants.get(selected)

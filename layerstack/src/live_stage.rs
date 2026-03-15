@@ -91,13 +91,39 @@ impl LiveStage {
         }
     }
 
-    /// Notifies that a specific prim's opinions in `layer` have changed.
+    /// Notifies that opinions for specific prims within `layer` have changed.
+    ///
+    /// This is more precise than [`notify_layer_edit`](Self::notify_layer_edit):
+    /// only the named prims are marked dirty (plus their transitive dependents
+    /// at drain time), rather than every prim that receives opinions from the
+    /// layer. Prims not actually connected to `layer` are silently ignored.
+    pub fn notify_layer_prim_edits(&mut self, layer: LayerId, prims: &[PathId]) {
+        if let Some(layer_prims) = self.layer_to_prims.get(&layer) {
+            for &prim in prims {
+                if layer_prims.contains(&prim) {
+                    self.invalidated.mark(prim, OPINION_EDIT);
+                }
+            }
+        }
+    }
+
+    /// Notifies that a specific prim's opinions have changed (any layer).
     ///
     /// This is more precise than [`notify_layer_edit`](Self::notify_layer_edit):
     /// only the named prim is marked dirty (plus its transitive dependents at
     /// drain time), rather than every prim that receives opinions from the layer.
     pub fn notify_prim_edit(&mut self, prim: PathId) {
         self.invalidated.mark(prim, OPINION_EDIT);
+    }
+
+    /// Batch-marks multiple prims as dirty (any layer).
+    ///
+    /// Equivalent to calling [`notify_prim_edit`](Self::notify_prim_edit) for
+    /// each prim, but more convenient for bulk edits.
+    pub fn notify_prim_edits(&mut self, prims: &[PathId]) {
+        for &prim in prims {
+            self.invalidated.mark(prim, OPINION_EDIT);
+        }
     }
 
     /// Notifies that a structural change occurred (prims added/removed, arcs changed).
@@ -777,6 +803,157 @@ mod tests {
             live.stage().resolve_field(prim_b, field_x).unwrap().value,
             Value::Int64(2),
             "B's value should be unchanged"
+        );
+    }
+
+    #[test]
+    fn notify_layer_prim_edits_only_marks_connected_prims() {
+        let mut store = InMemoryStore::default();
+        let field_x = store.tokens.intern("x");
+        let prim_a = p(&mut store, "/A");
+        let prim_b = p(&mut store, "/B");
+
+        // Both prims in layer 1.
+        let mut layer = Layer {
+            id: LayerId(1),
+            sublayers: vec![],
+            prims: HashMap::new(),
+        };
+        let mut a_spec = PrimSpec::default();
+        a_spec
+            .fields
+            .insert(field_x, FieldValue::Value(Value::Int64(1)));
+        layer.prims.insert(prim_a, a_spec);
+
+        let mut b_spec = PrimSpec::default();
+        b_spec
+            .fields
+            .insert(field_x, FieldValue::Value(Value::Int64(2)));
+        layer.prims.insert(prim_b, b_spec);
+        store.insert_layer(layer);
+
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+
+        // Edit only prim A in layer 1.
+        {
+            let layer = store.layers.get_mut(&LayerId(1)).unwrap();
+            let spec = layer.prims.get_mut(&prim_a).unwrap();
+            spec.fields
+                .insert(field_x, FieldValue::Value(Value::Int64(99)));
+        }
+
+        // Use the targeted notification: only mark prim_a within layer 1.
+        live.notify_layer_prim_edits(LayerId(1), &[prim_a]);
+        let updated = live.recompose(&mut store);
+
+        assert!(updated.contains(&prim_a), "A should be updated");
+        assert!(
+            !updated.contains(&prim_b),
+            "B should not be updated (not in notification list)"
+        );
+        assert_eq!(
+            live.stage().resolve_field(prim_a, field_x).unwrap().value,
+            Value::Int64(99)
+        );
+        assert_eq!(
+            live.stage().resolve_field(prim_b, field_x).unwrap().value,
+            Value::Int64(2),
+            "B should be unchanged"
+        );
+    }
+
+    #[test]
+    fn notify_layer_prim_edits_ignores_unconnected_prims() {
+        let mut store = InMemoryStore::default();
+        let field_x = store.tokens.intern("x");
+        let prim_a = p(&mut store, "/A");
+        let prim_b = p(&mut store, "/B");
+
+        // Prim A in layer 1, prim B in layer 2.
+        let mut layer1 = Layer {
+            id: LayerId(1),
+            sublayers: vec![LayerId(2)],
+            prims: HashMap::new(),
+        };
+        let mut a_spec = PrimSpec::default();
+        a_spec
+            .fields
+            .insert(field_x, FieldValue::Value(Value::Int64(1)));
+        layer1.prims.insert(prim_a, a_spec);
+        store.insert_layer(layer1);
+
+        let mut layer2 = Layer {
+            id: LayerId(2),
+            sublayers: vec![],
+            prims: HashMap::new(),
+        };
+        let mut b_spec = PrimSpec::default();
+        b_spec
+            .fields
+            .insert(field_x, FieldValue::Value(Value::Int64(2)));
+        layer2.prims.insert(prim_b, b_spec);
+        store.insert_layer(layer2);
+
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+
+        // Try to mark prim_b as dirty in layer 1 — it's not connected.
+        live.notify_layer_prim_edits(LayerId(1), &[prim_b]);
+        let updated = live.recompose(&mut store);
+
+        assert!(
+            updated.is_empty(),
+            "prim_b is not connected to layer 1, so nothing should be invalidated"
+        );
+    }
+
+    #[test]
+    fn notify_prim_edits_batch() {
+        let mut store = InMemoryStore::default();
+        let field_x = store.tokens.intern("x");
+        let prim_a = p(&mut store, "/A");
+        let prim_b = p(&mut store, "/B");
+        let prim_c = p(&mut store, "/C");
+
+        let mut layer = Layer {
+            id: LayerId(1),
+            sublayers: vec![],
+            prims: HashMap::new(),
+        };
+        for &(prim, val) in &[(prim_a, 1), (prim_b, 2), (prim_c, 3)] {
+            let mut spec = PrimSpec::default();
+            spec.fields
+                .insert(field_x, FieldValue::Value(Value::Int64(val)));
+            layer.prims.insert(prim, spec);
+        }
+        store.insert_layer(layer);
+
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+
+        // Edit A and B.
+        {
+            let layer = store.layers.get_mut(&LayerId(1)).unwrap();
+            layer
+                .prims
+                .get_mut(&prim_a)
+                .unwrap()
+                .fields
+                .insert(field_x, FieldValue::Value(Value::Int64(10)));
+            layer
+                .prims
+                .get_mut(&prim_b)
+                .unwrap()
+                .fields
+                .insert(field_x, FieldValue::Value(Value::Int64(20)));
+        }
+
+        live.notify_prim_edits(&[prim_a, prim_b]);
+        let updated = live.recompose(&mut store);
+
+        assert!(updated.contains(&prim_a), "A should be updated");
+        assert!(updated.contains(&prim_b), "B should be updated");
+        assert!(
+            !updated.contains(&prim_c),
+            "C should not be updated"
         );
     }
 }

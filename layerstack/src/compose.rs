@@ -234,17 +234,16 @@ fn filter_variant_children(
                 }
             });
 
-            // Re-order variant children: use authored order from the selected
-            // variant branch(es). Children from later variant sets come first.
-            // Build an ordered list of selected variant children.
-            let mut ordered_variant_children: Vec<TokenId> = Vec::new();
-
-            // Iterate variant sets in reverse order (later sets' children first).
+            // Re-order variant children: group by source arc (weakest first),
+            // then by variant set order within each group (later sets first).
+            // This ensures children from sibling reference arcs stay grouped
+            // together rather than being interleaved by variant set.
+            use alloc::collections::BTreeMap;
+            let mut arc_groups: BTreeMap<u16, Vec<TokenId>> = BTreeMap::new();
             for set_tok in variant_set_order.iter().rev() {
                 let Some(&selected_variant) = selections.get(set_tok) else {
                     continue;
                 };
-                // Find authored_children for the selected branch from any source.
                 for source in &prim_index.sources {
                     let Some(layer) = store.layer(source.layer_id) else {
                         continue;
@@ -255,11 +254,21 @@ fn filter_variant_children(
                     if let Some(set_spec) = spec.variant_sets.get(set_tok)
                         && let Some(variant_spec) = set_spec.variants.get(&selected_variant)
                     {
+                        let group = arc_groups.entry(source.arc_list_index).or_default();
                         for child in &variant_spec.authored_children {
-                            if !ordered_variant_children.contains(child) {
-                                ordered_variant_children.push(*child);
+                            if !group.contains(child) {
+                                group.push(*child);
                             }
                         }
+                    }
+                }
+            }
+            // Weakest arc first (highest arc_list_index first).
+            let mut ordered_variant_children: Vec<TokenId> = Vec::new();
+            for (_arc_idx, children) in arc_groups.iter().rev() {
+                for child in children {
+                    if !ordered_variant_children.contains(child) {
+                        ordered_variant_children.push(*child);
                     }
                 }
             }

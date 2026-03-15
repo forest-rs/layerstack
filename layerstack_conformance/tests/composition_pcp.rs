@@ -480,7 +480,7 @@ fn variant_specializes_and_reference_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires variant children population through references"]
+#[ignore = "requires fallback variant selection (standin=render not authored, comes from PCP test framework config)"]
 fn case1_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("case1_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
@@ -509,7 +509,6 @@ fn tricky_variant_weaker_selection_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires variant children ordering across sibling reference arcs"]
 fn tricky_variant_independent_selection_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("TrickyVariantIndependentSelection_root");
     assert_layer_stack_matches(&loaded, &pcp_path);

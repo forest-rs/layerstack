@@ -196,12 +196,7 @@ fn main() {
     store.insert_layer(robot_asset.layer.expect("first resolve returns layer"));
 
     let env_asset = resolver
-        .resolve(
-            "sets/env.layer",
-            None,
-            &mut store.tokens,
-            &mut store.paths,
-        )
+        .resolve("sets/env.layer", None, &mut store.tokens, &mut store.paths)
         .expect("env asset should resolve");
     let env_layer_id = env_asset.layer_id;
     store.insert_layer(env_asset.layer.expect("first resolve returns layer"));

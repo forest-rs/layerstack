@@ -951,9 +951,6 @@ mod tests {
 
         assert!(updated.contains(&prim_a), "A should be updated");
         assert!(updated.contains(&prim_b), "B should be updated");
-        assert!(
-            !updated.contains(&prim_c),
-            "C should not be updated"
-        );
+        assert!(!updated.contains(&prim_c), "C should not be updated");
     }
 }

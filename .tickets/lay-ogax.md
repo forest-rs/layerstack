@@ -1,6 +1,6 @@
 ---
 id: lay-ogax
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-03-13T18:08:56Z

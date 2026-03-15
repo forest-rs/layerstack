@@ -21,6 +21,7 @@ extern crate std;
 pub use hashbrown::{HashMap, HashSet};
 
 pub mod arcs;
+pub mod asset;
 pub mod compose;
 pub mod dependency_map;
 pub mod doc;
@@ -34,6 +35,7 @@ pub mod stage;
 
 pub mod live_stage;
 
+pub use asset::{AssetResolveError, AssetResolver, ResolvedAsset};
 pub use dependency_map::ArcDependency;
 pub use doc::{
     FieldValue, InMemoryStore, InterpolationType, Layer, LayerId, PrimSpec, Reference, Specifier,

@@ -2,9 +2,8 @@
 //!
 //! In a real pipeline, layers live in files, databases, or on the network.
 //! References carry an `asset` URI that must be resolved to a `LayerId`
-//! before composition. This example shows the pattern: a custom
-//! `LayerStore` that resolves asset URIs lazily and loads layers into an
-//! in-memory cache on first access.
+//! before composition. This example shows the pattern: a catalog-backed
+//! [`AssetResolver`] that loads layers lazily and deduplicates by URI.
 //!
 //! Scene structure:
 //!
@@ -17,35 +16,40 @@
 //! ```
 
 use std::collections::HashMap as StdHashMap;
+use std::sync::Arc;
 
 use layerstack::{
-    FieldValue, HashMap, Layer, LayerId, ListOp, Path, PathId, PrimSpec, Reference, Specifier,
-    Stage, StageOptions, TokenInterner, Value, path::PathInterner,
+    AssetResolveError, AssetResolver, FieldValue, HashMap, InMemoryStore, Layer, LayerId, ListOp,
+    Path, PathId, PrimSpec, Reference, ResolvedAsset, Specifier, Stage, StageOptions,
+    TokenInterner, Value, path::PathInterner,
 };
 
-use layerstack::doc::LayerStore;
-
 // ---------------------------------------------------------------------------
-// Asset resolver: maps URI strings to layer data.
+// Catalog-backed AssetResolver.
 // ---------------------------------------------------------------------------
 
-/// A simple asset catalog mapping URI strings to layer-building functions.
+/// An [`AssetResolver`] backed by a catalog of builder functions.
 ///
 /// In production this would be a file loader, database client, or HTTP
 /// fetcher. Here we use closures that build layers programmatically.
-struct AssetCatalog {
+struct CatalogResolver {
     /// URI to builder function.
     #[allow(
         clippy::type_complexity,
         reason = "example code, clarity over abstraction"
     )]
     builders: StdHashMap<String, Box<dyn Fn(&mut TokenInterner, &mut PathInterner) -> Layer>>,
+    /// Maps asset URI to resolved info for deduplication.
+    resolved: StdHashMap<String, (LayerId, Arc<str>)>,
+    next_id: u64,
 }
 
-impl AssetCatalog {
+impl CatalogResolver {
     fn new() -> Self {
         Self {
             builders: StdHashMap::new(),
+            resolved: StdHashMap::new(),
+            next_id: 100, // Reserve low IDs for hand-authored layers.
         }
     }
 
@@ -58,86 +62,50 @@ impl AssetCatalog {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Resolving LayerStore: resolves asset URIs and caches loaded layers.
-// ---------------------------------------------------------------------------
-
-/// A `LayerStore` that lazily loads layers when they're first accessed.
-///
-/// This demonstrates the pattern for integrating external asset sources
-/// with layerstack's composition. The key insight: all asset resolution
-/// happens *before* or *during* store population — `Stage::compose` only
-/// sees `LayerId`s and `PathId`s.
-struct ResolvingStore {
-    tokens: TokenInterner,
-    paths: PathInterner,
-    layers: HashMap<LayerId, Layer>,
-    /// Maps asset URI to assigned `LayerId` for deduplication.
-    resolved: StdHashMap<String, LayerId>,
-    next_id: u64,
-}
-
-impl ResolvingStore {
-    fn new() -> Self {
-        Self {
-            tokens: TokenInterner::default(),
-            paths: PathInterner::default(),
-            layers: HashMap::new(),
-            resolved: StdHashMap::new(),
-            next_id: 100, // Reserve low IDs for hand-authored layers.
-        }
-    }
-
-    /// Resolves an asset URI to a `LayerId`, loading it from the catalog
-    /// if not already cached.
-    fn resolve(&mut self, uri: &str, catalog: &AssetCatalog) -> LayerId {
-        if let Some(&id) = self.resolved.get(uri) {
-            return id;
+impl AssetResolver for CatalogResolver {
+    fn resolve(
+        &mut self,
+        asset_path: &str,
+        _anchor: Option<LayerId>,
+        tokens: &mut TokenInterner,
+        paths: &mut PathInterner,
+    ) -> Result<ResolvedAsset, AssetResolveError> {
+        // Deduplication: return cached result if already resolved.
+        if let Some((layer_id, resolved_path)) = self.resolved.get(asset_path) {
+            return Ok(ResolvedAsset {
+                layer_id: *layer_id,
+                resolved_path: resolved_path.clone(),
+                layer: None,
+            });
         }
 
         let id = LayerId(self.next_id);
         self.next_id += 1;
 
-        if let Some(builder) = catalog.builders.get(uri) {
-            let mut layer = builder(&mut self.tokens, &mut self.paths);
-            layer.id = id;
-            self.layers.insert(id, layer);
-        } else {
-            eprintln!("warning: unknown asset URI '{uri}', inserting empty layer");
-            self.layers.insert(
-                id,
-                Layer {
-                    id,
-                    sublayers: vec![],
-                    prims: HashMap::new(),
-                },
-            );
-        }
+        let builder = self
+            .builders
+            .get(asset_path)
+            .ok_or(AssetResolveError::NotFound)?;
 
-        self.resolved.insert(uri.to_string(), id);
-        id
+        let mut layer = builder(tokens, paths);
+        layer.id = id;
+
+        let resolved_path: Arc<str> = Arc::from(asset_path);
+        self.resolved
+            .insert(asset_path.to_string(), (id, resolved_path.clone()));
+
+        Ok(ResolvedAsset {
+            layer_id: id,
+            resolved_path,
+            layer: Some(layer),
+        })
     }
 
-    fn insert_layer(&mut self, layer: Layer) {
-        self.layers.insert(layer.id, layer);
-    }
-}
-
-impl LayerStore for ResolvingStore {
-    fn layer(&self, id: LayerId) -> Option<&Layer> {
-        self.layers.get(&id)
-    }
-    fn tokens(&self) -> &TokenInterner {
-        &self.tokens
-    }
-    fn tokens_mut(&mut self) -> &mut TokenInterner {
-        &mut self.tokens
-    }
-    fn paths(&self) -> &PathInterner {
-        &self.paths
-    }
-    fn paths_mut(&mut self) -> &mut PathInterner {
-        &mut self.paths
+    fn resolved_path(&self, id: LayerId) -> Option<&str> {
+        self.resolved
+            .values()
+            .find(|(lid, _)| *lid == id)
+            .map(|(_, path)| &**path)
     }
 }
 
@@ -145,7 +113,7 @@ impl LayerStore for ResolvingStore {
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn path(store: &mut ResolvingStore, s: &str) -> PathId {
+fn path(store: &mut InMemoryStore, s: &str) -> PathId {
     let p = Path::parse_absolute(s, &mut store.tokens).expect("valid path");
     store.paths.intern(p)
 }
@@ -155,10 +123,10 @@ fn path(store: &mut ResolvingStore, s: &str) -> PathId {
 // ---------------------------------------------------------------------------
 
 fn main() {
-    // 1. Set up an asset catalog with two referenced layers.
-    let mut catalog = AssetCatalog::new();
+    // 1. Set up a catalog-backed resolver with two asset layers.
+    let mut resolver = CatalogResolver::new();
 
-    catalog.register("props/robot.layer", |tokens, paths| {
+    resolver.register("props/robot.layer", |tokens, paths| {
         let field_material = tokens.intern("material");
         let field_joints = tokens.intern("joints");
         let arm_path = paths.intern(Path::parse_absolute("/Arm", tokens).expect("valid path"));
@@ -179,13 +147,13 @@ fn main() {
         prims.insert(arm_path, arm_spec);
 
         Layer {
-            id: LayerId(0), // Will be overwritten by resolve().
+            id: LayerId(0), // Overwritten by the resolver.
             sublayers: vec![],
             prims,
         }
     });
 
-    catalog.register("sets/env.layer", |tokens, paths| {
+    resolver.register("sets/env.layer", |tokens, paths| {
         let field_color = tokens.intern("color");
         let ground_path =
             paths.intern(Path::parse_absolute("/Ground", tokens).expect("valid path"));
@@ -209,15 +177,57 @@ fn main() {
         }
     });
 
-    // 2. Build the root scene layer, resolving asset URIs as we go.
-    let mut store = ResolvingStore::new();
+    // 2. Build the root scene layer, resolving asset URIs via the trait.
+    let mut store = InMemoryStore::default();
 
     let robot_path = path(&mut store, "/Robot");
     let env_path = path(&mut store, "/Environment");
 
-    // Resolve assets to get concrete LayerIds.
-    let robot_layer_id = store.resolve("props/robot.layer", &catalog);
-    let env_layer_id = store.resolve("sets/env.layer", &catalog);
+    // Resolve assets through the AssetResolver trait.
+    let robot_asset = resolver
+        .resolve(
+            "props/robot.layer",
+            None,
+            &mut store.tokens,
+            &mut store.paths,
+        )
+        .expect("robot asset should resolve");
+    let robot_layer_id = robot_asset.layer_id;
+    store.insert_layer(robot_asset.layer.expect("first resolve returns layer"));
+
+    let env_asset = resolver
+        .resolve(
+            "sets/env.layer",
+            None,
+            &mut store.tokens,
+            &mut store.paths,
+        )
+        .expect("env asset should resolve");
+    let env_layer_id = env_asset.layer_id;
+    store.insert_layer(env_asset.layer.expect("first resolve returns layer"));
+
+    // Deduplication: resolving the same URI again returns the same LayerId,
+    // with layer = None (no need to re-insert).
+    let robot_again = resolver
+        .resolve(
+            "props/robot.layer",
+            None,
+            &mut store.tokens,
+            &mut store.paths,
+        )
+        .expect("should deduplicate");
+    assert_eq!(
+        robot_layer_id, robot_again.layer_id,
+        "dedup should return same LayerId"
+    );
+    assert!(
+        robot_again.layer.is_none(),
+        "dedup hit should not return layer"
+    );
+    println!(
+        "Deduplication works: both resolve to layer {}",
+        robot_layer_id.0
+    );
 
     // The referenced prim paths (what the reference points *at* inside the
     // asset layer).
@@ -291,6 +301,16 @@ fn main() {
     let color = stage.resolve_field(env_path, field_color).unwrap();
     println!("/Environment");
     println!("  color = {:?}", color.value);
+
+    // Show resolved paths via the resolver.
+    println!(
+        "\nResolved path for robot layer: {:?}",
+        resolver.resolved_path(robot_layer_id)
+    );
+    println!(
+        "Resolved path for env layer: {:?}",
+        resolver.resolved_path(env_layer_id)
+    );
 
     // Show dependency tracking: which layers affect /Robot?
     let affecting = stage.layers_affecting_prim(robot_path);

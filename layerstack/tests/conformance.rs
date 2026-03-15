@@ -1009,8 +1009,8 @@ fn dependency_map_none_by_default() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     assert!(
-        stage.dependencies().is_none(),
-        "dependencies should be None when with_dependencies is false"
+        !stage.has_dependencies(),
+        "dependencies should be disabled by default"
     );
 }
 
@@ -1052,20 +1052,19 @@ fn dependency_map_records_local_layer_opinions() {
         },
     );
 
-    let deps = stage.dependencies().expect("dependencies enabled");
-    assert!(!deps.is_empty());
+    assert!(stage.has_dependencies());
 
     // Both layers should be recorded as affecting prim P.
-    let layers = deps.layers_affecting_prim(p);
+    let layers = stage.layers_affecting_prim(p);
     assert!(layers.contains(&LayerId(1)));
     assert!(layers.contains(&LayerId(2)));
 
     // P should appear in prims affected by both layers.
-    assert!(deps.prims_affected_by_layer(LayerId(1)).contains(&p));
-    assert!(deps.prims_affected_by_layer(LayerId(2)).contains(&p));
+    assert!(stage.prims_affected_by_layer(LayerId(1)).contains(&p));
+    assert!(stage.prims_affected_by_layer(LayerId(2)).contains(&p));
 
     // No arc dependencies for local-only composition.
-    assert!(deps.arcs().is_empty());
+    assert!(stage.arc_dependencies().is_empty());
 }
 
 #[test]
@@ -1110,10 +1109,10 @@ fn dependency_map_records_reference_arc_and_layer() {
         },
     );
 
-    let deps = stage.dependencies().expect("dependencies enabled");
+    assert!(stage.has_dependencies());
 
     // Should have a reference arc from Q → P.
-    let arcs = deps.arcs_targeting(p);
+    let arcs = stage.arcs_targeting(p);
     assert!(!arcs.is_empty(), "reference arc should target P");
     let ref_arc = arcs
         .iter()
@@ -1123,7 +1122,7 @@ fn dependency_map_records_reference_arc_and_layer() {
     assert_eq!(ref_arc.layer, LayerId(2));
 
     // LayerId(2) should affect P through the reference.
-    assert!(deps.layers_affecting_prim(p).contains(&LayerId(2)));
+    assert!(stage.layers_affecting_prim(p).contains(&LayerId(2)));
 }
 
 #[test]
@@ -1158,9 +1157,9 @@ fn dependency_map_records_inherit_arc() {
         },
     );
 
-    let deps = stage.dependencies().expect("dependencies enabled");
+    assert!(stage.has_dependencies());
 
-    let arcs = deps.arcs_targeting(p);
+    let arcs = stage.arcs_targeting(p);
     let inh_arc = arcs
         .iter()
         .find(|a| a.arc_kind == ArcKind::Inherits)
@@ -1200,9 +1199,9 @@ fn dependency_map_records_specializes_arc() {
         },
     );
 
-    let deps = stage.dependencies().expect("dependencies enabled");
+    assert!(stage.has_dependencies());
 
-    let arcs = deps.arcs_targeting(p);
+    let arcs = stage.arcs_targeting(p);
     let spec_arc = arcs
         .iter()
         .find(|a| a.arc_kind == ArcKind::Specializes)

@@ -18,7 +18,7 @@ use crate::{
         resolve_variant_branch_references, resolve_variant_child_references,
         resolve_variant_selections_for_prim,
     },
-    dependency_map::{ArcDependency, DependencyMapBuilder},
+    dependency_map::{ArcDependency, DependencyBuilder},
     doc::{FieldValue, LayerId, LayerStore, Reference},
     interner::TokenId,
     layer_stack::LayerStack,
@@ -49,7 +49,7 @@ pub fn compose_stage(store: &mut dyn LayerStore, root: LayerId, options: StageOp
         HashMap::new();
 
     let mut dep_builder = if options.with_dependencies {
-        Some(DependencyMapBuilder::new())
+        Some(DependencyBuilder::new())
     } else {
         None
     };
@@ -113,7 +113,7 @@ pub fn compose_stage(store: &mut dyn LayerStore, root: LayerId, options: StageOp
 
     filter_variant_children(store, &prims, &mut children);
 
-    let dependencies = dep_builder.map(DependencyMapBuilder::finish);
+    let dependencies = dep_builder.map(DependencyBuilder::finish);
     Stage::from_parts(prims, children, options.with_provenance, dependencies)
 }
 
@@ -685,7 +685,7 @@ fn add_local_and_variant_opinions(
     out: &mut HashMap<PathId, PrimIndex>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
-    mut deps: Option<&mut DependencyMapBuilder>,
+    mut deps: Option<&mut DependencyBuilder>,
 ) {
     for path in paths.iter().copied() {
         let selections = resolve_full_variant_selections(store, local_stack, path);
@@ -901,7 +901,7 @@ fn add_reference_opinions(
     out: &mut HashMap<PathId, PrimIndex>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
-    mut deps: Option<&mut DependencyMapBuilder>,
+    mut deps: Option<&mut DependencyBuilder>,
 ) {
     // Spec: AOUSD Core §10 (references arcs). For v0.1 we expand references
     // recursively so that nested references contribute opinions.
@@ -952,7 +952,7 @@ fn add_inherit_opinions(
     out: &mut HashMap<PathId, PrimIndex>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
-    mut deps: Option<&mut DependencyMapBuilder>,
+    mut deps: Option<&mut DependencyBuilder>,
 ) {
     // Spec: AOUSD Core §10 (inherits arc).
     let mut visited: HashSet<(PathId, PathId)> = HashSet::new();
@@ -1009,7 +1009,7 @@ fn add_inherit_edge_opinions(
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     // Optional reference namespace for remapping field values (dest, src).
     ref_remap: Option<(&crate::path::Path, &crate::path::Path)>,
-    mut deps: Option<&mut DependencyMapBuilder>,
+    mut deps: Option<&mut DependencyBuilder>,
 ) {
     if !visited.insert((dest_root, inherited_root)) {
         return;
@@ -1607,7 +1607,7 @@ fn add_reference_edge_opinions(
     visited_specializes: &mut HashSet<(PathId, PathId)>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
-    mut deps: Option<&mut DependencyMapBuilder>,
+    mut deps: Option<&mut DependencyBuilder>,
 ) {
     if !out.contains_key(&dest_root) {
         return;
@@ -2040,7 +2040,7 @@ fn add_payload_opinions(
     out: &mut HashMap<PathId, PrimIndex>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
-    mut deps: Option<&mut DependencyMapBuilder>,
+    mut deps: Option<&mut DependencyBuilder>,
 ) {
     // Spec: AOUSD Core §10 (payloads arc, §5.1.22). Payloads are structurally
     // identical to references for composition purposes but sit at a weaker
@@ -2098,7 +2098,7 @@ fn add_payload_edge_opinions(
     visited_specializes: &mut HashSet<(PathId, PathId)>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
-    mut deps: Option<&mut DependencyMapBuilder>,
+    mut deps: Option<&mut DependencyBuilder>,
 ) {
     // Payloads mirror reference edge opinions with ArcKind::Payloads.
     if !out.contains_key(&dest_root) {
@@ -2389,7 +2389,7 @@ fn add_specializes_opinions(
     out: &mut HashMap<PathId, PrimIndex>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
-    mut deps: Option<&mut DependencyMapBuilder>,
+    mut deps: Option<&mut DependencyBuilder>,
 ) {
     // Spec: AOUSD Core §10 (specializes arc, §5.1.33). Specializes mirrors
     // inherits but sits at the weakest position in LIVERPS.
@@ -2439,7 +2439,7 @@ fn add_specializes_edge_opinions(
     visited: &mut HashSet<(PathId, PathId)>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
-    mut deps: Option<&mut DependencyMapBuilder>,
+    mut deps: Option<&mut DependencyBuilder>,
 ) {
     if !visited.insert((dest_root, specialized_root)) {
         return;

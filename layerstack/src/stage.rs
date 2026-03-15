@@ -6,8 +6,10 @@ use alloc::{vec, vec::Vec};
 
 use hashbrown::HashMap;
 
+use invalidation::InvalidationGraph;
+
 use crate::{
-    dependency_map::DependencyMap,
+    dependency_map::{ArcDependency, CompositionDeps},
     doc::{FieldValue, InterpolationType, LayerId, LayerStore, Specifier, Value},
     interner::TokenId,
     listop::{ListOp, resolve_list_chain},
@@ -72,7 +74,7 @@ pub struct Stage {
     prims: HashMap<PathId, PrimIndex>,
     children: HashMap<PathId, Vec<PathId>>,
     with_provenance: bool,
-    dependencies: Option<DependencyMap>,
+    deps: Option<CompositionDeps>,
 }
 
 impl Stage {
@@ -85,20 +87,21 @@ impl Stage {
         prims: HashMap<PathId, PrimIndex>,
         children: HashMap<PathId, Vec<PathId>>,
         with_provenance: bool,
-        dependencies: Option<DependencyMap>,
+        deps: Option<CompositionDeps>,
     ) -> Self {
         Self {
             prims,
             children,
             with_provenance,
-            dependencies,
+            deps,
         }
     }
 
     /// Merges prims and children from a partial (scoped) composition into this stage.
     ///
     /// Entries in `partial` overwrite entries in `self` for the same key.
-    /// The dependency map is not merged — the caller is responsible for rebuilding it.
+    /// Dependency data is not merged — the caller is responsible for
+    /// incremental updates.
     pub(crate) fn merge_from(&mut self, partial: Self) {
         for (path, index) in partial.prims {
             self.prims.insert(path, index);
@@ -113,11 +116,74 @@ impl Stage {
         self.prims.keys().copied()
     }
 
-    /// Returns the dependency map if composition was run with
-    /// [`StageOptions::with_dependencies`] enabled.
+    /// Takes ownership of the composition dependency data.
+    ///
+    /// Returns `None` if composition was not run with
+    /// [`StageOptions::with_dependencies`] enabled, or if the data has
+    /// already been taken.
+    pub(crate) fn take_deps(&mut self) -> Option<CompositionDeps> {
+        self.deps.take()
+    }
+
+    /// Returns `true` if dependency tracking was enabled for this composition.
     #[must_use]
-    pub fn dependencies(&self) -> Option<&DependencyMap> {
-        self.dependencies.as_ref()
+    pub fn has_dependencies(&self) -> bool {
+        self.deps.is_some()
+    }
+
+    /// Returns a reference to the dependency graph if composition was run
+    /// with [`StageOptions::with_dependencies`] enabled.
+    ///
+    /// The [`InvalidationGraph`] is the single source of truth for the
+    /// dependency topology: "if prim A changes, which prims need
+    /// recomposition?"
+    #[must_use]
+    pub fn graph(&self) -> Option<&InvalidationGraph<PathId>> {
+        self.deps.as_ref().map(|d| &d.graph)
+    }
+
+    /// Returns all arc dependencies (diagnostic/inspection API).
+    #[must_use]
+    pub fn arc_dependencies(&self) -> Vec<ArcDependency> {
+        self.deps
+            .as_ref()
+            .map(|d| d.arcs.iter().copied().collect())
+            .unwrap_or_default()
+    }
+
+    /// Returns arc dependencies targeting the given prim.
+    #[must_use]
+    pub fn arcs_targeting(&self, prim: PathId) -> Vec<ArcDependency> {
+        self.deps
+            .as_ref()
+            .map(|d| {
+                d.arcs
+                    .iter()
+                    .filter(|a| a.target == prim)
+                    .copied()
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Returns prims affected by opinions from the given layer.
+    #[must_use]
+    pub fn prims_affected_by_layer(&self, layer: LayerId) -> Vec<PathId> {
+        self.deps
+            .as_ref()
+            .and_then(|d| d.layer_to_prims.get(&layer))
+            .map(|set| set.iter().copied().collect())
+            .unwrap_or_default()
+    }
+
+    /// Returns layers that contribute opinions to the given prim.
+    #[must_use]
+    pub fn layers_affecting_prim(&self, prim: PathId) -> Vec<LayerId> {
+        self.deps
+            .as_ref()
+            .and_then(|d| d.prim_to_layers.get(&prim))
+            .map(|set| set.iter().copied().collect())
+            .unwrap_or_default()
     }
 
     /// Resolves a field on a prim.

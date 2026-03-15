@@ -34,7 +34,7 @@ pub mod stage;
 
 pub mod live_stage;
 
-pub use dependency_map::DependencyMap;
+pub use dependency_map::ArcDependency;
 pub use doc::{
     FieldValue, InMemoryStore, InterpolationType, Layer, LayerId, PrimSpec, Reference, Specifier,
     Value, VariantSetSpec, VariantSpec,

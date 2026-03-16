@@ -12,16 +12,9 @@ extern crate alloc;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use layerstack::{
-    FieldValue, HashMap, InMemoryStore, Layer, LayerId, Path, PathId, PrimSpec, Specifier, Stage,
-    StageOptions, Value, VariantSetSpec, VariantSpec,
+    HashMap, InMemoryStore, Layer, LayerId, PrimSpec, Stage, StageOptions, Value, VariantSetSpec,
+    VariantSpec,
 };
-
-/// Intern an absolute path.
-fn p(store: &mut InMemoryStore, s: &str) -> PathId {
-    store
-        .paths
-        .intern(Path::parse_absolute(s, &mut store.tokens).expect("valid path"))
-}
 
 /// Build a scene with `n_prims` prims, each having a variant set with
 /// `n_variants` branches (one selected), then compose.
@@ -32,13 +25,9 @@ fn build_and_compose(n_prims: usize, n_variants: usize) -> Stage {
     let f_detail = store.tokens.intern("detailLevel");
     let vs_name = store.tokens.intern("look");
 
-    let root = p(&mut store, "/Root");
+    let root = store.path("/Root");
 
-    let mut layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
+    let mut layer = Layer::new(LayerId(1));
 
     let mut root_children = Vec::with_capacity(n_prims);
 
@@ -46,7 +35,7 @@ fn build_and_compose(n_prims: usize, n_variants: usize) -> Stage {
         let prim_name = alloc::format!("Mesh_{prim_idx:04}");
         let prim_tok = store.tokens.intern(&prim_name);
         root_children.push(prim_tok);
-        let prim_path = p(&mut store, &alloc::format!("/Root/{prim_name}"));
+        let prim_path = store.path(&alloc::format!("/Root/{prim_name}"));
 
         // Build variant set with n_variants branches.
         let mut variants = HashMap::new();
@@ -64,12 +53,10 @@ fn build_and_compose(n_prims: usize, n_variants: usize) -> Stage {
             let mut vspec = VariantSpec::default();
             vspec.fields.insert(
                 f_material,
-                FieldValue::Value(Value::String(alloc::format!("mat_{branch_name}").into())),
+                Value::String(alloc::format!("mat_{branch_name}").into()).into(),
             );
             let detail = v as i32;
-            vspec
-                .fields
-                .insert(f_detail, FieldValue::Value(Value::Int(detail)));
+            vspec.fields.insert(f_detail, Value::Int(detail).into());
 
             // Each branch introduces a child prim.
             let child_name = alloc::format!("detail_{branch_name}");
@@ -77,35 +64,26 @@ fn build_and_compose(n_prims: usize, n_variants: usize) -> Stage {
             vspec.authored_children.push(child_tok);
 
             // Intern the child path so composition can find it.
-            let _child_path = p(
-                &mut store,
-                &alloc::format!("/Root/{prim_name}/{child_name}"),
-            );
+            let _child_path = store.path(&alloc::format!("/Root/{prim_name}/{child_name}"));
 
             variants.insert(branch_tok, vspec);
         }
 
-        let mut spec = PrimSpec {
-            specifier: Some(Specifier::Def),
-            ..PrimSpec::default()
-        };
+        let mut spec = PrimSpec::def();
         spec.variant_sets
             .insert(vs_name, VariantSetSpec { variants });
         spec.variant_set_order.push(vs_name);
         if let Some(sel) = selected {
             spec.variant_selections.insert(vs_name, sel);
         }
-        layer.prims.insert(prim_path, spec);
+        layer.insert_prim(prim_path, spec);
     }
 
-    layer.prims.insert(
-        root,
-        PrimSpec {
-            specifier: Some(Specifier::Def),
-            authored_children: root_children,
-            ..PrimSpec::default()
-        },
-    );
+    layer.insert_prim(root, {
+        let mut spec = PrimSpec::def();
+        spec.authored_children = root_children;
+        spec
+    });
 
     store.insert_layer(layer);
 

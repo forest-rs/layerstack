@@ -37,6 +37,13 @@ pub struct Resolved<T> {
     pub provenance: Option<Provenance>,
 }
 
+impl<T> Resolved<T> {
+    /// Returns a reference to the resolved value.
+    pub fn value(&self) -> &T {
+        &self.value
+    }
+}
+
 /// A resolved field value.
 ///
 /// Spec: AOUSD Core §12 (value resolution), including §12.4 for `ListOps`.

@@ -3,44 +3,24 @@
 use layerstack::HashMap;
 
 use layerstack::{
-    ArcKind, FieldValue, Layer, LayerId, ListOp, Path, PrimSpec, Reference, ResolvedValue, Stage,
+    ArcKind, FieldValue, Layer, LayerId, ListOp, PrimSpec, Reference, ResolvedValue, Stage,
     StageOptions, Value, VariantSetSpec, VariantSpec, doc::InMemoryStore,
 };
-
-fn path(store: &mut InMemoryStore, s: &str) -> layerstack::PathId {
-    let p = Path::parse_absolute(s, &mut store.tokens).expect("valid path");
-    store.paths.intern(p)
-}
 
 #[test]
 fn sublayer_strength_local_beats_sublayer() {
     let mut store = InMemoryStore::default();
 
     let field_x = store.tokens.intern("x");
-    let p = path(&mut store, "/P");
+    let p = store.path("/P");
 
-    let mut root_layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![LayerId(2)],
-        prims: HashMap::new(),
-    };
-    let mut root_spec = PrimSpec::default();
-    root_spec
-        .fields
-        .insert(field_x, FieldValue::Value(Value::Int64(1)));
-    root_layer.prims.insert(p, root_spec);
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.sublayers = vec![LayerId(2)];
+    root_layer.insert_prim(p, PrimSpec::default().with_field(field_x, 1_i64));
     store.insert_layer(root_layer);
 
-    let mut sub_layer = Layer {
-        id: LayerId(2),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    let mut sub_spec = PrimSpec::default();
-    sub_spec
-        .fields
-        .insert(field_x, FieldValue::Value(Value::Int64(2)));
-    sub_layer.prims.insert(p, sub_spec);
+    let mut sub_layer = Layer::new(LayerId(2));
+    sub_layer.insert_prim(p, PrimSpec::default().with_field(field_x, 2_i64));
     store.insert_layer(sub_layer);
 
     let stage = Stage::compose(
@@ -63,39 +43,23 @@ fn reference_opinions_are_weaker_than_local() {
     let mut store = InMemoryStore::default();
 
     let field_x = store.tokens.intern("x");
-    let p = path(&mut store, "/P");
-    let q = path(&mut store, "/Q");
-    let q_child = path(&mut store, "/Q/Child");
-    let p_child = path(&mut store, "/P/Child");
+    let p = store.path("/P");
+    let q = store.path("/Q");
+    let q_child = store.path("/Q/Child");
+    let p_child = store.path("/P/Child");
 
-    let mut root_layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    let mut root_spec = PrimSpec::default();
-    root_spec.references.append.push(Reference {
-        layer: LayerId(2),
-        prim_path: q,
-        asset: None,
-    });
-    root_spec
-        .fields
-        .insert(field_x, FieldValue::Value(Value::Int64(2)));
-    root_layer.prims.insert(p, root_spec);
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.insert_prim(
+        p,
+        PrimSpec::default()
+            .with_reference(Reference::new(LayerId(2), q))
+            .with_field(field_x, 2_i64),
+    );
     store.insert_layer(root_layer);
 
-    let mut ref_layer = Layer {
-        id: LayerId(2),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    let mut ref_spec = PrimSpec::default();
-    ref_spec
-        .fields
-        .insert(field_x, FieldValue::Value(Value::Int64(1)));
-    ref_layer.prims.insert(q, ref_spec);
-    ref_layer.prims.insert(q_child, PrimSpec::default());
+    let mut ref_layer = Layer::new(LayerId(2));
+    ref_layer.insert_prim(q, PrimSpec::default().with_field(field_x, 1_i64));
+    ref_layer.insert_prim(q_child, PrimSpec::default());
     store.insert_layer(ref_layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -113,33 +77,26 @@ fn variants_selection_is_strength_ordered() {
     let mut store = InMemoryStore::default();
 
     let field_x = store.tokens.intern("x");
-    let prim = path(&mut store, "/P");
+    let prim = store.path("/P");
 
     let set_v = store.tokens.intern("v");
     let variant_a = store.tokens.intern("A");
     let variant_b = store.tokens.intern("B");
 
-    let mut root_layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![LayerId(2)],
-        prims: HashMap::new(),
-    };
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.sublayers = vec![LayerId(2)];
     let mut root_spec = PrimSpec::default();
     root_spec.variant_selections.insert(set_v, variant_a);
-    root_layer.prims.insert(prim, root_spec);
+    root_layer.insert_prim(prim, root_spec);
     store.insert_layer(root_layer);
 
-    let mut sub_layer = Layer {
-        id: LayerId(2),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
+    let mut sub_layer = Layer::new(LayerId(2));
     let mut sub_spec = PrimSpec::default();
     sub_spec.variant_selections.insert(set_v, variant_b);
 
     let mut set_spec = VariantSetSpec::default();
     let mut fields_a = HashMap::new();
-    fields_a.insert(field_x, FieldValue::Value(Value::Int64(1)));
+    fields_a.insert(field_x, Value::Int64(1).into());
     set_spec.variants.insert(
         variant_a,
         VariantSpec {
@@ -149,7 +106,7 @@ fn variants_selection_is_strength_ordered() {
     );
 
     let mut fields_b = HashMap::new();
-    fields_b.insert(field_x, FieldValue::Value(Value::Int64(2)));
+    fields_b.insert(field_x, Value::Int64(2).into());
     set_spec.variants.insert(
         variant_b,
         VariantSpec {
@@ -159,7 +116,7 @@ fn variants_selection_is_strength_ordered() {
     );
 
     sub_spec.variant_sets.insert(set_v, set_spec);
-    sub_layer.prims.insert(prim, sub_spec);
+    sub_layer.insert_prim(prim, sub_spec);
     store.insert_layer(sub_layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -174,13 +131,10 @@ fn listop_chain_is_applied_strong_to_weak() {
     let field_classes = store.tokens.intern("classes");
     let class_a = store.tokens.intern("a");
     let class_b = store.tokens.intern("b");
-    let prim = path(&mut store, "/P");
+    let prim = store.path("/P");
 
-    let mut root_layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![LayerId(2)],
-        prims: HashMap::new(),
-    };
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.sublayers = vec![LayerId(2)];
     let mut root_spec = PrimSpec::default();
     root_spec.fields.insert(
         field_classes,
@@ -189,14 +143,10 @@ fn listop_chain_is_applied_strong_to_weak() {
             ..ListOp::default()
         }),
     );
-    root_layer.prims.insert(prim, root_spec);
+    root_layer.insert_prim(prim, root_spec);
     store.insert_layer(root_layer);
 
-    let mut sub_layer = Layer {
-        id: LayerId(2),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
+    let mut sub_layer = Layer::new(LayerId(2));
     let mut sub_spec = PrimSpec::default();
     sub_spec.fields.insert(
         field_classes,
@@ -205,7 +155,7 @@ fn listop_chain_is_applied_strong_to_weak() {
             ..ListOp::default()
         }),
     );
-    sub_layer.prims.insert(prim, sub_spec);
+    sub_layer.insert_prim(prim, sub_spec);
     store.insert_layer(sub_layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -219,19 +169,13 @@ fn listop_chain_is_applied_strong_to_weak() {
 fn resolve_value_distinguishes_scalar_and_list() {
     let mut store = InMemoryStore::default();
 
-    let prim = path(&mut store, "/P");
+    let prim = store.path("/P");
     let field_x = store.tokens.intern("x");
     let field_classes = store.tokens.intern("classes");
     let class_a = store.tokens.intern("a");
 
-    let mut layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    let mut spec = PrimSpec::default();
-    spec.fields
-        .insert(field_x, FieldValue::Value(Value::Int64(123)));
+    let mut layer = Layer::new(LayerId(1));
+    let mut spec = PrimSpec::default().with_field(field_x, 123_i64);
     spec.fields.insert(
         field_classes,
         FieldValue::TokenListOp(ListOp {
@@ -239,7 +183,7 @@ fn resolve_value_distinguishes_scalar_and_list() {
             ..ListOp::default()
         }),
     );
-    layer.prims.insert(prim, spec);
+    layer.insert_prim(prim, spec);
     store.insert_layer(layer);
 
     let stage = Stage::compose(
@@ -291,58 +235,47 @@ fn child_order_reorder_name_children_matches_supplemental_fixture() {
     let y = store.tokens.intern("y");
     let z = store.tokens.intern("z");
 
-    let prim_a = path(&mut store, "/A");
-    let a_a = path(&mut store, "/A/a");
-    let a_b = path(&mut store, "/A/b");
-    let a_c = path(&mut store, "/A/c");
-    let a_f = path(&mut store, "/A/f");
-    let a_x = path(&mut store, "/A/x");
-    let a_y = path(&mut store, "/A/y");
-    let a_z = path(&mut store, "/A/z");
+    let prim_a = store.path("/A");
+    let a_a = store.path("/A/a");
+    let a_b = store.path("/A/b");
+    let a_c = store.path("/A/c");
+    let a_f = store.path("/A/f");
+    let a_x = store.path("/A/x");
+    let a_y = store.path("/A/y");
+    let a_z = store.path("/A/z");
 
-    let mut root_layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![LayerId(2), LayerId(3)],
-        prims: HashMap::new(),
-    };
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.sublayers = vec![LayerId(2), LayerId(3)];
     let root_spec = PrimSpec {
         authored_children: vec![f],
         prim_order: Some(vec![z, f, y]),
         ..PrimSpec::default()
     };
-    root_layer.prims.insert(prim_a, root_spec);
-    root_layer.prims.insert(a_f, PrimSpec::default());
+    root_layer.insert_prim(prim_a, root_spec);
+    root_layer.insert_prim(a_f, PrimSpec::default());
     store.insert_layer(root_layer);
 
-    let mut sub1_layer = Layer {
-        id: LayerId(2),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
+    let mut sub1_layer = Layer::new(LayerId(2));
     let sub1_spec = PrimSpec {
         authored_children: vec![a, b, c],
         prim_order: Some(vec![z, x, b]),
         ..PrimSpec::default()
     };
-    sub1_layer.prims.insert(prim_a, sub1_spec);
-    sub1_layer.prims.insert(a_a, PrimSpec::default());
-    sub1_layer.prims.insert(a_b, PrimSpec::default());
-    sub1_layer.prims.insert(a_c, PrimSpec::default());
+    sub1_layer.insert_prim(prim_a, sub1_spec);
+    sub1_layer.insert_prim(a_a, PrimSpec::default());
+    sub1_layer.insert_prim(a_b, PrimSpec::default());
+    sub1_layer.insert_prim(a_c, PrimSpec::default());
     store.insert_layer(sub1_layer);
 
-    let mut sub2_layer = Layer {
-        id: LayerId(3),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
+    let mut sub2_layer = Layer::new(LayerId(3));
     let sub2_spec = PrimSpec {
         authored_children: vec![x, y, z],
         ..PrimSpec::default()
     };
-    sub2_layer.prims.insert(prim_a, sub2_spec);
-    sub2_layer.prims.insert(a_x, PrimSpec::default());
-    sub2_layer.prims.insert(a_y, PrimSpec::default());
-    sub2_layer.prims.insert(a_z, PrimSpec::default());
+    sub2_layer.insert_prim(prim_a, sub2_spec);
+    sub2_layer.insert_prim(a_x, PrimSpec::default());
+    sub2_layer.insert_prim(a_y, PrimSpec::default());
+    sub2_layer.insert_prim(a_z, PrimSpec::default());
     store.insert_layer(sub2_layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -354,31 +287,16 @@ fn child_order_reorder_name_children_matches_supplemental_fixture() {
 fn explain_field_returns_sorted_opinion_stack() {
     let mut store = InMemoryStore::default();
 
-    let prim = path(&mut store, "/P");
+    let prim = store.path("/P");
     let field_x = store.tokens.intern("x");
 
-    let mut root_layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![LayerId(2)],
-        prims: HashMap::new(),
-    };
-    let mut root_spec = PrimSpec::default();
-    root_spec
-        .fields
-        .insert(field_x, FieldValue::Value(Value::Int64(1)));
-    root_layer.prims.insert(prim, root_spec);
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.sublayers = vec![LayerId(2)];
+    root_layer.insert_prim(prim, PrimSpec::default().with_field(field_x, 1_i64));
     store.insert_layer(root_layer);
 
-    let mut sub_layer = Layer {
-        id: LayerId(2),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    let mut sub_spec = PrimSpec::default();
-    sub_spec
-        .fields
-        .insert(field_x, FieldValue::Value(Value::Int64(2)));
-    sub_layer.prims.insert(prim, sub_spec);
+    let mut sub_layer = Layer::new(LayerId(2));
+    sub_layer.insert_prim(prim, PrimSpec::default().with_field(field_x, 2_i64));
     store.insert_layer(sub_layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -399,16 +317,13 @@ fn explain_field_returns_sorted_opinion_stack() {
 fn token_listop_append_reorders_duplicates() {
     let mut store = InMemoryStore::default();
 
-    let prim = path(&mut store, "/P");
+    let prim = store.path("/P");
     let field_classes = store.tokens.intern("classes");
     let class_a = store.tokens.intern("a");
     let class_b = store.tokens.intern("b");
 
-    let mut root_layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![LayerId(2)],
-        prims: HashMap::new(),
-    };
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.sublayers = vec![LayerId(2)];
     let mut root_spec = PrimSpec::default();
     root_spec.fields.insert(
         field_classes,
@@ -417,14 +332,10 @@ fn token_listop_append_reorders_duplicates() {
             ..ListOp::default()
         }),
     );
-    root_layer.prims.insert(prim, root_spec);
+    root_layer.insert_prim(prim, root_spec);
     store.insert_layer(root_layer);
 
-    let mut sub_layer = Layer {
-        id: LayerId(2),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
+    let mut sub_layer = Layer::new(LayerId(2));
     let mut sub_spec = PrimSpec::default();
     sub_spec.fields.insert(
         field_classes,
@@ -433,7 +344,7 @@ fn token_listop_append_reorders_duplicates() {
             ..ListOp::default()
         }),
     );
-    sub_layer.prims.insert(prim, sub_spec);
+    sub_layer.insert_prim(prim, sub_spec);
     store.insert_layer(sub_layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -449,7 +360,7 @@ fn token_listop_prepend_and_append_match_supplemental_list_editing_order() {
     // expressed using our current token-list `ListOp` support.
     let mut store = InMemoryStore::default();
 
-    let prim = path(&mut store, "/A");
+    let prim = store.path("/A");
     let field_targets = store.tokens.intern("targets");
 
     let root_prepend = store.tokens.intern("root_prepend");
@@ -459,11 +370,8 @@ fn token_listop_prepend_and_append_match_supplemental_list_editing_order() {
     let sub1_append = store.tokens.intern("sub1_append");
     let root_append = store.tokens.intern("root_append");
 
-    let mut root_layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![LayerId(2), LayerId(3)],
-        prims: HashMap::new(),
-    };
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.sublayers = vec![LayerId(2), LayerId(3)];
     let mut root_spec = PrimSpec::default();
     root_spec.fields.insert(
         field_targets,
@@ -473,14 +381,10 @@ fn token_listop_prepend_and_append_match_supplemental_list_editing_order() {
             ..ListOp::default()
         }),
     );
-    root_layer.prims.insert(prim, root_spec);
+    root_layer.insert_prim(prim, root_spec);
     store.insert_layer(root_layer);
 
-    let mut sub1_layer = Layer {
-        id: LayerId(2),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
+    let mut sub1_layer = Layer::new(LayerId(2));
     let mut sub1_spec = PrimSpec::default();
     sub1_spec.fields.insert(
         field_targets,
@@ -490,14 +394,10 @@ fn token_listop_prepend_and_append_match_supplemental_list_editing_order() {
             ..ListOp::default()
         }),
     );
-    sub1_layer.prims.insert(prim, sub1_spec);
+    sub1_layer.insert_prim(prim, sub1_spec);
     store.insert_layer(sub1_layer);
 
-    let mut sub2_layer = Layer {
-        id: LayerId(3),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
+    let mut sub2_layer = Layer::new(LayerId(3));
     let mut sub2_spec = PrimSpec::default();
     sub2_spec.fields.insert(
         field_targets,
@@ -507,7 +407,7 @@ fn token_listop_prepend_and_append_match_supplemental_list_editing_order() {
             ..ListOp::default()
         }),
     );
-    sub2_layer.prims.insert(prim, sub2_spec);
+    sub2_layer.insert_prim(prim, sub2_spec);
     store.insert_layer(sub2_layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -532,45 +432,22 @@ fn specifier_resolution_follows_strongest_defining() {
     use layerstack::Specifier;
 
     let mut store = InMemoryStore::default();
-    let prim = path(&mut store, "/P");
+    let prim = store.path("/P");
 
     // Layer 1 (strongest): over — non-defining
-    let mut root_layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![LayerId(2), LayerId(3)],
-        prims: HashMap::new(),
-    };
-    let root_spec = PrimSpec {
-        specifier: Some(Specifier::Over),
-        ..PrimSpec::default()
-    };
-    root_layer.prims.insert(prim, root_spec);
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.sublayers = vec![LayerId(2), LayerId(3)];
+    root_layer.insert_prim(prim, PrimSpec::over());
     store.insert_layer(root_layer);
 
     // Layer 2: def — strongest defining opinion
-    let mut sub1 = Layer {
-        id: LayerId(2),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    let sub1_spec = PrimSpec {
-        specifier: Some(Specifier::Def),
-        ..PrimSpec::default()
-    };
-    sub1.prims.insert(prim, sub1_spec);
+    let mut sub1 = Layer::new(LayerId(2));
+    sub1.insert_prim(prim, PrimSpec::def());
     store.insert_layer(sub1);
 
     // Layer 3: class — weaker defining opinion
-    let mut sub2 = Layer {
-        id: LayerId(3),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    let sub2_spec = PrimSpec {
-        specifier: Some(Specifier::Class),
-        ..PrimSpec::default()
-    };
-    sub2.prims.insert(prim, sub2_spec);
+    let mut sub2 = Layer::new(LayerId(3));
+    sub2.insert_prim(prim, PrimSpec::class());
     store.insert_layer(sub2);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -586,34 +463,15 @@ fn specifier_all_over_is_undefining() {
     use layerstack::Specifier;
 
     let mut store = InMemoryStore::default();
-    let prim = path(&mut store, "/P");
+    let prim = store.path("/P");
 
-    let mut root_layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![LayerId(2)],
-        prims: HashMap::new(),
-    };
-    root_layer.prims.insert(
-        prim,
-        PrimSpec {
-            specifier: Some(Specifier::Over),
-            ..PrimSpec::default()
-        },
-    );
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.sublayers = vec![LayerId(2)];
+    root_layer.insert_prim(prim, PrimSpec::over());
     store.insert_layer(root_layer);
 
-    let mut sub = Layer {
-        id: LayerId(2),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    sub.prims.insert(
-        prim,
-        PrimSpec {
-            specifier: Some(Specifier::Over),
-            ..PrimSpec::default()
-        },
-    );
+    let mut sub = Layer::new(LayerId(2));
+    sub.insert_prim(prim, PrimSpec::over());
     store.insert_layer(sub);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -627,20 +485,10 @@ fn specifier_class_is_abstract() {
     use layerstack::Specifier;
 
     let mut store = InMemoryStore::default();
-    let prim = path(&mut store, "/P");
+    let prim = store.path("/P");
 
-    let mut root_layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    root_layer.prims.insert(
-        prim,
-        PrimSpec {
-            specifier: Some(Specifier::Class),
-            ..PrimSpec::default()
-        },
-    );
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.insert_prim(prim, PrimSpec::class());
     store.insert_layer(root_layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -658,33 +506,21 @@ fn value_blocked_suppresses_weaker_opinions() {
     // Spec: AOUSD Core §12.3 — a `Blocked` value suppresses all weaker opinions.
     let mut store = InMemoryStore::default();
 
-    let prim = path(&mut store, "/P");
+    let prim = store.path("/P");
     let field_x = store.tokens.intern("x");
 
     // Strongest layer blocks the field.
-    let mut root_layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![LayerId(2)],
-        prims: HashMap::new(),
-    };
-    let mut root_spec = PrimSpec::default();
-    root_spec
-        .fields
-        .insert(field_x, FieldValue::Value(Value::Blocked));
-    root_layer.prims.insert(prim, root_spec);
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.sublayers = vec![LayerId(2)];
+    root_layer.insert_prim(
+        prim,
+        PrimSpec::default().with_field(field_x, Value::Blocked),
+    );
     store.insert_layer(root_layer);
 
     // Weaker layer provides a real value.
-    let mut sub_layer = Layer {
-        id: LayerId(2),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    let mut sub_spec = PrimSpec::default();
-    sub_spec
-        .fields
-        .insert(field_x, FieldValue::Value(Value::Int64(42)));
-    sub_layer.prims.insert(prim, sub_spec);
+    let mut sub_layer = Layer::new(LayerId(2));
+    sub_layer.insert_prim(prim, PrimSpec::default().with_field(field_x, 42_i64));
     store.insert_layer(sub_layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -699,21 +535,17 @@ fn value_blocked_only_affects_blocked_field() {
     // Blocking one field should not affect other fields on the same prim.
     let mut store = InMemoryStore::default();
 
-    let prim = path(&mut store, "/P");
+    let prim = store.path("/P");
     let field_x = store.tokens.intern("x");
     let field_y = store.tokens.intern("y");
 
-    let mut layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    let mut spec = PrimSpec::default();
-    spec.fields
-        .insert(field_x, FieldValue::Value(Value::Blocked));
-    spec.fields
-        .insert(field_y, FieldValue::Value(Value::Int64(99)));
-    layer.prims.insert(prim, spec);
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(
+        prim,
+        PrimSpec::default()
+            .with_field(field_x, Value::Blocked)
+            .with_field(field_y, 99_i64),
+    );
     store.insert_layer(layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -731,13 +563,9 @@ fn time_samples_held_interpolation() {
 
     let mut store = InMemoryStore::default();
     let field = store.tokens.intern("x");
-    let p = path(&mut store, "/P");
+    let p = store.path("/P");
 
-    let mut layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
+    let mut layer = Layer::new(LayerId(1));
     let mut spec = PrimSpec::default();
     spec.fields.insert(
         field,
@@ -747,7 +575,7 @@ fn time_samples_held_interpolation() {
             (5.0, Value::Double(50.0)),
         ]),
     );
-    layer.prims.insert(p, spec);
+    layer.insert_prim(p, spec);
     store.insert_layer(layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -809,13 +637,9 @@ fn time_samples_linear_interpolation() {
 
     let mut store = InMemoryStore::default();
     let field = store.tokens.intern("x");
-    let p = path(&mut store, "/P");
+    let p = store.path("/P");
 
-    let mut layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
+    let mut layer = Layer::new(LayerId(1));
     let mut spec = PrimSpec::default();
     spec.fields.insert(
         field,
@@ -824,7 +648,7 @@ fn time_samples_linear_interpolation() {
             (10.0, Value::Double(100.0)),
         ]),
     );
-    layer.prims.insert(p, spec);
+    layer.insert_prim(p, spec);
     store.insert_layer(layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -879,19 +703,15 @@ fn time_samples_linear_int_interpolation() {
 
     let mut store = InMemoryStore::default();
     let field = store.tokens.intern("x");
-    let p = path(&mut store, "/P");
+    let p = store.path("/P");
 
-    let mut layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
+    let mut layer = Layer::new(LayerId(1));
     let mut spec = PrimSpec::default();
     spec.fields.insert(
         field,
         FieldValue::TimeSamples(vec![(0.0, Value::Int64(0)), (10.0, Value::Int64(100))]),
     );
-    layer.prims.insert(p, spec);
+    layer.insert_prim(p, spec);
     store.insert_layer(layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -912,22 +732,18 @@ fn time_samples_non_numeric_falls_back_to_held() {
 
     let mut store = InMemoryStore::default();
     let field = store.tokens.intern("name");
-    let p = path(&mut store, "/P");
+    let p = store.path("/P");
 
-    let mut layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
+    let mut layer = Layer::new(LayerId(1));
     let mut spec = PrimSpec::default();
     spec.fields.insert(
         field,
         FieldValue::TimeSamples(vec![
-            (1.0, Value::String("hello".into())),
-            (5.0, Value::String("world".into())),
+            (1.0, Value::string("hello")),
+            (5.0, Value::string("world")),
         ]),
     );
-    layer.prims.insert(p, spec);
+    layer.insert_prim(p, spec);
     store.insert_layer(layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -938,7 +754,7 @@ fn time_samples_non_numeric_falls_back_to_held() {
             .resolve_value_at_time(p, field, 3.0, InterpolationType::Linear)
             .unwrap()
             .value,
-        Value::String("hello".into())
+        Value::string("hello")
     );
 }
 
@@ -948,33 +764,22 @@ fn time_samples_override_default_value() {
 
     let mut store = InMemoryStore::default();
     let field = store.tokens.intern("x");
-    let p = path(&mut store, "/P");
+    let p = store.path("/P");
 
     // Root layer: timeSamples.
-    let mut root = Layer {
-        id: LayerId(1),
-        sublayers: vec![LayerId(2)],
-        prims: HashMap::new(),
-    };
+    let mut root = Layer::new(LayerId(1));
+    root.sublayers = vec![LayerId(2)];
     let mut root_spec = PrimSpec::default();
     root_spec.fields.insert(
         field,
         FieldValue::TimeSamples(vec![(1.0, Value::Double(10.0))]),
     );
-    root.prims.insert(p, root_spec);
+    root.insert_prim(p, root_spec);
     store.insert_layer(root);
 
     // Sublayer: default value.
-    let mut sub = Layer {
-        id: LayerId(2),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    let mut sub_spec = PrimSpec::default();
-    sub_spec
-        .fields
-        .insert(field, FieldValue::Value(Value::Double(999.0)));
-    sub.prims.insert(p, sub_spec);
+    let mut sub = Layer::new(LayerId(2));
+    sub.insert_prim(p, PrimSpec::default().with_field(field, 999.0));
     store.insert_layer(sub);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -1000,14 +805,10 @@ fn time_samples_override_default_value() {
 #[test]
 fn dependency_map_none_by_default() {
     let mut store = InMemoryStore::default();
-    let p = path(&mut store, "/P");
+    let p = store.path("/P");
 
-    let mut layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    layer.prims.insert(p, PrimSpec::default());
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(p, PrimSpec::default());
     store.insert_layer(layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -1021,29 +822,15 @@ fn dependency_map_none_by_default() {
 fn dependency_map_records_local_layer_opinions() {
     let mut store = InMemoryStore::default();
     let field_x = store.tokens.intern("x");
-    let p = path(&mut store, "/P");
+    let p = store.path("/P");
 
-    let mut root = Layer {
-        id: LayerId(1),
-        sublayers: vec![LayerId(2)],
-        prims: HashMap::new(),
-    };
-    let mut spec = PrimSpec::default();
-    spec.fields
-        .insert(field_x, FieldValue::Value(Value::Int64(1)));
-    root.prims.insert(p, spec);
+    let mut root = Layer::new(LayerId(1));
+    root.sublayers = vec![LayerId(2)];
+    root.insert_prim(p, PrimSpec::default().with_field(field_x, 1_i64));
     store.insert_layer(root);
 
-    let mut sub = Layer {
-        id: LayerId(2),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    let mut sub_spec = PrimSpec::default();
-    sub_spec
-        .fields
-        .insert(field_x, FieldValue::Value(Value::Int64(2)));
-    sub.prims.insert(p, sub_spec);
+    let mut sub = Layer::new(LayerId(2));
+    sub.insert_prim(p, PrimSpec::default().with_field(field_x, 2_i64));
     store.insert_layer(sub);
 
     let stage = Stage::compose(
@@ -1074,33 +861,18 @@ fn dependency_map_records_local_layer_opinions() {
 fn dependency_map_records_reference_arc_and_layer() {
     let mut store = InMemoryStore::default();
     let field_x = store.tokens.intern("x");
-    let p = path(&mut store, "/P");
-    let q = path(&mut store, "/Q");
+    let p = store.path("/P");
+    let q = store.path("/Q");
 
-    let mut root = Layer {
-        id: LayerId(1),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    let mut p_spec = PrimSpec::default();
-    p_spec.references.append.push(Reference {
-        layer: LayerId(2),
-        prim_path: q,
-        asset: None,
-    });
-    root.prims.insert(p, p_spec);
+    let mut root = Layer::new(LayerId(1));
+    root.insert_prim(
+        p,
+        PrimSpec::default().with_reference(Reference::new(LayerId(2), q)),
+    );
     store.insert_layer(root);
 
-    let mut ref_layer = Layer {
-        id: LayerId(2),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    let mut q_spec = PrimSpec::default();
-    q_spec
-        .fields
-        .insert(field_x, FieldValue::Value(Value::Int64(42)));
-    ref_layer.prims.insert(q, q_spec);
+    let mut ref_layer = Layer::new(LayerId(2));
+    ref_layer.insert_prim(q, PrimSpec::default().with_field(field_x, 42_i64));
     store.insert_layer(ref_layer);
 
     let stage = Stage::compose(
@@ -1132,23 +904,12 @@ fn dependency_map_records_reference_arc_and_layer() {
 fn dependency_map_records_inherit_arc() {
     let mut store = InMemoryStore::default();
     let field_x = store.tokens.intern("x");
-    let p = path(&mut store, "/P");
-    let base = path(&mut store, "/Base");
+    let p = store.path("/P");
+    let base = store.path("/Base");
 
-    let mut layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    let mut p_spec = PrimSpec::default();
-    p_spec.inherits.append.push(base);
-    layer.prims.insert(p, p_spec);
-
-    let mut base_spec = PrimSpec::default();
-    base_spec
-        .fields
-        .insert(field_x, FieldValue::Value(Value::Int64(10)));
-    layer.prims.insert(base, base_spec);
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(p, PrimSpec::default().with_inherit(base));
+    layer.insert_prim(base, PrimSpec::default().with_field(field_x, 10_i64));
     store.insert_layer(layer);
 
     let stage = Stage::compose(
@@ -1174,23 +935,12 @@ fn dependency_map_records_inherit_arc() {
 fn dependency_map_records_specializes_arc() {
     let mut store = InMemoryStore::default();
     let field_x = store.tokens.intern("x");
-    let p = path(&mut store, "/P");
-    let base = path(&mut store, "/Base");
+    let p = store.path("/P");
+    let base = store.path("/Base");
 
-    let mut layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    let mut p_spec = PrimSpec::default();
-    p_spec.specializes.append.push(base);
-    layer.prims.insert(p, p_spec);
-
-    let mut base_spec = PrimSpec::default();
-    base_spec
-        .fields
-        .insert(field_x, FieldValue::Value(Value::Int64(10)));
-    layer.prims.insert(base, base_spec);
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(p, PrimSpec::default().with_specialize(base));
+    layer.insert_prim(base, PrimSpec::default().with_field(field_x, 10_i64));
     store.insert_layer(layer);
 
     let stage = Stage::compose(

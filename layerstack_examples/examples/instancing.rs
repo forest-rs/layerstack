@@ -49,8 +49,8 @@
 //! root's value flows down.
 
 use layerstack::{
-    FieldValue, HashMap, InMemoryStore, Layer, LayerId, Path, PathId, PrimSpec, Reference,
-    Specifier, Stage, StageOptions, TokenId, Value,
+    InMemoryStore, Layer, LayerId, PathId, PrimSpec, Reference, Resolved, Stage, StageOptions,
+    TokenId, Value,
 };
 
 // ---------------------------------------------------------------------------
@@ -78,24 +78,14 @@ fn resolve_primvar(
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn p(store: &mut InMemoryStore, s: &str) -> PathId {
-    store
-        .paths
-        .intern(Path::parse_absolute(s, &mut store.tokens).expect("valid path"))
-}
-
-fn coral_instance(_store: &mut InMemoryStore, coral_ref: PathId, instanceable: bool) -> PrimSpec {
-    let mut spec = PrimSpec {
-        specifier: Some(Specifier::Def),
-        instanceable: Some(instanceable),
-        ..PrimSpec::default()
-    };
-    spec.references.append.push(Reference {
-        layer: LayerId(2),
-        prim_path: coral_ref,
-        asset: Some("coral_asset.usd".into()),
-    });
-    spec
+fn coral_instance(coral_ref: PathId, instanceable: bool) -> PrimSpec {
+    PrimSpec::def()
+        .with_reference(Reference::with_asset(
+            LayerId(2),
+            coral_ref,
+            "coral_asset.usd",
+        ))
+        .with_instanceable(instanceable)
 }
 
 // ---------------------------------------------------------------------------
@@ -115,135 +105,80 @@ fn main() {
     let polyps_tok = store.tokens.intern("polyps");
 
     // Paths — asset layer.
-    let coral = p(&mut store, "/Coral");
-    let coral_branches = p(&mut store, "/Coral/branches");
-    let coral_polyps = p(&mut store, "/Coral/polyps");
+    let coral = store.path("/Coral");
+    let coral_branches = store.path("/Coral/branches");
+    let coral_polyps = store.path("/Coral/polyps");
 
     // Paths — reef layer.
-    let reef = p(&mut store, "/Reef");
-    let c01 = p(&mut store, "/Reef/Coral_01");
-    let c01_branches = p(&mut store, "/Reef/Coral_01/branches");
-    let c02 = p(&mut store, "/Reef/Coral_02");
-    let c02_branches = p(&mut store, "/Reef/Coral_02/branches");
-    let c03 = p(&mut store, "/Reef/Coral_03");
-    let c03_branches = p(&mut store, "/Reef/Coral_03/branches");
-    let hero = p(&mut store, "/Reef/Hero_Coral");
-    let hero_branches = p(&mut store, "/Reef/Hero_Coral/branches");
+    let reef = store.path("/Reef");
+    let c01 = store.path("/Reef/Coral_01");
+    let c01_branches = store.path("/Reef/Coral_01/branches");
+    let c02 = store.path("/Reef/Coral_02");
+    let c02_branches = store.path("/Reef/Coral_02/branches");
+    let c03 = store.path("/Reef/Coral_03");
+    let c03_branches = store.path("/Reef/Coral_03/branches");
+    let hero = store.path("/Reef/Hero_Coral");
+    let hero_branches = store.path("/Reef/Hero_Coral/branches");
 
     // -----------------------------------------------------------------------
     // Asset layer: the shared coral definition.
     // -----------------------------------------------------------------------
-    let mut asset = Layer {
-        id: LayerId(2),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
+    let mut asset = Layer::new(LayerId(2));
 
-    let mut coral_spec = PrimSpec {
-        specifier: Some(Specifier::Def),
-        authored_children: vec![branches_tok, polyps_tok],
-        ..PrimSpec::default()
-    };
-    coral_spec.fields.insert(
-        f_display_color,
-        FieldValue::Value(Value::String("gray".into())),
+    asset.insert_prim(
+        coral,
+        PrimSpec::def()
+            .with_children(vec![branches_tok, polyps_tok])
+            .with_field(f_display_color, "gray"),
     );
-    asset.prims.insert(coral, coral_spec);
-
-    let mut branches_spec = PrimSpec {
-        specifier: Some(Specifier::Def),
-        ..PrimSpec::default()
-    };
-    branches_spec
-        .fields
-        .insert(f_vertices, FieldValue::Value(Value::Int(2400)));
-    asset.prims.insert(coral_branches, branches_spec);
-
-    let mut polyps_spec = PrimSpec {
-        specifier: Some(Specifier::Def),
-        ..PrimSpec::default()
-    };
-    polyps_spec
-        .fields
-        .insert(f_vertices, FieldValue::Value(Value::Int(8000)));
-    asset.prims.insert(coral_polyps, polyps_spec);
+    asset.insert_prim(coral_branches, PrimSpec::def().with_field(f_vertices, 2400));
+    asset.insert_prim(coral_polyps, PrimSpec::def().with_field(f_vertices, 8000));
 
     store.insert_layer(asset);
 
     // -----------------------------------------------------------------------
     // Reef layer: instances and one hero coral.
     // -----------------------------------------------------------------------
-    let mut reef_layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
+    let mut reef_layer = Layer::new(LayerId(1));
 
     // /Reef parent (just a grouping prim).
     let c01_tok = store.tokens.intern("Coral_01");
     let c02_tok = store.tokens.intern("Coral_02");
     let c03_tok = store.tokens.intern("Coral_03");
     let hero_tok = store.tokens.intern("Hero_Coral");
-    reef_layer.prims.insert(
+    reef_layer.insert_prim(
         reef,
-        PrimSpec {
-            specifier: Some(Specifier::Def),
-            authored_children: vec![c01_tok, c02_tok, c03_tok, hero_tok],
-            ..PrimSpec::default()
-        },
+        PrimSpec::def().with_children(vec![c01_tok, c02_tok, c03_tok, hero_tok]),
     );
 
     // Coral_01: healthy green coral.
-    let mut c01_spec = coral_instance(&mut store, coral, true);
-    c01_spec.fields.insert(
-        f_display_color,
-        FieldValue::Value(Value::String("green".into())),
+    reef_layer.insert_prim(
+        c01,
+        coral_instance(coral, true)
+            .with_field(f_display_color, "green")
+            .with_field(f_bleach, 0.0_f32),
     );
-    c01_spec
-        .fields
-        .insert(f_bleach, FieldValue::Value(Value::Float(0.0)));
-    reef_layer.prims.insert(c01, c01_spec);
 
     // Coral_02: bleached coral.
-    let mut c02_spec = coral_instance(&mut store, coral, true);
-    c02_spec.fields.insert(
-        f_display_color,
-        FieldValue::Value(Value::String("pale_white".into())),
+    reef_layer.insert_prim(
+        c02,
+        coral_instance(coral, true)
+            .with_field(f_display_color, "pale_white")
+            .with_field(f_bleach, 0.85_f32),
     );
-    c02_spec
-        .fields
-        .insert(f_bleach, FieldValue::Value(Value::Float(0.85)));
-    reef_layer.prims.insert(c02, c02_spec);
 
     // Coral_03: attempts a local override on branches (will be stripped).
-    let c03_spec = coral_instance(&mut store, coral, true);
-    reef_layer.prims.insert(c03, c03_spec);
+    let c03_spec = coral_instance(coral, true);
+    reef_layer.insert_prim(c03, c03_spec);
 
-    let mut c03_branches_spec = PrimSpec {
-        specifier: Some(Specifier::Over),
-        ..PrimSpec::default()
-    };
-    c03_branches_spec
-        .fields
-        .insert(f_vertices, FieldValue::Value(Value::Int(999)));
-    reef_layer.prims.insert(c03_branches, c03_branches_spec);
+    reef_layer.insert_prim(c03_branches, PrimSpec::over().with_field(f_vertices, 999));
 
     // Hero_Coral: uninstanced for close-up — local overrides are kept.
-    let mut hero_spec = coral_instance(&mut store, coral, false);
-    hero_spec.fields.insert(
-        f_display_color,
-        FieldValue::Value(Value::String("orange".into())),
+    reef_layer.insert_prim(
+        hero,
+        coral_instance(coral, false).with_field(f_display_color, "orange"),
     );
-    reef_layer.prims.insert(hero, hero_spec);
-
-    let mut hero_branches_spec = PrimSpec {
-        specifier: Some(Specifier::Over),
-        ..PrimSpec::default()
-    };
-    hero_branches_spec
-        .fields
-        .insert(f_vertices, FieldValue::Value(Value::Int(6000)));
-    reef_layer.prims.insert(hero_branches, hero_branches_spec);
+    reef_layer.insert_prim(hero_branches, PrimSpec::over().with_field(f_vertices, 6000));
 
     store.insert_layer(reef_layer);
 
@@ -284,14 +219,14 @@ fn main() {
                 } else {
                     "coral_asset.usd"
                 };
-                println!("  {label}: vertices = {:?} (from {source})", r.value);
+                println!("  {label}: vertices = {} (from {source})", r.value);
             }
             None => println!("  {label}: vertices = <not resolved>"),
         }
 
         if instanced {
             assert_eq!(
-                verts.as_ref().map(|r| &r.value),
+                verts.as_ref().map(Resolved::value),
                 Some(&Value::Int(2400)),
                 "{label} should share asset geometry"
             );
@@ -303,7 +238,7 @@ fn main() {
         stage
             .resolve_field(hero_branches, f_vertices)
             .as_ref()
-            .map(|r| &r.value),
+            .map(Resolved::value),
         Some(&Value::Int(6000)),
         "Hero coral should keep local override"
     );
@@ -318,9 +253,13 @@ fn main() {
         let color = stage.resolve_field(path, f_display_color);
         let bleach = stage.resolve_field(path, f_bleach);
         println!(
-            "  {label}: color = {:?}, bleach = {:?}",
-            color.as_ref().map(|r| &r.value),
-            bleach.as_ref().map(|r| &r.value),
+            "  {label}: color = {}, bleach = {}",
+            color
+                .as_ref()
+                .map_or("none".into(), |r| format!("{}", r.value)),
+            bleach
+                .as_ref()
+                .map_or("none".into(), |r| format!("{}", r.value)),
         );
     }
 
@@ -348,9 +287,9 @@ fn main() {
         let inherited = resolve_primvar(&stage, &store, branches_path, f_display_color);
 
         println!(
-            "  {label}: direct = {:?}, inherited = {:?}",
-            direct.map(|r| r.value),
-            inherited,
+            "  {label}: direct = {}, inherited = {}",
+            direct.map_or("none".into(), |r| format!("{}", r.value)),
+            inherited.as_ref().map_or("none".into(), |v| format!("{v}")),
         );
     }
 
@@ -358,7 +297,7 @@ fn main() {
     let c03_inherited = resolve_primvar(&stage, &store, c03_branches, f_display_color);
     assert_eq!(
         c03_inherited,
-        Some(Value::String("gray".into())),
+        Some(Value::string("gray")),
         "Coral_03 should fall back to asset default"
     );
 

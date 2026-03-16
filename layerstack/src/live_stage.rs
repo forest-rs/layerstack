@@ -298,7 +298,7 @@ mod tests {
         let mut spec = PrimSpec::default();
         spec.fields
             .insert(field_x, FieldValue::Value(Value::Int64(42)));
-        layer.prims.insert(prim, spec);
+        layer.insert_prim(prim, spec);
         store.insert_layer(layer);
 
         let live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -320,7 +320,7 @@ mod tests {
             sublayers: vec![],
             prims: HashMap::new(),
         };
-        layer.prims.insert(prim, PrimSpec::default());
+        layer.insert_prim(prim, PrimSpec::default());
         store.insert_layer(layer);
 
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -342,7 +342,7 @@ mod tests {
         let mut spec = PrimSpec::default();
         spec.fields
             .insert(field_x, FieldValue::Value(Value::Int64(1)));
-        layer.prims.insert(prim, spec);
+        layer.insert_prim(prim, spec);
         store.insert_layer(layer);
 
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -380,7 +380,7 @@ mod tests {
             sublayers: vec![],
             prims: HashMap::new(),
         };
-        layer.prims.insert(prim, PrimSpec::default());
+        layer.insert_prim(prim, PrimSpec::default());
         store.insert_layer(layer);
 
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -389,7 +389,7 @@ mod tests {
         let prim_q = p(&mut store, "/Q");
         {
             let layer = store.layers.get_mut(&LayerId(1)).unwrap();
-            layer.prims.insert(prim_q, PrimSpec::default());
+            layer.insert_prim(prim_q, PrimSpec::default());
         }
 
         live.notify_structural_change();
@@ -416,12 +416,8 @@ mod tests {
             prims: HashMap::new(),
         };
         let mut p_spec = PrimSpec::default();
-        p_spec.references.append.push(Reference {
-            layer: LayerId(2),
-            prim_path: prim_q,
-            asset: None,
-        });
-        root.prims.insert(prim_p, p_spec);
+        p_spec.add_reference(Reference::new(LayerId(2), prim_q));
+        root.insert_prim(prim_p, p_spec);
         store.insert_layer(root);
 
         let mut ref_layer = Layer {
@@ -433,7 +429,7 @@ mod tests {
         q_spec
             .fields
             .insert(field_x, FieldValue::Value(Value::Int64(10)));
-        ref_layer.prims.insert(prim_q, q_spec);
+        ref_layer.insert_prim(prim_q, q_spec);
         store.insert_layer(ref_layer);
 
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -480,7 +476,7 @@ mod tests {
         spec2
             .fields
             .insert(field_x, FieldValue::Value(Value::Int64(10)));
-        layer2.prims.insert(prim, spec2);
+        layer2.insert_prim(prim, spec2);
         store.insert_layer(layer2);
 
         let mut layer1 = Layer {
@@ -492,7 +488,7 @@ mod tests {
         spec1
             .fields
             .insert(field_x, FieldValue::Value(Value::Int64(20)));
-        layer1.prims.insert(prim, spec1);
+        layer1.insert_prim(prim, spec1);
         store.insert_layer(layer1);
 
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -552,11 +548,11 @@ mod tests {
         class_spec
             .fields
             .insert(field_x, FieldValue::Value(Value::Int64(42)));
-        layer.prims.insert(class_c, class_spec);
+        layer.insert_prim(class_c, class_spec);
         // /P inherits from /Class_C.
         let mut p_spec = PrimSpec::default();
-        p_spec.inherits.append.push(class_c);
-        layer.prims.insert(prim_p, p_spec);
+        p_spec.add_inherit(class_c);
+        layer.insert_prim(prim_p, p_spec);
         store.insert_layer(layer);
 
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -606,7 +602,7 @@ mod tests {
         a_spec
             .fields
             .insert(field_x, FieldValue::Value(Value::Int64(1)));
-        layer1.prims.insert(prim_a, a_spec);
+        layer1.insert_prim(prim_a, a_spec);
         store.insert_layer(layer1);
 
         let mut layer2 = Layer {
@@ -618,7 +614,7 @@ mod tests {
         b_spec
             .fields
             .insert(field_y, FieldValue::Value(Value::Int64(2)));
-        layer2.prims.insert(prim_b, b_spec);
+        layer2.insert_prim(prim_b, b_spec);
         store.insert_layer(layer2);
 
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -668,7 +664,7 @@ mod tests {
         let mut spec = PrimSpec::default();
         spec.fields
             .insert(field_x, FieldValue::Value(Value::Int64(1)));
-        layer.prims.insert(prim, spec);
+        layer.insert_prim(prim, spec);
         store.insert_layer(layer);
 
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -708,15 +704,11 @@ mod tests {
             prims: HashMap::new(),
         };
         let mut p_spec = PrimSpec::default();
-        p_spec.references.append.push(Reference {
-            layer: LayerId(2),
-            prim_path: prim_q,
-            asset: None,
-        });
+        p_spec.add_reference(Reference::new(LayerId(2), prim_q));
         p_spec
             .fields
             .insert(field_x, FieldValue::Value(Value::Int64(1)));
-        root.prims.insert(prim_p, p_spec);
+        root.insert_prim(prim_p, p_spec);
         store.insert_layer(root);
 
         let mut ref_layer = Layer {
@@ -728,7 +720,7 @@ mod tests {
         q_spec
             .fields
             .insert(field_x, FieldValue::Value(Value::Int64(100)));
-        ref_layer.prims.insert(prim_q, q_spec);
+        ref_layer.insert_prim(prim_q, q_spec);
         store.insert_layer(ref_layer);
 
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -770,13 +762,13 @@ mod tests {
         a_spec
             .fields
             .insert(field_x, FieldValue::Value(Value::Int64(1)));
-        layer.prims.insert(prim_a, a_spec);
+        layer.insert_prim(prim_a, a_spec);
 
         let mut b_spec = PrimSpec::default();
         b_spec
             .fields
             .insert(field_x, FieldValue::Value(Value::Int64(2)));
-        layer.prims.insert(prim_b, b_spec);
+        layer.insert_prim(prim_b, b_spec);
         store.insert_layer(layer);
 
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -823,13 +815,13 @@ mod tests {
         a_spec
             .fields
             .insert(field_x, FieldValue::Value(Value::Int64(1)));
-        layer.prims.insert(prim_a, a_spec);
+        layer.insert_prim(prim_a, a_spec);
 
         let mut b_spec = PrimSpec::default();
         b_spec
             .fields
             .insert(field_x, FieldValue::Value(Value::Int64(2)));
-        layer.prims.insert(prim_b, b_spec);
+        layer.insert_prim(prim_b, b_spec);
         store.insert_layer(layer);
 
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -879,7 +871,7 @@ mod tests {
         a_spec
             .fields
             .insert(field_x, FieldValue::Value(Value::Int64(1)));
-        layer1.prims.insert(prim_a, a_spec);
+        layer1.insert_prim(prim_a, a_spec);
         store.insert_layer(layer1);
 
         let mut layer2 = Layer {
@@ -891,7 +883,7 @@ mod tests {
         b_spec
             .fields
             .insert(field_x, FieldValue::Value(Value::Int64(2)));
-        layer2.prims.insert(prim_b, b_spec);
+        layer2.insert_prim(prim_b, b_spec);
         store.insert_layer(layer2);
 
         let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -923,7 +915,7 @@ mod tests {
             let mut spec = PrimSpec::default();
             spec.fields
                 .insert(field_x, FieldValue::Value(Value::Int64(val)));
-            layer.prims.insert(prim, spec);
+            layer.insert_prim(prim, spec);
         }
         store.insert_layer(layer);
 

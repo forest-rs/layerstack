@@ -4,6 +4,7 @@
 //! for arc-related fields (variants/references).
 
 use alloc::{string::String, sync::Arc, vec::Vec};
+use core::fmt;
 
 use hashbrown::HashMap;
 
@@ -96,6 +97,68 @@ pub enum Value {
     Blocked,
 }
 
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Null => write!(f, "null"),
+            Self::Bool(v) => write!(f, "{v}"),
+            Self::UChar(v) => write!(f, "{v}"),
+            Self::Int(v) => write!(f, "{v}"),
+            Self::UInt(v) => write!(f, "{v}"),
+            Self::Int64(v) => write!(f, "{v}"),
+            Self::UInt64(v) => write!(f, "{v}"),
+            Self::Half(v) => write!(f, "half(0x{v:04x})"),
+            Self::Float(v) => write!(f, "{v}"),
+            Self::Double(v) => write!(f, "{v}"),
+            Self::String(v) => write!(f, "{v}"),
+            Self::Token(v) => write!(f, "token({v:?})"),
+            Self::Asset(v) => write!(f, "@{v}@"),
+            Self::TimeCode(v) => write!(f, "{v}"),
+            Self::Opaque { type_name, bytes } => {
+                write!(f, "opaque({type_name:?}, {} bytes)", bytes.len())
+            }
+            Self::Blocked => write!(f, "blocked"),
+        }
+    }
+}
+
+impl Value {
+    /// Creates a string value.
+    pub fn string(s: impl Into<Arc<str>>) -> Self {
+        Self::String(s.into())
+    }
+}
+
+impl From<&str> for Value {
+    fn from(s: &str) -> Self {
+        Self::String(Arc::from(s))
+    }
+}
+
+impl From<bool> for Value {
+    fn from(v: bool) -> Self {
+        Self::Bool(v)
+    }
+}
+
+impl From<i32> for Value {
+    fn from(v: i32) -> Self {
+        Self::Int(v)
+    }
+}
+
+impl From<f32> for Value {
+    fn from(v: f32) -> Self {
+        Self::Float(v)
+    }
+}
+
+impl From<f64> for Value {
+    fn from(v: f64) -> Self {
+        Self::Double(v)
+    }
+}
+
 /// A field value stored on a prim spec.
 #[derive(Clone, Debug, PartialEq)]
 pub enum FieldValue {
@@ -117,6 +180,48 @@ pub enum FieldValue {
     ///
     /// Spec: AOUSD Core §12.3.2.2 (timeSamples metadata).
     TimeSamples(Vec<(f64, Value)>),
+}
+
+impl From<Value> for FieldValue {
+    fn from(v: Value) -> Self {
+        Self::Value(v)
+    }
+}
+
+impl From<&str> for FieldValue {
+    fn from(s: &str) -> Self {
+        Self::Value(Value::string(s))
+    }
+}
+
+impl From<bool> for FieldValue {
+    fn from(v: bool) -> Self {
+        Self::Value(Value::Bool(v))
+    }
+}
+
+impl From<i32> for FieldValue {
+    fn from(v: i32) -> Self {
+        Self::Value(Value::Int(v))
+    }
+}
+
+impl From<i64> for FieldValue {
+    fn from(v: i64) -> Self {
+        Self::Value(Value::Int64(v))
+    }
+}
+
+impl From<f32> for FieldValue {
+    fn from(v: f32) -> Self {
+        Self::Value(Value::Float(v))
+    }
+}
+
+impl From<f64> for FieldValue {
+    fn from(v: f64) -> Self {
+        Self::Value(Value::Double(v))
+    }
 }
 
 /// Interpolation method for time-varying attribute resolution.
@@ -141,6 +246,26 @@ pub struct Reference {
     pub prim_path: PathId,
     /// Optional debug name / URI.
     pub asset: Option<String>,
+}
+
+impl Reference {
+    /// Creates a reference with no asset path.
+    pub fn new(layer: LayerId, prim_path: PathId) -> Self {
+        Self {
+            layer,
+            prim_path,
+            asset: None,
+        }
+    }
+
+    /// Creates a reference with an asset path.
+    pub fn with_asset(layer: LayerId, prim_path: PathId, asset: impl Into<String>) -> Self {
+        Self {
+            layer,
+            prim_path,
+            asset: Some(asset.into()),
+        }
+    }
 }
 
 /// Opinions for a variant branch.
@@ -282,6 +407,104 @@ pub struct PrimSpec {
     pub instanceable: Option<bool>,
 }
 
+impl PrimSpec {
+    /// Creates a prim spec with `specifier = def`.
+    pub fn def() -> Self {
+        Self {
+            specifier: Some(Specifier::Def),
+            ..Self::default()
+        }
+    }
+
+    /// Creates a prim spec with `specifier = over`.
+    pub fn over() -> Self {
+        Self {
+            specifier: Some(Specifier::Over),
+            ..Self::default()
+        }
+    }
+
+    /// Creates a prim spec with `specifier = class`.
+    pub fn class() -> Self {
+        Self {
+            specifier: Some(Specifier::Class),
+            ..Self::default()
+        }
+    }
+
+    /// Inserts a field value, returning `&mut Self` for chaining.
+    pub fn set_field(&mut self, token: TokenId, value: impl Into<FieldValue>) -> &mut Self {
+        self.fields.insert(token, value.into());
+        self
+    }
+
+    /// Inserts a field value (builder, consuming).
+    pub fn with_field(mut self, token: TokenId, value: impl Into<FieldValue>) -> Self {
+        self.fields.insert(token, value.into());
+        self
+    }
+
+    /// Appends a reference arc.
+    pub fn add_reference(&mut self, reference: Reference) -> &mut Self {
+        self.references.append.push(reference);
+        self
+    }
+
+    /// Appends a reference arc (builder, consuming).
+    pub fn with_reference(mut self, reference: Reference) -> Self {
+        self.references.append.push(reference);
+        self
+    }
+
+    /// Appends an inherit arc.
+    pub fn add_inherit(&mut self, path: PathId) -> &mut Self {
+        self.inherits.append.push(path);
+        self
+    }
+
+    /// Appends an inherit arc (builder, consuming).
+    pub fn with_inherit(mut self, path: PathId) -> Self {
+        self.inherits.append.push(path);
+        self
+    }
+
+    /// Appends a payload arc.
+    pub fn add_payload(&mut self, payload: Reference) -> &mut Self {
+        self.payloads.append.push(payload);
+        self
+    }
+
+    /// Appends a payload arc (builder, consuming).
+    pub fn with_payload(mut self, payload: Reference) -> Self {
+        self.payloads.append.push(payload);
+        self
+    }
+
+    /// Appends a specialize arc.
+    pub fn add_specialize(&mut self, path: PathId) -> &mut Self {
+        self.specializes.append.push(path);
+        self
+    }
+
+    /// Appends a specialize arc (builder, consuming).
+    pub fn with_specialize(mut self, path: PathId) -> Self {
+        self.specializes.append.push(path);
+        self
+    }
+
+    /// Sets the authored children list (builder, consuming).
+    pub fn with_children(mut self, children: Vec<TokenId>) -> Self {
+        self.authored_children = children;
+        self
+    }
+
+    /// Marks this prim as instanceable (or not).
+    pub fn with_instanceable(mut self, instanceable: bool) -> Self {
+        self.instanceable = Some(instanceable);
+        self
+    }
+}
+
 /// A document layer.
 #[derive(Clone, Debug)]
 pub struct Layer {
@@ -291,6 +514,22 @@ pub struct Layer {
     pub sublayers: Vec<LayerId>,
     /// Prim specs keyed by prim path.
     pub prims: HashMap<PathId, PrimSpec>,
+}
+
+impl Layer {
+    /// Creates an empty layer with no sublayers or prims.
+    pub fn new(id: LayerId) -> Self {
+        Self {
+            id,
+            sublayers: Vec::new(),
+            prims: HashMap::new(),
+        }
+    }
+
+    /// Inserts a prim spec at the given path.
+    pub fn insert_prim(&mut self, path: PathId, spec: PrimSpec) {
+        self.prims.insert(path, spec);
+    }
 }
 
 /// A store for accessing layers and shared interners.
@@ -326,6 +565,17 @@ impl InMemoryStore {
     /// Inserts (or replaces) a layer.
     pub fn insert_layer(&mut self, layer: Layer) {
         self.layers.insert(layer.id, layer);
+    }
+
+    /// Parses and interns an absolute path, returning its [`PathId`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if `s` is not a valid absolute path (must start with `/`).
+    pub fn path(&mut self, s: &str) -> PathId {
+        let p =
+            crate::path::Path::parse_absolute(s, &mut self.tokens).expect("valid absolute path");
+        self.paths.intern(p)
     }
 }
 

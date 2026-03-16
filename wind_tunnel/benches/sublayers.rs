@@ -11,17 +11,7 @@
 extern crate alloc;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use layerstack::{
-    FieldValue, HashMap, InMemoryStore, Layer, LayerId, Path, PathId, PrimSpec, Specifier, Stage,
-    StageOptions, Value,
-};
-
-/// Intern an absolute path.
-fn p(store: &mut InMemoryStore, s: &str) -> PathId {
-    store
-        .paths
-        .intern(Path::parse_absolute(s, &mut store.tokens).expect("valid path"))
-}
+use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, Stage, StageOptions, Value};
 
 /// Build a scene with `n_layers` sublayers, each providing opinions on
 /// `n_prims` prims, then compose.
@@ -32,70 +22,47 @@ fn build_and_compose(n_layers: usize, n_prims: usize) -> Stage {
     let f_priority = store.tokens.intern("priority");
 
     // Pre-intern prim paths and child name tokens.
-    let root = p(&mut store, "/Root");
+    let root = store.path("/Root");
     let mut child_paths = Vec::with_capacity(n_prims);
     let mut child_tokens = Vec::with_capacity(n_prims);
     for i in 0..n_prims {
         let name = alloc::format!("Prim_{i:04}");
         child_tokens.push(store.tokens.intern(&name));
-        child_paths.push(p(&mut store, &alloc::format!("/Root/{name}")));
+        child_paths.push(store.path(&alloc::format!("/Root/{name}")));
     }
 
     // Root layer (LayerId 1) — defines the sublayer chain and the root prim.
     let sublayer_ids: Vec<LayerId> = (2..=(n_layers as u64)).map(LayerId).collect();
 
-    let mut root_layer = Layer {
-        id: LayerId(1),
-        sublayers: sublayer_ids,
-        prims: HashMap::new(),
-    };
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.sublayers = sublayer_ids;
 
     // Root prim with children, plus strongest opinions.
-    root_layer.prims.insert(
-        root,
-        PrimSpec {
-            specifier: Some(Specifier::Def),
-            authored_children: child_tokens.clone(),
-            ..PrimSpec::default()
-        },
-    );
+    root_layer.insert_prim(root, PrimSpec::def().with_children(child_tokens.clone()));
     for (j, &path) in child_paths.iter().enumerate() {
-        let mut spec = PrimSpec {
-            specifier: Some(Specifier::Def),
-            ..PrimSpec::default()
-        };
-        spec.fields.insert(
-            f_value,
-            FieldValue::Value(Value::String(alloc::format!("layer1_prim{j}").into())),
+        root_layer.insert_prim(
+            path,
+            PrimSpec::def()
+                .with_field(f_value, Value::string(alloc::format!("layer1_prim{j}")))
+                .with_field(f_priority, 1),
         );
-        spec.fields
-            .insert(f_priority, FieldValue::Value(Value::Int(1)));
-        root_layer.prims.insert(path, spec);
     }
     store.insert_layer(root_layer);
 
     // Sublayers 2..=n_layers — each provides weaker opinions on all prims.
     for layer_idx in 2..=n_layers {
-        let mut layer = Layer {
-            id: LayerId(layer_idx as u64),
-            sublayers: vec![],
-            prims: HashMap::new(),
-        };
+        let mut layer = Layer::new(LayerId(layer_idx as u64));
         for (j, &path) in child_paths.iter().enumerate() {
-            let mut spec = PrimSpec {
-                specifier: Some(Specifier::Over),
-                ..PrimSpec::default()
-            };
-            spec.fields.insert(
-                f_value,
-                FieldValue::Value(Value::String(
-                    alloc::format!("layer{layer_idx}_prim{j}").into(),
-                )),
-            );
             let priority = layer_idx as i32;
-            spec.fields
-                .insert(f_priority, FieldValue::Value(Value::Int(priority)));
-            layer.prims.insert(path, spec);
+            layer.insert_prim(
+                path,
+                PrimSpec::over()
+                    .with_field(
+                        f_value,
+                        Value::string(alloc::format!("layer{layer_idx}_prim{j}")),
+                    )
+                    .with_field(f_priority, priority),
+            );
         }
         store.insert_layer(layer);
     }

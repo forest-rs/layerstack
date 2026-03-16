@@ -1,53 +1,29 @@
 //! Minimal end-to-end composition example.
 
-use layerstack::{
-    FieldValue, HashMap, InMemoryStore, Layer, LayerId, Path, PrimSpec, Reference, Stage,
-    StageOptions, Value,
-};
+use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, Reference, Stage, StageOptions, Value};
 
 fn main() {
     let mut store = InMemoryStore::default();
 
     let field_title = store.tokens.intern("title");
 
-    let p = store
-        .paths
-        .intern(Path::parse_absolute("/Doc", &mut store.tokens).expect("valid path"));
+    let p = store.path("/Doc");
+    let q = store.path("/Template");
 
-    let q = store
-        .paths
-        .intern(Path::parse_absolute("/Template", &mut store.tokens).expect("valid path"));
-
-    let mut root_layer = Layer {
-        id: LayerId(1),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-
-    let mut doc_spec = PrimSpec::default();
-    doc_spec.references.append.push(Reference {
-        layer: LayerId(2),
-        prim_path: q,
-        asset: Some("template".to_string()),
-    });
-    doc_spec.fields.insert(
-        field_title,
-        FieldValue::Value(Value::String("Hello from local".into())),
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.insert_prim(
+        p,
+        PrimSpec::default()
+            .with_reference(Reference::with_asset(LayerId(2), q, "template"))
+            .with_field(field_title, Value::string("Hello from local")),
     );
-    root_layer.prims.insert(p, doc_spec);
     store.insert_layer(root_layer);
 
-    let mut template_layer = Layer {
-        id: LayerId(2),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    let mut template_spec = PrimSpec::default();
-    template_spec.fields.insert(
-        field_title,
-        FieldValue::Value(Value::String("Hello from reference".into())),
+    let mut template_layer = Layer::new(LayerId(2));
+    template_layer.insert_prim(
+        q,
+        PrimSpec::default().with_field(field_title, Value::string("Hello from reference")),
     );
-    template_layer.prims.insert(q, template_spec);
     store.insert_layer(template_layer);
 
     let stage = Stage::compose(

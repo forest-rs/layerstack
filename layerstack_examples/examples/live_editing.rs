@@ -11,15 +11,8 @@
 //! 5. Batch edits across multiple layers in a single recompose cycle
 
 use layerstack::{
-    FieldValue, HashMap, InMemoryStore, Layer, LayerId, LiveStage, Path, PathId, PrimSpec,
-    Reference, Specifier, StageOptions, Value,
+    InMemoryStore, Layer, LayerId, LiveStage, PathId, PrimSpec, Reference, StageOptions,
 };
-
-fn p(store: &mut InMemoryStore, s: &str) -> PathId {
-    store
-        .paths
-        .intern(Path::parse_absolute(s, &mut store.tokens).expect("valid path"))
-}
 
 fn main() {
     let mut store = InMemoryStore::default();
@@ -28,11 +21,11 @@ fn main() {
     let field_speed = store.tokens.intern("speed");
     let field_color = store.tokens.intern("color");
 
-    let hero = p(&mut store, "/Hero");
-    let sword = p(&mut store, "/Hero/Sword");
-    let shield = p(&mut store, "/Hero/Shield");
-    let enemy = p(&mut store, "/Enemy");
-    let power_gem = p(&mut store, "/PowerGem");
+    let hero = store.path("/Hero");
+    let sword = store.path("/Hero/Sword");
+    let shield = store.path("/Hero/Shield");
+    let enemy = store.path("/Enemy");
+    let power_gem = store.path("/PowerGem");
 
     let sword_token = store.tokens.intern("Sword");
     let shield_token = store.tokens.intern("Shield");
@@ -42,75 +35,25 @@ fn main() {
     // Layer 2 (items): defines the power gem (referenced by the hero).
     // -----------------------------------------------------------------------
 
-    let mut base = Layer {
-        id: LayerId(1),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
+    let mut base = Layer::new(LayerId(1));
 
-    let mut hero_spec = PrimSpec {
-        specifier: Some(Specifier::Def),
-        authored_children: vec![sword_token, shield_token],
-        ..PrimSpec::default()
-    };
-    hero_spec
-        .fields
-        .insert(field_hp, FieldValue::Value(Value::Int64(100)));
-    hero_spec
-        .fields
-        .insert(field_speed, FieldValue::Value(Value::Double(5.0)));
-    // Hero references the power gem for bonus stats.
-    hero_spec.references.append.push(Reference {
-        layer: LayerId(2),
-        prim_path: power_gem,
-        asset: None,
-    });
-    base.prims.insert(hero, hero_spec);
-
-    let mut sword_spec = PrimSpec {
-        specifier: Some(Specifier::Def),
-        ..PrimSpec::default()
-    };
-    sword_spec.fields.insert(
-        field_color,
-        FieldValue::Value(Value::String("steel".into())),
+    base.insert_prim(
+        hero,
+        PrimSpec::def()
+            .with_children(vec![sword_token, shield_token])
+            .with_field(field_hp, 100_i64)
+            .with_field(field_speed, 5.0)
+            // Hero references the power gem for bonus stats.
+            .with_reference(Reference::new(LayerId(2), power_gem)),
     );
-    base.prims.insert(sword, sword_spec);
-
-    let mut shield_spec = PrimSpec {
-        specifier: Some(Specifier::Def),
-        ..PrimSpec::default()
-    };
-    shield_spec.fields.insert(
-        field_color,
-        FieldValue::Value(Value::String("bronze".into())),
-    );
-    base.prims.insert(shield, shield_spec);
-
-    let mut enemy_spec = PrimSpec {
-        specifier: Some(Specifier::Def),
-        ..PrimSpec::default()
-    };
-    enemy_spec
-        .fields
-        .insert(field_hp, FieldValue::Value(Value::Int64(50)));
-    base.prims.insert(enemy, enemy_spec);
+    base.insert_prim(sword, PrimSpec::def().with_field(field_color, "steel"));
+    base.insert_prim(shield, PrimSpec::def().with_field(field_color, "bronze"));
+    base.insert_prim(enemy, PrimSpec::def().with_field(field_hp, 50_i64));
     store.insert_layer(base);
 
     // Power gem layer: provides speed bonus to whoever references it.
-    let mut items = Layer {
-        id: LayerId(2),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
-    let mut gem_spec = PrimSpec {
-        specifier: Some(Specifier::Def),
-        ..PrimSpec::default()
-    };
-    gem_spec
-        .fields
-        .insert(field_speed, FieldValue::Value(Value::Double(10.0)));
-    items.prims.insert(power_gem, gem_spec);
+    let mut items = Layer::new(LayerId(2));
+    items.insert_prim(power_gem, PrimSpec::def().with_field(field_speed, 10.0));
     store.insert_layer(items);
 
     // -----------------------------------------------------------------------
@@ -139,8 +82,7 @@ fn main() {
     {
         let layer = store.layers.get_mut(&LayerId(1)).unwrap();
         let spec = layer.prims.get_mut(&hero).unwrap();
-        spec.fields
-            .insert(field_hp, FieldValue::Value(Value::Int64(70)));
+        spec.set_field(field_hp, 70_i64);
     }
 
     live.notify_layer_edit(LayerId(1));
@@ -164,10 +106,7 @@ fn main() {
     {
         let layer = store.layers.get_mut(&LayerId(1)).unwrap();
         let spec = layer.prims.get_mut(&sword).unwrap();
-        spec.fields.insert(
-            field_color,
-            FieldValue::Value(Value::String("glowing blue".into())),
-        );
+        spec.set_field(field_color, "glowing blue");
     }
 
     live.notify_prim_edit(sword);
@@ -192,8 +131,7 @@ fn main() {
     {
         let layer = store.layers.get_mut(&LayerId(2)).unwrap();
         let spec = layer.prims.get_mut(&power_gem).unwrap();
-        spec.fields
-            .insert(field_speed, FieldValue::Value(Value::Double(20.0)));
+        spec.set_field(field_speed, 20.0);
     }
 
     live.notify_layer_edit(LayerId(2));
@@ -223,14 +161,9 @@ fn main() {
     {
         let layer = store.layers.get_mut(&LayerId(1)).unwrap();
         let e_spec = layer.prims.get_mut(&enemy).unwrap();
-        e_spec
-            .fields
-            .insert(field_hp, FieldValue::Value(Value::Int64(25)));
+        e_spec.set_field(field_hp, 25_i64);
         let s_spec = layer.prims.get_mut(&shield).unwrap();
-        s_spec.fields.insert(
-            field_color,
-            FieldValue::Value(Value::String("mithril".into())),
-        );
+        s_spec.set_field(field_color, "mithril");
     }
 
     live.notify_layer_edit(LayerId(1));
@@ -255,18 +188,13 @@ fn main() {
     // -----------------------------------------------------------------------
 
     println!("\n--- Structural change: add /Treasure ---");
-    let treasure = p(&mut store, "/Treasure");
+    let treasure = store.path("/Treasure");
     {
         let layer = store.layers.get_mut(&LayerId(1)).unwrap();
-        let mut t_spec = PrimSpec {
-            specifier: Some(Specifier::Def),
-            ..PrimSpec::default()
-        };
-        t_spec.fields.insert(
-            store.tokens.intern("value"),
-            FieldValue::Value(Value::Int64(500)),
+        layer.insert_prim(
+            treasure,
+            PrimSpec::def().with_field(store.tokens.intern("value"), 500_i64),
         );
-        layer.prims.insert(treasure, t_spec);
     }
 
     live.notify_structural_change();
@@ -299,20 +227,16 @@ fn print_hero(
     let stage = live.stage();
     let hp = stage
         .resolve_field(hero, field_hp)
-        .map(|r| format!("{:?}", r.value))
-        .unwrap_or_else(|| "???".to_string());
+        .map_or("???".into(), |r| format!("{}", r.value));
     let speed = stage
         .resolve_field(hero, field_speed)
-        .map(|r| format!("{:?}", r.value))
-        .unwrap_or_else(|| "???".to_string());
+        .map_or("???".into(), |r| format!("{}", r.value));
     let sw_color = stage
         .resolve_field(sword, field_color)
-        .map(|r| format!("{:?}", r.value))
-        .unwrap_or_else(|| "???".to_string());
+        .map_or("???".into(), |r| format!("{}", r.value));
     let sh_color = stage
         .resolve_field(shield, field_color)
-        .map(|r| format!("{:?}", r.value))
-        .unwrap_or_else(|| "???".to_string());
+        .map_or("???".into(), |r| format!("{}", r.value));
     println!("  /Hero        hp={hp}  speed={speed}");
     println!("  /Hero/Sword  color={sw_color}");
     println!("  /Hero/Shield color={sh_color}");
@@ -322,7 +246,6 @@ fn print_enemy(live: &LiveStage, enemy: PathId, field_hp: layerstack::TokenId) {
     let stage = live.stage();
     let hp = stage
         .resolve_field(enemy, field_hp)
-        .map(|r| format!("{:?}", r.value))
-        .unwrap_or_else(|| "???".to_string());
+        .map_or("???".into(), |r| format!("{}", r.value));
     println!("  /Enemy       hp={hp}");
 }

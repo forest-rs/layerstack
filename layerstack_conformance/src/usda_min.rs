@@ -85,11 +85,7 @@ pub fn load_entry_usda_sublayers_only(entry: &Path) -> LoadedStage {
 
         let text = std::fs::read_to_string(path).expect("read usda");
         let sublayers = parse_sublayers(&text, path.parent().unwrap_or(Path::new(".")));
-        let mut layer = Layer {
-            id,
-            sublayers: Vec::new(),
-            prims: layerstack::HashMap::new(),
-        };
+        let mut layer = Layer::new(id);
 
         for sub in sublayers {
             let sub_id = load_layer_sublayers_only(
@@ -1500,11 +1496,7 @@ fn resolve_reference_spec(
 
     // Internal reference (no asset path) — same layer.
     if asset.is_empty() {
-        return Reference {
-            layer: current_layer_id,
-            prim_path,
-            asset: None,
-        };
+        return Reference::new(current_layer_id, prim_path);
     }
 
     let asset_rel = asset.strip_prefix("./").unwrap_or(asset);
@@ -1519,11 +1511,7 @@ fn resolve_reference_spec(
         layer_names,
     );
 
-    Reference {
-        layer,
-        prim_path,
-        asset: Some(asset.to_string()),
-    }
+    Reference::with_asset(layer, prim_path, asset)
 }
 
 fn parse_prim_name(line: &str) -> Option<&str> {
@@ -1560,21 +1548,13 @@ fn load_layer_with_prims(
         Ok(t) => t,
         Err(_) => {
             // Missing referenced layer file — create an empty layer.
-            let layer = Layer {
-                id,
-                sublayers: Vec::new(),
-                prims: layerstack::HashMap::new(),
-            };
+            let layer = Layer::new(id);
             store.insert_layer(layer);
             return id;
         }
     };
     let sublayers = parse_sublayers(&text, path.parent().unwrap_or(Path::new(".")));
-    let mut layer = Layer {
-        id,
-        sublayers: Vec::new(),
-        prims: layerstack::HashMap::new(),
-    };
+    let mut layer = Layer::new(id);
 
     for sub in sublayers {
         let sub_id =
@@ -2226,7 +2206,7 @@ fn load_layer_with_prims(
             .map(|n| store.tokens.intern(n))
             .collect();
 
-        layer.prims.insert(prim_path, spec);
+        layer.insert_prim(prim_path, spec);
     }
 
     store.insert_layer(layer);

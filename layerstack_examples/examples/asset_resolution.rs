@@ -19,9 +19,8 @@ use std::collections::HashMap as StdHashMap;
 use std::sync::Arc;
 
 use layerstack::{
-    AssetResolveError, AssetResolver, FieldValue, HashMap, InMemoryStore, Layer, LayerId, ListOp,
-    Path, PathId, PrimSpec, Reference, ResolvedAsset, Specifier, Stage, StageOptions,
-    TokenInterner, Value, path::PathInterner,
+    AssetResolveError, AssetResolver, InMemoryStore, Layer, LayerId, Path, PrimSpec, Reference,
+    ResolvedAsset, Stage, StageOptions, TokenInterner, path::PathInterner,
 };
 
 // ---------------------------------------------------------------------------
@@ -110,15 +109,6 @@ impl AssetResolver for CatalogResolver {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-fn path(store: &mut InMemoryStore, s: &str) -> PathId {
-    let p = Path::parse_absolute(s, &mut store.tokens).expect("valid path");
-    store.paths.intern(p)
-}
-
-// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -131,26 +121,14 @@ fn main() {
         let field_joints = tokens.intern("joints");
         let arm_path = paths.intern(Path::parse_absolute("/Arm", tokens).expect("valid path"));
 
-        let mut arm_spec = PrimSpec {
-            specifier: Some(Specifier::Def),
-            ..PrimSpec::default()
-        };
-        arm_spec.fields.insert(
-            field_material,
-            FieldValue::Value(Value::String("titanium".into())),
+        let mut layer = Layer::new(LayerId(0)); // Overwritten by the resolver.
+        layer.insert_prim(
+            arm_path,
+            PrimSpec::def()
+                .with_field(field_material, "titanium")
+                .with_field(field_joints, 6_i64),
         );
-        arm_spec
-            .fields
-            .insert(field_joints, FieldValue::Value(Value::Int64(6)));
-
-        let mut prims = HashMap::new();
-        prims.insert(arm_path, arm_spec);
-
-        Layer {
-            id: LayerId(0), // Overwritten by the resolver.
-            sublayers: vec![],
-            prims,
-        }
+        layer
     });
 
     resolver.register("sets/env.layer", |tokens, paths| {
@@ -158,30 +136,19 @@ fn main() {
         let ground_path =
             paths.intern(Path::parse_absolute("/Ground", tokens).expect("valid path"));
 
-        let mut ground_spec = PrimSpec {
-            specifier: Some(Specifier::Def),
-            ..PrimSpec::default()
-        };
-        ground_spec.fields.insert(
-            field_color,
-            FieldValue::Value(Value::String("brown".into())),
+        let mut layer = Layer::new(LayerId(0));
+        layer.insert_prim(
+            ground_path,
+            PrimSpec::def().with_field(field_color, "brown"),
         );
-
-        let mut prims = HashMap::new();
-        prims.insert(ground_path, ground_spec);
-
-        Layer {
-            id: LayerId(0),
-            sublayers: vec![],
-            prims,
-        }
+        layer
     });
 
     // 2. Build the root scene layer, resolving asset URIs via the trait.
     let mut store = InMemoryStore::default();
 
-    let robot_path = path(&mut store, "/Robot");
-    let env_path = path(&mut store, "/Environment");
+    let robot_path = store.path("/Robot");
+    let env_path = store.path("/Environment");
 
     // Resolve assets through the AssetResolver trait.
     let robot_asset = resolver
@@ -226,44 +193,30 @@ fn main() {
 
     // The referenced prim paths (what the reference points *at* inside the
     // asset layer).
-    let ref_arm = path(&mut store, "/Arm");
-    let ref_ground = path(&mut store, "/Ground");
+    let ref_arm = store.path("/Arm");
+    let ref_ground = store.path("/Ground");
 
-    let mut root = Layer {
-        id: LayerId(1),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
+    let mut root = Layer::new(LayerId(1));
 
     // /Robot references /Arm from the robot asset.
-    let mut robot_spec = PrimSpec {
-        specifier: Some(Specifier::Def),
-        ..PrimSpec::default()
-    };
-    robot_spec.references = ListOp {
-        append: vec![Reference {
-            layer: robot_layer_id,
-            prim_path: ref_arm,
-            asset: Some("props/robot.layer".to_string()),
-        }],
-        ..ListOp::default()
-    };
-    root.prims.insert(robot_path, robot_spec);
+    root.insert_prim(
+        robot_path,
+        PrimSpec::def().with_reference(Reference::with_asset(
+            robot_layer_id,
+            ref_arm,
+            "props/robot.layer",
+        )),
+    );
 
     // /Environment references /Ground from the environment asset.
-    let mut env_spec = PrimSpec {
-        specifier: Some(Specifier::Def),
-        ..PrimSpec::default()
-    };
-    env_spec.references = ListOp {
-        append: vec![Reference {
-            layer: env_layer_id,
-            prim_path: ref_ground,
-            asset: Some("sets/env.layer".to_string()),
-        }],
-        ..ListOp::default()
-    };
-    root.prims.insert(env_path, env_spec);
+    root.insert_prim(
+        env_path,
+        PrimSpec::def().with_reference(Reference::with_asset(
+            env_layer_id,
+            ref_ground,
+            "sets/env.layer",
+        )),
+    );
 
     store.insert_layer(root);
 
@@ -286,8 +239,8 @@ fn main() {
     let material = stage.resolve_field(robot_path, field_material).unwrap();
     let joints = stage.resolve_field(robot_path, field_joints).unwrap();
     println!("/Robot");
-    println!("  material = {:?}", material.value);
-    println!("  joints   = {:?}", joints.value);
+    println!("  material = {}", material.value);
+    println!("  joints   = {}", joints.value);
     if let Some(prov) = material.provenance {
         println!("  (material provided by layer {})", prov.layer.0);
     }
@@ -295,7 +248,7 @@ fn main() {
     // Environment gets its fields from the env asset.
     let color = stage.resolve_field(env_path, field_color).unwrap();
     println!("/Environment");
-    println!("  color = {:?}", color.value);
+    println!("  color = {}", color.value);
 
     // Show resolved paths via the resolver.
     println!(

@@ -19,8 +19,7 @@
 use std::sync::Arc;
 
 use layerstack::{
-    FieldValue, HashMap, InMemoryStore, Layer, LayerId, Path, PathId, PrimSpec, Specifier, Stage,
-    StageOptions, TokenId, Value,
+    InMemoryStore, Layer, LayerId, PathId, PrimSpec, Stage, StageOptions, TokenId, Value,
 };
 
 // ---------------------------------------------------------------------------
@@ -205,16 +204,6 @@ impl<'a> SceneQuery<'a> {
 }
 
 // ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-fn p(store: &mut InMemoryStore, s: &str) -> PathId {
-    store
-        .paths
-        .intern(Path::parse_absolute(s, &mut store.tokens).expect("valid path"))
-}
-
-// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 
@@ -222,105 +211,87 @@ fn main() {
     let mut store = InMemoryStore::default();
     let schema = SchemaTokens::intern(&mut store);
 
-    let robot = p(&mut store, "/Robot");
-    let arm = p(&mut store, "/Robot/Arm");
+    let robot = store.path("/Robot");
+    let arm = store.path("/Robot/Arm");
 
     // --- Base layer: defines the robot with default values. ---
-    let mut base = Layer {
-        id: LayerId(1),
-        sublayers: vec![LayerId(2)],
-        prims: HashMap::new(),
-    };
+    let mut base = Layer::new(LayerId(1));
+    base.sublayers = vec![LayerId(2)];
 
     let arm_token = store.tokens.intern("Arm");
 
-    let mut robot_spec = PrimSpec {
-        specifier: Some(Specifier::Def),
-        authored_children: vec![arm_token],
-        ..PrimSpec::default()
-    };
-    robot_spec.fields.insert(
-        schema.field_name,
-        FieldValue::Value(Value::String("Atlas".into())),
-    );
-    robot_spec.fields.insert(
-        schema.field_xform,
-        FieldValue::Value(encode_transform(
-            &schema,
-            &Transform {
-                position: [0.0, 0.0, 0.0],
-                rotation: [0.0, 0.0, 0.0],
-            },
-        )),
-    );
-    robot_spec.fields.insert(
-        schema.field_bounds,
-        FieldValue::Value(encode_bbox(
-            &schema,
-            &BoundingBox {
-                min: [-1.0, 0.0, -1.0],
-                max: [1.0, 2.0, 1.0],
-            },
-        )),
-    );
-    base.prims.insert(robot, robot_spec);
+    let robot_spec = PrimSpec::def()
+        .with_children(vec![arm_token])
+        .with_field(schema.field_name, "Atlas")
+        .with_field(
+            schema.field_xform,
+            encode_transform(
+                &schema,
+                &Transform {
+                    position: [0.0, 0.0, 0.0],
+                    rotation: [0.0, 0.0, 0.0],
+                },
+            ),
+        )
+        .with_field(
+            schema.field_bounds,
+            encode_bbox(
+                &schema,
+                &BoundingBox {
+                    min: [-1.0, 0.0, -1.0],
+                    max: [1.0, 2.0, 1.0],
+                },
+            ),
+        );
+    base.insert_prim(robot, robot_spec);
 
-    let mut arm_spec = PrimSpec {
-        specifier: Some(Specifier::Def),
-        ..PrimSpec::default()
-    };
-    arm_spec.fields.insert(
-        schema.field_color,
-        FieldValue::Value(encode_color(
-            &schema,
-            &Color {
-                r: 0.5,
-                g: 0.5,
-                b: 0.5,
-                a: 1.0,
-            },
-        )),
-    );
-    arm_spec.fields.insert(
-        schema.field_xform,
-        FieldValue::Value(encode_transform(
-            &schema,
-            &Transform {
-                position: [0.5, 1.0, 0.0],
-                rotation: [0.0, 0.0, 0.0],
-            },
-        )),
-    );
-    base.prims.insert(arm, arm_spec);
+    let arm_spec = PrimSpec::def()
+        .with_field(
+            schema.field_color,
+            encode_color(
+                &schema,
+                &Color {
+                    r: 0.5,
+                    g: 0.5,
+                    b: 0.5,
+                    a: 1.0,
+                },
+            ),
+        )
+        .with_field(
+            schema.field_xform,
+            encode_transform(
+                &schema,
+                &Transform {
+                    position: [0.5, 1.0, 0.0],
+                    rotation: [0.0, 0.0, 0.0],
+                },
+            ),
+        );
+    base.insert_prim(arm, arm_spec);
     store.insert_layer(base);
 
     // --- Override layer: a "shot" layer that repositions the robot and
     //     recolors the arm. Stronger than the base. ---
-    let mut shot = Layer {
-        id: LayerId(2),
-        sublayers: vec![],
-        prims: HashMap::new(),
-    };
+    let mut shot = Layer::new(LayerId(2));
 
     // Override only the transform on the robot (position it in the scene).
-    let mut robot_override = PrimSpec::default();
-    robot_override.fields.insert(
+    let robot_override = PrimSpec::default().with_field(
         schema.field_xform,
-        FieldValue::Value(encode_transform(
+        encode_transform(
             &schema,
             &Transform {
                 position: [10.0, 0.0, 5.0],
                 rotation: [0.0, 45.0, 0.0],
             },
-        )),
+        ),
     );
-    shot.prims.insert(robot, robot_override);
+    shot.insert_prim(robot, robot_override);
 
     // Override the arm color to red.
-    let mut arm_override = PrimSpec::default();
-    arm_override.fields.insert(
+    let arm_override = PrimSpec::default().with_field(
         schema.field_color,
-        FieldValue::Value(encode_color(
+        encode_color(
             &schema,
             &Color {
                 r: 1.0,
@@ -328,9 +299,9 @@ fn main() {
                 b: 0.0,
                 a: 1.0,
             },
-        )),
+        ),
     );
-    shot.prims.insert(arm, arm_override);
+    shot.insert_prim(arm, arm_override);
     store.insert_layer(shot);
 
     // --- Compose and query with the typed API. ---

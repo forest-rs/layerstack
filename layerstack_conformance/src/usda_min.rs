@@ -158,6 +158,8 @@ struct PrimDef {
     /// Composition arcs on variant branch headers (e.g. `"full" (add references = ...) {}`).
     /// These apply to the prim itself when the variant is selected.
     variant_branch_arcs: Vec<VariantBranchArc>,
+    /// Whether this prim is marked instanceable.
+    instanceable: Option<bool>,
 }
 
 #[derive(Clone, Debug)]
@@ -233,6 +235,7 @@ struct PendingPrim {
     payloads: PayloadsDef,
     variant_selections: Vec<(String, String)>,
     variant_set_names: Vec<String>,
+    instanceable: Option<bool>,
 }
 
 fn parse_sublayers(text: &str, base_dir: &Path) -> Vec<PathBuf> {
@@ -469,6 +472,7 @@ fn parse_prim_defs(text: &str) -> Vec<PrimDef> {
                 payloads: PayloadsDef::default(),
                 variant_selections: Vec::new(),
                 variant_set_names: Vec::new(),
+                instanceable: None,
             });
         }
 
@@ -551,6 +555,9 @@ fn parse_prim_defs(text: &str) -> Vec<PrimDef> {
                 // or `add variantSets = "costume"`
                 if let Some(names) = parse_variant_set_names_line(spec_line) {
                     pending.variant_set_names.extend(names);
+                }
+                if let Some(val) = parse_instanceable_line(spec_line) {
+                    pending.instanceable = Some(val);
                 }
             }
         }
@@ -796,6 +803,7 @@ fn parse_prim_defs(text: &str) -> Vec<PrimDef> {
                             variant_fields: Vec::new(),
                             _variant_child_arcs: Vec::new(),
                             variant_branch_arcs: Vec::new(),
+                            instanceable: pending.instanceable,
                         });
                     } else if let Some(ref set_name) = variant_set_name {
                         brace_stack.push(BraceKind::VariantSet(set_name.clone()));
@@ -873,6 +881,17 @@ fn parse_variant_set_names_line(line: &str) -> Option<Vec<String>> {
         } else {
             Some(vec![val.to_string()])
         }
+    }
+}
+
+/// Parses `instanceable = True` or `instanceable = true` or `instanceable = False`.
+fn parse_instanceable_line(line: &str) -> Option<bool> {
+    let rest = line.trim().strip_prefix("instanceable")?.trim();
+    let rhs = rest.strip_prefix('=')?.trim();
+    match rhs.to_ascii_lowercase().as_str() {
+        "true" => Some(true),
+        "false" => Some(false),
+        _ => None,
     }
 }
 
@@ -1864,6 +1883,7 @@ fn load_layer_with_prims(
             .prim_order
             .as_ref()
             .map(|names| names.iter().map(|n| store.tokens.intern(n)).collect());
+        spec.instanceable = prim.instanceable;
 
         if prim.declares_targets
             || prim.targets.explicit.is_some()

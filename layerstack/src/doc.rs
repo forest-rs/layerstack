@@ -271,6 +271,15 @@ pub struct PrimSpec {
     /// Spec: AOUSD Core §11 (stage population), plus the supplemental
     /// parser’s `primOrder` field (`reorder nameChildren = [...]`).
     pub prim_order: Option<Vec<TokenId>>,
+    /// Whether this prim is instanceable.
+    ///
+    /// When `true` and the prim has composition arcs (references, payloads),
+    /// descendant local opinions are stripped — only opinions from composition
+    /// arc targets survive. This enables prototype sharing for identical
+    /// composition structures.
+    ///
+    /// Spec: AOUSD Core §11 (instancing), §5.1.14 (instanceable).
+    pub instanceable: Option<bool>,
 }
 
 /// A document layer.

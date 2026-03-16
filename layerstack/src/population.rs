@@ -383,6 +383,40 @@ fn expand_reference_paths(
         }
     }
 
+    // Propagate inherits discovered by nested references through this
+    // reference's layer stack. When a nested reference (e.g. prop.usd) discovers
+    // an inherit (e.g. /_class_Prop), the inherit target may also have children
+    // in the current reference's layers (e.g. set.usd's /_class_Prop). We need
+    // to expand those here so the mapped paths get populated.
+    //
+    // Spec: AOUSD Core §10 (inherit propagation through references).
+    let new_inherits: Vec<(PathId, PathId)> = visited_inherits
+        .iter()
+        .copied()
+        .filter(|(dest, _src)| {
+            // Only process inherits whose destination is under (or equal to)
+            // our reference destination root.
+            *dest == dest_root || {
+                let dest_path = store.paths().resolve(*dest);
+                base.is_prefix_of(dest_path)
+            }
+        })
+        .collect();
+
+    for (inherit_dest, inherit_src) in new_inherits {
+        // Use a fresh visited set: the same (dest, src) pair may have been
+        // expanded in a deeper reference stack but not yet in this one.
+        expand_inherit_paths(
+            store,
+            &remote_stack,
+            inherit_dest,
+            inherit_src,
+            paths,
+            queue,
+            &mut HashSet::new(),
+        );
+    }
+
     // Note: `paths_mut()` borrows the store mutably, so we materialize any
     // `strip_prefix` results before interning to avoid borrow conflicts.
 }

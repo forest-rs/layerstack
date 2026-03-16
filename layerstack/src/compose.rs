@@ -113,6 +113,13 @@ pub fn compose_stage(store: &mut dyn LayerStore, root: LayerId, options: StageOp
 
     filter_variant_children(store, &prims, &mut children);
 
+    strip_instance_descendants(
+        store,
+        &mut prims,
+        &mut children,
+        &authored_children_opinions,
+    );
+
     let dependencies = dep_builder.map(DependencyBuilder::finish);
     Stage::from_parts(prims, children, options.with_provenance, dependencies)
 }
@@ -513,7 +520,14 @@ fn filter_variant_children(
 
         // Reorder: children from the prim's own arcs come before children
         // inherited from the source prim. Use the source's filtered child
-        // list to identify which children are inherited.
+        // list to identify which children are inherited. Only reorder when
+        // variant filtering actually removed children — otherwise
+        // `apply_authored_children_base_order` already established the
+        // correct ordering.
+        if to_remove.is_empty() {
+            continue;
+        }
+
         let inherited_leaves: HashSet<TokenId> = inherited_sources
             .iter()
             .filter_map(|src| children.get(src))
@@ -564,6 +578,407 @@ fn filter_variant_children(
             }
         }
     }
+}
+
+/// Strips descendant opinions and children for effective instances.
+///
+/// A prim is an *effective instance* when it has `instanceable = true`
+/// (strongest opinion) AND at least one composition arc (references,
+/// payloads, inherits). For each effective instance:
+///
+/// 1. Children introduced only by identity (local/instanceable) sources are
+///    removed along with their entire subtrees.
+/// 2. On surviving descendants, local (`is_local == true`) sources whose
+///    `spec_path` is a namespace descendant of an identity path are stripped.
+///    Variant, inherit, and reference sources survive even when their
+///    `spec_path` falls under an identity path.
+///
+/// Spec: AOUSD Core §11 (instancing), §5.1.14 (instanceable).
+fn strip_instance_descendants(
+    store: &dyn LayerStore,
+    prims: &mut HashMap<PathId, PrimIndex>,
+    children: &mut HashMap<PathId, Vec<PathId>>,
+    authored_children_opinions: &HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
+) {
+    use hashbrown::HashSet;
+
+    // Step 1: Identify effective instances and their identity paths.
+    //
+    // An "identity path" is a (LayerId, PathId) pair representing the instance
+    // prim's own definition. Sources that are local or whose PrimSpec has
+    // `instanceable == Some(true)` are considered identity.
+    let mut instance_identity: Vec<(PathId, Vec<(LayerId, PathId)>)> = Vec::new();
+
+    let all_prim_paths: Vec<PathId> = prims.keys().copied().collect();
+    for &prim_path in &all_prim_paths {
+        let Some(index) = prims.get(&prim_path) else {
+            continue;
+        };
+
+        // Resolve instanceable: strongest opinion wins.
+        let mut is_instanceable = false;
+        for source in &index.sources {
+            let Some(layer) = store.layer(source.layer_id) else {
+                continue;
+            };
+            let Some(spec) = layer.prims.get(&source.spec_path) else {
+                continue;
+            };
+            if let Some(val) = spec.instanceable {
+                is_instanceable = val;
+                break; // strongest wins
+            }
+        }
+        if !is_instanceable {
+            continue;
+        }
+
+        // Check for composition arcs (references, payloads, inherits).
+        let has_arcs = index.sources.iter().any(|s| {
+            matches!(
+                s.arc_kind,
+                ArcKind::References | ArcKind::Payloads | ArcKind::Inherits
+            ) && !s.is_local
+        });
+        if !has_arcs {
+            continue;
+        }
+
+        // Collect identity paths: local sources and sources with instanceable=true.
+        let mut identity_paths: Vec<(LayerId, PathId)> = Vec::new();
+        for source in &index.sources {
+            if source.is_local {
+                identity_paths.push((source.layer_id, source.spec_path));
+                continue;
+            }
+            let Some(layer) = store.layer(source.layer_id) else {
+                continue;
+            };
+            let Some(spec) = layer.prims.get(&source.spec_path) else {
+                continue;
+            };
+            if spec.instanceable == Some(true) {
+                identity_paths.push((source.layer_id, source.spec_path));
+            }
+        }
+
+        if !identity_paths.is_empty() {
+            instance_identity.push((prim_path, identity_paths));
+        }
+    }
+
+    // Step 2: For each effective instance, determine surviving children and
+    // strip descendant local opinions.
+    for (instance_path, identity_paths) in &instance_identity {
+        // 2a. Determine which children survive: a child survives if it appears
+        // in any non-identity source's authored_children or variant children.
+        let non_identity_children = collect_non_identity_children(
+            store,
+            *instance_path,
+            identity_paths,
+            prims,
+            authored_children_opinions,
+        );
+
+        // Find all descendant prim paths.
+        let descendants: Vec<PathId> = all_prim_paths
+            .iter()
+            .copied()
+            .filter(|p| {
+                *p != *instance_path
+                    && store
+                        .paths()
+                        .resolve(*instance_path)
+                        .is_prefix_of(store.paths().resolve(*p))
+            })
+            .collect();
+
+        // Collect variant-introduced children from identity sources.
+        // Descendants under variant-introduced children keep their local
+        // sources because variants are their own arc (V in LIVERPS) and
+        // should survive instancing stripping.
+        let variant_children: HashSet<TokenId> = {
+            let identity_set: HashSet<(LayerId, PathId)> = identity_paths.iter().copied().collect();
+            let mut vc = HashSet::new();
+            if let Some(index) = prims.get(instance_path) {
+                let mut selections: HashMap<TokenId, TokenId> = HashMap::new();
+                for source in &index.sources {
+                    let Some(layer) = store.layer(source.layer_id) else {
+                        continue;
+                    };
+                    let Some(spec) = layer.prims.get(&source.spec_path) else {
+                        continue;
+                    };
+                    for (set, variant) in &spec.variant_selections {
+                        selections.entry(*set).or_insert(*variant);
+                    }
+                }
+                for source in &index.sources {
+                    if !identity_set.contains(&(source.layer_id, source.spec_path)) {
+                        continue;
+                    }
+                    let Some(layer) = store.layer(source.layer_id) else {
+                        continue;
+                    };
+                    let Some(spec) = layer.prims.get(&source.spec_path) else {
+                        continue;
+                    };
+                    for (set, set_spec) in &spec.variant_sets {
+                        let Some(selected) = selections.get(set) else {
+                            continue;
+                        };
+                        let Some(variant_spec) = set_spec.variants.get(selected) else {
+                            continue;
+                        };
+                        for child in &variant_spec.authored_children {
+                            vc.insert(*child);
+                        }
+                    }
+                }
+            }
+            vc
+        };
+
+        let instance_resolved = store.paths().resolve(*instance_path).clone();
+
+        // 2b. Strip local sources and opinions on surviving descendants.
+        for &desc_path in &descendants {
+            // Skip stripping for descendants under variant-introduced children.
+            // Variant opinions are their own arc (V in LIVERPS) and survive
+            // instancing, so their descendant local sources should too.
+            let desc_resolved = store.paths().resolve(desc_path);
+            let is_under_variant_child = desc_resolved
+                .strip_prefix(&instance_resolved)
+                .and_then(|rel| rel.first().copied())
+                .is_some_and(|first_name| variant_children.contains(&first_name));
+            if is_under_variant_child {
+                continue;
+            }
+
+            let Some(desc_index) = prims.get_mut(&desc_path) else {
+                continue;
+            };
+
+            // Only strip LOCAL sources that are namespace-descendants of
+            // identity paths. Variant/inherit/reference sources survive.
+            desc_index.sources.retain(|source| {
+                if !source.is_local {
+                    return true; // non-local sources always survive
+                }
+                !is_identity_descendant(store, source.layer_id, source.spec_path, identity_paths)
+            });
+
+            // Strip LOCAL opinions from identity-descendant sources.
+            for opinions in desc_index.opinions_by_field.values_mut() {
+                opinions.retain(|op| {
+                    if !op.key.is_local {
+                        return true;
+                    }
+                    !is_identity_descendant(
+                        store,
+                        op.key.layer_id,
+                        op.key.spec_path,
+                        identity_paths,
+                    )
+                });
+            }
+
+            // Remove empty field entries.
+            desc_index
+                .opinions_by_field
+                .retain(|_, ops| !ops.is_empty());
+        }
+
+        // 2c. Strip children of the instance that are identity-only.
+        if let Some(child_list) = children.get_mut(instance_path) {
+            child_list.retain(|child| {
+                let child_leaf = store.paths().resolve(*child).leaf();
+                child_leaf.is_some_and(|name| non_identity_children.contains(&name))
+            });
+        }
+
+        // 2d. Also apply child stripping to descendant prims (recursive
+        // instances or descendant prims with identity-introduced children).
+        for &desc_path in &descendants {
+            if let Some(child_list) = children.get_mut(&desc_path) {
+                child_list
+                    .retain(|child| prims.get(child).is_some_and(|idx| !idx.sources.is_empty()));
+            }
+        }
+
+        // 2e. Remove subtrees of stripped children. A descendant is removed
+        // if its first namespace component under the instance is not a
+        // surviving child.
+        let surviving_child_paths: HashSet<PathId> = children
+            .get(instance_path)
+            .map(|list| list.iter().copied().collect())
+            .unwrap_or_default();
+
+        for &desc_path in &descendants {
+            let desc_resolved = store.paths().resolve(desc_path);
+            let Some(rel) = desc_resolved.strip_prefix(&instance_resolved) else {
+                continue;
+            };
+            if let Some(first_name) = rel.first().copied() {
+                let child_path_obj = instance_resolved.join(&[first_name]);
+                if let Some(child_id) = store.paths().lookup(&child_path_obj)
+                    && !surviving_child_paths.contains(&child_id)
+                {
+                    prims.remove(&desc_path);
+                    children.remove(&desc_path);
+                }
+            }
+        }
+    }
+}
+
+/// Collects child names introduced by non-identity sources for an instance prim.
+///
+/// A child survives instancing if it appears in the `authored_children` of any
+/// source that is NOT an identity source (local or instanceable). This includes
+/// children from reference targets, inherit classes, and variant branches on
+/// non-identity sources.
+fn collect_non_identity_children(
+    store: &dyn LayerStore,
+    instance_path: PathId,
+    identity_paths: &[(LayerId, PathId)],
+    prims: &HashMap<PathId, PrimIndex>,
+    authored_children_opinions: &HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
+) -> HashSet<TokenId> {
+    use hashbrown::HashSet;
+
+    let identity_set: HashSet<(LayerId, PathId)> = identity_paths.iter().copied().collect();
+    let mut surviving = HashSet::new();
+
+    // Check authored_children_opinions: these include both local and variant
+    // authored_children with their OpinionKey provenance.
+    if let Some(opinions) = authored_children_opinions.get(&instance_path) {
+        for (key, children) in opinions {
+            // A non-identity opinion contributes surviving children.
+            // Identity = source whose (layer_id, spec_path) is in identity_paths
+            // (either local or with instanceable=true).
+            let is_identity = identity_set.contains(&(key.layer_id, key.spec_path));
+            if !is_identity {
+                for child in children {
+                    surviving.insert(*child);
+                }
+            }
+        }
+    }
+
+    // Also check variant-introduced children directly from the PrimSpec
+    // variant branches. These may not all be in authored_children_opinions
+    // because variant_spec.authored_children for the prim itself are not
+    // forwarded there — only child_authored_children are.
+    if let Some(index) = prims.get(&instance_path) {
+        // Resolve variant selections from all sources.
+        let mut selections: HashMap<TokenId, TokenId> = HashMap::new();
+        for source in &index.sources {
+            let Some(layer) = store.layer(source.layer_id) else {
+                continue;
+            };
+            let Some(spec) = layer.prims.get(&source.spec_path) else {
+                continue;
+            };
+            for (set, variant) in &spec.variant_selections {
+                selections.entry(*set).or_insert(*variant);
+            }
+        }
+
+        // Collect variant children from non-identity sources.
+        for source in &index.sources {
+            let is_identity = identity_set.contains(&(source.layer_id, source.spec_path));
+            if is_identity {
+                continue;
+            }
+            let Some(layer) = store.layer(source.layer_id) else {
+                continue;
+            };
+            let Some(spec) = layer.prims.get(&source.spec_path) else {
+                continue;
+            };
+            for (set, set_spec) in &spec.variant_sets {
+                let Some(selected) = selections.get(set) else {
+                    continue;
+                };
+                let Some(variant_spec) = set_spec.variants.get(selected) else {
+                    continue;
+                };
+                for child in &variant_spec.authored_children {
+                    surviving.insert(*child);
+                }
+            }
+        }
+
+        // Also add variant children from identity sources' variant branches,
+        // because variants are their own arc (V in LIVERPS) and should survive
+        // instancing stripping even when authored on identity sources.
+        for source in &index.sources {
+            let is_identity = identity_set.contains(&(source.layer_id, source.spec_path));
+            if !is_identity {
+                continue;
+            }
+            let Some(layer) = store.layer(source.layer_id) else {
+                continue;
+            };
+            let Some(spec) = layer.prims.get(&source.spec_path) else {
+                continue;
+            };
+            for (set, set_spec) in &spec.variant_sets {
+                let Some(selected) = selections.get(set) else {
+                    continue;
+                };
+                let Some(variant_spec) = set_spec.variants.get(selected) else {
+                    continue;
+                };
+                for child in &variant_spec.authored_children {
+                    surviving.insert(*child);
+                }
+            }
+        }
+
+        // Collect authored_children from non-identity sources directly from
+        // the PrimSpec (supplements authored_children_opinions).
+        for source in &index.sources {
+            let is_identity = identity_set.contains(&(source.layer_id, source.spec_path));
+            if is_identity {
+                continue;
+            }
+            let Some(layer) = store.layer(source.layer_id) else {
+                continue;
+            };
+            let Some(spec) = layer.prims.get(&source.spec_path) else {
+                continue;
+            };
+            for child in &spec.authored_children {
+                surviving.insert(*child);
+            }
+        }
+    }
+
+    surviving
+}
+
+/// Checks if `(layer_id, spec_path)` has a `spec_path` that is a descendant of
+/// any identity path from the same layer.
+fn is_identity_descendant(
+    store: &dyn LayerStore,
+    layer_id: LayerId,
+    spec_path: PathId,
+    identity_paths: &[(LayerId, PathId)],
+) -> bool {
+    let spec_resolved = store.paths().resolve(spec_path);
+    for &(id_layer, id_path) in identity_paths {
+        if layer_id != id_layer {
+            continue;
+        }
+        let id_resolved = store.paths().resolve(id_path);
+        // spec_path must be a STRICT descendant (not equal to) the identity path.
+        if id_resolved.is_prefix_of(spec_resolved) && spec_path != id_path {
+            return true;
+        }
+    }
+    false
 }
 
 /// Resolves variant selections considering both the local layer stack and
@@ -2848,9 +3263,15 @@ fn apply_authored_children_base_order(
     children: &mut Vec<PathId>,
     opinions: &[(OpinionKey, Vec<TokenId>)],
 ) {
-    // Builds a deterministic baseline child order:
-    // - Take the first (strongest) contributing authored-children list as-is.
-    // - Insert children introduced by weaker sources in lexicographic position.
+    // Builds child ordering by processing opinions weakest-first (the weakest
+    // source establishes the baseline child order; stronger sources append
+    // unique children).
+    //
+    // The ordering groups opinions by layer, using the combined-stack position
+    // derived from inherit/specializes opinions (which walk the full combined
+    // stack and carry the correct `layer_strength`). Within each layer group,
+    // local opinions come first, then direct opinions, then nested (inherit)
+    // opinions.
     //
     // Spec: AOUSD Core §11 (stage population) and supplemental suite composition
     // fixtures that rely on authoring order in referenced layers.
@@ -2861,93 +3282,89 @@ fn apply_authored_children_base_order(
         }
     }
 
-    let mut sorted = opinions.to_vec();
-    sorted.sort_by(|a, b| a.0.cmp_strongest_first(&b.0));
-
-    // When the strongest opinion is Local and the next is from a Reference arc,
-    // and the Local opinion's children are all also present in the Reference
-    // opinion, prefer the Reference opinion as the baseline. This handles
-    // the case where local `over` children shouldn't override reference-defined
-    // child ordering.
-    if sorted.len() >= 2 && sorted[0].0.arc_kind == ArcKind::Local {
-        let local_names: HashSet<TokenId> = sorted[0].1.iter().copied().collect();
-        let local_order = sorted[0].1.clone();
-        // Find the first Reference opinion.
-        if let Some(ref_idx) = sorted[1..]
-            .iter()
-            .position(|(k, _)| k.arc_kind == ArcKind::References)
-        {
-            let ref_idx = ref_idx + 1;
-            let ref_names: HashSet<TokenId> = sorted[ref_idx].1.iter().copied().collect();
-            // If all local children also exist in the reference target's children,
-            // swap: use the reference opinion as the baseline.
-            if local_names.is_subset(&ref_names) && local_names != ref_names
-                || (local_names == ref_names && local_order != sorted[ref_idx].1)
-            {
-                sorted.swap(0, ref_idx);
-            }
+    // Build a layer ordering map from inherit/specializes opinions. These
+    // opinions walk the combined stack and their `layer_strength` reflects the
+    // correct position of each layer in the unified composition order.
+    let mut layer_position: HashMap<LayerId, u16> = HashMap::new();
+    for (key, _) in opinions {
+        if key.nested_arc_kind.is_some() {
+            layer_position
+                .entry(key.layer_id)
+                .and_modify(|pos| *pos = (*pos).min(key.layer_strength))
+                .or_insert(key.layer_strength);
         }
     }
+
+    // For layers not seen in inherit opinions, assign a position based on
+    // namespace_depth (deeper introduction site = more deeply nested reference
+    // = weaker, i.e. higher position number).
+    let max_inherit_pos = layer_position.values().copied().max().unwrap_or(0);
+    for (key, _) in opinions {
+        layer_position.entry(key.layer_id).or_insert_with(|| {
+            if key.is_local {
+                0
+            } else {
+                // Place after all inherit-discovered layers, offset by
+                // namespace_depth to preserve relative ordering among
+                // layers that only have direct reference opinions.
+                max_inherit_pos + 1 + key.namespace_depth
+            }
+        });
+    }
+
+    // Sort opinions strongest-first: by layer position (lower = stronger),
+    // then local > direct > nested within the same layer.
+    let mut sorted: Vec<_> = opinions.iter().collect();
+    sorted.sort_by(|a, b| {
+        let pos_a = layer_position
+            .get(&a.0.layer_id)
+            .copied()
+            .unwrap_or(u16::MAX);
+        let pos_b = layer_position
+            .get(&b.0.layer_id)
+            .copied()
+            .unwrap_or(u16::MAX);
+        let pos = pos_a.cmp(&pos_b);
+        if pos != Ordering::Equal {
+            return pos;
+        }
+        // Within the same layer: local first, then direct, then nested.
+        match (a.0.is_local, b.0.is_local) {
+            (true, false) => return Ordering::Less,
+            (false, true) => return Ordering::Greater,
+            _ => {}
+        }
+        match (a.0.nested_arc_kind, b.0.nested_arc_kind) {
+            (None, Some(_)) => return Ordering::Less,
+            (Some(_), None) => return Ordering::Greater,
+            _ => {}
+        }
+        a.0.layer_strength.cmp(&b.0.layer_strength)
+    });
 
     let mut out = Vec::new();
     let mut seen = HashSet::<PathId>::new();
-    for (_, names) in sorted {
-        if out.is_empty() {
-            // The first contributing list (strongest-first) establishes the
-            // baseline ordering and is preserved as-authored.
-            for name in &names {
-                let Some(child_id) = by_name.get(name).copied() else {
-                    continue;
-                };
-                if seen.insert(child_id) {
-                    out.push(child_id);
-                }
-            }
-            continue;
-        }
 
-        for name in names {
-            let Some(child_id) = by_name.get(&name).copied() else {
+    // Process weakest-first.
+    for (_key, names) in sorted.iter().rev() {
+        for name in names.iter() {
+            let Some(child_id) = by_name.get(name).copied() else {
                 continue;
             };
-            if !seen.insert(child_id) {
-                continue;
+            if seen.insert(child_id) {
+                out.push(child_id);
             }
-            insert_lexicographic(store, &mut out, child_id);
         }
     }
 
+    // Append remaining children not covered by any opinion.
     for child_id in children.iter().copied() {
-        if !seen.insert(child_id) {
-            continue;
-        }
-        if out.is_empty() {
+        if seen.insert(child_id) {
             out.push(child_id);
-        } else {
-            insert_lexicographic(store, &mut out, child_id);
         }
     }
 
     *children = out;
-}
-
-fn insert_lexicographic(store: &dyn LayerStore, list: &mut Vec<PathId>, child: PathId) {
-    // Use token-string ordering (not `TokenId` ordering) for AOUSD-aligned
-    // namespace ordering.
-    //
-    // Spec: AOUSD Core §8 (paths and namespace ordering).
-    let child_path = store.paths().resolve(child);
-    let idx = list
-        .iter()
-        .position(|existing| {
-            store
-                .paths()
-                .resolve(*existing)
-                .cmp_with_tokens(child_path, store.tokens())
-                == Ordering::Greater
-        })
-        .unwrap_or(list.len());
-    list.insert(idx, child);
 }
 
 fn apply_prim_order_chain(
@@ -3030,4 +3447,152 @@ fn apply_reorder_op(store: &dyn LayerStore, children: &mut Vec<PathId>, order: &
     }
 
     *children = out;
+}
+
+#[cfg(test)]
+mod child_order_tests {
+    extern crate std;
+    use super::*;
+    use crate::doc::InMemoryStore;
+    use crate::path::Path;
+    use alloc::vec;
+
+    #[test]
+    fn test_layer_grouped_sort() {
+        let mut store = InMemoryStore::default();
+        let root_layer = LayerId(1);
+        let set_layer = LayerId(2);
+        let prop_layer = LayerId(3);
+
+        let from_root = store.tokens.intern("From_root");
+        let from_set = store.tokens.intern("From_set");
+        let from_class_root = store.tokens.intern("From_class_in_root");
+        let from_class_set = store.tokens.intern("From_class_in_set");
+        let geom_tok = store.tokens.intern("geom");
+
+        let c_geom = store
+            .paths
+            .intern(Path::parse_absolute("/P/I/geom", &mut store.tokens).unwrap());
+        let c_fr = store
+            .paths
+            .intern(Path::parse_absolute("/P/I/From_root", &mut store.tokens).unwrap());
+        let c_fs = store
+            .paths
+            .intern(Path::parse_absolute("/P/I/From_set", &mut store.tokens).unwrap());
+        let c_fcr = store
+            .paths
+            .intern(Path::parse_absolute("/P/I/From_class_in_root", &mut store.tokens).unwrap());
+        let c_fcs = store
+            .paths
+            .intern(Path::parse_absolute("/P/I/From_class_in_set", &mut store.tokens).unwrap());
+
+        let sp_local = store
+            .paths
+            .intern(Path::parse_absolute("/P/I", &mut store.tokens).unwrap());
+        let sp_set = store
+            .paths
+            .intern(Path::parse_absolute("/S/I", &mut store.tokens).unwrap());
+        let sp_prop = store
+            .paths
+            .intern(Path::parse_absolute("/Prop", &mut store.tokens).unwrap());
+        let sp_class = store
+            .paths
+            .intern(Path::parse_absolute("/_C", &mut store.tokens).unwrap());
+
+        let opinions: Vec<(OpinionKey, Vec<TokenId>)> = vec![
+            (
+                OpinionKey {
+                    is_local: true,
+                    arc_kind: ArcKind::Local,
+                    nested_arc_kind: None,
+                    namespace_depth: 2,
+                    authored: true,
+                    arc_list_index: 0,
+                    layer_strength: 0,
+                    layer_id: root_layer,
+                    spec_path: sp_local,
+                },
+                vec![from_root, geom_tok],
+            ),
+            (
+                OpinionKey {
+                    is_local: false,
+                    arc_kind: ArcKind::References,
+                    nested_arc_kind: None,
+                    namespace_depth: 1,
+                    authored: true,
+                    arc_list_index: 0,
+                    layer_strength: 0,
+                    layer_id: set_layer,
+                    spec_path: sp_set,
+                },
+                vec![from_set, geom_tok],
+            ),
+            (
+                OpinionKey {
+                    is_local: false,
+                    arc_kind: ArcKind::References,
+                    nested_arc_kind: None,
+                    namespace_depth: 2,
+                    authored: true,
+                    arc_list_index: 0,
+                    layer_strength: 0,
+                    layer_id: prop_layer,
+                    spec_path: sp_prop,
+                },
+                vec![geom_tok],
+            ),
+            (
+                OpinionKey {
+                    is_local: false,
+                    arc_kind: ArcKind::References,
+                    nested_arc_kind: Some(ArcKind::Inherits),
+                    namespace_depth: 2,
+                    authored: true,
+                    arc_list_index: 0,
+                    layer_strength: 0,
+                    layer_id: root_layer,
+                    spec_path: sp_class,
+                },
+                vec![from_class_root, geom_tok],
+            ),
+            (
+                OpinionKey {
+                    is_local: false,
+                    arc_kind: ArcKind::References,
+                    nested_arc_kind: Some(ArcKind::Inherits),
+                    namespace_depth: 2,
+                    authored: true,
+                    arc_list_index: 0,
+                    layer_strength: 1,
+                    layer_id: set_layer,
+                    spec_path: sp_class,
+                },
+                vec![from_class_set, geom_tok],
+            ),
+        ];
+
+        let mut children = vec![c_geom, c_fr, c_fs, c_fcr, c_fcs];
+        apply_authored_children_base_order(&store, &mut children, &opinions);
+
+        let result: Vec<&str> = children
+            .iter()
+            .map(|c| {
+                store
+                    .tokens
+                    .resolve(store.paths.resolve(*c).leaf().unwrap())
+            })
+            .collect();
+
+        assert_eq!(
+            result,
+            vec![
+                "geom",
+                "From_class_in_set",
+                "From_set",
+                "From_class_in_root",
+                "From_root"
+            ]
+        );
+    }
 }

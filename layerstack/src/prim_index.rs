@@ -37,7 +37,7 @@ pub enum ArcKind {
 }
 
 impl ArcKind {
-    fn strength_rank(self) -> u8 {
+    pub(crate) fn strength_rank(self) -> u8 {
         match self {
             Self::Local => 0,
             Self::Inherits => 1,

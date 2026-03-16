@@ -1,0 +1,32 @@
+[package]
+name = "wind_tunnel"
+description = "Criterion benchmarks for the layerstack composition kernel."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["composition", "benchmark", "usd"]
+categories = ["development-tools::profiling"]
+publish = false
+
+[lints]
+workspace = true
+
+[dependencies]
+layerstack = { path = "../layerstack" }
+
+[dev-dependencies]
+criterion = { version = "0.8", features = ["html_reports"] }
+
+[[bench]]
+name = "instancing"
+harness = false
+
+[[bench]]
+name = "sublayers"
+harness = false
+
+[[bench]]
+name = "variants"
+harness = false

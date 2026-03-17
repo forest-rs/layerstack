@@ -26,4 +26,11 @@ pub mod error;
 pub mod header;
 pub mod section;
 pub mod toc;
+// Value representation decoding pervasively casts u64 file offsets/counts to
+// usize. Files larger than 4 GiB on 32-bit targets are unsupported.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "pervasive u64→usize casts for file offsets; >4 GiB files unsupported"
+)]
+pub mod value_rep;
 pub mod value_type;

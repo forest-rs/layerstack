@@ -2,7 +2,8 @@
 
 use layerstack::{
     ArcKind, FieldEntry, FieldValue, Layer, LayerId, ListOp, PrimSpec, Reference, ResolvedValue,
-    Stage, StageOptions, Value, VariantSetSpec, VariantSpec, doc::InMemoryStore,
+    SchemaDefinition, SchemaRegistry, Stage, StageOptions, Value, VariantSetSpec, VariantSpec,
+    doc::InMemoryStore,
 };
 
 #[test]
@@ -1256,4 +1257,201 @@ fn type_name_none_when_untyped() {
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
     assert_eq!(stage.resolve_type_name(p, &store), None);
+}
+
+// --- Schema fallback integration tests ---
+
+#[test]
+fn schema_fallback_provides_value_when_no_opinion() {
+    // When no authored opinion exists for a field that has a schema fallback,
+    // resolve_field_with_schema returns the fallback.
+    // Spec: AOUSD Core §13.3.2.4 (fallback value resolution).
+    let mut store = InMemoryStore::default();
+
+    let mesh_tok = store.tokens.intern("Mesh");
+    let extent_tok = store.tokens.intern("extent");
+    let p = store.path("/P");
+
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(p, PrimSpec::def().with_type_name(mesh_tok));
+    store.insert_layer(layer);
+
+    let mut registry = SchemaRegistry::new();
+    registry
+        .register(SchemaDefinition::typed(mesh_tok).with_property(extent_tok, Value::Double(0.0)));
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    // No authored opinion on "extent" → fallback from schema.
+    assert_eq!(stage.resolve_field(p, extent_tok), None);
+    let resolved = stage
+        .resolve_field_with_schema(p, extent_tok, &store, &registry, None)
+        .expect("schema fallback");
+    assert_eq!(resolved.value, Value::Double(0.0));
+}
+
+#[test]
+fn authored_opinion_beats_schema_fallback() {
+    // Authored opinions are always stronger than schema fallback.
+    // Spec: AOUSD Core §13.3.2.4.
+    let mut store = InMemoryStore::default();
+
+    let mesh_tok = store.tokens.intern("Mesh");
+    let double_sided_tok = store.tokens.intern("doubleSided");
+    let p = store.path("/P");
+
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(
+        p,
+        PrimSpec::def()
+            .with_type_name(mesh_tok)
+            .with_field(double_sided_tok, Value::Bool(true)),
+    );
+    store.insert_layer(layer);
+
+    let mut registry = SchemaRegistry::new();
+    registry.register(
+        SchemaDefinition::typed(mesh_tok).with_property(double_sided_tok, Value::Bool(false)),
+    );
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    // Authored value wins over schema fallback.
+    let resolved = stage
+        .resolve_field_with_schema(p, double_sided_tok, &store, &registry, None)
+        .expect("resolved");
+    assert_eq!(resolved.value, Value::Bool(true));
+}
+
+#[test]
+fn schema_isa_inheritance_fallback() {
+    // IsA inheritance: Mesh inherits from Gprim. A field defined on Gprim
+    // but not on Mesh should still be available as a fallback.
+    // Spec: AOUSD Core §13.3.1 (typed schema inheritance).
+    let mut store = InMemoryStore::default();
+
+    let mesh_tok = store.tokens.intern("Mesh");
+    let gprim_tok = store.tokens.intern("Gprim");
+    let visibility_tok = store.tokens.intern("visibility");
+    let p = store.path("/P");
+
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(p, PrimSpec::def().with_type_name(mesh_tok));
+    store.insert_layer(layer);
+
+    let mut registry = SchemaRegistry::new();
+    registry.register(
+        SchemaDefinition::typed(gprim_tok).with_property(visibility_tok, Value::from("inherited")),
+    );
+    registry.register(SchemaDefinition::typed(mesh_tok).with_parent(gprim_tok));
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    let resolved = stage
+        .resolve_field_with_schema(p, visibility_tok, &store, &registry, None)
+        .expect("inherited fallback");
+    assert_eq!(resolved.value, Value::from("inherited"));
+}
+
+#[test]
+fn schema_applied_api_provides_fallback() {
+    // Applied API schemas provide fallback values for their properties.
+    // Spec: AOUSD Core §13.3.2 (applied schemas), §13.2.1 (apiSchemas field).
+    let mut store = InMemoryStore::default();
+
+    let mesh_tok = store.tokens.intern("Mesh");
+    let collection_api_tok = store.tokens.intern("CollectionAPI");
+    let includes_tok = store.tokens.intern("includes");
+    let api_schemas_tok = store.tokens.intern("apiSchemas");
+    let p = store.path("/P");
+
+    let mut layer = Layer::new(LayerId(1));
+    // Prim has typeName=Mesh and apiSchemas=[CollectionAPI].
+    layer.insert_prim(
+        p,
+        PrimSpec::def().with_type_name(mesh_tok).with_field(
+            api_schemas_tok,
+            FieldValue::TokenListOp(ListOp {
+                append: vec![collection_api_tok],
+                ..ListOp::default()
+            }),
+        ),
+    );
+    store.insert_layer(layer);
+
+    let mut registry = SchemaRegistry::new();
+    registry.register(SchemaDefinition::typed(mesh_tok));
+    registry.register(
+        SchemaDefinition::api(collection_api_tok).with_property(includes_tok, Value::Null),
+    );
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    // Without apiSchemas token → only typed schema is consulted, no fallback.
+    assert!(
+        stage
+            .resolve_field_with_schema(p, includes_tok, &store, &registry, None)
+            .is_none()
+    );
+
+    // With apiSchemas token → applied API schema fallback is found.
+    let resolved = stage
+        .resolve_field_with_schema(p, includes_tok, &store, &registry, Some(api_schemas_tok))
+        .expect("api schema fallback");
+    assert_eq!(resolved.value, Value::Null);
+}
+
+#[test]
+fn schema_no_type_no_fallback() {
+    // A prim with no typeName gets no schema fallback.
+    let mut store = InMemoryStore::default();
+
+    let extent_tok = store.tokens.intern("extent");
+    let mesh_tok = store.tokens.intern("Mesh");
+    let p = store.path("/P");
+
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(p, PrimSpec::def());
+    store.insert_layer(layer);
+
+    let mut registry = SchemaRegistry::new();
+    registry
+        .register(SchemaDefinition::typed(mesh_tok).with_property(extent_tok, Value::Double(0.0)));
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    assert!(
+        stage
+            .resolve_field_with_schema(p, extent_tok, &store, &registry, None)
+            .is_none()
+    );
+}
+
+#[test]
+fn schema_builtin_api_fallback() {
+    // Built-in API schemas on a typed schema provide fallback values
+    // even without explicit apiSchemas authoring.
+    // Spec: AOUSD Core §13.3.2.1 (schema inclusions — built-ins).
+    let mut store = InMemoryStore::default();
+
+    let mesh_tok = store.tokens.intern("Mesh");
+    let some_api_tok = store.tokens.intern("SomeAPI");
+    let api_field_tok = store.tokens.intern("apiField");
+    let p = store.path("/P");
+
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(p, PrimSpec::def().with_type_name(mesh_tok));
+    store.insert_layer(layer);
+
+    let mut registry = SchemaRegistry::new();
+    registry
+        .register(SchemaDefinition::api(some_api_tok).with_property(api_field_tok, Value::Int(42)));
+    registry.register(SchemaDefinition::typed(mesh_tok).with_built_in_api(some_api_tok));
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    let resolved = stage
+        .resolve_field_with_schema(p, api_field_tok, &store, &registry, None)
+        .expect("built-in api fallback");
+    assert_eq!(resolved.value, Value::Int(42));
 }

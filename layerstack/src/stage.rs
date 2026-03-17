@@ -15,6 +15,7 @@ use crate::{
     listop::{ListOp, resolve_list_chain},
     path::PathId,
     prim_index::{Opinion, PrimIndex},
+    schema::SchemaRegistry,
 };
 
 /// Provenance information for resolved values.
@@ -473,6 +474,79 @@ impl Stage {
             }
         }
         None
+    }
+
+    /// Resolves a field on a prim with schema fallback.
+    ///
+    /// Like [`Stage::resolve_value`], but when no authored opinion exists,
+    /// consults the schema registry for a fallback value based on the prim's
+    /// resolved type name and applied API schemas.
+    ///
+    /// `api_schemas_token` is the interned token for `"apiSchemas"`. Pass it
+    /// so the resolver can look up applied API schemas on the prim. If `None`,
+    /// only the typed schema (and its built-ins / auto-applies) are consulted.
+    ///
+    /// Spec: AOUSD Core §13.3.2.4 (fallback value resolution).
+    #[must_use]
+    pub fn resolve_value_with_schema(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        store: &dyn LayerStore,
+        registry: &SchemaRegistry,
+        api_schemas_token: Option<TokenId>,
+    ) -> Option<Resolved<ResolvedValue>> {
+        // Try authored opinions first.
+        if let Some(resolved) = self.resolve_value(prim, field) {
+            return Some(resolved);
+        }
+
+        // No authored opinion — consult the schema registry.
+        let type_name = self.resolve_type_name(prim, store);
+        let applied = api_schemas_token
+            .and_then(|tok| self.resolve_token_list(prim, tok))
+            .map(|r| r.value)
+            .unwrap_or_default();
+        let fallback = registry.resolve_fallback(type_name, &applied, field)?;
+
+        Some(Resolved {
+            value: match fallback {
+                FieldValue::Value(v) => ResolvedValue::Scalar(v),
+                FieldValue::TokenListOp(op) => {
+                    ResolvedValue::TokenList(resolve_list_chain::<TokenId>(&[], [op]))
+                }
+                FieldValue::PathListOp(op) => {
+                    ResolvedValue::PathList(resolve_list_chain::<PathId>(&[], [op]))
+                }
+                FieldValue::TimeSamples(_) => return None,
+            },
+            provenance: None,
+        })
+    }
+
+    /// Resolves a scalar field on a prim with schema fallback.
+    ///
+    /// Like [`Stage::resolve_field`], but falls back to the schema registry.
+    ///
+    /// Spec: AOUSD Core §13.3.2.4 (fallback value resolution).
+    #[must_use]
+    pub fn resolve_field_with_schema(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        store: &dyn LayerStore,
+        registry: &SchemaRegistry,
+        api_schemas_token: Option<TokenId>,
+    ) -> Option<Resolved<Value>> {
+        let resolved =
+            self.resolve_value_with_schema(prim, field, store, registry, api_schemas_token)?;
+        match resolved.value {
+            ResolvedValue::Scalar(v) => Some(Resolved {
+                value: v,
+                provenance: resolved.provenance,
+            }),
+            ResolvedValue::TokenList(_) | ResolvedValue::PathList(_) => None,
+        }
     }
 
     fn provenance_for(&self, field: TokenId, strongest: &Opinion) -> Option<Provenance> {

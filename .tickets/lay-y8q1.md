@@ -1,6 +1,6 @@
 ---
 id: lay-y8q1
-status: open
+status: closed
 deps: [lay-rsdo]
 links: [lay-kl8k]
 created: 2026-03-13T18:08:22Z

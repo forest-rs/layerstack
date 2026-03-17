@@ -31,6 +31,7 @@ pub mod listop;
 pub mod path;
 pub mod population;
 pub mod prim_index;
+pub mod schema;
 pub mod stage;
 
 pub mod live_stage;
@@ -47,6 +48,7 @@ pub use layer_stack::LayerStack;
 pub use listop::ListOp;
 pub use path::{Path, PathId, PathInterner};
 pub use prim_index::{ArcKind, Opinion, OpinionKey};
+pub use schema::{PropertyDefinition, SchemaDefinition, SchemaRegistry};
 pub use stage::{Resolved, ResolvedValue, Stage, StageOptions};
 
 pub use live_stage::LiveStage;

@@ -334,6 +334,8 @@ pub struct ListOpPaths<'a> {
 pub struct MetadataEntry<'a> {
     /// Key name.
     pub key: &'a str,
+    /// List-op kind (explicit, prepend, append, delete).
+    pub op: ListOpKind,
     /// Value.
     pub value: MetadataValue<'a>,
 }

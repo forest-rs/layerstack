@@ -428,6 +428,56 @@ fn token_listop_prepend_and_append_match_supplemental_list_editing_order() {
 }
 
 #[test]
+fn token_listop_prepend_composes_before_explicit() {
+    // Simulates: sublayer has `apiSchemas = ["Original"]` (explicit),
+    // root has `prepend apiSchemas = ["Prepended"]`.
+    // Composed result: ["Prepended", "Original"].
+    let mut store = InMemoryStore::default();
+
+    let prim = store.path("/Card");
+    let api_schemas = store.tokens.intern("apiSchemas");
+    let original = store.tokens.intern("OriginalAPI");
+    let prepended = store.tokens.intern("PrependedAPI");
+
+    // Sublayer (weaker): explicit apiSchemas = ["OriginalAPI"].
+    let mut sub_layer = Layer::new(LayerId(2));
+    let mut sub_spec = PrimSpec::default();
+    sub_spec.fields.insert(
+        api_schemas,
+        FieldValue::TokenListOp(ListOp {
+            explicit: Some(vec![original]),
+            ..ListOp::default()
+        }),
+    );
+    sub_layer.insert_prim(prim, sub_spec);
+    store.insert_layer(sub_layer);
+
+    // Root layer (stronger): prepend apiSchemas = ["PrependedAPI"].
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.sublayers = vec![LayerId(2)];
+    let mut root_spec = PrimSpec::default();
+    root_spec.fields.insert(
+        api_schemas,
+        FieldValue::TokenListOp(ListOp {
+            prepend: vec![prepended],
+            ..ListOp::default()
+        }),
+    );
+    root_layer.insert_prim(prim, root_spec);
+    store.insert_layer(root_layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let resolved = stage
+        .resolve_token_list(prim, api_schemas)
+        .expect("apiSchemas field");
+    assert_eq!(
+        resolved.value,
+        vec![prepended, original],
+        "prepend should appear before the explicit list"
+    );
+}
+
+#[test]
 fn specifier_resolution_follows_strongest_defining() {
     use layerstack::Specifier;
 

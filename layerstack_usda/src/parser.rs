@@ -514,7 +514,7 @@ impl<'a> Parser<'a> {
         self.builder.start_node(SyntaxKind::PrimMetaEntry, start);
 
         // Check for list-op prefix.
-        let op = self.try_parse_listop_prefix();
+        let _op = self.try_parse_listop_prefix();
 
         self.eat_trivia();
         if self.peek() == Some(TokenKind::Ident) {
@@ -549,11 +549,6 @@ impl<'a> Parser<'a> {
                     self.bump();
                     self.expect(TokenKind::Equals);
                     self.parse_string_token();
-                }
-                _ if op != crate::ast::ListOpKind::Explicit => {
-                    let span = self.current_span();
-                    self.error(span, "unexpected list-op target in prim metadata");
-                    self.bump();
                 }
                 _ => {
                     self.parse_metadata_entry_inner();
@@ -1981,6 +1976,34 @@ def \"C\" {
 def \"A\" {
     // inside prim
     int x = 1
+}
+",
+        );
+    }
+
+    #[test]
+    fn parse_prepend_api_schemas() {
+        let src = "#usda 1.0\ndef Mesh \"card\" (\n    prepend apiSchemas = [\"MaterialBindingAPI\"]\n) {\n}\n";
+        let result = parse(src);
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        let meta = &result.layer.prims[0].metadata;
+        assert_eq!(meta.len(), 1);
+        if let PrimMeta::Custom(entry) = &meta[0] {
+            assert_eq!(entry.key, "apiSchemas");
+            assert_eq!(entry.op, ListOpKind::Prepend);
+        } else {
+            panic!("expected Custom metadata, got {:?}", meta[0]);
+        }
+    }
+
+    #[test]
+    fn lossless_roundtrip_prepend_api_schemas() {
+        assert_roundtrip(
+            "\
+#usda 1.0
+def Mesh \"card\" (
+    prepend apiSchemas = [\"MaterialBindingAPI\"]
+) {
 }
 ",
         );

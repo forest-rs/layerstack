@@ -247,8 +247,21 @@ impl EmitCtx<'_> {
                 }
                 ast::PrimMeta::Custom(entry) => {
                     let key = self.tokens.intern(entry.key);
-                    let val = self.convert_metadata_value(&entry.value);
-                    spec.fields.insert(key, FieldValue::Value(val));
+                    if entry.op != ast::ListOpKind::Explicit {
+                        // List-op on a token array (e.g. `prepend apiSchemas`).
+                        let items = self.extract_token_array(&entry.value);
+                        let mut list_op = ListOp::default();
+                        match entry.op {
+                            ast::ListOpKind::Prepend => list_op.prepend = items,
+                            ast::ListOpKind::Append => list_op.append = items,
+                            ast::ListOpKind::Delete => list_op.delete = items,
+                            ast::ListOpKind::Explicit => unreachable!(),
+                        }
+                        spec.fields.insert(key, FieldValue::TokenListOp(list_op));
+                    } else {
+                        let val = self.convert_metadata_value(&entry.value);
+                        spec.fields.insert(key, FieldValue::Value(val));
+                    }
                 }
             }
         }
@@ -979,6 +992,23 @@ impl EmitCtx<'_> {
         }
     }
 
+    /// Extracts string/identifier elements from a metadata array value and
+    /// interns them as tokens. Used for list-op metadata like `apiSchemas`.
+    fn extract_token_array(&mut self, val: &ast::MetadataValue<'_>) -> Vec<TokenId> {
+        if let ast::MetadataValue::Value(ast::Value::Array(items)) = val {
+            items
+                .iter()
+                .filter_map(|v| match v {
+                    ast::Value::String(s) => Some(self.tokens.intern(s)),
+                    ast::Value::Identifier(s) => Some(self.tokens.intern(s)),
+                    _ => None,
+                })
+                .collect()
+        } else {
+            Vec::new()
+        }
+    }
+
     // ── Asset resolution helper ─────────────────────────────────────
 
     fn resolve_asset(&mut self, asset_path: &str) -> Option<ResolvedAsset> {
@@ -1691,5 +1721,31 @@ def Scope "D" (
         let root_id = paths.lookup(&root_path).expect("root path interned");
         let spec = result.layer.prims.get(&root_id).expect("root prim");
         assert_eq!(spec.instanceable, Some(true));
+    }
+
+    #[test]
+    fn emit_prepend_api_schemas_produces_token_listop() {
+        let src = "#usda 1.0\n\
+                   def Mesh \"card\" (\n\
+                       prepend apiSchemas = [\"MaterialBindingAPI\"]\n\
+                   ) {\n}\n";
+        let (result, mut tokens, paths) = emit_source(src);
+        let card_path = Path::parse_absolute("/card", &mut tokens).unwrap();
+        let card_id = paths.lookup(&card_path).expect("card path interned");
+        let spec = result.layer.prims.get(&card_id).expect("card prim");
+
+        let api_tok = tokens.intern("apiSchemas");
+        let field = spec.fields.get(&api_tok).expect("apiSchemas field");
+        match field {
+            FieldValue::TokenListOp(listop) => {
+                assert!(listop.explicit.is_none(), "should not be explicit");
+                assert_eq!(listop.prepend.len(), 1);
+                let mat_tok = tokens.intern("MaterialBindingAPI");
+                assert_eq!(listop.prepend[0], mat_tok);
+                assert!(listop.append.is_empty());
+                assert!(listop.delete.is_empty());
+            }
+            other => panic!("expected TokenListOp, got {:?}", other),
+        }
     }
 }

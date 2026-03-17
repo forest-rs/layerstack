@@ -1256,19 +1256,35 @@ impl<'a> LowerCtx<'a> {
 
         let mut key = "";
         let mut value = MetadataValue::None;
+        let mut op = ListOpKind::Explicit;
         let mut idx = 0;
 
-        // Find key (skip list-op prefixes).
+        // Detect list-op prefix, then find the actual key.
         while idx < sig.len() {
             if sig[idx].0 == SyntaxKind::Ident {
                 let t = self.text(self.node_from(tree, sig[idx].1));
-                if matches!(t, "prepend" | "append" | "add" | "delete") {
-                    idx += 1;
-                    continue;
+                match t {
+                    "prepend" => {
+                        op = ListOpKind::Prepend;
+                        idx += 1;
+                        continue;
+                    }
+                    "append" | "add" => {
+                        op = ListOpKind::Append;
+                        idx += 1;
+                        continue;
+                    }
+                    "delete" => {
+                        op = ListOpKind::Delete;
+                        idx += 1;
+                        continue;
+                    }
+                    _ => {
+                        key = t;
+                        idx += 1;
+                        break;
+                    }
                 }
-                key = t;
-                idx += 1;
-                break;
             }
             idx += 1;
         }
@@ -1293,7 +1309,7 @@ impl<'a> LowerCtx<'a> {
             }
         }
 
-        MetadataEntry { key, value }
+        MetadataEntry { key, op, value }
     }
 
     fn lower_metadata_entry(&mut self, node: SyntaxNode<'_>) -> MetadataEntry<'a> {

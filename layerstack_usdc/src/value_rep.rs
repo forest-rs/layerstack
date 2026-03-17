@@ -794,15 +794,8 @@ fn decode_dictionary(
         }
     }
 
-    let cursor = if rep.is_inlined() {
-        // For inlined dictionaries, num_items is in payload.
-        off
-    } else {
-        off
-    };
-
-    let num_items = read_u64_at(data, cursor)? as usize;
-    let mut pos = cursor + 8;
+    let num_items = read_u64_at(data, off)? as usize;
+    let mut pos = off + 8;
     let mut entries = Vec::with_capacity(num_items);
 
     for _ in 0..num_items {
@@ -811,12 +804,21 @@ fn decode_dictionary(
         pos += 4;
         let key = lookup_string(sections, key_idx);
 
-        // Value offset: u64 relative offset to value rep.
+        // Value: u64 relative offset from the current position to the
+        // 8-byte `ValueRep`. The Python reference does:
+        //   seek_from = filehandle.tell()
+        //   offset = read_int() + seek_from   # read u64, add position
+        //   seek(offset); rep = read_int()    # read ValueRep at target
+        //   current = filehandle.tell()       # right after ValueRep
+        //   ... process ...
+        //   seek(current)                     # next entry starts here
+        //
+        // So the relative offset is from the position of the offset field
+        // itself, and the next entry continues from right after the ValueRep
+        // at the target location.
         let seek_from = pos;
-        let value_rel_offset = u64::from_le_bytes(data[pos..pos + 8].try_into().unwrap());
-        pos += 8;
-
-        let rep_offset = seek_from + value_rel_offset as usize;
+        let value_rel_offset = read_u64_at(data, pos)? as usize;
+        let rep_offset = seek_from + value_rel_offset;
         if rep_offset + 8 > data.len() {
             return Err(UsdcError::UnexpectedEof {
                 section: "dictionary value rep",
@@ -829,6 +831,10 @@ fn decode_dictionary(
         rep_bytes.copy_from_slice(&data[rep_offset..rep_offset + 8]);
         let child_rep = RawValueRep::new(rep_bytes);
         let child_val = decode_value(&child_rep, data, sections)?;
+
+        // Advance pos to right after the ValueRep (mirroring Python's
+        // `self.filehandle.seek(current)` where current = rep_offset + 8).
+        pos = rep_offset + 8;
 
         entries.push((key, child_val));
     }
@@ -1065,18 +1071,24 @@ fn decode_time_samples(
         return Ok(CrateValue::TimeSamples(vec![]));
     }
 
-    // At offset: timecodes_rep_offset (u64), then values_rep_offset (u64).
-    let timecodes_rel = read_u64_at(data, off)?;
-    let timecodes_abs = off as u64 + timecodes_rel;
+    // Layout at `off` (Python reference: parse_timesamples):
+    //   timecodes_offset: u64 — relative offset from `off` to the timecodes
+    //                          `ValueRep` (8 bytes)
+    // After the timecodes ValueRep:
+    //   values_offset: u64 — relative offset from current position to the
+    //                        values array
+    // At values location:
+    //   num_values: u64, then num_values × 8-byte ValueReps
 
-    #[allow(clippy::cast_possible_truncation, reason = "offset within file bounds")]
-    let tc_off = timecodes_abs as usize;
+    // 1. Read timecodes relative offset.
+    let timecodes_rel = read_u64_at(data, off)? as usize;
+    let tc_off = off + timecodes_rel;
 
-    // Read timecodes value rep (8 bytes at tc_off).
+    // 2. Read the 8-byte timecodes ValueRep.
     if tc_off + 8 > data.len() {
         return Err(UsdcError::UnexpectedEof {
             section: "timeSamples timecodes rep",
-            offset: timecodes_abs,
+            offset: tc_off as u64,
             expected: 8,
         });
     }
@@ -1084,14 +1096,12 @@ fn decode_time_samples(
     tc_rep_bytes.copy_from_slice(&data[tc_off..tc_off + 8]);
     let tc_rep = RawValueRep::new(tc_rep_bytes);
 
-    // Values offset is right after the timecodes rep offset.
-    let values_pos = off + 8;
-    let values_rel = read_u64_at(data, values_pos)?;
-    let values_abs = values_pos as u64 + values_rel;
-    #[allow(clippy::cast_possible_truncation, reason = "offset within file bounds")]
-    let val_off = values_abs as usize;
+    // 3. Right after the timecodes ValueRep, read values relative offset.
+    let current_offset = tc_off + 8;
+    let values_rel = read_u64_at(data, current_offset)? as usize;
+    let val_off = current_offset + values_rel;
 
-    // Decode timecodes (should be a Double array).
+    // 4. Decode timecodes (should be a Double array).
     let tc_value = decode_value(&tc_rep, data, sections)?;
     let timecodes: Vec<f64> = match &tc_value {
         CrateValue::Array(arr) => arr
@@ -1106,7 +1116,7 @@ fn decode_time_samples(
         _ => vec![],
     };
 
-    // Read value reps.
+    // 5. Read value reps.
     let num_values = read_u64_at(data, val_off)? as usize;
     let mut samples = Vec::with_capacity(num_values);
     let reps_start = val_off + 8;

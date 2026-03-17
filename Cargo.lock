@@ -271,6 +271,7 @@ version = "0.1.0"
 dependencies = [
  "layerstack",
  "layerstack_usda",
+ "layerstack_usdc",
  "serde",
  "serde_json",
 ]

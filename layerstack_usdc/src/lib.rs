@@ -42,3 +42,34 @@ pub mod value_type;
     reason = "pervasive u64→usize casts for section indices; >4 GiB files unsupported"
 )]
 pub mod assemble;
+
+use layerstack::AssetResolver;
+use layerstack::doc::LayerId;
+use layerstack::interner::TokenInterner;
+use layerstack::path::PathInterner;
+
+pub use assemble::AssembleResult;
+pub use error::UsdcError;
+
+/// Reads a USDC binary file from a byte slice and produces a [`Layer`].
+///
+/// This is the main entry point for the crate. It runs the full pipeline:
+/// header → TOC → sections → value reps → assemble.
+///
+/// `data` must contain the complete USDC file contents.
+///
+/// Spec: AOUSD Core §16.3.
+///
+/// [`Layer`]: layerstack::doc::Layer
+pub fn read_usdc(
+    data: &[u8],
+    layer_id: LayerId,
+    tokens: &mut TokenInterner,
+    paths: &mut PathInterner,
+    resolver: &mut dyn AssetResolver,
+) -> Result<AssembleResult, UsdcError> {
+    let hdr = header::parse_header(data)?;
+    let toc_sections = toc::parse_toc(data, hdr.toc_offset)?;
+    let sections = section::parse_sections(data, &toc_sections)?;
+    assemble::assemble(data, &sections, layer_id, tokens, paths, resolver)
+}

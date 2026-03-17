@@ -411,6 +411,12 @@ fn parse_paths(
 ///
 /// Mirrors the Python reference `build_decompressed_paths` but avoids
 /// recursion by using a work stack of `(start_index, parent_path)` frames.
+///
+/// The Python algorithm is a `do-while` loop that continues as long as
+/// `has_child or has_sibling`. When there are siblings but no children
+/// (`jump >= 0` and `jump != -1`, specifically `jump == 0`), the loop
+/// still advances `start_index += 1` to process the next entry as a
+/// sibling under the same parent.
 fn build_paths(
     path_indices: &[i64],
     element_token_indices: &[i64],
@@ -426,6 +432,8 @@ fn build_paths(
     let mut stack: Vec<(usize, String, bool)> = vec![(0, String::new(), true)];
 
     while let Some((mut idx, mut parent, mut first)) = stack.pop() {
+        // do-while: always execute at least once per stack frame,
+        // then continue while has_child || has_sibling.
         loop {
             if idx >= path_indices.len() {
                 break;
@@ -476,7 +484,7 @@ fn build_paths(
 
             if has_child {
                 if has_sibling {
-                    // Push sibling for later processing.
+                    // Push sibling for later processing with the same parent.
                     #[allow(
                         clippy::cast_possible_truncation,
                         reason = "jump values are small offsets"
@@ -496,8 +504,12 @@ fn build_paths(
                     parent = paths[target].clone();
                 }
                 idx += 1;
+            } else if has_sibling {
+                // No children but has sibling: advance to the next entry
+                // which is processed as a sibling under the same parent.
+                idx += 1;
             } else {
-                // Leaf node, no children. We're done with this branch.
+                // Leaf with no siblings — done with this branch.
                 break;
             }
         }
@@ -678,5 +690,52 @@ mod tests {
         assert_eq!(paths[0], "/");
         assert_eq!(paths[1], "/Sphere");
         assert_eq!(paths[2], "/Sphere.radius");
+    }
+
+    #[test]
+    fn build_paths_multiple_property_siblings() {
+        // Typical gen_bool.usdc layout:
+        //   /  (path 0)
+        //   /root  (path 1)
+        //   /root.array  (path 2)
+        //   /root.array:unset  (path 3)
+        //   /root.single  (path 4)
+        //   /root.unset  (path 5)
+        //
+        // Encoded entries:
+        //   [0]: idx=0, token=0(""),      jump=-1  → root "/" (has child, no sibling)
+        //   [1]: idx=1, token=1("root"),   jump=-1  → /root (has child, no sibling)
+        //   [2]: idx=2, token=-2("array"), jump=0   → /root.array (no child, has sibling → advance)
+        //   [3]: idx=3, token=-3("array:unset"), jump=0 → /root.array:unset (sibling → advance)
+        //   [4]: idx=4, token=-4("single"),jump=0   → /root.single (sibling → advance)
+        //   [5]: idx=5, token=-5("unset"), jump=-2  → /root.unset (no child, no sibling → stop)
+        let tokens = vec![
+            "".to_string(),
+            "root".to_string(),
+            "array".to_string(),
+            "array:unset".to_string(),
+            "single".to_string(),
+            "unset".to_string(),
+        ];
+        let path_indices = vec![0, 1, 2, 3, 4, 5_i64];
+        let element_token_indices = vec![0, 1, -2, -3, -4, -5_i64];
+        let jumps = vec![-1, -1, 0, 0, 0, -2_i64];
+
+        let mut paths = vec![String::new(); 6];
+        build_paths(
+            &path_indices,
+            &element_token_indices,
+            &jumps,
+            &tokens,
+            &mut paths,
+        )
+        .unwrap();
+
+        assert_eq!(paths[0], "/");
+        assert_eq!(paths[1], "/root");
+        assert_eq!(paths[2], "/root.array");
+        assert_eq!(paths[3], "/root.array:unset");
+        assert_eq!(paths[4], "/root.single");
+        assert_eq!(paths[5], "/root.unset");
     }
 }

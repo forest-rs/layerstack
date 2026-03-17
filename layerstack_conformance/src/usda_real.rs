@@ -1,7 +1,6 @@
 //! USDA loader using the production `layerstack_usda` parser and emit pipeline.
 //!
-//! This replaces [`usda_min`](crate::usda_min) for conformance tests by routing
-//! through the real lexer → CST → AST → emit pipeline.
+//! Routes through the real lexer → CST → AST → emit pipeline.
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -55,7 +54,7 @@ pub fn load_entry_usda(entry: &Path) -> LoadedStage {
 
 /// Loads only the layer stack structure (sublayers), ignoring prim contents.
 ///
-/// Mirrors [`crate::usda_min::load_entry_usda_sublayers_only`].
+/// Loads only the layer stack structure (sublayers), ignoring prim contents.
 pub fn load_entry_usda_sublayers_only(entry: &Path) -> LoadedStage {
     // For sublayers-only mode, we still run the full pipeline but the effect
     // is the same — sublayer arcs are resolved, prims are populated but tests

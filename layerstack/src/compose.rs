@@ -120,6 +120,8 @@ pub fn compose_stage(store: &mut dyn LayerStore, root: LayerId, options: StageOp
         &authored_children_opinions,
     );
 
+    prune_deactivated(store, &mut prims, &mut children);
+
     let dependencies = dep_builder.map(DependencyBuilder::finish);
     Stage::from_parts(prims, children, options.with_provenance, dependencies)
 }
@@ -1013,6 +1015,72 @@ fn is_identity_descendant(
         }
     }
     false
+}
+
+/// Removes deactivated prims and their namespace descendants from the stage.
+///
+/// A prim is deactivated when its strongest `active` opinion across all
+/// contributing sources resolves to `false`. When a prim is deactivated,
+/// both it and all its namespace descendants are removed from the prim index
+/// and children map.
+///
+/// Spec: AOUSD Core §7.6 (active metadata), §11 (stage population).
+fn prune_deactivated(
+    store: &dyn LayerStore,
+    prims: &mut HashMap<PathId, PrimIndex>,
+    children: &mut HashMap<PathId, Vec<PathId>>,
+) {
+    let mut deactivated: Vec<PathId> = Vec::new();
+
+    let all_paths: Vec<PathId> = prims.keys().copied().collect();
+    for &prim_path in &all_paths {
+        let Some(index) = prims.get(&prim_path) else {
+            continue;
+        };
+
+        // Resolve active: strongest opinion wins.
+        let mut active_value: Option<bool> = None;
+        for source in &index.sources {
+            let Some(layer) = store.layer(source.layer_id) else {
+                continue;
+            };
+            let Some(spec) = layer.prims.get(&source.spec_path) else {
+                continue;
+            };
+            if let Some(val) = spec.active {
+                active_value = Some(val);
+                break; // strongest wins
+            }
+        }
+
+        if active_value == Some(false) {
+            deactivated.push(prim_path);
+        }
+    }
+
+    // For each deactivated prim, collect all its namespace descendants
+    // and remove them all.
+    let mut to_remove: HashSet<PathId> = HashSet::new();
+    for &deact_path in &deactivated {
+        to_remove.insert(deact_path);
+        let deact_resolved = store.paths().resolve(deact_path);
+        for &path in &all_paths {
+            if path != deact_path && deact_resolved.is_prefix_of(store.paths().resolve(path)) {
+                to_remove.insert(path);
+            }
+        }
+    }
+
+    // Remove from prims and children.
+    for path in &to_remove {
+        prims.remove(path);
+        children.remove(path);
+    }
+
+    // Remove deactivated paths from parent children lists.
+    for child_list in children.values_mut() {
+        child_list.retain(|c| !to_remove.contains(c));
+    }
 }
 
 /// Resolves variant selections considering both the local layer stack and

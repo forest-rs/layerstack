@@ -1011,3 +1011,163 @@ fn dependency_map_records_specializes_arc() {
         .expect("specializes arc exists");
     assert_eq!(spec_arc.source, base);
 }
+
+/// Deactivated prims (`active = false`) are excluded from the stage.
+///
+/// Spec: AOUSD Core §7.6 (active metadata), §11 (stage population).
+#[test]
+fn deactivated_prim_excluded_from_stage() {
+    let mut store = InMemoryStore::default();
+
+    let root = store.path("/");
+    let p = store.path("/Active");
+    let q = store.path("/Inactive");
+
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(
+        root,
+        PrimSpec::default().with_children(vec![
+            store.tokens.intern("Active"),
+            store.tokens.intern("Inactive"),
+        ]),
+    );
+    layer.insert_prim(p, PrimSpec::def());
+    layer.insert_prim(q, PrimSpec::def().with_active(false));
+    store.insert_layer(layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    assert!(stage.has_prim(p), "active prim should be present");
+    assert!(!stage.has_prim(q), "deactivated prim should be excluded");
+}
+
+/// Descendants of a deactivated prim are also excluded.
+///
+/// Spec: AOUSD Core §7.6 (active metadata), §11 (stage population).
+#[test]
+fn deactivated_prim_descendants_excluded() {
+    let mut store = InMemoryStore::default();
+
+    let root = store.path("/");
+    let parent = store.path("/Parent");
+    let child = store.path("/Parent/Child");
+    let grandchild = store.path("/Parent/Child/Grandchild");
+
+    let parent_tok = store.tokens.intern("Parent");
+    let child_tok = store.tokens.intern("Child");
+    let gc_tok = store.tokens.intern("Grandchild");
+
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(root, PrimSpec::default().with_children(vec![parent_tok]));
+    layer.insert_prim(
+        parent,
+        PrimSpec::def()
+            .with_active(false)
+            .with_children(vec![child_tok]),
+    );
+    layer.insert_prim(child, PrimSpec::def().with_children(vec![gc_tok]));
+    layer.insert_prim(grandchild, PrimSpec::def());
+    store.insert_layer(layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    assert!(!stage.has_prim(parent), "deactivated parent excluded");
+    assert!(
+        !stage.has_prim(child),
+        "child of deactivated parent excluded"
+    );
+    assert!(
+        !stage.has_prim(grandchild),
+        "grandchild of deactivated parent excluded"
+    );
+}
+
+/// Explicitly active prims (`active = true`) remain in the stage.
+///
+/// Spec: AOUSD Core §7.6 (active metadata).
+#[test]
+fn explicitly_active_prim_remains() {
+    let mut store = InMemoryStore::default();
+
+    let root = store.path("/");
+    let p = store.path("/P");
+    let p_tok = store.tokens.intern("P");
+
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(root, PrimSpec::default().with_children(vec![p_tok]));
+    layer.insert_prim(p, PrimSpec::def().with_active(true));
+    store.insert_layer(layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    assert!(stage.has_prim(p), "explicitly active prim should remain");
+}
+
+/// Strongest `active` opinion wins across layers.
+///
+/// Spec: AOUSD Core §7.6 (active metadata), §9 (LIVERPS strength ordering).
+#[test]
+fn active_strongest_opinion_wins() {
+    let mut store = InMemoryStore::default();
+
+    let root = store.path("/");
+    let p = store.path("/P");
+    let p_tok = store.tokens.intern("P");
+    let field_x = store.tokens.intern("x");
+
+    // Root layer: active = true (stronger).
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.sublayers = vec![LayerId(2)];
+    root_layer.insert_prim(root, PrimSpec::default().with_children(vec![p_tok]));
+    root_layer.insert_prim(
+        p,
+        PrimSpec::def().with_active(true).with_field(field_x, 1_i64),
+    );
+    store.insert_layer(root_layer);
+
+    // Sublayer: active = false (weaker).
+    let mut sub_layer = Layer::new(LayerId(2));
+    sub_layer.insert_prim(p, PrimSpec::def().with_active(false));
+    store.insert_layer(sub_layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    assert!(
+        stage.has_prim(p),
+        "stronger active=true should override weaker active=false"
+    );
+    let resolved = stage.resolve_field(p, field_x).expect("field exists");
+    assert_eq!(resolved.value, Value::Int64(1));
+}
+
+/// When a weaker layer says `active = false` with no stronger override, the
+/// prim is deactivated.
+///
+/// Spec: AOUSD Core §7.6 (active metadata), §9 (LIVERPS strength ordering).
+#[test]
+fn weaker_active_false_deactivates() {
+    let mut store = InMemoryStore::default();
+
+    let root = store.path("/");
+    let p = store.path("/P");
+    let p_tok = store.tokens.intern("P");
+
+    // Root layer: no active opinion.
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.sublayers = vec![LayerId(2)];
+    root_layer.insert_prim(root, PrimSpec::default().with_children(vec![p_tok]));
+    root_layer.insert_prim(p, PrimSpec::def());
+    store.insert_layer(root_layer);
+
+    // Sublayer: active = false.
+    let mut sub_layer = Layer::new(LayerId(2));
+    sub_layer.insert_prim(p, PrimSpec::def().with_active(false));
+    store.insert_layer(sub_layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    assert!(
+        !stage.has_prim(p),
+        "only opinion is active=false; prim should be excluded"
+    );
+}

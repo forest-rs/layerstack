@@ -456,6 +456,13 @@ pub struct PrimSpec {
     ///
     /// Spec: AOUSD Core §11 (instancing), §5.1.14 (instanceable).
     pub instanceable: Option<bool>,
+    /// Whether this prim is active.
+    ///
+    /// When `false`, the prim and all its namespace descendants are excluded
+    /// from the composed stage. The strongest opinion wins.
+    ///
+    /// Spec: AOUSD Core §7.6 (active metadata), §11 (stage population).
+    pub active: Option<bool>,
 }
 
 impl PrimSpec {
@@ -552,6 +559,17 @@ impl PrimSpec {
     /// Marks this prim as instanceable (or not).
     pub fn with_instanceable(mut self, instanceable: bool) -> Self {
         self.instanceable = Some(instanceable);
+        self
+    }
+
+    /// Marks this prim as active (or not).
+    ///
+    /// When `false`, the prim and all its namespace descendants are excluded
+    /// from the composed stage.
+    ///
+    /// Spec: AOUSD Core §7.6 (active metadata).
+    pub fn with_active(mut self, active: bool) -> Self {
+        self.active = Some(active);
         self
     }
 }

@@ -245,6 +245,11 @@ impl EmitCtx<'_> {
                         spec.instanceable = Some(*b);
                     }
                 }
+                ast::PrimMeta::Custom(entry) if entry.key == "active" => {
+                    if let ast::MetadataValue::Value(ast::Value::Bool(b)) = &entry.value {
+                        spec.active = Some(*b);
+                    }
+                }
                 ast::PrimMeta::Custom(entry) => {
                     let key = self.tokens.intern(entry.key);
                     if entry.op != ast::ListOpKind::Explicit {
@@ -1721,6 +1726,36 @@ def Scope "D" (
         let root_id = paths.lookup(&root_path).expect("root path interned");
         let spec = result.layer.prims.get(&root_id).expect("root prim");
         assert_eq!(spec.instanceable, Some(true));
+    }
+
+    #[test]
+    fn emit_active_false() {
+        let src = "#usda 1.0\ndef Xform \"root\" (active = false) {\n}\n";
+        let (result, mut tokens, paths) = emit_source(src);
+        let root_path = Path::parse_absolute("/root", &mut tokens).unwrap();
+        let root_id = paths.lookup(&root_path).expect("root path interned");
+        let spec = result.layer.prims.get(&root_id).expect("root prim");
+        assert_eq!(spec.active, Some(false));
+    }
+
+    #[test]
+    fn emit_active_true() {
+        let src = "#usda 1.0\ndef Xform \"root\" (active = true) {\n}\n";
+        let (result, mut tokens, paths) = emit_source(src);
+        let root_path = Path::parse_absolute("/root", &mut tokens).unwrap();
+        let root_id = paths.lookup(&root_path).expect("root path interned");
+        let spec = result.layer.prims.get(&root_id).expect("root prim");
+        assert_eq!(spec.active, Some(true));
+    }
+
+    #[test]
+    fn emit_active_capitalized() {
+        let src = "#usda 1.0\ndef Xform \"root\" (active = False) {\n}\n";
+        let (result, mut tokens, paths) = emit_source(src);
+        let root_path = Path::parse_absolute("/root", &mut tokens).unwrap();
+        let root_id = paths.lookup(&root_path).expect("root path interned");
+        let spec = result.layer.prims.get(&root_id).expect("root prim");
+        assert_eq!(spec.active, Some(false));
     }
 
     #[test]

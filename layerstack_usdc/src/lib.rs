@@ -34,3 +34,11 @@ pub mod toc;
 )]
 pub mod value_rep;
 pub mod value_type;
+
+// Scene assembly converts decoded sections into Layer/PrimSpec structures.
+// Like value_rep, it pervasively casts u64 indices to usize.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "pervasive u64→usize casts for section indices; >4 GiB files unsupported"
+)]
+pub mod assemble;

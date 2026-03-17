@@ -397,6 +397,14 @@ pub struct PrimSpec {
     ///
     /// Spec: AOUSD Core §7.6 (specifier field), §12.2.1 (specifier resolution).
     pub specifier: Option<Specifier>,
+    /// The prim type name (e.g. `Xform`, `Mesh`, `Scope`).
+    ///
+    /// Type name resolution uses strongest-defining-opinion-wins: the first
+    /// opinion (in strength order) with a non-`None` type name determines the
+    /// composed type.
+    ///
+    /// Spec: AOUSD Core §7.6 (typeName field), §12.2.3 (type name resolution).
+    pub type_name: Option<TokenId>,
     /// Authored fields.
     pub fields: HashMap<TokenId, FieldValue>,
     /// Authored child prim names in this layer, in file order.
@@ -488,6 +496,14 @@ impl PrimSpec {
             specifier: Some(Specifier::Class),
             ..Self::default()
         }
+    }
+
+    /// Sets the prim type name (builder, consuming).
+    ///
+    /// Spec: AOUSD Core §7.6 (typeName field).
+    pub fn with_type_name(mut self, type_name: TokenId) -> Self {
+        self.type_name = Some(type_name);
+        self
     }
 
     /// Inserts a field value, returning `&mut Self` for chaining.

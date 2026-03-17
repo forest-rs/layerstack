@@ -452,6 +452,29 @@ impl Stage {
         matches!(self.resolve_specifier(prim, store), Some(Specifier::Class))
     }
 
+    /// Resolves the type name for a composed prim.
+    ///
+    /// Returns the strongest opinion's type name. If no contributing source
+    /// has a type name, returns `None`.
+    ///
+    /// Spec: AOUSD Core §7.6 (typeName field), §12.2.3 (type name resolution).
+    #[must_use]
+    pub fn resolve_type_name(&self, prim: PathId, store: &dyn LayerStore) -> Option<TokenId> {
+        let index = self.prims.get(&prim)?;
+        for key in &index.sources {
+            let Some(layer) = store.layer(key.layer_id) else {
+                continue;
+            };
+            let Some(spec) = layer.prims.get(&key.spec_path) else {
+                continue;
+            };
+            if let Some(tn) = spec.type_name {
+                return Some(tn);
+            }
+        }
+        None
+    }
+
     fn provenance_for(&self, field: TokenId, strongest: &Opinion) -> Option<Provenance> {
         self.with_provenance.then_some(Provenance {
             layer: strongest.key.layer_id,

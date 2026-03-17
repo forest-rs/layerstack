@@ -1171,3 +1171,89 @@ fn weaker_active_false_deactivates() {
         "only opinion is active=false; prim should be excluded"
     );
 }
+
+/// Type name is resolved from the strongest opinion.
+///
+/// Spec: AOUSD Core §7.6 (typeName field), §12.2.3 (type name resolution).
+#[test]
+fn type_name_resolved_from_strongest() {
+    let mut store = InMemoryStore::default();
+
+    let root = store.path("/");
+    let p = store.path("/P");
+    let p_tok = store.tokens.intern("P");
+    let xform_tok = store.tokens.intern("Xform");
+    let scope_tok = store.tokens.intern("Scope");
+
+    // Root layer: type = Xform (stronger).
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.sublayers = vec![LayerId(2)];
+    root_layer.insert_prim(root, PrimSpec::default().with_children(vec![p_tok]));
+    root_layer.insert_prim(p, PrimSpec::def().with_type_name(xform_tok));
+    store.insert_layer(root_layer);
+
+    // Sublayer: type = Scope (weaker).
+    let mut sub_layer = Layer::new(LayerId(2));
+    sub_layer.insert_prim(p, PrimSpec::def().with_type_name(scope_tok));
+    store.insert_layer(sub_layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    let resolved = stage.resolve_type_name(p, &store);
+    assert_eq!(resolved, Some(xform_tok));
+}
+
+/// An `over` without a type name does not contribute; the reference target's
+/// type name is used instead.
+///
+/// Spec: AOUSD Core §7.6 (typeName field), §12.2.3 (type name resolution).
+#[test]
+fn type_name_from_reference_when_local_untyped() {
+    let mut store = InMemoryStore::default();
+
+    let root = store.path("/");
+    let p = store.path("/P");
+    let q = store.path("/Q");
+    let p_tok = store.tokens.intern("P");
+    let mesh_tok = store.tokens.intern("Mesh");
+
+    // Root layer: /P is an untyped over with a reference to /Q in layer 2.
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.insert_prim(root, PrimSpec::default().with_children(vec![p_tok]));
+    root_layer.insert_prim(
+        p,
+        PrimSpec::over().with_reference(Reference::new(LayerId(2), q)),
+    );
+    store.insert_layer(root_layer);
+
+    // Layer 2: /Q is a typed Mesh.
+    let mut ref_layer = Layer::new(LayerId(2));
+    ref_layer.insert_prim(q, PrimSpec::def().with_type_name(mesh_tok));
+    store.insert_layer(ref_layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    let resolved = stage.resolve_type_name(p, &store);
+    assert_eq!(resolved, Some(mesh_tok));
+}
+
+/// A prim with no type name anywhere in its opinion stack returns `None`.
+///
+/// Spec: AOUSD Core §7.6 (typeName field).
+#[test]
+fn type_name_none_when_untyped() {
+    let mut store = InMemoryStore::default();
+
+    let root = store.path("/");
+    let p = store.path("/P");
+    let p_tok = store.tokens.intern("P");
+
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(root, PrimSpec::default().with_children(vec![p_tok]));
+    layer.insert_prim(p, PrimSpec::def());
+    store.insert_layer(layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    assert_eq!(stage.resolve_type_name(p, &store), None);
+}

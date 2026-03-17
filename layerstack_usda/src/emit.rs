@@ -150,6 +150,7 @@ impl EmitCtx<'_> {
 
         let mut spec = PrimSpec {
             specifier: Some(convert_specifier(prim.specifier)),
+            type_name: prim.type_name.map(|t| self.tokens.intern(t)),
             ..PrimSpec::default()
         };
 
@@ -1704,6 +1705,38 @@ def Scope "D" (
             &[(standin_tok, anim_tok)],
             "required_outer_selections for anim_spooky_sphere"
         );
+    }
+
+    #[test]
+    fn emit_type_name_stored() {
+        let src = "#usda 1.0\ndef Xform \"root\" {\n}\n";
+        let (result, mut tokens, paths) = emit_source(src);
+        let root_path = Path::parse_absolute("/root", &mut tokens).unwrap();
+        let root_id = paths.lookup(&root_path).expect("root path interned");
+        let spec = result.layer.prims.get(&root_id).expect("root prim");
+        let xform_tok = tokens.intern("Xform");
+        assert_eq!(spec.type_name, Some(xform_tok));
+    }
+
+    #[test]
+    fn emit_type_name_none_for_untyped() {
+        let src = "#usda 1.0\ndef \"root\" {\n}\n";
+        let (result, mut tokens, paths) = emit_source(src);
+        let root_path = Path::parse_absolute("/root", &mut tokens).unwrap();
+        let root_id = paths.lookup(&root_path).expect("root path interned");
+        let spec = result.layer.prims.get(&root_id).expect("root prim");
+        assert_eq!(spec.type_name, None);
+    }
+
+    #[test]
+    fn emit_type_name_mesh() {
+        let src = "#usda 1.0\ndef Mesh \"geo\" {\n}\n";
+        let (result, mut tokens, paths) = emit_source(src);
+        let root_path = Path::parse_absolute("/geo", &mut tokens).unwrap();
+        let root_id = paths.lookup(&root_path).expect("geo path interned");
+        let spec = result.layer.prims.get(&root_id).expect("geo prim");
+        let mesh_tok = tokens.intern("Mesh");
+        assert_eq!(spec.type_name, Some(mesh_tok));
     }
 
     #[test]

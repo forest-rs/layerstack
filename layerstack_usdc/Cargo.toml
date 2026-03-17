@@ -1,0 +1,25 @@
+[package]
+name = "layerstack_usdc"
+description = "USDC (binary crate format) reader for layerstack — §16.3 compliant."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "../README.md"
+keywords = ["usd", "usdc", "binary", "scene-description"]
+categories = ["parser-implementations"]
+
+[features]
+default = []
+std = []
+
+[dependencies]
+layerstack = { path = "../layerstack" }
+lz4_flex = { workspace = true }
+smallvec = { workspace = true }
+
+[dev-dependencies]
+
+[lints]
+workspace = true

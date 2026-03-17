@@ -31,3 +31,7 @@ Interpolation methods (lay-2b56) closed: Held + Linear interpolation implemented
 **2026-03-14T04:51:33Z**
 
 TimeSamples resolution (lay-n7r4) closed: timeSamples parsing + FieldValue::TimeSamples + resolve_value_at_time in 0cb2835.
+
+**2026-03-17T13:35:05Z**
+
+Dictionary combining (lay-zjzv) closed: Value::Dictionary + recursive merge + emit pipeline + stage resolution in ae08ad9.

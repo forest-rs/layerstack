@@ -2,7 +2,7 @@
 //!
 //! Spec: AOUSD Core §11–§12 (stage population and value resolution).
 
-use alloc::{vec, vec::Vec};
+use alloc::{sync::Arc, vec, vec::Vec};
 
 use hashbrown::HashMap;
 
@@ -10,7 +10,10 @@ use invalidation::InvalidationGraph;
 
 use crate::{
     dependency_map::{ArcDependency, CompositionDeps},
-    doc::{FieldValue, InterpolationType, LayerId, LayerStore, Specifier, Value},
+    doc::{
+        FieldValue, InterpolationType, LayerId, LayerStore, Specifier, Value,
+        combine_dictionary_chain,
+    },
     interner::TokenId,
     listop::{ListOp, resolve_list_chain},
     path::PathId,
@@ -56,6 +59,10 @@ pub enum ResolvedValue {
     TokenList(Vec<TokenId>),
     /// A path list value resolved by chaining `ListOps`.
     PathList(Vec<PathId>),
+    /// A dictionary value resolved by combining opinions.
+    ///
+    /// Spec: AOUSD Core §6.6.2.1 (dictionary combining), §12.2.5.
+    Dictionary(Vec<(Arc<str>, Value)>),
 }
 
 /// Controls partial population.
@@ -196,7 +203,7 @@ impl Stage {
 
     /// Resolves a field on a prim.
     ///
-    /// Note: this returns only scalar (`Value`) fields. For `ListOp` fields, use
+    /// Returns scalar and dictionary values. For `ListOp` fields, use
     /// [`Stage::resolve_token_list`].
     #[must_use]
     pub fn resolve_field(&self, prim: PathId, field: TokenId) -> Option<Resolved<Value>> {
@@ -204,6 +211,10 @@ impl Stage {
         match resolved.value {
             ResolvedValue::Scalar(v) => Some(Resolved {
                 value: v,
+                provenance: resolved.provenance,
+            }),
+            ResolvedValue::Dictionary(d) => Some(Resolved {
+                value: Value::Dictionary(d),
                 provenance: resolved.provenance,
             }),
             ResolvedValue::TokenList(_) | ResolvedValue::PathList(_) => None,
@@ -223,7 +234,9 @@ impl Stage {
                 value: v,
                 provenance: resolved.provenance,
             }),
-            ResolvedValue::Scalar(_) | ResolvedValue::PathList(_) => None,
+            ResolvedValue::Scalar(_)
+            | ResolvedValue::PathList(_)
+            | ResolvedValue::Dictionary(_) => None,
         }
     }
 
@@ -236,7 +249,9 @@ impl Stage {
                 value: v,
                 provenance: resolved.provenance,
             }),
-            ResolvedValue::Scalar(_) | ResolvedValue::TokenList(_) => None,
+            ResolvedValue::Scalar(_)
+            | ResolvedValue::TokenList(_)
+            | ResolvedValue::Dictionary(_) => None,
         }
     }
 
@@ -257,6 +272,19 @@ impl Stage {
                 // Value block: suppress all weaker opinions, return no value.
                 // Spec: AOUSD Core §12.3 (value blocking).
                 None
+            }
+            FieldValue::Value(Value::Dictionary(_)) => {
+                // Dictionary combining: merge all dictionary opinions.
+                // Spec: AOUSD Core §6.6.2.1, §12.2.5.
+                let dicts = opinions.iter().filter_map(|op| match &op.value {
+                    FieldValue::Value(Value::Dictionary(d)) => Some(d.clone()),
+                    _ => None,
+                });
+                let combined = combine_dictionary_chain(dicts);
+                Some(Resolved {
+                    value: ResolvedValue::Dictionary(combined),
+                    provenance: self.provenance_for(field, strongest),
+                })
             }
             FieldValue::Value(v) => Some(Resolved {
                 value: ResolvedValue::Scalar(v.clone()),
@@ -511,6 +539,7 @@ impl Stage {
 
         Some(Resolved {
             value: match fallback {
+                FieldValue::Value(Value::Dictionary(d)) => ResolvedValue::Dictionary(d),
                 FieldValue::Value(v) => ResolvedValue::Scalar(v),
                 FieldValue::TokenListOp(op) => {
                     ResolvedValue::TokenList(resolve_list_chain::<TokenId>(&[], [op]))
@@ -545,7 +574,33 @@ impl Stage {
                 value: v,
                 provenance: resolved.provenance,
             }),
+            ResolvedValue::Dictionary(d) => Some(Resolved {
+                value: Value::Dictionary(d),
+                provenance: resolved.provenance,
+            }),
             ResolvedValue::TokenList(_) | ResolvedValue::PathList(_) => None,
+        }
+    }
+
+    /// Resolves a dictionary-valued field on a prim, combining opinions.
+    ///
+    /// Returns `None` if the field does not exist or is not dictionary-valued.
+    ///
+    /// Spec: AOUSD Core §6.6.2.1 (dictionary combining), §12.2.5.
+    #[must_use]
+    #[allow(clippy::type_complexity, reason = "Resolved<Vec<(Arc<str>, Value)>> is the natural return type")]
+    pub fn resolve_dictionary(
+        &self,
+        prim: PathId,
+        field: TokenId,
+    ) -> Option<Resolved<Vec<(Arc<str>, Value)>>> {
+        let resolved = self.resolve_value(prim, field)?;
+        match resolved.value {
+            ResolvedValue::Dictionary(d) => Some(Resolved {
+                value: d,
+                provenance: resolved.provenance,
+            }),
+            _ => None,
         }
     }
 

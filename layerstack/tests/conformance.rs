@@ -1,5 +1,9 @@
 #![allow(missing_docs, reason = "integration tests")]
 
+use alloc::sync::Arc;
+
+extern crate alloc;
+
 use layerstack::{
     ArcKind, FieldEntry, FieldValue, Layer, LayerId, ListOp, PrimSpec, Reference, ResolvedValue,
     SchemaDefinition, SchemaRegistry, Stage, StageOptions, Value, VariantSetSpec, VariantSpec,
@@ -1454,4 +1458,214 @@ fn schema_builtin_api_fallback() {
         .resolve_field_with_schema(p, api_field_tok, &store, &registry, None)
         .expect("built-in api fallback");
     assert_eq!(resolved.value, Value::Int(42));
+}
+
+// ── Dictionary combining ──────────────────────────────────────────────
+
+fn dict_entry(key: &str, val: Value) -> (Arc<str>, Value) {
+    (Arc::from(key), val)
+}
+
+#[test]
+fn dictionary_combining_across_sublayers() {
+    // Spec: AOUSD Core §6.6.2.1, §12.2.5 — dictionaries combine across opinions.
+    let mut store = InMemoryStore::default();
+    let field = store.tokens.intern("customData");
+    let p = store.path("/P");
+
+    // Root (stronger): {a: 1}
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.sublayers.push(LayerId(2));
+    root_layer.insert_prim(
+        p,
+        PrimSpec::def().with_field(
+            field,
+            Value::Dictionary(vec![dict_entry("a", Value::Int(1))]),
+        ),
+    );
+    store.insert_layer(root_layer);
+
+    // Sublayer (weaker): {a: 99, b: 2}
+    let mut sub_layer = Layer::new(LayerId(2));
+    sub_layer.insert_prim(
+        p,
+        PrimSpec::default().with_field(
+            field,
+            Value::Dictionary(vec![
+                dict_entry("a", Value::Int(99)),
+                dict_entry("b", Value::Int(2)),
+            ]),
+        ),
+    );
+    store.insert_layer(sub_layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let resolved = stage
+        .resolve_dictionary(p, field)
+        .expect("dictionary resolved");
+    // a=1 (stronger wins), b=2 (weaker-only preserved).
+    assert_eq!(
+        resolved.value,
+        vec![
+            dict_entry("a", Value::Int(1)),
+            dict_entry("b", Value::Int(2))
+        ]
+    );
+}
+
+#[test]
+fn dictionary_nested_combining() {
+    // Spec: §6.6.2.1 — nested dictionaries combine recursively.
+    let mut store = InMemoryStore::default();
+    let field = store.tokens.intern("customData");
+    let p = store.path("/P");
+
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.sublayers.push(LayerId(2));
+    root_layer.insert_prim(
+        p,
+        PrimSpec::def().with_field(
+            field,
+            Value::Dictionary(vec![dict_entry(
+                "sub",
+                Value::Dictionary(vec![dict_entry("x", Value::Int(10))]),
+            )]),
+        ),
+    );
+    store.insert_layer(root_layer);
+
+    let mut sub_layer = Layer::new(LayerId(2));
+    sub_layer.insert_prim(
+        p,
+        PrimSpec::default().with_field(
+            field,
+            Value::Dictionary(vec![dict_entry(
+                "sub",
+                Value::Dictionary(vec![
+                    dict_entry("x", Value::Int(99)),
+                    dict_entry("y", Value::Int(20)),
+                ]),
+            )]),
+        ),
+    );
+    store.insert_layer(sub_layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let resolved = stage
+        .resolve_dictionary(p, field)
+        .expect("nested dict resolved");
+    // sub.x=10 (stronger), sub.y=20 (weaker-only).
+    assert_eq!(
+        resolved.value,
+        vec![dict_entry(
+            "sub",
+            Value::Dictionary(vec![
+                dict_entry("x", Value::Int(10)),
+                dict_entry("y", Value::Int(20)),
+            ])
+        )]
+    );
+}
+
+#[test]
+fn dictionary_combining_across_reference_arc() {
+    // Spec: §6.6.2.1, §10 — dictionaries combine across reference arcs.
+    let mut store = InMemoryStore::default();
+    let field = store.tokens.intern("customData");
+    let p = store.path("/P");
+    let q = store.path("/Q");
+
+    // Root: /P references /Q in layer 2, with local dictionary {a: 1}.
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.insert_prim(
+        p,
+        PrimSpec::def()
+            .with_field(
+                field,
+                Value::Dictionary(vec![dict_entry("a", Value::Int(1))]),
+            )
+            .with_reference(Reference::new(LayerId(2), q)),
+    );
+    store.insert_layer(root_layer);
+
+    // Reference target layer: /Q with dictionary {a: 99, b: 2}.
+    let mut ref_layer = Layer::new(LayerId(2));
+    ref_layer.insert_prim(
+        q,
+        PrimSpec::def().with_field(
+            field,
+            Value::Dictionary(vec![
+                dict_entry("a", Value::Int(99)),
+                dict_entry("b", Value::Int(2)),
+            ]),
+        ),
+    );
+    store.insert_layer(ref_layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let resolved = stage
+        .resolve_dictionary(p, field)
+        .expect("dict across reference");
+    assert_eq!(
+        resolved.value,
+        vec![
+            dict_entry("a", Value::Int(1)),
+            dict_entry("b", Value::Int(2))
+        ]
+    );
+}
+
+#[test]
+fn dictionary_blocked_value_suppresses() {
+    // Spec: §12.3 — a blocked value suppresses weaker dictionary opinions.
+    let mut store = InMemoryStore::default();
+    let field = store.tokens.intern("customData");
+    let p = store.path("/P");
+
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.sublayers.push(LayerId(2));
+    root_layer.insert_prim(p, PrimSpec::def().with_field(field, Value::Blocked));
+    store.insert_layer(root_layer);
+
+    let mut sub_layer = Layer::new(LayerId(2));
+    sub_layer.insert_prim(
+        p,
+        PrimSpec::default().with_field(
+            field,
+            Value::Dictionary(vec![dict_entry("a", Value::Int(1))]),
+        ),
+    );
+    store.insert_layer(sub_layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    // Blocked suppresses — resolve_value should return None, resolve_dictionary too.
+    let resolved = stage.resolve_dictionary(p, field);
+    assert!(resolved.is_none(), "blocked should suppress dictionary");
+}
+
+#[test]
+fn resolve_value_returns_dictionary_variant() {
+    // Verify that resolve_value returns ResolvedValue::Dictionary for dict fields.
+    let mut store = InMemoryStore::default();
+    let field = store.tokens.intern("customData");
+    let p = store.path("/P");
+
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(
+        p,
+        PrimSpec::def().with_field(
+            field,
+            Value::Dictionary(vec![dict_entry("x", Value::Double(1.5))]),
+        ),
+    );
+    store.insert_layer(layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let resolved = stage.resolve_value(p, field).expect("dictionary resolves");
+    match resolved.value {
+        ResolvedValue::Dictionary(d) => {
+            assert_eq!(d, vec![dict_entry("x", Value::Double(1.5))]);
+        }
+        other => panic!("expected ResolvedValue::Dictionary, got {:?}", other),
+    }
 }

@@ -1007,8 +1007,19 @@ impl EmitCtx<'_> {
             ast::Value::Asset(s) => Value::Asset(Arc::from(*s)),
             ast::Value::Path(s) => Value::String(Arc::from(*s)),
             ast::Value::Blocked => Value::Blocked,
+            ast::Value::Dictionary(entries) => {
+                let dict_entries: Vec<(Arc<str>, Value)> = entries
+                    .iter()
+                    .map(|e| {
+                        let key = Arc::from(e.key);
+                        let val = self.convert_value(&e.value, e.type_name.unwrap_or(""));
+                        (key, val)
+                    })
+                    .collect();
+                Value::Dictionary(dict_entries)
+            }
             // Compound types not yet modeled in layerstack Value.
-            ast::Value::Tuple(_) | ast::Value::Array(_) | ast::Value::Dictionary(_) => Value::Null,
+            ast::Value::Tuple(_) | ast::Value::Array(_) => Value::Null,
         }
     }
 
@@ -1016,7 +1027,17 @@ impl EmitCtx<'_> {
         match val {
             ast::MetadataValue::Value(v) => self.convert_value(v, ""),
             ast::MetadataValue::None => Value::Blocked,
-            ast::MetadataValue::Dictionary(_) => Value::Null,
+            ast::MetadataValue::Dictionary(entries) => {
+                let dict_entries: Vec<(Arc<str>, Value)> = entries
+                    .iter()
+                    .map(|e| {
+                        let key = Arc::from(e.key);
+                        let val = self.convert_value(&e.value, e.type_name.unwrap_or(""));
+                        (key, val)
+                    })
+                    .collect();
+                Value::Dictionary(dict_entries)
+            }
             ast::MetadataValue::String(s) => Value::String(Arc::from(s.as_str())),
         }
     }
@@ -1838,6 +1859,98 @@ def Scope "D" (
                 assert!(listop.delete.is_empty());
             }
             other => panic!("expected TokenListOp, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn emit_dictionary_metadata() {
+        let src = "\
+#usda 1.0
+def \"A\" (
+    customData = {
+        string foo = \"bar\"
+        int count = 42
+    }
+) {
+}
+";
+        let (result, mut tokens, _paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let a_id = _paths.lookup(&a_path).expect("/A");
+        let spec = result.layer.prims.get(&a_id).unwrap();
+        let cd_tok = tokens.intern("customData");
+        let field = get_field(&spec.fields, &cd_tok).expect("customData field");
+        match field {
+            FieldValue::Value(Value::Dictionary(entries)) => {
+                assert_eq!(entries.len(), 2);
+                assert_eq!(&*entries[0].0, "foo");
+                assert_eq!(entries[0].1, Value::String(Arc::from("bar")));
+                assert_eq!(&*entries[1].0, "count");
+                assert_eq!(entries[1].1, Value::Int(42));
+            }
+            other => panic!("expected Dictionary, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn emit_nested_dictionary_metadata() {
+        let src = "\
+#usda 1.0
+def \"A\" (
+    customData = {
+        dictionary inner = {
+            double val = 1.5
+        }
+    }
+) {
+}
+";
+        let (result, mut tokens, _paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let a_id = _paths.lookup(&a_path).expect("/A");
+        let spec = result.layer.prims.get(&a_id).unwrap();
+        let cd_tok = tokens.intern("customData");
+        let field = get_field(&spec.fields, &cd_tok).expect("customData field");
+        match field {
+            FieldValue::Value(Value::Dictionary(entries)) => {
+                assert_eq!(entries.len(), 1);
+                assert_eq!(&*entries[0].0, "inner");
+                match &entries[0].1 {
+                    Value::Dictionary(inner) => {
+                        assert_eq!(inner.len(), 1);
+                        assert_eq!(&*inner[0].0, "val");
+                        assert_eq!(inner[0].1, Value::Double(1.5));
+                    }
+                    other => panic!("expected nested Dictionary, got {:?}", other),
+                }
+            }
+            other => panic!("expected Dictionary, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn emit_dictionary_attribute() {
+        let src = "\
+#usda 1.0
+def \"A\" {
+    dictionary d = {
+        string key = \"value\"
+    }
+}
+";
+        let (result, mut tokens, _paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let a_id = _paths.lookup(&a_path).expect("/A");
+        let spec = result.layer.prims.get(&a_id).unwrap();
+        let d_tok = tokens.intern("d");
+        let field = get_field(&spec.fields, &d_tok).expect("d field");
+        match field {
+            FieldValue::Value(Value::Dictionary(entries)) => {
+                assert_eq!(entries.len(), 1);
+                assert_eq!(&*entries[0].0, "key");
+                assert_eq!(entries[0].1, Value::String(Arc::from("value")));
+            }
+            other => panic!("expected Dictionary, got {:?}", other),
         }
     }
 }

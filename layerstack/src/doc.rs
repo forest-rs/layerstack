@@ -95,6 +95,15 @@ pub enum Value {
     ///
     /// Spec: AOUSD Core §12.3 (value blocking), §16.3.10.16 (`ValueBlock` type).
     Blocked,
+    /// A dictionary of string-keyed values, maintaining insertion order.
+    ///
+    /// Dictionary-valued fields use combining semantics during value
+    /// resolution: dictionaries from multiple opinions are recursively
+    /// merged rather than using strongest-wins.
+    ///
+    /// Spec: AOUSD Core §6.2 (dictionary type), §6.6.2.1 (dictionary
+    /// combining), §12.2.5 (dictionary-valued metadata combining).
+    Dictionary(Vec<(Arc<str>, Self)>),
 }
 
 impl fmt::Display for Value {
@@ -118,6 +127,16 @@ impl fmt::Display for Value {
                 write!(f, "opaque({type_name:?}, {} bytes)", bytes.len())
             }
             Self::Blocked => write!(f, "blocked"),
+            Self::Dictionary(entries) => {
+                write!(f, "{{")?;
+                for (i, (k, v)) in entries.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{k}: {v}")?;
+                }
+                write!(f, "}}")
+            }
         }
     }
 }
@@ -157,6 +176,57 @@ impl From<f64> for Value {
     fn from(v: f64) -> Self {
         Self::Double(v)
     }
+}
+
+/// Combines two dictionaries per §6.6.2.1 (dictionary combining).
+///
+/// Rules:
+/// - Stronger non-dictionary values win per key.
+/// - When both stronger and weaker have a dictionary value at the same key,
+///   the values are combined recursively.
+/// - Weaker-only keys are preserved (appended to maintain order).
+///
+/// Spec: AOUSD Core §6.6.2.1, §12.2.5.
+pub fn combine_dictionaries(
+    stronger: &[(Arc<str>, Value)],
+    weaker: &[(Arc<str>, Value)],
+) -> Vec<(Arc<str>, Value)> {
+    let mut result: Vec<(Arc<str>, Value)> = stronger.to_vec();
+    for (key, weak_val) in weaker {
+        if let Some(pos) = result.iter().position(|(k, _)| k == key) {
+            // Key exists in stronger. Recurse if both are dictionaries.
+            let strong_val = &result[pos].1;
+            if let (Value::Dictionary(strong_dict), Value::Dictionary(weak_dict)) =
+                (strong_val, weak_val)
+            {
+                let combined = combine_dictionaries(strong_dict, weak_dict);
+                result[pos].1 = Value::Dictionary(combined);
+            }
+            // Otherwise stronger non-dict value wins — no action needed.
+        } else {
+            // Key only in weaker: preserve it.
+            result.push((key.clone(), weak_val.clone()));
+        }
+    }
+    result
+}
+
+/// Combines a chain of dictionary opinions in strength order (strongest first).
+///
+/// Applies the combining algorithm pairwise from strongest to weakest.
+///
+/// Spec: AOUSD Core §6.6.2.1 (dictionary combining).
+pub fn combine_dictionary_chain(
+    opinions: impl IntoIterator<Item = Vec<(Arc<str>, Value)>>,
+) -> Vec<(Arc<str>, Value)> {
+    let mut result: Option<Vec<(Arc<str>, Value)>> = None;
+    for dict in opinions {
+        result = Some(match result {
+            None => dict,
+            Some(acc) => combine_dictionaries(&acc, &dict),
+        });
+    }
+    result.unwrap_or_default()
 }
 
 /// A named field entry on a prim spec or variant spec.
@@ -736,5 +806,154 @@ impl LayerStore for InMemoryStore {
 
     fn paths_mut(&mut self) -> &mut PathInterner {
         &mut self.paths
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::sync::Arc;
+    use alloc::vec;
+
+    fn entry(key: &str, val: Value) -> (Arc<str>, Value) {
+        (Arc::from(key), val)
+    }
+
+    #[test]
+    fn combine_stronger_scalar_wins() {
+        let stronger = vec![entry("a", Value::Int(1))];
+        let weaker = vec![entry("a", Value::Int(2))];
+        let result = combine_dictionaries(&stronger, &weaker);
+        assert_eq!(result, vec![entry("a", Value::Int(1))]);
+    }
+
+    #[test]
+    fn combine_weaker_only_keys_preserved() {
+        let stronger = vec![entry("a", Value::Int(1))];
+        let weaker = vec![entry("b", Value::Int(2))];
+        let result = combine_dictionaries(&stronger, &weaker);
+        assert_eq!(
+            result,
+            vec![entry("a", Value::Int(1)), entry("b", Value::Int(2))]
+        );
+    }
+
+    #[test]
+    fn combine_nested_dictionaries_recurse() {
+        let stronger = vec![entry(
+            "sub",
+            Value::Dictionary(vec![entry("x", Value::Int(10))]),
+        )];
+        let weaker = vec![entry(
+            "sub",
+            Value::Dictionary(vec![entry("x", Value::Int(20)), entry("y", Value::Int(30))]),
+        )];
+        let result = combine_dictionaries(&stronger, &weaker);
+        // x=10 from stronger wins; y=30 from weaker preserved.
+        assert_eq!(
+            result,
+            vec![entry(
+                "sub",
+                Value::Dictionary(vec![entry("x", Value::Int(10)), entry("y", Value::Int(30))])
+            )]
+        );
+    }
+
+    #[test]
+    fn combine_stronger_dict_weaker_scalar_wins_stronger() {
+        // When stronger has a dictionary and weaker has a scalar at the same key,
+        // stronger wins (it's not a dict-dict merge).
+        let stronger = vec![entry(
+            "a",
+            Value::Dictionary(vec![entry("x", Value::Int(1))]),
+        )];
+        let weaker = vec![entry("a", Value::Int(99))];
+        let result = combine_dictionaries(&stronger, &weaker);
+        assert_eq!(
+            result,
+            vec![entry(
+                "a",
+                Value::Dictionary(vec![entry("x", Value::Int(1))])
+            )]
+        );
+    }
+
+    #[test]
+    fn combine_stronger_scalar_weaker_dict_wins_stronger() {
+        // When stronger is scalar and weaker is dictionary, stronger wins.
+        let stronger = vec![entry("a", Value::Int(1))];
+        let weaker = vec![entry(
+            "a",
+            Value::Dictionary(vec![entry("x", Value::Int(99))]),
+        )];
+        let result = combine_dictionaries(&stronger, &weaker);
+        assert_eq!(result, vec![entry("a", Value::Int(1))]);
+    }
+
+    #[test]
+    fn combine_empty_stronger() {
+        let stronger: Vec<(Arc<str>, Value)> = vec![];
+        let weaker = vec![entry("a", Value::Int(1))];
+        let result = combine_dictionaries(&stronger, &weaker);
+        assert_eq!(result, vec![entry("a", Value::Int(1))]);
+    }
+
+    #[test]
+    fn combine_empty_weaker() {
+        let stronger = vec![entry("a", Value::Int(1))];
+        let weaker: Vec<(Arc<str>, Value)> = vec![];
+        let result = combine_dictionaries(&stronger, &weaker);
+        assert_eq!(result, vec![entry("a", Value::Int(1))]);
+    }
+
+    #[test]
+    fn combine_chain_three_opinions() {
+        let strongest = vec![entry("a", Value::Int(1))];
+        let middle = vec![entry("b", Value::Int(2))];
+        let weakest = vec![entry("c", Value::Int(3)), entry("a", Value::Int(99))];
+        let result = combine_dictionary_chain([strongest, middle, weakest]);
+        assert_eq!(
+            result,
+            vec![
+                entry("a", Value::Int(1)),
+                entry("b", Value::Int(2)),
+                entry("c", Value::Int(3)),
+            ]
+        );
+    }
+
+    #[test]
+    fn combine_chain_empty_yields_default() {
+        let result = combine_dictionary_chain(Vec::<Vec<(Arc<str>, Value)>>::new());
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn combine_chain_nested_across_three_layers() {
+        // Three layers all contribute to a nested dictionary.
+        let strongest = vec![entry(
+            "d",
+            Value::Dictionary(vec![entry("x", Value::Int(1))]),
+        )];
+        let middle = vec![entry(
+            "d",
+            Value::Dictionary(vec![entry("y", Value::Int(2))]),
+        )];
+        let weakest = vec![entry(
+            "d",
+            Value::Dictionary(vec![entry("x", Value::Int(99)), entry("z", Value::Int(3))]),
+        )];
+        let result = combine_dictionary_chain([strongest, middle, weakest]);
+        assert_eq!(
+            result,
+            vec![entry(
+                "d",
+                Value::Dictionary(vec![
+                    entry("x", Value::Int(1)),
+                    entry("y", Value::Int(2)),
+                    entry("z", Value::Int(3)),
+                ])
+            )]
+        );
     }
 }

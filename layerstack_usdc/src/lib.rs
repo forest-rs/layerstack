@@ -21,6 +21,7 @@
 
 extern crate alloc;
 
+pub mod compression;
 pub mod error;
 pub mod header;
 pub mod toc;

@@ -254,10 +254,35 @@ fn filter_variant_children(
 
             // Re-order variant children: group by source arc (weakest first),
             // then by variant set order within each group (later sets first).
-            // This ensures children from sibling reference arcs stay grouped
-            // together rather than being interleaved by variant set.
+            // Within a variant set, children from deeper nesting levels
+            // (more required_outer_selections) come before shallower ones
+            // because deeper variant opinions are stronger.
             use alloc::collections::BTreeMap;
             let mut arc_groups: BTreeMap<u16, Vec<TokenId>> = BTreeMap::new();
+
+            // Collect nesting depth for each child across all sources.
+            let mut child_nesting_depth: HashMap<TokenId, usize> = HashMap::new();
+            for source in &prim_index.sources {
+                let Some(layer) = store.layer(source.layer_id) else {
+                    continue;
+                };
+                let Some(spec) = layer.prims.get(&source.spec_path) else {
+                    continue;
+                };
+                for set_spec in spec.variant_sets.values() {
+                    for variant_spec in set_spec.variants.values() {
+                        for child in &variant_spec.authored_children {
+                            let depth = variant_spec
+                                .required_outer_selections
+                                .get(child)
+                                .map_or(0, |r| r.len());
+                            let entry = child_nesting_depth.entry(*child).or_insert(0);
+                            *entry = (*entry).max(depth);
+                        }
+                    }
+                }
+            }
+
             for set_tok in variant_set_order.iter().rev() {
                 let Some(&selected_variant) = selections.get(set_tok) else {
                     continue;
@@ -290,6 +315,15 @@ fn filter_variant_children(
                     }
                 }
             }
+
+            // Sort by nesting depth (deepest first = strongest opinions).
+            // Children from deeper variant nesting have more required
+            // outer selections and represent stronger opinions.
+            ordered_variant_children.sort_by(|a, b| {
+                let a_depth = child_nesting_depth.get(a).copied().unwrap_or(0);
+                let b_depth = child_nesting_depth.get(b).copied().unwrap_or(0);
+                b_depth.cmp(&a_depth)
+            });
 
             if !ordered_variant_children.is_empty() {
                 // Build a position map for stable sorting.
@@ -3453,8 +3487,9 @@ fn apply_reorder_op(store: &dyn LayerStore, children: &mut Vec<PathId>, order: &
 mod child_order_tests {
     extern crate std;
     use super::*;
-    use crate::doc::InMemoryStore;
+    use crate::doc::{InMemoryStore, Layer, PrimSpec, VariantSetSpec, VariantSpec};
     use crate::path::Path;
+    use crate::prim_index::OpinionKey;
     use alloc::vec;
 
     #[test]
@@ -3593,6 +3628,116 @@ mod child_order_tests {
                 "From_class_in_root",
                 "From_root"
             ]
+        );
+    }
+
+    /// Test that deeply nested variant children are ordered correctly:
+    /// children from deeper nesting levels (more `required_outer_selections`)
+    /// come before shallower ones.
+    #[test]
+    fn test_nested_variant_child_ordering() {
+        let mut store = InMemoryStore::default();
+        let layer_id = LayerId(1);
+
+        // Intern tokens.
+        let standin = store.tokens.intern("standin");
+        let shading = store.tokens.intern("shadingVariant");
+        let anim = store.tokens.intern("anim");
+        let spooky = store.tokens.intern("spooky");
+
+        let sphere = store.tokens.intern("anim_spooky_sphere");
+        let anim_sphere = store.tokens.intern("anim_spooky_anim_sphere");
+
+        // Create paths.
+        let parent_path = store
+            .paths
+            .intern(Path::parse_absolute("/D", &mut store.tokens).unwrap());
+        let child_sphere = store
+            .paths
+            .intern(Path::parse_absolute("/D/anim_spooky_sphere", &mut store.tokens).unwrap());
+        let child_anim_sphere = store
+            .paths
+            .intern(Path::parse_absolute("/D/anim_spooky_anim_sphere", &mut store.tokens).unwrap());
+
+        // Build PrimSpec with nested variant sets.
+        let mut d_spec = PrimSpec {
+            variant_set_order: vec![standin, shading],
+            ..PrimSpec::default()
+        };
+        d_spec.variant_selections.insert(standin, anim);
+        d_spec.variant_selections.insert(shading, spooky);
+
+        // shadingVariant=spooky: anim_spooky_sphere with required_outer [(standin, anim)]
+        let mut shading_spooky = VariantSpec::default();
+        shading_spooky.authored_children.push(sphere);
+        shading_spooky
+            .required_outer_selections
+            .insert(sphere, vec![(standin, anim)]);
+
+        let mut shading_set = VariantSetSpec::default();
+        shading_set.variants.insert(spooky, shading_spooky);
+        d_spec.variant_sets.insert(shading, shading_set);
+
+        // standin=anim: anim_spooky_anim_sphere with required_outer [(standin, anim), (shading, spooky)]
+        let mut standin_anim = VariantSpec::default();
+        standin_anim.authored_children.push(anim_sphere);
+        standin_anim
+            .required_outer_selections
+            .insert(anim_sphere, vec![(standin, anim), (shading, spooky)]);
+
+        let mut standin_set = VariantSetSpec::default();
+        standin_set.variants.insert(anim, standin_anim);
+        d_spec.variant_sets.insert(standin, standin_set);
+
+        // Build layer.
+        let mut layer = Layer::new(layer_id);
+        layer.prims.insert(parent_path, d_spec);
+
+        // Add child PrimSpecs.
+        layer.prims.insert(child_sphere, PrimSpec::default());
+        layer.prims.insert(child_anim_sphere, PrimSpec::default());
+
+        store.insert_layer(layer);
+
+        // Build prim index.
+        let mut prims = HashMap::new();
+        prims.insert(
+            parent_path,
+            PrimIndex {
+                opinions_by_field: HashMap::new(),
+                sources: vec![OpinionKey {
+                    is_local: true,
+                    arc_kind: ArcKind::Local,
+                    nested_arc_kind: None,
+                    namespace_depth: 1,
+                    authored: true,
+                    arc_list_index: 0,
+                    layer_strength: 0,
+                    layer_id,
+                    spec_path: parent_path,
+                }],
+            },
+        );
+
+        // Children list (initial order from population).
+        let mut children = HashMap::new();
+        children.insert(parent_path, vec![child_sphere, child_anim_sphere]);
+
+        filter_variant_children(&store, &prims, &mut children);
+
+        let result: Vec<&str> = children[&parent_path]
+            .iter()
+            .map(|c| {
+                store
+                    .tokens
+                    .resolve(store.paths.resolve(*c).leaf().unwrap())
+            })
+            .collect();
+
+        // Deeper nesting (depth 2) should come before shallower (depth 1).
+        assert_eq!(
+            result,
+            vec!["anim_spooky_anim_sphere", "anim_spooky_sphere"]
         );
     }
 }

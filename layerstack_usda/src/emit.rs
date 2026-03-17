@@ -17,7 +17,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use layerstack::doc::{
-    FieldValue, Layer, LayerId, PrimSpec, Reference, Specifier, Value, VariantSetSpec, VariantSpec,
+    FieldValue, Layer, LayerId, PrimSpec, Reference, Specifier, Value, VariantSpec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp;
@@ -344,11 +344,14 @@ impl EmitCtx<'_> {
             spec.variant_set_order.push(set_tok);
         }
 
-        let mut set_spec = VariantSetSpec::default();
+        // Remove-then-reinsert: if a nested variant set with the same name
+        // was built during recursive processing of inner branches, we merge
+        // into it rather than overwriting.
+        let mut set_spec = spec.variant_sets.remove(&set_tok).unwrap_or_default();
 
         for branch in &vs.branches {
             let branch_tok = self.tokens.intern(branch.name);
-            let mut variant_spec = VariantSpec::default();
+            let mut variant_spec = set_spec.variants.remove(&branch_tok).unwrap_or_default();
 
             // Process branch metadata (arcs on the branch itself).
             self.emit_variant_branch_metadata(&branch.metadata, prim_path, &mut variant_spec);
@@ -480,9 +483,15 @@ impl EmitCtx<'_> {
                             }
                         }
                     }
-                    ast::PrimChild::VariantSet(_) => {
-                        // Nested variant sets within variant branches are advanced;
-                        // for now we don't model them inside VariantSpec.
+                    ast::PrimChild::VariantSet(nested_vs) => {
+                        // Process nested variant sets within variant branches.
+                        // These variant sets belong to the same owning prim;
+                        // children introduced by nested branches are gated by
+                        // required_outer_selections.
+                        //
+                        // Spec: AOUSD Core §10.5 (variant nesting).
+                        let outer_ctx = alloc::vec![(set_tok, branch_tok)];
+                        self.emit_nested_variant_set(nested_vs, prim_path, spec, layer, &outer_ctx);
                     }
                     ast::PrimChild::ReorderNameChildren(_)
                     | ast::PrimChild::ReorderProperties(_) => {}
@@ -492,7 +501,161 @@ impl EmitCtx<'_> {
             set_spec.variants.insert(branch_tok, variant_spec);
         }
 
+        // Merge with any variant set spec that recursive nested calls may have
+        // inserted under the same name during branch processing. This happens
+        // when a nested variant branch contains a variant set with the same
+        // name as the outer one (e.g., `standin → shadingVariant → standin`).
+        if let Some(recursed) = spec.variant_sets.remove(&set_tok) {
+            for (name, nested_variant) in recursed.variants {
+                set_spec
+                    .variants
+                    .entry(name)
+                    .or_default()
+                    .merge(nested_variant);
+            }
+        }
         spec.variant_sets.insert(set_tok, set_spec);
+    }
+
+    /// Recursively emit a variant set nested inside a variant branch.
+    ///
+    /// Nested variant sets are syntactically defined inside an outer variant
+    /// branch but semantically belong to the same owning prim. Children
+    /// introduced by nested branches are registered with
+    /// [`VariantSpec::required_outer_selections`] so that
+    /// [`filter_variant_children`](crate::compose) can gate them on the
+    /// correct combination of outer variant selections.
+    ///
+    /// Spec: AOUSD Core §10.5 (variant nesting).
+    fn emit_nested_variant_set(
+        &mut self,
+        vs: &ast::VariantSet<'_>,
+        prim_path: &str,
+        spec: &mut PrimSpec,
+        layer: &mut Layer,
+        outer_context: &[(TokenId, TokenId)],
+    ) {
+        let nested_set_tok = self.tokens.intern(vs.name);
+
+        // Add to variant_set_order if not already present.
+        if !spec.variant_set_order.contains(&nested_set_tok) {
+            spec.variant_set_order.push(nested_set_tok);
+        }
+
+        // Build the nested variant set spec in a local to avoid double
+        // mutable borrows of `spec` when recursing.
+        let mut local_set_spec = spec
+            .variant_sets
+            .remove(&nested_set_tok)
+            .unwrap_or_default();
+
+        for branch in &vs.branches {
+            let nested_branch_tok = self.tokens.intern(branch.name);
+            let variant_spec = local_set_spec
+                .variants
+                .entry(nested_branch_tok)
+                .or_default();
+
+            // Process branch metadata.
+            self.emit_variant_branch_metadata(&branch.metadata, prim_path, variant_spec);
+
+            // Collect deeper nested variant sets to process after this
+            // branch's variant_spec borrow is released.
+            let mut deeper_variant_sets: Vec<(usize, Vec<(TokenId, TokenId)>)> = Vec::new();
+
+            for (child_idx, child) in branch.children.iter().enumerate() {
+                match child {
+                    ast::PrimChild::Prim(child_prim) => {
+                        let child_tok = self.tokens.intern(child_prim.name);
+
+                        // Register child in the nested variant spec.
+                        if !variant_spec.authored_children.contains(&child_tok) {
+                            variant_spec.authored_children.push(child_tok);
+                        }
+
+                        // Record required outer selections for this child.
+                        variant_spec
+                            .required_outer_selections
+                            .entry(child_tok)
+                            .or_insert_with(|| outer_context.to_vec());
+
+                        // Emit the child prim as a full PrimSpec.
+                        let child_path = format!("{}/{}", prim_path, child_prim.name);
+                        let child_path_parsed =
+                            Path::parse_absolute(&child_path, self.tokens).expect("valid path");
+                        let child_path_id = self.paths.intern(child_path_parsed);
+
+                        if !layer.prims.contains_key(&child_path_id) {
+                            self.emit_prim(child_prim, &child_path, layer);
+                        }
+
+                        // Route composition arcs to the nested variant spec.
+                        self.emit_variant_child_arcs(
+                            child_prim,
+                            &child_path,
+                            child_tok,
+                            variant_spec,
+                        );
+
+                        // Route grandchild names.
+                        for gc in &child_prim.children {
+                            if let ast::PrimChild::Prim(grandchild) = gc {
+                                let gc_tok = self.tokens.intern(grandchild.name);
+                                let gc_list = variant_spec
+                                    .child_authored_children
+                                    .entry(child_tok)
+                                    .or_default();
+                                if !gc_list.contains(&gc_tok) {
+                                    gc_list.push(gc_tok);
+                                }
+                            }
+                        }
+                    }
+                    ast::PrimChild::VariantSet(_) => {
+                        // Defer recursive processing until after variant_spec
+                        // borrow is released.
+                        let mut deeper_ctx = outer_context.to_vec();
+                        deeper_ctx.push((nested_set_tok, nested_branch_tok));
+                        deeper_variant_sets.push((child_idx, deeper_ctx));
+                    }
+                    ast::PrimChild::Attribute(attr) => {
+                        let attr_tok = self.tokens.intern(attr.name);
+                        if let Some(val) = &attr.default {
+                            let converted = self.convert_value(val, attr.type_name);
+                            variant_spec
+                                .fields
+                                .insert(attr_tok, FieldValue::Value(converted));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+
+            // Now process deferred deeper nested variant sets.
+            // Re-insert local_set_spec so recursive calls can access it.
+            if !deeper_variant_sets.is_empty() {
+                spec.variant_sets.insert(nested_set_tok, local_set_spec);
+                for (child_idx, deeper_ctx) in deeper_variant_sets {
+                    if let ast::PrimChild::VariantSet(deeper_vs) = &branch.children[child_idx] {
+                        self.emit_nested_variant_set(
+                            deeper_vs,
+                            prim_path,
+                            spec,
+                            layer,
+                            &deeper_ctx,
+                        );
+                    }
+                }
+                // Re-extract after recursion.
+                local_set_spec = spec
+                    .variant_sets
+                    .remove(&nested_set_tok)
+                    .unwrap_or_default();
+            }
+        }
+
+        // Re-insert the completed set spec.
+        spec.variant_sets.insert(nested_set_tok, local_set_spec);
     }
 
     /// Emit metadata arcs on a variant branch header into a [`VariantSpec`].
@@ -1244,6 +1407,262 @@ def \"A\" (
         assert_eq!(
             spec.fields.get(&x_tok),
             Some(&FieldValue::Value(Value::Blocked))
+        );
+    }
+
+    #[test]
+    fn emit_directly_nested_variant_sets() {
+        // Simplified version of the DirectlyNestedVariants case from
+        // the BasicNestedVariants conformance fixture.
+        let src = r##"#usda 1.0
+def Scope "D" (
+    add variantSets = ['standin']
+    variants = {
+        string shadingVariant = "spooky"
+        string standin = "anim"
+    }
+)
+{
+    variantSet "standin" = {
+        "anim" (
+            add variantSets = ['shadingVariant']
+        ) {
+            variantSet "shadingVariant" = {
+                "default" {
+                    def Cone "anim_default_cone"
+                    {
+                    }
+                }
+                "spooky" {
+                    def Sphere "anim_spooky_sphere"
+                    {
+                    }
+                }
+            }
+        }
+    }
+}
+"##;
+        let (result, mut tokens, paths) = emit_source(src);
+        let d_path = Path::parse_absolute("/D", &mut tokens).unwrap();
+        let d_id = paths.lookup(&d_path).unwrap();
+        let d_spec = result.layer.prims.get(&d_id).unwrap();
+
+        // The "standin" variant set should exist on the PrimSpec.
+        let standin_tok = tokens.intern("standin");
+        let standin_vs = d_spec
+            .variant_sets
+            .get(&standin_tok)
+            .expect("standin variant set");
+
+        // The "anim" variant branch should exist.
+        let anim_tok = tokens.intern("anim");
+        let anim_variant = standin_vs.variants.get(&anim_tok).expect("anim variant");
+
+        // The "shadingVariant" variant set should also exist on the PrimSpec
+        // (not inside VariantSpec — nested variant sets are hoisted).
+        let shading_tok = tokens.intern("shadingVariant");
+        assert!(
+            d_spec.variant_sets.contains_key(&shading_tok),
+            "shadingVariant should be on PrimSpec.variant_sets: {:?}",
+            d_spec
+                .variant_sets
+                .keys()
+                .map(|k| tokens.resolve(*k))
+                .collect::<Vec<_>>()
+        );
+        let shading_vs = d_spec.variant_sets.get(&shading_tok).unwrap();
+
+        // The "default" and "spooky" branches should exist.
+        let default_tok = tokens.intern("default");
+        let spooky_tok = tokens.intern("spooky");
+        assert!(shading_vs.variants.contains_key(&default_tok));
+        assert!(shading_vs.variants.contains_key(&spooky_tok));
+
+        // anim_default_cone is in shadingVariant=default
+        let cone_tok = tokens.intern("anim_default_cone");
+        let default_variant = shading_vs.variants.get(&default_tok).unwrap();
+        assert!(default_variant.authored_children.contains(&cone_tok));
+
+        // anim_spooky_sphere is in shadingVariant=spooky
+        let sphere_tok = tokens.intern("anim_spooky_sphere");
+        let spooky_variant = shading_vs.variants.get(&spooky_tok).unwrap();
+        assert!(spooky_variant.authored_children.contains(&sphere_tok));
+
+        // Both children should have required_outer_selections
+        // pointing to standin=anim (since they're nested inside it).
+        let cone_reqs = default_variant.required_outer_selections.get(&cone_tok);
+        assert!(
+            cone_reqs.is_some(),
+            "anim_default_cone should have required_outer_selections"
+        );
+        assert_eq!(cone_reqs.unwrap(), &[(standin_tok, anim_tok)]);
+
+        let sphere_reqs = spooky_variant.required_outer_selections.get(&sphere_tok);
+        assert!(
+            sphere_reqs.is_some(),
+            "anim_spooky_sphere should have required_outer_selections"
+        );
+        assert_eq!(sphere_reqs.unwrap(), &[(standin_tok, anim_tok)]);
+
+        // Nested children should NOT be in the outer variant's
+        // authored_children — they are gated by the inner variant set.
+        // The composition engine discovers them through the inner variant
+        // set's VariantSpec and filters via required_outer_selections.
+        assert!(
+            !anim_variant.authored_children.contains(&cone_tok),
+            "anim variant should NOT list nested child anim_default_cone"
+        );
+        assert!(
+            !anim_variant.authored_children.contains(&sphere_tok),
+            "anim variant should NOT list nested child anim_spooky_sphere"
+        );
+
+        // variant_set_order should be [standin, shadingVariant].
+        assert_eq!(d_spec.variant_set_order.len(), 2);
+        assert_eq!(d_spec.variant_set_order[0], standin_tok);
+        assert_eq!(d_spec.variant_set_order[1], shading_tok);
+    }
+
+    #[test]
+    fn emit_triple_nested_variant_sets() {
+        // Full DirectlyNestedVariants case: standin → shadingVariant → standin (reused name).
+        let src = r##"#usda 1.0
+def Scope "D" (
+    add variantSets = ['standin']
+    variants = {
+        string shadingVariant = "spooky"
+        string standin = "anim"
+    }
+)
+{
+    variantSet "standin" = {
+        "anim" (
+            add variantSets = ['shadingVariant']
+        ) {
+            variantSet "shadingVariant" = {
+                "default" {
+                    def Cone "anim_default_cone"
+                    {
+                    }
+                }
+                "spooky" (
+                    add variantSets = ['standin']
+                ) {
+                    def Sphere "anim_spooky_sphere"
+                    {
+                    }
+                    variantSet "standin" = {
+                        "anim" {
+                            def Sphere "anim_spooky_anim_sphere"
+                            {
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        "render" (
+            add variantSets = ['shadingVariant']
+        ) {
+            variantSet "shadingVariant" = {
+                "default" {
+                    def Cube "render_default_cube"
+                    {
+                    }
+                }
+                "spooky" {
+                    def Cylinder "render_spooky_cylinder"
+                    {
+                    }
+                }
+            }
+        }
+    }
+}
+"##;
+        let (result, mut tokens, paths) = emit_source(src);
+        let d_path = Path::parse_absolute("/D", &mut tokens).unwrap();
+        let d_id = paths.lookup(&d_path).unwrap();
+        let d_spec = result.layer.prims.get(&d_id).unwrap();
+
+        let standin_tok = tokens.intern("standin");
+        let shading_tok = tokens.intern("shadingVariant");
+        let anim_tok = tokens.intern("anim");
+        let spooky_tok = tokens.intern("spooky");
+
+        // variant_set_order should be [standin, shadingVariant].
+        assert_eq!(
+            d_spec
+                .variant_set_order
+                .iter()
+                .map(|t| tokens.resolve(*t))
+                .collect::<Vec<_>>(),
+            vec!["standin", "shadingVariant"],
+            "variant_set_order"
+        );
+
+        // standin variant set should have "anim" and "render" branches.
+        let standin_vs = d_spec.variant_sets.get(&standin_tok).expect("standin VS");
+        assert!(standin_vs.variants.contains_key(&anim_tok));
+        let render_tok = tokens.intern("render");
+        assert!(standin_vs.variants.contains_key(&render_tok));
+
+        // shadingVariant variant set should have "default" and "spooky" branches.
+        let shading_vs = d_spec
+            .variant_sets
+            .get(&shading_tok)
+            .expect("shadingVariant VS");
+        let default_tok = tokens.intern("default");
+        assert!(shading_vs.variants.contains_key(&default_tok));
+        assert!(shading_vs.variants.contains_key(&spooky_tok));
+
+        // anim_spooky_anim_sphere: lives in standin=anim branch, with
+        // required_outer_selections [(standin, anim), (shadingVariant, spooky)].
+        let sphere3_tok = tokens.intern("anim_spooky_anim_sphere");
+        let anim_branch = standin_vs.variants.get(&anim_tok).unwrap();
+        assert!(
+            anim_branch.authored_children.contains(&sphere3_tok),
+            "anim_spooky_anim_sphere should be in standin=anim: {:?}",
+            anim_branch
+                .authored_children
+                .iter()
+                .map(|t| tokens.resolve(*t))
+                .collect::<Vec<_>>()
+        );
+        let sphere3_reqs = anim_branch.required_outer_selections.get(&sphere3_tok);
+        assert!(
+            sphere3_reqs.is_some(),
+            "anim_spooky_anim_sphere should have required_outer_selections"
+        );
+        assert_eq!(
+            sphere3_reqs.unwrap(),
+            &[(standin_tok, anim_tok), (shading_tok, spooky_tok)],
+            "required_outer_selections for anim_spooky_anim_sphere"
+        );
+
+        // anim_spooky_sphere: lives in shadingVariant=spooky branch, with
+        // required_outer_selections [(standin, anim)].
+        let sphere2_tok = tokens.intern("anim_spooky_sphere");
+        let spooky_branch = shading_vs.variants.get(&spooky_tok).unwrap();
+        assert!(
+            spooky_branch.authored_children.contains(&sphere2_tok),
+            "anim_spooky_sphere should be in shadingVariant=spooky: {:?}",
+            spooky_branch
+                .authored_children
+                .iter()
+                .map(|t| tokens.resolve(*t))
+                .collect::<Vec<_>>()
+        );
+        let sphere2_reqs = spooky_branch.required_outer_selections.get(&sphere2_tok);
+        assert!(
+            sphere2_reqs.is_some(),
+            "anim_spooky_sphere should have required_outer_selections"
+        );
+        assert_eq!(
+            sphere2_reqs.unwrap(),
+            &[(standin_tok, anim_tok)],
+            "required_outer_selections for anim_spooky_sphere"
         );
     }
 }

@@ -332,6 +332,57 @@ pub struct VariantSpec {
     pub variant_selections: HashMap<TokenId, TokenId>,
 }
 
+impl VariantSpec {
+    /// Merges another [`VariantSpec`] into this one, combining authored
+    /// children, required outer selections, and other fields.
+    ///
+    /// Used when the same variant branch name appears at multiple nesting
+    /// levels (e.g., an outer `standin=anim` and a deeply nested
+    /// `standin=anim` within `shadingVariant=spooky`).
+    pub fn merge(&mut self, other: Self) {
+        for child in other.authored_children {
+            if !self.authored_children.contains(&child) {
+                self.authored_children.push(child);
+            }
+        }
+        for (child, reqs) in other.required_outer_selections {
+            self.required_outer_selections.entry(child).or_insert(reqs);
+        }
+        for (k, v) in other.fields {
+            self.fields.entry(k).or_insert(v);
+        }
+        for (k, v) in other.child_references {
+            self.child_references.entry(k).or_insert(v);
+        }
+        for (k, v) in other.child_inherits {
+            self.child_inherits.entry(k).or_insert(v);
+        }
+        for (k, v) in other.child_payloads {
+            self.child_payloads.entry(k).or_insert(v);
+        }
+        for (k, v) in other.child_specializes {
+            self.child_specializes.entry(k).or_insert(v);
+        }
+        for (k, v) in other.child_authored_children {
+            let existing = self.child_authored_children.entry(k).or_default();
+            for child in v {
+                if !existing.contains(&child) {
+                    existing.push(child);
+                }
+            }
+        }
+        for (k, v) in other.child_fields {
+            let existing = self.child_fields.entry(k).or_default();
+            for (field, val) in v {
+                existing.entry(field).or_insert(val);
+            }
+        }
+        for (k, v) in other.variant_selections {
+            self.variant_selections.entry(k).or_insert(v);
+        }
+    }
+}
+
 /// A variant set: a named collection of variants.
 #[derive(Clone, Debug, Default)]
 pub struct VariantSetSpec {

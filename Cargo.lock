@@ -282,6 +282,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerstack_usda"
+version = "0.1.0"
+dependencies = [
+ "layerstack",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.183"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -1,0 +1,23 @@
+[package]
+name = "layerstack_usda"
+description = "USDA (text format) parser for layerstack — lossless CST, typed AST, and error recovery."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "../README.md"
+keywords = ["usd", "usda", "parser", "scene-description"]
+categories = ["parser-implementations"]
+
+[features]
+default = []
+std = []
+
+[dependencies]
+layerstack = { path = "../layerstack" }
+
+[dev-dependencies]
+
+[lints]
+workspace = true

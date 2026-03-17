@@ -1,6 +1,6 @@
 ---
 id: lay-nqrf
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-03-13T18:05:40Z
@@ -22,3 +22,9 @@ Instancing requires: (1) instanceable metadata field on prim specs, (2) prototyp
 
 BasicInstancing_root, BasicInstancingAndNestedInstances_root, BasicInstancingAndVariants_root conformance fixtures pass.
 
+
+## Notes
+
+**2026-03-16T18:04:17Z**
+
+All three acceptance criteria conformance fixtures pass (BasicInstancing_root, BasicInstancingAndNestedInstances_root, BasicInstancingAndVariants_root). instanceable field, strip_instance_descendants, and variant interaction all implemented. Prototype sharing/dedup is a potential future optimization but not required by the acceptance criteria.

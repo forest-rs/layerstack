@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["layerstack", "layerstack_conformance", "layerstack_examples", "wind_tunnel"]
+members = ["layerstack", "layerstack_conformance", "layerstack_examples", "layerstack_usda", "wind_tunnel"]
 
 [workspace.package]
 version = "0.1.0"

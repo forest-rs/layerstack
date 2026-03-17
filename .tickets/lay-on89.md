@@ -22,3 +22,25 @@ The grammar is fully specified as PEG in §16.2. Consider using a PEG parser gen
 
 Can parse all conformance fixture USDA files. Produces correct Layer structures that compose identically to the current hand-built test fixtures. Handles all §16.2 grammar productions.
 
+
+## Notes
+
+**2026-03-16T18:22:11Z**
+
+Design decisions locked in:
+- Separate crate: layerstack_usda (no_std default, optional std feature for file I/O)
+- Hand-written recursive descent parser
+- Lossless CST (preserves whitespace, comments, all formatting)
+- Own AST types (not Layer/PrimSpec — separate lowering step)
+- Error recovery (partial trees + diagnostics on malformed input)
+- Lexer foundation landed with 39 tests (spans, token kinds, lossless roundtrip)
+- Full PEG grammar extracted from AOUSD Core §16.2 for reference
+
+Crate structure:
+  lexer.rs  — tokenizer with spans (done)
+  span.rs   — Span + TextPosition (done)
+  cst.rs    — lossless syntax tree (next)
+  ast.rs    — typed abstract tree
+  lower.rs  — CST → AST
+  bridge.rs — AST → Layer/PrimSpec
+  error.rs  — diagnostics

@@ -580,7 +580,7 @@ impl<'a> Parser<'a> {
                     self.bump();
                     crate::ast::ListOpKind::Prepend
                 }
-                "append" => {
+                "append" | "add" => {
                     self.bump();
                     crate::ast::ListOpKind::Append
                 }
@@ -832,7 +832,7 @@ impl<'a> Parser<'a> {
         if self.peek() != Some(TokenKind::Ident) {
             return false;
         }
-        if !matches!(self.current_text(), "prepend" | "append" | "delete") {
+        if !matches!(self.current_text(), "prepend" | "append" | "add" | "delete") {
             return false;
         }
         let mut i = self.pos + 1;
@@ -886,6 +886,7 @@ impl<'a> Parser<'a> {
                 | "rel"
                 | "prepend"
                 | "append"
+                | "add"
                 | "delete"
         )
     }
@@ -895,7 +896,7 @@ impl<'a> Parser<'a> {
         if self.peek() != Some(TokenKind::Ident) {
             return false;
         }
-        if !matches!(self.current_text(), "prepend" | "append" | "delete") {
+        if !matches!(self.current_text(), "prepend" | "append" | "add" | "delete") {
             return false;
         }
         let mut i = self.pos + 1;
@@ -937,7 +938,7 @@ impl<'a> Parser<'a> {
         // Optional list-op prefix.
         self.eat_trivia();
         if self.peek() == Some(TokenKind::Ident)
-            && matches!(self.current_text(), "prepend" | "append" | "delete")
+            && matches!(self.current_text(), "prepend" | "append" | "add" | "delete")
         {
             self.bump();
         }
@@ -1077,7 +1078,12 @@ impl<'a> Parser<'a> {
             let entry_start = self.current_span().start;
             self.builder
                 .start_node(SyntaxKind::MetadataEntry, entry_start);
-            self.parse_metadata_entry_inner();
+            if self.at_string() {
+                // Bare doc string (e.g. '''...''' without key = value).
+                self.parse_string_token();
+            } else {
+                self.parse_metadata_entry_inner();
+            }
             let entry_end = self.current_span().start;
             self.builder.finish_node(entry_end);
         }
@@ -1095,7 +1101,7 @@ impl<'a> Parser<'a> {
         // Optional list-op prefix.
         self.eat_trivia();
         if self.peek() == Some(TokenKind::Ident)
-            && matches!(self.current_text(), "prepend" | "append" | "delete")
+            && matches!(self.current_text(), "prepend" | "append" | "add" | "delete")
         {
             self.bump();
         }

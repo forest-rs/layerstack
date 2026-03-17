@@ -5,7 +5,7 @@
 //! lifetime `'a`, making the AST zero-copy.
 //!
 //! The AST is produced by [`crate::parser::parse`] and consumed by
-//! [`crate::bridge`] to create layerstack [`Layer`](layerstack::Layer) /
+//! [`crate::emit`] to create layerstack [`Layer`](layerstack::Layer) /
 //! [`PrimSpec`](layerstack::PrimSpec) values.
 
 use alloc::string::String;

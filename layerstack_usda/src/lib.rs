@@ -18,8 +18,8 @@
 //!    syntactic noise. Represents what was *authored* in the file, not what
 //!    composition produces.
 //!
-//! 4. **Bridge** — Lowers the AST into layerstack's [`Layer`] / [`PrimSpec`]
-//!    document model for composition.
+//! 4. **Emit** ([`emit`]) — Converts the AST into layerstack's [`Layer`] /
+//!    [`PrimSpec`] document model for composition.
 //!
 //! The parser supports error recovery: malformed input produces partial
 //! trees with diagnostics rather than hard failures.
@@ -71,3 +71,9 @@ pub mod parser;
     reason = "USDA files >4GB are unrealistic; u32 spans are intentional"
 )]
 pub mod lower;
+
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "USDA value conversions intentionally narrow numeric types"
+)]
+pub mod emit;

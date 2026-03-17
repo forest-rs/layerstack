@@ -303,7 +303,7 @@ impl<'a> LowerCtx<'a> {
                     op = ListOpKind::Prepend;
                     idx += 1;
                 }
-                "append" => {
+                "append" | "add" => {
                     op = ListOpKind::Append;
                     idx += 1;
                 }
@@ -440,7 +440,7 @@ impl<'a> LowerCtx<'a> {
                     list_op = ListOpKind::Prepend;
                     idx += 1;
                 }
-                "append" => {
+                "append" | "add" => {
                     list_op = ListOpKind::Append;
                     idx += 1;
                 }
@@ -570,7 +570,7 @@ impl<'a> LowerCtx<'a> {
                     op = ListOpKind::Prepend;
                     idx += 1;
                 }
-                "append" => {
+                "append" | "add" => {
                     op = ListOpKind::Append;
                     idx += 1;
                 }
@@ -1262,7 +1262,7 @@ impl<'a> LowerCtx<'a> {
         while idx < sig.len() {
             if sig[idx].0 == SyntaxKind::Ident {
                 let t = self.text(self.node_from(tree, sig[idx].1));
-                if matches!(t, "prepend" | "append" | "delete") {
+                if matches!(t, "prepend" | "append" | "add" | "delete") {
                     idx += 1;
                     continue;
                 }

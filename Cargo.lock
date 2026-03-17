@@ -270,6 +270,7 @@ name = "layerstack_conformance"
 version = "0.1.0"
 dependencies = [
  "layerstack",
+ "layerstack_usda",
  "serde",
  "serde_json",
 ]

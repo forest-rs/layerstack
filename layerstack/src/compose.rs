@@ -1209,7 +1209,7 @@ fn add_local_and_variant_opinions(
         let namespace_depth =
             u16::try_from(store.paths().resolve(path).depth()).unwrap_or(u16::MAX);
 
-        for (layer_strength, layer_id) in local_stack.layers.iter().copied().enumerate() {
+        for (layer_strength_idx, layer_id) in local_stack.layers.iter().copied().enumerate() {
             let Some(layer) = store.layer(layer_id) else {
                 continue;
             };
@@ -1221,7 +1221,8 @@ fn add_local_and_variant_opinions(
                 d.add_layer_opinion(layer_id, path);
             }
 
-            let layer_strength = u16::try_from(layer_strength).unwrap_or(u16::MAX);
+            let accumulated_offset = local_stack.offset_at(layer_strength_idx);
+            let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
             out.get_mut(&path)
                 .expect("path exists")
                 .add_source(OpinionKey {
@@ -1253,7 +1254,7 @@ fn add_local_and_variant_opinions(
                         },
                         field: entry.name,
                         value: entry.value.clone(),
-                        layer_offset: LayerOffset::IDENTITY,
+                        layer_offset: accumulated_offset,
                     });
             }
 
@@ -1330,7 +1331,7 @@ fn add_local_and_variant_opinions(
                             },
                             field: entry.name,
                             value: entry.value.clone(),
-                            layer_offset: LayerOffset::IDENTITY,
+                            layer_offset: accumulated_offset,
                         });
                 }
 
@@ -1361,7 +1362,7 @@ fn add_local_and_variant_opinions(
                                     },
                                     field: entry.name,
                                     value: entry.value.clone(),
-                                    layer_offset: LayerOffset::IDENTITY,
+                                    layer_offset: accumulated_offset,
                                 });
                         }
                         out.get_mut(&child_path_id)
@@ -1507,6 +1508,7 @@ fn add_inherit_opinions(
                 prim_order_out,
                 authored_children_out,
                 None,
+                LayerOffset::IDENTITY,
                 deps.as_deref_mut(),
             );
         }
@@ -1529,6 +1531,9 @@ fn add_inherit_edge_opinions(
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     // Optional reference namespace for remapping field values (dest, src).
     ref_remap: Option<(&crate::path::Path, &crate::path::Path)>,
+    // Accumulated offset from outer arcs (references/payloads). Composed with
+    // each layer's sublayer offset to produce the final opinion offset.
+    base_offset: LayerOffset,
     mut deps: Option<&mut DependencyBuilder>,
 ) {
     if !visited.insert((dest_root, inherited_root)) {
@@ -1572,8 +1577,9 @@ fn add_inherit_edge_opinions(
         None => (ArcKind::Inherits, None),
     };
 
-    for (layer_strength, layer_id) in local_stack.layers.iter().copied().enumerate() {
-        let layer_strength = u16::try_from(layer_strength).unwrap_or(u16::MAX);
+    for (layer_strength_idx, layer_id) in local_stack.layers.iter().copied().enumerate() {
+        let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
+        let layer_offset = base_offset.compose(local_stack.offset_at(layer_strength_idx));
         let mut pending = Vec::new();
         let mut pending_sources = Vec::new();
         {
@@ -1725,7 +1731,7 @@ fn add_inherit_edge_opinions(
                     },
                     field,
                     value,
-                    layer_offset: LayerOffset::IDENTITY,
+                    layer_offset,
                 });
         }
     }
@@ -1777,7 +1783,7 @@ fn add_inherit_edge_opinions(
                             },
                             field: *field,
                             value: opinion.value.clone(),
-                            layer_offset: LayerOffset::IDENTITY,
+                            layer_offset: opinion.layer_offset,
                         });
                 }
             }
@@ -1821,6 +1827,7 @@ fn add_inherit_edge_opinions(
                     prim_order_out,
                     authored_children_out,
                     ref_remap,
+                    base_offset,
                     deps.as_deref_mut(),
                 );
             }
@@ -1855,6 +1862,7 @@ fn add_inherit_edge_opinions(
                         prim_order_out,
                         authored_children_out,
                         ref_remap,
+                        base_offset,
                         deps.as_deref_mut(),
                     );
                 }
@@ -1874,6 +1882,7 @@ fn add_inherit_edge_opinions(
                 prim_order_out,
                 authored_children_out,
                 ref_remap,
+                base_offset,
                 deps.as_deref_mut(),
             );
         }
@@ -1906,6 +1915,7 @@ fn add_inherit_edge_opinions(
                     visited_specializes,
                     prim_order_out,
                     authored_children_out,
+                    base_offset,
                     deps.as_deref_mut(),
                 );
             }
@@ -1928,6 +1938,7 @@ fn add_inherit_edge_opinions(
                         visited_specializes,
                         prim_order_out,
                         authored_children_out,
+                        base_offset,
                         deps.as_deref_mut(),
                     );
                 }
@@ -1945,6 +1956,7 @@ fn add_inherit_edge_opinions(
                 visited_specializes,
                 prim_order_out,
                 authored_children_out,
+                base_offset,
                 deps.as_deref_mut(),
             );
         }
@@ -2039,7 +2051,7 @@ fn add_inherit_edge_opinions(
                             },
                             field: *field,
                             value: opinion.value.clone(),
-                            layer_offset: LayerOffset::IDENTITY,
+                            layer_offset: opinion.layer_offset,
                         });
                 }
             }
@@ -2157,6 +2169,12 @@ fn add_reference_edge_opinions(
             .copied()
             .chain(remote_stack.layers.iter().copied())
             .collect(),
+        offsets: stage_stack
+            .offsets
+            .iter()
+            .copied()
+            .chain(remote_stack.offsets.iter().copied())
+            .collect(),
     };
     let target_root = store.paths().resolve(reference.prim_path).clone();
     let dest_root_path = store.paths().resolve(dest_root).clone();
@@ -2190,14 +2208,23 @@ fn add_reference_edge_opinions(
         }
     }
 
-    for (layer_strength, remote_layer_id) in remote_stack.layers.iter().copied().enumerate() {
-        let layer_strength = u16::try_from(layer_strength).unwrap_or(u16::MAX);
+    // Compose the reference's own offset with each remote layer's sublayer offset.
+    // This gives the total time remapping for opinions from each layer in the
+    // referenced layer stack.
+    //
+    // Spec: §12.3.2.1 (sublayer offsets compose when nested).
+    for (layer_strength_idx, remote_layer_id) in remote_stack.layers.iter().copied().enumerate() {
+        let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
+        let ref_offset = reference
+            .layer_offset
+            .compose(remote_stack.offset_at(layer_strength_idx));
         let Some(remote_layer) = store.layer(remote_layer_id) else {
             continue;
         };
 
         let mut pending_sources = Vec::new();
-        let mut pending_fields: Vec<(PathId, TokenId, OpinionKey, FieldValue)> = Vec::new();
+        let mut pending_fields: Vec<(PathId, TokenId, OpinionKey, FieldValue, LayerOffset)> =
+            Vec::new();
         for (remote_path_id, dest_path_id) in &mapping {
             let Some(remote_spec) = remote_layer.prims.get(remote_path_id) else {
                 continue;
@@ -2219,7 +2246,13 @@ fn add_reference_edge_opinions(
             pending_sources.push((*dest_path_id, base_key));
 
             for entry in &remote_spec.fields {
-                pending_fields.push((*dest_path_id, entry.name, base_key, entry.value.clone()));
+                pending_fields.push((
+                    *dest_path_id,
+                    entry.name,
+                    base_key,
+                    entry.value.clone(),
+                    ref_offset,
+                ));
             }
 
             // Forward variant opinions from selected variants.
@@ -2248,6 +2281,7 @@ fn add_reference_edge_opinions(
                                     spec_path: *remote_path_id,
                                 },
                                 entry.value.clone(),
+                                ref_offset,
                             ));
                         }
 
@@ -2307,6 +2341,7 @@ fn add_reference_edge_opinions(
                                             spec_path: child_path_id,
                                         },
                                         entry.value.clone(),
+                                        ref_offset,
                                     ));
                                 }
                                 out.get_mut(&child_path_id)
@@ -2371,7 +2406,7 @@ fn add_reference_edge_opinions(
                 .expect("path exists")
                 .add_source(key);
         }
-        for (dest_path_id, field, key, value) in pending_fields {
+        for (dest_path_id, field, key, value, offset) in pending_fields {
             let value = remap_field_value_paths(store, &dest_root_path, &target_root, value);
             out.get_mut(&dest_path_id)
                 .expect("path exists")
@@ -2379,7 +2414,7 @@ fn add_reference_edge_opinions(
                     key,
                     field,
                     value,
-                    layer_offset: LayerOffset::IDENTITY,
+                    layer_offset: offset,
                 });
         }
     }
@@ -2415,6 +2450,7 @@ fn add_reference_edge_opinions(
                     prim_order_out,
                     authored_children_out,
                     ref_remap,
+                    reference.layer_offset,
                     deps.as_deref_mut(),
                 );
             }
@@ -2434,6 +2470,7 @@ fn add_reference_edge_opinions(
                 prim_order_out,
                 authored_children_out,
                 ref_remap,
+                reference.layer_offset,
                 deps.as_deref_mut(),
             );
         }
@@ -2527,6 +2564,7 @@ fn add_reference_edge_opinions(
                     visited_specializes,
                     prim_order_out,
                     authored_children_out,
+                    reference.layer_offset,
                     deps.as_deref_mut(),
                 );
             }
@@ -2543,6 +2581,7 @@ fn add_reference_edge_opinions(
                 visited_specializes,
                 prim_order_out,
                 authored_children_out,
+                reference.layer_offset,
                 deps.as_deref_mut(),
             );
         }
@@ -2654,6 +2693,12 @@ fn add_payload_edge_opinions(
             .copied()
             .chain(remote_stack.layers.iter().copied())
             .collect(),
+        offsets: stage_stack
+            .offsets
+            .iter()
+            .copied()
+            .chain(remote_stack.offsets.iter().copied())
+            .collect(),
     };
     let target_root = store.paths().resolve(reference.prim_path).clone();
     let dest_root_path = store.paths().resolve(dest_root).clone();
@@ -2687,8 +2732,11 @@ fn add_payload_edge_opinions(
         }
     }
 
-    for (layer_strength, remote_layer_id) in remote_stack.layers.iter().copied().enumerate() {
-        let layer_strength = u16::try_from(layer_strength).unwrap_or(u16::MAX);
+    for (layer_strength_idx, remote_layer_id) in remote_stack.layers.iter().copied().enumerate() {
+        let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
+        let payload_offset = reference
+            .layer_offset
+            .compose(remote_stack.offset_at(layer_strength_idx));
         let Some(remote_layer) = store.layer(remote_layer_id) else {
             continue;
         };
@@ -2733,7 +2781,7 @@ fn add_payload_edge_opinions(
                         },
                         field: entry.name,
                         value: entry.value.clone(),
-                        layer_offset: LayerOffset::IDENTITY,
+                        layer_offset: payload_offset,
                     });
             }
 
@@ -2808,6 +2856,7 @@ fn add_payload_edge_opinions(
                     prim_order_out,
                     authored_children_out,
                     ref_remap,
+                    reference.layer_offset,
                     deps.as_deref_mut(),
                 );
             }
@@ -2827,6 +2876,7 @@ fn add_payload_edge_opinions(
                 prim_order_out,
                 authored_children_out,
                 ref_remap,
+                reference.layer_offset,
                 deps.as_deref_mut(),
             );
         }
@@ -2899,6 +2949,7 @@ fn add_payload_edge_opinions(
                     visited_specializes,
                     prim_order_out,
                     authored_children_out,
+                    reference.layer_offset,
                     deps.as_deref_mut(),
                 );
             }
@@ -2915,6 +2966,7 @@ fn add_payload_edge_opinions(
                 visited_specializes,
                 prim_order_out,
                 authored_children_out,
+                reference.layer_offset,
                 deps.as_deref_mut(),
             );
         }
@@ -2959,6 +3011,7 @@ fn add_specializes_opinions(
                 &mut visited,
                 prim_order_out,
                 authored_children_out,
+                LayerOffset::IDENTITY,
                 deps.as_deref_mut(),
             );
         }
@@ -2978,6 +3031,8 @@ fn add_specializes_edge_opinions(
     visited: &mut HashSet<(PathId, PathId)>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
+    // Accumulated offset from outer arcs (references/payloads).
+    base_offset: LayerOffset,
     mut deps: Option<&mut DependencyBuilder>,
 ) {
     if !visited.insert((dest_root, specialized_root)) {
@@ -3021,8 +3076,9 @@ fn add_specializes_edge_opinions(
         None => (ArcKind::Specializes, None),
     };
 
-    for (layer_strength, layer_id) in local_stack.layers.iter().copied().enumerate() {
-        let layer_strength = u16::try_from(layer_strength).unwrap_or(u16::MAX);
+    for (layer_strength_idx, layer_id) in local_stack.layers.iter().copied().enumerate() {
+        let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
+        let layer_offset = base_offset.compose(local_stack.offset_at(layer_strength_idx));
         let mut pending = Vec::new();
         let mut pending_sources = Vec::new();
         {
@@ -3141,7 +3197,7 @@ fn add_specializes_edge_opinions(
                     },
                     field,
                     value,
-                    layer_offset: LayerOffset::IDENTITY,
+                    layer_offset,
                 });
         }
     }
@@ -3190,7 +3246,7 @@ fn add_specializes_edge_opinions(
                             },
                             field: *field,
                             value: opinion.value.clone(),
-                            layer_offset: LayerOffset::IDENTITY,
+                            layer_offset: opinion.layer_offset,
                         });
                 }
             }
@@ -3219,6 +3275,7 @@ fn add_specializes_edge_opinions(
                     visited,
                     prim_order_out,
                     authored_children_out,
+                    base_offset,
                     deps.as_deref_mut(),
                 );
             }
@@ -3242,6 +3299,7 @@ fn add_specializes_edge_opinions(
                         visited,
                         prim_order_out,
                         authored_children_out,
+                        base_offset,
                         deps.as_deref_mut(),
                     );
                 }
@@ -3259,6 +3317,7 @@ fn add_specializes_edge_opinions(
                 visited,
                 prim_order_out,
                 authored_children_out,
+                base_offset,
                 deps.as_deref_mut(),
             );
         }
@@ -3293,6 +3352,7 @@ fn add_specializes_edge_opinions(
                     visited,
                     prim_order_out,
                     authored_children_out,
+                    base_offset,
                     deps.as_deref_mut(),
                 );
             }
@@ -3320,6 +3380,7 @@ fn add_specializes_edge_opinions(
                         visited,
                         prim_order_out,
                         authored_children_out,
+                        base_offset,
                         deps.as_deref_mut(),
                     );
                 }
@@ -3337,6 +3398,7 @@ fn add_specializes_edge_opinions(
                 visited,
                 prim_order_out,
                 authored_children_out,
+                base_offset,
                 deps.as_deref_mut(),
             );
         }

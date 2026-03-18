@@ -211,6 +211,18 @@ impl Path {
     }
 
     /// Parses an absolute path and interns each segment as a token.
+    ///
+    /// ```
+    /// use layerstack::{Path, PathError, TokenInterner};
+    ///
+    /// let mut tokens = TokenInterner::default();
+    ///
+    /// let path = Path::parse_absolute("/A/B", &mut tokens).unwrap();
+    /// assert_eq!(path.depth(), 2);
+    /// assert_eq!(path.display(&tokens), "/A/B");
+    ///
+    /// assert_eq!(Path::parse_absolute("relative", &mut tokens), Err(PathError::NotAbsolute));
+    /// ```
     pub fn parse_absolute(s: &str, tokens: &mut TokenInterner) -> Result<Self, PathError> {
         if !s.starts_with('/') {
             return Err(PathError::NotAbsolute);
@@ -328,6 +340,17 @@ impl Path {
 }
 
 /// Interns [`Path`] values to stable [`PathId`]s.
+///
+/// ```
+/// use layerstack::{Path, PathInterner, TokenInterner};
+///
+/// let mut tokens = TokenInterner::default();
+/// let mut paths = PathInterner::default();
+///
+/// let path = Path::parse_absolute("/Robot/Arm", &mut tokens).unwrap();
+/// let id = paths.intern(path);
+/// assert_eq!(paths.display(id, &tokens), "/Robot/Arm");
+/// ```
 #[derive(Debug, Default)]
 pub struct PathInterner {
     by_path: HashMap<Path, PathId>,

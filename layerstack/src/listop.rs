@@ -8,6 +8,18 @@
 use alloc::vec::Vec;
 
 /// A list operation over unique elements.
+///
+/// ```
+/// use layerstack::ListOp;
+///
+/// let op = ListOp {
+///     prepend: vec![1, 2],
+///     append: vec![5],
+///     delete: vec![3],
+///     ..ListOp::default()
+/// };
+/// assert_eq!(op.apply_to(&[3, 4]), vec![1, 2, 4, 5]);
+/// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ListOp<T> {
     /// If present, replaces the current list before other edits apply.
@@ -72,6 +84,16 @@ impl<T: Clone + Eq> ListOp<T> {
 /// Spec: AOUSD Core §12.4 (`ListOps`) composes lists via strength ordering, with
 /// stronger opinions taking precedence over weaker ones. This function applies
 /// operations from weakest → strongest so that stronger ops have the last word.
+///
+/// ```
+/// use layerstack::listop::{ListOp, resolve_list_chain};
+///
+/// let weak = ListOp { append: vec![1_u32, 2], ..ListOp::default() };
+/// let strong = ListOp { prepend: vec![0_u32], ..ListOp::default() };
+///
+/// // Strong op runs last, so 0 ends up at the front.
+/// assert_eq!(resolve_list_chain::<u32>(&[], [strong, weak]), vec![0, 1, 2]);
+/// ```
 #[must_use]
 pub fn resolve_list_chain<T: Clone + Eq>(
     base: &[T],

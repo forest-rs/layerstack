@@ -89,6 +89,28 @@ pub struct StageOptions {
 }
 
 /// A composed stage: read-only facade over composition results.
+///
+/// Build a `Stage` with [`Stage::compose`], then query resolved values
+/// with [`Stage::resolve_field`] or traverse the prim hierarchy with
+/// [`Stage::traverse`].
+///
+/// ```
+/// use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, Stage, StageOptions, Value};
+///
+/// let mut store = InMemoryStore::default();
+/// let color = store.tokens.intern("color");
+/// let prim = store.path("/Sphere");
+///
+/// let mut layer = Layer::new(LayerId(1));
+/// layer.insert_prim(prim, PrimSpec::def().with_field(color, Value::string("red")));
+/// store.insert_layer(layer);
+///
+/// let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+/// assert!(stage.has_prim(prim));
+///
+/// let resolved = stage.resolve_field(prim, color).unwrap();
+/// assert_eq!(resolved.value, Value::string("red"));
+/// ```
 #[derive(Debug)]
 pub struct Stage {
     prims: HashMap<PathId, PrimIndex>,

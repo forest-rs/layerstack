@@ -26,15 +26,24 @@
 //!
 //! # Quick start
 //!
-//! ```ignore
-//! use layerstack::{InMemoryStore, LayerId};
+//! ```
+//! use layerstack::{
+//!     AssetResolveError, AssetResolver, InMemoryStore, LayerId, ResolvedAsset,
+//!     TokenInterner, PathInterner,
+//! };
 //! use layerstack_usda::{parser, emit};
 //!
-//! let source = r#"#usda 1.0
-//! def Xform "Root" {
-//!     custom string greeting = "hello"
+//! // Minimal resolver that rejects all asset paths (no external files).
+//! struct NoAssets;
+//! impl AssetResolver for NoAssets {
+//!     fn resolve(&mut self, _: &str, _: Option<LayerId>, _: &mut TokenInterner,
+//!                _: &mut PathInterner) -> Result<ResolvedAsset, AssetResolveError> {
+//!         Err(AssetResolveError::NotFound)
+//!     }
+//!     fn resolved_path(&self, _: LayerId) -> Option<&str> { None }
 //! }
-//! "#;
+//!
+//! let source = "#usda 1.0\ndef Xform \"Root\" {\n    custom string greeting = \"hello\"\n}\n";
 //!
 //! let mut store = InMemoryStore::default();
 //! let ast = parser::parse(source);
@@ -43,9 +52,9 @@
 //!     LayerId(1),
 //!     &mut store.tokens,
 //!     &mut store.paths,
-//!     &mut NoOpResolver,  // your AssetResolver implementation
+//!     &mut NoAssets,
 //! );
-//! // result.layer is ready for composition via Stage::compose()
+//! assert!(!result.layer.prims.is_empty());
 //! ```
 //!
 //! # `no_std` support

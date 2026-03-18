@@ -23,6 +23,16 @@ impl TokenId {
 }
 
 /// Interns strings into [`TokenId`] values.
+///
+/// ```
+/// use layerstack::TokenInterner;
+///
+/// let mut interner = TokenInterner::default();
+/// let id_a = interner.intern("hello");
+/// let id_b = interner.intern("hello");  // same string → same id
+/// assert_eq!(id_a, id_b);
+/// assert_eq!(interner.resolve(id_a), "hello");
+/// ```
 #[derive(Debug, Default)]
 pub struct TokenInterner {
     by_str: HashMap<Arc<str>, TokenId>,

@@ -16,7 +16,7 @@
 //!
 //! # Quick start
 //!
-//! ```ignore
+//! ```
 //! use layerstack::{
 //!     InMemoryStore, Layer, LayerId, PrimSpec, Stage, StageOptions, Value,
 //! };

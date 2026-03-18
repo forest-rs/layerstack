@@ -14,3 +14,4 @@ pub mod listop_vectors;
 pub mod pcp;
 pub mod usda_real;
 pub mod usdc;
+pub mod usdz;

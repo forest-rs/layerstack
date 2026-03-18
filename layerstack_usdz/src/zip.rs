@@ -222,11 +222,10 @@ fn parse_cd_entry(data: &[u8], offset: usize) -> Result<CdParsed, UsdzError> {
     if name_end > data.len() {
         return Err(UsdzError::UnexpectedEof);
     }
-    let name = core::str::from_utf8(&data[name_start..name_end]).map_err(|_| {
-        UsdzError::InvalidZip {
+    let name =
+        core::str::from_utf8(&data[name_start..name_end]).map_err(|_| UsdzError::InvalidZip {
             reason: "file name is not valid UTF-8",
-        }
-    })?;
+        })?;
 
     // Validate the Local File Header and compute data offset.
     let data_offset = validate_local_header(data, local_header_offset)?;

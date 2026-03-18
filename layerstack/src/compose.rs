@@ -169,7 +169,11 @@ fn normalized_variant_property_spec_path(
 /// - Layer stack gathering (layer is stronger than its sublayers)
 /// - Stage population (including prims introduced via references)
 /// - Value resolution (scalar + `ListOp`)
-pub fn compose_stage(store: &mut dyn LayerStore, root: LayerId, options: StageOptions) -> Stage {
+pub(crate) fn compose_stage(
+    store: &mut dyn LayerStore,
+    root: LayerId,
+    options: StageOptions,
+) -> Stage {
     let layer_stack = LayerStack::gather(store, root);
     let (paths, mut children) = populate(store, &layer_stack, options.mask.as_ref());
 

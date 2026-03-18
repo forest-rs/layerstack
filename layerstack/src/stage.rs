@@ -786,7 +786,11 @@ impl Stage {
     }
 }
 
-/// An iterator for deterministic stage traversal.
+/// An iterator for deterministic preorder stage traversal.
+///
+/// Yields each [`PathId`] starting from the root, visiting children in
+/// authored order before moving to sibling subtrees. Created by
+/// [`Stage::traverse`].
 #[derive(Debug)]
 pub struct Traverse<'a> {
     stage: &'a Stage,

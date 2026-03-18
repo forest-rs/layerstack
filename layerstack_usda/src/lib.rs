@@ -24,6 +24,30 @@
 //! The parser supports error recovery: malformed input produces partial
 //! trees with diagnostics rather than hard failures.
 //!
+//! # Quick start
+//!
+//! ```ignore
+//! use layerstack::{InMemoryStore, LayerId};
+//! use layerstack_usda::{parser, emit};
+//!
+//! let source = r#"#usda 1.0
+//! def Xform "Root" {
+//!     custom string greeting = "hello"
+//! }
+//! "#;
+//!
+//! let mut store = InMemoryStore::default();
+//! let ast = parser::parse(source);
+//! let result = emit::emit(
+//!     &ast.layer,
+//!     LayerId(1),
+//!     &mut store.tokens,
+//!     &mut store.paths,
+//!     &mut NoOpResolver,  // your AssetResolver implementation
+//! );
+//! // result.layer is ready for composition via Stage::compose()
+//! ```
+//!
 //! # `no_std` support
 //!
 //! This crate is `no_std` by default, operating on byte slices (`&[u8]`)

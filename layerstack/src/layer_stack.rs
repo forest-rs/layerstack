@@ -147,4 +147,100 @@ mod tests {
         let stack = LayerStack::gather(&store, LayerId(1));
         assert_eq!(stack.layers, vec![LayerId(1), LayerId(2), LayerId(3)]);
     }
+
+    #[test]
+    fn sublayer_offsets_accumulate() {
+        // Root → (offset=10) → A → (offset=20) → B
+        // Root has identity offset, A has offset=10, B has offset=30 (10+20).
+        let mut store = InMemoryStore::default();
+        store.insert_layer(Layer {
+            id: LayerId(1),
+            sublayers: vec![SublayerEntry {
+                layer: LayerId(2),
+                offset: LayerOffset {
+                    offset: 10.0,
+                    scale: 1.0,
+                },
+            }],
+            prims: HashMap::new(),
+        });
+        store.insert_layer(Layer {
+            id: LayerId(2),
+            sublayers: vec![SublayerEntry {
+                layer: LayerId(3),
+                offset: LayerOffset {
+                    offset: 20.0,
+                    scale: 1.0,
+                },
+            }],
+            prims: HashMap::new(),
+        });
+        store.insert_layer(Layer {
+            id: LayerId(3),
+            sublayers: vec![],
+            prims: HashMap::new(),
+        });
+
+        let stack = LayerStack::gather(&store, LayerId(1));
+        assert_eq!(stack.layers, vec![LayerId(1), LayerId(2), LayerId(3)]);
+        assert_eq!(stack.offset_at(0), LayerOffset::IDENTITY);
+        assert_eq!(
+            stack.offset_at(1),
+            LayerOffset {
+                offset: 10.0,
+                scale: 1.0
+            }
+        );
+        assert_eq!(
+            stack.offset_at(2),
+            LayerOffset {
+                offset: 30.0,
+                scale: 1.0
+            }
+        );
+    }
+
+    #[test]
+    fn sublayer_offsets_compose_with_scale() {
+        // Root → (offset=10, scale=2) → A → (offset=5, scale=3) → B
+        // A's accumulated: offset=10, scale=2
+        // B's accumulated: compose(10,2; 5,3) = offset=10+2*5=20, scale=2*3=6
+        let mut store = InMemoryStore::default();
+        store.insert_layer(Layer {
+            id: LayerId(1),
+            sublayers: vec![SublayerEntry {
+                layer: LayerId(2),
+                offset: LayerOffset {
+                    offset: 10.0,
+                    scale: 2.0,
+                },
+            }],
+            prims: HashMap::new(),
+        });
+        store.insert_layer(Layer {
+            id: LayerId(2),
+            sublayers: vec![SublayerEntry {
+                layer: LayerId(3),
+                offset: LayerOffset {
+                    offset: 5.0,
+                    scale: 3.0,
+                },
+            }],
+            prims: HashMap::new(),
+        });
+        store.insert_layer(Layer {
+            id: LayerId(3),
+            sublayers: vec![],
+            prims: HashMap::new(),
+        });
+
+        let stack = LayerStack::gather(&store, LayerId(1));
+        assert_eq!(
+            stack.offset_at(2),
+            LayerOffset {
+                offset: 20.0,
+                scale: 6.0
+            }
+        );
+    }
 }

@@ -1068,4 +1068,54 @@ mod tests {
             )]
         );
     }
+
+    #[test]
+    fn layer_offset_identity() {
+        let id = LayerOffset::IDENTITY;
+        assert!(id.is_identity());
+        assert_eq!(id.map_time(42.0), 42.0);
+    }
+
+    #[test]
+    fn layer_offset_map_time() {
+        let lo = LayerOffset {
+            offset: 10.0,
+            scale: 2.0,
+        };
+        // mappedTime = time * scale + offset = 5 * 2 + 10 = 20
+        assert_eq!(lo.map_time(5.0), 20.0);
+    }
+
+    #[test]
+    fn layer_offset_compose() {
+        // outer (offset=10, scale=2) composed with inner (offset=5, scale=3)
+        // composed_offset = 10 + 2*5 = 20
+        // composed_scale  = 2 * 3 = 6
+        let outer = LayerOffset {
+            offset: 10.0,
+            scale: 2.0,
+        };
+        let inner = LayerOffset {
+            offset: 5.0,
+            scale: 3.0,
+        };
+        let composed = outer.compose(inner);
+        assert_eq!(
+            composed,
+            LayerOffset {
+                offset: 20.0,
+                scale: 6.0
+            }
+        );
+    }
+
+    #[test]
+    fn layer_offset_compose_identity_is_noop() {
+        let lo = LayerOffset {
+            offset: 10.0,
+            scale: 2.0,
+        };
+        assert_eq!(lo.compose(LayerOffset::IDENTITY), lo);
+        assert_eq!(LayerOffset::IDENTITY.compose(lo), lo);
+    }
 }

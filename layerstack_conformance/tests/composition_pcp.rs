@@ -640,3 +640,17 @@ fn basic_instancing_and_variants_root_layer_stack_matches() {
     assert_layer_stack_matches(&loaded, &pcp_path);
     assert_pcp_composing(&mut loaded, &pcp_path);
 }
+
+#[test]
+fn basic_time_offset_root() {
+    let (mut loaded, pcp_path) = load_fixture("BasicTimeOffset_root");
+    assert_layer_stack_matches(&loaded, &pcp_path);
+    assert_pcp_composing(&mut loaded, &pcp_path);
+}
+
+#[test]
+fn reference_list_ops_with_offsets_root() {
+    let (mut loaded, pcp_path) = load_fixture("ReferenceListOpsWithOffsets_root");
+    assert_layer_stack_matches(&loaded, &pcp_path);
+    assert_pcp_composing(&mut loaded, &pcp_path);
+}

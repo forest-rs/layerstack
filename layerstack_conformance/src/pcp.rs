@@ -38,6 +38,36 @@ pub struct PcpPrim {
 
     #[serde(rename = "Attribute connections")]
     pub attribute_connections: Option<BTreeMap<String, Vec<String>>>,
+
+    /// Time offset entries for this prim (§12.3.2.1).
+    #[serde(rename = "Time Offsets")]
+    pub time_offsets: Option<Vec<PcpTimeOffset>>,
+}
+
+/// A time offset entry from the supplemental composition `pcp.json` files.
+///
+/// Each entry represents an arc boundary (root, reference, payload) or sublayer
+/// with its accumulated offset and scale.
+#[derive(Debug, Deserialize)]
+pub struct PcpTimeOffset {
+    pub layer: String,
+    pub prim: Option<String>,
+    #[serde(rename = "type")]
+    pub arc_type: String,
+    pub offset: String,
+    pub scale: String,
+    #[serde(default)]
+    pub children: Vec<PcpTimeOffsetChild>,
+}
+
+/// A sublayer child within a [`PcpTimeOffset`] entry.
+#[derive(Debug, Deserialize)]
+pub struct PcpTimeOffsetChild {
+    pub layer: String,
+    #[serde(rename = "type")]
+    pub arc_type: String,
+    pub offset: String,
+    pub scale: String,
 }
 
 pub fn load_pcp_json(path: &std::path::Path) -> Pcp {

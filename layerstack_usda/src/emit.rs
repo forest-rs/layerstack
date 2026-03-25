@@ -5,8 +5,8 @@
 //! the USDA pipeline: `source → lexer → CST → AST → emit`.
 //!
 //! Asset path resolution (sublayer includes, references, payloads) is
-//! delegated to the caller via the [`AssetResolver`](layerstack::AssetResolver)
-//! trait, keeping this module `no_std` compatible.
+//! delegated to the caller via the [`AssetResolver`] trait, keeping this
+//! module `no_std` compatible.
 //!
 //! [`Layer`]: layerstack::Layer
 //! [`PrimSpec`]: layerstack::PrimSpec
@@ -572,7 +572,7 @@ impl EmitCtx<'_> {
     /// branch but semantically belong to the same owning prim. Children
     /// introduced by nested branches are registered with
     /// [`VariantSpec::required_outer_selections`] so that
-    /// [`filter_variant_children`](crate::compose) can gate them on the
+    /// `filter_variant_children` can gate them on the
     /// correct combination of outer variant selections.
     ///
     /// Spec: AOUSD Core §10.5 (variant nesting).

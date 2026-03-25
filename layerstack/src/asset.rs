@@ -2,7 +2,7 @@
 //!
 //! Asset paths appear in references, payloads, and sublayer includes. Before
 //! composition can use them, they must be resolved to concrete [`LayerId`]s
-//! with their layer data loaded into a [`LayerStore`].
+//! with their layer data loaded into a [`LayerStore`](crate::doc::LayerStore).
 //!
 //! The [`AssetResolver`] trait defines this mapping. Implementations handle
 //! the full resolution pipeline described in AOUSD Core §9:

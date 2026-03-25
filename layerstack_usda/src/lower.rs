@@ -1,8 +1,8 @@
 //! Lowers a lossless CST into the typed AST.
 //!
-//! This module walks a [`SyntaxTree`](crate::cst::SyntaxTree) and produces
-//! the [`ast`](crate::ast) types. Semantic logic (quote stripping, number
-//! parsing, keyword dispatch) lives here rather than in the parser.
+//! This module walks a [`SyntaxTree`] and produces the [`ast`](crate::ast)
+//! types. Semantic logic (quote stripping, number parsing, keyword dispatch)
+//! lives here rather than in the parser.
 
 use alloc::string::String;
 use alloc::vec;

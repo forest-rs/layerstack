@@ -104,6 +104,7 @@ fn variants_selection_is_strength_ordered() {
             fields: vec![FieldEntry {
                 name: field_x,
                 value: Value::Int64(1).into(),
+                property_type: None,
             }],
             ..Default::default()
         },
@@ -115,6 +116,7 @@ fn variants_selection_is_strength_ordered() {
             fields: vec![FieldEntry {
                 name: field_x,
                 value: Value::Int64(2).into(),
+                property_type: None,
             }],
             ..Default::default()
         },

@@ -1238,24 +1238,27 @@ fn add_local_and_variant_opinions(
                 });
 
             for entry in &spec.fields {
-                out.get_mut(&path)
-                    .expect("path exists")
-                    .add_opinion(Opinion {
-                        key: OpinionKey {
-                            is_local: true,
-                            arc_kind: ArcKind::Local,
-                            nested_arc_kind: None,
-                            namespace_depth,
-                            authored: true,
-                            arc_list_index: 0,
-                            layer_strength,
-                            layer_id,
-                            spec_path: path,
-                        },
-                        field: entry.name,
-                        value: entry.value.clone(),
-                        layer_offset: accumulated_offset,
-                    });
+                let key = OpinionKey {
+                    is_local: true,
+                    arc_kind: ArcKind::Local,
+                    nested_arc_kind: None,
+                    namespace_depth,
+                    authored: true,
+                    arc_list_index: 0,
+                    layer_strength,
+                    layer_id,
+                    spec_path: path,
+                };
+                let index = out.get_mut(&path).expect("path exists");
+                if let Some(property_type) = &entry.property_type {
+                    index.add_property_type(entry.name, key, property_type.clone());
+                }
+                index.add_opinion(Opinion {
+                    key,
+                    field: entry.name,
+                    value: entry.value.clone(),
+                    layer_offset: accumulated_offset,
+                });
             }
 
             if !spec.authored_children.is_empty() {
@@ -1315,24 +1318,27 @@ fn add_local_and_variant_opinions(
                     });
 
                 for entry in &variant_spec.fields {
-                    out.get_mut(&path)
-                        .expect("path exists")
-                        .add_opinion(Opinion {
-                            key: OpinionKey {
-                                is_local: false,
-                                arc_kind: ArcKind::Variants,
-                                nested_arc_kind: None,
-                                namespace_depth,
-                                authored: true,
-                                arc_list_index: 0,
-                                layer_strength,
-                                layer_id,
-                                spec_path: path,
-                            },
-                            field: entry.name,
-                            value: entry.value.clone(),
-                            layer_offset: accumulated_offset,
-                        });
+                    let key = OpinionKey {
+                        is_local: false,
+                        arc_kind: ArcKind::Variants,
+                        nested_arc_kind: None,
+                        namespace_depth,
+                        authored: true,
+                        arc_list_index: 0,
+                        layer_strength,
+                        layer_id,
+                        spec_path: path,
+                    };
+                    let index = out.get_mut(&path).expect("path exists");
+                    if let Some(property_type) = &entry.property_type {
+                        index.add_property_type(entry.name, key, property_type.clone());
+                    }
+                    index.add_opinion(Opinion {
+                        key,
+                        field: entry.name,
+                        value: entry.value.clone(),
+                        layer_offset: accumulated_offset,
+                    });
                 }
 
                 // Forward variant-scoped child prim fields.
@@ -1346,24 +1352,27 @@ fn add_local_and_variant_opinions(
                             u16::try_from(store.paths().resolve(child_path_id).depth())
                                 .unwrap_or(u16::MAX);
                         for entry in child_fields {
-                            out.get_mut(&child_path_id)
-                                .expect("path exists")
-                                .add_opinion(Opinion {
-                                    key: OpinionKey {
-                                        is_local: false,
-                                        arc_kind: ArcKind::Variants,
-                                        nested_arc_kind: None,
-                                        namespace_depth: child_ns_depth,
-                                        authored: true,
-                                        arc_list_index: 0,
-                                        layer_strength,
-                                        layer_id,
-                                        spec_path: child_path_id,
-                                    },
-                                    field: entry.name,
-                                    value: entry.value.clone(),
-                                    layer_offset: accumulated_offset,
-                                });
+                            let key = OpinionKey {
+                                is_local: false,
+                                arc_kind: ArcKind::Variants,
+                                nested_arc_kind: None,
+                                namespace_depth: child_ns_depth,
+                                authored: true,
+                                arc_list_index: 0,
+                                layer_strength,
+                                layer_id,
+                                spec_path: child_path_id,
+                            };
+                            let index = out.get_mut(&child_path_id).expect("path exists");
+                            if let Some(property_type) = &entry.property_type {
+                                index.add_property_type(entry.name, key, property_type.clone());
+                            }
+                            index.add_opinion(Opinion {
+                                key,
+                                field: entry.name,
+                                value: entry.value.clone(),
+                                layer_offset: accumulated_offset,
+                            });
                         }
                         out.get_mut(&child_path_id)
                             .expect("path exists")
@@ -1651,6 +1660,7 @@ fn add_inherit_edge_opinions(
                         *remote_path_id,
                         entry.name,
                         entry.value.clone(),
+                        entry.property_type.clone(),
                     ));
                 }
 
@@ -1667,6 +1677,7 @@ fn add_inherit_edge_opinions(
                                 *remote_path_id,
                                 entry.name,
                                 entry.value.clone(),
+                                entry.property_type.clone(),
                             ));
                         }
                     }
@@ -1695,6 +1706,7 @@ fn add_inherit_edge_opinions(
                                     *remote_path_id,
                                     entry.name,
                                     entry.value.clone(),
+                                    entry.property_type.clone(),
                                 ));
                             }
                         }
@@ -1709,30 +1721,33 @@ fn add_inherit_edge_opinions(
                 .add_source(key);
         }
 
-        for (dest_path_id, remote_path_id, field, value) in pending {
+        for (dest_path_id, remote_path_id, field, value, property_type) in pending {
             let mut value = remap_field_value_paths(store, &base_path, &inherited_path, value);
             // Also apply reference namespace remapping if within a reference context.
             if let Some((ref_dest, ref_src)) = ref_remap {
                 value = remap_field_value_paths(store, ref_dest, ref_src, value);
             }
-            out.get_mut(&dest_path_id)
-                .expect("path exists")
-                .add_opinion(Opinion {
-                    key: OpinionKey {
-                        is_local: false,
-                        arc_kind,
-                        nested_arc_kind,
-                        namespace_depth,
-                        authored: true,
-                        arc_list_index,
-                        layer_strength,
-                        layer_id,
-                        spec_path: remote_path_id,
-                    },
-                    field,
-                    value,
-                    layer_offset,
-                });
+            let key = OpinionKey {
+                is_local: false,
+                arc_kind,
+                nested_arc_kind,
+                namespace_depth,
+                authored: true,
+                arc_list_index,
+                layer_strength,
+                layer_id,
+                spec_path: remote_path_id,
+            };
+            let index = out.get_mut(&dest_path_id).expect("path exists");
+            if let Some(property_type) = property_type {
+                index.add_property_type(field, key, property_type);
+            }
+            index.add_opinion(Opinion {
+                key,
+                field,
+                value,
+                layer_offset,
+            });
         }
     }
 
@@ -2223,8 +2238,14 @@ fn add_reference_edge_opinions(
         };
 
         let mut pending_sources = Vec::new();
-        let mut pending_fields: Vec<(PathId, TokenId, OpinionKey, FieldValue, LayerOffset)> =
-            Vec::new();
+        let mut pending_fields: Vec<(
+            PathId,
+            TokenId,
+            OpinionKey,
+            FieldValue,
+            Option<crate::PropertyType>,
+            LayerOffset,
+        )> = Vec::new();
         for (remote_path_id, dest_path_id) in &mapping {
             let Some(remote_spec) = remote_layer.prims.get(remote_path_id) else {
                 continue;
@@ -2251,6 +2272,7 @@ fn add_reference_edge_opinions(
                     entry.name,
                     base_key,
                     entry.value.clone(),
+                    entry.property_type.clone(),
                     ref_offset,
                 ));
             }
@@ -2281,6 +2303,7 @@ fn add_reference_edge_opinions(
                                     spec_path: *remote_path_id,
                                 },
                                 entry.value.clone(),
+                                entry.property_type.clone(),
                                 ref_offset,
                             ));
                         }
@@ -2341,6 +2364,7 @@ fn add_reference_edge_opinions(
                                             spec_path: child_path_id,
                                         },
                                         entry.value.clone(),
+                                        entry.property_type.clone(),
                                         ref_offset,
                                     ));
                                 }
@@ -2406,16 +2430,18 @@ fn add_reference_edge_opinions(
                 .expect("path exists")
                 .add_source(key);
         }
-        for (dest_path_id, field, key, value, offset) in pending_fields {
+        for (dest_path_id, field, key, value, property_type, offset) in pending_fields {
             let value = remap_field_value_paths(store, &dest_root_path, &target_root, value);
-            out.get_mut(&dest_path_id)
-                .expect("path exists")
-                .add_opinion(Opinion {
-                    key,
-                    field,
-                    value,
-                    layer_offset: offset,
-                });
+            let index = out.get_mut(&dest_path_id).expect("path exists");
+            if let Some(property_type) = property_type {
+                index.add_property_type(field, key, property_type);
+            }
+            index.add_opinion(Opinion {
+                key,
+                field,
+                value,
+                layer_offset: offset,
+            });
         }
     }
 
@@ -2765,24 +2791,27 @@ fn add_payload_edge_opinions(
             ));
 
             for entry in &remote_spec.fields {
-                out.get_mut(dest_path_id)
-                    .expect("path exists")
-                    .add_opinion(Opinion {
-                        key: OpinionKey {
-                            is_local: false,
-                            arc_kind: ArcKind::Payloads,
-                            nested_arc_kind: None,
-                            namespace_depth,
-                            authored: true,
-                            arc_list_index,
-                            layer_strength,
-                            layer_id: remote_layer_id,
-                            spec_path: *remote_path_id,
-                        },
-                        field: entry.name,
-                        value: entry.value.clone(),
-                        layer_offset: payload_offset,
-                    });
+                let key = OpinionKey {
+                    is_local: false,
+                    arc_kind: ArcKind::Payloads,
+                    nested_arc_kind: None,
+                    namespace_depth,
+                    authored: true,
+                    arc_list_index,
+                    layer_strength,
+                    layer_id: remote_layer_id,
+                    spec_path: *remote_path_id,
+                };
+                let index = out.get_mut(dest_path_id).expect("path exists");
+                if let Some(property_type) = &entry.property_type {
+                    index.add_property_type(entry.name, key, property_type.clone());
+                }
+                index.add_opinion(Opinion {
+                    key,
+                    field: entry.name,
+                    value: entry.value.clone(),
+                    layer_offset: payload_offset,
+                });
             }
 
             if let Some(order) = &remote_spec.prim_order {
@@ -3150,6 +3179,7 @@ fn add_specializes_edge_opinions(
                         *remote_path_id,
                         entry.name,
                         entry.value.clone(),
+                        entry.property_type.clone(),
                     ));
                 }
 
@@ -3166,6 +3196,7 @@ fn add_specializes_edge_opinions(
                                 *remote_path_id,
                                 entry.name,
                                 entry.value.clone(),
+                                entry.property_type.clone(),
                             ));
                         }
                     }
@@ -3179,26 +3210,29 @@ fn add_specializes_edge_opinions(
                 .add_source(key);
         }
 
-        for (dest_path_id, remote_path_id, field, value) in pending {
+        for (dest_path_id, remote_path_id, field, value, property_type) in pending {
             let value = remap_field_value_paths(store, &base_path, &specialized_path, value);
-            out.get_mut(&dest_path_id)
-                .expect("path exists")
-                .add_opinion(Opinion {
-                    key: OpinionKey {
-                        is_local: false,
-                        arc_kind,
-                        nested_arc_kind,
-                        namespace_depth,
-                        authored: true,
-                        arc_list_index,
-                        layer_strength,
-                        layer_id,
-                        spec_path: remote_path_id,
-                    },
-                    field,
-                    value,
-                    layer_offset,
-                });
+            let key = OpinionKey {
+                is_local: false,
+                arc_kind,
+                nested_arc_kind,
+                namespace_depth,
+                authored: true,
+                arc_list_index,
+                layer_strength,
+                layer_id,
+                spec_path: remote_path_id,
+            };
+            let index = out.get_mut(&dest_path_id).expect("path exists");
+            if let Some(property_type) = property_type {
+                index.add_property_type(field, key, property_type);
+            }
+            index.add_opinion(Opinion {
+                key,
+                field,
+                value,
+                layer_offset,
+            });
         }
     }
 
@@ -3869,6 +3903,7 @@ mod child_order_tests {
             parent_path,
             PrimIndex {
                 opinions_by_field: HashMap::new(),
+                property_types_by_field: HashMap::new(),
                 sources: vec![OpinionKey {
                     is_local: true,
                     arc_kind: ArcKind::Local,

@@ -53,11 +53,13 @@ fn build_and_compose(n_prims: usize, n_variants: usize) -> Stage {
             let mut vspec = VariantSpec::default();
             vspec.fields.push(layerstack::FieldEntry {
                 name: f_material,
+                property_type: None,
                 value: Value::String(alloc::format!("mat_{branch_name}").into()).into(),
             });
             let detail = v as i32;
             vspec.fields.push(layerstack::FieldEntry {
                 name: f_detail,
+                property_type: None,
                 value: Value::Int(detail).into(),
             });
 

@@ -21,6 +21,7 @@ extern crate std;
 pub use hashbrown::{HashMap, HashSet};
 
 pub mod arcs;
+pub mod array_edit;
 pub mod asset;
 pub mod compose;
 pub mod dependency_map;
@@ -31,25 +32,28 @@ pub mod listop;
 pub mod path;
 pub mod population;
 pub mod prim_index;
+pub mod property;
 pub mod schema;
 pub mod spline;
 pub mod stage;
 
 pub mod live_stage;
 
+pub use array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
 pub use asset::{AssetResolveError, AssetResolver, ResolvedAsset};
 pub use dependency_map::ArcDependency;
 pub use doc::{
     FieldEntry, FieldValue, InMemoryStore, InterpolationType, Layer, LayerId, LayerOffset,
     PrimSpec, Reference, Specifier, SublayerEntry, Value, VariantSetSpec, VariantSpec,
     combine_dictionaries, combine_dictionary_chain, get_field, get_field_mut,
-    insert_field_if_absent, set_field_vec,
+    insert_field_if_absent, insert_property_field_if_absent, set_field_vec, set_property_field_vec,
 };
 pub use interner::{TokenId, TokenInterner};
 pub use layer_stack::LayerStack;
 pub use listop::ListOp;
 pub use path::{Path, PathId, PathInterner};
 pub use prim_index::{ArcKind, Opinion, OpinionKey};
+pub use property::PropertyType;
 pub use schema::{PropertyDefinition, SchemaDefinition, SchemaRegistry};
 pub use spline::SplineData;
 pub use stage::{Resolved, ResolvedValue, Stage, StageOptions};

@@ -9,10 +9,12 @@ use core::fmt;
 use hashbrown::HashMap;
 
 use crate::{
+    array_edit::ArrayEdit,
     interner::TokenId,
     interner::TokenInterner,
     listop::ListOp,
     path::{PathId, PathInterner},
+    property::PropertyType,
     spline::SplineData,
 };
 
@@ -164,6 +166,11 @@ pub enum Value {
     /// Spec: AOUSD Core §6.2 (dictionary type), §6.6.2.1 (dictionary
     /// combining), §12.2.5 (dictionary-valued metadata combining).
     Dictionary(Vec<(Arc<str>, Self)>),
+    /// A sparse array edit composed over a weaker array opinion.
+    ///
+    /// Resolved attribute values never expose this directly; it exists in
+    /// authored scene description and during composition.
+    ArrayEdit(ArrayEdit),
 }
 
 impl fmt::Display for Value {
@@ -246,6 +253,7 @@ impl fmt::Display for Value {
                 }
                 write!(f, "}}")
             }
+            Self::ArrayEdit(edit) => write!(f, "edit({} ops)", edit.ops.len()),
         }
     }
 }
@@ -369,6 +377,8 @@ pub struct FieldEntry {
     pub name: TokenId,
     /// The field value.
     pub value: FieldValue,
+    /// Optional declared property type for authored attributes.
+    pub property_type: Option<PropertyType>,
 }
 
 /// A field value stored on a prim spec.
@@ -915,7 +925,30 @@ pub fn set_field_vec(fields: &mut Vec<FieldEntry>, name: TokenId, value: FieldVa
     if let Some(entry) = fields.iter_mut().find(|e| e.name == name) {
         entry.value = value;
     } else {
-        fields.push(FieldEntry { name, value });
+        fields.push(FieldEntry {
+            name,
+            value,
+            property_type: None,
+        });
+    }
+}
+
+/// Inserts or replaces a typed property field in a `Vec<FieldEntry>` by name.
+pub fn set_property_field_vec(
+    fields: &mut Vec<FieldEntry>,
+    name: TokenId,
+    value: FieldValue,
+    property_type: PropertyType,
+) {
+    if let Some(entry) = fields.iter_mut().find(|e| e.name == name) {
+        entry.value = value;
+        entry.property_type = Some(property_type);
+    } else {
+        fields.push(FieldEntry {
+            name,
+            value,
+            property_type: Some(property_type),
+        });
     }
 }
 
@@ -938,7 +971,27 @@ pub fn get_field_mut<'a>(
 /// Inserts a field only if no entry with the same name exists.
 pub fn insert_field_if_absent(fields: &mut Vec<FieldEntry>, name: TokenId, value: FieldValue) {
     if !fields.iter().any(|e| e.name == name) {
-        fields.push(FieldEntry { name, value });
+        fields.push(FieldEntry {
+            name,
+            value,
+            property_type: None,
+        });
+    }
+}
+
+/// Inserts a typed property field only if no entry with the same name exists.
+pub fn insert_property_field_if_absent(
+    fields: &mut Vec<FieldEntry>,
+    name: TokenId,
+    value: FieldValue,
+    property_type: PropertyType,
+) {
+    if !fields.iter().any(|e| e.name == name) {
+        fields.push(FieldEntry {
+            name,
+            value,
+            property_type: Some(property_type),
+        });
     }
 }
 

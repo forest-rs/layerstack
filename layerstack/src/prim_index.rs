@@ -15,6 +15,7 @@ use crate::{
     doc::{FieldValue, LayerId, LayerOffset},
     interner::TokenId,
     path::PathId,
+    property::PropertyType,
 };
 
 /// Composition arc kind (LIVERPS ordering).
@@ -162,6 +163,7 @@ pub struct Opinion {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct PrimIndex {
     pub(crate) opinions_by_field: HashMap<TokenId, Vec<Opinion>>,
+    pub(crate) property_types_by_field: HashMap<TokenId, (OpinionKey, PropertyType)>,
     pub(crate) sources: Vec<OpinionKey>,
 }
 
@@ -176,6 +178,33 @@ impl PrimIndex {
 
     pub(crate) fn add_source(&mut self, key: OpinionKey) {
         self.sources.push(key);
+    }
+
+    pub(crate) fn add_property_type(
+        &mut self,
+        field: TokenId,
+        key: OpinionKey,
+        property_type: PropertyType,
+    ) {
+        match self.property_types_by_field.get_mut(&field) {
+            Some((existing_key, existing_type))
+                if existing_key.cmp_strongest_first(&key).is_gt() =>
+            {
+                *existing_key = key;
+                *existing_type = property_type;
+            }
+            Some(_) => {}
+            None => {
+                self.property_types_by_field
+                    .insert(field, (key, property_type));
+            }
+        }
+    }
+
+    pub(crate) fn property_type_for(&self, field: &TokenId) -> Option<&PropertyType> {
+        self.property_types_by_field
+            .get(field)
+            .map(|(_, property_type)| property_type)
     }
 
     pub(crate) fn finalize(&mut self) {

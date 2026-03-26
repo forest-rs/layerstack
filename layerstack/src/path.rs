@@ -40,6 +40,90 @@ impl invalidation::DenseKey for PathId {
     }
 }
 
+/// A concrete property path: a prim namespace path plus a property name.
+///
+/// This is distinct from [`SpecPath`](crate::spec_path::SpecPath), which owns
+/// variant-qualified provenance. `PropertyPath` is for concrete scene-namespace
+/// identity such as `/Model.xformOpOrder`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct PropertyPath {
+    prim_path: PathId,
+    property: TokenId,
+}
+
+impl PropertyPath {
+    /// Builds a property path from an interned prim path and interned property name.
+    #[must_use]
+    pub const fn new(prim_path: PathId, property: TokenId) -> Self {
+        Self {
+            prim_path,
+            property,
+        }
+    }
+
+    /// Parses a concrete property path such as `/Prim.attrName`.
+    ///
+    /// Property paths are concrete scene paths and therefore do not admit
+    /// variant selections. Use [`crate::spec_path::SpecPath`] for
+    /// variant-qualified provenance paths.
+    pub fn parse(
+        s: &str,
+        tokens: &mut TokenInterner,
+        paths: &mut PathInterner,
+    ) -> Result<Self, PropertyPathError> {
+        let Some(dot_pos) = s.rfind('.') else {
+            return Err(PropertyPathError::MissingProperty);
+        };
+        let prim = &s[..dot_pos];
+        let property = &s[dot_pos + 1..];
+        if property.is_empty() {
+            return Err(PropertyPathError::EmptyPropertyName);
+        }
+        if property.contains('/')
+            || property.contains('{')
+            || property.contains('}')
+            || property.contains('.')
+        {
+            return Err(PropertyPathError::InvalidPropertyName);
+        }
+        if prim.contains('{') || prim.contains('}') {
+            return Err(PropertyPathError::VariantSelectionNotAllowed);
+        }
+        if prim == "/" {
+            return Err(PropertyPathError::RootPrimNotAllowed);
+        }
+        if prim.contains('.') {
+            return Err(PropertyPathError::InvalidPrimPath);
+        }
+        let prim_path = Path::parse_absolute(prim, tokens)?;
+        Ok(Self {
+            prim_path: paths.intern(prim_path),
+            property: tokens.intern(property),
+        })
+    }
+
+    /// Returns the concrete prim path.
+    #[must_use]
+    pub const fn prim_path(self) -> PathId {
+        self.prim_path
+    }
+
+    /// Returns the property token.
+    #[must_use]
+    pub const fn property(self) -> TokenId {
+        self.property
+    }
+
+    /// Formats this property path as `/Prim.attrName`.
+    #[must_use]
+    pub fn display(self, paths: &PathInterner, tokens: &TokenInterner) -> String {
+        let mut out = paths.display(self.prim_path, tokens);
+        out.push('.');
+        out.push_str(tokens.resolve(self.property));
+        out
+    }
+}
+
 /// A segmented absolute path.
 ///
 /// v0.1 supports prim-style absolute paths like `/A/B/C`.
@@ -222,4 +306,109 @@ pub enum PathError {
     NotAbsolute,
     /// Path contains an empty segment (e.g. `//`).
     EmptySegment,
+}
+
+/// Errors that can occur when parsing a [`PropertyPath`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PropertyPathError {
+    /// Path is not absolute (doesn't start with `/`).
+    NotAbsolute,
+    /// Path contains an empty segment (e.g. `//`).
+    EmptySegment,
+    /// Property paths must target a concrete prim, not the pseudo-root.
+    RootPrimNotAllowed,
+    /// Property suffix was present but empty.
+    EmptyPropertyName,
+    /// Property separator `.` was missing.
+    MissingProperty,
+    /// Concrete prim paths do not admit property separators in namespace segments.
+    InvalidPrimPath,
+    /// Property name was malformed for a concrete property path.
+    InvalidPropertyName,
+    /// Concrete property paths do not admit variant selections.
+    VariantSelectionNotAllowed,
+}
+
+impl From<PathError> for PropertyPathError {
+    fn from(value: PathError) -> Self {
+        match value {
+            PathError::NotAbsolute => Self::NotAbsolute,
+            PathError::EmptySegment => Self::EmptySegment,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::interner::TokenInterner;
+
+    #[test]
+    fn property_path_parse_round_trips() {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let property =
+            PropertyPath::parse("/World/Cube.visibility", &mut tokens, &mut paths).unwrap();
+        assert_eq!(property.display(&paths, &tokens), "/World/Cube.visibility");
+    }
+
+    #[test]
+    fn property_path_parse_rejects_missing_property() {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        assert_eq!(
+            PropertyPath::parse("/World/Cube", &mut tokens, &mut paths),
+            Err(PropertyPathError::MissingProperty)
+        );
+    }
+
+    #[test]
+    fn property_path_parse_rejects_empty_property() {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        assert_eq!(
+            PropertyPath::parse("/World/Cube.", &mut tokens, &mut paths),
+            Err(PropertyPathError::EmptyPropertyName)
+        );
+    }
+
+    #[test]
+    fn property_path_parse_rejects_variant_qualified_path() {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        assert_eq!(
+            PropertyPath::parse("/World/Cube{lod=high}.visibility", &mut tokens, &mut paths),
+            Err(PropertyPathError::VariantSelectionNotAllowed)
+        );
+    }
+
+    #[test]
+    fn property_path_parse_rejects_invalid_property_name() {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        assert_eq!(
+            PropertyPath::parse("/World/Cube.visibility/child", &mut tokens, &mut paths),
+            Err(PropertyPathError::InvalidPropertyName)
+        );
+    }
+
+    #[test]
+    fn property_path_parse_rejects_root_property() {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        assert_eq!(
+            PropertyPath::parse("/.visibility", &mut tokens, &mut paths),
+            Err(PropertyPathError::RootPrimNotAllowed)
+        );
+    }
+
+    #[test]
+    fn property_path_parse_rejects_ambiguous_dotted_prim_path() {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        assert_eq!(
+            PropertyPath::parse("/World/Cube.visibility.extra", &mut tokens, &mut paths),
+            Err(PropertyPathError::InvalidPrimPath)
+        );
+    }
 }

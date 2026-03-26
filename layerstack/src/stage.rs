@@ -16,7 +16,7 @@ use crate::{
     },
     interner::TokenId,
     listop::{ListOp, resolve_list_chain},
-    path::PathId,
+    path::{PathId, PropertyPath},
     prim_index::{Opinion, PrimIndex},
     schema::SchemaRegistry,
     spec_path::SpecPath,
@@ -442,6 +442,43 @@ impl Stage {
         let index = self.prims.get(&prim)?;
         let opinions = index.opinions_by_field.get(&field)?;
         Some(opinions.as_slice())
+    }
+
+    /// Resolves a concrete property path.
+    #[must_use]
+    pub fn resolve_property_path(
+        &self,
+        property_path: PropertyPath,
+    ) -> Option<Resolved<ResolvedValue>> {
+        self.resolve_value(property_path.prim_path(), property_path.property())
+    }
+
+    /// Resolves a concrete property path at a specific time.
+    #[must_use]
+    pub fn resolve_property_path_at_time(
+        &self,
+        property_path: PropertyPath,
+        time: f64,
+        interp: InterpolationType,
+    ) -> Option<Resolved<Value>> {
+        self.resolve_value_at_time(
+            property_path.prim_path(),
+            property_path.property(),
+            time,
+            interp,
+        )
+    }
+
+    /// Returns the sorted opinion stack for a concrete property path.
+    #[must_use]
+    pub fn explain_property_path(&self, property_path: PropertyPath) -> Option<&[Opinion]> {
+        self.explain_field(property_path.prim_path(), property_path.property())
+    }
+
+    /// Returns `true` if the stage contains opinions for a concrete property path.
+    #[must_use]
+    pub fn has_property_path(&self, property_path: PropertyPath) -> bool {
+        self.explain_property_path(property_path).is_some()
     }
 
     /// Traverses prims in a deterministic preorder.

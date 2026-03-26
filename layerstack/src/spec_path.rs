@@ -12,7 +12,7 @@ use alloc::{boxed::Box, string::String, vec::Vec};
 
 use crate::{
     interner::{TokenId, TokenInterner},
-    path::{Path, PathError, PathId, PathInterner},
+    path::{Path, PathError, PathId, PathInterner, PropertyPath},
 };
 
 /// A variant selection applied at a specific prim host path.
@@ -71,6 +71,13 @@ impl SpecPath {
             components,
             property: None,
         }
+    }
+
+    /// Builds a plain property spec path from a concrete [`PropertyPath`].
+    #[must_use]
+    pub fn from_property_path(property_path: PropertyPath, paths: &PathInterner) -> Self {
+        Self::from_prim_path(property_path.prim_path(), paths)
+            .with_property(property_path.property())
     }
 
     /// Builds a variant-qualified spec path by inserting `selections` after
@@ -426,5 +433,18 @@ mod tests {
         );
         let prim = paths.resolve(spec.prim_path());
         assert_eq!(prim.display(&tokens), "/A");
+    }
+
+    #[test]
+    fn from_property_path_preserves_plain_property_identity() {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let property = PropertyPath::parse("/Robot.visibility", &mut tokens, &mut paths)
+            .expect("property path");
+
+        let spec = SpecPath::from_property_path(property, &paths);
+
+        assert_eq!(spec.display(&tokens), "/Robot.visibility");
+        assert_eq!(spec.prim_path(), property.prim_path());
     }
 }

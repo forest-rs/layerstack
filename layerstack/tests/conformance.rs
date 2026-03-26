@@ -5,9 +5,9 @@ use alloc::sync::Arc;
 extern crate alloc;
 
 use layerstack::{
-    ArcKind, FieldEntry, FieldValue, Layer, LayerId, ListOp, PrimSpec, Reference, ResolvedValue,
-    SchemaDefinition, SchemaRegistry, Stage, StageOptions, SublayerEntry, Value, VariantSetSpec,
-    VariantSpec, doc::InMemoryStore,
+    ArcKind, FieldEntry, FieldValue, InterpolationType, Layer, LayerId, ListOp, PrimSpec,
+    Reference, ResolvedValue, SchemaDefinition, SchemaRegistry, Stage, StageOptions, SublayerEntry,
+    Value, VariantSetSpec, VariantSpec, doc::InMemoryStore,
 };
 
 #[test]
@@ -39,6 +39,67 @@ fn sublayer_strength_local_beats_sublayer() {
     assert_eq!(resolved.value, Value::Int64(1));
     let prov = resolved.provenance.expect("provenance enabled");
     assert_eq!(prov.layer, LayerId(1));
+}
+
+#[test]
+fn property_path_queries_match_prim_plus_field_queries() {
+    let mut store = InMemoryStore::default();
+
+    let field_x = store.tokens.intern("x");
+    let prim = store.path("/P");
+    let property_path = store.property_path("/P.x");
+
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(prim, PrimSpec::default().with_field(field_x, 7_i64));
+    store.insert_layer(layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    assert!(stage.has_property_path(property_path));
+    assert_eq!(
+        stage
+            .resolve_property_path(property_path)
+            .expect("property exists")
+            .value,
+        ResolvedValue::Scalar(Value::Int64(7))
+    );
+    assert_eq!(
+        stage
+            .explain_property_path(property_path)
+            .expect("opinion stack exists")
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn property_path_time_queries_match_prim_plus_field_queries() {
+    let mut store = InMemoryStore::default();
+
+    let field_x = store.tokens.intern("x");
+    let prim = store.path("/P");
+    let property_path = store.property_path("/P.x");
+
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(
+        prim,
+        PrimSpec::default().with_field(
+            field_x,
+            FieldValue::TimeSamples(vec![(1.0, Value::Double(10.0)), (3.0, Value::Double(30.0))]),
+        ),
+    );
+    store.insert_layer(layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    let by_field = stage
+        .resolve_value_at_time(prim, field_x, 2.0, InterpolationType::Held)
+        .expect("sampled property exists");
+    let by_property_path = stage
+        .resolve_property_path_at_time(property_path, 2.0, InterpolationType::Held)
+        .expect("sampled property exists");
+
+    assert_eq!(by_property_path.value, by_field.value);
 }
 
 #[test]

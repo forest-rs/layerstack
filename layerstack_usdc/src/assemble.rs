@@ -24,7 +24,7 @@ use layerstack::doc::{
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp;
-use layerstack::path::{Path, PathId, PathInterner};
+use layerstack::path::{Path, PathId, PathInterner, PropertyPath};
 #[cfg(feature = "experimental_sparse_array_edits")]
 use layerstack::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
 use layerstack::{AssetResolver, PropertyType, ReferenceTarget, ResolvedAsset};
@@ -133,10 +133,12 @@ impl AssembleCtx<'_> {
         for (i, spec) in self.sections.specs.iter().enumerate() {
             if spec.form == SpecForm::Attribute {
                 let path_str = self.lookup_path(spec.path_index)?;
-                if let Some((prim_path, attr_name)) = split_property_path(&path_str)
-                    && let Some(prim) = prim_specs_map.get_mut(&prim_path)
-                {
-                    self.apply_attribute_fields(&spec_fields[i], &attr_name, prim)?;
+                if let Ok(property_path) = PropertyPath::parse(&path_str, self.tokens, self.paths) {
+                    let prim_path = self.paths.display(property_path.prim_path(), self.tokens);
+                    let attr_name = String::from(self.tokens.resolve(property_path.property()));
+                    if let Some(prim) = prim_specs_map.get_mut(&prim_path) {
+                        self.apply_attribute_fields(&spec_fields[i], &attr_name, prim)?;
+                    }
                 }
             }
         }
@@ -145,10 +147,12 @@ impl AssembleCtx<'_> {
         for (i, spec) in self.sections.specs.iter().enumerate() {
             if spec.form == SpecForm::Relationship {
                 let path_str = self.lookup_path(spec.path_index)?;
-                if let Some((prim_path, rel_name)) = split_property_path(&path_str)
-                    && let Some(prim) = prim_specs_map.get_mut(&prim_path)
-                {
-                    self.apply_relationship_fields(&spec_fields[i], &rel_name, prim)?;
+                if let Ok(property_path) = PropertyPath::parse(&path_str, self.tokens, self.paths) {
+                    let prim_path = self.paths.display(property_path.prim_path(), self.tokens);
+                    let rel_name = String::from(self.tokens.resolve(property_path.property()));
+                    if let Some(prim) = prim_specs_map.get_mut(&prim_path) {
+                        self.apply_relationship_fields(&spec_fields[i], &rel_name, prim)?;
+                    }
                 }
             }
         }
@@ -157,10 +161,12 @@ impl AssembleCtx<'_> {
         for (i, spec) in self.sections.specs.iter().enumerate() {
             if spec.form == SpecForm::Connection {
                 let path_str = self.lookup_path(spec.path_index)?;
-                if let Some((prim_path, attr_name)) = split_property_path(&path_str)
-                    && let Some(prim) = prim_specs_map.get_mut(&prim_path)
-                {
-                    self.apply_connection_fields(&spec_fields[i], &attr_name, prim)?;
+                if let Ok(property_path) = PropertyPath::parse(&path_str, self.tokens, self.paths) {
+                    let prim_path = self.paths.display(property_path.prim_path(), self.tokens);
+                    let attr_name = String::from(self.tokens.resolve(property_path.property()));
+                    if let Some(prim) = prim_specs_map.get_mut(&prim_path) {
+                        self.apply_connection_fields(&spec_fields[i], &attr_name, prim)?;
+                    }
                 }
             }
         }
@@ -1332,42 +1338,6 @@ impl AssembleCtx<'_> {
 // Path parsing helpers
 // ---------------------------------------------------------------------------
 
-/// Splits a property path like `/Prim.attrName` into `("/Prim", "attrName")`.
-///
-/// Returns `None` if the path doesn't contain a property separator.
-fn split_property_path(path: &str) -> Option<(String, String)> {
-    // Find the last `.` that is not inside variant braces.
-    let brace_depth = path.chars().fold(0_i32, |depth, c| match c {
-        '{' => depth + 1,
-        '}' => depth - 1,
-        _ => depth,
-    });
-    // Simple case: no braces, just find the last `.`.
-    if brace_depth == 0 {
-        if let Some(dot_pos) = path.rfind('.') {
-            let prim_path = &path[..dot_pos];
-            let prop_name = &path[dot_pos + 1..];
-            if !prim_path.is_empty() && !prop_name.is_empty() {
-                return Some((String::from(prim_path), String::from(prop_name)));
-            }
-        }
-    } else {
-        // Path contains braces (variant path). Find the `.` after the last `}`.
-        if let Some(last_brace) = path.rfind('}') {
-            let after = &path[last_brace + 1..];
-            if let Some(dot_pos) = after.find('.') {
-                let split_pos = last_brace + 1 + dot_pos;
-                let prim_path = &path[..split_pos];
-                let prop_name = &path[split_pos + 1..];
-                if !prim_path.is_empty() && !prop_name.is_empty() {
-                    return Some((String::from(prim_path), String::from(prop_name)));
-                }
-            }
-        }
-    }
-    None
-}
-
 /// Parses a variant set path like `/Prim{varSetName=}` → `("/Prim", "varSetName")`.
 fn parse_variant_set_path(path: &str) -> Option<(String, String)> {
     let open = path.find('{')?;
@@ -1714,21 +1684,28 @@ mod tests {
 
     #[test]
     fn split_property_simple() {
-        let (prim, prop) = split_property_path("/Cube.size").unwrap();
-        assert_eq!(prim, "/Cube");
-        assert_eq!(prop, "size");
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let property = PropertyPath::parse("/Cube.size", &mut tokens, &mut paths).unwrap();
+        assert_eq!(paths.display(property.prim_path(), &tokens), "/Cube");
+        assert_eq!(tokens.resolve(property.property()), "size");
     }
 
     #[test]
     fn split_property_nested() {
-        let (prim, prop) = split_property_path("/World/Cube.visibility").unwrap();
-        assert_eq!(prim, "/World/Cube");
-        assert_eq!(prop, "visibility");
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let property =
+            PropertyPath::parse("/World/Cube.visibility", &mut tokens, &mut paths).unwrap();
+        assert_eq!(paths.display(property.prim_path(), &tokens), "/World/Cube");
+        assert_eq!(tokens.resolve(property.property()), "visibility");
     }
 
     #[test]
     fn split_property_none() {
-        assert!(split_property_path("/Cube").is_none());
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        assert!(PropertyPath::parse("/Cube", &mut tokens, &mut paths).is_err());
     }
 
     #[test]

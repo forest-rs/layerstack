@@ -13,7 +13,7 @@ use crate::{
     interner::TokenId,
     interner::TokenInterner,
     listop::ListOp,
-    path::{PathId, PathInterner},
+    path::{PathId, PathInterner, PropertyPath},
     property::PropertyType,
     spec_path::VariantSelectionSite,
     spline::SplineData,
@@ -1138,6 +1138,15 @@ impl InMemoryStore {
         let p =
             crate::path::Path::parse_absolute(s, &mut self.tokens).expect("valid absolute path");
         self.paths.intern(p)
+    }
+
+    /// Parses a concrete property path, interning its prim path and property token.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `s` is not a valid property path such as `/Prim.attrName`.
+    pub fn property_path(&mut self, s: &str) -> PropertyPath {
+        PropertyPath::parse(s, &mut self.tokens, &mut self.paths).expect("valid property path")
     }
 }
 

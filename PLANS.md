@@ -256,3 +256,61 @@ separate spec-identity layer and to reference/payload target resolution.
   value resolution and prim-stack/source provenance.
 - Payload forwarding may still expose the older subroot gap; selection-root
   cleanup should not accidentally blur that boundary.
+
+## Path / Spec Identity Cleanup
+
+### Fence
+
+`path.rs` owns concrete scene-namespace identities such as prim and property
+paths. It explicitly does not own variant-qualified provenance; that remains in
+`spec_path.rs`.
+
+### Endpoint
+
+- `layerstack` has a first-class `PropertyPath` for concrete authored property
+  identity.
+- Property-path parsing/formatting lives in one core implementation instead of
+  ad hoc string splitting in USDA/USDC code.
+- `Stage` can answer common queries directly from a parsed property path.
+- `SpecPath` stays provenance-oriented, but gains calmer integration points
+  with concrete property identity.
+
+### Non-goals
+
+- Introduce a universal path algebra that merges prim paths, property paths,
+  target paths, and variant-qualified provenance into one type.
+- Change list-op target storage away from `PathId` in this branch.
+- Implement relocates or target/connection-path syntax in the same slice.
+
+### Migration Note
+
+- Public API changes are expected in `layerstack`:
+  - `PropertyPath` will be added and re-exported from the crate root.
+  - `InMemoryStore` and `Stage` will gain property-path-based helpers in
+    addition to the existing prim-plus-field APIs.
+  - Internal USDA/USDC property-path parsing will move to the shared core
+    parser.
+
+### Phases
+
+1. Core path model
+   - Add `PropertyPath` parsing, formatting, and construction in `path.rs`.
+   - Keep `Path` as the concrete prim-path type.
+2. Stage/query integration
+   - Add `Stage` helpers that resolve/explain values via `PropertyPath`.
+   - Add `InMemoryStore` convenience parsing for property paths.
+3. File-format integration
+   - Replace local property-path splitters in USDA/USDC assembly with the
+     shared core type where the path is concrete rather than provenance-only.
+4. Validation
+   - Add focused path parsing/display tests and query tests.
+   - Run workspace verification and note remaining identity gaps for later
+     slices (target paths, richer spec identities, relocates).
+
+### Risks
+
+- USDC currently mixes concrete property paths and variant-qualified spec paths
+  in a few helper functions; the branch must keep those responsibilities
+  separate.
+- It is easy to over-generalize into a too-clever path abstraction; this slice
+  should stay concrete and boring.

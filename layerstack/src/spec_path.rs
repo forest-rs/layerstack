@@ -15,6 +15,21 @@ use crate::{
     path::{Path, PathError, PathId, PathInterner},
 };
 
+/// A variant selection applied at a specific prim host path.
+///
+/// Provenance needs the host path as well as the `(set, variant)` pair because
+/// nested variant selections can apply at different prims, and repeated set
+/// names can appear at different hosts along one composed source path.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct VariantSelectionSite {
+    /// Prim path that owns the variant set.
+    pub host_path: PathId,
+    /// Variant set name.
+    pub set: TokenId,
+    /// Selected variant name.
+    pub variant: TokenId,
+}
+
 /// A single spec-path component.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum SpecComponent {
@@ -69,21 +84,56 @@ impl SpecPath {
         selections: &[(TokenId, TokenId)],
         paths: &PathInterner,
     ) -> Self {
-        let prim = paths.resolve(prim_path);
-        let host = paths.resolve(variant_host);
-        let remainder = prim
-            .strip_prefix(host)
-            .expect("variant host must be equal to or a prefix of prim path");
+        let sites: Vec<_> = selections
+            .iter()
+            .copied()
+            .map(|(set, variant)| VariantSelectionSite {
+                host_path: variant_host,
+                set,
+                variant,
+            })
+            .collect();
+        Self::from_variant_selection_sites(prim_path, &sites, paths)
+    }
 
+    /// Builds a variant-qualified spec path from ordered host-aware selection
+    /// sites.
+    ///
+    /// Each site host must be equal to or a prefix of `prim_path`, and the
+    /// provided sites must appear in outer-to-inner order.
+    #[must_use]
+    pub fn from_variant_selection_sites(
+        prim_path: PathId,
+        selection_sites: &[VariantSelectionSite],
+        paths: &PathInterner,
+    ) -> Self {
+        let prim = paths.resolve(prim_path);
         let mut components = Vec::new();
-        components.extend(host.segments().iter().copied().map(SpecComponent::Prim));
-        components.extend(
-            selections
-                .iter()
-                .copied()
-                .map(|(set, variant)| SpecComponent::VariantSelection { set, variant }),
+        let mut emitted_sites = 0_usize;
+        let mut prefix_segments = Vec::new();
+
+        for depth in 0..prim.depth() {
+            let segment = prim.segments()[depth];
+            prefix_segments.push(segment);
+            let prefix_path = Path::root().join(&prefix_segments);
+            components.push(SpecComponent::Prim(segment));
+
+            while emitted_sites < selection_sites.len()
+                && paths.resolve(selection_sites[emitted_sites].host_path) == &prefix_path
+            {
+                let site = selection_sites[emitted_sites];
+                components.push(SpecComponent::VariantSelection {
+                    set: site.set,
+                    variant: site.variant,
+                });
+                emitted_sites += 1;
+            }
+        }
+
+        assert!(
+            emitted_sites == selection_sites.len(),
+            "variant selection site host must be equal to or a prefix of the concrete prim path"
         );
-        components.extend(remainder.iter().copied().map(SpecComponent::Prim));
 
         Self {
             prim_path,
@@ -278,6 +328,84 @@ mod tests {
             "/Sarah{modelComplexity=full}FaceRig/EyesRig"
         );
         assert_eq!(spec.prim_path(), concrete);
+    }
+
+    #[test]
+    fn from_variant_selection_sites_supports_multiple_hosts() {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let foo = paths.intern(Path::parse_absolute("/Foo", &mut tokens).expect("path"));
+        let foo_a_number =
+            paths.intern(Path::parse_absolute("/Foo/A/Number", &mut tokens).expect("path"));
+        let which = tokens.intern("which");
+        let a = tokens.intern("A");
+        let count = tokens.intern("count");
+        let one = tokens.intern("one");
+
+        let spec = SpecPath::from_variant_selection_sites(
+            foo_a_number,
+            &[
+                VariantSelectionSite {
+                    host_path: foo,
+                    set: which,
+                    variant: a,
+                },
+                VariantSelectionSite {
+                    host_path: foo_a_number,
+                    set: count,
+                    variant: one,
+                },
+            ],
+            &paths,
+        );
+
+        assert_eq!(spec.display(&tokens), "/Foo{which=A}A/Number{count=one}");
+    }
+
+    #[test]
+    fn from_variant_selection_sites_supports_repeated_set_names_on_same_host() {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let host = paths
+            .intern(Path::parse_absolute("/DirectlyNestedVariants", &mut tokens).expect("path"));
+        let concrete = paths.intern(
+            Path::parse_absolute(
+                "/DirectlyNestedVariants/anim_spooky_anim_sphere",
+                &mut tokens,
+            )
+            .expect("path"),
+        );
+        let standin = tokens.intern("standin");
+        let shading = tokens.intern("shadingVariant");
+        let anim = tokens.intern("anim");
+        let spooky = tokens.intern("spooky");
+
+        let spec = SpecPath::from_variant_selection_sites(
+            concrete,
+            &[
+                VariantSelectionSite {
+                    host_path: host,
+                    set: standin,
+                    variant: anim,
+                },
+                VariantSelectionSite {
+                    host_path: host,
+                    set: shading,
+                    variant: spooky,
+                },
+                VariantSelectionSite {
+                    host_path: host,
+                    set: standin,
+                    variant: anim,
+                },
+            ],
+            &paths,
+        );
+
+        assert_eq!(
+            spec.display(&tokens),
+            "/DirectlyNestedVariants{standin=anim}{shadingVariant=spooky}{standin=anim}anim_spooky_anim_sphere"
+        );
     }
 
     #[test]

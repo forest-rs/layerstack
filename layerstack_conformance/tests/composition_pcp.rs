@@ -368,7 +368,6 @@ fn basic_specializes_and_references_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires propagated variant-qualified provenance through specializes"]
 fn basic_specializes_and_variants_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("BasicSpecializesAndVariants_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
@@ -376,7 +375,6 @@ fn basic_specializes_and_variants_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires multi-host nested variant-qualified spec-path provenance"]
 fn basic_nested_variants_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("BasicNestedVariants_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
@@ -384,7 +382,6 @@ fn basic_nested_variants_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires multi-host nested variant-qualified spec-path provenance"]
 fn basic_nested_variants_with_same_name_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("BasicNestedVariantsWithSameName_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
@@ -436,7 +433,6 @@ fn case1_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires propagated non-local variant-qualified source provenance"]
 fn tricky_non_local_variant_selection_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("TrickyNonLocalVariantSelection_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
@@ -452,7 +448,6 @@ fn tricky_variant_ancestral_selection_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires propagated weaker-selection variant-qualified source provenance"]
 fn tricky_variant_weaker_selection_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("TrickyVariantWeakerSelection_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
@@ -460,7 +455,6 @@ fn tricky_variant_weaker_selection_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires propagated independent variant-qualified source provenance"]
 fn tricky_variant_independent_selection_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("TrickyVariantIndependentSelection_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
@@ -468,7 +462,6 @@ fn tricky_variant_independent_selection_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires propagated variant-qualified provenance on nested reference sources"]
 fn bug74847_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("bug74847_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
@@ -483,7 +476,6 @@ fn tricky_nested_specializes2_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires propagated variant-qualified source provenance through nested references"]
 fn tricky_variant_selection_in_variant_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("TrickyVariantSelectionInVariant_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
@@ -491,7 +483,6 @@ fn tricky_variant_selection_in_variant_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires multi-host nested variant-qualified spec-path provenance"]
 fn tricky_variant_selection_in_variant2_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("TrickyVariantSelectionInVariant2_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
@@ -500,7 +491,6 @@ fn tricky_variant_selection_in_variant2_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires propagated variant-qualified provenance through references"]
 fn basic_variant_with_reference_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("BasicVariantWithReference_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
@@ -523,7 +513,6 @@ fn tricky_variant_weaker_selection3_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires multi-host variant-qualified spec-path provenance on remapped descendants"]
 fn tricky_variant_weaker_selection4_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("TrickyVariantWeakerSelection4_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
@@ -531,7 +520,6 @@ fn tricky_variant_weaker_selection4_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires propagated variant-qualified provenance through references"]
 fn basic_variant_with_connections_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("BasicVariantWithConnections_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
@@ -554,7 +542,6 @@ fn tricky_variant_in_payload_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires propagated variant-qualified provenance through inherits"]
 fn tricky_inherits_in_variants_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("TrickyInheritsInVariants_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
@@ -599,7 +586,6 @@ fn basic_instancing_and_nested_instances_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "requires propagated variant-qualified provenance through references"]
 fn basic_instancing_and_variants_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("BasicInstancingAndVariants_root");
     assert_layer_stack_matches(&loaded, &pcp_path);

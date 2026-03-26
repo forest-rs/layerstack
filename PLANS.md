@@ -143,3 +143,68 @@ separate spec-identity layer and to reference/payload target resolution.
   omitted target and an explicit prim path.
 - USDC pseudo-root metadata is currently only partially assembled, so
   `defaultPrim` support has to fit that code path cleanly.
+
+## Follow-On: Propagated Variant Provenance Through Arcs
+
+### Endpoint
+
+- Variant-qualified opinion provenance retains the host path for every variant
+  selection, including nested selections and repeated variant-set names.
+- `SpecPath` can represent multi-host variant qualification along one concrete
+  prim path instead of only one host-path insertion point.
+- Composition forwarding sites build provenance through one shared helper
+  rather than ad hoc `variant_spec_path(...)` calls.
+- The remaining ignored PCP composition tests that only require propagated
+  variant-qualified provenance are unignored and passing.
+
+### Goals
+
+- Preserve host-aware outer selection context in `VariantSpec`.
+- Centralize spec-path construction/remapping for local, variant, reference,
+  payload, inherit, and specializes forwarding.
+- Unblock the current ignored PCP cases around nested variants and
+  variant-qualified prim-stack/source provenance.
+
+### Non-goals
+
+- Implement fallback variant selection supplied externally by the AOUSD PCP
+  test harness.
+- Implement unrelated missing features like relocates or value clips in the
+  same branch.
+
+### Migration Note
+
+- Public API changes are expected in `layerstack`:
+  - Variant provenance metadata in the document model will carry host-aware
+    selection sites instead of plain `(set, variant)` pairs.
+  - Internal spec-path construction helpers will move from single-host builders
+    to a more general provenance context.
+
+### Phases
+
+1. Provenance model
+   - Add a host-aware variant selection site type.
+   - Store outer/required variant context using that type in the document
+     model.
+2. Spec-path construction
+   - Extend `SpecPath` with multi-host construction from a concrete prim path
+     plus ordered selection sites.
+   - Add focused tests for nested hosts and repeated set names.
+3. USDA emission
+   - Record nested variant context with host paths when emitting `VariantSpec`s,
+     including repeated set names on different hosts.
+4. Composition integration
+   - Replace ad hoc variant provenance builders in `compose.rs` with shared
+     helpers that preserve host context across arc forwarding.
+5. Validation
+   - Unignore the remaining provenance-related PCP cases.
+   - Add targeted regression tests for nested references, payloads, inherits,
+     specializes, and remapped descendants carrying variant-qualified sources.
+
+### Risks
+
+- Existing `VariantSpec::merge` behavior currently collapses nested contexts
+  that share the same set/variant names; the host path must become part of the
+  identity without making merge order unstable.
+- Provenance propagation appears in many code paths; partial conversion could
+  easily produce mixed single-host and multi-host behavior.

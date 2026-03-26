@@ -15,6 +15,7 @@ use crate::{
     listop::ListOp,
     path::{PathId, PathInterner},
     property::PropertyType,
+    spec_path::VariantSelectionSite,
     spline::SplineData,
 };
 
@@ -639,8 +640,9 @@ pub struct VariantSpec {
     /// Only populated for children from deeply nested variant contexts.
     ///
     /// E.g., a child from `standin=render > shadingVariant=spooky` registered
-    /// under `shadingVariant=spooky` would have `{child_tok: [(standin_tok, render_tok)]}`.
-    pub required_outer_selections: HashMap<TokenId, Vec<(TokenId, TokenId)>>,
+    /// under `shadingVariant=spooky` would carry the `standin=render` site so
+    /// composed provenance can recover both the selection and its host path.
+    pub required_outer_variant_sites: HashMap<TokenId, Vec<VariantSelectionSite>>,
     /// Composition arcs for child prims within this variant branch.
     ///
     /// When a child prim (e.g. `over "Child" (add references = ...)`) appears
@@ -687,12 +689,18 @@ pub struct VariantSpec {
     /// When a variant branch header includes `variants = { string v2 = "b" }`,
     /// those selections apply to the owning prim when this variant is selected.
     pub variant_selections: HashMap<TokenId, TokenId>,
+    /// Variant selections authored on child prims within this variant branch.
+    ///
+    /// This captures cases like `over "Child" (variants = { ... }) {}` inside
+    /// a selected branch, so the child prim resolves those selections only when
+    /// the parent branch is active.
+    pub child_variant_selections: HashMap<TokenId, HashMap<TokenId, TokenId>>,
     /// Outer selections required to reach this nested variant branch.
     ///
     /// Top-level branches leave this empty. Nested branches record the
     /// selection chain leading to the branch so composed provenance can retain
     /// the full variant-qualified source identity.
-    pub outer_selections: Vec<(TokenId, TokenId)>,
+    pub outer_variant_sites: Vec<VariantSelectionSite>,
 }
 
 impl VariantSpec {
@@ -708,8 +716,10 @@ impl VariantSpec {
                 self.authored_children.push(child);
             }
         }
-        for (child, reqs) in other.required_outer_selections {
-            self.required_outer_selections.entry(child).or_insert(reqs);
+        for (child, reqs) in other.required_outer_variant_sites {
+            self.required_outer_variant_sites
+                .entry(child)
+                .or_insert(reqs);
         }
         for entry in other.fields {
             if !self.fields.iter().any(|e| e.name == entry.name) {
@@ -744,11 +754,17 @@ impl VariantSpec {
                 }
             }
         }
+        for (child, selections) in other.child_variant_selections {
+            let existing = self.child_variant_selections.entry(child).or_default();
+            for (set, variant) in selections {
+                existing.entry(set).or_insert(variant);
+            }
+        }
         for (k, v) in other.variant_selections {
             self.variant_selections.entry(k).or_insert(v);
         }
-        if self.outer_selections.is_empty() {
-            self.outer_selections = other.outer_selections;
+        if self.outer_variant_sites.is_empty() {
+            self.outer_variant_sites = other.outer_variant_sites;
         }
     }
 }
@@ -777,6 +793,13 @@ pub struct PrimSpec {
     pub type_name: Option<TokenId>,
     /// Authored fields.
     pub fields: Vec<FieldEntry>,
+    /// Variant selections required to reach this concrete prim spec in its
+    /// defining layer.
+    ///
+    /// This preserves composed provenance for prims authored beneath variant
+    /// branches so descendant local opinions can retain their variant-qualified
+    /// source identity.
+    pub outer_variant_sites: Vec<VariantSelectionSite>,
     /// Authored child prim names in this layer, in file order.
     ///
     /// This is used as a deterministic baseline for child ordering. Child

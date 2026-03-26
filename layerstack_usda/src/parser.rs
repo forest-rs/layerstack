@@ -742,9 +742,13 @@ impl<'a> Parser<'a> {
             let saved_node_count = self.builder_node_count();
             self.bump(); // type name or key
             self.eat_trivia();
-            if self.peek() == Some(TokenKind::Ident) {
-                // Was a type prefix — next is the key ident.
-                self.bump(); // key
+            if self.peek() == Some(TokenKind::Ident) || self.at_string() {
+                // Was a type prefix — next is the key ident or quoted token.
+                if self.at_string() {
+                    self.parse_string_token();
+                } else {
+                    self.bump(); // key
+                }
                 self.expect(TokenKind::Equals);
                 self.parse_string_token();
             } else if self.peek() == Some(TokenKind::Equals) {

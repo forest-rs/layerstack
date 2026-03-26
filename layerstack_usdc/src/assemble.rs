@@ -19,12 +19,15 @@ use layerstack::HashMap;
 
 use layerstack::doc::{
     FieldValue, Layer, LayerId, LayerOffset, PrimSpec, Reference, Specifier, SublayerEntry, Value,
-    VariantSetSpec, VariantSpec, set_field_vec,
+    VariantSetSpec, VariantSpec, insert_property_field_if_absent, set_field_vec,
+    set_property_field_vec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp;
 use layerstack::path::{Path, PathId, PathInterner};
-use layerstack::{AssetResolver, ResolvedAsset};
+#[cfg(feature = "experimental_sparse_array_edits")]
+use layerstack::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
+use layerstack::{AssetResolver, PropertyType, ResolvedAsset};
 
 use crate::error::UsdcError;
 use crate::section::CrateSections;
@@ -372,6 +375,7 @@ impl AssembleCtx<'_> {
         prim: &mut PrimSpec,
     ) -> Result<(), UsdcError> {
         let name_tok = self.tokens.intern(attr_name);
+        let property_type = self.attribute_property_type(fields);
 
         // Look for time samples, spline, default value, or connection paths.
         // Priority: timeSamples > spline > default (§12.3).
@@ -387,16 +391,22 @@ impl AssembleCtx<'_> {
                             .iter()
                             .map(|(tc, v)| (*tc, self.convert_crate_value(v)))
                             .collect();
-                        set_field_vec(&mut prim.fields, name_tok, FieldValue::TimeSamples(ts));
+                        set_property_field_vec(
+                            &mut prim.fields,
+                            name_tok,
+                            FieldValue::TimeSamples(ts),
+                            property_type.clone(),
+                        );
                         has_time_samples = true;
                     }
                 }
                 "spline" => {
                     if !has_time_samples && let CrateValue::Spline(spline) = value {
-                        set_field_vec(
+                        set_property_field_vec(
                             &mut prim.fields,
                             name_tok,
                             FieldValue::Spline(spline.clone()),
+                            property_type.clone(),
                         );
                         has_spline = true;
                     }
@@ -404,13 +414,23 @@ impl AssembleCtx<'_> {
                 "default" => {
                     if !has_time_samples && !has_spline {
                         let converted = self.convert_crate_value(value);
-                        set_field_vec(&mut prim.fields, name_tok, FieldValue::Value(converted));
+                        set_property_field_vec(
+                            &mut prim.fields,
+                            name_tok,
+                            FieldValue::Value(converted),
+                            property_type.clone(),
+                        );
                         has_default = true;
                     }
                 }
                 "connectionPaths" => {
                     let listop = self.convert_connection_value(value)?;
-                    set_field_vec(&mut prim.fields, name_tok, FieldValue::PathListOp(listop));
+                    set_property_field_vec(
+                        &mut prim.fields,
+                        name_tok,
+                        FieldValue::PathListOp(listop),
+                        property_type.clone(),
+                    );
                 }
                 // Skip metadata fields (variability, custom, etc.).
                 "variability" | "custom" | "typeName" => {}
@@ -426,10 +446,11 @@ impl AssembleCtx<'_> {
         if !has_time_samples && !has_spline && !has_default {
             let has_connection = fields.iter().any(|(n, _)| n == "connectionPaths");
             if !has_connection {
-                layerstack::insert_field_if_absent(
+                insert_property_field_if_absent(
                     &mut prim.fields,
                     name_tok,
                     FieldValue::Value(Value::Null),
+                    property_type,
                 );
             }
         }
@@ -606,7 +627,17 @@ impl AssembleCtx<'_> {
                         } else {
                             self.build_relationship_field_value(&spec_fields[i])?
                         };
-                        set_field_vec(&mut variant.fields, prop_tok, fv);
+                        if spec.form == SpecForm::Attribute {
+                            let property_type = self.attribute_property_type(&spec_fields[i]);
+                            set_property_field_vec(
+                                &mut variant.fields,
+                                prop_tok,
+                                fv,
+                                property_type,
+                            );
+                        } else {
+                            set_field_vec(&mut variant.fields, prop_tok, fv);
+                        }
                     }
                 }
             }
@@ -648,6 +679,9 @@ impl AssembleCtx<'_> {
 
     /// Converts a [`CrateValue`] to a [`Value`].
     fn convert_crate_value(&mut self, cv: &CrateValue) -> Value {
+        if let Some(edit) = self.try_convert_experimental_array_edit(cv) {
+            return edit;
+        }
         match cv {
             CrateValue::None => Value::Blocked,
             CrateValue::Bool(b) => Value::Bool(*b),
@@ -722,6 +756,185 @@ impl AssembleCtx<'_> {
                 // Splines are handled as FieldValue::Spline, not plain values.
                 Value::Null
             }
+        }
+    }
+
+    #[cfg(feature = "experimental_sparse_array_edits")]
+    fn try_convert_experimental_array_edit(&mut self, cv: &CrateValue) -> Option<Value> {
+        let CrateValue::Dictionary(entries) = cv else {
+            return None;
+        };
+
+        let is_marker = entries.iter().any(|(key, value)| {
+            key == "__layerstack_sparse_array_edit__" && matches!(value, CrateValue::Bool(true))
+        });
+        if !is_marker {
+            return None;
+        }
+
+        let CrateValue::Array(op_values) = entries
+            .iter()
+            .find(|(key, _)| key == "ops")
+            .map(|(_, value)| value)?
+        else {
+            return None;
+        };
+
+        let mut ops = Vec::with_capacity(op_values.len());
+        for op_value in op_values {
+            ops.push(self.convert_experimental_array_edit_op(op_value)?);
+        }
+        Some(Value::ArrayEdit(ArrayEdit { ops }))
+    }
+
+    #[cfg(not(feature = "experimental_sparse_array_edits"))]
+    fn try_convert_experimental_array_edit(&mut self, _cv: &CrateValue) -> Option<Value> {
+        None
+    }
+
+    #[cfg(feature = "experimental_sparse_array_edits")]
+    fn convert_experimental_array_edit_op(&mut self, value: &CrateValue) -> Option<ArrayEditOp> {
+        let CrateValue::Dictionary(entries) = value else {
+            return None;
+        };
+
+        let op_name = entries.iter().find_map(|(key, value)| {
+            (key == "op").then_some(match value {
+                CrateValue::String(text) | CrateValue::Token(text) => Some(text.as_str()),
+                _ => None,
+            })?
+        })?;
+
+        match op_name {
+            "write" => Some(ArrayEditOp::Write {
+                src: self.convert_experimental_array_edit_operand(
+                    entries
+                        .iter()
+                        .find(|(key, _)| key == "src")
+                        .map(|(_, value)| value)?,
+                )?,
+                index: self.convert_experimental_array_edit_index(
+                    entries
+                        .iter()
+                        .find(|(key, _)| key == "index")
+                        .map(|(_, value)| value)?,
+                )?,
+            }),
+            "insert" => Some(ArrayEditOp::Insert {
+                src: self.convert_experimental_array_edit_operand(
+                    entries
+                        .iter()
+                        .find(|(key, _)| key == "src")
+                        .map(|(_, value)| value)?,
+                )?,
+                index: self.convert_experimental_array_edit_index(
+                    entries
+                        .iter()
+                        .find(|(key, _)| key == "index")
+                        .map(|(_, value)| value)?,
+                )?,
+            }),
+            "prepend" => Some(ArrayEditOp::Insert {
+                src: self.convert_experimental_array_edit_operand(
+                    entries
+                        .iter()
+                        .find(|(key, _)| key == "src")
+                        .map(|(_, value)| value)?,
+                )?,
+                index: ArrayIndex::Position(0),
+            }),
+            "append" => Some(ArrayEditOp::Insert {
+                src: self.convert_experimental_array_edit_operand(
+                    entries
+                        .iter()
+                        .find(|(key, _)| key == "src")
+                        .map(|(_, value)| value)?,
+                )?,
+                index: ArrayIndex::End,
+            }),
+            "erase" => Some(ArrayEditOp::Erase {
+                index: self.convert_experimental_array_edit_index(
+                    entries
+                        .iter()
+                        .find(|(key, _)| key == "index")
+                        .map(|(_, value)| value)?,
+                )?,
+            }),
+            "minsize" => Some(ArrayEditOp::MinSize {
+                len: self.convert_experimental_array_edit_len(
+                    entries
+                        .iter()
+                        .find(|(key, _)| key == "len")
+                        .map(|(_, value)| value)?,
+                )?,
+            }),
+            "maxsize" => Some(ArrayEditOp::MaxSize {
+                len: self.convert_experimental_array_edit_len(
+                    entries
+                        .iter()
+                        .find(|(key, _)| key == "len")
+                        .map(|(_, value)| value)?,
+                )?,
+            }),
+            "resize" => Some(ArrayEditOp::Resize {
+                len: self.convert_experimental_array_edit_len(
+                    entries
+                        .iter()
+                        .find(|(key, _)| key == "len")
+                        .map(|(_, value)| value)?,
+                )?,
+            }),
+            _ => None,
+        }
+    }
+
+    #[cfg(feature = "experimental_sparse_array_edits")]
+    fn convert_experimental_array_edit_operand(
+        &mut self,
+        value: &CrateValue,
+    ) -> Option<ArrayEditOperand> {
+        let CrateValue::Dictionary(entries) = value else {
+            return None;
+        };
+
+        if let Some(literal) = entries
+            .iter()
+            .find(|(key, _)| key == "literal")
+            .map(|(_, value)| value)
+        {
+            return Some(ArrayEditOperand::Literal(self.convert_crate_value(literal)));
+        }
+
+        entries
+            .iter()
+            .find(|(key, _)| key == "copyFrom")
+            .map(|(_, value)| value)
+            .and_then(|value| self.convert_experimental_array_edit_index(value))
+            .map(ArrayEditOperand::CopyFrom)
+    }
+
+    #[cfg(feature = "experimental_sparse_array_edits")]
+    fn convert_experimental_array_edit_index(&self, value: &CrateValue) -> Option<ArrayIndex> {
+        match value {
+            CrateValue::Int(v) => Some(ArrayIndex::Position(i64::from(*v))),
+            CrateValue::Int64(v) => Some(ArrayIndex::Position(*v)),
+            CrateValue::UInt(v) => Some(ArrayIndex::Position(i64::from(*v))),
+            CrateValue::UInt64(v) => i64::try_from(*v).ok().map(ArrayIndex::Position),
+            CrateValue::String(text) | CrateValue::Token(text) if text == "end" => {
+                Some(ArrayIndex::End)
+            }
+            _ => None,
+        }
+    }
+
+    #[cfg(feature = "experimental_sparse_array_edits")]
+    fn convert_experimental_array_edit_len(&self, value: &CrateValue) -> Option<usize> {
+        match value {
+            CrateValue::Int(v) if *v >= 0 => usize::try_from(*v).ok(),
+            CrateValue::Int64(v) if *v >= 0 => usize::try_from(*v).ok(),
+            CrateValue::UInt(v) => usize::try_from(*v).ok(),
+            CrateValue::UInt64(v) => usize::try_from(*v).ok(),
+            _ => None,
         }
     }
 
@@ -807,6 +1020,34 @@ impl AssembleCtx<'_> {
             }
         }
         Ok(FieldValue::PathListOp(ListOp::default()))
+    }
+
+    fn attribute_property_type(&mut self, fields: &[(String, CrateValue)]) -> PropertyType {
+        let mut type_name = String::new();
+        for (name, value) in fields {
+            if name == "typeName"
+                && let CrateValue::Token(token) = value
+            {
+                type_name = token.clone();
+                break;
+            }
+        }
+
+        let inferred_array = fields.iter().any(|(name, value)| {
+            matches!(name.as_str(), "default" | "timeSamples") && crate_value_is_array(value)
+        });
+
+        let is_array = type_name.ends_with("[]") || inferred_array;
+        let base_name = type_name.strip_suffix("[]").unwrap_or(type_name.as_str());
+        PropertyType::new(
+            if type_name.is_empty() {
+                base_name
+            } else {
+                type_name.as_str()
+            },
+            is_array,
+            default_scalar_for_type(base_name, self.tokens),
+        )
     }
 
     // ── List op conversion ──────────────────────────────────────────
@@ -1191,6 +1432,104 @@ fn parse_variant_property_path(path: &str) -> Option<(String, String, String, St
     ))
 }
 
+fn crate_value_is_array(value: &CrateValue) -> bool {
+    match value {
+        CrateValue::Array(_) => true,
+        CrateValue::TimeSamples(samples) => samples
+            .iter()
+            .any(|(_, sample)| crate_value_is_array(sample)),
+        _ => false,
+    }
+}
+
+fn default_scalar_for_type(type_hint: &str, tokens: &mut TokenInterner) -> Value {
+    match type_hint {
+        "bool" => Value::Bool(false),
+        "uchar" => Value::UChar(0),
+        "int" => Value::Int(0),
+        "uint" => Value::UInt(0),
+        "int64" => Value::Int64(0),
+        "uint64" => Value::UInt64(0),
+        "half" => Value::Half(0),
+        "float" => Value::Float(0.0),
+        "double" => Value::Double(0.0),
+        "string" => Value::String(Arc::from("")),
+        "token" => Value::Token(tokens.intern("")),
+        "asset" => Value::Asset(Arc::from("")),
+        "timecode" => Value::TimeCode(0.0),
+        "double2" => Value::Vec2d([0.0; 2]),
+        "double3" => Value::Vec3d([0.0; 3]),
+        "double4" => Value::Vec4d([0.0; 4]),
+        "float2" => Value::Vec2f([0.0; 2]),
+        "float3" => Value::Vec3f([0.0; 3]),
+        "float4" => Value::Vec4f([0.0; 4]),
+        "half2" => Value::Vec2h([0; 2]),
+        "half3" => Value::Vec3h([0; 3]),
+        "half4" => Value::Vec4h([0; 4]),
+        "int2" => Value::Vec2i([0; 2]),
+        "int3" => Value::Vec3i([0; 3]),
+        "int4" => Value::Vec4i([0; 4]),
+        "matrix2d" => Value::Matrix2d(Box::new([0.0; 4])),
+        "matrix3d" => Value::Matrix3d(Box::new([0.0; 9])),
+        "matrix4d" => Value::Matrix4d(Box::new([0.0; 16])),
+        "quatd" => Value::Quatd([0.0; 4]),
+        "quatf" => Value::Quatf([0.0; 4]),
+        "quath" => Value::Quath([0; 4]),
+        type_name
+            if type_name.ends_with('f')
+                && (type_name.starts_with("color")
+                    || type_name.starts_with("normal")
+                    || type_name.starts_with("point")
+                    || type_name.starts_with("vector")
+                    || type_name.starts_with("texCoord")) =>
+        {
+            match semantic_component_count(type_name) {
+                2 => Value::Vec2f([0.0; 2]),
+                3 => Value::Vec3f([0.0; 3]),
+                _ => Value::Vec4f([0.0; 4]),
+            }
+        }
+        type_name
+            if type_name.ends_with('d')
+                && (type_name.starts_with("color")
+                    || type_name.starts_with("normal")
+                    || type_name.starts_with("point")
+                    || type_name.starts_with("vector")
+                    || type_name.starts_with("texCoord")) =>
+        {
+            match semantic_component_count(type_name) {
+                2 => Value::Vec2d([0.0; 2]),
+                3 => Value::Vec3d([0.0; 3]),
+                _ => Value::Vec4d([0.0; 4]),
+            }
+        }
+        type_name
+            if type_name.ends_with('h')
+                && (type_name.starts_with("color")
+                    || type_name.starts_with("normal")
+                    || type_name.starts_with("point")
+                    || type_name.starts_with("vector")
+                    || type_name.starts_with("texCoord")) =>
+        {
+            match semantic_component_count(type_name) {
+                2 => Value::Vec2h([0; 2]),
+                3 => Value::Vec3h([0; 3]),
+                _ => Value::Vec4h([0; 4]),
+            }
+        }
+        "dictionary" => Value::Dictionary(Vec::new()),
+        _ => Value::Null,
+    }
+}
+
+fn semantic_component_count(name: &str) -> usize {
+    name.chars()
+        .rev()
+        .nth(1)
+        .and_then(|c| c.to_digit(10))
+        .unwrap_or(0) as usize
+}
+
 /// Returns the parent prim path for a path like `/A/B` → `/A`, `/A` → `/`.
 fn parent_prim_path(path: &str) -> Option<String> {
     if path == "/" {
@@ -1359,6 +1698,10 @@ fn merge_path_listop(target: &mut ListOp<PathId>, source: ListOp<PathId>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(feature = "experimental_sparse_array_edits")]
+    use crate::section::CrateSections;
+    #[cfg(feature = "experimental_sparse_array_edits")]
+    use alloc::vec;
 
     #[test]
     fn split_property_simple() {
@@ -1420,5 +1763,112 @@ mod tests {
     #[test]
     fn parent_prim_path_root() {
         assert!(parent_prim_path("/").is_none());
+    }
+
+    #[cfg(feature = "experimental_sparse_array_edits")]
+    #[test]
+    fn converts_experimental_sparse_array_edit_dictionary() {
+        struct NoopResolver;
+
+        impl AssetResolver for NoopResolver {
+            fn resolve(
+                &mut self,
+                _asset_path: &str,
+                _anchor: Option<LayerId>,
+                _tokens: &mut TokenInterner,
+                _paths: &mut PathInterner,
+            ) -> Result<ResolvedAsset, layerstack::AssetResolveError> {
+                unreachable!("asset resolution is not used in this test")
+            }
+
+            fn resolved_path(&self, _id: LayerId) -> Option<&str> {
+                None
+            }
+        }
+
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let sections = CrateSections {
+            tokens: Vec::new(),
+            strings: Vec::new(),
+            fields: Vec::new(),
+            fieldsets: Vec::new(),
+            paths: Vec::new(),
+            specs: Vec::new(),
+        };
+        let mut resolver = NoopResolver;
+        let mut ctx = AssembleCtx {
+            data: &[],
+            sections: &sections,
+            tokens: &mut tokens,
+            paths: &mut paths,
+            resolver: &mut resolver,
+            layer_id: LayerId(1),
+            resolved_layers: Vec::new(),
+        };
+
+        let value = ctx.convert_crate_value(&CrateValue::Dictionary(vec![
+            (
+                String::from("__layerstack_sparse_array_edit__"),
+                CrateValue::Bool(true),
+            ),
+            (
+                String::from("ops"),
+                CrateValue::Array(vec![
+                    CrateValue::Dictionary(vec![
+                        (
+                            String::from("op"),
+                            CrateValue::String(String::from("write")),
+                        ),
+                        (
+                            String::from("src"),
+                            CrateValue::Dictionary(vec![(
+                                String::from("literal"),
+                                CrateValue::Int(7),
+                            )]),
+                        ),
+                        (String::from("index"), CrateValue::Int(0)),
+                    ]),
+                    CrateValue::Dictionary(vec![
+                        (
+                            String::from("op"),
+                            CrateValue::String(String::from("append")),
+                        ),
+                        (
+                            String::from("src"),
+                            CrateValue::Dictionary(vec![(
+                                String::from("literal"),
+                                CrateValue::Int(9),
+                            )]),
+                        ),
+                        (
+                            String::from("index"),
+                            CrateValue::String(String::from("end")),
+                        ),
+                    ]),
+                ]),
+            ),
+        ]));
+
+        match value {
+            Value::ArrayEdit(edit) => {
+                assert_eq!(edit.ops.len(), 2);
+                assert!(matches!(
+                    edit.ops[0],
+                    ArrayEditOp::Write {
+                        src: ArrayEditOperand::Literal(Value::Int(7)),
+                        index: ArrayIndex::Position(0),
+                    }
+                ));
+                assert!(matches!(
+                    edit.ops[1],
+                    ArrayEditOp::Insert {
+                        src: ArrayEditOperand::Literal(Value::Int(9)),
+                        index: ArrayIndex::End,
+                    }
+                ));
+            }
+            other => panic!("expected array edit, got {other:?}"),
+        }
     }
 }

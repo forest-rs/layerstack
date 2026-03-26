@@ -13,6 +13,7 @@ categories = ["parser-implementations"]
 [features]
 default = []
 std = []
+experimental_sparse_array_edits = []
 
 [dependencies]
 layerstack = { path = "../layerstack" }

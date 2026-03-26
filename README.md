@@ -20,6 +20,7 @@ value resolution) and to keep it honest via a growing, fixture-driven conformanc
 - `layerstack_conformance/`: a std-only test harness that loads AOUSD supplemental fixtures and
   asserts behavior against `pcp.json` expectations
 - `layerstack_examples/`: runnable examples using the `layerstack` API
+- `docs/`: focused design notes for active architecture slices
 - `core-spec-supplemental-release_dec2025/`: upstream AOUSD supplemental test corpus (vendored)
 - `specs/`: normative spec PDFs used as implementation references
 
@@ -49,6 +50,13 @@ cargo fmt --all
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features --offline
 ```
+
+## Sparse Array Edits
+
+- Runnable example:
+  `cargo run -p layerstack_examples --example sparse_array_edits`
+- Follow-on architecture note:
+  `docs/generic-sparse-composition.md`
 
 ## Specs
 

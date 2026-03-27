@@ -209,7 +209,7 @@ impl Stage {
     /// Resolves a field on a prim.
     ///
     /// Returns scalar and dictionary values. For `ListOp` fields, use
-    /// [`Stage::resolve_token_list`] or [`Stage::resolve_path_list`].
+    /// [`Stage::resolve_token_list`] or [`Stage::resolve_target_list`].
     #[must_use]
     pub fn resolve_field(&self, prim: PathId, field: TokenId) -> Option<Resolved<Value>> {
         let resolved = self.resolve_value(prim, field)?;
@@ -247,7 +247,7 @@ impl Stage {
 
     /// Resolves a target-path `ListOp` field on a prim.
     #[must_use]
-    pub fn resolve_path_list(
+    pub fn resolve_target_list(
         &self,
         prim: PathId,
         field: TokenId,
@@ -262,6 +262,19 @@ impl Stage {
             | ResolvedValue::TokenList(_)
             | ResolvedValue::Dictionary(_) => None,
         }
+    }
+
+    /// Resolves a target-path `ListOp` field on a prim.
+    ///
+    /// This alias is kept for older call-sites that still think of these as
+    /// generic path lists. Prefer [`Stage::resolve_target_list`].
+    #[must_use]
+    pub fn resolve_path_list(
+        &self,
+        prim: PathId,
+        field: TokenId,
+    ) -> Option<Resolved<Vec<TargetPath>>> {
+        self.resolve_target_list(prim, field)
     }
 
     /// Resolves a field on a prim.
@@ -455,6 +468,30 @@ impl Stage {
         property_path: PropertyPath,
     ) -> Option<Resolved<ResolvedValue>> {
         self.resolve_value(property_path.prim_path(), property_path.property())
+    }
+
+    /// Resolves a scalar or dictionary field via concrete [`PropertyPath`].
+    #[must_use]
+    pub fn resolve_field_path(&self, property_path: PropertyPath) -> Option<Resolved<Value>> {
+        self.resolve_field(property_path.prim_path(), property_path.property())
+    }
+
+    /// Resolves a token-list field via concrete [`PropertyPath`].
+    #[must_use]
+    pub fn resolve_token_list_path(
+        &self,
+        property_path: PropertyPath,
+    ) -> Option<Resolved<Vec<TokenId>>> {
+        self.resolve_token_list(property_path.prim_path(), property_path.property())
+    }
+
+    /// Resolves a target-list field via concrete [`PropertyPath`].
+    #[must_use]
+    pub fn resolve_target_list_path(
+        &self,
+        property_path: PropertyPath,
+    ) -> Option<Resolved<Vec<TargetPath>>> {
+        self.resolve_target_list(property_path.prim_path(), property_path.property())
     }
 
     /// Resolves a concrete property path at a specific time.

@@ -1093,6 +1093,40 @@ impl Layer {
     pub fn insert_prim(&mut self, path: PathId, spec: PrimSpec) {
         self.prims.insert(path, spec);
     }
+
+    /// Inserts or replaces a property field by concrete [`PropertyPath`].
+    ///
+    /// If the owning prim does not yet exist in this layer, a default
+    /// [`PrimSpec`] is created first.
+    pub fn set_property(
+        &mut self,
+        property_path: PropertyPath,
+        value: impl Into<FieldValue>,
+    ) -> &mut Self {
+        let spec = self.prims.entry(property_path.prim_path()).or_default();
+        set_field_vec(&mut spec.fields, property_path.property(), value.into());
+        self
+    }
+
+    /// Inserts or replaces a typed property field by concrete [`PropertyPath`].
+    ///
+    /// If the owning prim does not yet exist in this layer, a default
+    /// [`PrimSpec`] is created first.
+    pub fn set_typed_property(
+        &mut self,
+        property_path: PropertyPath,
+        value: impl Into<FieldValue>,
+        property_type: PropertyType,
+    ) -> &mut Self {
+        let spec = self.prims.entry(property_path.prim_path()).or_default();
+        set_property_field_vec(
+            &mut spec.fields,
+            property_path.property(),
+            value.into(),
+            property_type,
+        );
+        self
+    }
 }
 
 /// A store for accessing layers and shared interners.

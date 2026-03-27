@@ -5,9 +5,10 @@ use alloc::sync::Arc;
 extern crate alloc;
 
 use layerstack::{
-    ArcKind, FieldEntry, FieldValue, InterpolationType, Layer, LayerId, ListOp, PrimSpec,
-    Reference, ResolvedValue, SchemaDefinition, SchemaRegistry, Stage, StageOptions, SublayerEntry,
-    TargetPath, Value, VariantSetSpec, VariantSpec, doc::InMemoryStore,
+    ArcKind, ArrayEdit, ArrayEditOp, FieldEntry, FieldValue, InterpolationType, Layer, LayerId,
+    ListOp, PrimSpec, PropertyType, Reference, ResolvedValue, SchemaDefinition, SchemaRegistry,
+    Stage, StageOptions, SublayerEntry, TargetPath, Value, VariantSetSpec, VariantSpec,
+    doc::InMemoryStore,
 };
 
 #[test]
@@ -172,6 +173,106 @@ fn referenced_property_targets_are_remapped_structurally() {
     assert_eq!(
         resolved.value,
         vec![TargetPath::property(model_shader_output)]
+    );
+}
+
+#[test]
+fn property_path_query_helpers_cover_field_and_target_lists() {
+    let mut store = InMemoryStore::default();
+
+    let labels = store.tokens.intern("labels");
+    let input = store.tokens.intern("inputs:surface");
+    let token_a = store.tokens.intern("A");
+    let token_b = store.tokens.intern("B");
+    let prim = store.path("/P");
+    let labels_path = store.property_path("/P.labels");
+    let input_path = store.property_path("/P.inputs:surface");
+    let shader_output = store.property_path("/Q.outputs:surface");
+
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(
+        prim,
+        PrimSpec::default()
+            .with_field(
+                labels,
+                FieldValue::TokenListOp(ListOp {
+                    explicit: Some(vec![token_a, token_b]),
+                    ..ListOp::default()
+                }),
+            )
+            .with_field(
+                input,
+                FieldValue::PathListOp(ListOp {
+                    explicit: Some(vec![TargetPath::property(shader_output)]),
+                    ..ListOp::default()
+                }),
+            ),
+    );
+    store.insert_layer(layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    assert_eq!(
+        stage
+            .resolve_token_list_path(labels_path)
+            .expect("labels")
+            .value,
+        vec![token_a, token_b]
+    );
+    assert_eq!(
+        stage
+            .resolve_target_list_path(input_path)
+            .expect("target list")
+            .value,
+        vec![TargetPath::property(shader_output)]
+    );
+}
+
+#[test]
+fn layer_property_helpers_author_without_manual_prim_lookup() {
+    let mut store = InMemoryStore::default();
+
+    let property = store.property_path("/P.answer");
+    let mut layer = Layer::new(LayerId(1));
+    layer.set_property(property, 42_i64);
+    store.insert_layer(layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    assert_eq!(
+        stage
+            .resolve_field_path(property)
+            .expect("property exists")
+            .value,
+        Value::Int64(42)
+    );
+}
+
+#[test]
+fn layer_typed_property_helper_preserves_sparse_array_defaults() {
+    let mut store = InMemoryStore::default();
+
+    let property = store.property_path("/P.indices");
+    let mut layer = Layer::new(LayerId(1));
+    layer.set_typed_property(
+        property,
+        Value::ArrayEdit(ArrayEdit {
+            ops: vec![ArrayEditOp::Resize { len: 3 }],
+        }),
+        PropertyType::new("int[]", true, Value::Int(0)),
+    );
+    store.insert_layer(layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    assert_eq!(
+        stage
+            .resolve_property_path(property)
+            .expect("property exists")
+            .value,
+        ResolvedValue::Scalar(Value::Array(vec![
+            Value::Int(0),
+            Value::Int(0),
+            Value::Int(0),
+        ]))
     );
 }
 

@@ -195,16 +195,19 @@ fn assert_pcp_composing(loaded: &mut LoadedStage, pcp_path: &Path) {
                     .resolve_path_list(prim_id, field)
                     .unwrap_or_else(|| panic!("missing relationship targets for {prop_path}"));
 
-                let expected_ids: Vec<_> = expected
+                let expected_targets: Vec<_> = expected
                     .into_iter()
                     .map(|p| {
-                        let path = layerstack::Path::parse_absolute(&p, &mut loaded.store.tokens)
-                            .expect("path");
-                        loaded.store.paths.intern(path)
+                        layerstack::TargetPath::parse(
+                            &p,
+                            &mut loaded.store.tokens,
+                            &mut loaded.store.paths,
+                        )
+                        .expect("target path")
                     })
                     .collect();
                 assert_eq!(
-                    resolved.value, expected_ids,
+                    resolved.value, expected_targets,
                     "relationship target mismatch for {prop_path}"
                 );
             }
@@ -221,16 +224,19 @@ fn assert_pcp_composing(loaded: &mut LoadedStage, pcp_path: &Path) {
                     .resolve_path_list(prim_id, field)
                     .unwrap_or_else(|| panic!("missing attribute connections for {prop_path}"));
 
-                let expected_ids: Vec<_> = expected
+                let expected_targets: Vec<_> = expected
                     .into_iter()
                     .map(|p| {
-                        let path = layerstack::Path::parse_absolute(&p, &mut loaded.store.tokens)
-                            .expect("path");
-                        loaded.store.paths.intern(path)
+                        layerstack::TargetPath::parse(
+                            &p,
+                            &mut loaded.store.tokens,
+                            &mut loaded.store.paths,
+                        )
+                        .expect("target path")
                     })
                     .collect();
                 assert_eq!(
-                    resolved.value, expected_ids,
+                    resolved.value, expected_targets,
                     "attribute connection mismatch for {prop_path}"
                 );
             }

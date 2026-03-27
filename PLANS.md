@@ -306,6 +306,14 @@ paths. It explicitly does not own variant-qualified provenance; that remains in
    - Add focused path parsing/display tests and query tests.
    - Run workspace verification and note remaining identity gaps for later
      slices (target paths, richer spec identities, relocates).
+5. Concrete target identity
+   - Add a first-class `TargetPath` for relationship/connection targets.
+   - Replace fake dotted `PathId` targets with structured prim-or-property
+     identity across doc/storage, USDA/USDC parsing, and composition remapping.
+6. Public API follow-through
+   - Add `PropertyPath`-based query helpers for typed property resolution.
+   - Add `Layer` editing helpers that author property fields via
+     `PropertyPath` instead of separate prim/token inputs.
 
 ### Risks
 

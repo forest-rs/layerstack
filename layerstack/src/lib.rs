@@ -53,7 +53,9 @@ pub use doc::{
 pub use interner::{TokenId, TokenInterner};
 pub use layer_stack::LayerStack;
 pub use listop::ListOp;
-pub use path::{Path, PathId, PathInterner, PropertyPath, PropertyPathError};
+pub use path::{
+    Path, PathId, PathInterner, PropertyPath, PropertyPathError, TargetPath, TargetPathError,
+};
 pub use prim_index::{ArcKind, Opinion, OpinionKey};
 pub use property::PropertyType;
 pub use schema::{PropertyDefinition, SchemaDefinition, SchemaRegistry};

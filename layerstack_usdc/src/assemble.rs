@@ -24,7 +24,7 @@ use layerstack::doc::{
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp;
-use layerstack::path::{Path, PathId, PathInterner, PropertyPath};
+use layerstack::path::{Path, PathId, PathInterner, PropertyPath, TargetPath};
 #[cfg(feature = "experimental_sparse_array_edits")]
 use layerstack::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
 use layerstack::{AssetResolver, PropertyType, ReferenceTarget, ResolvedAsset};
@@ -960,7 +960,9 @@ impl AssembleCtx<'_> {
                         FieldValue::TokenListOp(converted)
                     }
                     ValueType::PathListOp => {
-                        if let Ok(converted) = self.convert_path_listop(listop) {
+                        if let Ok(converted) =
+                            self.convert_connection_value(&CrateValue::ListOp(listop.clone()))
+                        {
                             FieldValue::PathListOp(converted)
                         } else {
                             FieldValue::Value(Value::Null)
@@ -1151,29 +1153,57 @@ impl AssembleCtx<'_> {
         result
     }
 
-    /// Converts a connection or target paths value to `ListOp<PathId>`.
+    /// Converts a connection or target paths value to `ListOp<TargetPath>`.
     fn convert_connection_value(
         &mut self,
         value: &CrateValue,
-    ) -> Result<ListOp<PathId>, UsdcError> {
+    ) -> Result<ListOp<TargetPath>, UsdcError> {
         match value {
-            CrateValue::ListOp(listop) => self.convert_path_listop(listop),
+            CrateValue::ListOp(listop) => self.convert_target_listop(listop),
             CrateValue::PathVector(paths) => {
-                let path_ids: Vec<PathId> = paths
+                let target_paths: Vec<TargetPath> = paths
                     .iter()
-                    .filter_map(|s| {
-                        Path::parse_absolute(s, self.tokens)
-                            .ok()
-                            .map(|p| self.paths.intern(p))
-                    })
+                    .filter_map(|s| TargetPath::parse(s, self.tokens, self.paths).ok())
                     .collect();
                 Ok(ListOp {
-                    explicit: Some(path_ids),
+                    explicit: Some(target_paths),
                     ..ListOp::default()
                 })
             }
             _ => Ok(ListOp::default()),
         }
+    }
+
+    fn convert_target_listop(
+        &mut self,
+        listop: &CrateListOp,
+    ) -> Result<ListOp<TargetPath>, UsdcError> {
+        let mut result = ListOp::default();
+
+        let convert_items = |items: &[CrateValue],
+                             tokens: &mut TokenInterner,
+                             paths: &mut PathInterner|
+         -> Vec<TargetPath> {
+            items
+                .iter()
+                .filter_map(|v| {
+                    if let CrateValue::String(s) = v {
+                        TargetPath::parse(s, tokens, paths).ok()
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        };
+
+        if let Some(items) = &listop.explicit_items {
+            result.explicit = Some(convert_items(items, self.tokens, self.paths));
+        }
+        result.prepend = convert_items(&listop.prepended_items, self.tokens, self.paths);
+        result.append = convert_items(&listop.appended_items, self.tokens, self.paths);
+        result.delete = convert_items(&listop.deleted_items, self.tokens, self.paths);
+
+        Ok(result)
     }
 
     /// Converts a USDC reference-encoded dictionary to a [`Reference`].

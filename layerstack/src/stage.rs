@@ -16,7 +16,7 @@ use crate::{
     },
     interner::TokenId,
     listop::{ListOp, resolve_list_chain},
-    path::{PathId, PropertyPath},
+    path::{PathId, PropertyPath, TargetPath},
     prim_index::{Opinion, PrimIndex},
     schema::SchemaRegistry,
     spec_path::SpecPath,
@@ -62,8 +62,8 @@ pub enum ResolvedValue {
     Scalar(Value),
     /// A token list value resolved by chaining `ListOps`.
     TokenList(Vec<TokenId>),
-    /// A path list value resolved by chaining `ListOps`.
-    PathList(Vec<PathId>),
+    /// A relationship or connection target list resolved by chaining `ListOps`.
+    PathList(Vec<TargetPath>),
     /// A dictionary value resolved by combining opinions.
     ///
     /// Spec: AOUSD Core §6.6.2.1 (dictionary combining), §12.2.5.
@@ -209,7 +209,7 @@ impl Stage {
     /// Resolves a field on a prim.
     ///
     /// Returns scalar and dictionary values. For `ListOp` fields, use
-    /// [`Stage::resolve_token_list`].
+    /// [`Stage::resolve_token_list`] or [`Stage::resolve_path_list`].
     #[must_use]
     pub fn resolve_field(&self, prim: PathId, field: TokenId) -> Option<Resolved<Value>> {
         let resolved = self.resolve_value(prim, field)?;
@@ -245,9 +245,13 @@ impl Stage {
         }
     }
 
-    /// Resolves a path `ListOp` field on a prim.
+    /// Resolves a target-path `ListOp` field on a prim.
     #[must_use]
-    pub fn resolve_path_list(&self, prim: PathId, field: TokenId) -> Option<Resolved<Vec<PathId>>> {
+    pub fn resolve_path_list(
+        &self,
+        prim: PathId,
+        field: TokenId,
+    ) -> Option<Resolved<Vec<TargetPath>>> {
         let resolved = self.resolve_value(prim, field)?;
         match resolved.value {
             ResolvedValue::PathList(v) => Some(Resolved {
@@ -325,7 +329,7 @@ impl Stage {
                 })
             }
             FieldValue::PathListOp(_) => {
-                let ops: Vec<ListOp<PathId>> = opinions
+                let ops: Vec<ListOp<TargetPath>> = opinions
                     .iter()
                     .filter_map(|op| match &op.value {
                         FieldValue::PathListOp(list) => Some(list.clone()),
@@ -333,7 +337,7 @@ impl Stage {
                     })
                     .collect();
                 Some(Resolved {
-                    value: ResolvedValue::PathList(resolve_list_chain::<PathId>(&[], ops)),
+                    value: ResolvedValue::PathList(resolve_list_chain::<TargetPath>(&[], ops)),
                     provenance: self.provenance_for(field, strongest),
                 })
             }
@@ -674,7 +678,7 @@ impl Stage {
                     ResolvedValue::TokenList(resolve_list_chain::<TokenId>(&[], [op]))
                 }
                 FieldValue::PathListOp(op) => {
-                    ResolvedValue::PathList(resolve_list_chain::<PathId>(&[], [op]))
+                    ResolvedValue::PathList(resolve_list_chain::<TargetPath>(&[], [op]))
                 }
                 FieldValue::TimeSamples(_) | FieldValue::Spline(_) => return None,
             },

@@ -24,7 +24,7 @@ use layerstack::doc::{
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp;
-use layerstack::path::{Path, PathId, PathInterner};
+use layerstack::path::{Path, PathId, PathInterner, TargetPath};
 use layerstack::spec_path::VariantSelectionSite;
 use layerstack::{
     ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, AssetResolver, PropertyType,
@@ -384,21 +384,17 @@ impl EmitCtx<'_> {
         let name_tok = self.tokens.intern(rel.name);
 
         if let Some(targets) = &rel.targets {
-            let path_ids: Vec<PathId> = targets
+            let target_paths: Vec<TargetPath> = targets
                 .iter()
-                .filter_map(|t| {
-                    Path::parse_absolute(t, self.tokens)
-                        .ok()
-                        .map(|p| self.paths.intern(p))
-                })
+                .filter_map(|t| TargetPath::parse(t, self.tokens, self.paths).ok())
                 .collect();
 
             let mut listop = ListOp::default();
             match rel.op {
-                ast::ListOpKind::Explicit => listop.explicit = Some(path_ids),
-                ast::ListOpKind::Prepend => listop.prepend = path_ids,
-                ast::ListOpKind::Append => listop.append = path_ids,
-                ast::ListOpKind::Delete => listop.delete = path_ids,
+                ast::ListOpKind::Explicit => listop.explicit = Some(target_paths),
+                ast::ListOpKind::Prepend => listop.prepend = target_paths,
+                ast::ListOpKind::Append => listop.append = target_paths,
+                ast::ListOpKind::Delete => listop.delete = target_paths,
             }
 
             // Merge with existing if present.
@@ -511,20 +507,16 @@ impl EmitCtx<'_> {
                     ast::PrimChild::Relationship(rel) => {
                         let name_tok = self.tokens.intern(rel.name);
                         if let Some(targets) = &rel.targets {
-                            let path_ids: Vec<PathId> = targets
+                            let target_paths: Vec<TargetPath> = targets
                                 .iter()
-                                .filter_map(|t| {
-                                    Path::parse_absolute(t, self.tokens)
-                                        .ok()
-                                        .map(|p| self.paths.intern(p))
-                                })
+                                .filter_map(|t| TargetPath::parse(t, self.tokens, self.paths).ok())
                                 .collect();
                             let mut listop = ListOp::default();
                             match rel.op {
-                                ast::ListOpKind::Explicit => listop.explicit = Some(path_ids),
-                                ast::ListOpKind::Prepend => listop.prepend = path_ids,
-                                ast::ListOpKind::Append => listop.append = path_ids,
-                                ast::ListOpKind::Delete => listop.delete = path_ids,
+                                ast::ListOpKind::Explicit => listop.explicit = Some(target_paths),
+                                ast::ListOpKind::Prepend => listop.prepend = target_paths,
+                                ast::ListOpKind::Append => listop.append = target_paths,
+                                ast::ListOpKind::Delete => listop.delete = target_paths,
                             }
                             if let Some(FieldValue::PathListOp(existing)) =
                                 get_field_mut(&mut variant_spec.fields, &name_tok)
@@ -541,7 +533,7 @@ impl EmitCtx<'_> {
                             insert_field_if_absent(
                                 &mut variant_spec.fields,
                                 name_tok,
-                                FieldValue::Value(Value::Null),
+                                FieldValue::PathListOp(ListOp::default()),
                             );
                         }
                     }
@@ -901,20 +893,16 @@ impl EmitCtx<'_> {
                 ast::PrimChild::Relationship(rel) => {
                     let name_tok = self.tokens.intern(rel.name);
                     if let Some(targets) = &rel.targets {
-                        let path_ids: Vec<PathId> = targets
+                        let target_paths: Vec<TargetPath> = targets
                             .iter()
-                            .filter_map(|t| {
-                                Path::parse_absolute(t, self.tokens)
-                                    .ok()
-                                    .map(|p| self.paths.intern(p))
-                            })
+                            .filter_map(|t| TargetPath::parse(t, self.tokens, self.paths).ok())
                             .collect();
                         let mut listop = ListOp::default();
                         match rel.op {
-                            ast::ListOpKind::Explicit => listop.explicit = Some(path_ids),
-                            ast::ListOpKind::Prepend => listop.prepend = path_ids,
-                            ast::ListOpKind::Append => listop.append = path_ids,
-                            ast::ListOpKind::Delete => listop.delete = path_ids,
+                            ast::ListOpKind::Explicit => listop.explicit = Some(target_paths),
+                            ast::ListOpKind::Prepend => listop.prepend = target_paths,
+                            ast::ListOpKind::Append => listop.append = target_paths,
+                            ast::ListOpKind::Delete => listop.delete = target_paths,
                         }
                         if let Some(FieldValue::PathListOp(existing)) =
                             get_field_mut(child_fields, &name_tok)
@@ -927,7 +915,7 @@ impl EmitCtx<'_> {
                         insert_field_if_absent(
                             child_fields,
                             name_tok,
-                            FieldValue::Value(Value::Null),
+                            FieldValue::PathListOp(ListOp::default()),
                         );
                     }
                 }
@@ -1094,23 +1082,19 @@ impl EmitCtx<'_> {
         listop
     }
 
-    fn emit_connection_listop(&mut self, conn: &ast::Connection<'_>) -> ListOp<PathId> {
-        let path_ids: Vec<PathId> = conn
+    fn emit_connection_listop(&mut self, conn: &ast::Connection<'_>) -> ListOp<TargetPath> {
+        let target_paths: Vec<TargetPath> = conn
             .targets
             .iter()
-            .filter_map(|t| {
-                Path::parse_absolute(t, self.tokens)
-                    .ok()
-                    .map(|p| self.paths.intern(p))
-            })
+            .filter_map(|t| TargetPath::parse(t, self.tokens, self.paths).ok())
             .collect();
 
         let mut listop = ListOp::default();
         match conn.op {
-            ast::ListOpKind::Explicit => listop.explicit = Some(path_ids),
-            ast::ListOpKind::Prepend => listop.prepend = path_ids,
-            ast::ListOpKind::Append => listop.append = path_ids,
-            ast::ListOpKind::Delete => listop.delete = path_ids,
+            ast::ListOpKind::Explicit => listop.explicit = Some(target_paths),
+            ast::ListOpKind::Prepend => listop.prepend = target_paths,
+            ast::ListOpKind::Append => listop.append = target_paths,
+            ast::ListOpKind::Delete => listop.delete = target_paths,
         }
         listop
     }
@@ -1618,7 +1602,7 @@ fn merge_ref_listop(target: &mut ListOp<Reference>, source: ListOp<Reference>) {
     target.delete.extend(source.delete);
 }
 
-fn merge_path_listop(target: &mut ListOp<PathId>, source: ListOp<PathId>) {
+fn merge_path_listop<T>(target: &mut ListOp<T>, source: ListOp<T>) {
     if source.explicit.is_some() {
         target.explicit = source.explicit;
     }
@@ -1631,7 +1615,7 @@ fn has_ref_content(listop: &ListOp<Reference>) -> bool {
     listop.explicit.is_some() || !listop.prepend.is_empty() || !listop.append.is_empty()
 }
 
-fn has_path_content(listop: &ListOp<PathId>) -> bool {
+fn has_path_content<T>(listop: &ListOp<T>) -> bool {
     listop.explicit.is_some() || !listop.prepend.is_empty() || !listop.append.is_empty()
 }
 

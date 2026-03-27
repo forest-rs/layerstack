@@ -13,7 +13,7 @@ use crate::{
     interner::TokenId,
     interner::TokenInterner,
     listop::ListOp,
-    path::{PathId, PathInterner, PropertyPath},
+    path::{PathId, PathInterner, PropertyPath, TargetPath},
     property::PropertyType,
     spec_path::VariantSelectionSite,
     spline::SplineData,
@@ -389,12 +389,13 @@ pub enum FieldValue {
     Value(Value),
     /// A list-op field over tokens (resolved by chaining).
     TokenListOp(ListOp<TokenId>),
-    /// A list-op field over paths (resolved by chaining).
+    /// A list-op field over relationship or connection target paths.
     ///
-    /// This is used for relationship targets and other path-valued list fields.
+    /// This is used for relationship targets, attribute connections, and other
+    /// concrete target-path list fields.
     ///
     /// Spec: AOUSD Core §12.4 (`ListOps`), applied to path lists.
-    PathListOp(ListOp<PathId>),
+    PathListOp(ListOp<TargetPath>),
     /// Time-varying samples: sorted `(timeCode, value)` pairs.
     ///
     /// `TimeSamples` take priority over default values per §12.3.
@@ -1147,6 +1148,16 @@ impl InMemoryStore {
     /// Panics if `s` is not a valid property path such as `/Prim.attrName`.
     pub fn property_path(&mut self, s: &str) -> PropertyPath {
         PropertyPath::parse(s, &mut self.tokens, &mut self.paths).expect("valid property path")
+    }
+
+    /// Parses a concrete relationship or connection target path.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `s` is not a valid target path such as `/Prim` or
+    /// `/Prim.attrName`.
+    pub fn target_path(&mut self, s: &str) -> TargetPath {
+        TargetPath::parse(s, &mut self.tokens, &mut self.paths).expect("valid target path")
     }
 }
 

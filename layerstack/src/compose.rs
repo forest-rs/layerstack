@@ -22,7 +22,7 @@ use crate::{
     doc::{FieldValue, LayerId, LayerOffset, LayerStore, Reference},
     interner::TokenId,
     layer_stack::LayerStack,
-    path::PathId,
+    path::{PathId, PropertyPath, TargetPath},
     population::populate,
     prim_index::{ArcKind, Opinion, OpinionKey, PrimIndex},
     property::PropertyType,
@@ -2613,28 +2613,54 @@ fn remap_field_value_paths(
             let mut out = list;
             out.explicit = out.explicit.map(|v| {
                 v.into_iter()
-                    .map(|p| remap_path_id(store, dest_root, src_root, p))
+                    .map(|p| remap_target_path(store, dest_root, src_root, p))
                     .collect()
             });
             out.prepend = out
                 .prepend
                 .into_iter()
-                .map(|p| remap_path_id(store, dest_root, src_root, p))
+                .map(|p| remap_target_path(store, dest_root, src_root, p))
                 .collect();
             out.append = out
                 .append
                 .into_iter()
-                .map(|p| remap_path_id(store, dest_root, src_root, p))
+                .map(|p| remap_target_path(store, dest_root, src_root, p))
                 .collect();
             out.delete = out
                 .delete
                 .into_iter()
-                .map(|p| remap_path_id(store, dest_root, src_root, p))
+                .map(|p| remap_target_path(store, dest_root, src_root, p))
                 .collect();
             FieldValue::PathListOp(out)
         }
         other => other,
     }
+}
+
+fn remap_target_path(
+    store: &mut dyn LayerStore,
+    dest_root: &crate::path::Path,
+    src_root: &crate::path::Path,
+    path: TargetPath,
+) -> TargetPath {
+    match path {
+        TargetPath::Prim(path) => TargetPath::Prim(remap_path_id(store, dest_root, src_root, path)),
+        TargetPath::Property(path) => {
+            TargetPath::Property(remap_property_path(store, dest_root, src_root, path))
+        }
+    }
+}
+
+fn remap_property_path(
+    store: &mut dyn LayerStore,
+    dest_root: &crate::path::Path,
+    src_root: &crate::path::Path,
+    path: PropertyPath,
+) -> PropertyPath {
+    PropertyPath::new(
+        remap_path_id(store, dest_root, src_root, path.prim_path()),
+        path.property(),
+    )
 }
 
 fn remap_path_id(
@@ -2649,34 +2675,6 @@ fn remap_path_id(
     };
     if let Some(rel) = rel {
         return store.paths_mut().intern(dest_root.join(&rel));
-    }
-
-    // Handle property paths like /Model.prop where src_root is /Model.
-    // The path segment "Model.prop" doesn't match "Model" directly, but
-    // the prim portion should still be remapped.
-    let p = store.paths().resolve(path).clone();
-    let src_depth = src_root.depth();
-    if p.depth() >= 1 && src_depth >= 1 && p.depth() == src_depth {
-        // Check if parent paths match.
-        let p_parent = p.parent();
-        let src_parent = src_root.parent();
-        if p_parent == src_parent {
-            let p_leaf_tok = p.leaf().unwrap();
-            let src_leaf_tok = src_root.leaf().unwrap();
-            let p_leaf = store.tokens().resolve(p_leaf_tok);
-            let src_leaf = store.tokens().resolve(src_leaf_tok);
-            if let Some(suffix) = p_leaf.strip_prefix(src_leaf)
-                && suffix.starts_with('.')
-            {
-                // Remap: dest_root's leaf + property suffix.
-                let dest_leaf = store.tokens().resolve(dest_root.leaf().unwrap());
-                let new_leaf_str = alloc::format!("{}{}", dest_leaf, suffix);
-                let new_leaf_tok = store.tokens_mut().intern(&new_leaf_str);
-                // Build dest path = dest_root's parent + new_leaf_tok.
-                let dest_parent = dest_root.parent().unwrap_or_else(crate::path::Path::root);
-                return store.paths_mut().intern(dest_parent.join(&[new_leaf_tok]));
-            }
-        }
     }
 
     path

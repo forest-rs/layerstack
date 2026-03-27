@@ -7,7 +7,7 @@ extern crate alloc;
 use layerstack::{
     ArcKind, FieldEntry, FieldValue, InterpolationType, Layer, LayerId, ListOp, PrimSpec,
     Reference, ResolvedValue, SchemaDefinition, SchemaRegistry, Stage, StageOptions, SublayerEntry,
-    Value, VariantSetSpec, VariantSpec, doc::InMemoryStore,
+    TargetPath, Value, VariantSetSpec, VariantSpec, doc::InMemoryStore,
 };
 
 #[test]
@@ -100,6 +100,79 @@ fn property_path_time_queries_match_prim_plus_field_queries() {
         .expect("sampled property exists");
 
     assert_eq!(by_property_path.value, by_field.value);
+}
+
+#[test]
+fn target_list_preserves_property_target_identity() {
+    let mut store = InMemoryStore::default();
+
+    let input = store.tokens.intern("inputs:surface");
+    let material = store.path("/Looks/Material");
+    let shader = store.path("/Looks/Shader");
+    let shader_output = store.property_path("/Looks/Shader.outputs:surface");
+
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(
+        material,
+        PrimSpec::default().with_field(
+            input,
+            FieldValue::PathListOp(ListOp {
+                explicit: Some(vec![store.target_path("/Looks/Shader.outputs:surface")]),
+                ..ListOp::default()
+            }),
+        ),
+    );
+    layer.insert_prim(shader, PrimSpec::default());
+    store.insert_layer(layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let resolved = stage
+        .resolve_path_list(material, input)
+        .expect("target list exists");
+
+    assert_eq!(resolved.value, vec![TargetPath::property(shader_output)]);
+}
+
+#[test]
+fn referenced_property_targets_are_remapped_structurally() {
+    let mut store = InMemoryStore::default();
+
+    let input = store.tokens.intern("inputs:surface");
+    let model = store.path("/Model");
+    let asset = store.path("/Asset");
+    let asset_shader = store.path("/Asset/Shader");
+    let model_shader_output = store.property_path("/Model/Shader.outputs:surface");
+
+    let mut root = Layer::new(LayerId(1));
+    root.insert_prim(
+        model,
+        PrimSpec::default().with_reference(Reference::new(LayerId(2), asset)),
+    );
+    store.insert_layer(root);
+
+    let mut asset_layer = Layer::new(LayerId(2));
+    asset_layer.insert_prim(
+        asset,
+        PrimSpec::default().with_field(
+            input,
+            FieldValue::PathListOp(ListOp {
+                explicit: Some(vec![store.target_path("/Asset/Shader.outputs:surface")]),
+                ..ListOp::default()
+            }),
+        ),
+    );
+    asset_layer.insert_prim(asset_shader, PrimSpec::default());
+    store.insert_layer(asset_layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let resolved = stage
+        .resolve_path_list(model, input)
+        .expect("remapped target list exists");
+
+    assert_eq!(
+        resolved.value,
+        vec![TargetPath::property(model_shader_output)]
+    );
 }
 
 #[test]

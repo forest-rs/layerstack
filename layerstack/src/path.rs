@@ -124,6 +124,75 @@ impl PropertyPath {
     }
 }
 
+/// A concrete relationship or connection target path.
+///
+/// Target paths may point at a prim or at a property on a prim. They are
+/// concrete scene identities, not provenance-bearing spec paths.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum TargetPath {
+    /// A prim target such as `/World/Looks/Metal`.
+    Prim(PathId),
+    /// A property target such as `/World/Looks/Metal.outputs:surface`.
+    Property(PropertyPath),
+}
+
+impl TargetPath {
+    /// Builds a prim target path from an interned prim path.
+    #[must_use]
+    pub const fn prim(path: PathId) -> Self {
+        Self::Prim(path)
+    }
+
+    /// Builds a property target path from a concrete [`PropertyPath`].
+    #[must_use]
+    pub const fn property(path: PropertyPath) -> Self {
+        Self::Property(path)
+    }
+
+    /// Parses a concrete target path such as `/Prim` or `/Prim.attrName`.
+    pub fn parse(
+        s: &str,
+        tokens: &mut TokenInterner,
+        paths: &mut PathInterner,
+    ) -> Result<Self, TargetPathError> {
+        if s.contains('.') {
+            return PropertyPath::parse(s, tokens, paths)
+                .map(Self::Property)
+                .map_err(TargetPathError::Property);
+        }
+        Path::parse_absolute(s, tokens)
+            .map(|path| Self::Prim(paths.intern(path)))
+            .map_err(TargetPathError::Prim)
+    }
+
+    /// Returns the concrete prim path targeted by this path.
+    #[must_use]
+    pub const fn prim_path(self) -> PathId {
+        match self {
+            Self::Prim(path) => path,
+            Self::Property(path) => path.prim_path(),
+        }
+    }
+
+    /// Returns the targeted property path, if this is a property target.
+    #[must_use]
+    pub const fn property_path(self) -> Option<PropertyPath> {
+        match self {
+            Self::Prim(_) => None,
+            Self::Property(path) => Some(path),
+        }
+    }
+
+    /// Formats this target path as a concrete prim or property path string.
+    #[must_use]
+    pub fn display(self, paths: &PathInterner, tokens: &TokenInterner) -> String {
+        match self {
+            Self::Prim(path) => paths.display(path, tokens),
+            Self::Property(path) => path.display(paths, tokens),
+        }
+    }
+}
+
 /// A segmented absolute path.
 ///
 /// v0.1 supports prim-style absolute paths like `/A/B/C`.
@@ -329,6 +398,15 @@ pub enum PropertyPathError {
     VariantSelectionNotAllowed,
 }
 
+/// Errors that can occur when parsing a [`TargetPath`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TargetPathError {
+    /// The input was parsed as a prim target path and was invalid.
+    Prim(PathError),
+    /// The input was parsed as a property target path and was invalid.
+    Property(PropertyPathError),
+}
+
 impl From<PathError> for PropertyPathError {
     fn from(value: PathError) -> Self {
         match value {
@@ -410,5 +488,23 @@ mod tests {
             PropertyPath::parse("/World/Cube.visibility.extra", &mut tokens, &mut paths),
             Err(PropertyPathError::InvalidPrimPath)
         );
+    }
+
+    #[test]
+    fn target_path_parse_round_trips_prim_target() {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let target = TargetPath::parse("/World/Cube", &mut tokens, &mut paths).unwrap();
+        assert_eq!(target.display(&paths, &tokens), "/World/Cube");
+        assert_eq!(target.property_path(), None);
+    }
+
+    #[test]
+    fn target_path_parse_round_trips_property_target() {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let target = TargetPath::parse("/World/Cube.visibility", &mut tokens, &mut paths).unwrap();
+        assert_eq!(target.display(&paths, &tokens), "/World/Cube.visibility");
+        assert!(target.property_path().is_some());
     }
 }

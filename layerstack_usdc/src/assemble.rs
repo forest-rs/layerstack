@@ -422,18 +422,17 @@ impl AssembleCtx<'_> {
                         has_spline = true;
                     }
                 }
-                "default" => {
-                    if !has_time_samples && !has_spline {
-                        let converted = self.convert_crate_value(value);
-                        set_property_field_vec(
-                            &mut prim.fields,
-                            name_tok,
-                            FieldValue::Value(converted),
-                            property_type.clone(),
-                        );
-                        has_default = true;
-                    }
+                "default" if !has_time_samples && !has_spline => {
+                    let converted = self.convert_crate_value(value);
+                    set_property_field_vec(
+                        &mut prim.fields,
+                        name_tok,
+                        FieldValue::Value(converted),
+                        property_type.clone(),
+                    );
+                    has_default = true;
                 }
+                "default" => {}
                 "connectionPaths" => {
                     let listop = self.convert_connection_value(value)?;
                     set_property_field_vec(

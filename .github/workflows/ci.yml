@@ -70,6 +70,7 @@ on:
   push:
     branches:
       - main
+      - check-ci
 
 jobs:
   fmt:

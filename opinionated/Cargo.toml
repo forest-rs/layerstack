@@ -1,0 +1,16 @@
+[package]
+name = "opinionated"
+description = "Layered sparse opinion resolution over typed addresses."
+readme = "README.md"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["composition", "incremental", "layering", "opinions"]
+categories = ["algorithms", "data-structures"]
+
+[lints]
+workspace = true
+
+[dependencies]

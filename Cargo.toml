@@ -7,6 +7,7 @@ members = [
     "layerstack_usda",
     "layerstack_usdc",
     "layerstack_usdz",
+    "opinionated",
     "wind_tunnel",
 ]
 

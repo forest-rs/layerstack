@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! USDZ (packaged scene) reader for layerstack.
 //!
 //! Reads USDZ package files per AOUSD Core §16.4 and produces [`Layer`] /

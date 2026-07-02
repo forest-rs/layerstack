@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Composition entry points.
 //!
 //! This module is responsible for producing composition results (`PrimIndex`es)

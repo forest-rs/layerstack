@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! List operation semantics (`ListOps`).
 //!
 //! A [`ListOp`] edits an ordered, unique-element list. `ListOps` can be chained in

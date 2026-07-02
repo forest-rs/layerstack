@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! USDC value type and spec form enumerations.
 //!
 //! Spec: AOUSD Core §16.3.9 (value representations), §16.3.10 (value types).

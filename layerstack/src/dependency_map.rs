@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Dependency edges discovered during stage composition.
 //!
 //! When [`crate::stage::StageOptions::with_dependencies`] is enabled, the

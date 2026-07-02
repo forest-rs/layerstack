@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Timeline composition for a video-editor-like scenario.
 //!
 //! This example builds a simple multi-track timeline — the kind you'd see in a

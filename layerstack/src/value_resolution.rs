@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Internal value-resolution helpers shared by [`crate::stage`].
 //!
 //! This module owns sparse-family detection and strong-over-weak folding for

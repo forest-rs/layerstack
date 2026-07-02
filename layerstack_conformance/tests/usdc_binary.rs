@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Integration tests for USDC binary file parsing.
 //!
 //! These tests read the supplemental spec's `gen_*.usdc` reference files

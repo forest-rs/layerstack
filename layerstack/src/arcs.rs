@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Composition arc helpers.
 //!
 //! This module provides small helpers for composing arc-specific data such as

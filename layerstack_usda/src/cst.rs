@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Lossless concrete syntax tree for USDA files.
 //!
 //! The CST preserves every byte of the original source — whitespace, comments,

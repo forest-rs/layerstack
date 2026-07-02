@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! LZ4 block decompression and integer array decoding.
 //!
 //! USDC uses LZ4 compression for token strings, field value reps, and

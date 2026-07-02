@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! String and path interning for `layerstack`.
 //!
 //! This module keeps the public types small (`TokenId`, `PathId`) while allowing

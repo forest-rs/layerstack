@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Spline data model and evaluation for time-varying attribute resolution.
 //!
 //! Splines provide smooth interpolation between knots using Bézier or Hermite

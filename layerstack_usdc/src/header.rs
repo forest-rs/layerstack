@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! USDC file header parsing.
 //!
 //! The header occupies the first 32 bytes of a USDC file and contains the

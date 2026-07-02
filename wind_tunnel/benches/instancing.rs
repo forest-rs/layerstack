@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Instancing scaling benchmarks.
 //!
 //! Measures `Stage::compose` time as the number of instanced prims grows.

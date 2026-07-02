@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Emits layerstack [`Layer`] / [`PrimSpec`] from a USDA AST.
 //!
 //! This module converts the typed AST (produced by [`crate::lower`]) into

@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! USDC loader for conformance testing.
 //!
 //! Reads `.usdc` binary files through `layerstack_usdc::read_usdc` and

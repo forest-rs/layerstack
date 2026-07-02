@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Abstract syntax tree for USDA files.
 //!
 //! These types represent what was *authored* in a `.usda` file, not what

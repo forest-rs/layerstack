@@ -580,6 +580,30 @@ where
         }
     }
 
+    /// Resolves one field on one address over a fallback seed.
+    ///
+    /// The fallback participates as the weakest dense seed without being
+    /// modeled as an extra layer; see [`resolve_ordered_chain_with_fallback`]
+    /// for the exact semantics.
+    #[must_use]
+    pub fn resolve_with_fallback(
+        &self,
+        address: A,
+        field: F,
+        fallback: &ResolvedValue<V, I, K>,
+    ) -> Resolution<V, I, K, P> {
+        match self.opinions.get(&OpinionKey::new(address, field)) {
+            Some(bucket) => resolve_ordered_chain_with_fallback(
+                bucket.iter().map(|opinion| ChainOpinion {
+                    op: &opinion.op,
+                    provenance: &opinion.provenance,
+                }),
+                fallback,
+            ),
+            None => Resolution::Absent,
+        }
+    }
+
     /// Resolves one field and returns an explanation report.
     ///
     /// The report includes contributing opinions, incompatible mixed operation
@@ -638,6 +662,52 @@ where
     K: Clone + Ord + 'a,
     P: Clone + 'a,
 {
+    fold_ordered_chain(opinions_strong_to_weak, None)
+}
+
+/// Resolves an already ordered chain of opinions over a fallback seed.
+///
+/// Behaves exactly like [`resolve_ordered_chain`], with `fallback`
+/// participating as the weakest dense seed for the resolved family: list
+/// chains fold over the fallback list and dictionary chains combine over the
+/// fallback entries. Scalar chains are strongest-wins and never consult the
+/// seed, and a fallback whose shape does not match the resolved family is
+/// ignored.
+///
+/// The fallback is a seed, not an opinion — it carries no provenance. An
+/// empty chain therefore still resolves [`Resolution::Absent`], and a
+/// strongest block still resolves [`Resolution::Blocked`]. A weaker block
+/// cuts off weaker opinions, but edits accumulated from stronger opinions
+/// still fold over the seed, matching [`resolve_family_chain`]'s block
+/// semantics.
+#[must_use]
+pub fn resolve_ordered_chain_with_fallback<'a, V, I, K, P>(
+    opinions_strong_to_weak: impl IntoIterator<Item = ChainOpinion<'a, V, I, K, P>>,
+    fallback: &ResolvedValue<V, I, K>,
+) -> Resolution<V, I, K, P>
+where
+    V: Clone + 'a,
+    I: Clone + Eq + 'a,
+    K: Clone + Ord + 'a,
+    P: Clone + 'a,
+{
+    fold_ordered_chain(opinions_strong_to_weak, Some(fallback))
+}
+
+/// The shared fold used by both ordered-chain entry points.
+///
+/// When `fallback` is `Some`, it seeds the resolved family's fold as the
+/// weakest dense value; when `None`, families fold over their empty seeds.
+fn fold_ordered_chain<'a, V, I, K, P>(
+    opinions_strong_to_weak: impl IntoIterator<Item = ChainOpinion<'a, V, I, K, P>>,
+    fallback: Option<&ResolvedValue<V, I, K>>,
+) -> Resolution<V, I, K, P>
+where
+    V: Clone + 'a,
+    I: Clone + Eq + 'a,
+    K: Clone + Ord + 'a,
+    P: Clone + 'a,
+{
     let mut opinions = opinions_strong_to_weak.into_iter();
     let Some(strongest) = opinions.next() else {
         return Resolution::Absent;
@@ -661,8 +731,12 @@ where
                     OpinionOp::Set(_) | OpinionOp::Dictionary(_) => {}
                 }
             }
+            let seed = match fallback {
+                Some(ResolvedValue::List(items)) => items.as_slice(),
+                _ => &[],
+            };
             Resolution::Resolved(Resolved {
-                value: ResolvedValue::List(resolve_list_chain(&[], ops)),
+                value: ResolvedValue::List(resolve_list_chain(seed, ops)),
                 provenance: strongest.provenance.clone(),
             })
         }
@@ -675,6 +749,9 @@ where
                     OpinionOp::Block => break,
                     OpinionOp::Set(_) | OpinionOp::List(_) => {}
                 }
+            }
+            if let Some(ResolvedValue::Dictionary(entries)) = fallback {
+                dicts.push(entries.as_slice());
             }
             Resolution::Resolved(Resolved {
                 value: ResolvedValue::Dictionary(combine_dictionary_chain(dicts)),

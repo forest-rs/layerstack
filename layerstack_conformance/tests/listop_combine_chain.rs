@@ -10,12 +10,10 @@ use std::path::PathBuf;
 
 use layerstack::listop::resolve_list_chain;
 
-use layerstack_conformance::listop_vectors::load_cases;
+use layerstack_conformance::{listop_vectors::load_cases, workspace_root};
 
 fn vectors_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("workspace root")
+    workspace_root()
         .join("core-spec-supplemental-release_dec2025")
         .join("data_types")
         .join("tests")

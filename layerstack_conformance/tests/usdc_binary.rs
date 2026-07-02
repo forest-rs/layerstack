@@ -22,11 +22,11 @@ use layerstack::doc::{FieldValue, LayerId, Value, get_field};
 use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset};
+use layerstack_conformance::workspace_root;
 
 /// Path to the binary test assets relative to the workspace root.
 fn binary_assets_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../core-spec-supplemental-release_dec2025/file_formats/tests/assets/binary")
+    workspace_root().join("core-spec-supplemental-release_dec2025/file_formats/tests/assets/binary")
 }
 
 /// Reads a gen_*.usdc file and returns the assembled layer plus store.

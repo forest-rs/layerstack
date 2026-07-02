@@ -10,12 +10,11 @@ use layerstack::{LayerId, LayerStack, Stage, StageOptions};
 use layerstack_conformance::{
     pcp::load_pcp_json,
     usda_real::{LoadedStage, load_entry_usda},
+    workspace_root,
 };
 
 fn assets_dir() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .expect("workspace root")
+    workspace_root()
         .join("core-spec-supplemental-release_dec2025")
         .join("composition")
         .join("tests")

@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Conformance harness for `layerstack`.
 //!
 //! This crate is intentionally `std`-based and may use external dependencies to

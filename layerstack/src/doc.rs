@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Document model: layers, prim specs, and composition arcs.
 //!
 //! Spec: AOUSD Core §6–§7 (scene description data model and opinions), plus §10

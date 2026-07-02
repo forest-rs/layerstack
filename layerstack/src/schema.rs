@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Schema registry and fallback value resolution.
 //!
 //! Schemas define property sets with fallback values for prim types.

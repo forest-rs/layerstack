@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Stage facade and value resolution.
 //!
 //! Spec: AOUSD Core §11–§12 (stage population and value resolution).

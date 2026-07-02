@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! USDZ loader for conformance testing.
 //!
 //! Reads `.usdz` package files through `layerstack_usdz::read_usdz` and

@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Golden tests for `ListOp` behavior.
 //!
 //! Inputs are sourced from the AOUSD supplemental release:

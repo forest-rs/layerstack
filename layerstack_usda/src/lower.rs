@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Lowers a lossless CST into the typed AST.
 //!
 //! This module walks a [`SyntaxTree`] and produces the [`ast`](crate::ast)

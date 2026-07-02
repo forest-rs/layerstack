@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Table of Contents parsing.
 //!
 //! The TOC sits at the end of a USDC file (at the offset stored in the

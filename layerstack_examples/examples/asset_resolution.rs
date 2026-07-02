@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Asset resolution: loading referenced layers on demand.
 //!
 //! In a real pipeline, layers live in files, databases, or on the network.

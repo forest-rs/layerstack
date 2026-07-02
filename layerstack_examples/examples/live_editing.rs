@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Interactive editing with `LiveStage`.
 //!
 //! This example simulates an interactive scene editor: the user makes a

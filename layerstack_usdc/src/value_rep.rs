@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Value representation decoder for USDC fields.
 //!
 //! Each field in the FIELDS section carries an 8-byte `RawValueRep` that

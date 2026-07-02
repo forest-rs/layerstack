@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Typed schema layer: domain-specific types over `Value::Opaque`.
 //!
 //! The layerstack kernel is domain-neutral — it stores `Value` enums and

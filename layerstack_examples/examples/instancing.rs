@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Instancing and inheritable primvars: a coral reef.
 //!
 //! This example demonstrates three key USD concepts:

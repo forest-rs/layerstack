@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Source locations and spans.
 //!
 //! All tokens and CST/AST nodes carry [`Span`] information linking them

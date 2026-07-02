@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Validate USDA files through the full parse pipeline.
 //!
 //! Runs each file through CST → AST → emit and reports diagnostics.

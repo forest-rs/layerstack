@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! `ListOp` conformance tests derived from AOUSD supplemental materials.
 //!
 //! Source: `core-spec-supplemental-release_dec2025/data_types/tests/combine_chain/*.json`.

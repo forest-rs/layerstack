@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Recursive descent parser for the USDA text format.
 //!
 //! Consumes a token stream from [`crate::lexer`] and produces a lossless

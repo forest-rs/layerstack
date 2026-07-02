@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! `layerstack` is a small, domain-neutral composition kernel aligned with the
 //! [OpenUSD Core specification][spec].
 //!

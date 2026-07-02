@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 #![allow(
     clippy::cast_possible_truncation,
     reason = "bench indices are trivially small"

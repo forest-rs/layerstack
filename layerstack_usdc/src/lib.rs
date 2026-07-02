@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! USDC (binary crate format) reader for layerstack.
 //!
 //! Reads USDC files per AOUSD Core §16.3 and produces [`Layer`] / [`PrimSpec`]

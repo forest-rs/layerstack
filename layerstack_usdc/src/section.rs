@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Section parsers for the six USDC sections.
 //!
 //! Each section is located via the TOC and parsed into in-memory structures

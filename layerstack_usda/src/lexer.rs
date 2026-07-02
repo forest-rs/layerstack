@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Tokenizer for the USDA text format.
 //!
 //! Produces a stream of [`Token`]s with [`Span`] information from a USDA

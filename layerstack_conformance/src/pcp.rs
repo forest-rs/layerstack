@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Minimal loader for the supplemental `pcp.json` expectation files.
 
 use std::collections::BTreeMap;

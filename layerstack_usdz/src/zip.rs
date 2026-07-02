@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Minimal ZIP reader for USDZ packages.
 //!
 //! USDZ files are constrained ZIP archives (§16.4.1):

@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Asset resolution: mapping asset path URIs to layers.
 //!
 //! Asset paths appear in references, payloads, and sublayer includes. Before

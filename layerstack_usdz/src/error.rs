@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Error types for USDZ reading.
 //!
 //! Spec: AOUSD Core §16.4 (USDZ package format).

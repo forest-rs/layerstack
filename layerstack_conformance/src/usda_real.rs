@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! USDA loader using the production `layerstack_usda` parser and emit pipeline.
 //!
 //! Routes through the real lexer → CST → AST → emit pipeline.

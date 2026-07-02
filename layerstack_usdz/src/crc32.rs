@@ -1,3 +1,6 @@
+// Copyright 2026 the LayerStack Authors
+// SPDX-License-Identifier: Apache-2.0 OR MIT
+
 //! Pure-Rust CRC-32 implementation.
 //!
 //! Uses the standard IEEE polynomial (0xEDB88320, bit-reflected) and a

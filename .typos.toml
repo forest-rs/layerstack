@@ -20,5 +20,5 @@ ignore-hidden = false
 # Typos doesn't know that, though.
 extend-exclude = [
     "/.git",
-    "core-spec-supplemental-release_dec2025/"
+    "core-spec-supplemental-release_dec2025/",
 ]

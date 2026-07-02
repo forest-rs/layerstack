@@ -71,6 +71,13 @@ extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
+mod family;
+
+pub use family::{
+    DictionaryFamily, FamilyEvent, FamilyMember, FamilyReport, FamilyResolution, ListFamily,
+    OpinionFamily, ScalarFamily, resolve_family_chain, resolve_family_chain_report,
+};
+
 /// A stable key for resolving one field on one address.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct OpinionKey<A, F> {

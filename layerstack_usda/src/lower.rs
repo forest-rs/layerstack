@@ -1864,9 +1864,9 @@ def \"A\" {
     fn lower_inherits() {
         let src = "#usda 1.0\ndef \"A\" (\n    inherits = </B>\n) {\n}\n";
         let r = parse(src);
-        if let PrimMeta::Inherits(inh) = &r.layer.prims[0].metadata[0] {
-            assert_eq!(inh.kind, ListOpKind::Explicit);
-            let items = inh.items.as_ref().unwrap();
+        if let PrimMeta::Inherits(inherits) = &r.layer.prims[0].metadata[0] {
+            assert_eq!(inherits.kind, ListOpKind::Explicit);
+            let items = inherits.items.as_ref().unwrap();
             assert_eq!(items, &["/B"]);
         } else {
             panic!("expected Inherits, got {:?}", r.layer.prims[0].metadata[0]);

@@ -1280,11 +1280,11 @@ fn dependency_map_records_inherit_arc() {
     assert!(stage.has_dependencies());
 
     let arcs = stage.arcs_targeting(p);
-    let inh_arc = arcs
+    let inherits_arc = arcs
         .iter()
         .find(|a| a.arc_kind == ArcKind::Inherits)
         .expect("inherit arc exists");
-    assert_eq!(inh_arc.source, base);
+    assert_eq!(inherits_arc.source, base);
 }
 
 #[test]

@@ -2104,14 +2104,14 @@ fn add_inherit_edge_opinions(
                 }
 
                 // Forward variant opinions from selected variants through inherits.
-                let inh_selections = resolve_forwarded_variant_selections(
+                let inherits_selections = resolve_forwarded_variant_selections(
                     store,
                     local_stack,
                     *dest_path_id,
                     local_stack,
                     *remote_path_id,
                 );
-                for (set, selected) in &inh_selections {
+                for (set, selected) in &inherits_selections {
                     if let Some(set_spec) = spec.variant_sets.get(set)
                         && let Some(variant_spec) = set_spec.variants.get(selected)
                     {

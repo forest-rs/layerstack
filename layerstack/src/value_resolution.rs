@@ -3,10 +3,22 @@
 
 //! Internal value-resolution helpers shared by [`crate::stage`].
 //!
-//! This module owns sparse-family detection and strong-over-weak folding for
-//! attribute value families that require composed sparse opinions.
+//! This module owns sparse-family detection and chain construction for
+//! attribute value families that require composed sparse opinions. The
+//! strong-over-weak fold itself is delegated to [`opinionated`]'s family
+//! kernel via [`resolve_family_chain`]: each query mode samples authored
+//! opinions into family member values first (the kernel is time-agnostic),
+//! and [`ArrayFamily`] expresses the sparse array-edit semantics over
+//! [`OpinionFamily`].
+
+use alloc::vec::Vec;
+
+use opinionated::{
+    FamilyMember, FamilyResolution, IgnoreReason, OpinionFamily, OpinionKind, resolve_family_chain,
+};
 
 use crate::{
+    array_edit::ArrayEdit,
     doc::{FieldValue, InterpolationType, Value},
     prim_index::Opinion,
     property::PropertyType,
@@ -45,12 +57,54 @@ enum SparseValueFamily {
     Array,
 }
 
-#[derive(Clone, Debug)]
-enum OpinionFoldStep {
-    Blocked,
-    Member(Value),
-    Skip,
-    Stop,
+/// The sparse array-edit family, expressed over [`opinionated`]'s kernel.
+///
+/// [`Value::Array`] is the dense member, [`Value::ArrayEdit`] the sparse edit,
+/// and [`Value::Blocked`] the block. The seed is the schema fallback when one
+/// is present (materialized over the empty array if it is itself an edit),
+/// otherwise the empty array. The carried [`PropertyType`] lets edits perform
+/// typed materialization (`minsize`/`resize` fill values) during apply.
+#[derive(Clone, Copy, Debug)]
+struct ArrayFamily<'a> {
+    /// Typed property metadata for edit materialization.
+    property_type: Option<&'a PropertyType>,
+    /// Optional weakest dense seed, such as a schema fallback.
+    fallback: Option<&'a Value>,
+}
+
+impl OpinionFamily<Value> for ArrayFamily<'_> {
+    type Value = Vec<Value>;
+    type Edit = ArrayEdit;
+
+    fn classify(&self, op: &Value) -> FamilyMember<Self::Value, Self::Edit> {
+        match op {
+            Value::Array(items) => FamilyMember::Dense(items.clone()),
+            Value::ArrayEdit(edit) => FamilyMember::Sparse(edit.clone()),
+            Value::Blocked => FamilyMember::Block,
+            // Chain construction filters foreign values before the fold
+            // reaches classify, so this arm is defensive. `OpinionKind`
+            // cannot name domain families, so the reason degrades to a
+            // set-over-set mismatch.
+            _ => FamilyMember::Foreign(IgnoreReason::IncompatibleOperation {
+                resolved: OpinionKind::Set,
+                ignored: OpinionKind::Set,
+            }),
+        }
+    }
+
+    fn apply(&self, edit: Self::Edit, base: Self::Value) -> Self::Value {
+        let mut value = base;
+        edit.apply_in_place(&mut value, self.property_type);
+        value
+    }
+
+    fn seed(&self) -> Self::Value {
+        match self.fallback {
+            Some(Value::Array(items)) => items.clone(),
+            Some(Value::ArrayEdit(edit)) => edit.compose_over_array(&[], self.property_type),
+            _ => Vec::new(),
+        }
+    }
 }
 
 /// Attempts sparse-family resolution for the given opinion chain.
@@ -123,25 +177,28 @@ impl SparseValueFamily {
         }
     }
 
+    /// Resolves a default-value query by folding the family kernel over the
+    /// authored dense/sparse opinions.
+    ///
+    /// A stronger dense opinion outside the family ends the chain: weaker
+    /// family members stay hidden behind it, and any accumulated edits
+    /// materialize over the seed.
     fn resolve_default(
         self,
         opinions: &[Opinion],
         fallback: Option<&Value>,
         property_type: Option<&PropertyType>,
     ) -> SparseResolveResult {
-        self.fold_sparse_members(
-            opinions,
-            fallback,
-            property_type,
-            |opinion| match &opinion.value {
-                FieldValue::Value(Value::Blocked) => OpinionFoldStep::Blocked,
-                FieldValue::Value(value) if self.matches(value) => {
-                    OpinionFoldStep::Member(value.clone())
-                }
-                FieldValue::Value(_) => OpinionFoldStep::Stop,
-                _ => OpinionFoldStep::Skip,
-            },
-        )
+        let mut chain = Vec::new();
+        for opinion in opinions {
+            match &opinion.value {
+                FieldValue::Value(Value::Blocked) => chain.push(Value::Blocked),
+                FieldValue::Value(value) if self.matches(value) => chain.push(value.clone()),
+                FieldValue::Value(_) => break,
+                _ => {}
+            }
+        }
+        self.fold(&chain, fallback, property_type)
     }
 
     fn resolve_at_time(
@@ -151,65 +208,55 @@ impl SparseValueFamily {
         interp: InterpolationType,
         property_type: Option<&PropertyType>,
     ) -> SparseResolveResult {
-        self.fold_sparse_members(opinions, None, property_type, |opinion| {
+        let mut chain = Vec::new();
+        for opinion in opinions {
             match &opinion.value {
-                FieldValue::Value(Value::Blocked) => OpinionFoldStep::Blocked,
-                FieldValue::Value(value) if self.matches(value) => {
-                    OpinionFoldStep::Member(value.clone())
-                }
+                FieldValue::Value(Value::Blocked) => chain.push(Value::Blocked),
+                FieldValue::Value(value) if self.matches(value) => chain.push(value.clone()),
                 FieldValue::TimeSamples(samples) => {
+                    // The kernel is time-agnostic: sample the opinion into a
+                    // family member before it is classified.
                     let mapped_time = opinion.layer_offset.map_time(time);
-                    match interpolate_samples(samples, mapped_time, interp) {
-                        Some(value) if self.matches(&value) => OpinionFoldStep::Member(value),
-                        _ => OpinionFoldStep::Skip,
+                    if let Some(value) = interpolate_samples(samples, mapped_time, interp)
+                        && self.matches(&value)
+                    {
+                        chain.push(value);
                     }
                 }
-                _ => OpinionFoldStep::Skip,
+                _ => {}
             }
-        })
+        }
+        self.fold(&chain, None, property_type)
     }
 
-    fn fold_sparse_members(
+    /// Folds pre-sampled family member values through [`opinionated`]'s
+    /// chain kernel.
+    fn fold(
         self,
-        opinions: &[Opinion],
+        chain: &[Value],
         fallback: Option<&Value>,
         property_type: Option<&PropertyType>,
-        mut next_step: impl FnMut(&Opinion) -> OpinionFoldStep,
     ) -> SparseResolveResult {
-        let mut acc: Option<Value> = None;
-
-        for opinion in opinions {
-            match next_step(opinion) {
-                OpinionFoldStep::Blocked => return SparseResolveResult::Blocked,
-                OpinionFoldStep::Member(value) => {
-                    acc = match acc {
-                        Some(strong) => self.compose_over(&strong, value, property_type),
-                        None => Some(value),
-                    };
-                    if let Some(value) = acc.as_ref()
-                        && self.is_dense(value)
-                    {
-                        break;
-                    }
-                }
-                OpinionFoldStep::Skip => {}
-                OpinionFoldStep::Stop => break,
-            }
-        }
-
-        if let Some(fallback) = fallback {
-            let needs_fallback = acc.as_ref().is_none_or(|value| !self.is_dense(value));
-            if needs_fallback {
-                acc = match acc {
-                    Some(strong) => self.compose_over(&strong, fallback.clone(), property_type),
-                    None => Some(fallback.clone()),
+        match self {
+            Self::Array => {
+                let family = ArrayFamily {
+                    property_type,
+                    fallback,
                 };
+                match resolve_family_chain(&family, chain.iter().map(|op| (op, &()))) {
+                    FamilyResolution::Resolved { value, .. } => {
+                        SparseResolveResult::Resolved(Value::Array(value))
+                    }
+                    FamilyResolution::Blocked { .. } => SparseResolveResult::Blocked,
+                    // No opinion contributed: an array-family fallback still
+                    // resolves on its own; otherwise the family does not
+                    // apply to this chain.
+                    FamilyResolution::Absent if fallback.is_some() => {
+                        SparseResolveResult::Resolved(Value::Array(family.seed()))
+                    }
+                    FamilyResolution::Absent => SparseResolveResult::NotApplicable,
+                }
             }
-        }
-
-        match self.materialize(acc, property_type) {
-            Some(value) => SparseResolveResult::Resolved(value),
-            None => SparseResolveResult::NotApplicable,
         }
     }
 
@@ -218,41 +265,6 @@ impl SparseValueFamily {
             (self, value),
             (Self::Array, Value::Array(_) | Value::ArrayEdit(_))
         )
-    }
-
-    fn is_dense(self, value: &Value) -> bool {
-        matches!((self, value), (Self::Array, Value::Array(_)))
-    }
-
-    fn compose_over(
-        self,
-        strong: &Value,
-        weak: Value,
-        property_type: Option<&PropertyType>,
-    ) -> Option<Value> {
-        match (self, strong, weak) {
-            (Self::Array, Value::Array(items), _) => Some(Value::Array(items.clone())),
-            (Self::Array, Value::ArrayEdit(edit), Value::Array(items)) => {
-                Some(Value::Array(edit.compose_over_array(&items, property_type)))
-            }
-            (Self::Array, Value::ArrayEdit(edit), Value::ArrayEdit(weak_edit)) => {
-                Some(Value::ArrayEdit(edit.compose_over(&weak_edit)))
-            }
-            _ => None,
-        }
-    }
-
-    fn materialize(
-        self,
-        value: Option<Value>,
-        property_type: Option<&PropertyType>,
-    ) -> Option<Value> {
-        match (self, value) {
-            (Self::Array, Some(Value::ArrayEdit(edit))) => {
-                Some(Value::Array(edit.compose_over_array(&[], property_type)))
-            }
-            (_, other) => other,
-        }
     }
 }
 
@@ -528,6 +540,37 @@ mod tests {
             resolved,
             SparseResolveResult::Blocked,
             "blocking opinions must suppress weaker sparse-family values"
+        );
+    }
+
+    #[test]
+    fn stronger_edits_materialize_over_seed_when_block_cuts_chain() {
+        let (spec_path, field) = test_ids();
+        let opinions = vec![
+            array_opinion(
+                spec_path,
+                field,
+                FieldValue::Value(Value::ArrayEdit(ArrayEdit {
+                    ops: vec![ArrayEditOp::Insert {
+                        src: ArrayEditOperand::Literal(Value::Int(7)),
+                        index: ArrayIndex::End,
+                    }],
+                })),
+                0,
+            ),
+            array_opinion(spec_path, field, FieldValue::Value(Value::Blocked), 1),
+            array_opinion(spec_path, field, FieldValue::Value(array_value(&[1, 2])), 2),
+        ];
+
+        let resolved = resolve_sparse_value(
+            &opinions,
+            SparseQuery::Default { fallback: None },
+            Some(&int_array_type()),
+        );
+        assert_eq!(
+            resolved,
+            SparseResolveResult::Resolved(array_value(&[7])),
+            "a block hides weaker opinions, but stronger sparse edits still materialize over the seed"
         );
     }
 

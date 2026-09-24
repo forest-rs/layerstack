@@ -429,6 +429,11 @@ impl Stage {
     /// opinion with timeSamples is used. If no timeSamples exist, falls back to
     /// `resolve_value`.
     ///
+    /// Array-valued attributes compose instead: every opinion's samples
+    /// bracketing `time` compose strongest over weakest (sparse array edits
+    /// over dense arrays), and the composed bracketing samples are then held
+    /// or interpolated, as in OpenUSD.
+    ///
     /// Spec: AOUSD Core §12.3.2.2 (timeSamples), §12.5 (interpolation).
     #[must_use]
     pub fn resolve_value_at_time(
@@ -443,7 +448,11 @@ impl Stage {
 
         match resolve_sparse_value(
             opinions,
-            SparseQuery::AtTime { time, interp },
+            SparseQuery::AtTime {
+                time,
+                interp,
+                fallback: None,
+            },
             index.property_type_for(&field),
         ) {
             SparseResolveResult::Resolved(value) => {

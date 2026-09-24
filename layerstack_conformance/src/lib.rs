@@ -19,6 +19,7 @@ pub mod export_fixtures;
 pub mod listop_vectors;
 pub mod pcp;
 pub mod pcp_txt;
+pub mod scalar;
 pub mod usda_real;
 pub mod usdc;
 pub mod usdz;

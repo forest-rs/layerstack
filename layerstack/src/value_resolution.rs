@@ -6,11 +6,14 @@
 //! This module owns sparse-family detection and chain construction for
 //! attribute value families that require composed sparse opinions. The
 //! strong-over-weak fold itself is delegated to [`opinionated`]'s family
-//! kernel via [`resolve_family_chain`]: [`ArrayFamily`] expresses the sparse
-//! array-edit semantics over [`OpinionFamily`] and samples each authored
-//! opinion as the kernel reaches it (the kernel itself is time-agnostic).
+//! kernel via [`resolve_family_chain`], which is time-agnostic:
+//!
+//! - default-time queries fold authored defaults through [`ArrayFamily`];
+//! - time queries first plan the composed series' bracketing samples
+//!   ([`plan_brackets`]), then fold the chain once per bracketing sample
+//!   through [`PickedArrayFamily`] and interpolate the composed results.
 
-use alloc::vec::Vec;
+use alloc::{vec, vec::Vec};
 
 use opinionated::{
     FamilyMember, FamilyResolution, IgnoreReason, OpinionFamily, OpinionKind, resolve_family_chain,
@@ -33,10 +36,12 @@ pub(crate) enum SparseQuery<'a> {
     },
     /// Resolve a time-varying query at a specific time.
     AtTime {
-        /// Query time.
+        /// Query time, in stage time.
         time: f64,
         /// Interpolation mode.
         interp: InterpolationType,
+        /// Optional weakest dense seed, such as a schema fallback.
+        fallback: Option<&'a Value>,
     },
 }
 
@@ -56,61 +61,32 @@ enum SparseValueFamily {
     Array,
 }
 
-/// How [`ArrayFamily`] reads one authored opinion into a family member.
+/// The sparse array-edit family over authored defaults, expressed over
+/// [`opinionated`]'s kernel.
 ///
-/// The kernel is time-agnostic, so sampling happens inside
-/// [`ArrayFamily::classify`]: an opinion is only sampled when the fold actually
-/// reaches it.
-#[derive(Clone, Copy, Debug)]
-enum Sampling {
-    /// Read default values; time samples do not participate.
-    Default,
-    /// Read default values and time samples at `time`.
-    AtTime {
-        /// Query time, before each opinion's layer offset is applied.
-        time: f64,
-        /// Interpolation mode.
-        interp: InterpolationType,
-    },
-}
-
-/// The sparse array-edit family, expressed over [`opinionated`]'s kernel.
-///
-/// The family folds authored [`Opinion`]s directly. [`Value::Array`] is the
-/// dense member, [`Value::ArrayEdit`] the sparse edit, and [`Value::Blocked`]
-/// the block, whether authored as a default or as a time sample. The seed is
-/// the schema fallback when one is present (materialized over the empty array
-/// if it is itself an edit), otherwise the empty array. The carried
-/// [`PropertyType`] lets edits perform typed materialization
-/// (`minsize`/`resize` fill values) during apply.
+/// [`Value::Array`] is the dense member, [`Value::ArrayEdit`] the sparse edit,
+/// and [`Value::Blocked`] the block. Time samples do not participate in a
+/// default-time query. The seed is the schema fallback when one is present
+/// (materialized over the empty array if it is itself an edit), otherwise the
+/// empty array. The carried [`PropertyType`] lets edits perform typed
+/// materialization (`minsize`/`resize` fill values) during apply.
 ///
 /// Because the kernel pulls opinions lazily and stops at the first dense
-/// member or block, opinions hidden behind them are never sampled or cloned,
-/// and each participating value is cloned (or sampled) exactly once.
+/// member or block, opinions hidden behind them are never cloned, and each
+/// participating value is cloned exactly once.
 #[derive(Clone, Copy, Debug)]
 struct ArrayFamily<'a> {
     /// Typed property metadata for edit materialization.
     property_type: Option<&'a PropertyType>,
     /// Optional weakest dense seed, such as a schema fallback.
     fallback: Option<&'a Value>,
-    /// How opinions are read into members.
-    sampling: Sampling,
 }
 
 impl ArrayFamily<'_> {
-    fn classify_borrowed(value: &Value) -> FamilyMember<Vec<Value>, ArrayEdit> {
+    fn classify_value(value: &Value) -> FamilyMember<Vec<Value>, ArrayEdit> {
         match value {
             Value::Array(items) => FamilyMember::Dense(items.clone()),
             Value::ArrayEdit(edit) => FamilyMember::Sparse(edit.clone()),
-            Value::Blocked => FamilyMember::Block,
-            _ => Self::foreign(),
-        }
-    }
-
-    fn classify_owned(value: Value) -> FamilyMember<Vec<Value>, ArrayEdit> {
-        match value {
-            Value::Array(items) => FamilyMember::Dense(items),
-            Value::ArrayEdit(edit) => FamilyMember::Sparse(edit),
             // A sampled block blocks exactly like an authored default block.
             //
             // Spec: AOUSD Core §12.3.6 (blocked attributes: individual time
@@ -136,16 +112,8 @@ impl OpinionFamily<Opinion> for ArrayFamily<'_> {
     type Edit = ArrayEdit;
 
     fn classify(&self, opinion: &Opinion) -> FamilyMember<Self::Value, Self::Edit> {
-        match (&opinion.value, self.sampling) {
-            (FieldValue::Value(value), _) => Self::classify_borrowed(value),
-            (FieldValue::TimeSamples(samples), Sampling::AtTime { time, interp }) => {
-                // Spec: AOUSD Core §12.3.2.1 (layer offset and scale).
-                let mapped_time = opinion.layer_offset.map_time(time);
-                match interpolate_samples(samples, mapped_time, interp) {
-                    Some(value) => Self::classify_owned(value),
-                    None => Self::foreign(),
-                }
-            }
+        match &opinion.value {
+            FieldValue::Value(value) => Self::classify_value(value),
             _ => Self::foreign(),
         }
     }
@@ -181,6 +149,9 @@ impl OpinionFamily<Opinion> for ArrayFamily<'_> {
 /// the block still compose over the weakest dense value that survives it: the
 /// fallback seed if one is supplied, otherwise the empty array, since the
 /// proposal requires a resolved array value to always be dense.
+///
+/// Time queries compose the bracketing samples of the chain before
+/// interpolating; see [`resolve_array_at_time`].
 pub(crate) fn resolve_sparse_value(
     opinions: &[Opinion],
     query: SparseQuery<'_>,
@@ -242,7 +213,6 @@ impl SparseValueFamily {
                     let family = ArrayFamily {
                         property_type,
                         fallback,
-                        sampling: Sampling::Default,
                     };
                     // A stronger dense default outside the family ends the
                     // chain: weaker family members stay hidden behind it, and
@@ -254,14 +224,19 @@ impl SparseValueFamily {
                             .take_while(|opinion| !is_foreign_default(&opinion.value)),
                     )
                 }
-                SparseQuery::AtTime { time, interp } => {
-                    let family = ArrayFamily {
+                SparseQuery::AtTime {
+                    time,
+                    interp,
+                    fallback,
+                } => resolve_array_at_time(
+                    opinions,
+                    time,
+                    interp,
+                    ArrayFamily {
                         property_type,
-                        fallback: None,
-                        sampling: Sampling::AtTime { time, interp },
-                    };
-                    fold_array_chain(&family, opinions.iter())
-                }
+                        fallback,
+                    },
+                ),
             },
         }
     }
@@ -280,7 +255,7 @@ fn is_foreign_default(value: &FieldValue) -> bool {
 /// family kernel.
 ///
 /// `opinions` is consumed lazily: the kernel stops pulling at the first dense
-/// member or block, so weaker opinions are neither sampled nor cloned.
+/// member or block, so weaker opinions are never cloned.
 fn fold_array_chain<'o>(
     family: &ArrayFamily<'_>,
     opinions: impl Iterator<Item = &'o Opinion>,
@@ -297,6 +272,525 @@ fn fold_array_chain<'o>(
         }
         FamilyResolution::Absent => SparseResolveResult::NotApplicable,
     }
+}
+
+// ── Time queries ─────────────────────────────────────────────────────────
+//
+// A time query cannot fold each opinion's own interpolated value: an edit
+// sampled at one time and a dense value sampled at another must compose at
+// matching times, and interpolation must see composed values. OpenUSD and the
+// sparse-array-edits proposal ("Evaluating a Strength-Ordering of Samples at
+// a Specific Time", `OpenUSD-proposals/proposals/sparse-array-edits/README.md`)
+// therefore compose each opinion's bracketing samples into a composed series
+// trimmed to the (at most two) samples bracketing the query time, and
+// interpolate only those. See `_GetValueFromResolveInfoImpl` and
+// `_ResolveInfoResolver::ProcessLayerAtTime` in `pxr/usd/usd/stage.cpp`
+// (OpenUSD 26.08) and `SdfComposeTimeSampleSeries` in
+// `pxr/usd/sdf/composeTimeSampleSeries.h`.
+//
+// Layerstack splits that walk in two. [`plan_brackets`] runs the series
+// composition without touching values: each composed sample records its time,
+// whether it still composes (it is sparse), and which of every participating
+// opinion's bracketing samples it is made of. The existing time-agnostic
+// kernel then folds the chain once for each composed bracketing sample,
+// reading exactly those samples ([`PickedArrayFamily`]), so values are only
+// composed (and cloned) for the at most two samples that are interpolated.
+
+/// Sample times closer than this are "close" in OpenUSD's two tolerance
+/// rules, which apply to different times and must stay separate:
+///
+/// - composing two series treats their samples as one time
+///   (`Sdf_timesEqualDefaultFn` in `pxr/usd/sdf/composeTimeSampleSeries.h`),
+///   see [`Entry::compose_under`];
+/// - within one series, two bracketing samples this close in layer time do
+///   not interpolate: the lower one holds (`_GetInterpolatingSamplesImpl` in
+///   `pxr/usd/usd/interpolators.cpp`), see [`Bracket::of`].
+///
+/// Both use `GfIsClose(a, b, 1e-6)`, a strict `|a - b| < 1e-6`.
+const TIME_EPSILON: f64 = 1e-6;
+
+/// `GfIsClose(a, b, TIME_EPSILON)`; also true for equal infinities.
+fn times_close(a: f64, b: f64) -> bool {
+    a == b || (a - b).abs() < TIME_EPSILON
+}
+
+/// Which of an opinion's bracketing samples a composed sample is made of.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Pick {
+    Lower,
+    Upper,
+}
+
+/// One opinion's bracketing samples for a time query, in stage time.
+///
+/// A default value is a single sample at `-inf`, as in the proposal ("a
+/// Series with a single sample at the earliest time") and OpenUSD. A spline
+/// is a default-like sample with no array value (`None`). Splines and
+/// non-array values end the fold, as a dense value outside the family ends a
+/// default-time fold.
+#[derive(Clone, Copy, Debug)]
+struct Bracket<'o> {
+    /// Position of the opinion among the participating opinions.
+    index: usize,
+    lower: (f64, Option<&'o Value>),
+    upper: (f64, Option<&'o Value>),
+}
+
+impl<'o> Bracket<'o> {
+    /// Returns `opinion`'s samples bracketing stage time `query`, or `None`
+    /// when the opinion has no value to contribute.
+    ///
+    /// Time-sample brackets follow `SdfLayer::GetBracketingTimeSamples`
+    /// (exact layer times): the sample at the query time, else the samples on
+    /// either side, clamped to the first or last sample outside the authored
+    /// range. As in `_GetInterpolatingSamplesImpl`, only the lower sample
+    /// contributes under held interpolation, or when the two samples are
+    /// close ([`TIME_EPSILON`]) in layer time, even under linear
+    /// interpolation.
+    ///
+    /// Spec: AOUSD Core §12.3.2.1 (layer offset and scale), §12.3.2.2 (time
+    /// samples), §12.5 (interpolation).
+    fn of(
+        opinion: &'o Opinion,
+        index: usize,
+        query: f64,
+        interp: InterpolationType,
+    ) -> Option<Self> {
+        let single = |time, value| {
+            Some(Self {
+                index,
+                lower: (time, value),
+                upper: (time, value),
+            })
+        };
+        match &opinion.value {
+            FieldValue::Value(value) => single(f64::NEG_INFINITY, Some(value)),
+            FieldValue::TimeSamples(samples) => {
+                let offset = opinion.layer_offset;
+                let to_stage = |index: usize| {
+                    let (local, ref value) = samples[index];
+                    (local * offset.scale + offset.offset, Some(value))
+                };
+                let local = offset.map_time(query);
+                let last = samples.len().checked_sub(1)?;
+                let (lower, upper) = if local <= samples[0].0 {
+                    (0, 0)
+                } else if local >= samples[last].0 {
+                    (last, last)
+                } else {
+                    // Strictly inside the authored range, so `1..=last`
+                    // (the clamp only guards a NaN query time).
+                    let next = samples.partition_point(|(t, _)| *t < local).clamp(1, last);
+                    if samples[next].0 == local {
+                        (next, next)
+                    } else if interp == InterpolationType::Held
+                        || times_close(samples[next - 1].0, samples[next].0)
+                    {
+                        (next - 1, next - 1)
+                    } else {
+                        (next - 1, next)
+                    }
+                };
+                Some(Self {
+                    index,
+                    lower: to_stage(lower),
+                    upper: to_stage(upper),
+                })
+            }
+            FieldValue::Spline(_) => single(f64::NEG_INFINITY, None),
+            FieldValue::TokenListOp(_) | FieldValue::PathListOp(_) => None,
+        }
+    }
+
+    fn sample(&self, pick: Pick) -> Option<&'o Value> {
+        match pick {
+            Pick::Lower => self.lower.1,
+            Pick::Upper => self.upper.1,
+        }
+    }
+
+    /// The bracket's distinct samples, as a series of its own.
+    fn entries(&self) -> Vec<Entry> {
+        let own = |(time, value): (f64, Option<&Value>), pick| Entry {
+            time,
+            composes: Composes::of(value),
+            picks: vec![pick],
+        };
+        let mut entries = vec![own(self.lower, Pick::Lower)];
+        if self.upper.0 != self.lower.0 {
+            entries.push(own(self.upper, Pick::Upper));
+        }
+        entries
+    }
+}
+
+/// Whether a (composed) sample still composes over weaker opinions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Composes {
+    /// A sparse edit: weaker opinions still contribute.
+    Yes,
+    /// A dense value, a block, or a value outside the family: the fold ends.
+    No,
+}
+
+impl Composes {
+    fn of(value: Option<&Value>) -> Self {
+        if matches!(value, Some(Value::ArrayEdit(_))) {
+            Self::Yes
+        } else {
+            Self::No
+        }
+    }
+
+    /// Composes a stronger sample over a weaker one: the result composes only
+    /// if both do (edit over edit is an edit; an edit over a dense value or a
+    /// block materializes).
+    fn over(self, weaker: Self) -> Self {
+        if self == Self::Yes && weaker == Self::Yes {
+            Self::Yes
+        } else {
+            Self::No
+        }
+    }
+}
+
+/// One sample of a composed series, without its value.
+#[derive(Clone, Debug)]
+struct Entry {
+    /// Stage time of the composed sample.
+    time: f64,
+    /// Whether the composed sample still composes over weaker opinions.
+    composes: Composes,
+    /// For each opinion composed so far (by [`Bracket::index`]), the
+    /// bracketing sample this composed sample is made of.
+    picks: Vec<Pick>,
+}
+
+impl Entry {
+    /// The entry of `series` held at `time` while merging, where `next` is
+    /// the next unmerged index: the entry at (within [`TIME_EPSILON`] of)
+    /// `time`, else the previous entry, else the first (the `held` helper of
+    /// `SdfComposeTimeSampleSeries`).
+    fn held_while_merging(series: &[Self], next: usize, time: f64) -> &Self {
+        if next == series.len() || (next != 0 && !times_close(series[next].time, time)) {
+            &series[next - 1]
+        } else {
+            &series[next]
+        }
+    }
+
+    fn joined(&self, weaker: &Self, time: f64, composes: Composes) -> Self {
+        let mut picks = Vec::with_capacity(self.picks.len() + weaker.picks.len());
+        picks.extend_from_slice(&self.picks);
+        picks.extend_from_slice(&weaker.picks);
+        Self {
+            time,
+            composes,
+            picks,
+        }
+    }
+
+    /// Composes `strong` over `weak`, following `SdfComposeTimeSampleSeries`:
+    /// every stronger sample composes over the weaker sample held at its
+    /// time, a weaker sample appears in the result only where the stronger
+    /// sample held at its time composes, and samples of the two series closer
+    /// than [`TIME_EPSILON`] merge into one.
+    fn compose_under(strong: &[Self], weak: &[Self]) -> Vec<Self> {
+        if strong.is_empty() {
+            return weak.to_vec();
+        }
+        let mut out = Vec::with_capacity(strong.len() + weak.len());
+        let (mut i, mut j) = (0, 0);
+        while i < strong.len() || j < weak.len() {
+            let strong_time = strong.get(i).map_or(f64::INFINITY, |e| e.time);
+            let weak_time = weak.get(j).map_or(f64::INFINITY, |e| e.time);
+            if strong_time <= weak_time {
+                let held = Self::held_while_merging(weak, j, strong_time);
+                let composes = strong[i].composes.over(held.composes);
+                out.push(strong[i].joined(held, strong_time, composes));
+            } else {
+                let held = Self::held_while_merging(strong, i, weak_time);
+                if held.composes == Composes::Yes {
+                    out.push(held.joined(&weak[j], weak_time, weak[j].composes));
+                }
+            }
+            if i == strong.len() {
+                j += 1;
+            } else if j == weak.len() {
+                i += 1;
+            } else if times_close(strong_time, weak_time) {
+                i += 1;
+                j += 1;
+            } else if strong_time < weak_time {
+                i += 1;
+            } else {
+                j += 1;
+            }
+        }
+        out
+    }
+
+    /// Trims `series` to the entries bracketing `time`: the entry at `time`,
+    /// else the entries on either side, else the first or last entry (the
+    /// trimming step of `composeSamples` in `stage.cpp`, with exact times).
+    fn bracketing(mut series: Vec<Self>, time: f64) -> Vec<Self> {
+        let Some(last) = series.len().checked_sub(1) else {
+            return series;
+        };
+        let (from, to) = if last == 0 || time <= series[0].time {
+            (0, 0)
+        } else if time >= series[last].time {
+            (last, last)
+        } else {
+            // Strictly inside the series, so `1..=last` (the clamp only
+            // guards a NaN query time).
+            let next = series.partition_point(|e| e.time < time).clamp(1, last);
+            if series[next].time == time {
+                (next, next)
+            } else {
+                (next - 1, next)
+            }
+        };
+        series.truncate(to + 1);
+        series.drain(..from);
+        series
+    }
+}
+
+/// The participating opinions of a time query and the composed series'
+/// bracketing samples.
+#[derive(Debug)]
+struct BracketPlan<'o> {
+    /// Participating opinions' brackets, strongest first.
+    brackets: Vec<Bracket<'o>>,
+    /// The composed series' samples bracketing the query time. Empty when no
+    /// opinion participates, or when composing left no sample at all.
+    composed: Vec<Entry>,
+}
+
+/// Composes the opinions' bracketing samples, strongest first, into the
+/// composed series' bracketing samples at `time`.
+///
+/// This is the proposal's `Evaluate` loop over sample times and
+/// composability. Each opinion contributes its samples bracketing the query
+/// time; the composed series is trimmed back to the samples bracketing `time`
+/// after each opinion. When the composed lower sample no longer composes, it
+/// hides weaker opinions until the composed upper sample, so weaker opinions
+/// are bracketed at that sample's time instead. The walk stops once neither
+/// bracketing sample composes (or, for held interpolation, once the lower one
+/// does not), so opinions hidden behind dense values and blocks are never
+/// visited.
+///
+/// Unlike OpenUSD 26.08, the walk keeps composing after the query moves to
+/// the upper sample even when a weaker opinion's own upper sample does not
+/// compose, as the proposal does: its held sample at that time still does.
+fn plan_brackets<'o>(
+    opinions: impl IntoIterator<Item = &'o Opinion>,
+    time: f64,
+    interp: InterpolationType,
+) -> BracketPlan<'o> {
+    let mut brackets: Vec<Bracket<'o>> = Vec::new();
+    let mut composed: Vec<Entry> = Vec::new();
+    let mut query = time;
+    for opinion in opinions {
+        let Some(bracket) = Bracket::of(opinion, brackets.len(), query, interp) else {
+            continue;
+        };
+        composed = Entry::bracketing(Entry::compose_under(&composed, &bracket.entries()), time);
+        brackets.push(bracket);
+        // Composing can swallow every sample (a stronger sample that does not
+        // compose, merged with an earlier weaker one); OpenUSD then has no
+        // value.
+        let (Some(lower), Some(upper)) = (composed.first(), composed.last()) else {
+            break;
+        };
+        if lower.composes == Composes::No {
+            if upper.composes == Composes::No || interp == InterpolationType::Held {
+                break;
+            }
+            query = upper.time;
+        }
+    }
+    BracketPlan { brackets, composed }
+}
+
+/// [`ArrayFamily`] reading, for one composed sample, the bracketing sample
+/// each opinion contributes to it.
+#[derive(Clone, Copy, Debug)]
+struct PickedArrayFamily<'a> {
+    array: ArrayFamily<'a>,
+    /// [`Entry::picks`] of the composed sample being folded.
+    picks: &'a [Pick],
+}
+
+impl<'o> OpinionFamily<Bracket<'o>> for PickedArrayFamily<'_> {
+    type Value = Vec<Value>;
+    type Edit = ArrayEdit;
+
+    fn classify(&self, bracket: &Bracket<'o>) -> FamilyMember<Self::Value, Self::Edit> {
+        bracket
+            .sample(self.picks[bracket.index])
+            .map_or_else(ArrayFamily::foreign, ArrayFamily::classify_value)
+    }
+
+    fn apply(&self, edit: Self::Edit, base: Self::Value) -> Self::Value {
+        self.array.apply(edit, base)
+    }
+
+    fn seed(&self) -> Self::Value {
+        self.array.seed()
+    }
+}
+
+/// Resolves an array-family attribute at stage time `time`.
+///
+/// Composes the bracketing samples of every participating opinion
+/// ([`plan_brackets`]), folds the chain for the composed lower (and, for
+/// linear interpolation, upper) sample with the time-agnostic kernel, then
+/// interpolates or holds the composed values.
+///
+/// Before the first composed time sample, a default or fallback is the lower
+/// bracketing sample at `-inf`; the composed lower value holds there. OpenUSD
+/// 26.08 interpolates towards the upper sample with `alpha = inf / inf`, which
+/// yields NaN for interpolating element types.
+///
+/// Spec: AOUSD Core §12.3.2.2 (time samples), §12.3.6 (blocked samples),
+/// §12.5 (interpolation); sparse-array-edits proposal, "Composing and
+/// Evaluating Time-Varying Sparse Opinions".
+fn resolve_array_at_time(
+    opinions: &[Opinion],
+    time: f64,
+    interp: InterpolationType,
+    array: ArrayFamily<'_>,
+) -> SparseResolveResult {
+    let plan = plan_brackets(opinions, time, interp);
+    let (Some(lower_entry), Some(upper_entry)) = (plan.composed.first(), plan.composed.last())
+    else {
+        return if plan.brackets.is_empty() {
+            fold_array_chain(&array, core::iter::empty())
+        } else {
+            SparseResolveResult::Blocked
+        };
+    };
+    let lower = match fold_entry(&plan.brackets, array, lower_entry) {
+        SparseResolveResult::Resolved(Value::Array(lower)) => lower,
+        other => return other,
+    };
+    let (lower_time, upper_time) = (lower_entry.time, upper_entry.time);
+    if interp == InterpolationType::Held || upper_time == lower_time || lower_time.is_infinite() {
+        return SparseResolveResult::Resolved(Value::Array(lower));
+    }
+    let alpha = (time - lower_time) / (upper_time - lower_time);
+    let value = match fold_entry(&plan.brackets, array, upper_entry) {
+        SparseResolveResult::Resolved(Value::Array(upper)) => {
+            lerp_arrays(&lower, &upper, alpha).unwrap_or(lower)
+        }
+        // A blocked or absent upper sample holds the lower one
+        // (`_GetInterpolatingSamplesImpl` in `interpolators.cpp`).
+        _ => lower,
+    };
+    SparseResolveResult::Resolved(Value::Array(value))
+}
+
+/// Folds the participating brackets into the value of one composed sample.
+///
+/// The fold stops at the first picked sample outside the array family, which
+/// ends the chain as a dense value would.
+fn fold_entry(
+    brackets: &[Bracket<'_>],
+    array: ArrayFamily<'_>,
+    entry: &Entry,
+) -> SparseResolveResult {
+    let family = PickedArrayFamily {
+        array,
+        picks: &entry.picks,
+    };
+    let chain = brackets
+        .iter()
+        .take(entry.picks.len())
+        .take_while(|bracket| {
+            matches!(
+                bracket.sample(entry.picks[bracket.index]),
+                Some(Value::Array(_) | Value::ArrayEdit(_) | Value::Blocked)
+            )
+        })
+        .map(|bracket| (bracket, &()));
+    match resolve_family_chain(&family, chain) {
+        FamilyResolution::Resolved { value, .. } => {
+            SparseResolveResult::Resolved(Value::Array(value))
+        }
+        FamilyResolution::Blocked { .. } => SparseResolveResult::Blocked,
+        FamilyResolution::Absent if array.fallback.is_some() => {
+            SparseResolveResult::Resolved(Value::Array(array.seed()))
+        }
+        FamilyResolution::Absent => SparseResolveResult::NotApplicable,
+    }
+}
+
+/// Linearly interpolates two composed arrays element by element.
+///
+/// Returns `None`, meaning hold the lower array, when the sizes differ or an
+/// element type does not interpolate. As in OpenUSD, floating-point scalars,
+/// vectors, matrices and time codes interpolate, and integers do not
+/// (`USD_LINEAR_INTERPOLATION_TYPES` in `pxr/usd/usd/interpolation.h`,
+/// `_LerpVisitor` in `pxr/usd/usd/interpolators.cpp`). Half-precision and
+/// quaternion elements hold.
+///
+/// Spec: AOUSD Core §12.5 (interpolation).
+fn lerp_arrays(lower: &[Value], upper: &[Value], alpha: f64) -> Option<Vec<Value>> {
+    if lower.len() != upper.len() {
+        return None;
+    }
+    lower
+        .iter()
+        .zip(upper)
+        .map(|(a, b)| lerp_element(a, b, alpha))
+        .collect()
+}
+
+/// `GfLerp`: `(1 - alpha) * a + alpha * b`, evaluated in double precision.
+fn gf_lerp(a: f64, b: f64, alpha: f64) -> f64 {
+    (1.0 - alpha) * a + alpha * b
+}
+
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "single-precision elements interpolate in double precision, as `GfLerp` does"
+)]
+fn lerp_f32(a: f32, b: f32, alpha: f64) -> f32 {
+    gf_lerp(f64::from(a), f64::from(b), alpha) as f32
+}
+
+fn lerp_f32s<const N: usize>(a: &[f32; N], b: &[f32; N], alpha: f64) -> [f32; N] {
+    core::array::from_fn(|i| lerp_f32(a[i], b[i], alpha))
+}
+
+fn lerp_f64s<const N: usize>(a: &[f64; N], b: &[f64; N], alpha: f64) -> [f64; N] {
+    core::array::from_fn(|i| gf_lerp(a[i], b[i], alpha))
+}
+
+fn lerp_element(a: &Value, b: &Value, alpha: f64) -> Option<Value> {
+    Some(match (a, b) {
+        (Value::Float(a), Value::Float(b)) => Value::Float(lerp_f32(*a, *b, alpha)),
+        (Value::Double(a), Value::Double(b)) => Value::Double(gf_lerp(*a, *b, alpha)),
+        (Value::TimeCode(a), Value::TimeCode(b)) => Value::TimeCode(gf_lerp(*a, *b, alpha)),
+        (Value::Vec2f(a), Value::Vec2f(b)) => Value::Vec2f(lerp_f32s(a, b, alpha)),
+        (Value::Vec3f(a), Value::Vec3f(b)) => Value::Vec3f(lerp_f32s(a, b, alpha)),
+        (Value::Vec4f(a), Value::Vec4f(b)) => Value::Vec4f(lerp_f32s(a, b, alpha)),
+        (Value::Vec2d(a), Value::Vec2d(b)) => Value::Vec2d(lerp_f64s(a, b, alpha)),
+        (Value::Vec3d(a), Value::Vec3d(b)) => Value::Vec3d(lerp_f64s(a, b, alpha)),
+        (Value::Vec4d(a), Value::Vec4d(b)) => Value::Vec4d(lerp_f64s(a, b, alpha)),
+        (Value::Matrix2d(a), Value::Matrix2d(b)) => {
+            Value::Matrix2d(alloc::boxed::Box::new(lerp_f64s(a, b, alpha)))
+        }
+        (Value::Matrix3d(a), Value::Matrix3d(b)) => {
+            Value::Matrix3d(alloc::boxed::Box::new(lerp_f64s(a, b, alpha)))
+        }
+        (Value::Matrix4d(a), Value::Matrix4d(b)) => {
+            Value::Matrix4d(alloc::boxed::Box::new(lerp_f64s(a, b, alpha)))
+        }
+        _ => return None,
+    })
 }
 
 /// Interpolates a value from sorted time samples at the given time.
@@ -541,6 +1035,7 @@ mod tests {
             SparseQuery::AtTime {
                 time: 1.0,
                 interp: InterpolationType::Held,
+                fallback: None,
             },
             Some(&int_array_type()),
         );
@@ -564,6 +1059,7 @@ mod tests {
             SparseQuery::AtTime {
                 time: 1.0,
                 interp: InterpolationType::Held,
+                fallback: None,
             },
             Some(&int_array_type()),
         );
@@ -683,6 +1179,19 @@ mod tests {
         (resolved, visited)
     }
 
+    /// Plans a time query and reports how many opinions the walk visited
+    /// (and therefore bracketed).
+    fn plan_counting(
+        opinions: &[Opinion],
+        time: f64,
+        interp: InterpolationType,
+    ) -> (Vec<f64>, usize) {
+        let mut visited = 0;
+        let plan = plan_brackets(opinions.iter().inspect(|_| visited += 1), time, interp);
+        let times = plan.composed.iter().map(|e| e.time).collect();
+        (times, visited)
+    }
+
     #[test]
     fn opinions_hidden_by_a_dense_value_are_not_sampled() {
         let (spec_path, field) = test_ids();
@@ -702,24 +1211,58 @@ mod tests {
             ),
             array_opinion(spec_path, field, FieldValue::Value(array_value(&[3])), 3),
         ];
-        let property_type = int_array_type();
-        let family = ArrayFamily {
-            property_type: Some(&property_type),
-            fallback: None,
-            sampling: Sampling::AtTime {
-                time: 0.0,
-                interp: InterpolationType::Held,
-            },
-        };
+        for interp in [InterpolationType::Held, InterpolationType::Linear] {
+            assert_eq!(
+                resolve_at(&opinions, 0.0, interp),
+                SparseResolveResult::Resolved(array_value(&[9, 2]))
+            );
+            let (_, visited) = plan_counting(&opinions, 0.0, interp);
+            assert_eq!(
+                visited, 2,
+                "the walk must stop at the first dense value without sampling weaker opinions ({interp:?})"
+            );
+        }
+    }
 
-        let (resolved, visited) = fold_counting(&family, &opinions);
+    #[test]
+    fn dense_lower_sample_hides_weaker_opinions_until_the_upper_sample() {
+        let (spec_path, field) = test_ids();
+        let opinions = vec![
+            array_opinion(
+                spec_path,
+                field,
+                FieldValue::TimeSamples(vec![(0.0, array_value(&[0, 0])), (2.0, write_edit(9, 0))]),
+                0,
+            ),
+            array_opinion(
+                spec_path,
+                field,
+                FieldValue::TimeSamples(vec![
+                    (1.0, array_value(&[1, 1])),
+                    (3.0, array_value(&[3, 3])),
+                ]),
+                1,
+            ),
+            array_opinion(spec_path, field, FieldValue::Value(array_value(&[7])), 2),
+        ];
+
+        // Held: only the lower sample contributes, and being dense it ends the
+        // walk at once.
+        let (times, visited) = plan_counting(&opinions, 1.5, InterpolationType::Held);
+        assert_eq!((times, visited), (vec![0.0], 1));
+
+        // Linear: the weaker series is bracketed at the upper sample's time
+        // (2), where its held sample is dense, so the walk ends there. Its
+        // sample at 1 is hidden by the stronger dense sample held at 1.
+        let (times, visited) = plan_counting(&opinions, 1.5, InterpolationType::Linear);
+        assert_eq!((times, visited), (vec![0.0, 2.0], 2));
         assert_eq!(
-            resolved,
-            SparseResolveResult::Resolved(array_value(&[9, 2]))
+            resolve_at(&opinions, 1.5, InterpolationType::Held),
+            SparseResolveResult::Resolved(array_value(&[0, 0]))
         );
         assert_eq!(
-            visited, 2,
-            "the fold must stop at the first dense value without sampling weaker opinions"
+            resolve_at(&opinions, 2.0, InterpolationType::Held),
+            SparseResolveResult::Resolved(array_value(&[9, 1]))
         );
     }
 
@@ -736,7 +1279,6 @@ mod tests {
         let family = ArrayFamily {
             property_type: Some(&property_type),
             fallback: None,
-            sampling: Sampling::Default,
         };
 
         let (_, visited) = fold_counting(&family, &opinions);
@@ -753,7 +1295,11 @@ mod tests {
     ) -> SparseResolveResult {
         resolve_sparse_value(
             opinions,
-            SparseQuery::AtTime { time, interp },
+            SparseQuery::AtTime {
+                time,
+                interp,
+                fallback: None,
+            },
             Some(&int_array_type()),
         )
     }
@@ -926,5 +1472,589 @@ mod tests {
             SparseResolveResult::Resolved(array_value(&[3, 7])),
             "once the dense sample takes over, the edit composes over it"
         );
+    }
+
+    fn float_array(values: &[f32]) -> Value {
+        Value::Array(values.iter().copied().map(Value::Float).collect())
+    }
+
+    fn float_array_type() -> PropertyType {
+        PropertyType::new(Arc::<str>::from("float"), true, Value::Float(0.0))
+    }
+
+    fn float3_array(values: &[[f32; 3]]) -> Value {
+        Value::Array(values.iter().copied().map(Value::Vec3f).collect())
+    }
+
+    fn edit(op: ArrayEditOp) -> Value {
+        Value::ArrayEdit(ArrayEdit { ops: vec![op] })
+    }
+
+    fn append(value: Value) -> ArrayEditOp {
+        ArrayEditOp::Insert {
+            src: ArrayEditOperand::Literal(value),
+            index: ArrayIndex::End,
+        }
+    }
+
+    fn write(value: Value, index: i64) -> ArrayEditOp {
+        ArrayEditOp::Write {
+            src: ArrayEditOperand::Literal(value),
+            index: ArrayIndex::Position(index),
+        }
+    }
+
+    fn resolve_float_at(
+        opinions: &[Opinion],
+        time: f64,
+        interp: InterpolationType,
+        fallback: Option<&Value>,
+    ) -> SparseResolveResult {
+        resolve_sparse_value(
+            opinions,
+            SparseQuery::AtTime {
+                time,
+                interp,
+                fallback,
+            },
+            Some(&float_array_type()),
+        )
+    }
+
+    /// `usd_interpolation_session_edit` (a port of `TestInterpolation` in
+    /// `testUsdAttributeArrayEdits.cpp`): the stronger edit composes over both
+    /// bracketing samples before they interpolate.
+    #[test]
+    fn stronger_edit_composes_over_both_bracketing_samples_before_interpolating() {
+        let (spec_path, field) = test_ids();
+        let resize_four = Value::ArrayEdit(ArrayEdit {
+            ops: vec![ArrayEditOp::Resize { len: 4 }],
+        });
+        let opinions = vec![
+            array_opinion(
+                spec_path,
+                field,
+                FieldValue::TimeSamples(vec![(2.0, edit(write(Value::Float(8.0), 1)))]),
+                0,
+            ),
+            array_opinion(
+                spec_path,
+                field,
+                FieldValue::TimeSamples(vec![
+                    (1.0, resize_four),
+                    (3.0, float_array(&[2.0, 4.0, 6.0, 8.0])),
+                ]),
+                1,
+            ),
+        ];
+        let linear = InterpolationType::Linear;
+        for (time, expected) in [
+            (0.0, [0.0, 8.0, 0.0, 0.0]),
+            (2.0, [0.0, 8.0, 0.0, 0.0]),
+            (2.5, [1.0, 8.0, 3.0, 4.0]),
+            (3.0, [2.0, 8.0, 6.0, 8.0]),
+        ] {
+            assert_eq!(
+                resolve_float_at(&opinions, time, linear, None),
+                SparseResolveResult::Resolved(float_array(&expected)),
+                "t={time}"
+            );
+        }
+        assert_eq!(
+            resolve_float_at(&opinions, 2.5, InterpolationType::Held, None),
+            SparseResolveResult::Resolved(float_array(&[0.0, 8.0, 0.0, 0.0]))
+        );
+    }
+
+    #[test]
+    fn composed_arrays_interpolate_by_element_type() {
+        let lerp = |a: Value, b: Value| lerp_arrays(&[a], &[b], 0.25).map(|v| v[0].clone());
+        assert_eq!(
+            lerp(Value::Float(0.0), Value::Float(4.0)),
+            Some(Value::Float(1.0))
+        );
+        assert_eq!(
+            lerp(Value::Double(0.0), Value::Double(4.0)),
+            Some(Value::Double(1.0))
+        );
+        assert_eq!(
+            lerp(Value::TimeCode(0.0), Value::TimeCode(4.0)),
+            Some(Value::TimeCode(1.0))
+        );
+        assert_eq!(
+            lerp(Value::Vec3f([0.0; 3]), Value::Vec3f([4.0, 8.0, 12.0])),
+            Some(Value::Vec3f([1.0, 2.0, 3.0]))
+        );
+        assert_eq!(
+            lerp(
+                Value::Matrix2d(alloc::boxed::Box::new([0.0; 4])),
+                Value::Matrix2d(alloc::boxed::Box::new([4.0; 4]))
+            ),
+            Some(Value::Matrix2d(alloc::boxed::Box::new([1.0; 4])))
+        );
+        assert_eq!(
+            lerp(Value::Int(0), Value::Int(4)),
+            None,
+            "integers hold, as in OpenUSD"
+        );
+        assert_eq!(
+            lerp_arrays(
+                &[Value::Float(0.0)],
+                &[Value::Float(1.0), Value::Float(2.0)],
+                0.5
+            ),
+            None,
+            "arrays of different sizes hold"
+        );
+    }
+
+    /// OpenUSD 26.08 resolved values for a `Cube`'s `extent`, whose schema
+    /// fallback is `[(-1, -1, -1), (1, 1, 1)]`: time-sampled edits compose
+    /// over the fallback, and so do edits above a default block. Recorded
+    /// with `layerstack_conformance/scripts/temporal_sparse_oracle.py`'s
+    /// OpenUSD build; Stage has no schema-aware time query, so these run
+    /// against the resolver directly.
+    #[test]
+    fn time_sampled_edits_compose_over_the_fallback_seed() {
+        let (spec_path, field) = test_ids();
+        let fallback = float3_array(&[[-1.0; 3], [1.0; 3]]);
+        let float3_type =
+            PropertyType::new(Arc::<str>::from("float3"), true, Value::Vec3f([0.0; 3]));
+        let resolve = |opinions: &[Opinion], time: f64, interp| {
+            resolve_sparse_value(
+                opinions,
+                SparseQuery::AtTime {
+                    time,
+                    interp,
+                    fallback: Some(&fallback),
+                },
+                Some(&float3_type),
+            )
+        };
+        let edits = vec![array_opinion(
+            spec_path,
+            field,
+            FieldValue::TimeSamples(vec![
+                (1.0, edit(write(Value::Vec3f([0.0; 3]), 0))),
+                (3.0, edit(append(Value::Vec3f([5.0; 3])))),
+            ]),
+            0,
+        )];
+        let written = float3_array(&[[0.0; 3], [1.0; 3]]);
+        let appended = float3_array(&[[-1.0; 3], [1.0; 3], [5.0; 3]]);
+        for interp in [InterpolationType::Held, InterpolationType::Linear] {
+            // OpenUSD resolves NaN before the first sample (`alpha = inf/inf`
+            // against the fallback's `-inf` sample); the first sample holds.
+            for (time, expected) in [
+                (0.0, &written),
+                (1.0, &written),
+                (2.0, &written),
+                (3.0, &appended),
+                (4.0, &appended),
+            ] {
+                assert_eq!(
+                    resolve(&edits, time, interp),
+                    SparseResolveResult::Resolved(expected.clone()),
+                    "t={time} {interp:?}"
+                );
+            }
+        }
+
+        let over_default_block = vec![
+            array_opinion(
+                spec_path,
+                field,
+                FieldValue::TimeSamples(vec![(1.0, edit(append(Value::Vec3f([5.0; 3]))))]),
+                0,
+            ),
+            array_opinion(spec_path, field, FieldValue::Value(Value::Blocked), 1),
+            array_opinion(
+                spec_path,
+                field,
+                FieldValue::Value(float3_array(&[[2.0; 3]])),
+                2,
+            ),
+        ];
+        for time in [0.0, 1.0, 2.0] {
+            assert_eq!(
+                resolve(&over_default_block, time, InterpolationType::Linear),
+                SparseResolveResult::Resolved(appended.clone()),
+                "the fallback survives the block and seeds the edit at t={time}"
+            );
+        }
+    }
+
+    /// Composes sample values the way OpenUSD 26.08's
+    /// `_GetValueFromResolveInfoImpl` does, rather than planning sample times
+    /// first: each opinion's interpolating samples (`_GetInterpolatingSamplesImpl`),
+    /// `SdfComposeTimeSampleSeries` over values, and trimming to the samples
+    /// bracketing the query time, with the proposal's `Evaluate` deciding
+    /// when to move the query and stop (`OpenUSD-proposals/proposals/sparse-array-edits/README.md`).
+    mod reference {
+        use super::*;
+
+        #[derive(Clone, Debug)]
+        enum Sample {
+            Dense(Vec<Value>),
+            Sparse(ArrayEdit),
+            Block,
+        }
+
+        type Series = Vec<(f64, Sample)>;
+
+        fn sample(value: &Value) -> Sample {
+            match value {
+                Value::Array(items) => Sample::Dense(items.clone()),
+                Value::ArrayEdit(edit) => Sample::Sparse(edit.clone()),
+                Value::Blocked => Sample::Block,
+                other => panic!("unexpected sample {other:?}"),
+            }
+        }
+
+        fn close(a: f64, b: f64) -> bool {
+            a == b || (a - b).abs() < 1e-6
+        }
+
+        /// The opinion's interpolating samples at stage time `query`.
+        fn interpolating(
+            opinion: &Opinion,
+            query: f64,
+            interp: InterpolationType,
+        ) -> Option<Series> {
+            let offset = opinion.layer_offset;
+            let samples = match &opinion.value {
+                FieldValue::Value(value) => return Some(vec![(f64::NEG_INFINITY, sample(value))]),
+                FieldValue::TimeSamples(samples) if !samples.is_empty() => samples,
+                _ => return None,
+            };
+            let local = (query - offset.offset) / offset.scale;
+            let lower = samples.iter().rposition(|(t, _)| *t <= local).unwrap_or(0);
+            let upper = if samples[lower].0 >= local {
+                lower
+            } else {
+                (lower + 1).min(samples.len() - 1)
+            };
+            let stage = |i: usize| {
+                (
+                    samples[i].0 * offset.scale + offset.offset,
+                    sample(&samples[i].1),
+                )
+            };
+            if interp == InterpolationType::Held || close(samples[lower].0, samples[upper].0) {
+                Some(vec![stage(lower)])
+            } else {
+                Some(vec![stage(lower), stage(upper)])
+            }
+        }
+
+        fn compose(
+            strong: &Sample,
+            weak: &Sample,
+            ty: &PropertyType,
+            seed: &[Value],
+        ) -> Option<Sample> {
+            let Sample::Sparse(s) = strong else {
+                return None;
+            };
+            Some(match weak {
+                Sample::Sparse(w) => Sample::Sparse(s.compose_over(w)),
+                Sample::Dense(d) => Sample::Dense(s.compose_over_array(d, Some(ty))),
+                Sample::Block => Sample::Dense(s.compose_over_array(seed, Some(ty))),
+            })
+        }
+
+        fn held(series: &Series, next: usize, time: f64) -> &Sample {
+            if next == series.len() || (next != 0 && !close(series[next].0, time)) {
+                &series[next - 1].1
+            } else {
+                &series[next].1
+            }
+        }
+
+        fn over(strong: &Series, weak: &Series, ty: &PropertyType, seed: &[Value]) -> Series {
+            if strong.is_empty() {
+                return weak.clone();
+            }
+            let (mut i, mut j) = (0, 0);
+            let mut out = Series::new();
+            while i < strong.len() || j < weak.len() {
+                let st = strong.get(i).map_or(f64::INFINITY, |e| e.0);
+                let wt = weak.get(j).map_or(f64::INFINITY, |e| e.0);
+                if st <= wt {
+                    let composed = compose(&strong[i].1, held(weak, j, st), ty, seed);
+                    out.push((st, composed.unwrap_or_else(|| strong[i].1.clone())));
+                } else if let Some(composed) = compose(held(strong, i, wt), &weak[j].1, ty, seed) {
+                    out.push((wt, composed));
+                }
+                if i == strong.len() {
+                    j += 1;
+                } else if j == weak.len() {
+                    i += 1;
+                } else if close(st, wt) {
+                    i += 1;
+                    j += 1;
+                } else if st < wt {
+                    i += 1;
+                } else {
+                    j += 1;
+                }
+            }
+            out
+        }
+
+        fn trim(series: Series, time: f64) -> Series {
+            let last = series.len() - 1;
+            if series.len() == 1 || time <= series[0].0 {
+                return vec![series[0].clone()];
+            }
+            if time >= series[last].0 {
+                return vec![series[last].clone()];
+            }
+            let next = series.iter().position(|(t, _)| *t >= time).expect("inside");
+            if series[next].0 == time {
+                vec![series[next].clone()]
+            } else {
+                series[next - 1..=next].to_vec()
+            }
+        }
+
+        pub(super) fn evaluate(
+            opinions: &[Opinion],
+            time: f64,
+            interp: InterpolationType,
+            ty: &PropertyType,
+            fallback: Option<&Vec<Value>>,
+        ) -> SparseResolveResult {
+            let seed = fallback.cloned().unwrap_or_default();
+            let mut composed = Series::new();
+            let mut query = time;
+            for opinion in opinions {
+                let Some(weaker) = interpolating(opinion, query, interp) else {
+                    continue;
+                };
+                let merged = over(&composed, &weaker, ty, &seed);
+                if merged.is_empty() {
+                    return SparseResolveResult::Blocked;
+                }
+                composed = trim(merged, time);
+                let dense = |s: &Sample| !matches!(s, Sample::Sparse(_));
+                if dense(&composed[0].1) {
+                    if dense(&composed[composed.len() - 1].1) {
+                        break;
+                    }
+                    query = composed[composed.len() - 1].0;
+                }
+            }
+            if composed.is_empty() {
+                return match fallback {
+                    Some(seed) => SparseResolveResult::Resolved(Value::Array(seed.clone())),
+                    None => SparseResolveResult::NotApplicable,
+                };
+            }
+            let finish = |s: &Sample| match s {
+                Sample::Dense(d) => Some(d.clone()),
+                Sample::Sparse(e) => Some(e.compose_over_array(&seed, Some(ty))),
+                Sample::Block => None,
+            };
+            let (lo_time, lo) = &composed[0];
+            let (hi_time, hi) = &composed[composed.len() - 1];
+            let Some(lower) = finish(lo) else {
+                return SparseResolveResult::Blocked;
+            };
+            if interp == InterpolationType::Held || hi_time == lo_time || lo_time.is_infinite() {
+                return SparseResolveResult::Resolved(Value::Array(lower));
+            }
+            let alpha = (time - lo_time) / (hi_time - lo_time);
+            let value = finish(hi)
+                .and_then(|upper| lerp_arrays(&lower, &upper, alpha))
+                .unwrap_or(lower);
+            SparseResolveResult::Resolved(Value::Array(value))
+        }
+    }
+
+    /// Deterministic xorshift generator for the randomized cross-check.
+    struct Rng(u64);
+
+    impl Rng {
+        fn next(&mut self) -> u64 {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            self.0
+        }
+
+        fn below(&mut self, n: u64) -> u64 {
+            self.next() % n
+        }
+    }
+
+    #[allow(clippy::cast_precision_loss, reason = "small test values")]
+    fn random_value(rng: &mut Rng, allow_block: bool) -> Value {
+        let k = rng.below(10) as f32;
+        match rng.below(if allow_block { 7 } else { 6 }) {
+            0 | 1 => float_array(&[k, k + 1.0]),
+            2 => float_array(&[k]),
+            3 => edit(write(Value::Float(k), 0)),
+            4 => edit(append(Value::Float(k))),
+            5 => Value::ArrayEdit(ArrayEdit {
+                ops: vec![ArrayEditOp::Insert {
+                    src: ArrayEditOperand::Literal(Value::Float(k)),
+                    index: ArrayIndex::Position(0),
+                }],
+            }),
+            _ => Value::Blocked,
+        }
+    }
+
+    /// How [`random_chain`] spaces sample times.
+    #[derive(Clone, Copy, Debug)]
+    enum Spacing {
+        /// Whole frames.
+        Coarse,
+        /// Whole frames nudged by amounts below, at and above the 1e-6
+        /// closeness tolerance, and layer scales that compress or spread them.
+        NearCoincident,
+    }
+
+    const NUDGES: [f64; 6] = [0.0, 3e-7, 5e-7, 9e-7, 1e-6, 1.5e-6];
+
+    #[allow(clippy::cast_precision_loss, reason = "small test values")]
+    fn random_time(rng: &mut Rng, spacing: Spacing) -> f64 {
+        let frame = rng.below(if matches!(spacing, Spacing::Coarse) {
+            6
+        } else {
+            3
+        }) as f64;
+        match spacing {
+            Spacing::Coarse => frame,
+            Spacing::NearCoincident => {
+                frame + NUDGES[usize::try_from(rng.below(6)).expect("small index")]
+            }
+        }
+    }
+
+    fn random_chain(
+        rng: &mut Rng,
+        spacing: Spacing,
+        spec_path: PathId,
+        field: TokenId,
+    ) -> Vec<Opinion> {
+        let count = 1 + rng.below(4);
+        (0..count)
+            .map(|strength| {
+                let value = if rng.below(4) == 0 {
+                    FieldValue::Value(random_value(rng, true))
+                } else {
+                    let mut times: Vec<f64> = (0..1 + rng.below(3))
+                        .map(|_| random_time(rng, spacing))
+                        .collect();
+                    times.sort_by(f64::total_cmp);
+                    times.dedup();
+                    FieldValue::TimeSamples(
+                        times
+                            .into_iter()
+                            .map(|t| (t, random_value(rng, true)))
+                            .collect(),
+                    )
+                };
+                let mut opinion = array_opinion(
+                    spec_path,
+                    field,
+                    value,
+                    u16::try_from(strength).expect("small chain"),
+                );
+                let (offset, scale) = match (spacing, rng.below(3)) {
+                    (_, 0) => (0.0, 1.0),
+                    (Spacing::Coarse, 1) => (1.0, 1.0),
+                    (Spacing::Coarse, _) => (0.5, 2.0),
+                    (Spacing::NearCoincident, 1) => (5e-7, 1e-7),
+                    (Spacing::NearCoincident, _) => (0.0, 10.0),
+                };
+                opinion.layer_offset = LayerOffset { offset, scale };
+                opinion
+            })
+            .collect()
+    }
+
+    fn check_planning_matches_series_composition(spacing: Spacing, seed: u64) {
+        let (spec_path, field) = test_ids();
+        let ty = float_array_type();
+        let fallback = vec![Value::Float(100.0)];
+        let mut rng = Rng(seed);
+        let times: Vec<f64> = match spacing {
+            Spacing::Coarse => (0..=36).map(|step| -1.0 + f64::from(step) * 0.25).collect(),
+            Spacing::NearCoincident => [-1.0, 0.0, 1.0, 2.0, 3.0]
+                .iter()
+                .flat_map(|frame| {
+                    [0.0, 1e-7, 2.5e-7, 5e-7, 7e-7, 1e-6, 1.2e-6, 2e-6, 0.5]
+                        .iter()
+                        .map(move |nudge| frame + nudge)
+                })
+                .collect(),
+        };
+        for case in 0..2000 {
+            let opinions = random_chain(&mut rng, spacing, spec_path, field);
+            let seed = (rng.below(2) == 0).then_some(&fallback);
+            let seed_value = seed.map(|s| Value::Array(s.clone()));
+            for &time in &times {
+                for interp in [InterpolationType::Held, InterpolationType::Linear] {
+                    let actual = resolve_array_at_time(
+                        &opinions,
+                        time,
+                        interp,
+                        ArrayFamily {
+                            property_type: Some(&ty),
+                            fallback: seed_value.as_ref(),
+                        },
+                    );
+                    let expected = reference::evaluate(&opinions, time, interp, &ty, seed);
+                    assert_eq!(
+                        actual, expected,
+                        "{spacing:?} case {case} at t={time} ({interp:?}), fallback {seed:?}:\n{opinions:#?}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// Planning sample times first and folding once per bracketing time gives
+    /// the same results as composing the sample values themselves, including
+    /// the lazy stops.
+    #[test]
+    fn bracket_planning_matches_series_composition() {
+        check_planning_matches_series_composition(Spacing::Coarse, 0x9e37_79b9_7f4a_7c15);
+    }
+
+    /// As [`bracket_planning_matches_series_composition`], with sample times
+    /// closer than the 1e-6 tolerance within and across series.
+    #[test]
+    fn bracket_planning_matches_series_composition_near_coincident_times() {
+        check_planning_matches_series_composition(Spacing::NearCoincident, 0x2545_f491_4f6c_dd1d);
+    }
+
+    #[test]
+    fn nan_query_time_resolves_without_panicking() {
+        let (spec_path, field) = test_ids();
+        let opinions = vec![
+            array_opinion(
+                spec_path,
+                field,
+                FieldValue::TimeSamples(vec![
+                    (0.0, write_edit(9, 0)),
+                    (1.0, write_edit(8, 0)),
+                    (2.0, write_edit(7, 0)),
+                ]),
+                0,
+            ),
+            array_opinion(
+                spec_path,
+                field,
+                FieldValue::TimeSamples(vec![(0.0, array_value(&[1])), (2.0, array_value(&[2]))]),
+                1,
+            ),
+        ];
+        for interp in [InterpolationType::Held, InterpolationType::Linear] {
+            let _ = resolve_at(&opinions, f64::NAN, interp);
+        }
     }
 }

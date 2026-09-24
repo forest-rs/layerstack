@@ -385,23 +385,108 @@ impl EmitCtx<'_> {
         };
         let key = self.tokens.intern(key_name);
         let field_type = metadata_field_type(key_name);
-        if entry.op != ast::ListOpKind::Explicit || field_type == MetadataFieldType::TokenListOp {
-            let items = self.extract_token_array(&entry.value);
-            let mut list_op = ListOp::default();
-            match entry.op {
-                ast::ListOpKind::Explicit => list_op.explicit = Some(items),
-                ast::ListOpKind::Prepend => list_op.prepend = items,
-                ast::ListOpKind::Append => list_op.append = items,
-                ast::ListOpKind::Delete => list_op.delete = items,
+        let element = match field_type {
+            MetadataFieldType::ListOp(element) => Some(element),
+            _ if entry.op != ast::ListOpKind::Explicit => {
+                // An unregistered list-op field: integers make an `int64`
+                // list op, anything else a token list op.
+                Some(if self.metadata_items_are_integers(&entry.value) {
+                    ListElement::Int64
+                } else {
+                    ListElement::Token
+                })
             }
+            _ => None,
+        };
+        if let Some(element) = element {
+            let Some(value) = self.metadata_list_op(entry, element) else {
+                self.diagnostics.push(Diagnostic::error(
+                    entry.span,
+                    format!("`{key_name}` list op items do not match its element type; ignored"),
+                ));
+                return;
+            };
             match get_field_mut(fields, &key) {
-                Some(FieldValue::TokenListOp(existing)) => merge_path_listop(existing, list_op),
-                _ => set_field_vec(fields, key, FieldValue::TokenListOp(list_op)),
+                Some(existing) => {
+                    if !merge_field_list_ops(existing, value) {
+                        self.diagnostics.push(Diagnostic::error(
+                            entry.span,
+                            format!("`{key_name}` list op statements disagree on type; ignored"),
+                        ));
+                    }
+                }
+                None => set_field_vec(fields, key, value),
             }
             return;
         }
         let value = self.convert_metadata_value(&entry.value, field_type.type_hint());
         set_field_vec(fields, key, FieldValue::Value(value));
+    }
+
+    /// Returns `true` when a metadata value is an array of integers.
+    fn metadata_items_are_integers(&self, value: &ast::MetadataValue<'_>) -> bool {
+        matches!(value, ast::MetadataValue::Value(ast::Value::Array(items))
+            if !items.is_empty() && items.iter().all(|v| matches!(v, ast::Value::Int(_))))
+    }
+
+    /// Converts one list-op metadata statement, or returns `None` when an
+    /// item does not fit `element`.
+    ///
+    /// Spec: AOUSD Core §12.2.6 (list ops).
+    fn metadata_list_op(
+        &mut self,
+        entry: &ast::MetadataEntry<'_>,
+        element: ListElement,
+    ) -> Option<FieldValue> {
+        let items: &[ast::Value<'_>] = match &entry.value {
+            ast::MetadataValue::Value(ast::Value::Array(items)) => items,
+            ast::MetadataValue::Value(single) => core::slice::from_ref(single),
+            // `= None` clears the list.
+            _ => &[],
+        };
+        fn list<T>(op: ast::ListOpKind, items: Vec<T>) -> ListOp<T> {
+            let mut list = ListOp::default();
+            match op {
+                ast::ListOpKind::Explicit => list.explicit = Some(items),
+                ast::ListOpKind::Prepend => list.prepend = items,
+                ast::ListOpKind::Append => list.append = items,
+                ast::ListOpKind::Delete => list.delete = items,
+            }
+            list
+        }
+        let int = |v: &ast::Value<'_>| match v {
+            ast::Value::Int(n) => Some(*n),
+            _ => None,
+        };
+        let op = entry.op;
+        Some(match element {
+            ListElement::Token => {
+                let mut tokens = Vec::with_capacity(items.len());
+                for item in items {
+                    match item {
+                        ast::Value::String(s) | ast::Value::Identifier(s) => {
+                            tokens.push(self.tokens.intern(s));
+                        }
+                        _ => return None,
+                    }
+                }
+                FieldValue::TokenListOp(list(op, tokens))
+            }
+            ListElement::String => {
+                let strings = items
+                    .iter()
+                    .map(|v| match v {
+                        ast::Value::String(s) => Some(Arc::from(*s)),
+                        _ => None,
+                    })
+                    .collect::<Option<Vec<_>>>()?;
+                FieldValue::StringListOp(list(op, strings))
+            }
+            ListElement::Int64 => FieldValue::Int64ListOp(list(
+                op,
+                items.iter().map(int).collect::<Option<Vec<_>>>()?,
+            )),
+        })
     }
 
     // ── Properties ──────────────────────────────────────────────────
@@ -1293,23 +1378,6 @@ impl EmitCtx<'_> {
         }
     }
 
-    /// Extracts string/identifier elements from a metadata array value and
-    /// interns them as tokens. Used for list-op metadata like `apiSchemas`.
-    fn extract_token_array(&mut self, val: &ast::MetadataValue<'_>) -> Vec<TokenId> {
-        if let ast::MetadataValue::Value(ast::Value::Array(items)) = val {
-            items
-                .iter()
-                .filter_map(|v| match v {
-                    ast::Value::String(s) => Some(self.tokens.intern(s)),
-                    ast::Value::Identifier(s) => Some(self.tokens.intern(s)),
-                    _ => None,
-                })
-                .collect()
-        } else {
-            Vec::new()
-        }
-    }
-
     // ── Asset resolution helper ─────────────────────────────────────
 
     fn resolve_asset(&mut self, asset_path: &str) -> Option<ResolvedAsset> {
@@ -1455,19 +1523,43 @@ fn absolute_path(path: &str, anchor: &str) -> String {
 enum MetadataFieldType {
     /// Convert with this USDA type name.
     Typed(&'static str),
-    /// A `tokenlistop` field: explicit assignments are list ops too.
-    TokenListOp,
+    /// A list-op field: explicit assignments are list ops too.
+    ListOp(ListElement),
     /// Unregistered here: convert from the literal alone.
     Unknown,
+}
+
+/// The element type of a list-op metadata field.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ListElement {
+    Token,
+    String,
+    Int64,
 }
 
 impl MetadataFieldType {
     fn type_hint(self) -> &'static str {
         match self {
             Self::Typed(hint) => hint,
-            Self::TokenListOp | Self::Unknown => "",
+            Self::ListOp(_) | Self::Unknown => "",
         }
     }
+}
+
+/// Combines a list-op statement into an earlier one for the same field.
+/// Returns `false` when the two have different element types.
+fn merge_field_list_ops(existing: &mut FieldValue, value: FieldValue) -> bool {
+    match (existing, value) {
+        (FieldValue::TokenListOp(a), FieldValue::TokenListOp(b)) => merge_path_listop(a, b),
+        (FieldValue::StringListOp(a), FieldValue::StringListOp(b)) => merge_path_listop(a, b),
+        (FieldValue::IntListOp(a), FieldValue::IntListOp(b)) => merge_path_listop(a, b),
+        (FieldValue::UIntListOp(a), FieldValue::UIntListOp(b)) => merge_path_listop(a, b),
+        (FieldValue::Int64ListOp(a), FieldValue::Int64ListOp(b)) => merge_path_listop(a, b),
+        (FieldValue::UInt64ListOp(a), FieldValue::UInt64ListOp(b)) => merge_path_listop(a, b),
+        (existing @ FieldValue::Value(_), value) => *existing = value,
+        _ => return false,
+    }
+    true
 }
 
 /// Returns the registered type of a well-known metadata field.
@@ -1481,7 +1573,7 @@ impl MetadataFieldType {
 ///
 /// Spec: AOUSD Core §7.6 (core metadata fields and their types).
 fn metadata_field_type(key: &str) -> MetadataFieldType {
-    use MetadataFieldType::{TokenListOp, Typed, Unknown};
+    use MetadataFieldType::{ListOp, Typed, Unknown};
     match key {
         "kind"
         | "colorSpace"
@@ -1504,7 +1596,9 @@ fn metadata_field_type(key: &str) -> MetadataFieldType {
         "allowedTokens" => Typed("token[]"),
         "displayGroupOrder" => Typed("string[]"),
         "colorConfiguration" => Typed("asset"),
-        "apiSchemas" => TokenListOp,
+        "apiSchemas" => ListOp(ListElement::Token),
+        "clipSets" => ListOp(ListElement::String),
+        "inactiveIds" => ListOp(ListElement::Int64),
         _ => Unknown,
     }
 }

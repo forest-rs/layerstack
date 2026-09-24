@@ -432,6 +432,57 @@ fn variant_branch_specs_compose_from_usdc() {
     );
 }
 
+/// `int64` and `string` list ops (`inactiveIds`, `clipSets`) keep their
+/// element types and compose like OpenUSD: `usdcat --flatten` of
+/// `listops_strong.usda` gives `inactiveIds = [3, 7, 9000000000]`.
+///
+/// Spec: AOUSD Core §12.2.6 (list op resolution).
+#[test]
+fn int64_and_string_list_ops_match_usdcat() {
+    let store = assert_matches_usdcat("listops");
+    let dump = dump(&store);
+    assert!(
+        dump.iter().any(|l| l.contains(
+            "inactiveIds = listop(prepend=[Int64(3), Int64(4), Int64(7)] delete=[Int64(7)])"
+        )),
+        "{}",
+        dump.join("\n")
+    );
+    assert!(
+        dump.iter()
+            .any(|l| l.contains(r#"clipSets = listop(prepend=[String("walk"), String("run")])"#)),
+        "{}",
+        dump.join("\n")
+    );
+
+    let mut loaded = layerstack_conformance::usda_real::load_entry_usda(
+        &assets_dir().join("listops_strong.usda"),
+    );
+    let prim = loaded.store.path("/Instancer");
+    let inactive = loaded.store.tokens.intern("inactiveIds");
+    let clip_sets = loaded.store.tokens.intern("clipSets");
+    let stage = Stage::compose(
+        &mut loaded.store,
+        loaded.root_layer,
+        StageOptions::default(),
+    );
+    assert_eq!(
+        stage.resolve_value(prim, inactive).map(|r| r.value),
+        Some(ResolvedValue::ValueList(vec![
+            Value::Int64(3),
+            Value::Int64(7),
+            Value::Int64(9_000_000_000),
+        ]))
+    );
+    assert_eq!(
+        stage.resolve_value(prim, clip_sets).map(|r| r.value),
+        Some(ResolvedValue::ValueList(vec![
+            Value::string("walk"),
+            Value::string("run"),
+        ]))
+    );
+}
+
 /// Declarations of a prim authored in several variant branches come from
 /// the selected branch's spec, including through nested selections.
 ///

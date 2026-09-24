@@ -1433,6 +1433,7 @@ impl<'a> LowerCtx<'a> {
             return None;
         }
         Some(MetadataEntry {
+            span: node.span(),
             key: "comment",
             op: ListOpKind::Explicit,
             value: MetadataValue::Value(Value::String(strip_quotes(self.text(first)))),
@@ -1504,7 +1505,12 @@ impl<'a> LowerCtx<'a> {
             }
         }
 
-        MetadataEntry { key, op, value }
+        MetadataEntry {
+            span: node.span(),
+            key,
+            op,
+            value,
+        }
     }
 
     fn lower_metadata_entry(&mut self, node: SyntaxNode<'_>) -> MetadataEntry<'a> {

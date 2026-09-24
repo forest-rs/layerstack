@@ -1,0 +1,10 @@
+#usda 1.0
+
+def PointInstancer "Instancer" (
+    prepend clipSets = ["walk", "run"]
+    delete inactiveIds = [7]
+    prepend inactiveIds = [3, 4, 7]
+)
+{
+}
+

@@ -93,6 +93,11 @@ pub fn render_field(value: &FieldValue, names: Names<'_>) -> String {
         FieldValue::Value(value) => render_value(value, names),
         FieldValue::TokenListOp(list) => render_list(list, |t| format!("{:?}", names.token(*t))),
         FieldValue::PathListOp(list) => render_list(list, |t| names.target(t)),
+        FieldValue::StringListOp(list) => render_list(list, |s| format!("String({s:?})")),
+        FieldValue::IntListOp(list) => render_list(list, |v| format!("Int({v})")),
+        FieldValue::UIntListOp(list) => render_list(list, |v| format!("UInt({v})")),
+        FieldValue::Int64ListOp(list) => render_list(list, |v| format!("Int64({v})")),
+        FieldValue::UInt64ListOp(list) => render_list(list, |v| format!("UInt64({v})")),
     }
 }
 

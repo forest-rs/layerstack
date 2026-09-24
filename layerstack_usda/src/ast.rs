@@ -398,6 +398,8 @@ pub struct ListOpPaths<'a> {
 /// A generic metadata key-value entry.
 #[derive(Debug)]
 pub struct MetadataEntry<'a> {
+    /// Source span of the entry.
+    pub span: Span,
     /// Key name.
     pub key: &'a str,
     /// List-op kind (explicit, prepend, append, delete).

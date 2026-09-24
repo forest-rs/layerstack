@@ -336,19 +336,10 @@ impl Stage {
         }
 
         match &strongest.value {
-            FieldValue::Value(Value::Dictionary(_)) => {
-                // Dictionary combining: merge all dictionary opinions.
-                // Spec: AOUSD Core §6.6.2.1, §12.2.5.
-                let dicts = opinions.iter().filter_map(|op| match &op.value {
-                    FieldValue::Value(Value::Dictionary(d)) => Some(d.clone()),
-                    _ => None,
-                });
-                let combined = combine_dictionary_chain(dicts);
-                Some(Resolved {
-                    value: ResolvedValue::Dictionary(combined),
-                    provenance: self.provenance_for(field, strongest),
-                })
-            }
+            FieldValue::Value(Value::Dictionary(_)) => Some(Resolved {
+                value: ResolvedValue::Dictionary(resolve_dictionary_chain(opinions, None)),
+                provenance: self.provenance_for(field, strongest),
+            }),
             FieldValue::Value(v) => Some(Resolved {
                 value: ResolvedValue::Scalar(v.clone()),
                 provenance: self.provenance_for(field, strongest),
@@ -723,6 +714,23 @@ impl Stage {
                     SparseResolveResult::Blocked => {}
                     SparseResolveResult::NotApplicable => {}
                 }
+                // A dictionary fallback is the weakest opinion in the combining
+                // chain, as in `OpenUSD`'s `MetadataValueComposer::ConsumeUsdFallback`.
+                //
+                // Spec: AOUSD Core §6.6.2.1, §13.3.2.4 (fallback value resolution).
+                if let (
+                    FieldValue::Value(Value::Dictionary(_)),
+                    Some(FieldValue::Value(Value::Dictionary(seed))),
+                ) = (&strongest.value, fallback.as_ref())
+                {
+                    return Some(Resolved {
+                        value: ResolvedValue::Dictionary(resolve_dictionary_chain(
+                            opinions,
+                            Some(seed),
+                        )),
+                        provenance: self.provenance_for(field, strongest),
+                    });
+                }
                 if let Some(resolved) = self.resolve_value(prim, field) {
                     return Some(resolved);
                 }
@@ -734,7 +742,9 @@ impl Stage {
 
         Some(Resolved {
             value: match fallback {
-                FieldValue::Value(Value::Dictionary(d)) => ResolvedValue::Dictionary(d),
+                FieldValue::Value(Value::Dictionary(d)) => {
+                    ResolvedValue::Dictionary(combine_dictionary_chain([d]))
+                }
                 FieldValue::Value(v) => ResolvedValue::Scalar(v),
                 FieldValue::TokenListOp(op) => {
                     ResolvedValue::TokenList(resolve_list_chain::<TokenId>(&[], [op]))
@@ -894,6 +904,30 @@ fn half_from_f64(v: f64) -> u16 {
     } else {
         (sign | ((exp as u32) << 10) | (frac >> 13)) as u16
     }
+}
+
+/// Combines the dictionary opinions of a chain whose strongest opinion is a
+/// dictionary, optionally over a schema `fallback` seed.
+///
+/// `layerstack` selects the participating opinions; the recursive combining
+/// itself is delegated to `opinionated` through [`combine_dictionary_chain`].
+/// A value block discards every weaker opinion (AOUSD Core §12.3.6); stronger
+/// dictionaries still combine over the fallback. Non-dictionary opinions are
+/// skipped.
+///
+/// Spec: AOUSD Core §6.6.2.1 (dictionary combining), §12.2.5.
+fn resolve_dictionary_chain(
+    opinions: &[Opinion],
+    fallback: Option<&[(Arc<str>, Value)]>,
+) -> Vec<(Arc<str>, Value)> {
+    let authored = opinions
+        .iter()
+        .take_while(|opinion| !matches!(opinion.value, FieldValue::Value(Value::Blocked)))
+        .filter_map(|opinion| match &opinion.value {
+            FieldValue::Value(Value::Dictionary(entries)) => Some(entries.as_slice()),
+            _ => None,
+        });
+    combine_dictionary_chain(authored.chain(fallback))
 }
 
 #[cfg(test)]

@@ -318,55 +318,65 @@ impl From<f64> for Value {
     }
 }
 
+/// Exposes [`Value::Dictionary`] nesting to `opinionated`'s dictionary kernel.
+///
+/// `layerstack` keeps its own [`Value`] representation and USD opinion
+/// selection; the recursive combining algorithm itself is `opinionated`'s.
+struct ValueDictionaries;
+
+impl opinionated::DictionaryAdapter<Arc<str>, Value> for ValueDictionaries {
+    fn entries<'v>(&self, value: &'v Value) -> Option<&'v [(Arc<str>, Value)]> {
+        match value {
+            Value::Dictionary(entries) => Some(entries),
+            _ => None,
+        }
+    }
+
+    fn dictionary(&self, entries: Vec<(Arc<str>, Value)>) -> Value {
+        Value::Dictionary(entries)
+    }
+}
+
 /// Combines two dictionaries per §6.6.2.1 (dictionary combining).
 ///
 /// Rules:
-/// - Stronger non-dictionary values win per key.
-/// - When both stronger and weaker have a dictionary value at the same key,
-///   the values are combined recursively.
-/// - Weaker-only keys are preserved (appended to maintain order).
+/// - Keys present on only one side are kept.
+/// - For a key on both sides the stronger value wins, unless both values are
+///   dictionaries, which combine recursively.
+/// - The result is ordered by key at every nesting level, including nested
+///   dictionaries contributed by only one side, matching `OpenUSD`'s
+///   `VtDictionary`.
+///
+/// Delegates to [`opinionated::combine_dictionaries`].
 ///
 /// Spec: AOUSD Core §6.6.2.1, §12.2.5.
+#[must_use]
 pub fn combine_dictionaries(
     stronger: &[(Arc<str>, Value)],
     weaker: &[(Arc<str>, Value)],
 ) -> Vec<(Arc<str>, Value)> {
-    let mut result: Vec<(Arc<str>, Value)> = stronger.to_vec();
-    for (key, weak_val) in weaker {
-        if let Some(pos) = result.iter().position(|(k, _)| k == key) {
-            // Key exists in stronger. Recurse if both are dictionaries.
-            let strong_val = &result[pos].1;
-            if let (Value::Dictionary(strong_dict), Value::Dictionary(weak_dict)) =
-                (strong_val, weak_val)
-            {
-                let combined = combine_dictionaries(strong_dict, weak_dict);
-                result[pos].1 = Value::Dictionary(combined);
-            }
-            // Otherwise stronger non-dict value wins — no action needed.
-        } else {
-            // Key only in weaker: preserve it.
-            result.push((key.clone(), weak_val.clone()));
-        }
-    }
-    result
+    opinionated::combine_dictionaries(&ValueDictionaries, stronger, weaker)
 }
 
 /// Combines a chain of dictionary opinions in strength order (strongest first).
 ///
-/// Applies the combining algorithm pairwise from strongest to weakest.
+/// The chain folds strongest-first, `((d0 ∪ d1) ∪ d2) ∪ …`. Combining is not
+/// associative when a key holds a dictionary in one opinion and a
+/// non-dictionary in another, and the spec does not say how a chain is folded,
+/// so `OpenUSD` governs (AOUSD Core §4.2): `MetadataValueComposer` in
+/// `pxr/usd/usd/stage.cpp` composes the stronger partial result over each
+/// weaker opinion via `VtDictionaryOverRecursive`. A schema fallback is the
+/// last, weakest element of the chain. The result is ordered by key at every
+/// nesting level, including for a single-opinion chain.
 ///
-/// Spec: AOUSD Core §6.6.2.1 (dictionary combining).
+/// Delegates to [`opinionated::combine_dictionary_chain`].
+///
+/// Spec: AOUSD Core §6.6.2.1 (dictionary combining), §12.2.5.
+#[must_use]
 pub fn combine_dictionary_chain(
-    opinions: impl IntoIterator<Item = Vec<(Arc<str>, Value)>>,
+    opinions: impl IntoIterator<Item = impl AsRef<[(Arc<str>, Value)]>>,
 ) -> Vec<(Arc<str>, Value)> {
-    let mut result: Option<Vec<(Arc<str>, Value)>> = None;
-    for dict in opinions {
-        result = Some(match result {
-            None => dict,
-            Some(acc) => combine_dictionaries(&acc, &dict),
-        });
-    }
-    result.unwrap_or_default()
+    opinionated::combine_dictionary_chain(&ValueDictionaries, opinions)
 }
 
 /// A named field entry on a prim spec or variant spec.

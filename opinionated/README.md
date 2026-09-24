@@ -74,7 +74,9 @@ cloned as-is; only unordered levels are rebuilt.
 The crate has no value type of its own, so a host exposes nesting through a
 small `DictionaryAdapter`: whether a value is a dictionary, its entries, and
 how to wrap combined entries back into a value. There is no universal value
-enum, domain dependency, or serialization model.
+enum, domain dependency, or serialization model. `layerstack` implements the
+adapter for its `Value` and delegates USD dictionary resolution to this
+kernel, keeping only the USD-specific choice of which opinions participate.
 
 A chain folds strongest-first. Recursive combination is not associative when a
 key holds a dictionary in one opinion and a non-dictionary in another:

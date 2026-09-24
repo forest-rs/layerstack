@@ -117,7 +117,16 @@ impl Document {
         Ok(())
     }
 
-    fn validate(&self) -> Result<(), WriteError> {
+    /// Checks everything [`Self::to_usda`] checks, without writing.
+    ///
+    /// Other serializations of a document (e.g. the binary crate writer in
+    /// `layerstack_usdc`) run this first, so every format accepts and rejects
+    /// the same documents for the same reasons.
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::to_usda`].
+    pub fn validate(&self) -> Result<(), WriteError> {
         let mut keys: Vec<&str> = Vec::new();
         if self.default_prim.is_some() {
             keys.push("defaultPrim");

@@ -170,6 +170,17 @@ impl OpinionFamily<Opinion> for ArrayFamily<'_> {
 /// This keeps sparse-family detection and strong-over-weak folding out of
 /// [`crate::stage::Stage`]. If no sparse family applies, returns
 /// [`SparseResolveResult::NotApplicable`].
+///
+/// Block semantics follow AOUSD Core §12.3.6 (blocked attributes) and the
+/// sparse-array-edits proposal (`OpenUSD-proposals/proposals/sparse-array-edits`,
+/// "Generalized Value Resolution with Composed Sparse Opinions" and "Value
+/// Resolution"). The fold runs strongest to weakest and stops at the first
+/// dense value or block. A block discards every weaker authored opinion; when
+/// nothing stronger contributed, the result is [`SparseResolveResult::Blocked`]
+/// and callers fall back to the schema fallback. Sparse edits stronger than
+/// the block still compose over the weakest dense value that survives it: the
+/// fallback seed if one is supplied, otherwise the empty array, since the
+/// proposal requires a resolved array value to always be dense.
 pub(crate) fn resolve_sparse_value(
     opinions: &[Opinion],
     query: SparseQuery<'_>,
@@ -842,6 +853,78 @@ mod tests {
         assert_eq!(
             resolve_at(&opinions, 11.0, InterpolationType::Held),
             SparseResolveResult::Blocked
+        );
+    }
+
+    #[test]
+    fn stronger_edits_materialize_over_fallback_seed_when_block_cuts_chain() {
+        let (spec_path, field) = test_ids();
+        let append_seven = Value::ArrayEdit(ArrayEdit {
+            ops: vec![ArrayEditOp::Insert {
+                src: ArrayEditOperand::Literal(Value::Int(7)),
+                index: ArrayIndex::End,
+            }],
+        });
+        let opinions = vec![
+            array_opinion(spec_path, field, FieldValue::Value(append_seven), 0),
+            array_opinion(spec_path, field, FieldValue::Value(Value::Blocked), 1),
+            array_opinion(spec_path, field, FieldValue::Value(array_value(&[1, 2])), 2),
+        ];
+
+        let resolved = resolve_sparse_value(
+            &opinions,
+            SparseQuery::Default {
+                fallback: Some(&array_value(&[5, 6])),
+            },
+            Some(&int_array_type()),
+        );
+        assert_eq!(
+            resolved,
+            SparseResolveResult::Resolved(array_value(&[5, 6, 7])),
+            "the fallback survives the block and seeds the stronger edit; [1, 2] does not"
+        );
+    }
+
+    #[test]
+    fn stronger_sampled_edit_materializes_over_seed_when_sampled_block_cuts_chain() {
+        let (spec_path, field) = test_ids();
+        let append_seven = Value::ArrayEdit(ArrayEdit {
+            ops: vec![ArrayEditOp::Insert {
+                src: ArrayEditOperand::Literal(Value::Int(7)),
+                index: ArrayIndex::End,
+            }],
+        });
+        let opinions = vec![
+            array_opinion(
+                spec_path,
+                field,
+                FieldValue::TimeSamples(vec![(0.0, append_seven)]),
+                0,
+            ),
+            array_opinion(
+                spec_path,
+                field,
+                FieldValue::TimeSamples(vec![(0.0, Value::Blocked), (2.0, array_value(&[3]))]),
+                1,
+            ),
+            array_opinion(spec_path, field, FieldValue::Value(array_value(&[1, 2])), 2),
+        ];
+
+        let held = InterpolationType::Held;
+        assert_eq!(
+            resolve_at(&opinions, 0.0, held),
+            SparseResolveResult::Resolved(array_value(&[7])),
+            "exact block sample: the stronger edit materializes over the empty seed"
+        );
+        assert_eq!(
+            resolve_at(&opinions, 1.0, held),
+            SparseResolveResult::Resolved(array_value(&[7])),
+            "held block sample: the stronger edit materializes over the empty seed"
+        );
+        assert_eq!(
+            resolve_at(&opinions, 2.0, held),
+            SparseResolveResult::Resolved(array_value(&[3, 7])),
+            "once the dense sample takes over, the edit composes over it"
         );
     }
 }

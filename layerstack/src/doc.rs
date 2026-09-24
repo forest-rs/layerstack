@@ -484,7 +484,11 @@ pub enum InterpolationType {
 
 /// A time offset/scale pair for retiming (§16.3.10.20, §12.3.2.1).
 ///
-/// Remaps time via: `mappedTime = queryTime * scale + offset`.
+/// The offset places a layer's local timeline on the timeline of the layer
+/// or arc that includes it: `outerTime = localTime * scale + offset`, the
+/// convention of OpenUSD's `SdfLayerOffset`. [`LayerOffset::compose`]
+/// concatenates offsets along a sublayer or arc chain (§10.3.1.1), and
+/// [`LayerOffset::map_time`] maps a query time back into the layer.
 /// The identity (no-op) is `{ offset: 0.0, scale: 1.0 }`.
 ///
 /// `Eq` is implemented via bitwise comparison of the `f64` fields, which is
@@ -528,10 +532,20 @@ impl LayerOffset {
 
     /// Maps a stage time to a layer-local time.
     ///
-    /// Spec: §12.3.2.1 — `mappedTime = queryTime * scale + offset`.
+    /// This is the inverse of the offset's local-to-stage map:
+    /// `localTime = (stageTime - offset) / scale`. OpenUSD value resolution
+    /// applies `SdfLayerOffset::GetInverse()` to the query time the same way
+    /// (`_GetInterpolatingTimeSamples` in `pxr/usd/usd/stage.cpp`), so a
+    /// sublayer authored with `(offset = 10)` plays its local frame 0 at stage
+    /// frame 10.
+    ///
+    /// Spec: §12.3.2.1 (layer offset and scale), §10.3.1.1 (offsets concatenate
+    /// by applying the outer scale to the inner offset). The worked example in
+    /// §12.3.2.1 applies the forward map to the query time instead, which
+    /// contradicts OpenUSD; this follows OpenUSD.
     #[must_use]
     pub fn map_time(self, time: f64) -> f64 {
-        time * self.scale + self.offset
+        (time - self.offset) / self.scale
     }
 
     /// Composes two offsets: `self` is the outer, `inner` is the inner.
@@ -1393,8 +1407,28 @@ mod tests {
             offset: 10.0,
             scale: 2.0,
         };
-        // mappedTime = time * scale + offset = 5 * 2 + 10 = 20
-        assert_eq!(lo.map_time(5.0), 20.0);
+        // Local frame 5 plays at stage frame 5 * 2 + 10 = 20.
+        assert_eq!(lo.map_time(20.0), 5.0);
+        assert_eq!(lo.map_time(10.0), 0.0);
+    }
+
+    #[test]
+    fn layer_offset_map_time_inverts_composed_offsets_innermost_last() {
+        // A layer reached through `outer` then `inner` maps a stage time
+        // through `outer` first, then through `inner`.
+        let outer = LayerOffset {
+            offset: 10.0,
+            scale: 2.0,
+        };
+        let inner = LayerOffset {
+            offset: 5.0,
+            scale: 3.0,
+        };
+        let stage_time = 47.0;
+        assert_eq!(
+            outer.compose(inner).map_time(stage_time),
+            inner.map_time(outer.map_time(stage_time))
+        );
     }
 
     #[test]

@@ -23,8 +23,9 @@ value resolution) and to keep it honest via a growing, fixture-driven conformanc
 - `layerstack_conformance/`: a std-only test harness that loads AOUSD supplemental fixtures and
   asserts behavior against `pcp.json` expectations
 - `layerstack_examples/`: runnable examples using the `layerstack` API
-- `layerstack_mesh_export/`: polygon mesh export to USDA/USDZ (`UsdGeomMesh` adapter over the
-  `layerstack_usda` writer and `layerstack_usdz` packager); materials are the next scope
+- `layerstack_mesh_export/`: polygon mesh export to USDA/USDC/USDZ (`UsdGeomMesh` adapter over the
+  `layerstack_usda` and `layerstack_usdc` writers and the `layerstack_usdz` packager, with generic
+  and ARKit USDZ profiles; `UsdPreviewSurface` materials with direct and per-face bindings)
 - `docs/`: focused design notes for active architecture slices
 - `core-spec-supplemental-release_dec2025/`: upstream AOUSD supplemental test corpus (vendored)
 - `specs/`: normative spec PDFs used as implementation references

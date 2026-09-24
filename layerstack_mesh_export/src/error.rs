@@ -7,7 +7,10 @@ use alloc::string::String;
 use core::fmt;
 
 use layerstack_usda::writer::WriteError;
+use layerstack_usdc::writer::UsdcWriteError;
 use layerstack_usdz::UsdzWriteError;
+
+use crate::UsdzProfile;
 
 /// Why a scene could not be exported.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -41,9 +44,20 @@ pub enum ExportError {
         /// The asset path as authored.
         asset: String,
     },
+    /// A package member is a file type the USDZ profile excludes (e.g. a
+    /// second USD layer or an EXR image in an [`UsdzProfile::Arkit`]
+    /// package).
+    ProfileMember {
+        /// The member's package path.
+        path: String,
+        /// The profile being written.
+        profile: UsdzProfile,
+    },
     /// The USDA writer rejected the document (e.g. a name that is not a USD
     /// identifier, or duplicate sibling names).
     Usda(WriteError),
+    /// The USDC writer rejected the document.
+    Usdc(UsdcWriteError),
     /// The package could not be written (e.g. an invalid or duplicate asset
     /// path).
     Usdz(UsdzWriteError),
@@ -163,7 +177,11 @@ impl fmt::Display for ExportError {
             Self::UnpackagedAsset { asset } => {
                 write!(f, "asset path {asset:?} names no file in the package")
             }
+            Self::ProfileMember { path, profile } => {
+                write!(f, "{path:?} is not allowed in a {profile:?} USDZ package")
+            }
             Self::Usda(e) => write!(f, "USDA: {e}"),
+            Self::Usdc(e) => write!(f, "USDC: {e}"),
             Self::Usdz(e) => write!(f, "USDZ: {e}"),
         }
     }
@@ -241,6 +259,12 @@ impl core::error::Error for ExportError {}
 impl From<WriteError> for ExportError {
     fn from(e: WriteError) -> Self {
         Self::Usda(e)
+    }
+}
+
+impl From<UsdcWriteError> for ExportError {
+    fn from(e: UsdcWriteError) -> Self {
+        Self::Usdc(e)
     }
 }
 

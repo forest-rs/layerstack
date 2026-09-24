@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 
 use layerstack_mesh_export::{
     Channel, ColorInput, Faces, FamilyType, FloatInput, Material, Mesh, PackageFile, Primvar,
-    PrimvarData, Scene, StageSettings, Texture, Transform, UpAxis, Xform,
+    PrimvarData, Scene, StageSettings, Texture, Transform, UpAxis, UsdzProfile, Xform,
 };
 use layerstack_usda::writer::{Attribute, Document, Metadatum, Prim, Value};
 
@@ -509,7 +509,7 @@ fn package(scene: &Scene<'_>, files: &[(&str, Vec<u8>)]) -> Vec<u8> {
         .iter()
         .map(|(path, bytes)| PackageFile::new(path, bytes))
         .collect();
-    scene.to_usdz(&files).unwrap()
+    scene.to_usdz(UsdzProfile::Generic, &files).unwrap()
 }
 
 fn material_fixtures(dir: &Path, out: &mut Vec<Fixture>) {
@@ -533,7 +533,7 @@ fn material_fixtures(dir: &Path, out: &mut Vec<Fixture>) {
     write(
         dir,
         "material_untextured.usdz",
-        &untextured.to_usdz(&[]).unwrap(),
+        &untextured.to_usdz(UsdzProfile::Generic, &[]).unwrap(),
         Expect::Valid,
         out,
     );
@@ -547,7 +547,9 @@ fn material_fixtures(dir: &Path, out: &mut Vec<Fixture>) {
     write(
         dir,
         "material_partition.usdz",
-        &two_material_cube().to_usdz(&[]).unwrap(),
+        &two_material_cube()
+            .to_usdz(UsdzProfile::Generic, &[])
+            .unwrap(),
         Expect::Valid,
         out,
     );
@@ -663,7 +665,7 @@ pub fn write_all(dir: &Path) -> Vec<Fixture> {
     write(
         dir,
         "primvars.usdz",
-        &scene.to_usdz(&[]).unwrap(),
+        &scene.to_usdz(UsdzProfile::Generic, &[]).unwrap(),
         Expect::Valid,
         &mut out,
     );
@@ -694,10 +696,13 @@ pub fn write_all(dir: &Path) -> Vec<Fixture> {
         StageSettings::new(UpAxis::Z, 1.0),
         Xform::new("Root").with_mesh(mesh),
     )
-    .to_usdz(&[
-        PackageFile::new("textures/checker.png", &png),
-        PackageFile::new("audio/silence.wav", &wav),
-    ])
+    .to_usdz(
+        UsdzProfile::Generic,
+        &[
+            PackageFile::new("textures/checker.png", &png),
+            PackageFile::new("audio/silence.wav", &wav),
+        ],
+    )
     .unwrap();
     write(dir, "package.usdz", &package, Expect::Valid, &mut out);
 

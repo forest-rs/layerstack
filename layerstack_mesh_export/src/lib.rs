@@ -30,19 +30,26 @@
 //!
 //! [`Scene::to_usda`] writes one *authored* layer through
 //! [`layerstack_usda::writer`]; nothing is composed or flattened, and the
-//! composition kernel is not involved. [`Scene::to_usdz`] is a separate
-//! packaging step ([`layerstack_usdz::write_usdz`]): the layer becomes the
-//! package's first file, followed by the caller's files (e.g. textures),
-//! and every asset path the scene authors must name one of those files.
-//! Paths are used as given; the packager does not discover or rewrite
-//! dependencies.
+//! composition kernel is not involved. [`Scene::to_usdc`] writes the same
+//! layer in the binary crate format ([`layerstack_usdc::writer`]).
+//! [`Scene::to_usdz`] is a separate packaging step
+//! ([`layerstack_usdz::write_usdz`]): the layer becomes the package's first
+//! file, followed by the caller's files (e.g. textures), and every asset
+//! path the scene authors must name one of those files. Paths are used as
+//! given; the packager does not discover or rewrite dependencies.
 //!
-//! The package targets the **generic USDZ profile** (OpenUSD
-//! `docs/spec_usdz.rst`): a USDA default layer plus media. It is not the
-//! `ARKit` / AR Quick Look profile, which expects a single USDC layer
-//! (`spec_usdz.rst:210`, `pxr/usd/usdUtils/usdzPackage.h:71`); passing
-//! `usdchecker --arkit` does not by itself establish compatibility with
-//! those viewers.
+//! Packages are written for an explicit [`UsdzProfile`] (OpenUSD
+//! `docs/spec_usdz.rst`):
+//!
+//! - [`UsdzProfile::Generic`]: a USDA root layer (`scene.usda`) plus any
+//!   member type the USDZ specification allows;
+//! - [`UsdzProfile::Arkit`]: the profile AR Quick Look and `ARKit` expect, a
+//!   single USDC root layer (`scene.usdc`) plus PNG/JPEG images and
+//!   M4A/MP3/WAV audio (`spec_usdz.rst`, "File Types";
+//!   `pxr/usd/usdUtils/usdzPackage.h`, `UsdUtilsCreateNewARKitUsdzPackage`).
+//!
+//! Passing `usdchecker --arkit` checks the package layout and stage rules;
+//! it does not by itself establish that a given viewer renders the result.
 //!
 //! # Materials
 //!
@@ -81,7 +88,7 @@
 //! ```
 //! use layerstack_mesh_export::{
 //!     Channel, ColorInput, Faces, FloatInput, Material, Mesh, PackageFile, Primvar, Scene,
-//!     StageSettings, Texture, Transform, UpAxis, Xform,
+//!     StageSettings, Texture, Transform, UpAxis, UsdzProfile, Xform,
 //! };
 //!
 //! let points = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0]];
@@ -108,11 +115,16 @@
 //! let usda = scene.to_usda()?;
 //! assert!(usda.contains("uniform token subdivisionScheme = \"none\""));
 //! assert!(usda.contains("rel material:binding = </Root/Materials/Painted>"));
+//! let usdc = scene.to_usdc()?;
+//! assert_eq!(&usdc[..8], b"PXR-USDC");
 //! # let png: &[u8] = b"\x89PNG\r\n\x1a\n";
-//! let usdz = scene.to_usdz(&[
-//!     PackageFile::new("textures/base.png", png),
-//!     PackageFile::new("textures/metal_rough.png", png),
-//! ])?;
+//! let usdz = scene.to_usdz(
+//!     UsdzProfile::Arkit,
+//!     &[
+//!         PackageFile::new("textures/base.png", png),
+//!         PackageFile::new("textures/metal_rough.png", png),
+//!     ],
+//! )?;
 //! assert_eq!(&usdz[..4], b"PK\x03\x04");
 //! # Ok::<(), layerstack_mesh_export::ExportError>(())
 //! ```
@@ -167,7 +179,7 @@ pub use mesh::{
     CustomAttribute, CustomPrimvar, Faces, FamilyType, Interpolation, MaterialSubset, Mesh,
     Orientation, Primvar, PrimvarData,
 };
-pub use scene::{Node, ROOT_LAYER_PATH, Scene, StageSettings, UpAxis, Xform};
+pub use scene::{Node, Scene, StageSettings, UpAxis, UsdzProfile, Xform};
 pub use transform::Transform;
 
 #[cfg(test)]

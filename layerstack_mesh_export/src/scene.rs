@@ -7,12 +7,55 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use layerstack_usda::writer::{Document, Value};
+use layerstack_usdc::writer::write_document;
 use layerstack_usdz::{PackageFile, write_usdz};
 
 use crate::{CustomAttribute, ExportError, Material, Mesh, Transform};
 
-/// Path of the root layer inside packages written by [`Scene::to_usdz`].
-pub const ROOT_LAYER_PATH: &str = "scene.usda";
+/// The consumers a USDZ package is written for.
+///
+/// Both profiles store every member uncompressed and 64-byte aligned, put
+/// the root layer first, and require every asset path the scene authors to
+/// name a packaged file (`docs/spec_usdz.rst`, "Layout" and "Default
+/// Layer"). They differ in the root layer's format and the members allowed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UsdzProfile {
+    /// The generic USDZ profile: the root layer is USDA text
+    /// (`scene.usda`), and members may be any file type the USDZ
+    /// specification allows (USD layers, PNG, JPEG, EXR and AVIF images,
+    /// M4A, MP3 and WAV audio; `spec_usdz.rst`, "File Types").
+    Generic,
+    /// The `ARKit` / AR Quick Look profile: the root layer is binary USDC
+    /// (`scene.usdc`) and is the package's only USD layer, because Apple's
+    /// implementation reads a single USDC file (`spec_usdz.rst`, "File
+    /// Types"; `pxr/usd/usdUtils/usdzPackage.h`,
+    /// `UsdUtilsCreateNewARKitUsdzPackage`, which flattens to one `.usdc`
+    /// first layer). Other members are limited to PNG and JPEG images and
+    /// M4A, MP3 and WAV audio.
+    Arkit,
+}
+
+impl UsdzProfile {
+    /// Path of the root layer inside the package.
+    pub const fn root_layer_path(self) -> &'static str {
+        match self {
+            Self::Generic => "scene.usda",
+            Self::Arkit => "scene.usdc",
+        }
+    }
+
+    /// Whether the profile allows a member at `path` besides the root
+    /// layer. For [`Self::Generic`], the package writer's own member check
+    /// ([`layerstack_usdz::writer::MEMBER_EXTENSIONS`]) applies.
+    fn allows_member(self, path: &str) -> bool {
+        match self {
+            Self::Generic => true,
+            Self::Arkit => path
+                .rsplit_once('.')
+                .is_some_and(|(_, ext)| ["png", "jpg", "jpeg", "m4a", "mp3", "wav"].contains(&ext)),
+        }
+    }
+}
 
 /// The stage's up axis.
 ///
@@ -184,25 +227,43 @@ impl<'a> Scene<'a> {
         Ok(self.to_document()?.to_usda()?)
     }
 
-    /// Serializes the scene and packages it as a generic-profile USDZ.
+    /// Serializes the scene as a binary USDC layer.
     ///
-    /// The layer is stored as [`ROOT_LAYER_PATH`], first in the archive,
-    /// followed by `assets` (e.g. textures) in order. Assets must be USD,
-    /// image or audio files ([`layerstack_usdz::writer::MEMBER_EXTENSIONS`]).
-    /// The package must be self-contained: every asset path the scene
-    /// authors (material texture files, which become `UsdUVTexture`
-    /// `inputs:file`, and asset-valued custom attributes, including asset
-    /// arrays) must name one of `assets` by its package path, e.g.
-    /// `@textures/albedo.png@` (a leading `./` is allowed). Those paths
-    /// resolve relative to the root layer, i.e. inside the package,
-    /// wherever the package is moved.
+    /// The layer holds the same specs and fields as [`Self::to_usda`]'s
+    /// text (see [`layerstack_usdc::writer::document`]).
+    ///
+    /// # Errors
+    ///
+    /// See [`Self::to_document`]; [`ExportError::Usdc`] if the crate writer
+    /// rejects the document.
+    pub fn to_usdc(&self) -> Result<Vec<u8>, ExportError> {
+        Ok(write_document(&self.to_document()?)?)
+    }
+
+    /// Serializes the scene and packages it as a USDZ for `profile`.
+    ///
+    /// The layer is stored as [`UsdzProfile::root_layer_path`], first in
+    /// the archive, followed by `assets` (e.g. textures) in order. Assets
+    /// must be member types the profile allows. The package must be
+    /// self-contained: every asset path the scene authors (material texture
+    /// files, which become `UsdUVTexture` `inputs:file`, and asset-valued
+    /// custom attributes, including asset arrays) must name one of `assets`
+    /// by its package path, e.g. `@textures/albedo.png@` (a leading `./` is
+    /// allowed). Those paths resolve relative to the root layer, i.e.
+    /// inside the package, wherever the package is moved.
     ///
     /// # Errors
     ///
     /// See [`Self::to_document`]; [`ExportError::UnpackagedAsset`] for an
-    /// authored asset path with no matching file; [`ExportError::Usdz`] for
-    /// invalid or duplicate package paths and unsupported member types.
-    pub fn to_usdz(&self, assets: &[PackageFile<'_>]) -> Result<Vec<u8>, ExportError> {
+    /// authored asset path with no matching file;
+    /// [`ExportError::ProfileMember`] for an asset the profile excludes;
+    /// [`ExportError::Usdc`] as for [`Self::to_usdc`]; [`ExportError::Usdz`]
+    /// for invalid or duplicate package paths and unsupported member types.
+    pub fn to_usdz(
+        &self,
+        profile: UsdzProfile,
+        assets: &[PackageFile<'_>],
+    ) -> Result<Vec<u8>, ExportError> {
         let mut authored = Vec::new();
         collect_xform_assets(&self.root, &mut authored);
         for material in &self.materials {
@@ -216,9 +277,18 @@ impl<'a> Scene<'a> {
                 });
             }
         }
-        let layer = self.to_usda()?;
+        if let Some(file) = assets.iter().find(|f| !profile.allows_member(f.path)) {
+            return Err(ExportError::ProfileMember {
+                path: file.path.into(),
+                profile,
+            });
+        }
+        let layer = match profile {
+            UsdzProfile::Generic => self.to_usda()?.into_bytes(),
+            UsdzProfile::Arkit => self.to_usdc()?,
+        };
         let mut files = Vec::with_capacity(assets.len() + 1);
-        files.push(PackageFile::new(ROOT_LAYER_PATH, layer.as_bytes()));
+        files.push(PackageFile::new(profile.root_layer_path(), &layer));
         files.extend_from_slice(assets);
         Ok(write_usdz(&files)?)
     }

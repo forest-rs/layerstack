@@ -11,7 +11,7 @@ use layerstack_usda::writer::WriteError;
 use crate::{
     Channel, ColorInput, ExportError, Faces, FamilyType, FloatInput, Material, MaterialProblem,
     Mesh, MeshProblem, PackageFile, Primvar, PrimvarData, Scene, StageSettings, Texture, UpAxis,
-    Wrap, Xform,
+    UsdzProfile, Wrap, Xform,
 };
 
 const POINTS: [[f32; 3]; 3] = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
@@ -413,7 +413,8 @@ fn usdz_requires_textures_to_be_packaged() {
         PackageFile::new("textures/orm.png", png),
     ];
     assert_eq!(
-        scene(tri().with_material("Painted"), alloc::vec![painted()]).to_usdz(&packaged),
+        scene(tri().with_material("Painted"), alloc::vec![painted()])
+            .to_usdz(UsdzProfile::Generic, &packaged),
         Err(ExportError::UnpackagedAsset {
             asset: "textures/normal.png".into()
         }),
@@ -422,7 +423,7 @@ fn usdz_requires_textures_to_be_packaged() {
     let mut all = packaged.to_vec();
     all.push(PackageFile::new("textures/normal.png", png));
     let bytes = scene(tri().with_material("Painted"), alloc::vec![painted()])
-        .to_usdz(&all)
+        .to_usdz(UsdzProfile::Generic, &all)
         .expect("self-contained package");
     assert_eq!(&bytes[..4], b"PK\x03\x04", "zip signature");
 }

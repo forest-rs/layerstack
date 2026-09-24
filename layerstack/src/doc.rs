@@ -86,6 +86,16 @@ pub enum Value {
     ///
     /// Spec: §6.2 (asset type), §9 (asset resolution).
     Asset(Arc<str>),
+    /// A path expression (`pathExpression`), kept as its authored text.
+    ///
+    /// OpenUSD's `SdfPathExpression` (used for example by
+    /// `CollectionAPI`'s `membershipExpression`) is not evaluated here, and
+    /// its `%_` references to weaker expressions are not composed: the
+    /// strongest opinion wins like any scalar.
+    ///
+    /// Spec: AOUSD Core §16.3.10.14 (crate encoding); the type itself is an
+    /// OpenUSD extension (`pxr/usd/sdf/pathExpression.h`).
+    PathExpression(Arc<str>),
     /// A time code value (`timecode`), semantically a time in frames.
     ///
     /// Spec: §6.2.
@@ -196,6 +206,7 @@ impl fmt::Display for Value {
             Self::String(v) => write!(f, "{v}"),
             Self::Token(v) => write!(f, "token({v:?})"),
             Self::Asset(v) => write!(f, "@{v}@"),
+            Self::PathExpression(v) => write!(f, "pathExpression({v:?})"),
             Self::TimeCode(v) => write!(f, "{v}"),
             // Vectors
             Self::Vec2d(v) => write!(f, "({}, {})", v[0], v[1]),

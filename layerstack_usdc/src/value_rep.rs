@@ -140,6 +140,8 @@ pub enum CrateValue {
     Token(String),
     /// Asset path string.
     AssetPath(String),
+    /// Path expression text (`SdfPathExpression`, crate version 0.10.0).
+    PathExpression(String),
     /// Specifier enum (0=Def, 1=Over, 2=Class).
     Specifier(u32),
     /// Variability enum (0=Varying, 1=Uniform).
@@ -332,7 +334,12 @@ pub fn decode_value(
         }
         ValueType::String => decode_string(rep, data, sections),
         ValueType::Token => decode_token(rep, data, sections),
-        ValueType::AssetPath | ValueType::PathExpression => decode_asset_path(rep, data, sections),
+        ValueType::AssetPath => decode_asset_path(rep, data, sections),
+        // Stored like an asset path (Core §16.3.10.14), but typed apart:
+        // the text is an `SdfPathExpression`, not an asset to resolve.
+        ValueType::PathExpression => {
+            decode_asset_path(rep, data, sections).map(asset_path_to_path_expression)
+        }
         ValueType::Specifier => {
             let v = decode_inlined_or_offset_u32(rep, data)?;
             Ok(CrateValue::Specifier(v))
@@ -752,6 +759,20 @@ fn decode_token(
     }
     let idx = decode_inlined_or_offset_u32(rep, data)?;
     Ok(CrateValue::Token(lookup_token(sections, idx as usize)))
+}
+
+/// Retypes decoded asset-path text as path-expression text.
+fn asset_path_to_path_expression(value: CrateValue) -> CrateValue {
+    match value {
+        CrateValue::AssetPath(text) => CrateValue::PathExpression(text),
+        CrateValue::Array(items) => CrateValue::Array(
+            items
+                .into_iter()
+                .map(asset_path_to_path_expression)
+                .collect(),
+        ),
+        other => other,
+    }
 }
 
 fn decode_asset_path(

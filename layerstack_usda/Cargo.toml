@@ -1,6 +1,6 @@
 [package]
 name = "layerstack_usda"
-description = "USDA (text format) parser for layerstack — lossless CST, typed AST, and error recovery."
+description = "USDA (text format) parser and writer for layerstack — lossless CST, typed AST, error recovery, deterministic serialization."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

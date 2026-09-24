@@ -1419,7 +1419,17 @@ fn prune_deactivated(
 /// Resolves variant selections considering both the local layer stack and
 /// referenced layers (weaker selections from references fill in gaps).
 ///
+/// The result is keyed by set name but scoped to the variant sets hosted on
+/// `path` itself: every selection comes from a site that maps to `path` (its
+/// own specs, selections authored for it inside its parent's selected branch,
+/// and its inherit, reference and payload targets). Ancestors' selections are
+/// deliberately not merged in: a same-named set on an ancestor is a different
+/// variant set, and letting its selection apply here would pick a branch
+/// nobody selected.
+///
 /// Spec: AOUSD Core §10.5 (variant selection), §9 (LIVERPS strength ordering).
+/// `OpenUSD` resolves a set's selection at the site hosting it
+/// (`pxr/usd/pcp/primIndex.cpp`, `_ComposeVariantSelection`).
 fn resolve_full_variant_selections(
     store: &dyn LayerStore,
     local_stack: &LayerStack,
@@ -1428,28 +1438,6 @@ fn resolve_full_variant_selections(
     let mut selections = resolve_variant_selections_for_prim(store, local_stack, path);
     for (set, variant) in resolve_variant_child_selections_for_prim(store, local_stack, path) {
         selections.entry(set).or_insert(variant);
-    }
-
-    // Ancestor variant selections apply to namespace descendants unless a more
-    // local selection overrides them.
-    //
-    // Spec: AOUSD Core §10.5 (variant selections authored on a prim determine
-    // which descendant variant branches participate in composition).
-    let path_obj = store.paths().resolve(path).clone();
-    let mut ancestors = Vec::new();
-    let mut cursor = path_obj.parent();
-    while let Some(parent) = cursor {
-        ancestors.push(parent.clone());
-        cursor = parent.parent();
-    }
-    ancestors.reverse();
-    for ancestor in ancestors {
-        let Some(ancestor_id) = store.paths().lookup(&ancestor) else {
-            continue;
-        };
-        for (set, variant) in resolve_full_variant_selections(store, local_stack, ancestor_id) {
-            selections.entry(set).or_insert(variant);
-        }
     }
 
     // Also gather selections from inherit targets (weaker than local, per LIVERPS).
@@ -3183,7 +3171,7 @@ fn add_reference_edge_opinions(
                                             arc_list_index,
                                             layer_strength,
                                             layer_id: remote_layer_id,
-                                            lookup_path: *remote_path_id,
+                                            lookup_path: remote_child_source,
                                             spec_path: normalized_variant_spec_path(
                                                 store,
                                                 remote_child_source,
@@ -3237,7 +3225,7 @@ fn add_reference_edge_opinions(
                                             arc_list_index,
                                             layer_strength,
                                             layer_id: remote_layer_id,
-                                            lookup_path: *remote_path_id,
+                                            lookup_path: remote_child_source,
                                             spec_path: normalized_variant_property_spec_path(
                                                 store,
                                                 remote_child_source,
@@ -3262,7 +3250,7 @@ fn add_reference_edge_opinions(
                                         arc_list_index,
                                         layer_strength,
                                         layer_id: remote_layer_id,
-                                        lookup_path: *remote_path_id,
+                                        lookup_path: remote_child_source,
                                         spec_path: normalized_variant_spec_path(
                                             store,
                                             remote_child_source,
@@ -3420,7 +3408,7 @@ fn add_reference_edge_opinions(
                                         arc_list_index,
                                         layer_strength,
                                         layer_id: remote_layer_id,
-                                        lookup_path: *remote_path_id,
+                                        lookup_path: remote_child_source,
                                         spec_path: normalized_variant_spec_path(
                                             store,
                                             remote_child_source,
@@ -3469,7 +3457,7 @@ fn add_reference_edge_opinions(
                                     arc_list_index,
                                     layer_strength,
                                     layer_id: remote_layer_id,
-                                    lookup_path: *remote_path_id,
+                                    lookup_path: remote_child_source,
                                     spec_path: normalized_variant_spec_path(
                                         store,
                                         remote_child_source,
@@ -3487,7 +3475,7 @@ fn add_reference_edge_opinions(
                                     arc_list_index,
                                     layer_strength,
                                     layer_id: remote_layer_id,
-                                    lookup_path: *remote_path_id,
+                                    lookup_path: remote_child_source,
                                     spec_path: normalized_variant_property_spec_path(
                                         store,
                                         remote_child_source,

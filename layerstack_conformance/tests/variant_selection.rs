@@ -228,3 +228,144 @@ def "SelectsA" (
     assert_eq!(value, Value::Double(10.0), "referencing selection `a` wins");
     assert_eq!(stack, vec![Value::Double(10.0)], "branch `b` leaked");
 }
+
+const NESTED_LOD: &str = r#"#usda 1.0
+def "A" (
+    variantSets = ["lod"]
+    variants = {
+        string lod = "high"
+    }
+)
+{
+    def "B" (
+        variantSets = ["lod"]
+    )
+    {
+        variantSet "lod" = {
+            "high" {
+                double x = 10
+                def "HighOnly"
+                {
+                }
+            }
+            "low" {
+                double x = 20
+                def "LowOnly"
+                {
+                }
+            }
+        }
+    }
+
+    def "C" (
+        variantSets = ["lod"]
+        variants = {
+            string lod = "low"
+        }
+    )
+    {
+        variantSet "lod" = {
+            "high" {
+                double x = 100
+            }
+            "low" {
+                double x = 200
+            }
+        }
+    }
+
+    variantSet "lod" = {
+        "high" {
+            double x = 1
+            over "B"
+            {
+                double y = 5
+            }
+            def "D" (
+                variantSets = ["lod"]
+            )
+            {
+                variantSet "lod" = {
+                    "high" {
+                        double x = 1000
+                        def "HighOnly"
+                        {
+                        }
+                    }
+                    "low" {
+                        double x = 2000
+                        def "LowOnly"
+                        {
+                        }
+                    }
+                }
+            }
+        }
+        "low" {
+            double x = 2
+        }
+    }
+}
+"#;
+
+/// Variant selections belong to the prim whose variant set they select.
+/// `/A` selects `lod = "high"` for its own `lod` set; that must not select a
+/// branch of `/A/B`'s unrelated, same-named `lod` set (which has no
+/// selection, so none of its branches contribute), nor override `/A/C`'s
+/// own selection.
+///
+/// Spec: AOUSD Core §10.5; `OpenUSD` resolves a set's selection at the site
+/// hosting the set (`pxr/usd/pcp/primIndex.cpp`, `_ComposeVariantSelection`).
+#[test]
+fn same_named_variant_sets_on_different_hosts_do_not_alias() {
+    let check = |store: &mut InMemoryStore, stage: &Stage, prefix: &str| {
+        let (value, _) = resolve(store, stage, &format!("{prefix}.x"));
+        assert_eq!(value, Value::Double(1.0), "{prefix} uses its own selection");
+
+        let (value, _) = resolve(store, stage, &format!("{prefix}/C.x"));
+        assert_eq!(
+            value,
+            Value::Double(200.0),
+            "{prefix}/C uses its own selection"
+        );
+
+        let (value, _) = resolve(store, stage, &format!("{prefix}/B.y"));
+        assert_eq!(value, Value::Double(5.0), "{prefix}'s branch overrides B");
+
+        // `B` is a plain child that `/A`'s selected branch also overrides;
+        // `D` is introduced by that branch.
+        for child in ["B", "D"] {
+            let prim = format!("{prefix}/{child}");
+            let x = PropertyPath::parse(&format!("{prim}.x"), &mut store.tokens, &mut store.paths)
+                .expect("path");
+            assert!(stage.has_prim(x.prim_path()), "{prim} exists");
+            assert_eq!(
+                stage.explain_property_path(x).map(<[_]>::len),
+                None,
+                "{prim} has no `lod` selection, so no branch may contribute"
+            );
+            let kids: Vec<String> = stage
+                .children_of(x.prim_path())
+                .unwrap_or(&[])
+                .iter()
+                .map(|c| store.paths.display(*c, &store.tokens))
+                .collect();
+            assert!(kids.is_empty(), "{prim} children {kids:?}");
+        }
+    };
+
+    let mut store = load(NESTED_LOD, &[]);
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    check(&mut store, &stage, "/A");
+
+    let root = r#"#usda 1.0
+def "R" (
+    references = @./model.usda@</A>
+)
+{
+}
+"#;
+    let mut store = load(root, &[("model.usda", NESTED_LOD)]);
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    check(&mut store, &stage, "/R");
+}

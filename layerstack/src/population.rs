@@ -316,6 +316,23 @@ fn expand_reference_paths(
             );
         }
 
+        // Specializes authored inside referenced content populate like
+        // inherits, as they do at the stage's own layer stack.
+        //
+        // Spec: AOUSD Core §10 (specializes arc), §11 (population).
+        let specializes = resolve_specializes_for_prim(store, &remote_stack, remote_path_id);
+        for specialized_root in specializes {
+            expand_inherit_paths(
+                store,
+                &remote_stack,
+                dest_path_id,
+                specialized_root,
+                paths,
+                queue,
+                visited_inherits,
+            );
+        }
+
         let nested_refs = resolve_references_for_prim(store, &remote_stack, remote_path_id);
         for nested in nested_refs {
             expand_reference_paths(

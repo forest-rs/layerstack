@@ -23,6 +23,7 @@ use crate::{
         resolve_variant_branch_payloads, resolve_variant_child_references,
         resolve_variant_references_in, resolve_variant_selections_for_prim, spec_arcs_apply,
     },
+    composition_error::CompositionError,
     dependency_map::{ArcDependency, DependencyBuilder},
     doc::{FieldValue, LayerId, LayerOffset, LayerStore, Reference},
     interner::TokenId,
@@ -156,7 +157,12 @@ pub(crate) fn compose_stage(
     root: LayerId,
     options: StageOptions,
 ) -> Stage {
-    let layer_stack = LayerStack::gather(store, root);
+    let mut sublayer_cycles = Vec::new();
+    let layer_stack = LayerStack::gather_reporting(store, root, &mut sublayer_cycles);
+    let errors: Vec<CompositionError> = sublayer_cycles
+        .into_iter()
+        .map(CompositionError::SublayerCycle)
+        .collect();
     let (paths, mut children) = populate(store, &layer_stack, options.mask.as_ref());
 
     let mut prims: HashMap<PathId, PrimIndex> = paths
@@ -254,6 +260,7 @@ pub(crate) fn compose_stage(
     }
     let dependencies = dep_builder.map(DependencyBuilder::finish);
     Stage::from_parts(prims, children, options.with_provenance, dependencies)
+        .with_composition_errors(errors)
 }
 
 /// Removes populated prims whose prim index holds no spec, together with

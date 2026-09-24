@@ -5,7 +5,9 @@
 
 use std::path::{Path, PathBuf};
 
-use layerstack::{LayerId, LayerStack, Stage, StageOptions, Value};
+use layerstack::{
+    CompositionError, LayerId, LayerStack, Stage, StageOptions, SublayerCycle, Value,
+};
 
 use layerstack_conformance::{
     pcp::load_pcp_json,
@@ -261,6 +263,36 @@ fn error_sublayer_cycle_root_layer_stack_matches() {
     assert_layer_stack_matches(&loaded, &pcp_path);
     assert!(pcp.errors.is_some(), "fixture should record errors");
     assert_pcp_composing(&mut loaded, &pcp_path);
+
+    // `pcp.txt` reports one `PcpErrorSublayerCycle` per repeated visit:
+    // B.usd names A.usd (via root → A → B), and A.usd names B.usd (via
+    // root → B → A).
+    let stage = Stage::compose(
+        &mut loaded.store,
+        loaded.root_layer,
+        StageOptions::default(),
+    );
+    let layer = |name: &str| {
+        *loaded
+            .layer_names
+            .iter()
+            .find(|(_, n)| n.as_str() == name)
+            .unwrap_or_else(|| panic!("layer {name}"))
+            .0
+    };
+    assert_eq!(
+        stage.composition_errors(),
+        [
+            CompositionError::SublayerCycle(SublayerCycle {
+                layer: layer("B.usd"),
+                sublayer: layer("A.usd"),
+            }),
+            CompositionError::SublayerCycle(SublayerCycle {
+                layer: layer("A.usd"),
+                sublayer: layer("B.usd"),
+            }),
+        ]
+    );
 }
 
 #[test]

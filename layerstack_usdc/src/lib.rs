@@ -1,10 +1,11 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! USDC (binary crate format) reader for layerstack.
+//! USDC (binary crate format) reader and writer for layerstack.
 //!
 //! Reads USDC files per AOUSD Core §16.3 and produces [`Layer`] / [`PrimSpec`]
-//! structures compatible with the layerstack composition engine.
+//! structures compatible with the layerstack composition engine. The
+//! [`writer`] module writes crate files from explicitly authored specs.
 //!
 //! Crate versions 0.7 through 0.15 are readable, following OpenUSD v26.08 for
 //! the versions after AOUSD Core 1.0.1. The [`version`] module lists what each
@@ -43,6 +44,7 @@ pub mod toc;
 pub mod value_rep;
 pub mod value_type;
 pub mod version;
+pub mod writer;
 
 // Scene assembly converts decoded sections into Layer/PrimSpec structures.
 // Like value_rep, it pervasively casts u64 indices to usize.

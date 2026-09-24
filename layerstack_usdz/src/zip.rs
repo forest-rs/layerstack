@@ -8,7 +8,7 @@
 //! - No encryption (general purpose bit flag bits 0 and 6 clear)
 //! - 32-bit ZIP only (no Zip64 extensions)
 //! - No End of Central Directory comment
-//! - Local file header offsets are 64-byte aligned
+//! - Entry *data* (not the local file header) starts at a 64-byte offset
 //! - No data descriptors (bit 3 of general purpose flag clear)
 //!
 //! These constraints make the format simple enough that a full ZIP library
@@ -213,12 +213,6 @@ fn parse_cd_entry(data: &[u8], offset: usize) -> Result<CdParsed, UsdzError> {
             reason: "compressed size must equal uncompressed size (Stored)",
         });
     }
-    if !local_header_offset.is_multiple_of(64) {
-        return Err(UsdzError::ConstraintViolation {
-            reason: "local file header must be 64-byte aligned",
-        });
-    }
-
     // Read file name.
     let name_start = offset + CDFH_FIXED_SIZE;
     let name_end = name_start + name_len;
@@ -232,6 +226,20 @@ fn parse_cd_entry(data: &[u8], offset: usize) -> Result<CdParsed, UsdzError> {
 
     // Validate the Local File Header and compute data offset.
     let data_offset = validate_local_header(data, local_header_offset)?;
+
+    // Alignment applies to the entry's data, not to its local file header:
+    // the OpenUSD USDZ specification requires each file's data to begin at a
+    // multiple of 64 bytes ("Layout": <https://openusd.org/dev/spec_usdz.html#layout>).
+    // Writers achieve this by padding the local header's extra field, so
+    // headers themselves generally sit at unaligned offsets. AOUSD Core
+    // §16.4.1.3 words this as "every file header starts at a multiple of 64
+    // bytes"; we follow the reference layout, which is what conforming
+    // packages (e.g. those written by `usdzip`) actually contain.
+    if !data_offset.is_multiple_of(64) {
+        return Err(UsdzError::ConstraintViolation {
+            reason: "entry data must be 64-byte aligned",
+        });
+    }
 
     let next = name_end + extra_len + comment_len;
 
@@ -270,4 +278,152 @@ fn validate_local_header(data: &[u8], offset: usize) -> Result<usize, UsdzError>
     }
 
     Ok(data_offset)
+}
+
+#[cfg(test)]
+mod tests {
+    use alloc::vec::Vec;
+
+    use super::ZipArchive;
+    use crate::crc32::crc32;
+    use crate::error::UsdzError;
+
+    /// One hand-laid-out entry: a local header followed by `extra_len` bytes
+    /// of extra field and then `data`.
+    struct RawEntry<'a> {
+        name: &'a str,
+        extra_len: u16,
+        data: &'a [u8],
+    }
+
+    fn put_u16(out: &mut Vec<u8>, v: u16) {
+        out.extend_from_slice(&v.to_le_bytes());
+    }
+
+    fn put_u32(out: &mut Vec<u8>, v: u32) {
+        out.extend_from_slice(&v.to_le_bytes());
+    }
+
+    fn len_u16(len: usize) -> u16 {
+        u16::try_from(len).expect("test field fits in u16")
+    }
+
+    fn len_u32(len: usize) -> u32 {
+        u32::try_from(len).expect("test offset fits in u32")
+    }
+
+    /// Builds a stored ZIP with entries packed back to back (no gaps), so the
+    /// resulting header/data offsets are fully determined by the names, extra
+    /// lengths and data sizes. Deliberately independent of any crate writer.
+    ///
+    /// Returns the bytes and each entry's `(header_offset, data_offset)`.
+    fn build_zip(entries: &[RawEntry<'_>]) -> (Vec<u8>, Vec<(usize, usize)>) {
+        let mut out = Vec::new();
+        let mut offsets = Vec::new();
+        for e in entries {
+            let header = out.len();
+            put_u32(&mut out, 0x0403_4b50);
+            put_u16(&mut out, 20); // version needed
+            put_u16(&mut out, 0); // flags
+            put_u16(&mut out, 0); // method: stored
+            put_u16(&mut out, 0); // time
+            put_u16(&mut out, 0x21); // date
+            put_u32(&mut out, crc32(e.data));
+            put_u32(&mut out, len_u32(e.data.len()));
+            put_u32(&mut out, len_u32(e.data.len()));
+            put_u16(&mut out, len_u16(e.name.len()));
+            put_u16(&mut out, e.extra_len);
+            out.extend_from_slice(e.name.as_bytes());
+            if e.extra_len > 0 {
+                // A well-formed padding record: id, size, zero payload.
+                put_u16(&mut out, 0x1986);
+                put_u16(&mut out, e.extra_len - 4);
+                out.resize(out.len() + usize::from(e.extra_len - 4), 0);
+            }
+            offsets.push((header, out.len()));
+            out.extend_from_slice(e.data);
+        }
+        let cd_start = out.len();
+        for (e, &(header, _)) in entries.iter().zip(&offsets) {
+            put_u32(&mut out, 0x0201_4b50);
+            put_u16(&mut out, 20); // version made by
+            put_u16(&mut out, 20); // version needed
+            put_u16(&mut out, 0); // flags
+            put_u16(&mut out, 0); // method
+            put_u16(&mut out, 0); // time
+            put_u16(&mut out, 0x21); // date
+            put_u32(&mut out, crc32(e.data));
+            put_u32(&mut out, len_u32(e.data.len()));
+            put_u32(&mut out, len_u32(e.data.len()));
+            put_u16(&mut out, len_u16(e.name.len()));
+            put_u16(&mut out, 0); // extra
+            put_u16(&mut out, 0); // comment
+            put_u16(&mut out, 0); // disk
+            put_u16(&mut out, 0); // internal attrs
+            put_u32(&mut out, 0); // external attrs
+            put_u32(&mut out, len_u32(header));
+            out.extend_from_slice(e.name.as_bytes());
+        }
+        let cd_size = out.len() - cd_start;
+        put_u32(&mut out, 0x0605_4b50);
+        put_u16(&mut out, 0);
+        put_u16(&mut out, 0);
+        put_u16(&mut out, len_u16(entries.len()));
+        put_u16(&mut out, len_u16(entries.len()));
+        put_u32(&mut out, len_u32(cd_size));
+        put_u32(&mut out, len_u32(cd_start));
+        put_u16(&mut out, 0);
+        (out, offsets)
+    }
+
+    #[test]
+    fn accepts_aligned_data_behind_unaligned_header() {
+        // Entry 0: header at 0; 30 + 6 (name) + 28 (extra) puts data at 64.
+        // "#usda 1.0\n" is 10 bytes, so entry 1's header lands at 74; with a
+        // 5-byte name and 19 bytes of extra its data starts at 128.
+        let (bytes, offsets) = build_zip(&[
+            RawEntry {
+                name: "a.usda",
+                extra_len: 28,
+                data: b"#usda 1.0\n",
+            },
+            RawEntry {
+                name: "b.png",
+                extra_len: 19,
+                data: b"not really a png",
+            },
+        ]);
+        assert_eq!(offsets, [(0, 64), (74, 128)], "fixture layout");
+
+        let archive = ZipArchive::parse(&bytes).expect("data-aligned archive is valid USDZ");
+        let entries = archive.entries();
+        assert_eq!(entries.len(), 2, "both entries parsed");
+        assert_eq!(entries[0].data_offset, 64, "entry 0 data offset");
+        assert_eq!(entries[1].data_offset, 128, "entry 1 data offset");
+        assert_eq!(
+            archive.entry_data(&entries[1]),
+            b"not really a png",
+            "entry 1 data"
+        );
+    }
+
+    #[test]
+    fn rejects_unaligned_data_behind_aligned_header() {
+        // Header at 0 (aligned) but data at 30 + 9 = 39.
+        let (bytes, offsets) = build_zip(&[RawEntry {
+            name: "root.usda",
+            extra_len: 0,
+            data: b"#usda 1.0\n",
+        }]);
+        assert_eq!(offsets, [(0, 39)], "fixture layout");
+
+        let err = ZipArchive::parse(&bytes).expect_err("unaligned data must be rejected");
+        assert_eq!(
+            err,
+            UsdzError::ConstraintViolation {
+                reason: "entry data must be 64-byte aligned",
+            },
+            "alignment error"
+        );
+    }
 }

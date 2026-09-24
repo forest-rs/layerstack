@@ -38,8 +38,8 @@ impl AssetResolver for StubResolver {
 
 /// Builds a valid USDZ ZIP archive from constituent files.
 ///
-/// Each entry is a `(name, data)` pair. Local file headers are 64-byte
-/// aligned with padding as required by §16.4.1.
+/// Each entry is a `(name, data)` pair. Entry data is 64-byte aligned via
+/// extra-field padding, matching the USDZ data layout.
 fn build_usdz(files: &[(&str, &[u8])]) -> Vec<u8> {
     build_usdz_opts(files, &BuildOpts::default())
 }
@@ -55,7 +55,7 @@ struct BuildOpts {
     eocd_comment: bool,
     /// If true, corrupt the CRC of the first entry.
     corrupt_crc: bool,
-    /// If true, skip 64-byte alignment of local file headers.
+    /// If true, skip 64-byte alignment of entry data.
     skip_alignment: bool,
 }
 
@@ -86,20 +86,21 @@ fn build_usdz_opts(files: &[(&str, &[u8])], opts: &BuildOpts) -> Vec<u8> {
         };
         let size = data.len() as u32;
 
-        // Compute padding for 64-byte alignment of the local file header.
-        let padding = if opts.skip_alignment {
-            0_usize
-        } else {
-            let current = buf.len();
-            let rem = current % 64;
-            if rem == 0 { 0 } else { 64 - rem }
-        };
-
-        // Pad with zeros before the local file header.
-        buf.extend(core::iter::repeat_n(0_u8, padding));
-
+        // USDZ aligns each entry's *data* to 64 bytes by padding the local
+        // header's extra field (OpenUSD USDZ spec, "Layout"). Headers are
+        // packed back to back and are generally unaligned.
         let local_header_offset = buf.len() as u32;
-        let extra_len = 0_u16;
+        let extra_len = if opts.skip_alignment {
+            0_u16
+        } else {
+            let unpadded = buf.len() + 30 + name_bytes.len();
+            let mut pad = (64 - unpadded % 64) % 64;
+            // An extra-field record needs at least its 4-byte header.
+            if pad != 0 && pad < 4 {
+                pad += 64;
+            }
+            pad as u16
+        };
 
         // Local File Header (30 bytes + name).
         buf.extend_from_slice(&0x0403_4b50_u32.to_le_bytes()); // signature
@@ -114,6 +115,11 @@ fn build_usdz_opts(files: &[(&str, &[u8])], opts: &BuildOpts) -> Vec<u8> {
         buf.extend_from_slice(&(name_bytes.len() as u16).to_le_bytes()); // name len
         buf.extend_from_slice(&extra_len.to_le_bytes()); // extra len
         buf.extend_from_slice(name_bytes); // name
+        if extra_len > 0 {
+            buf.extend_from_slice(&0x1986_u16.to_le_bytes()); // padding record id
+            buf.extend_from_slice(&(extra_len - 4).to_le_bytes()); // payload size
+            buf.extend(core::iter::repeat_n(0_u8, usize::from(extra_len - 4)));
+        }
         buf.extend_from_slice(data); // data
 
         records.push(EntryRecord {
@@ -422,7 +428,8 @@ fn alignment_validation() {
         skip_alignment: true,
         ..Default::default()
     };
-    // Build with two files so the second one is likely misaligned.
+    // Without extra-field padding the root entry's header is at offset 0
+    // (aligned) but its data starts at 30 + 9 = 39, which USDZ forbids.
     let data = build_usdz_opts(
         &[
             ("root.usda", SIMPLE_USDA.as_bytes()),
@@ -435,14 +442,11 @@ fn alignment_validation() {
     let mut resolver = StubResolver;
     let result =
         layerstack_usdz::read_usdz(&data, LayerId(1), &mut tokens, &mut paths, &mut resolver);
-    // The first entry starts at offset 0 which is 64-byte aligned.
-    // The second entry may or may not be aligned depending on data sizes.
-    // If it's misaligned, we expect a ConstraintViolation error.
-    // If it happens to be aligned, the parse succeeds -- both outcomes are valid.
-    if let Err(e) = result {
-        assert!(
-            matches!(e, layerstack_usdz::UsdzError::ConstraintViolation { .. }),
-            "expected ConstraintViolation, got {e:?}"
-        );
-    }
+    assert_eq!(
+        result.unwrap_err(),
+        layerstack_usdz::UsdzError::ConstraintViolation {
+            reason: "entry data must be 64-byte aligned",
+        },
+        "unaligned data must be rejected"
+    );
 }

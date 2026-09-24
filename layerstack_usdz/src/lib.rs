@@ -11,7 +11,7 @@
 //! - All entries are uncompressed (Stored)
 //! - No encryption
 //! - 32-bit ZIP only (no Zip64)
-//! - Local file header offsets are 64-byte aligned
+//! - Entry data offsets are 64-byte aligned
 //! - No End of Central Directory comment
 //! - First file is the root USD layer
 //!

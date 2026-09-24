@@ -1,0 +1,18 @@
+[package]
+name = "layerstack_mesh_export"
+description = "Polygon mesh export to USDA/USDZ (UsdGeomMesh) for layerstack."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+readme = "../README.md"
+keywords = ["usd", "usdz", "mesh", "export", "no-std"]
+categories = ["graphics", "encoding"]
+
+[dependencies]
+layerstack_usda = { path = "../layerstack_usda" }
+layerstack_usdz = { path = "../layerstack_usdz" }
+
+[lints]
+workspace = true

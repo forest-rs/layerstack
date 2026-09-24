@@ -17,7 +17,8 @@ operations, and provenance.
 - storage-agnostic ordered-chain resolution
 - scalar set/block resolution
 - ordered unique-list edits
-- shallow dictionary composition
+- recursive dictionary combination over host values, with shallow overlay as
+  a separate named policy
 - provenance, opinion-stack inspection, and key enumeration
 - explanation reports for diagnostics
 
@@ -58,5 +59,33 @@ operations are ignored and reported. A scalar `Set` is strongest-wins. A
 List edits follow the `ListOps` semantics of AOUSD Core §12.4 as implemented
 by `layerstack`: an authored explicit list makes the other edits in the same
 operation spurious, and re-inserting an existing item moves it to the
-requested position. Dictionary composition is shallow: entries combine by key
-only, stronger entries win, and output is ordered by key.
+requested position.
+
+## Dictionaries
+
+`opinionated` owns dictionary combination. `combine_dictionary_chain` follows
+AOUSD Core §6.6.2.1: keys from every opinion are kept, a stronger value wins a
+key collision, and when both colliding values are dictionaries they combine
+recursively. Output is ordered by key at every nesting level, whether a level
+was merged or contributed by a single opinion, as OpenUSD's `VtDictionary`
+(a `std::map`) is. Already-ordered levels are detected with one linear scan and
+cloned as-is; only unordered levels are rebuilt.
+
+The crate has no value type of its own, so a host exposes nesting through a
+small `DictionaryAdapter`: whether a value is a dictionary, its entries, and
+how to wrap combined entries back into a value. There is no universal value
+enum, domain dependency, or serialization model.
+
+A chain folds strongest-first. Recursive combination is not associative when a
+key holds a dictionary in one opinion and a non-dictionary in another:
+strongest-first over `{s: {a: 1}}`, `{s: 0}`, `{s: {b: 2}}` gives
+`{s: {a: 1, b: 2}}`, while weakest-first gives `{s: {a: 1}}`. The spec is
+silent on chain order, so OpenUSD governs (AOUSD Core §4.2), and OpenUSD folds
+strongest-first. The weakest-first `OpinionFamily` kernel is therefore not
+used for recursive dictionaries.
+
+`ShallowOverlay` is an explicitly distinct policy: values are opaque and the
+stronger value wins a collision outright, even between nested dictionaries.
+The `OpinionOp::Dictionary` enum API uses it because its `V` exposes no
+structure; hosts with nested values call `combine_dictionary_chain` with their
+own adapter.

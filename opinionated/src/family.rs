@@ -27,7 +27,9 @@
 use alloc::vec::Vec;
 use core::convert::Infallible;
 
-use crate::{IgnoreReason, ListOp, OpinionKind, OpinionOp, combine_dictionary_chain};
+use crate::{
+    IgnoreReason, ListOp, OpinionKind, OpinionOp, ShallowOverlay, combine_dictionary_chain,
+};
 
 /// How one authored operation participates in a family's fold.
 ///
@@ -371,8 +373,13 @@ where
 /// The dictionary family adapter for [`OpinionOp`].
 ///
 /// [`OpinionOp::Dictionary`] is a sparse edit combined over weaker
-/// dictionaries; [`OpinionOp::Block`] blocks; every other operation is foreign.
-/// The seed is the empty dictionary.
+/// dictionaries under the [`ShallowOverlay`] policy; [`OpinionOp::Block`]
+/// blocks; every other operation is foreign. The seed is the empty dictionary.
+///
+/// Shallow overlay is associative, so the kernel's weakest-first application
+/// matches a strongest-first fold. Recursive combination is not associative
+/// (see [`combine_dictionary_chain`]) and is therefore not offered as a family
+/// over this kernel.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct DictionaryFamily;
 
@@ -400,7 +407,7 @@ where
     fn apply(&self, edit: Self::Edit, base: Self::Value) -> Self::Value {
         // `edit` is stronger than `base`; combining strongest-first lets the
         // stronger entries win by key.
-        combine_dictionary_chain([edit, base])
+        combine_dictionary_chain(&ShallowOverlay, [edit, base])
     }
 
     fn seed(&self) -> Self::Value {

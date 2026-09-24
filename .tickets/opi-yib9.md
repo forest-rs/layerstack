@@ -16,3 +16,9 @@ combine_dictionary_chain merges shallowly by key; USD merges dictionaries recurs
 
 Decision recorded; either recursive merge implemented and tested, or README/docs state shallow-only as a stable contract.
 
+
+## Notes
+
+**2026-09-24T15:52:02Z**
+
+Decided: opinionated owns recursive dictionary combination (combine_dictionaries / combine_dictionary_chain over a host DictionaryAdapter, AOUSD Core §6.6.2.1), folding strongest-first as OpenUSD does (§4.2; MetadataValueComposer::ConsumeAuthored, confirmed with usdcat on {s:{a:1}},{s:0},{s:{b:2}} -> {s:{a:1,b:2}}). ShallowOverlay is the separate named policy, used by the OpinionOp enum API whose V is opaque. Remaining: layerstack delegates its dictionary resolution.

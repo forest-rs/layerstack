@@ -71,8 +71,12 @@ extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
+mod dictionary;
 mod family;
 
+pub use dictionary::{
+    DictionaryAdapter, ShallowOverlay, combine_dictionaries, combine_dictionary_chain,
+};
 pub use family::{
     DictionaryFamily, FamilyEvent, FamilyMember, FamilyReport, FamilyResolution, ListFamily,
     OpinionFamily, ScalarFamily, resolve_family_chain, resolve_family_chain_report,
@@ -179,6 +183,11 @@ pub enum OpinionOp<V, I = V, K = String> {
     /// Composes an ordered unique list.
     List(ListOp<I>),
     /// Combines dictionary entries by key, with stronger keys winning.
+    ///
+    /// `V` is opaque to the enum API, so entries combine under the
+    /// [`ShallowOverlay`] policy: nested dictionaries are not merged. Hosts
+    /// whose values nest dictionaries combine them recursively with
+    /// [`combine_dictionary_chain`] and their own [`DictionaryAdapter`].
     Dictionary(Vec<(K, V)>),
 }
 
@@ -754,7 +763,7 @@ where
                 dicts.push(entries.as_slice());
             }
             Resolution::Resolved(Resolved {
-                value: ResolvedValue::Dictionary(combine_dictionary_chain(dicts)),
+                value: ResolvedValue::Dictionary(combine_dictionary_chain(&ShallowOverlay, dicts)),
                 provenance: strongest.provenance.clone(),
             })
         }
@@ -845,7 +854,10 @@ where
             record_dictionary_events(&opinions, &mut dicts, &mut events);
             ResolutionReport {
                 resolution: Resolution::Resolved(Resolved {
-                    value: ResolvedValue::Dictionary(combine_dictionary_chain(dicts)),
+                    value: ResolvedValue::Dictionary(combine_dictionary_chain(
+                        &ShallowOverlay,
+                        dicts,
+                    )),
                     provenance: strongest.provenance.clone(),
                 }),
                 events,
@@ -941,23 +953,4 @@ fn record_block_cutoff<'a, V, I, K, P>(
                 reason: IgnoreReason::WeakerThanBlock,
             }),
     );
-}
-
-/// Combines dictionaries from strongest to weakest.
-///
-/// The merge is shallow: entries are combined by key only, and values are not
-/// merged recursively. For duplicate keys across dictionaries, the strongest
-/// entry wins; within one dictionary, the first occurrence of a key wins.
-/// Output entries are ordered by key, not by authored order.
-#[must_use]
-pub fn combine_dictionary_chain<K: Clone + Ord, V: Clone>(
-    dicts_strong_to_weak: impl IntoIterator<Item = impl AsRef<[(K, V)]>>,
-) -> Vec<(K, V)> {
-    let mut out = BTreeMap::<K, V>::new();
-    for dict in dicts_strong_to_weak {
-        for (key, value) in dict.as_ref() {
-            out.entry(key.clone()).or_insert_with(|| value.clone());
-        }
-    }
-    out.into_iter().collect()
 }

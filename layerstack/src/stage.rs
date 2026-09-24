@@ -142,18 +142,39 @@ impl Stage {
         }
     }
 
-    /// Merges prims and children from a partial (scoped) composition into this stage.
+    /// Replaces the prim indexes of `recomposed` with those from a partial
+    /// (population-masked) composition.
     ///
-    /// Entries in `partial` overwrite entries in `self` for the same key.
-    /// Dependency data is not merged — the caller is responsible for
-    /// incremental updates.
-    pub(crate) fn merge_from(&mut self, partial: Self) {
-        for (path, index) in partial.prims {
-            self.prims.insert(path, index);
+    /// Only the listed prims are taken from `partial`. A masked composition
+    /// also composes the ancestors and arc sources it needs, but its child
+    /// lists hold only masked prims, so they must never replace this stage's
+    /// complete lists; hierarchy is left untouched. Callers must detect edits
+    /// that change hierarchy (see [`Stage::hierarchy_diverges`]) and rebuild
+    /// instead. Dependency data is not merged; the caller updates it.
+    pub(crate) fn merge_prims_from(&mut self, mut partial: Self, recomposed: &[PathId]) {
+        for path in recomposed {
+            if let Some(index) = partial.prims.remove(path) {
+                self.prims.insert(*path, index);
+            }
         }
-        for (parent, kids) in partial.children {
-            self.children.insert(parent, kids);
-        }
+    }
+
+    /// Returns `true` if a partial composition shows that recomposing
+    /// `recomposed` changes hierarchy: a recomposed prim appears or
+    /// disappears, or its children differ in membership or order.
+    ///
+    /// The partial composition's mask must include the current children of
+    /// every recomposed prim, so its child lists for those prims are complete
+    /// with respect to this stage. Paths this stage has never populated (for
+    /// example children introduced by a new variant selection) are outside
+    /// the mask and invisible here; such edits must be reported as structural
+    /// changes.
+    pub(crate) fn hierarchy_diverges(&self, partial: &Self, recomposed: &[PathId]) -> bool {
+        recomposed.iter().any(|prim| {
+            self.has_prim(*prim) != partial.has_prim(*prim)
+                || self.children_of(*prim).unwrap_or(&[])
+                    != partial.children_of(*prim).unwrap_or(&[])
+        })
     }
 
     /// Returns all prim paths present in the stage.

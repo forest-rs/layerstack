@@ -138,6 +138,9 @@ impl<'a> LowerCtx<'a> {
     }
 
     fn lower_layer_meta_entry(&mut self, node: SyntaxNode<'_>) -> Option<LayerMeta<'a>> {
+        if let Some(comment) = self.bare_comment(node) {
+            return Some(LayerMeta::Custom(comment));
+        }
         let key_node = node
             .children_no_trivia()
             .find(|c| c.kind() == SyntaxKind::Ident)?;
@@ -295,6 +298,9 @@ impl<'a> LowerCtx<'a> {
     }
 
     fn lower_prim_meta_entry(&mut self, node: SyntaxNode<'_>) -> Option<PrimMeta<'a>> {
+        if let Some(comment) = self.bare_comment(node) {
+            return Some(PrimMeta::Custom(comment));
+        }
         let tree = node.tree();
         let sig: Vec<_> = node
             .children_no_trivia()
@@ -1395,7 +1401,29 @@ impl<'a> LowerCtx<'a> {
         (offset, scale)
     }
 
+    /// Lowers a metadata entry that is only a string (`( "text" )`) to the
+    /// `comment` field it authors.
+    ///
+    /// Spec: AOUSD Core §7.6.1.6.1, §7.6.2.6.3, §7.6.3.3.3 (`comment`).
+    /// OpenUSD's text parser stores a bare metadata string as
+    /// `SdfFieldKeys->Comment` (`pxr/usd/sdf/textFileFormatParser.cpp`).
+    fn bare_comment(&self, node: SyntaxNode<'_>) -> Option<MetadataEntry<'a>> {
+        let mut children = node.children_no_trivia();
+        let first = children.next()?;
+        if !is_string_kind(first.kind()) || children.next().is_some() {
+            return None;
+        }
+        Some(MetadataEntry {
+            key: "comment",
+            op: ListOpKind::Explicit,
+            value: MetadataValue::Value(Value::String(strip_quotes(self.text(first)))),
+        })
+    }
+
     fn lower_metadata_entry_from_node(&mut self, node: SyntaxNode<'_>) -> MetadataEntry<'a> {
+        if let Some(comment) = self.bare_comment(node) {
+            return comment;
+        }
         let tree = node.tree();
         let sig: Vec<_> = node
             .children_no_trivia()

@@ -1,0 +1,56 @@
+#usda 1.0
+(
+    "Layer comment"
+    customLayerData = {
+        string author = "layerstack"
+        dictionary nested = {
+            int depth = 2
+        }
+    }
+    defaultPrim = "Root"
+    doc = "Layer documentation"
+    endTimeCode = 24
+    framesPerSecond = 30
+    metersPerUnit = 0.01
+    startTimeCode = 1
+    timeCodesPerSecond = 24
+    upAxis = "Y"
+)
+
+def Xform "Root" (
+    "Prim comment"
+    prepend apiSchemas = ["GeomModelAPI", "StudioReviewAPI:main"]
+    customData = {
+        bool reviewed = 1
+    }
+    displayName = "The root"
+    doc = "Prim documentation"
+    hidden = true
+    kind = "component"
+)
+{
+    uniform token authorship:main:tool = "painter" (
+        doc = "Which tool authored the prim"
+    )
+    custom uniform string[] authorship:main:inputs = ["sketch", "photo"]
+    color3f[] primvars:displayColor = [(1, 0, 0)] (
+        "Attribute comment"
+        colorSpace = "srgb_texture"
+        customData = {
+            string source = "scan"
+        }
+        displayName = "Display color"
+        elementSize = 1
+        hidden = false
+        interpolation = "constant"
+    )
+    float softness = 0.5
+    float softness.timeSamples = {
+        0: 0.25,
+        10: None,
+    }
+    custom rel look:material = </Root/Looks/Mat> (
+        displayName = "Look material"
+    )
+    reorder properties = ["softness", "primvars:displayColor"]
+}

@@ -734,6 +734,10 @@ pub struct VariantSpec {
     /// selection chain leading to the branch so composed provenance can retain
     /// the full variant-qualified source identity.
     pub outer_variant_sites: Vec<VariantSelectionSite>,
+    /// Property ordering authored inside this branch (`reorder properties`).
+    ///
+    /// Spec: AOUSD Core §7.6.7 (variant specs contribute prim spec fields).
+    pub property_order: Option<Vec<TokenId>>,
 }
 
 impl VariantSpec {
@@ -811,6 +815,9 @@ impl VariantSpec {
         }
         if self.outer_variant_sites.is_empty() {
             self.outer_variant_sites = other.outer_variant_sites;
+        }
+        if self.property_order.is_none() {
+            self.property_order = other.property_order;
         }
     }
 }

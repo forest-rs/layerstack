@@ -164,22 +164,61 @@ impl<'a> Scene<'a> {
         Ok(self.to_document()?.to_usda()?)
     }
 
-    /// Serializes the scene and packages it as USDZ.
+    /// Serializes the scene and packages it as a generic-profile USDZ.
     ///
     /// The layer is stored as [`ROOT_LAYER_PATH`], first in the archive,
-    /// followed by `assets` (e.g. textures) in order. Asset-valued
-    /// attributes should refer to those files by their package path, e.g.
-    /// `@textures/albedo.png@`.
+    /// followed by `assets` (e.g. textures) in order. Assets must be USD,
+    /// image or audio files ([`layerstack_usdz::writer::MEMBER_EXTENSIONS`]).
+    /// The package must be self-contained: every asset path the scene
+    /// authors (asset-valued custom attributes, including asset arrays) must name
+    /// one of `assets` by its package path, e.g. `@textures/albedo.png@`
+    /// (a leading `./` is allowed). Those paths resolve relative to the
+    /// root layer, i.e. inside the package, wherever the package is moved.
     ///
     /// # Errors
     ///
-    /// See [`Self::to_document`]; [`ExportError::Usdz`] for invalid or
-    /// duplicate asset paths.
+    /// See [`Self::to_document`]; [`ExportError::UnpackagedAsset`] for an
+    /// authored asset path with no matching file; [`ExportError::Usdz`] for
+    /// invalid or duplicate package paths and unsupported member types.
     pub fn to_usdz(&self, assets: &[PackageFile<'_>]) -> Result<Vec<u8>, ExportError> {
+        let mut authored = Vec::new();
+        collect_xform_assets(&self.root, &mut authored);
+        for asset in authored {
+            let path = asset.strip_prefix("./").unwrap_or(asset);
+            if !assets.iter().any(|file| file.path == path) {
+                return Err(ExportError::UnpackagedAsset {
+                    asset: asset.into(),
+                });
+            }
+        }
         let layer = self.to_usda()?;
         let mut files = Vec::with_capacity(assets.len() + 1);
         files.push(PackageFile::new(ROOT_LAYER_PATH, layer.as_bytes()));
         files.extend_from_slice(assets);
         Ok(write_usdz(&files)?)
+    }
+}
+
+fn collect_xform_assets<'s>(xform: &'s Xform<'_>, out: &mut Vec<&'s str>) {
+    collect_attribute_assets(&xform.attributes, out);
+    for child in &xform.children {
+        match child {
+            Node::Xform(x) => collect_xform_assets(x, out),
+            Node::Mesh(m) => collect_attribute_assets(&m.attributes, out),
+        }
+    }
+}
+
+fn collect_attribute_assets<'s>(attributes: &'s [CustomAttribute<'_>], out: &mut Vec<&'s str>) {
+    for attribute in attributes {
+        collect_value_assets(&attribute.value, out);
+    }
+}
+
+fn collect_value_assets<'s>(value: &'s Value, out: &mut Vec<&'s str>) {
+    match value {
+        Value::Asset(path) => out.push(path),
+        Value::AssetArray(paths) => out.extend(paths.iter().map(String::as_str)),
+        _ => {}
     }
 }

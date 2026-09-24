@@ -82,7 +82,13 @@ impl Interpolation {
 ///
 /// Without `indices`, `values` holds exactly one element per interpolation
 /// site. With `indices`, `indices` holds one entry per site and each entry
-/// selects an element of `values`, so shared values are stored once.
+/// selects an element of `values`.
+///
+/// For [`Interpolation::FaceVarying`], indices are not just compression:
+/// corners that share an index are joined in the primvar's topology, and
+/// corners with distinct indices are split (a UV seam or hard normal edge)
+/// even when their values are equal (`pxr/usd/usdGeom/primvar.h:497`).
+/// Indices are written exactly as given.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Primvar<'a, V> {
     /// The element values.

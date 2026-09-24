@@ -21,6 +21,11 @@ pub enum ExportError {
     },
     /// `metersPerUnit` is not finite and positive.
     InvalidStage,
+    /// An authored asset path names no file in the package being written.
+    UnpackagedAsset {
+        /// The asset path as authored.
+        asset: String,
+    },
     /// The USDA writer rejected the document (e.g. a name that is not a USD
     /// identifier, or duplicate sibling names).
     Usda(WriteError),
@@ -94,6 +99,9 @@ impl fmt::Display for ExportError {
         match self {
             Self::InvalidMesh { path, problem } => write!(f, "{path}: {problem}"),
             Self::InvalidStage => write!(f, "metersPerUnit must be finite and positive"),
+            Self::UnpackagedAsset { asset } => {
+                write!(f, "asset path {asset:?} names no file in the package")
+            }
             Self::Usda(e) => write!(f, "USDA: {e}"),
             Self::Usdz(e) => write!(f, "USDZ: {e}"),
         }

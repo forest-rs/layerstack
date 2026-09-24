@@ -21,7 +21,7 @@ pub(crate) fn document(scene: &Scene<'_>) -> Result<Document, ExportError> {
         return Err(ExportError::InvalidStage);
     }
     // Stage metadata: `metersPerUnit` and `upAxis` are layer metadata on
-    // the root layer (UsdGeom linear units / up axis). The root prim is the
+    // the root layer (`pxr/usd/usdGeom/metrics.h:23`, `:107`). The root prim is the
     // `defaultPrim` so references to the file need no prim path (AOUSD
     // Core §7.6.1.2.3).
     let up_axis = match stage.up_axis {
@@ -65,7 +65,7 @@ struct Sites {
 }
 
 impl Sites {
-    /// Spec: `UsdGeomPrimvar` interpolation — constant: 1; uniform: one
+    /// Spec: `pxr/usd/usdGeom/mesh.h:75` — constant: 1; uniform: one
     /// per face; varying/vertex: one per point; faceVarying: one per face
     /// corner (<https://openusd.org/dev/api/class_usd_geom_primvar.html>).
     fn count(self, interpolation: Interpolation) -> usize {
@@ -95,7 +95,8 @@ fn mesh_prim(mesh: &Mesh<'_>, parent: &str) -> Result<Prim, ExportError> {
     let mut attrs = Vec::new();
     // `extent` is required on boundable prims for correct culling and
     // bounds; it is the local-space AABB of `points`, before this prim's
-    // own transform (UsdGeomBoundable). Empty meshes have no extent.
+    // own transform (`pxr/usd/usdGeom/boundable.h:42`). Empty meshes have
+    // no extent.
     if let Some(extent) = extent(mesh.points).map_err(fail)? {
         attrs.push(Attribute::new(
             "extent",
@@ -118,7 +119,7 @@ fn mesh_prim(mesh: &Mesh<'_>, parent: &str) -> Result<Prim, ExportError> {
         let values = Value::Float3Array(normals.values.to_vec());
         match normals.indices {
             // `normals` is a plain attribute with an `interpolation`, not a
-            // primvar, so it cannot be indexed (UsdGeomPointBased).
+            // primvar, so it cannot be indexed (`pxr/usd/usdGeom/pointBased.h`).
             None => {
                 check_primvar("normals", normals.values.len(), &normals, sites).map_err(fail)?;
                 attrs.push(
@@ -129,7 +130,7 @@ fn mesh_prim(mesh: &Mesh<'_>, parent: &str) -> Result<Prim, ExportError> {
                 );
             }
             // Indexed normals go to `primvars:normals`, which takes
-            // precedence over `normals` (UsdGeomPointBased::GetNormalsAttr).
+            // precedence over `normals` (`pxr/usd/usdGeom/pointBased.h:204`).
             Some(_) => push_primvar(
                 &mut attrs,
                 "primvars:normals",
@@ -145,7 +146,7 @@ fn mesh_prim(mesh: &Mesh<'_>, parent: &str) -> Result<Prim, ExportError> {
 
     // `orientation` is authored even when it equals the `rightHanded`
     // fallback, so the winding convention is explicit in the file
-    // (UsdGeomGprim).
+    // (`pxr/usd/usdGeom/gprim.h:212`).
     let orientation = match mesh.orientation {
         Orientation::RightHanded => "rightHanded",
         Orientation::LeftHanded => "leftHanded",
@@ -162,7 +163,7 @@ fn mesh_prim(mesh: &Mesh<'_>, parent: &str) -> Result<Prim, ExportError> {
 
     if let Some(uvs) = mesh.uvs {
         // The conventional primary UV set is the `st` primvar of role
-        // `texCoord2f` (UsdGeomPrimvar, texture coordinate conventions).
+        // `texCoord2f` (`pxr/usd/usdGeom/primvar.h`).
         push_primvar(
             &mut attrs,
             "primvars:st",
@@ -189,7 +190,7 @@ fn mesh_prim(mesh: &Mesh<'_>, parent: &str) -> Result<Prim, ExportError> {
     }
 
     // The schema fallback is `catmullClark`; polygonal kernel output must
-    // opt out explicitly or consumers will smooth it (`UsdGeomMesh`).
+    // opt out explicitly or consumers will smooth it (`pxr/usd/usdGeom/mesh.h:62`).
     attrs.push(Attribute::new("subdivisionScheme", "token", Value::Token("none".into())).uniform());
     push_transform(&mut attrs, mesh.transform);
     push_custom(&mut attrs, &mesh.attributes);
@@ -200,7 +201,8 @@ fn mesh_prim(mesh: &Mesh<'_>, parent: &str) -> Result<Prim, ExportError> {
 }
 
 /// Converts topology to USD's `int[]` counts and indices, checking counts,
-/// index ranges and the 32-bit signed limit (`UsdGeomMesh`).
+/// index ranges and the 32-bit signed limit, as `UsdGeomMesh::ValidateTopology`
+/// does (`pxr/usd/usdGeom/mesh.h:575`).
 fn topology(faces: Faces<'_>, points: usize) -> Result<(Vec<i32>, Vec<i32>), MeshProblem> {
     let (counts, raw) = match faces {
         Faces::Triangles(indices) => {
@@ -298,8 +300,9 @@ fn check_primvar<V>(
 }
 
 /// Writes `name` with its `interpolation` metadata and, when indexed, the
-/// companion `name:indices` `int[]` attribute (`UsdGeomPrimvar` indexed
-/// primvars).
+/// companion `name:indices` `int[]` attribute (`pxr/usd/usdGeom/primvar.h:497`).
+/// Indices are copied verbatim: for face-varying data they define the
+/// primvar's topology, so they must not be deduplicated by value.
 fn push_primvar<V>(
     attrs: &mut Vec<Attribute>,
     name: &str,
@@ -329,7 +332,7 @@ fn push_primvar<V>(
 }
 
 /// A single `xformOp:transform` op, listed in the `uniform token[]
-/// xformOpOrder` (`UsdGeomXformable`). Nothing is written without a
+/// xformOpOrder` (`pxr/usd/usdGeom/xformable.h:136`). Nothing is written without a
 /// transform, which composes as identity.
 fn push_transform(attrs: &mut Vec<Attribute>, transform: Option<Transform>) {
     let Some(transform) = transform else {

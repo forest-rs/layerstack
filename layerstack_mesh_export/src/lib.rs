@@ -22,14 +22,30 @@
 //! - stage metadata `upAxis` and `metersPerUnit` are always authored, and
 //!   the root prim is the layer's `defaultPrim`.
 //!
-//! Serialization goes through [`layerstack_usda::writer`] (deterministic
-//! USDA) and packaging through [`layerstack_usdz::write_usdz`]. The
-//! composition kernel is not involved.
+//! Face-varying indices are written exactly as given. They encode the
+//! primvar's own topology (seams and hard edges), so equal values at
+//! distinct indices are never merged.
 //!
-//! Materials are not exported yet: material bindings and a shader
-//! representation (e.g. `UsdPreviewSurface`) are the next scope. Texture
-//! files can already be packaged next to the layer with
-//! [`Scene::to_usdz`].
+//! # Outputs and profile
+//!
+//! [`Scene::to_usda`] writes one *authored* layer through
+//! [`layerstack_usda::writer`]; nothing is composed or flattened, and the
+//! composition kernel is not involved. [`Scene::to_usdz`] is a separate
+//! packaging step ([`layerstack_usdz::write_usdz`]): the layer becomes the
+//! package's first file, followed by the caller's files (e.g. textures),
+//! and every asset path the scene authors must name one of those files.
+//! Paths are used as given; the packager does not discover or rewrite
+//! dependencies.
+//!
+//! The package targets the **generic USDZ profile** (`OpenUSD`
+//! `docs/spec_usdz.rst`): a USDA default layer plus media. It is not the
+//! `ARKit` / AR Quick Look profile, which expects a single USDC layer
+//! (`spec_usdz.rst:210`, `pxr/usd/usdUtils/usdzPackage.h:71`); passing
+//! `usdchecker --arkit` does not by itself establish compatibility with
+//! those viewers.
+//!
+//! Materials are not exported yet: direct material bindings, face subsets
+//! and a portable shader subset (`UsdPreviewSurface`) are the next scope.
 //!
 //! # Example
 //!
@@ -57,12 +73,25 @@
 //! # Ok::<(), layerstack_mesh_export::ExportError>(())
 //! ```
 //!
-//! References:
-//! [`UsdGeomMesh`](https://openusd.org/dev/api/class_usd_geom_mesh.html),
-//! [`UsdGeomPointBased`](https://openusd.org/dev/api/class_usd_geom_point_based.html),
-//! [`UsdGeomPrimvar`](https://openusd.org/dev/api/class_usd_geom_primvar.html),
-//! [`UsdGeomXformable`](https://openusd.org/dev/api/class_usd_geom_xformable.html),
-//! [`UsdGeomBoundable`](https://openusd.org/dev/api/class_usd_geom_boundable.html).
+//! # References
+//!
+//! Conventions follow the `OpenUSD` reference implementation (v26.08 headers;
+//! `pxr/usd/usdGeom/...`), which documents the `UsdGeom` domain schemas
+//! that AOUSD Core (§2.1) leaves out of scope:
+//! [`mesh.h`](https://openusd.org/dev/api/class_usd_geom_mesh.html) (topology,
+//! explicit polygonal `subdivisionScheme`, primvar element counts),
+//! [`pointBased.h`](https://openusd.org/dev/api/class_usd_geom_point_based.html)
+//! (`normals` vs. `primvars:normals`),
+//! [`primvar.h`](https://openusd.org/dev/api/class_usd_geom_primvar.html)
+//! (interpolation, indexed primvars),
+//! [`metrics.h`](https://openusd.org/dev/api/group___usd_geom_up_axis__group.html)
+//! (`upAxis`, `metersPerUnit`),
+//! [`xformable.h`](https://openusd.org/dev/api/class_usd_geom_xformable.html)
+//! (`xformOpOrder`),
+//! [`gprim.h`](https://openusd.org/dev/api/class_usd_geom_gprim.html)
+//! (`orientation`, `doubleSided`), and
+//! [`boundable.h`](https://openusd.org/dev/api/class_usd_geom_boundable.html)
+//! (`extent`).
 
 #![no_std]
 

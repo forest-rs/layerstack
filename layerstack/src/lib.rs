@@ -63,6 +63,7 @@ extern crate std;
 
 pub use hashbrown::{HashMap, HashSet};
 
+pub(crate) mod arc_cycle;
 pub(crate) mod arcs;
 pub mod array_edit;
 pub mod asset;

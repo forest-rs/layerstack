@@ -141,7 +141,17 @@ impl LiveStage {
     /// - If no prims are invalidated, returns an empty vec.
     /// - Otherwise, drains the invalidation set (expanding lazy roots to all
     ///   transitive dependents), performs a scoped recomposition, and updates
-    ///   the dependency graph incrementally for the affected prims.
+    ///   the dependency graph incrementally for the affected prims. Only the
+    ///   affected prims' indexes are replaced; the hierarchy is kept.
+    /// - If the scoped recomposition shows that an affected prim appeared,
+    ///   disappeared, or changed its children (for example `active` or child
+    ///   reordering edits), falls back to a full rebuild, with the same return
+    ///   value as a structural change.
+    ///
+    /// Edits that introduce prims this stage has never populated (new specs,
+    /// new arcs, a variant selection that adds children) are not visible to a
+    /// scoped recomposition and must be reported with
+    /// [`notify_structural_change`](Self::notify_structural_change).
     pub fn recompose(&mut self, store: &mut dyn LayerStore) -> Vec<PathId> {
         if self.needs_full_rebuild {
             return self.full_rebuild(store);
@@ -156,11 +166,15 @@ impl LiveStage {
 
         // Expand the affected set to include arc sources so composition can
         // read inherit/reference targets.
+        // Also include each affected prim's current children, so the masked
+        // composition's child lists for affected prims are complete and
+        // hierarchy changes can be detected below.
         let mut mask_set: HashSet<PathId> = HashSet::from_iter(affected.iter().copied());
         for &prim in &affected {
             for dep in self.tracker.graph().dependencies(prim, OPINION_EDIT) {
                 mask_set.insert(dep);
             }
+            mask_set.extend(self.stage.children_of(prim).unwrap_or(&[]).iter().copied());
         }
         let mask_vec: Vec<PathId> = mask_set.into_iter().collect();
 
@@ -172,11 +186,18 @@ impl LiveStage {
         };
         let mut partial = Stage::compose(store, self.root, scoped_opts);
 
+        // An opinion edit that turns out to change hierarchy (activation,
+        // child ordering, ...) cannot be patched from a masked composition,
+        // whose child lists are partial by construction.
+        if self.stage.hierarchy_diverges(&partial, &affected) {
+            return self.full_rebuild(store);
+        }
+
         // Extract partial dependency data before merging the stage.
         let partial_deps = partial.take_deps().unwrap_or_default();
 
-        // Merge partial prim/children results into the existing stage.
-        self.stage.merge_from(partial);
+        // Replace only the recomposed prim indexes; hierarchy is unchanged.
+        self.stage.merge_prims_from(partial, &affected);
 
         // Incrementally update dependency edges for each affected prim.
         for &prim in &affected {
@@ -272,8 +293,10 @@ mod tests {
 
     use super::*;
     use crate::{
-        FieldValue, HashMap, Layer, PrimSpec, Reference, SublayerEntry, Value, doc::InMemoryStore,
-        path::Path,
+        FieldValue, HashMap, Layer, PrimSpec, Reference, SublayerEntry, Value,
+        doc::InMemoryStore,
+        interner::TokenId,
+        path::{Path, PropertyPath},
     };
 
     fn p(store: &mut InMemoryStore, s: &str) -> PathId {
@@ -915,5 +938,172 @@ mod tests {
         assert!(updated.contains(&prim_a), "A should be updated");
         assert!(updated.contains(&prim_b), "B should be updated");
         assert!(!updated.contains(&prim_c), "C should not be updated");
+    }
+
+    /// Asserts that `live` is indistinguishable from a fresh composition:
+    /// prim set, traversal order, children, resolved values with provenance,
+    /// opinion stacks, and the dependency data used for later invalidation.
+    fn assert_matches_fresh(live: &LiveStage, store: &mut InMemoryStore, fields: &[TokenId]) {
+        let fresh_opts = StageOptions {
+            with_dependencies: true,
+            ..live.options.clone()
+        };
+        let mut fresh = Stage::compose(store, live.root, fresh_opts);
+        let fresh_deps = fresh.take_deps().unwrap_or_default();
+        let stage = live.stage();
+        let root = p(store, "/");
+
+        let mut live_prims: Vec<PathId> = stage.prim_paths().collect();
+        let mut fresh_prims: Vec<PathId> = fresh.prim_paths().collect();
+        live_prims.sort_unstable();
+        fresh_prims.sort_unstable();
+        assert_eq!(live_prims, fresh_prims, "prim sets differ");
+
+        let live_order: Vec<PathId> = stage.traverse(root).collect();
+        let fresh_order: Vec<PathId> = fresh.traverse(root).collect();
+        assert_eq!(live_order, fresh_order, "traversal order differs");
+
+        for &prim in &fresh_prims {
+            assert_eq!(
+                stage.children_of(prim),
+                fresh.children_of(prim),
+                "children differ for {prim:?}"
+            );
+            for &field in fields {
+                assert_eq!(
+                    stage.resolve_value(prim, field),
+                    fresh.resolve_value(prim, field),
+                    "value/provenance differs for {prim:?}.{field:?}"
+                );
+                assert_eq!(
+                    stage.explain_field(prim, field),
+                    fresh.explain_field(prim, field),
+                    "opinion stack differs for {prim:?}.{field:?}"
+                );
+            }
+        }
+
+        assert_eq!(live.arc_metadata, fresh_deps.arcs, "arc metadata differs");
+        let non_empty = |m: &HashMap<LayerId, HashSet<PathId>>| {
+            m.iter()
+                .filter(|(_, prims)| !prims.is_empty())
+                .map(|(layer, prims)| (*layer, prims.clone()))
+                .collect::<HashMap<_, _>>()
+        };
+        assert_eq!(
+            non_empty(&live.layer_to_prims),
+            non_empty(&fresh_deps.layer_to_prims),
+            "layer → prim dependencies differ"
+        );
+        assert_eq!(
+            live.prim_to_layers, fresh_deps.prim_to_layers,
+            "prim → layer dependencies differ"
+        );
+    }
+
+    /// Regression: recomposing one sibling used to replace the root's child
+    /// list with the masked composition's partial list, dropping `/B` from
+    /// traversal while `has_prim(/B)` stayed true.
+    #[test]
+    fn prim_edit_preserves_sibling_hierarchy() {
+        let mut store = InMemoryStore::default();
+        let field_x = store.tokens.intern("x");
+        let prim_a = p(&mut store, "/A");
+        let prim_b = p(&mut store, "/B");
+        let prim_c = p(&mut store, "/C");
+        let child = p(&mut store, "/A/Child");
+
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(prim_a, PrimSpec::def().with_field(field_x, 1_i64));
+        layer.insert_prim(child, PrimSpec::def().with_field(field_x, 5_i64));
+        layer.insert_prim(prim_b, PrimSpec::def().with_field(field_x, 2_i64));
+        // `/C` references `/A`, so editing `/A` also recomposes `/C`.
+        layer.insert_prim(
+            prim_c,
+            PrimSpec::def().with_reference(Reference::new(LayerId(1), prim_a)),
+        );
+        store.insert_layer(layer);
+
+        let options = StageOptions {
+            with_provenance: true,
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+
+        store
+            .layers
+            .get_mut(&LayerId(1))
+            .unwrap()
+            .set_property(PropertyPath::new(prim_a, field_x), 10_i64);
+        live.notify_prim_edit(prim_a);
+        let updated = live.recompose(&mut store);
+        assert!(updated.contains(&prim_a), "A recomposed");
+        assert!(updated.contains(&prim_c), "C depends on A");
+        assert!(!updated.contains(&prim_b), "B untouched");
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+        assert_eq!(
+            live.stage().resolve_field(prim_c, field_x).unwrap().value,
+            Value::Int64(10),
+            "reference sees the edit"
+        );
+
+        // Later notifications still reach every dependent.
+        store
+            .layers
+            .get_mut(&LayerId(1))
+            .unwrap()
+            .set_property(PropertyPath::new(prim_b, field_x), 20_i64);
+        live.notify_layer_prim_edits(LayerId(1), &[prim_b]);
+        let updated = live.recompose(&mut store);
+        assert_eq!(updated, vec![prim_b], "only B recomposed");
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+
+        store
+            .layers
+            .get_mut(&LayerId(1))
+            .unwrap()
+            .set_property(PropertyPath::new(prim_a, field_x), 11_i64);
+        live.notify_layer_prim_edits(LayerId(1), &[prim_a]);
+        let updated = live.recompose(&mut store);
+        assert!(updated.contains(&prim_c), "C still depends on A");
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+    }
+
+    /// An opinion edit that changes hierarchy (here, child order) cannot be
+    /// patched from a masked composition; it falls back to a rebuild.
+    #[test]
+    fn prim_edit_that_reorders_children_matches_fresh() {
+        let mut store = InMemoryStore::default();
+        let field_x = store.tokens.intern("x");
+        let parent = p(&mut store, "/P");
+        let a = p(&mut store, "/P/A");
+        let b = p(&mut store, "/P/B");
+        let a_tok = store.tokens.intern("A");
+        let b_tok = store.tokens.intern("B");
+
+        let mut layer = Layer::new(LayerId(1));
+        let mut parent_spec = PrimSpec::def();
+        parent_spec.authored_children = vec![a_tok, b_tok];
+        layer.insert_prim(parent, parent_spec);
+        layer.insert_prim(a, PrimSpec::def().with_field(field_x, 1_i64));
+        layer.insert_prim(b, PrimSpec::def().with_field(field_x, 2_i64));
+        store.insert_layer(layer);
+
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+
+        store
+            .layers
+            .get_mut(&LayerId(1))
+            .unwrap()
+            .prims
+            .get_mut(&parent)
+            .unwrap()
+            .prim_order = Some(vec![b_tok, a_tok]);
+        live.notify_prim_edit(parent);
+        live.recompose(&mut store);
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+        assert_eq!(live.stage().children_of(parent), Some(&[b, a][..]));
     }
 }

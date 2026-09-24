@@ -3,7 +3,7 @@
 
 //! Composition result types.
 //!
-//! Composition produces per-prim indexes (similar to `OpenUSD`'s internal
+//! Composition produces per-prim indexes (similar to OpenUSD's internal
 //! `PrimIndex`) which the [`crate::stage::Stage`] queries for population and
 //! value resolution.
 //!

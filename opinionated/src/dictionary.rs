@@ -6,7 +6,7 @@
 //! Dictionaries combine key by key: a key present on one side only is kept,
 //! and when both sides hold a value for the same key the stronger value wins,
 //! unless both values are themselves dictionaries, in which case they combine
-//! recursively. This is AOUSD Core §6.6.2.1 (combining) and `OpenUSD`'s
+//! recursively. This is AOUSD Core §6.6.2.1 (combining) and OpenUSD's
 //! `VtDictionaryOverRecursive`.
 //!
 //! `opinionated` does not own a value type, so a host exposes the nested
@@ -27,7 +27,7 @@
 //! AOUSD Core §6.6.2.1 calls combining associative, which holds only while
 //! colliding values agree on being dictionaries. The spec states the pairwise
 //! operation but not how a chain is folded, so
-//! `OpenUSD`'s behavior governs (AOUSD Core §4.2). `OpenUSD` folds
+//! OpenUSD's behavior governs (AOUSD Core §4.2). OpenUSD folds
 //! strongest-first: `MetadataValueComposer::ConsumeAuthored` in
 //! `pxr/usd/usd/stage.cpp` composes the accumulated stronger partial over each
 //! weaker opinion in turn, and `usdcat --flatten` on the three-layer case above
@@ -38,7 +38,7 @@
 //! # Output order
 //!
 //! The result is ordered by key at every nesting level, whether a level was
-//! merged or contributed by a single opinion, matching `OpenUSD`'s
+//! merged or contributed by a single opinion, matching OpenUSD's
 //! `VtDictionary` (a `std::map`). Within one dictionary, the first occurrence
 //! of a duplicate key wins.
 //!
@@ -114,7 +114,7 @@ where
 /// Combines a chain of dictionaries supplied strongest-to-weakest.
 ///
 /// The chain folds strongest-first, `((d0 ∪ d1) ∪ d2) ∪ …`, which is the
-/// order `OpenUSD` uses and differs from a weakest-first fold when a key holds a
+/// order OpenUSD uses and differs from a weakest-first fold when a key holds a
 /// dictionary in one opinion and a non-dictionary in another (see the module
 /// docs). A caller-supplied fallback seed is simply the last, weakest element
 /// of the chain. An empty chain yields an empty dictionary. The result is

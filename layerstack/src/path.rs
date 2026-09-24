@@ -3,7 +3,7 @@
 
 //! Paths for `layerstack`.
 //!
-//! `layerstack` uses segmented, interned paths (similar to `OpenUSD` prim paths).
+//! `layerstack` uses segmented, interned paths (similar to OpenUSD prim paths).
 //!
 //! Spec: AOUSD Core §8 (paths and namespace ordering).
 

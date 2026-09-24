@@ -269,7 +269,7 @@ pub(crate) fn compose_stage(
 /// above a real prim.
 ///
 /// Spec: AOUSD Core §11 (stage population from composed prim indexes);
-/// `OpenUSD` only populates prims whose index has specs
+/// OpenUSD only populates prims whose index has specs
 /// (`PcpPrimIndex::HasSpecs`).
 fn remove_prims_without_specs(
     store: &dyn LayerStore,
@@ -423,7 +423,7 @@ fn composed_variant_selections(
 ///
 /// Spec: AOUSD Core §10.5 (only the selected variant of each variant set
 /// contributes opinions). Where the Core is silent (§4.2), this follows
-/// `OpenUSD` v26.08: `pxr/usd/pcp/primIndex.cpp:4471` adds a variant arc only
+/// OpenUSD v26.08: `pxr/usd/pcp/primIndex.cpp:4471` adds a variant arc only
 /// for the selection found by `_ComposeVariantSelection` (`:4130`), which
 /// searches the whole prim index in strength order.
 fn prune_unselected_variant_specs(store: &dyn LayerStore, prims: &mut HashMap<PathId, PrimIndex>) {
@@ -1484,7 +1484,7 @@ fn prune_deactivated(
 /// nobody selected.
 ///
 /// Spec: AOUSD Core §10.5 (variant selection), §9 (LIVERPS strength ordering).
-/// `OpenUSD` resolves a set's selection at the site hosting it
+/// OpenUSD resolves a set's selection at the site hosting it
 /// (`pxr/usd/pcp/primIndex.cpp`, `_ComposeVariantSelection`).
 fn resolve_full_variant_selections(
     store: &dyn LayerStore,
@@ -1719,7 +1719,7 @@ fn resolve_variant_child_selections_for_prim(
 /// destination there.
 ///
 /// Spec: AOUSD Core §10.5 (the strongest selection wins across arcs).
-/// `OpenUSD` searches the prim index built so far in strength order
+/// OpenUSD searches the prim index built so far in strength order
 /// (`pxr/usd/pcp/primIndex.cpp`, `_ComposeVariantSelection`).
 fn enclosing_variant_selections(
     store: &dyn LayerStore,
@@ -1807,7 +1807,7 @@ struct AdmittedArcs {
 /// content in, or an arc in between) decides which branch's arcs apply, at any
 /// depth below the branch.
 ///
-/// Spec: AOUSD Core §10.5 (arcs inside the selected variant only); `OpenUSD`
+/// Spec: AOUSD Core §10.5 (arcs inside the selected variant only); OpenUSD
 /// adds arcs only beneath the selected variant node, choosing the selection by
 /// searching the prim index built so far (`pxr/usd/pcp/primIndex.cpp`).
 fn admitted_arcs(
@@ -3316,7 +3316,7 @@ fn add_reference_edge_opinions(
     // `(outer, Some(References))`, never as a direct arc of the root layer stack.
     //
     // Spec: AOUSD Core §10.4 (LIVERPS strength ordering is applied recursively
-    // within each arc's target prim index). `OpenUSD` makes this explicit by
+    // within each arc's target prim index). OpenUSD makes this explicit by
     // ranking a node above all of its descendants and comparing siblings below
     // the common ancestor (`pxr/usd/pcp/strengthOrdering.cpp:309`).
     //
@@ -4246,7 +4246,7 @@ fn add_payload_edge_opinions(
     // `(outer, Some(Payloads))`, never as a direct arc of the root layer stack.
     //
     // Spec: AOUSD Core §10.4 (LIVERPS strength ordering is applied recursively
-    // within each arc's target prim index). `OpenUSD` makes this explicit by
+    // within each arc's target prim index). OpenUSD makes this explicit by
     // ranking a node above all of its descendants and comparing siblings below
     // the common ancestor (`pxr/usd/pcp/strengthOrdering.cpp:309`).
     //

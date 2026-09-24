@@ -63,11 +63,11 @@ fn nested_dictionaries_combine_recursively() {
     );
 }
 
-/// The three-layer dictionary/scalar conflict, pinned to `OpenUSD`.
+/// The three-layer dictionary/scalar conflict, pinned to OpenUSD.
 ///
 /// `usdcat --flatten` over sublayers carrying `customData` of
 /// `{settings: {a: 1}}`, `{settings: 0}`, `{settings: {b: 2}}` (strongest
-/// first) yields `{settings: {a: 1, b: 2}}`: `OpenUSD` folds strongest-first.
+/// first) yields `{settings: {a: 1, b: 2}}`: OpenUSD folds strongest-first.
 #[test]
 fn dictionary_scalar_conflict_across_three_layers_folds_strongest_first() {
     let strong = vec![("settings", dict(&[("a", int(1))]))];

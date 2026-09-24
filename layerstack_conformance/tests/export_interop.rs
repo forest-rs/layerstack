@@ -1,7 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Independent check of exporter output with the `OpenUSD` tools `usdcat` and
+//! Independent check of exporter output with the OpenUSD tools `usdcat` and
 //! `usdchecker`, when they are on `PATH`.
 //!
 //! The tools are optional: without them this test reports that it skipped

@@ -20,7 +20,7 @@ use crate::{
     interner::TokenId,
     listop::{ListOp, resolve_list_chain},
     path::{PathId, PropertyPath, TargetPath},
-    prim_index::{Opinion, PrimIndex},
+    prim_index::{Opinion, OpinionKey, PrimIndex},
     schema::SchemaRegistry,
     spec_path::SpecPath,
     spline::{SplineData, SplineDataType},
@@ -606,7 +606,29 @@ impl Stage {
         self.children.get(&prim).map(|v| v.as_slice())
     }
 
+    /// Returns every source that contributes to `prim`, strongest first.
+    ///
+    /// This is the full ordered source stack: one [`OpinionKey`] per
+    /// contributing `(arc, layer, spec)` site, with repeated sites kept. A
+    /// site reached through two arcs (a reference diamond, or a layer that
+    /// appears twice in a layer stack) appears twice, as it does in
+    /// OpenUSD's `PcpPrimIndex::GetPrimStack()`
+    /// (`pxr/usd/pcp/primIndex.h`). [`Stage::prim_stack`] is the
+    /// deduplicated `(layer, spec)` projection of this stack.
+    ///
+    /// This is an inspection API intended for conformance and debugging,
+    /// the prim-level counterpart of [`Stage::explain_field`].
+    ///
+    /// Spec: AOUSD Core §10.4 (strength ordering).
+    #[must_use]
+    pub fn explain_prim(&self, prim: PathId) -> Option<&[OpinionKey]> {
+        self.prims.get(&prim).map(|index| index.sources.as_slice())
+    }
+
     /// Returns the composed prim stack as `(layer_id, spec_path)` pairs (strongest-first).
+    ///
+    /// Each `(layer, spec)` site appears once, at its strongest position; use
+    /// [`Stage::explain_prim`] for the full stack with repeated sites.
     ///
     /// This is an inspection API intended for conformance and debugging.
     ///
@@ -1257,5 +1279,39 @@ mod tests {
             ResolvedValue::Scalar(array_value(&[5, 6])),
             "a strongest block yields the schema fallback unmodified (AOUSD Core §12.3.6)"
         );
+    }
+
+    /// A layer sublayered twice contributes its spec twice, as in OpenUSD's
+    /// prim stack for the supplemental `BasicDuplicateSublayer` fixture;
+    /// `prim_stack` keeps only the strongest occurrence.
+    #[test]
+    fn explain_prim_keeps_repeated_sites() {
+        use crate::doc::{InMemoryStore, Layer, PrimSpec, SublayerEntry};
+
+        let mut store = InMemoryStore::default();
+        let prim = store.path("/B");
+        let mut root = Layer::new(LayerId(1));
+        root.sublayers = vec![
+            SublayerEntry::new(LayerId(2)),
+            SublayerEntry::new(LayerId(2)),
+        ];
+        store.insert_layer(root);
+        let mut shared = Layer::new(LayerId(2));
+        shared.insert_prim(prim, PrimSpec::def());
+        store.insert_layer(shared);
+
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        let full: Vec<_> = stage
+            .explain_prim(prim)
+            .expect("composed prim")
+            .iter()
+            .map(|key| (key.layer_id, key.spec_path.clone()))
+            .collect();
+        let spec = SpecPath::from_prim_path(prim, &store.paths);
+        assert_eq!(
+            full,
+            [(LayerId(2), spec.clone()), (LayerId(2), spec.clone())]
+        );
+        assert_eq!(stage.prim_stack(prim), Some(vec![(LayerId(2), spec)]));
     }
 }

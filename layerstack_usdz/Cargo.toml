@@ -1,6 +1,6 @@
 [package]
 name = "layerstack_usdz"
-description = "USDZ (packaged scene) reader for layerstack — §16.4 compliant."
+description = "USDZ (packaged scene) reader and writer for layerstack — §16.4 compliant."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

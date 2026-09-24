@@ -1,10 +1,12 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! USDZ (packaged scene) reader for layerstack.
+//! USDZ (packaged scene) reader and writer for layerstack.
 //!
 //! Reads USDZ package files per AOUSD Core §16.4 and produces [`Layer`] /
 //! [`PrimSpec`] structures compatible with the layerstack composition engine.
+//! [`write_usdz`] packages already-serialized layers and media into a
+//! conforming archive (see [`writer`]).
 //!
 //! USDZ is a constrained ZIP archive containing USD layers and associated
 //! media (textures, audio). Constraints (§16.4.1):
@@ -42,9 +44,11 @@ use layerstack::path::PathInterner;
 pub mod crc32;
 pub mod error;
 mod resolver;
+pub mod writer;
 pub mod zip;
 
 pub use error::UsdzError;
+pub use writer::{PackageFile, UsdzWriteError, write_usdz};
 
 /// The result of successfully reading a USDZ package.
 #[derive(Clone, Debug)]

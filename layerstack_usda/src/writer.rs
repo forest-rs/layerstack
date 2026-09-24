@@ -9,16 +9,20 @@
 //! `interpolation`) and most layer metadata. Formatting a composed `Value`
 //! therefore cannot produce a faithful file. This module instead serializes
 //! a small, owned *authored* representation — [`Document`], [`Prim`],
-//! [`Attribute`], [`Metadatum`] and [`Value`] — that states every one of
-//! those details explicitly.
+//! [`Attribute`], [`Relationship`], [`Metadatum`] and [`Value`] — that
+//! states every one of those details explicitly.
 //!
 //! Output is deterministic: the same document always produces byte-identical
 //! text. Items are written in the order they appear in the document (nothing
 //! is sorted or deduplicated behind the caller's back); invalid input is
 //! rejected with a [`WriteError`] rather than silently repaired.
 //!
-//! Scope: prims, attributes with default values, and metadata. Time samples,
-//! relationships, connections, composition arcs and variant sets are not yet
+//! Scope: prims; attributes with default values and explicit connection
+//! lists; relationships with explicit target lists; and metadata, including
+//! token list operations such as `prepend apiSchemas = [...]`
+//! ([`Value::TokenListOp`]). This is the property set a `UsdShade` material
+//! network and its bindings need. Time samples, splines, list-edited
+//! connections or targets, composition arcs and variant sets are not yet
 //! representable.
 //!
 //! # Example
@@ -118,7 +122,7 @@ impl Document {
         if self.default_prim.is_some() {
             keys.push("defaultPrim");
         }
-        validate_metadata(&self.metadata, &mut keys, "/")?;
+        validate_metadata(&self.metadata, &mut keys, "/", false)?;
         if let Some(name) = &self.default_prim
             && !self.prims.iter().any(|p| &p.name == name)
         {
@@ -147,6 +151,9 @@ pub struct Prim {
     pub metadata: Vec<Metadatum>,
     /// Attributes, in order.
     pub attributes: Vec<Attribute>,
+    /// Relationships, in order. They are written after
+    /// [`Self::attributes`]; property names must be unique across both.
+    pub relationships: Vec<Relationship>,
     /// Child prims, in order.
     pub children: Vec<Self>,
 }
@@ -165,6 +172,7 @@ impl Prim {
             name: name.into(),
             metadata: Vec::new(),
             attributes: Vec::new(),
+            relationships: Vec::new(),
             children: Vec::new(),
         }
     }
@@ -193,21 +201,31 @@ impl Prim {
                 name: type_name.clone(),
             });
         }
-        validate_metadata(&self.metadata, &mut Vec::new(), &path)?;
-        let mut attribute_names: Vec<&str> = Vec::new();
-        for attribute in &self.attributes {
-            let attr_path = alloc::format!("{path}.{}", attribute.name);
-            if !is_property_name(&attribute.name) {
+        validate_metadata(&self.metadata, &mut Vec::new(), &path, true)?;
+        let mut property_names: Vec<&str> = Vec::new();
+        let names = self
+            .attributes
+            .iter()
+            .map(|a| &a.name)
+            .chain(self.relationships.iter().map(|r| &r.name));
+        for name in names {
+            let prop_path = alloc::format!("{path}.{name}");
+            if !is_property_name(name) {
                 return Err(WriteError::InvalidName {
-                    path: attr_path,
-                    name: attribute.name.clone(),
+                    path: prop_path,
+                    name: name.clone(),
                 });
             }
-            if attribute_names.contains(&attribute.name.as_str()) {
-                return Err(WriteError::Duplicate { path: attr_path });
+            if property_names.contains(&name.as_str()) {
+                return Err(WriteError::Duplicate { path: prop_path });
             }
-            attribute_names.push(&attribute.name);
-            attribute.validate(&attr_path)?;
+            property_names.push(name);
+        }
+        for attribute in &self.attributes {
+            attribute.validate(&alloc::format!("{path}.{}", attribute.name))?;
+        }
+        for relationship in &self.relationships {
+            relationship.validate(&alloc::format!("{path}.{}", relationship.name))?;
         }
         let mut child_names: Vec<&str> = Vec::new();
         for child in &self.children {
@@ -229,9 +247,23 @@ pub enum Variability {
     Uniform,
 }
 
-/// An attribute spec: declaration, optional default value and metadata.
+/// An attribute spec: declaration, optional default value, optional
+/// connections and metadata.
 ///
-/// Spec: AOUSD Core §16.2.16 (attribute specs).
+/// Written as up to two statements, as OpenUSD writes them
+/// (`pxr/usd/sdf/fileIO_Common.h`, `Sdf_WriteAttribute`):
+///
+/// - the declaration `[custom] [uniform] type name [= value] [( metadata )]`,
+///   written unless the attribute only carries connections (no default, no
+///   metadata, not `custom`);
+/// - `[uniform] type name.connect = <target>` (or `[<a>, <b>]`) when
+///   [`Self::connections`] is non-empty.
+///
+/// So `token outputs:surface.connect = </M/S.outputs:surface>` is an
+/// attribute with no value and one connection, and an input that has both
+/// a default and a connection is written as two lines.
+///
+/// Spec: AOUSD Core §16.2.16 (attribute specs), §16.2.16.4 (connections).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Attribute {
     /// Namespaced property name (e.g. `primvars:st`).
@@ -246,6 +278,12 @@ pub struct Attribute {
     pub variability: Variability,
     /// Default value; `None` writes a bare declaration.
     pub value: Option<Value>,
+    /// Explicit connection list (the `connectionPaths` field): absolute
+    /// property paths such as `/Root/Materials/M/Tex.outputs:rgb`, written
+    /// in order. Empty means no connection statement. List-edited (`prepend`,
+    /// `append`, `delete`) and blocked (`= None`) connections are not
+    /// representable.
+    pub connections: Vec<String>,
     /// Attribute metadata (e.g. `interpolation`, `elementSize`), in order.
     pub metadata: Vec<Metadatum>,
 }
@@ -259,8 +297,31 @@ impl Attribute {
             custom: false,
             variability: Variability::Varying,
             value: Some(value),
+            connections: Vec::new(),
             metadata: Vec::new(),
         }
+    }
+
+    /// Creates a varying, non-custom attribute without a default value: a
+    /// bare declaration such as `float3 outputs:rgb`, or, with
+    /// [`Self::with_connection`], a connection-only attribute.
+    pub fn declared(name: impl Into<String>, type_name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            type_name: type_name.into(),
+            custom: false,
+            variability: Variability::Varying,
+            value: None,
+            connections: Vec::new(),
+            metadata: Vec::new(),
+        }
+    }
+
+    /// Appends a connection target (an absolute property path).
+    #[must_use]
+    pub fn with_connection(mut self, target: impl Into<String>) -> Self {
+        self.connections.push(target.into());
+        self
     }
 
     /// Marks the attribute `uniform`.
@@ -300,7 +361,60 @@ impl Attribute {
             }
             validate_value(value, path)?;
         }
-        validate_metadata(&self.metadata, &mut Vec::new(), path)
+        for target in &self.connections {
+            validate_target(target, path, true)?;
+        }
+        validate_metadata(&self.metadata, &mut Vec::new(), path, true)
+    }
+}
+
+/// A relationship spec: declaration, optional explicit targets and metadata.
+///
+/// Written as `[custom] rel name [= targets] [( metadata )]`, where
+/// `targets` is `<path>`, `[<a>, <b>]` or `None`. Relationships are always
+/// uniform; the `varying` qualifier is not representable.
+///
+/// Spec: AOUSD Core §16.2.16.7–§16.2.16.9 (relationship specs); OpenUSD
+/// `pxr/usd/sdf/fileIO_Common.h`, `Sdf_WriteRelationship`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Relationship {
+    /// Namespaced property name (e.g. `material:binding`).
+    pub name: String,
+    /// Whether the declaration carries the `custom` keyword.
+    pub custom: bool,
+    /// Explicit target list (the `targetPaths` field): absolute prim or
+    /// property paths, in order. `None` writes a bare declaration (`rel
+    /// name`, no targets authored); `Some` of an empty list writes
+    /// `rel name = None`, an explicit empty list that blocks weaker
+    /// opinions. List-edited targets are not representable.
+    pub targets: Option<Vec<String>>,
+    /// Relationship metadata (e.g. `bindMaterialAs`), in order.
+    pub metadata: Vec<Metadatum>,
+}
+
+impl Relationship {
+    /// Creates a non-custom relationship with one explicit target.
+    pub fn new(name: impl Into<String>, target: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            custom: false,
+            targets: Some(alloc::vec![target.into()]),
+            metadata: Vec::new(),
+        }
+    }
+
+    /// Marks the relationship `custom`.
+    #[must_use]
+    pub fn custom(mut self) -> Self {
+        self.custom = true;
+        self
+    }
+
+    fn validate(&self, path: &str) -> Result<(), WriteError> {
+        for target in self.targets.iter().flatten() {
+            validate_target(target, path, false)?;
+        }
+        validate_metadata(&self.metadata, &mut Vec::new(), path, true)
     }
 }
 
@@ -312,7 +426,10 @@ pub struct Metadatum {
     /// Metadata field name; must be a plain identifier.
     pub key: String,
     /// Field value. Tokens and strings are both written quoted, as USDA
-    /// metadata syntax requires.
+    /// metadata syntax requires. A [`Value::TokenListOp`] is written as one
+    /// statement per operation (`prepend key = [...]`); it is accepted on
+    /// prims, attributes and relationships, not in layer metadata or inside
+    /// dictionaries.
     pub value: Value,
 }
 
@@ -415,6 +532,69 @@ pub enum Value {
     /// an attribute value type in USD (`Sdf` registers no `dictionary`
     /// attribute type), so an [`Attribute`] cannot hold or declare one.
     Dictionary(Vec<(String, Self)>),
+    /// A token list operation (`SdfTokenListOp`), such as the `apiSchemas`
+    /// prim metadata. Like [`Self::Dictionary`] it is a metadata value only;
+    /// see [`ListOp`] for how it is written.
+    ///
+    /// Spec: AOUSD Core §6.6.3 (list operations), §16.2.14 (list-op
+    /// syntax).
+    TokenListOp(ListOp<String>),
+}
+
+/// A list operation: either an explicit list, or edits (`delete`,
+/// `prepend`, `append`) applied to weaker opinions.
+///
+/// Written in OpenUSD's order (`pxr/usd/sdf/fileIO_Common.cpp`,
+/// `_WriteListOp`): the explicit list as `key = [...]`; otherwise one
+/// statement per non-empty edit, `delete`, then `prepend`, then `append`.
+/// An explicit list excludes edits, and a list op must say something: both
+/// are checked ([`WriteError::InvalidListOp`]). The legacy `add` and
+/// `reorder` operations are not representable.
+///
+/// Spec: AOUSD Core §6.6.3 (list operations), §16.2.14 (list-op syntax).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ListOp<T> {
+    /// The explicit list, replacing weaker opinions; `None` when the list
+    /// op is made of edits.
+    pub explicit: Option<Vec<T>>,
+    /// Items removed from weaker opinions.
+    pub deleted: Vec<T>,
+    /// Items added to the front.
+    pub prepended: Vec<T>,
+    /// Items added to the back.
+    pub appended: Vec<T>,
+}
+
+impl<T> ListOp<T> {
+    /// An explicit list.
+    pub fn explicit(items: Vec<T>) -> Self {
+        Self {
+            explicit: Some(items),
+            deleted: Vec::new(),
+            prepended: Vec::new(),
+            appended: Vec::new(),
+        }
+    }
+
+    /// A list op that prepends `items`.
+    pub fn prepend(items: Vec<T>) -> Self {
+        Self {
+            explicit: None,
+            deleted: Vec::new(),
+            prepended: items,
+            appended: Vec::new(),
+        }
+    }
+
+    fn is_valid(&self) -> bool {
+        let edits =
+            !(self.deleted.is_empty() && self.prepended.is_empty() && self.appended.is_empty());
+        if self.explicit.is_some() {
+            !edits
+        } else {
+            edits
+        }
+    }
 }
 
 // ── Errors ──────────────────────────────────────────────────────────────
@@ -470,6 +650,22 @@ pub enum WriteError {
         /// The `defaultPrim` value.
         name: String,
     },
+    /// A relationship target or connection is not an absolute path of
+    /// identifiers (`/A/B` or `/A/B.ns:prop`); connections must name a
+    /// property.
+    InvalidTargetPath {
+        /// Path of the owning property.
+        path: String,
+        /// The rejected target.
+        target: String,
+    },
+    /// A list-op metadata value is empty, mixes an explicit list with
+    /// edits, or appears where USDA has no list-op syntax (layer metadata,
+    /// dictionary entries).
+    InvalidListOp {
+        /// Path of the owning object, with the metadata key after `#`.
+        path: String,
+    },
 }
 
 impl fmt::Display for WriteError {
@@ -493,6 +689,10 @@ impl fmt::Display for WriteError {
             Self::DefaultPrimNotFound { name } => {
                 write!(f, "defaultPrim {name:?} does not name a root prim")
             }
+            Self::InvalidTargetPath { path, target } => {
+                write!(f, "{path}: invalid target path {target:?}")
+            }
+            Self::InvalidListOp { path } => write!(f, "{path}: invalid list op"),
         }
     }
 }
@@ -514,12 +714,49 @@ fn is_property_name(name: &str) -> bool {
     name.split(':').all(is_identifier)
 }
 
+/// An absolute path to a prim (`/A/B`) or, after one `.`, to a property of
+/// it (`/A/B.ns:prop`) — the target forms USDA relationships and
+/// connections use (§16.2.9; §16.2.16.9 excludes variant selections from
+/// targets). Relative paths, variant selections and
+/// relational attribute paths are not produced by this writer.
+fn validate_target(target: &str, path: &str, property: bool) -> Result<(), WriteError> {
+    let (prim, prop) = match target.split_once('.') {
+        Some((prim, prop)) => (prim, Some(prop)),
+        None => (target, None),
+    };
+    let prim_ok = prim
+        .strip_prefix('/')
+        .is_some_and(|rest| rest.split('/').all(is_identifier));
+    let prop_ok = match prop {
+        Some(prop) => is_property_name(prop),
+        None => !property,
+    };
+    if prim_ok && prop_ok {
+        Ok(())
+    } else {
+        Err(WriteError::InvalidTargetPath {
+            path: path.into(),
+            target: target.into(),
+        })
+    }
+}
+
+/// Validates metadata keys and values; `list_ops` admits
+/// [`Value::TokenListOp`] entries (prim and property metadata only).
 fn validate_metadata<'a>(
     entries: &'a [Metadatum],
     seen: &mut Vec<&'a str>,
     path: &str,
+    list_ops: bool,
 ) -> Result<(), WriteError> {
     for entry in entries {
+        if let Value::TokenListOp(op) = &entry.value
+            && !(list_ops && op.is_valid())
+        {
+            return Err(WriteError::InvalidListOp {
+                path: alloc::format!("{path}#{}", entry.key),
+            });
+        }
         if !is_identifier(&entry.key) {
             return Err(WriteError::InvalidName {
                 path: path.into(),
@@ -564,10 +801,24 @@ fn validate_value(value: &Value, path: &str) -> Result<(), WriteError> {
                 if let Some(error) = bad_text(key) {
                     return Err(error);
                 }
+                if matches!(v, Value::TokenListOp(_)) {
+                    return Err(WriteError::InvalidListOp {
+                        path: alloc::format!("{path}#{key}"),
+                    });
+                }
                 validate_value(v, path)?;
             }
             Ok(())
         }
+        Value::TokenListOp(op) => op
+            .explicit
+            .iter()
+            .flatten()
+            .chain(&op.deleted)
+            .chain(&op.prepended)
+            .chain(&op.appended)
+            .find_map(bad_text)
+            .map_or(Ok(()), Err),
         _ => Ok(()),
     }
 }
@@ -587,6 +838,7 @@ enum Elem {
     Token,
     Asset,
     Dictionary,
+    ListOp,
     /// A known type this writer has no [`Value`] variant for (e.g. `half`,
     /// quaternions). It can be declared but not given a value.
     Unsupported,
@@ -690,12 +942,15 @@ impl Value {
             Self::Int3Array(_) => (Elem::Int, 3, true),
             Self::Int4Array(_) => (Elem::Int, 4, true),
             Self::Dictionary(_) => (Elem::Dictionary, 1, false),
+            Self::TokenListOp(_) => (Elem::ListOp, 1, false),
         };
         Some(Shape { elem, arity, array })
     }
 
     /// The canonical (alias-free) USD type name of this value, as used for
-    /// typed dictionary entries.
+    /// typed dictionary entries. For the metadata-only values this is the
+    /// `Sdf` value type name (`dictionary`, `tokenListOp`), which is not an
+    /// attribute type.
     pub fn canonical_type_name(&self) -> &'static str {
         match self {
             Self::Bool(_) => "bool",
@@ -736,6 +991,7 @@ impl Value {
             Self::Int3Array(_) => "int3[]",
             Self::Int4Array(_) => "int4[]",
             Self::Dictionary(_) => "dictionary",
+            Self::TokenListOp(_) => "tokenListOp",
         }
     }
 }
@@ -777,11 +1033,42 @@ impl Writer<'_> {
 
     fn metadata_entries(&mut self, entries: &[Metadatum], depth: usize) {
         for entry in entries {
+            if let Value::TokenListOp(op) = &entry.value {
+                self.list_op(&entry.key, op, depth);
+                continue;
+            }
             self.indent(depth);
             self.out.push_str(&entry.key);
             self.out.push_str(" = ");
             self.value(&entry.value, depth);
             self.out.push('\n');
+        }
+    }
+
+    /// §16.2.14: one `[op] key = [items]` statement per operation, in
+    /// OpenUSD's order. Validation guarantees the op is non-empty and not
+    /// mixed.
+    fn list_op(&mut self, key: &str, op: &ListOp<String>, depth: usize) {
+        let statement = |w: &mut Self, keyword: &str, items: &[String]| {
+            w.indent(depth);
+            w.out.push_str(keyword);
+            w.out.push_str(key);
+            w.out.push_str(" = ");
+            w.array(items, |w, s| w.string(s));
+            w.out.push('\n');
+        };
+        if let Some(items) = &op.explicit {
+            statement(self, "", items);
+            return;
+        }
+        for (keyword, items) in [
+            ("delete ", &op.deleted),
+            ("prepend ", &op.prepended),
+            ("append ", &op.appended),
+        ] {
+            if !items.is_empty() {
+                statement(self, keyword, items);
+            }
         }
     }
 
@@ -810,8 +1097,12 @@ impl Writer<'_> {
         for attribute in &prim.attributes {
             self.attribute(attribute, depth + 1);
         }
+        for relationship in &prim.relationships {
+            self.relationship(relationship, depth + 1);
+        }
+        let has_properties = !prim.attributes.is_empty() || !prim.relationships.is_empty();
         for (i, child) in prim.children.iter().enumerate() {
-            if i > 0 || !prim.attributes.is_empty() {
+            if i > 0 || has_properties {
                 self.out.push('\n');
             }
             self.prim(child, depth + 1);
@@ -820,29 +1111,89 @@ impl Writer<'_> {
         self.out.push_str("}\n");
     }
 
-    /// §16.2.16.1: `[custom] [uniform] type name [= value] [( metadata )]`.
+    /// §16.2.16.1: `[custom] [uniform] type name [= value] [( metadata )]`,
+    /// then `[uniform] type name.connect = targets`. The declaration is
+    /// skipped for a connection-only attribute, as `Sdf_WriteAttribute`
+    /// does.
     fn attribute(&mut self, attribute: &Attribute, depth: usize) {
-        self.indent(depth);
-        if attribute.custom {
-            self.out.push_str("custom ");
+        let declare = attribute.value.is_some()
+            || !attribute.metadata.is_empty()
+            || attribute.custom
+            || attribute.connections.is_empty();
+        if declare {
+            self.indent(depth);
+            if attribute.custom {
+                self.out.push_str("custom ");
+            }
+            self.attribute_head(attribute);
+            if let Some(value) = &attribute.value {
+                self.out.push_str(" = ");
+                self.value(value, depth);
+            }
+            if !attribute.metadata.is_empty() {
+                self.out.push_str(" (\n");
+                self.metadata_entries(&attribute.metadata, depth + 1);
+                self.indent(depth);
+                self.out.push(')');
+            }
+            self.out.push('\n');
         }
+        if !attribute.connections.is_empty() {
+            self.indent(depth);
+            self.attribute_head(attribute);
+            self.out.push_str(".connect = ");
+            self.targets(&attribute.connections);
+            self.out.push('\n');
+        }
+    }
+
+    /// `[uniform] type name`.
+    fn attribute_head(&mut self, attribute: &Attribute) {
         if attribute.variability == Variability::Uniform {
             self.out.push_str("uniform ");
         }
         self.out.push_str(&attribute.type_name);
         self.out.push(' ');
         self.out.push_str(&attribute.name);
-        if let Some(value) = &attribute.value {
-            self.out.push_str(" = ");
-            self.value(value, depth);
+    }
+
+    /// §16.2.16.7: `[custom] rel name [= targets] [( metadata )]`.
+    fn relationship(&mut self, relationship: &Relationship, depth: usize) {
+        self.indent(depth);
+        if relationship.custom {
+            self.out.push_str("custom ");
         }
-        if !attribute.metadata.is_empty() {
+        self.out.push_str("rel ");
+        self.out.push_str(&relationship.name);
+        match relationship.targets.as_deref() {
+            None => {}
+            Some([]) => self.out.push_str(" = None"),
+            Some(targets) => {
+                self.out.push_str(" = ");
+                self.targets(targets);
+            }
+        }
+        if !relationship.metadata.is_empty() {
             self.out.push_str(" (\n");
-            self.metadata_entries(&attribute.metadata, depth + 1);
+            self.metadata_entries(&relationship.metadata, depth + 1);
             self.indent(depth);
             self.out.push(')');
         }
         self.out.push('\n');
+    }
+
+    /// `<path>` for one target, `[<a>, <b>]` for several. Validation
+    /// guarantees each path is plain identifiers, so it needs no escaping.
+    fn targets(&mut self, targets: &[String]) {
+        let path = |w: &mut Self, target: &String| {
+            w.out.push('<');
+            w.out.push_str(target);
+            w.out.push('>');
+        };
+        match targets {
+            [one] => path(self, one),
+            _ => self.array(targets, path),
+        }
     }
 
     fn value(&mut self, value: &Value, depth: usize) {
@@ -893,6 +1244,9 @@ impl Writer<'_> {
             Value::Int2Array(v) => self.array(v, |w, t| w.tuple(t, Self::i32)),
             Value::Int3Array(v) => self.array(v, |w, t| w.tuple(t, Self::i32)),
             Value::Int4Array(v) => self.array(v, |w, t| w.tuple(t, Self::i32)),
+            // Written as statements by `metadata_entries`; validation keeps
+            // list ops out of attribute values and dictionaries.
+            Value::TokenListOp(_) => unreachable!("list ops are written as statements"),
             Value::Dictionary(entries) => {
                 // §6.6.2, §16.2.15: typed entries with quoted keys.
                 self.out.push_str("{\n");
@@ -1387,6 +1741,316 @@ over "P" (
             text.contains(
                 "        dictionary \"nested\" = {\n            int \"n\" = 1\n        }"
             ),
+            "{text}"
+        );
+        assert!(parse(&text).diagnostics.is_empty(), "re-parses");
+    }
+
+    /// A minimal `UsdShade` network: list-op metadata, relationships and
+    /// connections with and without a default value.
+    fn shading_doc() -> Document {
+        let mut shader = Prim::def("Shader", "Surface");
+        shader.attributes.push(
+            Attribute::new("info:id", "token", Value::Token("UsdPreviewSurface".into())).uniform(),
+        );
+        shader.attributes.push(
+            Attribute::new(
+                "inputs:diffuseColor",
+                "color3f",
+                Value::Float3([0.5, 0.5, 0.5]),
+            )
+            .with_connection("/Root/Mat/Tex.outputs:rgb"),
+        );
+        shader.attributes.push(
+            Attribute::declared("inputs:roughness", "float")
+                .with_connection("/Root/Mat/Tex.outputs:g"),
+        );
+        shader
+            .attributes
+            .push(Attribute::declared("outputs:surface", "token"));
+        let mut material = Prim::def("Material", "Mat");
+        material.attributes.push(
+            Attribute::declared("outputs:surface", "token")
+                .with_connection("/Root/Mat/Surface.outputs:surface"),
+        );
+        material.children.push(shader);
+        let mut mesh = Prim::def("Mesh", "Body");
+        mesh.metadata.push(Metadatum::new(
+            "apiSchemas",
+            Value::TokenListOp(ListOp::prepend(vec!["MaterialBindingAPI".into()])),
+        ));
+        mesh.attributes.push(
+            Attribute::new(
+                "subsetFamily:materialBind:familyType",
+                "token",
+                Value::Token("partition".into()),
+            )
+            .uniform(),
+        );
+        mesh.relationships
+            .push(Relationship::new("material:binding", "/Root/Mat"));
+        mesh.relationships.push(Relationship {
+            targets: None,
+            ..Relationship::new("exedra:declared", "/Root").custom()
+        });
+        mesh.relationships.push(Relationship {
+            targets: Some(vec!["/Root/Mat".into(), "/Root/Body.points".into()]),
+            ..Relationship::new("exedra:many", "/Root")
+        });
+        mesh.relationships.push(Relationship {
+            targets: Some(Vec::new()),
+            ..Relationship::new("exedra:blocked", "/Root")
+        });
+        let mut root = Prim::def("Xform", "Root");
+        root.children.push(material);
+        root.children.push(mesh);
+        Document {
+            default_prim: Some("Root".into()),
+            prims: vec![root],
+            ..Document::new()
+        }
+    }
+
+    #[test]
+    fn shading_network_golden_text() {
+        let text = shading_doc().to_usda().unwrap();
+        let expected = r#"#usda 1.0
+(
+    defaultPrim = "Root"
+)
+
+def Xform "Root"
+{
+    def Material "Mat"
+    {
+        token outputs:surface.connect = </Root/Mat/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            color3f inputs:diffuseColor = (0.5, 0.5, 0.5)
+            color3f inputs:diffuseColor.connect = </Root/Mat/Tex.outputs:rgb>
+            float inputs:roughness.connect = </Root/Mat/Tex.outputs:g>
+            token outputs:surface
+        }
+    }
+
+    def Mesh "Body" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        uniform token subsetFamily:materialBind:familyType = "partition"
+        rel material:binding = </Root/Mat>
+        custom rel exedra:declared
+        rel exedra:many = [</Root/Mat>, </Root/Body.points>]
+        rel exedra:blocked = None
+    }
+}
+"#;
+        assert_eq!(text, expected, "writer output");
+    }
+
+    #[test]
+    fn shading_network_reparses() {
+        let text = shading_doc().to_usda().unwrap();
+        let parsed = parse(&text);
+        assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+        let root = &parsed.layer.prims[0];
+        let child = |prim: &ast::Prim<'_>, name: &str| -> usize {
+            prim.children
+                .iter()
+                .position(|c| matches!(c, ast::PrimChild::Prim(p) if p.name == name))
+                .unwrap_or_else(|| panic!("{name} child"))
+        };
+        let ast::PrimChild::Prim(mesh) = &root.children[child(root, "Body")] else {
+            unreachable!()
+        };
+        let ast::PrimMeta::Custom(api) = &mesh.metadata[0] else {
+            panic!("apiSchemas metadata: {:?}", mesh.metadata);
+        };
+        assert_eq!(
+            (api.key, api.op),
+            ("apiSchemas", ast::ListOpKind::Prepend),
+            "prepend apiSchemas"
+        );
+        let rels: Vec<(&str, bool, Option<Vec<&str>>)> = mesh
+            .children
+            .iter()
+            .filter_map(|c| match c {
+                ast::PrimChild::Relationship(r) => Some((r.name, r.custom, r.targets.clone())),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            rels,
+            [
+                ("material:binding", false, Some(vec!["/Root/Mat"])),
+                ("exedra:declared", true, None),
+                (
+                    "exedra:many",
+                    false,
+                    Some(vec!["/Root/Mat", "/Root/Body.points"])
+                ),
+                // The AST records `= None` like a bare declaration; the
+                // golden text pins the written form.
+                ("exedra:blocked", false, None),
+            ],
+            "relationships"
+        );
+
+        let ast::PrimChild::Prim(material) = &root.children[child(root, "Mat")] else {
+            unreachable!()
+        };
+        let ast::PrimChild::Prim(shader) = &material.children[child(material, "Surface")] else {
+            unreachable!()
+        };
+        let statements: Vec<(&str, bool, Option<Vec<&str>>)> = shader
+            .children
+            .iter()
+            .filter_map(|c| match c {
+                ast::PrimChild::Attribute(a) => Some((
+                    a.name,
+                    a.default.is_some(),
+                    a.connection.as_ref().map(|c| c.targets.clone()),
+                )),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(
+            statements,
+            [
+                ("info:id", true, None),
+                ("inputs:diffuseColor", true, None),
+                (
+                    "inputs:diffuseColor",
+                    false,
+                    Some(vec!["/Root/Mat/Tex.outputs:rgb"])
+                ),
+                (
+                    "inputs:roughness",
+                    false,
+                    Some(vec!["/Root/Mat/Tex.outputs:g"])
+                ),
+                ("outputs:surface", false, None),
+            ],
+            "declarations and connection statements"
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_targets_and_list_ops() {
+        for target in [
+            "Root/Mat",
+            "/",
+            "/Root//Mat",
+            "/Root/Mat.",
+            "/Root{v=a}/Mat",
+        ] {
+            let mut doc = shading_doc();
+            doc.prims[0].children[1].relationships[0].targets = Some(vec![target.into()]);
+            assert_eq!(
+                doc.to_usda(),
+                Err(WriteError::InvalidTargetPath {
+                    path: "/Root/Body.material:binding".into(),
+                    target: target.into()
+                }),
+                "relationship target {target:?}"
+            );
+        }
+        // Connections name properties, not prims.
+        let mut doc = shading_doc();
+        doc.prims[0].children[0].attributes[0].connections = vec!["/Root/Mat/Surface".into()];
+        assert!(
+            matches!(doc.to_usda(), Err(WriteError::InvalidTargetPath { .. })),
+            "connection to a prim path"
+        );
+        // A relationship and an attribute cannot share a name.
+        let mut doc = shading_doc();
+        doc.prims[0].children[1]
+            .relationships
+            .push(Relationship::new(
+                "subsetFamily:materialBind:familyType",
+                "/Root",
+            ));
+        assert!(
+            matches!(doc.to_usda(), Err(WriteError::Duplicate { .. })),
+            "property names are shared by attributes and relationships"
+        );
+
+        let invalid = [
+            ListOp::default(),
+            ListOp {
+                explicit: Some(vec!["A".into()]),
+                prepended: vec!["B".into()],
+                ..ListOp::default()
+            },
+        ];
+        for op in invalid {
+            let mut doc = shading_doc();
+            doc.prims[0].children[1].metadata[0].value = Value::TokenListOp(op.clone());
+            assert_eq!(
+                doc.to_usda(),
+                Err(WriteError::InvalidListOp {
+                    path: "/Root/Body#apiSchemas".into()
+                }),
+                "{op:?}"
+            );
+        }
+        let op = Value::TokenListOp(ListOp::prepend(vec!["A".into()]));
+        let mut doc = shading_doc();
+        doc.metadata.push(Metadatum::new("apiSchemas", op.clone()));
+        assert!(
+            matches!(doc.to_usda(), Err(WriteError::InvalidListOp { .. })),
+            "no list ops in layer metadata"
+        );
+        let mut doc = shading_doc();
+        doc.prims[0].metadata.push(Metadatum::new(
+            "customData",
+            Value::Dictionary(vec![("k".into(), op.clone())]),
+        ));
+        assert!(
+            matches!(doc.to_usda(), Err(WriteError::InvalidListOp { .. })),
+            "no list ops in dictionaries"
+        );
+        let mut doc = shading_doc();
+        doc.prims[0]
+            .attributes
+            .push(Attribute::new("x", "token[]", op).custom());
+        assert!(
+            matches!(doc.to_usda(), Err(WriteError::TypeMismatch { .. })),
+            "a list op is not an attribute value"
+        );
+    }
+
+    #[test]
+    fn list_op_statements_follow_openusd_order() {
+        let mut prim = Prim::new(Specifier::Over, None, "P");
+        prim.metadata.push(Metadatum::new(
+            "apiSchemas",
+            Value::TokenListOp(ListOp {
+                explicit: None,
+                deleted: vec!["D".into()],
+                prepended: vec!["P".into()],
+                appended: vec!["A1".into(), "A2".into()],
+            }),
+        ));
+        prim.metadata.push(Metadatum::new(
+            "exedraTags",
+            Value::TokenListOp(ListOp::explicit(Vec::new())),
+        ));
+        let text = Document {
+            prims: vec![prim],
+            ..Document::new()
+        }
+        .to_usda()
+        .unwrap();
+        assert!(
+            text.contains(concat!(
+                "    delete apiSchemas = [\"D\"]\n",
+                "    prepend apiSchemas = [\"P\"]\n",
+                "    append apiSchemas = [\"A1\", \"A2\"]\n",
+                "    exedraTags = []\n",
+            )),
             "{text}"
         );
         assert!(parse(&text).diagnostics.is_empty(), "re-parses");

@@ -461,17 +461,10 @@ fn prune_unselected_variant_specs(store: &dyn LayerStore, prims: &mut HashMap<Pa
 
         let is_rejected =
             |key: &OpinionKey| rejected.contains(&(key.layer_id, key.spec_path.clone()));
-        let index = prims.get_mut(&prim_path).expect("prim exists");
-        index.sources.retain(|key| !is_rejected(key));
-        for opinions in index.opinions_by_field.values_mut() {
-            opinions.retain(|op| !is_rejected(&op.key));
-        }
-        index
-            .opinions_by_field
-            .retain(|_, opinions| !opinions.is_empty());
-        index
-            .property_types_by_field
-            .retain(|_, (key, _)| !is_rejected(key));
+        prims
+            .get_mut(&prim_path)
+            .expect("prim exists")
+            .retain_keys(|key| !is_rejected(key));
     }
 }
 
@@ -1015,10 +1008,15 @@ fn filter_variant_children(
 ///    removed along with their entire subtrees.
 /// 2. On surviving descendants, local (`is_local == true`) sources whose
 ///    `spec_path` is a namespace descendant of an identity path are stripped.
-///    Variant, inherit, and reference sources survive even when their
-///    `spec_path` falls under an identity path.
+///    Non-local sources survive only when their arc was introduced at the
+///    instance or below (`namespace_depth` at least the instance's depth):
+///    sites reached through arcs authored on the instance's ancestors are
+///    local to the instance, not brought in by its own arcs. OpenUSD marks
+///    those nodes inert (`pxr/usd/pcp/instancing.h`,
+///    `Pcp_ChildNodeIsInstanceable`).
 ///
-/// Spec: AOUSD Core §11 (instancing), §5.1.14 (instanceable).
+/// Spec: AOUSD Core §11.3.3 (scene graph instancing: only opinions brought
+/// in by the instance's composition arcs are used), §5.1.14 (instanceable).
 fn strip_instance_descendants(
     store: &dyn LayerStore,
     prims: &mut HashMap<PathId, PrimIndex>,
@@ -1165,6 +1163,7 @@ fn strip_instance_descendants(
         };
 
         let instance_resolved = store.paths().resolve(*instance_path).clone();
+        let instance_depth = u16::try_from(instance_resolved.depth()).unwrap_or(u16::MAX);
 
         // 2b. Strip local sources and opinions on surviving descendants.
         for &desc_path in &descendants {
@@ -1184,34 +1183,18 @@ fn strip_instance_descendants(
                 continue;
             };
 
-            // Only strip LOCAL sources that are namespace-descendants of
-            // identity paths. Variant/inherit/reference sources survive.
-            desc_index.sources.retain(|source| {
-                if !source.is_local {
-                    return true; // non-local sources always survive
+            // Strip LOCAL sources that are namespace-descendants of identity
+            // paths, and arc sources introduced above the instance, together
+            // with their opinions and property declarations; the property
+            // type then comes from the strongest surviving declaration.
+            // Variant/inherit/reference sources of the instance's own arcs
+            // survive.
+            desc_index.retain_keys(|key| {
+                if !key.is_local {
+                    return key.namespace_depth >= instance_depth;
                 }
-                !is_identity_descendant(store, source.layer_id, source.lookup_path, identity_paths)
+                !is_identity_descendant(store, key.layer_id, key.lookup_path, identity_paths)
             });
-
-            // Strip LOCAL opinions from identity-descendant sources.
-            for opinions in desc_index.opinions_by_field.values_mut() {
-                opinions.retain(|op| {
-                    if !op.key.is_local {
-                        return true;
-                    }
-                    !is_identity_descendant(
-                        store,
-                        op.key.layer_id,
-                        op.key.lookup_path,
-                        identity_paths,
-                    )
-                });
-            }
-
-            // Remove empty field entries.
-            desc_index
-                .opinions_by_field
-                .retain(|_, ops| !ops.is_empty());
         }
 
         // 2c. Strip children of the instance that are identity-only.
@@ -5944,6 +5927,127 @@ mod child_order_tests {
         assert_eq!(
             result,
             vec!["anim_spooky_anim_sphere", "anim_spooky_sphere"]
+        );
+    }
+}
+
+#[cfg(test)]
+mod instancing_tests {
+    use super::*;
+    use crate::{
+        array_edit::{ArrayEdit, ArrayEditOp},
+        doc::{InMemoryStore, Layer, PrimSpec, Value, set_property_field_vec},
+        listop::ListOp,
+        property::PropertyType,
+        stage::ResolvedValue,
+    };
+    use alloc::vec;
+
+    /// An instance descendant drops the site reached through an arc above the
+    /// instance together with its declaration, so the composed type comes
+    /// from the instance's own asset: `double[]`, not the discarded `int[]`.
+    ///
+    /// Spec: AOUSD Core §11.3.3 (scene graph instancing).
+    #[test]
+    fn instance_descendant_keeps_contributing_declaration_type() {
+        let mut store = InMemoryStore::default();
+        let x = store.tokens.intern("x");
+        let reference = |layer: u64, path| ListOp {
+            explicit: Some(vec![Reference::new(LayerId(layer), path)]),
+            ..ListOp::default()
+        };
+
+        // root.usda: def "P" (references = @group@</Group>) {}
+        let p = store.path("/P");
+        let group = store.path("/Group");
+        let mut root = Layer::new(LayerId(1));
+        root.insert_prim(
+            p,
+            PrimSpec {
+                references: reference(2, group),
+                ..PrimSpec::def()
+            },
+        );
+        store.insert_layer(root);
+
+        // group.usda: /Group/I is an instance of @asset@</Asset> and authors
+        // `int[] x = [99]` on its child `C`.
+        let instance = store.path("/Group/I");
+        let group_c = store.path("/Group/I/C");
+        let asset = store.path("/Asset");
+        let i_tok = store.tokens.intern("I");
+        let c_tok = store.tokens.intern("C");
+        let mut group_layer = Layer::new(LayerId(2));
+        group_layer.insert_prim(
+            group,
+            PrimSpec {
+                authored_children: vec![i_tok],
+                ..PrimSpec::def()
+            },
+        );
+        group_layer.insert_prim(
+            instance,
+            PrimSpec {
+                instanceable: Some(true),
+                references: reference(3, asset),
+                authored_children: vec![c_tok],
+                ..PrimSpec::def()
+            },
+        );
+        let mut over_c = PrimSpec::over();
+        set_property_field_vec(
+            &mut over_c.fields,
+            x,
+            FieldValue::Value(Value::Array(vec![Value::Int(99)])),
+            PropertyType::new("int", true, Value::Int(0)),
+        );
+        group_layer.insert_prim(group_c, over_c);
+        store.insert_layer(group_layer);
+
+        // asset.usda: def "C" { double[] x = edit (resize 2) }
+        let asset_c = store.path("/Asset/C");
+        let mut asset_layer = Layer::new(LayerId(3));
+        asset_layer.insert_prim(
+            asset,
+            PrimSpec {
+                authored_children: vec![c_tok],
+                ..PrimSpec::def()
+            },
+        );
+        let mut def_c = PrimSpec::def();
+        set_property_field_vec(
+            &mut def_c.fields,
+            x,
+            FieldValue::Value(Value::ArrayEdit(ArrayEdit {
+                ops: vec![ArrayEditOp::Resize { len: 2 }],
+            })),
+            PropertyType::new("double", true, Value::Double(0.0)),
+        );
+        asset_layer.insert_prim(asset_c, def_c);
+        store.insert_layer(asset_layer);
+
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        let c = store.path("/P/I/C");
+        let stack: Vec<_> = stage
+            .explain_field(c, x)
+            .expect("x has opinions")
+            .iter()
+            .map(|opinion| (opinion.key.layer_id, opinion.key.lookup_path))
+            .collect();
+        assert_eq!(stack, [(LayerId(3), asset_c)], "only the asset contributes");
+        let sources: Vec<_> = stage
+            .explain_prim(c)
+            .expect("C is composed")
+            .iter()
+            .map(|key| (key.layer_id, key.lookup_path))
+            .collect();
+        assert_eq!(sources, [(LayerId(3), asset_c)]);
+        assert_eq!(
+            stage.resolve_value(c, x).map(|resolved| resolved.value),
+            Some(ResolvedValue::Scalar(Value::Array(vec![
+                Value::Double(0.0),
+                Value::Double(0.0)
+            ])))
         );
     }
 }

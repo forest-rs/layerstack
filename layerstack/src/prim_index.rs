@@ -183,7 +183,10 @@ pub struct Opinion {
 #[derive(Clone, Debug, Default)]
 pub(crate) struct PrimIndex {
     pub(crate) opinions_by_field: HashMap<TokenId, Vec<Opinion>>,
-    pub(crate) property_types_by_field: HashMap<TokenId, (OpinionKey, PropertyType)>,
+    /// Every contributing property declaration, keyed by field. The
+    /// composed type is the strongest surviving declaration's, so filtering
+    /// out an opinion's declaration lets a weaker one take over.
+    pub(crate) property_types_by_field: HashMap<TokenId, Vec<(OpinionKey, PropertyType)>>,
     pub(crate) sources: Vec<OpinionKey>,
 }
 
@@ -205,25 +208,36 @@ impl PrimIndex {
         key: OpinionKey,
         property_type: PropertyType,
     ) {
-        match self.property_types_by_field.get_mut(&field) {
-            Some((existing_key, existing_type))
-                if existing_key.cmp_strongest_first(&key).is_gt() =>
-            {
-                *existing_key = key;
-                *existing_type = property_type;
-            }
-            Some(_) => {}
-            None => {
-                self.property_types_by_field
-                    .insert(field, (key, property_type));
-            }
-        }
+        self.property_types_by_field
+            .entry(field)
+            .or_default()
+            .push((key, property_type));
     }
 
+    /// Returns the type of the strongest declaration of `field`.
     pub(crate) fn property_type_for(&self, field: &TokenId) -> Option<&PropertyType> {
         self.property_types_by_field
-            .get(field)
+            .get(field)?
+            .iter()
+            .min_by(|(a, _), (b, _)| a.cmp_strongest_first(b))
             .map(|(_, property_type)| property_type)
+    }
+
+    /// Keeps only the sources, opinions and property declarations whose key
+    /// satisfies `keep`, dropping fields left without opinions or
+    /// declarations.
+    pub(crate) fn retain_keys(&mut self, mut keep: impl FnMut(&OpinionKey) -> bool) {
+        self.sources.retain(|key| keep(key));
+        for opinions in self.opinions_by_field.values_mut() {
+            opinions.retain(|opinion| keep(&opinion.key));
+        }
+        self.opinions_by_field
+            .retain(|_, opinions| !opinions.is_empty());
+        for declarations in self.property_types_by_field.values_mut() {
+            declarations.retain(|(key, _)| keep(key));
+        }
+        self.property_types_by_field
+            .retain(|_, declarations| !declarations.is_empty());
     }
 
     pub(crate) fn finalize(&mut self) {

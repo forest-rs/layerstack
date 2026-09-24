@@ -1971,6 +1971,305 @@ fn resolve_value_returns_dictionary_variant() {
     }
 }
 
+fn dict(entries: &[(&str, Value)]) -> Value {
+    Value::Dictionary(
+        entries
+            .iter()
+            .map(|(key, value)| dict_entry(key, value.clone()))
+            .collect(),
+    )
+}
+
+/// Composes `/P` over a sublayer stack whose layers author `customData`
+/// strongest first, and resolves it.
+fn resolve_custom_data_stack(opinions: Vec<Value>) -> Option<Vec<(Arc<str>, Value)>> {
+    let mut store = InMemoryStore::default();
+    let field = store.tokens.intern("customData");
+    let p = store.path("/P");
+
+    let mut root = Layer::new(LayerId(100));
+    for (index, value) in opinions.into_iter().enumerate() {
+        let id = LayerId(u64::try_from(index).expect("small stack") + 1);
+        root.sublayers.push(SublayerEntry::new(id));
+        let mut layer = Layer::new(id);
+        let spec = if index == 0 {
+            PrimSpec::def()
+        } else {
+            PrimSpec::default()
+        };
+        layer.insert_prim(p, spec.with_field(field, value));
+        store.insert_layer(layer);
+    }
+    store.insert_layer(root);
+
+    let stage = Stage::compose(&mut store, LayerId(100), StageOptions::default());
+    stage
+        .resolve_dictionary(p, field)
+        .map(|resolved| resolved.value)
+}
+
+#[test]
+fn dictionary_scalar_conflict_across_three_sublayers_matches_openusd() {
+    // Pinned to `usdcat --flatten` (OpenUSD) over the same three sublayers.
+    // The chain folds strongest-first (AOUSD Core §4.2, OpenUSD's
+    // `MetadataValueComposer`): the middle layer's scalar `settings = 0` loses
+    // to the stronger dictionary, which then still combines with the weakest
+    // dictionary. A weakest-first fold would drop `b`.
+    let strong = dict(&[
+        ("settings", dict(&[("a", Value::Int(1))])),
+        ("only_strong", Value::string("s")),
+        ("nested", dict(&[("deep", dict(&[("x", Value::Int(1))]))])),
+    ]);
+    let middle = dict(&[
+        ("settings", Value::Int(0)),
+        ("only_strong", Value::string("m")),
+        (
+            "nested",
+            dict(&[
+                ("deep", dict(&[("y", Value::Int(2))])),
+                ("z", Value::Int(3)),
+            ]),
+        ),
+    ]);
+    let weak = dict(&[
+        ("settings", dict(&[("b", Value::Int(2))])),
+        ("only_weak", Value::Int(7)),
+        ("nested", dict(&[("deep", Value::Int(9))])),
+    ]);
+
+    let resolved = resolve_custom_data_stack(vec![strong, middle, weak]).expect("customData");
+    assert_eq!(
+        resolved,
+        vec![
+            dict_entry(
+                "nested",
+                dict(&[
+                    ("deep", dict(&[("x", Value::Int(1)), ("y", Value::Int(2))])),
+                    ("z", Value::Int(3)),
+                ]),
+            ),
+            dict_entry("only_strong", Value::string("s")),
+            dict_entry("only_weak", Value::Int(7)),
+            dict_entry(
+                "settings",
+                dict(&[("a", Value::Int(1)), ("b", Value::Int(2))]),
+            ),
+        ]
+    );
+}
+
+#[test]
+fn resolved_dictionary_keys_are_ordered_by_key() {
+    // `VtDictionary` iterates in key order; authored order is not preserved.
+    let resolved = resolve_custom_data_stack(vec![
+        dict(&[("zeta", Value::Int(1)), ("beta", Value::Int(2))]),
+        dict(&[("alpha", Value::Int(3))]),
+    ])
+    .expect("customData");
+    let keys: Vec<&str> = resolved.iter().map(|(key, _)| &**key).collect();
+    assert_eq!(keys, ["alpha", "beta", "zeta"]);
+}
+
+#[test]
+fn nested_dictionaries_from_one_opinion_are_key_ordered() {
+    // `VtDictionary` is a `std::map`: every level is key-ordered, whether or
+    // not it was merged with another opinion.
+    let resolved = resolve_custom_data_stack(vec![
+        dict(&[(
+            "strong_only",
+            dict(&[
+                ("z", Value::Int(1)),
+                ("y", dict(&[("q", Value::Int(2)), ("p", Value::Int(3))])),
+            ]),
+        )]),
+        dict(&[(
+            "weak_only",
+            dict(&[("n", Value::Int(4)), ("m", Value::Int(5))]),
+        )]),
+    ])
+    .expect("customData");
+    assert_eq!(
+        resolved,
+        vec![
+            dict_entry(
+                "strong_only",
+                dict(&[
+                    ("y", dict(&[("p", Value::Int(3)), ("q", Value::Int(2))])),
+                    ("z", Value::Int(1)),
+                ]),
+            ),
+            dict_entry(
+                "weak_only",
+                dict(&[("m", Value::Int(5)), ("n", Value::Int(4))])
+            ),
+        ]
+    );
+}
+
+#[test]
+fn single_opinion_dictionary_is_key_ordered_at_every_level() {
+    let resolved = resolve_custom_data_stack(vec![dict(&[
+        ("zeta", dict(&[("b", Value::Int(1)), ("a", Value::Int(2))])),
+        ("alpha", Value::Int(3)),
+    ])])
+    .expect("customData");
+    assert_eq!(
+        resolved,
+        vec![
+            dict_entry("alpha", Value::Int(3)),
+            dict_entry("zeta", dict(&[("a", Value::Int(2)), ("b", Value::Int(1))])),
+        ]
+    );
+}
+
+#[test]
+fn dictionary_block_discards_weaker_but_not_stronger_opinions() {
+    // Spec: AOUSD Core §12.3.6 — a block discards weaker opinions.
+    let resolved = resolve_custom_data_stack(vec![
+        dict(&[("a", Value::Int(1))]),
+        Value::Blocked,
+        dict(&[("b", Value::Int(2))]),
+    ])
+    .expect("stronger dictionary survives the block");
+    assert_eq!(resolved, vec![dict_entry("a", Value::Int(1))]);
+
+    assert_eq!(
+        resolve_custom_data_stack(vec![Value::Blocked, dict(&[("b", Value::Int(2))])]),
+        None,
+        "a strongest block suppresses the dictionary"
+    );
+}
+
+#[test]
+fn dictionary_combines_over_schema_fallback() {
+    // A schema dictionary fallback is the weakest opinion in the chain, as in
+    // OpenUSD's `MetadataValueComposer::ConsumeUsdFallback`.
+    // Spec: AOUSD Core §6.6.2.1, §13.3.2.4.
+    let mut store = InMemoryStore::default();
+    let mesh = store.tokens.intern("Mesh");
+    let field = store.tokens.intern("customData");
+    let p = store.path("/P");
+
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(
+        p,
+        PrimSpec::def()
+            .with_type_name(mesh)
+            .with_field(field, dict(&[("settings", dict(&[("a", Value::Int(1))]))])),
+    );
+    store.insert_layer(layer);
+
+    let mut registry = SchemaRegistry::new();
+    registry.register(SchemaDefinition::typed(mesh).with_property(
+        field,
+        dict(&[
+            (
+                "settings",
+                dict(&[("a", Value::Int(0)), ("c", Value::Int(3))]),
+            ),
+            ("version", Value::Int(1)),
+        ]),
+    ));
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let resolved = stage
+        .resolve_value_with_schema(p, field, &store, &registry, None)
+        .expect("customData");
+    assert_eq!(
+        resolved.value,
+        ResolvedValue::Dictionary(vec![
+            dict_entry(
+                "settings",
+                dict(&[("a", Value::Int(1)), ("c", Value::Int(3))]),
+            ),
+            dict_entry("version", Value::Int(1)),
+        ])
+    );
+}
+
+/// An independent, insertion-ordered implementation of strongest-first
+/// dictionary combining (AOUSD Core §6.6.2.1), used as a parity reference.
+/// Resolution must match it up to key order.
+fn reference_combine(
+    stronger: &[(Arc<str>, Value)],
+    weaker: &[(Arc<str>, Value)],
+) -> Vec<(Arc<str>, Value)> {
+    let mut result = stronger.to_vec();
+    for (key, weak_val) in weaker {
+        if let Some(pos) = result.iter().position(|(k, _)| k == key) {
+            if let (Value::Dictionary(s), Value::Dictionary(w)) = (&result[pos].1, weak_val) {
+                result[pos].1 = Value::Dictionary(reference_combine(s, w));
+            }
+        } else {
+            result.push((key.clone(), weak_val.clone()));
+        }
+    }
+    result
+}
+
+fn sorted_recursively(entries: &[(Arc<str>, Value)]) -> Vec<(Arc<str>, Value)> {
+    let mut out: Vec<(Arc<str>, Value)> = entries
+        .iter()
+        .map(|(key, value)| match value {
+            Value::Dictionary(nested) => {
+                (key.clone(), Value::Dictionary(sorted_recursively(nested)))
+            }
+            other => (key.clone(), other.clone()),
+        })
+        .collect();
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
+#[test]
+fn dictionary_resolution_matches_reference_fold_up_to_key_order() {
+    let stacks = vec![
+        vec![
+            dict(&[("a", Value::Int(1))]),
+            dict(&[("a", Value::Int(99)), ("b", Value::Int(2))]),
+        ],
+        vec![
+            dict(&[("sub", dict(&[("x", Value::Int(10))]))]),
+            dict(&[("sub", dict(&[("x", Value::Int(99)), ("y", Value::Int(20))]))]),
+        ],
+        vec![
+            dict(&[("s", dict(&[("a", Value::Int(1))]))]),
+            dict(&[("s", Value::Int(0))]),
+            dict(&[("s", dict(&[("b", Value::Int(2))]))]),
+        ],
+        vec![
+            dict(&[("s", Value::Int(0)), ("k", dict(&[("q", Value::Int(1))]))]),
+            dict(&[("s", dict(&[("a", Value::Int(1))])), ("k", Value::Int(4))]),
+            dict(&[("t", dict(&[("m", dict(&[("n", Value::Int(1))]))]))]),
+            dict(&[("t", dict(&[("m", dict(&[("o", Value::Int(2))]))]))]),
+        ],
+    ];
+
+    for stack in stacks {
+        let entries: Vec<Vec<(Arc<str>, Value)>> = stack
+            .iter()
+            .map(|value| match value {
+                Value::Dictionary(entries) => entries.clone(),
+                other => panic!("stack holds dictionaries only, got {other:?}"),
+            })
+            .collect();
+        let reference = entries
+            .iter()
+            .skip(1)
+            .fold(entries[0].clone(), |acc, weaker| {
+                reference_combine(&acc, weaker)
+            });
+
+        let resolved = resolve_custom_data_stack(stack).expect("customData");
+        assert_eq!(
+            resolved,
+            sorted_recursively(&resolved),
+            "output is key-ordered"
+        );
+        assert_eq!(resolved, sorted_recursively(&reference));
+    }
+}
+
 // ── Array value resolution ────────────────────────────────────────────
 
 #[test]

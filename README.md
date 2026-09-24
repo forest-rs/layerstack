@@ -17,6 +17,9 @@ value resolution) and to keep it honest via a growing, fixture-driven conformanc
 ## Repository layout
 
 - `layerstack/`: the core crate (no_std by default; `alloc`-only APIs where practical)
+- `opinionated/`: a dependency-free, no_std crate for layered sparse opinion resolution; owns
+  the `ListOp` kernel, recursive dictionary combining, and the `OpinionFamily` fold that
+  `layerstack` uses for sparse arrays
 - `layerstack_conformance/`: a std-only test harness that loads AOUSD supplemental fixtures and
   asserts behavior against `pcp.json` expectations
 - `layerstack_examples/`: runnable examples using the `layerstack` API

@@ -501,8 +501,13 @@ impl AssembleCtx<'_> {
                     }
                 }
                 "variantSetNames" => {
-                    // Ordered variant set names.
-                    let names = self.extract_token_names(value);
+                    // Ordered variant set names: a string list op (AOUSD
+                    // Core §7.6.2.3.5) whose items, in order, give the
+                    // variant sets' strength order.
+                    let names = match value {
+                        CrateValue::ListOp(listop) => self.list_op_names(listop),
+                        _ => self.extract_token_names(value),
+                    };
                     for name in names {
                         if !spec.variant_set_order.contains(&name) {
                             spec.variant_set_order.push(name);
@@ -1396,6 +1401,25 @@ impl AssembleCtx<'_> {
     }
 
     // ── Token/path helpers ──────────────────────────────────────────
+
+    /// Returns the names a token or string list op adds, in order: its
+    /// explicit, prepended and appended items.
+    fn list_op_names(&mut self, listop: &CrateListOp) -> Vec<TokenId> {
+        let mut names = Vec::new();
+        let items = listop.explicit_items.iter().flatten();
+        for item in items
+            .chain(&listop.prepended_items)
+            .chain(&listop.appended_items)
+        {
+            if let CrateValue::Token(name) | CrateValue::String(name) = item {
+                let name = self.tokens.intern(name);
+                if !names.contains(&name) {
+                    names.push(name);
+                }
+            }
+        }
+        names
+    }
 
     /// Extracts token names from a [`CrateValue`] (typically a `TokenVector`
     /// or `Array` of tokens).

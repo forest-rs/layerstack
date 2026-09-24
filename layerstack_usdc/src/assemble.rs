@@ -1813,6 +1813,7 @@ mod tests {
             fieldsets: Vec::new(),
             paths: Vec::new(),
             specs: Vec::new(),
+            version: crate::version::CrateVersion::NEWEST_READABLE,
         };
         let mut resolver = NoopResolver;
         let mut ctx = AssembleCtx {

@@ -1753,6 +1753,7 @@ mod tests {
             fieldsets: vec![],
             paths: vec![],
             specs: vec![],
+            version: crate::version::CrateVersion::NEWEST_READABLE,
         };
 
         let val = decode_value(&rep, &[], &sections).unwrap();
@@ -1777,6 +1778,7 @@ mod tests {
             fieldsets: vec![],
             paths: vec![],
             specs: vec![],
+            version: crate::version::CrateVersion::NEWEST_READABLE,
         };
 
         let val = decode_value(&rep, &[], &sections).unwrap();

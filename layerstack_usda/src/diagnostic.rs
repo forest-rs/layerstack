@@ -10,7 +10,10 @@ use crate::Span;
 /// Severity of a diagnostic.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Severity {
-    /// A fatal parse error. The resulting AST may be incomplete.
+    /// A fatal error. When parsing, the resulting AST may be incomplete;
+    /// when emitting, the emitted layer does not represent authored content
+    /// (for example unsupported relocates), so composition results will differ
+    /// from the source's intent.
     Error,
     /// A non-fatal warning.
     Warning,

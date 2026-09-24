@@ -196,13 +196,18 @@ impl<'a> LowerCtx<'a> {
     }
 
     fn lower_relocate_entry(&mut self, node: SyntaxNode<'_>) -> RelocateEntry<'a> {
+        let span = node.span();
         let paths: Vec<_> = node
             .children_no_trivia()
             .filter(|c| c.kind() == SyntaxKind::PathRef)
             .collect();
         let source = paths.first().map(|n| self.lower_path_ref(*n)).unwrap_or("");
         let target = paths.get(1).map(|n| self.lower_path_ref(*n)).unwrap_or("");
-        RelocateEntry { source, target }
+        RelocateEntry {
+            span,
+            source,
+            target,
+        }
     }
 
     // ── Prims ──────────────────────────────────────────────────────

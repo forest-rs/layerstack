@@ -478,6 +478,34 @@ mod tests {
     }
 
     #[test]
+    fn scoped_recompose_keeps_arc_cycle_errors() {
+        // `/P/C` inherits its parent: an arc cycle reported on `/P/C`.
+        let mut store = InMemoryStore::default();
+        let field_x = store.tokens.intern("x");
+        let parent = p(&mut store, "/P");
+        let child = p(&mut store, "/P/C");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(parent, PrimSpec::def());
+        layer.insert_prim(child, PrimSpec::def().with_inherit(parent));
+        store.insert_layer(layer);
+
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let errors = live.stage().composition_errors().to_vec();
+        assert_eq!(errors.len(), 1, "one cycle: {errors:?}");
+
+        {
+            let layer = store.layers.get_mut(&LayerId(1)).unwrap();
+            let spec = layer.prims.get_mut(&child).unwrap();
+            spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
+        }
+        live.notify_prim_edit(child);
+        let updated = live.recompose(&mut store);
+
+        assert!(updated.contains(&child), "the edited prim is recomposed");
+        assert_eq!(live.stage().composition_errors(), errors.as_slice());
+    }
+
+    #[test]
     fn structural_change_triggers_full_rebuild() {
         let mut store = InMemoryStore::default();
         let prim = p(&mut store, "/P");

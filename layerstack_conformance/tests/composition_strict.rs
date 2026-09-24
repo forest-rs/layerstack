@@ -68,9 +68,8 @@
 //!   authored in sublayers ([`Cause::InternalArcAnchoring`]),
 //!   declaration-only defaults ([`Cause::DeclarationDefault`]), conflicting
 //!   property spec types ([`Cause::PropertyTypeConflict`]), asset-path
-//!   expressions
-//!   ([`Cause::ExpressionVariables`]), variant fallbacks
-//!   ([`Cause::FallbackVariants`]) and arc cycles ([`SKIPPED`]).
+//!   expressions ([`Cause::ExpressionVariables`]) and variant fallbacks
+//!   ([`Cause::FallbackVariants`]).
 //!
 //! The test prints the per-cause tally and the list of exact matches.
 
@@ -576,12 +575,6 @@ const SKIPPED: &[(&str, &str)] = &[
         "no oracle: OpenUSD rejects `root.usd` (reference paths cannot contain variant \
          selections), so `pcp.txt` composes no prims",
     ),
-    (
-        "ErrorArcCycle_root",
-        "no arc-cycle detection: population recurses through the ancestral reference cycle \
-         `/AnotherParent/AnotherChild` -> `model.usd /Model` -> `/AnotherParent` until the \
-         stack overflows (`population::expand_reference_paths`)",
-    ),
 ];
 
 /// Every fixture that does not match the oracle exactly.
@@ -794,6 +787,15 @@ const KNOWN: &[Known] = &[
             D::ExtraRepeat,
         ],
         reason: "ignores `</CharBase/CharBaseRig/CollisionRig/Collision>` -> `</CharBase/Anim/Collision>` authored in `base.usd`",
+    },
+    Known {
+        fixture: "ErrorArcCycle_root",
+        causes: &[C::Relocates],
+        prims: 1,
+        props: 0,
+        values: 0,
+        diffs: &[D::MissingPrim],
+        reason: "ignores `</RelocatedInheritOfChild/Child/Object>` -> `</RelocatedInheritOfChild/Object>`, so the relocated prim is missing; every arc cycle is skipped as in OpenUSD",
     },
     Known {
         fixture: "ErrorConnectionPermissionDenied_root",
@@ -1604,11 +1606,11 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "bug74847_root",
         causes: &[C::AncestralArcs, C::DuplicateSources],
-        prims: 2,
+        prims: 1,
         props: 0,
         values: 0,
         diffs: &[D::ExtraSite, D::ExtraRepeat],
-        reason: "`/A/B` gains `payload.usd /A`, the parent of the payload target",
+        reason: "`/A/B/B` gains `ref.usd /A`, the parent of the reference target, and repeats its variant spec",
     },
     Known {
         fixture: "bug92827_root",

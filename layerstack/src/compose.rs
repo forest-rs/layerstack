@@ -15,6 +15,7 @@ use core::cmp::Ordering;
 use hashbrown::{HashMap, HashSet};
 
 use crate::{
+    arc_cycle::CycleDetector,
     arcs::{
         SelectionScope, resolve_branch_payloads_in, resolve_direct_references_for_prim,
         resolve_inherits_for_prim, resolve_inherits_for_prim_in, resolve_payloads_for_prim,
@@ -157,12 +158,8 @@ pub(crate) fn compose_stage(
     root: LayerId,
     options: StageOptions,
 ) -> Stage {
-    let mut sublayer_cycles = Vec::new();
-    let layer_stack = LayerStack::gather_reporting(store, root, &mut sublayer_cycles);
-    let errors: Vec<CompositionError> = sublayer_cycles
-        .into_iter()
-        .map(CompositionError::SublayerCycle)
-        .collect();
+    let mut cycles = CycleDetector::new(root);
+    let layer_stack = cycles.gather_layer_stack(store, root);
     let (paths, mut children) = populate(store, &layer_stack, options.mask.as_ref());
 
     let mut prims: HashMap<PathId, PrimIndex> = paths
@@ -197,6 +194,7 @@ pub(crate) fn compose_stage(
         &mut prims,
         &mut prim_order_opinions,
         &mut authored_children_opinions,
+        &mut cycles,
         dep_builder.as_mut(),
     );
     add_reference_opinions(
@@ -206,6 +204,7 @@ pub(crate) fn compose_stage(
         &mut prims,
         &mut prim_order_opinions,
         &mut authored_children_opinions,
+        &mut cycles,
         dep_builder.as_mut(),
     );
     add_payload_opinions(
@@ -215,6 +214,7 @@ pub(crate) fn compose_stage(
         &mut prims,
         &mut prim_order_opinions,
         &mut authored_children_opinions,
+        &mut cycles,
         dep_builder.as_mut(),
     );
     add_specializes_opinions(
@@ -224,6 +224,7 @@ pub(crate) fn compose_stage(
         &mut prims,
         &mut prim_order_opinions,
         &mut authored_children_opinions,
+        &mut cycles,
         dep_builder.as_mut(),
     );
 
@@ -259,6 +260,16 @@ pub(crate) fn compose_stage(
         builder.retain_prims(&prims);
     }
     let dependencies = dep_builder.map(DependencyBuilder::finish);
+    // Only prims of the composed stage report arc cycles: population
+    // over-approximates, and pruned prims are not part of the stage.
+    let errors = cycles
+        .into_errors()
+        .into_iter()
+        .filter(|error| match error {
+            CompositionError::ArcCycle(cycle) => prims.contains_key(&cycle.prim),
+            _ => true,
+        })
+        .collect();
     Stage::from_parts(prims, children, options.with_provenance, dependencies)
         .with_composition_errors(errors)
 }
@@ -2328,6 +2339,7 @@ fn add_reference_opinions(
     out: &mut HashMap<PathId, PrimIndex>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
+    cycles: &mut CycleDetector,
     mut deps: Option<&mut DependencyBuilder>,
 ) {
     // Spec: AOUSD Core §10 (references arcs). For v0.1 we expand references
@@ -2336,6 +2348,7 @@ fn add_reference_opinions(
     let mut visited_inherits: HashSet<(PathId, PathId)> = HashSet::new();
     let mut visited_specializes: HashSet<(PathId, PathId)> = HashSet::new();
     for dest_root in paths.iter().copied() {
+        cycles.begin(dest_root);
         let refs =
             resolve_references_for_prim(store, local_stack, dest_root, SelectionScope::Stack);
         // Also resolve variant child references with full selection chaining.
@@ -2372,6 +2385,7 @@ fn add_reference_opinions(
                 prim_order_out,
                 authored_children_out,
                 None,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -2385,6 +2399,7 @@ fn add_inherit_opinions(
     out: &mut HashMap<PathId, PrimIndex>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
+    cycles: &mut CycleDetector,
     mut deps: Option<&mut DependencyBuilder>,
 ) {
     // Spec: AOUSD Core §10 (inherits arc).
@@ -2392,6 +2407,7 @@ fn add_inherit_opinions(
     let mut visited_specializes: HashSet<(PathId, PathId)> = HashSet::new();
     let mut visited_refs: HashSet<(PathId, LayerId, PathId)> = HashSet::new();
     for dest_root in paths.iter().copied() {
+        cycles.begin(dest_root);
         let inherits =
             resolve_inherits_for_prim(store, local_stack, dest_root, SelectionScope::Stack);
         for (arc_list_index, inherited_root) in inherits.into_iter().enumerate() {
@@ -2411,6 +2427,7 @@ fn add_inherit_opinions(
                 local_stack,
                 dest_root,
                 inherited_root,
+                cycles.stage_layer_stack(),
                 None,
                 namespace_depth,
                 arc_list_index,
@@ -2423,6 +2440,7 @@ fn add_inherit_opinions(
                 None,
                 None,
                 LayerOffset::IDENTITY,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -2434,6 +2452,8 @@ fn add_inherit_edge_opinions(
     local_stack: &LayerStack,
     dest_root: PathId,
     inherited_root: PathId,
+    // Root layer of the layer stack the inherit is authored in.
+    arc_stack: LayerId,
     outer_arc_kind: Option<ArcKind>,
     namespace_depth: u16,
     arc_list_index: u16,
@@ -2450,11 +2470,24 @@ fn add_inherit_edge_opinions(
     // Accumulated offset from outer arcs (references/payloads). Composed with
     // each layer's sublayer offset to produce the final opinion offset.
     base_offset: LayerOffset,
+    cycles: &mut CycleDetector,
     mut deps: Option<&mut DependencyBuilder>,
 ) {
+    // An arc that would close a cycle is a composition error and is skipped
+    // (AOUSD Core §10.6; OpenUSD `_CheckForCycle`).
+    if cycles.closes_cycle(
+        store.paths_mut(),
+        dest_root,
+        arc_stack,
+        inherited_root,
+        ArcKind::Inherits,
+    ) {
+        return;
+    }
     if !visited.insert((dest_root, inherited_root)) {
         return;
     }
+    cycles.enter(arc_stack, inherited_root, dest_root, ArcKind::Inherits);
 
     let base_path = store.paths().resolve(dest_root).clone();
     let inherited_path = store.paths().resolve(inherited_root).clone();
@@ -2777,6 +2810,14 @@ fn add_inherit_edge_opinions(
         let src_index = out.get(&remote_path_id).cloned();
         if let Some(src_index) = src_index {
             for source in &src_index.sources {
+                if cycles.copies_cycle(
+                    store.paths(),
+                    dest_path_id,
+                    source.layer_id,
+                    source.spec_path.prim_path(),
+                ) {
+                    continue;
+                }
                 if source.arc_kind == ArcKind::Local {
                     continue;
                 }
@@ -2799,6 +2840,14 @@ fn add_inherit_edge_opinions(
             }
             for (field, opinions) in &src_index.opinions_by_field {
                 for opinion in opinions {
+                    if cycles.copies_cycle(
+                        store.paths(),
+                        dest_path_id,
+                        opinion.key.layer_id,
+                        opinion.key.spec_path.prim_path(),
+                    ) {
+                        continue;
+                    }
                     if opinion.key.arc_kind == ArcKind::Local {
                         continue;
                     }
@@ -2872,6 +2921,7 @@ fn add_inherit_edge_opinions(
                     local_stack,
                     dest_path_id,
                     translated,
+                    arc_stack,
                     outer_arc_kind,
                     namespace_depth,
                     nested_index,
@@ -2884,6 +2934,7 @@ fn add_inherit_edge_opinions(
                     ref_remap,
                     None,
                     base_offset,
+                    cycles,
                     deps.as_deref_mut(),
                 );
             }
@@ -2908,6 +2959,7 @@ fn add_inherit_edge_opinions(
                         local_stack,
                         dest_path_id,
                         parent_translated,
+                        arc_stack,
                         outer_arc_kind,
                         namespace_depth,
                         nested_index,
@@ -2920,6 +2972,7 @@ fn add_inherit_edge_opinions(
                         ref_remap,
                         None,
                         base_offset,
+                        cycles,
                         deps.as_deref_mut(),
                     );
                 }
@@ -2929,6 +2982,7 @@ fn add_inherit_edge_opinions(
                 local_stack,
                 dest_path_id,
                 nested,
+                arc_stack,
                 outer_arc_kind,
                 namespace_depth,
                 nested_index,
@@ -2941,6 +2995,7 @@ fn add_inherit_edge_opinions(
                 ref_remap,
                 None,
                 base_offset,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -2966,6 +3021,7 @@ fn add_inherit_edge_opinions(
                     dest_path_id,
                     dest_path_id,
                     translated,
+                    arc_stack,
                     outer_arc_kind,
                     namespace_depth,
                     spec_index,
@@ -2975,6 +3031,7 @@ fn add_inherit_edge_opinions(
                     authored_children_out,
                     None,
                     base_offset,
+                    cycles,
                     deps.as_deref_mut(),
                 );
             }
@@ -2991,6 +3048,7 @@ fn add_inherit_edge_opinions(
                         dest_path_id,
                         dest_path_id,
                         parent_translated,
+                        arc_stack,
                         outer_arc_kind,
                         namespace_depth,
                         spec_index,
@@ -3000,6 +3058,7 @@ fn add_inherit_edge_opinions(
                         authored_children_out,
                         None,
                         base_offset,
+                        cycles,
                         deps.as_deref_mut(),
                     );
                 }
@@ -3011,6 +3070,7 @@ fn add_inherit_edge_opinions(
                 dest_path_id,
                 dest_path_id,
                 specialized,
+                arc_stack,
                 outer_arc_kind,
                 namespace_depth,
                 spec_index,
@@ -3020,6 +3080,7 @@ fn add_inherit_edge_opinions(
                 authored_children_out,
                 None,
                 base_offset,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -3050,6 +3111,7 @@ fn add_inherit_edge_opinions(
                 prim_order_out,
                 authored_children_out,
                 None,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -3076,6 +3138,7 @@ fn add_inherit_edge_opinions(
                 prim_order_out,
                 authored_children_out,
                 None,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -3109,6 +3172,14 @@ fn add_inherit_edge_opinions(
         let src_index = out.get(&src_path_id).cloned();
         if let Some(src_index) = src_index {
             for source in &src_index.sources {
+                if cycles.copies_cycle(
+                    store.paths(),
+                    dest_path_id,
+                    source.layer_id,
+                    source.spec_path.prim_path(),
+                ) {
+                    continue;
+                }
                 let spec_path =
                     remap_spec_path(store, &source.spec_path, &base_path, &inherited_path);
                 out.get_mut(&dest_path_id)
@@ -3128,6 +3199,14 @@ fn add_inherit_edge_opinions(
             }
             for (field, opinions) in &src_index.opinions_by_field {
                 for opinion in opinions {
+                    if cycles.copies_cycle(
+                        store.paths(),
+                        dest_path_id,
+                        opinion.key.layer_id,
+                        opinion.key.spec_path.prim_path(),
+                    ) {
+                        continue;
+                    }
                     let spec_path =
                         remap_spec_path(store, &opinion.key.spec_path, &base_path, &inherited_path);
                     out.get_mut(&dest_path_id)
@@ -3153,6 +3232,7 @@ fn add_inherit_edge_opinions(
             }
         }
     }
+    cycles.exit();
 }
 
 fn remap_field_value_paths(
@@ -3298,6 +3378,7 @@ fn add_reference_edge_opinions(
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     provenance_remap: Option<(PathId, PathId)>,
+    cycles: &mut CycleDetector,
     mut deps: Option<&mut DependencyBuilder>,
 ) {
     // Arcs nested inside another arc stay in the outer arc's strength
@@ -3324,11 +3405,28 @@ fn add_reference_edge_opinions(
     let Some(reference_path) = resolve_reference_target_path(store, &reference) else {
         return;
     };
+    // An arc that would close a cycle is a composition error and is skipped
+    // (AOUSD Core §10.6; OpenUSD `_CheckForCycle`).
+    if cycles.closes_cycle(
+        store.paths_mut(),
+        dest_root,
+        reference.layer,
+        reference_path,
+        ArcKind::References,
+    ) {
+        return;
+    }
     if !visited.insert((dest_root, reference.layer, reference_path)) {
         return;
     }
+    cycles.enter(
+        reference.layer,
+        reference_path,
+        dest_root,
+        ArcKind::References,
+    );
 
-    let remote_stack = LayerStack::gather(store, reference.layer);
+    let remote_stack = cycles.gather_layer_stack(store, reference.layer);
     let combined_stack = LayerStack {
         layers: stage_stack
             .layers
@@ -3930,6 +4028,7 @@ fn add_reference_edge_opinions(
                     stage_stack,
                     dest_path_id,
                     translated,
+                    cycles.stage_layer_stack(),
                     Some(edge_arc_kind),
                     namespace_depth,
                     inherit_index,
@@ -3942,6 +4041,7 @@ fn add_reference_edge_opinions(
                     ref_remap,
                     None,
                     reference.layer_offset,
+                    cycles,
                     deps.as_deref_mut(),
                 );
             }
@@ -3951,6 +4051,7 @@ fn add_reference_edge_opinions(
                 &combined_stack,
                 dest_path_id,
                 inherited_root,
+                reference.layer,
                 Some(edge_arc_kind),
                 namespace_depth,
                 inherit_index,
@@ -3963,6 +4064,7 @@ fn add_reference_edge_opinions(
                 ref_remap,
                 None,
                 reference.layer_offset,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -3990,6 +4092,7 @@ fn add_reference_edge_opinions(
                 prim_order_out,
                 authored_children_out,
                 None,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -4015,6 +4118,7 @@ fn add_reference_edge_opinions(
                 prim_order_out,
                 authored_children_out,
                 None,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -4038,6 +4142,7 @@ fn add_reference_edge_opinions(
                     dest_path_id,
                     dest_path_id,
                     translated,
+                    cycles.stage_layer_stack(),
                     Some(edge_arc_kind),
                     namespace_depth,
                     spec_index,
@@ -4047,6 +4152,7 @@ fn add_reference_edge_opinions(
                     authored_children_out,
                     None,
                     reference.layer_offset,
+                    cycles,
                     deps.as_deref_mut(),
                 );
             }
@@ -4057,6 +4163,7 @@ fn add_reference_edge_opinions(
                 dest_path_id,
                 remote_path_id,
                 specialized_root,
+                reference.layer,
                 Some(edge_arc_kind),
                 namespace_depth,
                 spec_index,
@@ -4066,6 +4173,7 @@ fn add_reference_edge_opinions(
                 authored_children_out,
                 None,
                 reference.layer_offset,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -4078,6 +4186,14 @@ fn add_reference_edge_opinions(
         let src_index = out.get(&remote_path_id).cloned();
         if let Some(src_index) = src_index {
             for source in &src_index.sources {
+                if cycles.copies_cycle(
+                    store.paths(),
+                    dest_path_id,
+                    source.layer_id,
+                    source.spec_path.prim_path(),
+                ) {
+                    continue;
+                }
                 if source.arc_kind == ArcKind::Local {
                     continue;
                 }
@@ -4100,6 +4216,14 @@ fn add_reference_edge_opinions(
             }
             for (field, opinions) in &src_index.opinions_by_field {
                 for opinion in opinions {
+                    if cycles.copies_cycle(
+                        store.paths(),
+                        dest_path_id,
+                        opinion.key.layer_id,
+                        opinion.key.spec_path.prim_path(),
+                    ) {
+                        continue;
+                    }
                     if opinion.key.arc_kind == ArcKind::Local {
                         continue;
                     }
@@ -4153,6 +4277,7 @@ fn add_reference_edge_opinions(
             }
         }
     }
+    cycles.exit();
 }
 
 fn add_payload_opinions(
@@ -4162,6 +4287,7 @@ fn add_payload_opinions(
     out: &mut HashMap<PathId, PrimIndex>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
+    cycles: &mut CycleDetector,
     mut deps: Option<&mut DependencyBuilder>,
 ) {
     // Spec: AOUSD Core §10 (payloads arc, §5.1.22). Payloads are structurally
@@ -4171,6 +4297,7 @@ fn add_payload_opinions(
     let mut visited_inherits: HashSet<(PathId, PathId)> = HashSet::new();
     let mut visited_specializes: HashSet<(PathId, PathId)> = HashSet::new();
     for dest_root in paths.iter().copied() {
+        cycles.begin(dest_root);
         let payloads =
             resolve_payloads_for_prim(store, local_stack, dest_root, SelectionScope::Stack);
         // Also resolve variant branch-level payloads.
@@ -4207,6 +4334,7 @@ fn add_payload_opinions(
                 prim_order_out,
                 authored_children_out,
                 None,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -4228,6 +4356,7 @@ fn add_payload_edge_opinions(
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     provenance_remap: Option<(PathId, PathId)>,
+    cycles: &mut CycleDetector,
     mut deps: Option<&mut DependencyBuilder>,
 ) {
     // Arcs nested inside another arc stay in the outer arc's strength
@@ -4255,11 +4384,28 @@ fn add_payload_edge_opinions(
     let Some(reference_path) = resolve_reference_target_path(store, &reference) else {
         return;
     };
+    // An arc that would close a cycle is a composition error and is skipped
+    // (AOUSD Core §10.6; OpenUSD `_CheckForCycle`).
+    if cycles.closes_cycle(
+        store.paths_mut(),
+        dest_root,
+        reference.layer,
+        reference_path,
+        ArcKind::Payloads,
+    ) {
+        return;
+    }
     if !visited.insert((dest_root, reference.layer, reference_path)) {
         return;
     }
+    cycles.enter(
+        reference.layer,
+        reference_path,
+        dest_root,
+        ArcKind::Payloads,
+    );
 
-    let remote_stack = LayerStack::gather(store, reference.layer);
+    let remote_stack = cycles.gather_layer_stack(store, reference.layer);
     let combined_stack = LayerStack {
         layers: stage_stack
             .layers
@@ -4532,6 +4678,7 @@ fn add_payload_edge_opinions(
                     stage_stack,
                     dest_path_id,
                     translated,
+                    cycles.stage_layer_stack(),
                     Some(edge_arc_kind),
                     namespace_depth,
                     inherit_index,
@@ -4544,6 +4691,7 @@ fn add_payload_edge_opinions(
                     ref_remap,
                     None,
                     reference.layer_offset,
+                    cycles,
                     deps.as_deref_mut(),
                 );
             }
@@ -4553,6 +4701,7 @@ fn add_payload_edge_opinions(
                 &combined_stack,
                 dest_path_id,
                 inherited_root,
+                reference.layer,
                 Some(edge_arc_kind),
                 namespace_depth,
                 inherit_index,
@@ -4565,6 +4714,7 @@ fn add_payload_edge_opinions(
                 ref_remap,
                 None,
                 reference.layer_offset,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -4591,6 +4741,7 @@ fn add_payload_edge_opinions(
                 prim_order_out,
                 authored_children_out,
                 None,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -4616,6 +4767,7 @@ fn add_payload_edge_opinions(
                 prim_order_out,
                 authored_children_out,
                 None,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -4635,6 +4787,7 @@ fn add_payload_edge_opinions(
                     dest_path_id,
                     dest_path_id,
                     translated,
+                    cycles.stage_layer_stack(),
                     Some(edge_arc_kind),
                     namespace_depth,
                     spec_index,
@@ -4644,6 +4797,7 @@ fn add_payload_edge_opinions(
                     authored_children_out,
                     None,
                     reference.layer_offset,
+                    cycles,
                     deps.as_deref_mut(),
                 );
             }
@@ -4654,6 +4808,7 @@ fn add_payload_edge_opinions(
                 dest_path_id,
                 remote_path_id,
                 specialized_root,
+                reference.layer,
                 Some(edge_arc_kind),
                 namespace_depth,
                 spec_index,
@@ -4663,10 +4818,12 @@ fn add_payload_edge_opinions(
                 authored_children_out,
                 None,
                 reference.layer_offset,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
     }
+    cycles.exit();
 }
 
 fn add_specializes_opinions(
@@ -4676,12 +4833,14 @@ fn add_specializes_opinions(
     out: &mut HashMap<PathId, PrimIndex>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
+    cycles: &mut CycleDetector,
     mut deps: Option<&mut DependencyBuilder>,
 ) {
     // Spec: AOUSD Core §10 (specializes arc, §5.1.33). Specializes mirrors
     // inherits but sits at the weakest position in LIVERPS.
     let mut visited: HashSet<(PathId, PathId)> = HashSet::new();
     for dest_root in paths.iter().copied() {
+        cycles.begin(dest_root);
         let specializes =
             resolve_specializes_for_prim(store, local_stack, dest_root, SelectionScope::Stack);
         for (arc_list_index, specialized_root) in specializes.into_iter().enumerate() {
@@ -4702,6 +4861,7 @@ fn add_specializes_opinions(
                 dest_root,
                 dest_root,
                 specialized_root,
+                cycles.stage_layer_stack(),
                 None,
                 namespace_depth,
                 arc_list_index,
@@ -4711,6 +4871,7 @@ fn add_specializes_opinions(
                 authored_children_out,
                 None,
                 LayerOffset::IDENTITY,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -4724,6 +4885,8 @@ fn add_specializes_edge_opinions(
     dest_root: PathId,
     selection_root: PathId,
     specialized_root: PathId,
+    // Root layer of the layer stack the specializes arc is authored in.
+    arc_stack: LayerId,
     outer_arc_kind: Option<ArcKind>,
     namespace_depth: u16,
     arc_list_index: u16,
@@ -4734,11 +4897,24 @@ fn add_specializes_edge_opinions(
     provenance_remap: Option<(PathId, PathId)>,
     // Accumulated offset from outer arcs (references/payloads).
     base_offset: LayerOffset,
+    cycles: &mut CycleDetector,
     mut deps: Option<&mut DependencyBuilder>,
 ) {
+    // An arc that would close a cycle is a composition error and is skipped
+    // (AOUSD Core §10.6; OpenUSD `_CheckForCycle`).
+    if cycles.closes_cycle(
+        store.paths_mut(),
+        dest_root,
+        arc_stack,
+        specialized_root,
+        ArcKind::Specializes,
+    ) {
+        return;
+    }
     if !visited.insert((dest_root, specialized_root)) {
         return;
     }
+    cycles.enter(arc_stack, specialized_root, dest_root, ArcKind::Specializes);
 
     let base_path = store.paths().resolve(dest_root).clone();
     let selection_base_path = store.paths().resolve(selection_root).clone();
@@ -5032,6 +5208,14 @@ fn add_specializes_edge_opinions(
         let src_index = out.get(&remote_path_id).cloned();
         if let Some(src_index) = src_index {
             for source in &src_index.sources {
+                if cycles.copies_cycle(
+                    store.paths(),
+                    dest_path_id,
+                    source.layer_id,
+                    source.spec_path.prim_path(),
+                ) {
+                    continue;
+                }
                 if source.arc_kind == ArcKind::Local {
                     continue;
                 }
@@ -5054,6 +5238,14 @@ fn add_specializes_edge_opinions(
             }
             for (field, opinions) in &src_index.opinions_by_field {
                 for opinion in opinions {
+                    if cycles.copies_cycle(
+                        store.paths(),
+                        dest_path_id,
+                        opinion.key.layer_id,
+                        opinion.key.spec_path.prim_path(),
+                    ) {
+                        continue;
+                    }
                     if opinion.key.arc_kind == ArcKind::Local {
                         continue;
                     }
@@ -5124,6 +5316,7 @@ fn add_specializes_edge_opinions(
                     dest_path_id,
                     selection_path_id,
                     translated,
+                    arc_stack,
                     outer_arc_kind,
                     namespace_depth,
                     nested_index,
@@ -5133,6 +5326,7 @@ fn add_specializes_edge_opinions(
                     authored_children_out,
                     None,
                     base_offset,
+                    cycles,
                     deps.as_deref_mut(),
                 );
             }
@@ -5150,6 +5344,7 @@ fn add_specializes_edge_opinions(
                         dest_path_id,
                         selection_path_id,
                         parent_translated,
+                        arc_stack,
                         outer_arc_kind,
                         namespace_depth,
                         nested_index,
@@ -5159,6 +5354,7 @@ fn add_specializes_edge_opinions(
                         authored_children_out,
                         None,
                         base_offset,
+                        cycles,
                         deps.as_deref_mut(),
                     );
                 }
@@ -5170,6 +5366,7 @@ fn add_specializes_edge_opinions(
                 dest_path_id,
                 selection_path_id,
                 nested,
+                arc_stack,
                 outer_arc_kind,
                 namespace_depth,
                 nested_index,
@@ -5179,6 +5376,7 @@ fn add_specializes_edge_opinions(
                 authored_children_out,
                 None,
                 base_offset,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -5229,6 +5427,7 @@ fn add_specializes_edge_opinions(
                     dest_path_id,
                     selection_path_id,
                     translated,
+                    arc_stack,
                     outer_arc_kind,
                     namespace_depth,
                     nested_index,
@@ -5238,6 +5437,7 @@ fn add_specializes_edge_opinions(
                     authored_children_out,
                     None,
                     base_offset,
+                    cycles,
                     deps.as_deref_mut(),
                 );
             }
@@ -5259,6 +5459,7 @@ fn add_specializes_edge_opinions(
                         dest_path_id,
                         selection_path_id,
                         parent_translated,
+                        arc_stack,
                         outer_arc_kind,
                         namespace_depth,
                         nested_index,
@@ -5268,6 +5469,7 @@ fn add_specializes_edge_opinions(
                         authored_children_out,
                         None,
                         base_offset,
+                        cycles,
                         deps.as_deref_mut(),
                     );
                 }
@@ -5279,6 +5481,7 @@ fn add_specializes_edge_opinions(
                 dest_path_id,
                 selection_path_id,
                 inherited,
+                arc_stack,
                 outer_arc_kind,
                 namespace_depth,
                 nested_index,
@@ -5288,6 +5491,7 @@ fn add_specializes_edge_opinions(
                 authored_children_out,
                 None,
                 base_offset,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -5346,6 +5550,7 @@ fn add_specializes_edge_opinions(
                 prim_order_out,
                 authored_children_out,
                 None,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -5371,6 +5576,7 @@ fn add_specializes_edge_opinions(
                 prim_order_out,
                 authored_children_out,
                 None,
+                cycles,
                 deps.as_deref_mut(),
             );
         }
@@ -5382,6 +5588,14 @@ fn add_specializes_edge_opinions(
         let src_index = out.get(&remote_path_id).cloned();
         if let Some(src_index) = src_index {
             for source in &src_index.sources {
+                if cycles.copies_cycle(
+                    store.paths(),
+                    dest_path_id,
+                    source.layer_id,
+                    source.spec_path.prim_path(),
+                ) {
+                    continue;
+                }
                 if source.arc_kind == ArcKind::Local {
                     continue;
                 }
@@ -5404,6 +5618,14 @@ fn add_specializes_edge_opinions(
             }
             for (field, opinions) in &src_index.opinions_by_field {
                 for opinion in opinions {
+                    if cycles.copies_cycle(
+                        store.paths(),
+                        dest_path_id,
+                        opinion.key.layer_id,
+                        opinion.key.spec_path.prim_path(),
+                    ) {
+                        continue;
+                    }
                     if opinion.key.arc_kind == ArcKind::Local {
                         continue;
                     }
@@ -5435,6 +5657,7 @@ fn add_specializes_edge_opinions(
             }
         }
     }
+    cycles.exit();
 }
 
 fn apply_child_order(

@@ -1097,4 +1097,112 @@ mod tests {
             );
         }
     }
+
+    /// Builds a `Mesh`-typed `/A` whose `x` array field carries `opinions`
+    /// (strongest first) and whose schema fallback is `[5, 6]`.
+    fn schema_fallback_fixture(
+        opinions: Vec<FieldValue>,
+    ) -> (
+        Stage,
+        crate::doc::InMemoryStore,
+        SchemaRegistry,
+        PathId,
+        TokenId,
+    ) {
+        let mut store = crate::doc::InMemoryStore::default();
+        let prim = store.path("/A");
+        let field = store.tokens.intern("x");
+        let mesh = store.tokens.intern("Mesh");
+
+        let mut layer = crate::doc::Layer::new(LayerId(1));
+        layer.insert_prim(
+            prim,
+            crate::doc::PrimSpec {
+                type_name: Some(mesh),
+                ..crate::doc::PrimSpec::default()
+            },
+        );
+        store.insert_layer(layer);
+
+        let mut registry = SchemaRegistry::new();
+        registry.register(
+            crate::schema::SchemaDefinition::typed(mesh).with_property(field, array_value(&[5, 6])),
+        );
+
+        let mut index = PrimIndex::default();
+        let key = test_key(LayerId(1), prim);
+        index.add_source(key.clone());
+        index.add_property_type(field, key.clone(), int_array_type());
+        for (strength, value) in opinions.into_iter().enumerate() {
+            index.add_opinion(Opinion {
+                key: OpinionKey {
+                    layer_strength: u16::try_from(strength).expect("small fixture"),
+                    ..key.clone()
+                },
+                field,
+                value,
+                layer_offset: LayerOffset::IDENTITY,
+            });
+        }
+
+        let stage = Stage::from_parts(HashMap::from([(prim, index)]), HashMap::new(), false, None);
+        (stage, store, registry, prim, field)
+    }
+
+    fn append_edit(value: i32) -> Value {
+        Value::ArrayEdit(ArrayEdit {
+            ops: vec![ArrayEditOp::Insert {
+                src: ArrayEditOperand::Literal(Value::Int(value)),
+                index: ArrayIndex::End,
+            }],
+        })
+    }
+
+    /// A block discards weaker authored opinions (AOUSD Core §12.3.6), but
+    /// stronger sparse edits still compose over the weakest dense value that
+    /// survives it, the schema fallback or the empty array (sparse-array-edits
+    /// proposal, "Value Resolution").
+    #[test]
+    fn stronger_array_edit_over_block_materializes_over_fallback() {
+        let (stage, store, registry, prim, field) = schema_fallback_fixture(vec![
+            FieldValue::Value(append_edit(7)),
+            FieldValue::Value(Value::Blocked),
+            FieldValue::Value(array_value(&[1, 2])),
+        ]);
+
+        let without_schema = stage.resolve_value(prim, field).expect("edit resolves");
+        assert_eq!(
+            without_schema.value,
+            ResolvedValue::Scalar(array_value(&[7])),
+            "without a schema fallback the edit materializes over the empty array"
+        );
+
+        let with_schema = stage
+            .resolve_value_with_schema(prim, field, &store, &registry, None)
+            .expect("edit resolves");
+        assert_eq!(
+            with_schema.value,
+            ResolvedValue::Scalar(array_value(&[5, 6, 7])),
+            "the edit composes over the schema fallback, never over the blocked [1, 2]"
+        );
+    }
+
+    #[test]
+    fn strongest_array_block_resolves_to_schema_fallback() {
+        let (stage, store, registry, prim, field) = schema_fallback_fixture(vec![
+            FieldValue::Value(Value::Blocked),
+            FieldValue::Value(append_edit(7)),
+            FieldValue::Value(array_value(&[1, 2])),
+        ]);
+
+        assert_eq!(stage.resolve_value(prim, field), None);
+        let with_schema = stage
+            .resolve_value_with_schema(prim, field, &store, &registry, None)
+            .expect("fallback resolves");
+        assert_eq!(
+            with_schema.value,
+            ResolvedValue::Scalar(array_value(&[5, 6])),
+            "a strongest block yields the schema fallback unmodified (AOUSD Core §12.3.6)"
+        );
+    }
 }

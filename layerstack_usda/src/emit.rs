@@ -21,13 +21,15 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use layerstack::doc::{
-    FieldValue, Layer, LayerId, LayerOffset, PrimSpec, Reference, Specifier, SublayerEntry, Value,
-    VariantSpec, set_field_vec,
+    FieldEntry, FieldValue, Layer, LayerId, LayerOffset, PrimSpec, Reference, Specifier,
+    SublayerEntry, Value, VariantSpec, get_field_mut, set_field_vec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp;
 use layerstack::path::{Path, PathId, PathInterner, TargetPath};
-use layerstack::property::{PropertyEntry, PropertyKind, property_entry};
+use layerstack::property::{
+    PropertyEntry, PropertyKind, PropertySpec, Variability, property_entry,
+};
 use layerstack::spec_path::VariantSelectionSite;
 use layerstack::{
     ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, AssetResolver, PropertyType,
@@ -138,22 +140,30 @@ impl EmitCtx<'_> {
                         ));
                     }
                 }
-                ast::LayerMeta::Doc(_) => {
-                    // Layer-level metadata fields don't map to PrimSpec.
+                ast::LayerMeta::Doc(doc) => {
+                    // Spec: AOUSD Core §7.6.1.5.1 (`documentation`).
+                    let key = self.tokens.intern("documentation");
+                    set_field_vec(
+                        &mut layer.metadata,
+                        key,
+                        FieldValue::Value(Value::String(Arc::from(*doc))),
+                    );
                 }
-                ast::LayerMeta::Custom(entry) => {
+                ast::LayerMeta::Custom(entry) if entry.key == "defaultPrim" => {
                     // Spec: AOUSD Core §7.6.1.2.3 (`defaultPrim: token`),
                     // authored as a quoted string in USDA layer metadata.
-                    if entry.key == "defaultPrim" {
-                        let name = match &entry.value {
-                            ast::MetadataValue::Value(ast::Value::String(name)) => Some(*name),
-                            ast::MetadataValue::String(name) => Some(name.as_str()),
-                            _ => None,
-                        };
-                        if let Some(name) = name {
-                            layer.default_prim = Some(self.tokens.intern(name));
-                        }
+                    let name = match &entry.value {
+                        ast::MetadataValue::Value(ast::Value::String(name)) => Some(*name),
+                        ast::MetadataValue::String(name) => Some(name.as_str()),
+                        _ => None,
+                    };
+                    if let Some(name) = name {
+                        layer.default_prim = Some(self.tokens.intern(name));
                     }
+                }
+                ast::LayerMeta::Custom(entry) => {
+                    // Spec: AOUSD Core §7.6.1 (layer spec fields), §12.2.7.
+                    self.emit_metadata_entry(entry, &mut layer.metadata);
                 }
             }
         }
@@ -232,8 +242,11 @@ impl EmitCtx<'_> {
                 ast::PrimChild::ReorderNameChildren(names) => {
                     spec.prim_order = Some(names.iter().map(|n| self.tokens.intern(n)).collect());
                 }
-                ast::PrimChild::ReorderProperties(_) => {
-                    // Property ordering is not yet modeled in PrimSpec.
+                ast::PrimChild::ReorderProperties(names) => {
+                    // Spec: AOUSD Core §7.6.2.2.2 (`propertyChildren`); the
+                    // `reorder properties` statement authors `propertyOrder`.
+                    spec.property_order =
+                        Some(names.iter().map(|n| self.tokens.intern(n)).collect());
                 }
             }
         }
@@ -295,49 +308,97 @@ impl EmitCtx<'_> {
                         }
                     }
                 }
-                ast::PrimMeta::Kind(kind) => {
-                    let key = self.tokens.intern("kind");
-                    let val = self.tokens.intern(kind);
-                    set_field_vec(&mut spec.fields, key, FieldValue::Value(Value::Token(val)));
-                }
-                ast::PrimMeta::Doc(doc) => {
-                    let key = self.tokens.intern("documentation");
-                    set_field_vec(
-                        &mut spec.fields,
-                        key,
-                        FieldValue::Value(Value::String(Arc::from(*doc))),
-                    );
-                }
                 ast::PrimMeta::Custom(entry) if entry.key == "instanceable" => {
                     if let ast::MetadataValue::Value(ast::Value::Bool(b)) = &entry.value {
                         spec.instanceable = Some(*b);
+                    } else {
+                        self.emit_metadata_entry(entry, &mut spec.fields);
                     }
                 }
                 ast::PrimMeta::Custom(entry) if entry.key == "active" => {
                     if let ast::MetadataValue::Value(ast::Value::Bool(b)) = &entry.value {
                         spec.active = Some(*b);
+                    } else {
+                        self.emit_metadata_entry(entry, &mut spec.fields);
                     }
                 }
-                ast::PrimMeta::Custom(entry) => {
-                    let key = self.tokens.intern(entry.key);
-                    if entry.op != ast::ListOpKind::Explicit {
-                        // List-op on a token array (e.g. `prepend apiSchemas`).
-                        let items = self.extract_token_array(&entry.value);
-                        let mut list_op = ListOp::default();
-                        match entry.op {
-                            ast::ListOpKind::Prepend => list_op.prepend = items,
-                            ast::ListOpKind::Append => list_op.append = items,
-                            ast::ListOpKind::Delete => list_op.delete = items,
-                            ast::ListOpKind::Explicit => unreachable!(),
-                        }
-                        set_field_vec(&mut spec.fields, key, FieldValue::TokenListOp(list_op));
-                    } else {
-                        let val = self.convert_metadata_value(&entry.value);
-                        set_field_vec(&mut spec.fields, key, FieldValue::Value(val));
-                    }
+                ast::PrimMeta::Kind(_) | ast::PrimMeta::Doc(_) | ast::PrimMeta::Custom(_) => {
+                    self.emit_plain_prim_meta(meta, &mut spec.fields);
                 }
             }
         }
+    }
+
+    /// Emits a prim metadata entry that has no dedicated [`PrimSpec`]
+    /// member (`kind`, `doc`, `comment`, `apiSchemas`, `customData`,
+    /// `hidden`, …) into `fields`.
+    ///
+    /// Spec: AOUSD Core §7.6.2 (prim spec fields).
+    fn emit_plain_prim_meta(&mut self, meta: &ast::PrimMeta<'_>, fields: &mut Vec<FieldEntry>) {
+        match meta {
+            ast::PrimMeta::Kind(kind) => {
+                // Spec: AOUSD Core §7.6.2.4.4 (`kind: token`).
+                let key = self.tokens.intern("kind");
+                let val = self.tokens.intern(kind);
+                set_field_vec(fields, key, FieldValue::Value(Value::Token(val)));
+            }
+            ast::PrimMeta::Doc(doc) => {
+                // Spec: AOUSD Core §7.6.2.5.4 (`documentation`).
+                let key = self.tokens.intern("documentation");
+                set_field_vec(
+                    fields,
+                    key,
+                    FieldValue::Value(Value::String(Arc::from(*doc))),
+                );
+            }
+            ast::PrimMeta::Custom(entry) => self.emit_metadata_entry(entry, fields),
+            ast::PrimMeta::References(_)
+            | ast::PrimMeta::Inherits(_)
+            | ast::PrimMeta::Specializes(_)
+            | ast::PrimMeta::Payload(_)
+            | ast::PrimMeta::Variants(_)
+            | ast::PrimMeta::VariantSets(_) => {}
+        }
+    }
+
+    /// Emits one generic metadata entry into `fields`.
+    ///
+    /// Values are converted with the field's registered type where it is
+    /// known (see [`metadata_field_type`]), so `interpolation = "vertex"`
+    /// becomes a token and `metersPerUnit = 1` a double, as OpenUSD's text
+    /// parser does with its schema-registered field types. Repeated list-op
+    /// statements for one field combine into a single list op.
+    ///
+    /// Spec: AOUSD Core §7.4 (metadata fields), §12.2.6 (list ops).
+    fn emit_metadata_entry(
+        &mut self,
+        entry: &ast::MetadataEntry<'_>,
+        fields: &mut Vec<FieldEntry>,
+    ) {
+        let key_name = match entry.key {
+            // `doc` is the USDA spelling of the `documentation` field.
+            "doc" => "documentation",
+            key => key,
+        };
+        let key = self.tokens.intern(key_name);
+        let field_type = metadata_field_type(key_name);
+        if entry.op != ast::ListOpKind::Explicit || field_type == MetadataFieldType::TokenListOp {
+            let items = self.extract_token_array(&entry.value);
+            let mut list_op = ListOp::default();
+            match entry.op {
+                ast::ListOpKind::Explicit => list_op.explicit = Some(items),
+                ast::ListOpKind::Prepend => list_op.prepend = items,
+                ast::ListOpKind::Append => list_op.append = items,
+                ast::ListOpKind::Delete => list_op.delete = items,
+            }
+            match get_field_mut(fields, &key) {
+                Some(FieldValue::TokenListOp(existing)) => merge_path_listop(existing, list_op),
+                _ => set_field_vec(fields, key, FieldValue::TokenListOp(list_op)),
+            }
+            return;
+        }
+        let value = self.convert_metadata_value(&entry.value, field_type.type_hint());
+        set_field_vec(fields, key, FieldValue::Value(value));
     }
 
     // ── Properties ──────────────────────────────────────────────────
@@ -346,7 +407,7 @@ impl EmitCtx<'_> {
     ///
     /// USDA may split one attribute spec over several statements
     /// (`float a = 1`, `float a.timeSamples = {...}`, `float a.connect = ...`).
-    /// Each statement fills its own slot of the same [`PropertySpec`](layerstack::PropertySpec); no slot
+    /// Each statement fills its own slot of the same [`PropertySpec`]; no slot
     /// replaces another.
     ///
     /// Spec: AOUSD Core §7.6.4 (attribute spec fields), §16.2 (USDA grammar).
@@ -365,9 +426,30 @@ impl EmitCtx<'_> {
             .default
             .as_ref()
             .map(|value| self.convert_value(value, attr.type_name));
+        let mut metadata = Vec::new();
+        for entry in &attr.metadata {
+            self.emit_metadata_entry(entry, &mut metadata);
+        }
 
-        let spec = property_entry(properties, name_tok, PropertyKind::Attribute);
+        let Some(spec) = self.property_of_kind(
+            properties,
+            name_tok,
+            attr.name,
+            attr.span,
+            PropertyKind::Attribute,
+        ) else {
+            return;
+        };
         spec.type_name = Some(property_type);
+        // Qualifiers restated by any statement of the attribute hold for the
+        // whole spec (Core §7.6.3.1.1 `custom`, §7.6.4.1.2 `variability`).
+        spec.custom |= attr.custom;
+        if attr.uniform {
+            spec.variability = Variability::Uniform;
+        }
+        for entry in metadata {
+            set_field_vec(&mut spec.metadata, entry.name, entry.value);
+        }
         if let Some(listop) = connection {
             match spec.targets.as_mut() {
                 Some(existing) => merge_path_listop(existing, listop),
@@ -406,13 +488,61 @@ impl EmitCtx<'_> {
             listop
         });
 
-        let spec = property_entry(properties, name_tok, PropertyKind::Relationship);
+        let mut metadata = Vec::new();
+        for entry in &rel.metadata {
+            self.emit_metadata_entry(entry, &mut metadata);
+        }
+
+        let Some(spec) = self.property_of_kind(
+            properties,
+            name_tok,
+            rel.name,
+            rel.span,
+            PropertyKind::Relationship,
+        ) else {
+            return;
+        };
+        spec.custom |= rel.custom;
+        for entry in metadata {
+            set_field_vec(&mut spec.metadata, entry.name, entry.value);
+        }
         if let Some(listop) = listop {
             match spec.targets.as_mut() {
                 Some(existing) => merge_path_listop(existing, listop),
                 None => spec.targets = Some(listop),
             }
         }
+    }
+
+    /// Returns the property `name` of `kind`, creating it when absent.
+    ///
+    /// Attributes and relationships of one prim share a name space (Core
+    /// §7.3.3), so a statement of the other kind is reported and ignored
+    /// instead of silently merging two properties.
+    fn property_of_kind<'p>(
+        &mut self,
+        properties: &'p mut Vec<PropertyEntry>,
+        name_tok: TokenId,
+        name: &str,
+        span: crate::Span,
+        kind: PropertyKind,
+    ) -> Option<&'p mut PropertySpec> {
+        let spec = property_entry(properties, name_tok, kind);
+        if spec.kind == kind {
+            return Some(spec);
+        }
+        let (authored, ignored) = match kind {
+            PropertyKind::Attribute => ("relationship", "attribute"),
+            PropertyKind::Relationship => ("attribute", "relationship"),
+        };
+        self.diagnostics.push(Diagnostic::error(
+            span,
+            format!(
+                "`{name}` is already authored as a {authored} on this prim; \
+                 the {ignored} statement is ignored"
+            ),
+        ));
+        None
     }
 
     // ── Variant sets ────────────────────────────────────────────────
@@ -529,8 +659,11 @@ impl EmitCtx<'_> {
                             &branch_context,
                         );
                     }
-                    ast::PrimChild::ReorderNameChildren(_)
-                    | ast::PrimChild::ReorderProperties(_) => {}
+                    ast::PrimChild::ReorderProperties(names) => {
+                        variant_spec.property_order =
+                            Some(names.iter().map(|n| self.tokens.intern(n)).collect());
+                    }
+                    ast::PrimChild::ReorderNameChildren(_) => {}
                 }
             }
 
@@ -733,10 +866,12 @@ impl EmitCtx<'_> {
                         variant_spec.variant_selections.insert(set_tok, branch_tok);
                     }
                 }
-                ast::PrimMeta::VariantSets(_)
-                | ast::PrimMeta::Kind(_)
-                | ast::PrimMeta::Doc(_)
-                | ast::PrimMeta::Custom(_) => {}
+                ast::PrimMeta::Kind(_) | ast::PrimMeta::Doc(_) | ast::PrimMeta::Custom(_) => {
+                    // Spec: AOUSD Core §7.6.7 (variant specs contribute prim
+                    // spec fields).
+                    self.emit_plain_prim_meta(meta, &mut variant_spec.fields);
+                }
+                ast::PrimMeta::VariantSets(_) => {}
             }
         }
     }
@@ -757,7 +892,14 @@ impl EmitCtx<'_> {
 
         // Record the child's presence in this branch even when it authors no
         // fields: composition adds the branch as a source of the child.
-        variant_spec.child_fields.entry(child_tok).or_default();
+        let mut child_fields = variant_spec
+            .child_fields
+            .remove(&child_tok)
+            .unwrap_or_default();
+        for meta in &child_prim.metadata {
+            self.emit_plain_prim_meta(meta, &mut child_fields);
+        }
+        variant_spec.child_fields.insert(child_tok, child_fields);
 
         // Route properties.
         for child_child in &child_prim.children {
@@ -1079,9 +1221,9 @@ impl EmitCtx<'_> {
         }
     }
 
-    fn convert_metadata_value(&mut self, val: &ast::MetadataValue<'_>) -> Value {
+    fn convert_metadata_value(&mut self, val: &ast::MetadataValue<'_>, type_hint: &str) -> Value {
         match val {
-            ast::MetadataValue::Value(v) => self.convert_value(v, ""),
+            ast::MetadataValue::Value(v) => self.convert_value(v, type_hint),
             ast::MetadataValue::None => Value::Blocked,
             ast::MetadataValue::Dictionary(entries) => {
                 let dict_entries: Vec<(Arc<str>, Value)> = entries
@@ -1212,6 +1354,66 @@ impl EmitCtx<'_> {
 
 // ── Specifier conversion ────────────────────────────────────────────────
 
+/// The registered value type of a metadata field, as far as ingestion needs
+/// it to convert USDA literals.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MetadataFieldType {
+    /// Convert with this USDA type name.
+    Typed(&'static str),
+    /// A `tokenlistop` field: explicit assignments are list ops too.
+    TokenListOp,
+    /// Unregistered here: convert from the literal alone.
+    Unknown,
+}
+
+impl MetadataFieldType {
+    fn type_hint(self) -> &'static str {
+        match self {
+            Self::Typed(hint) => hint,
+            Self::TokenListOp | Self::Unknown => "",
+        }
+    }
+}
+
+/// Returns the registered type of a well-known metadata field.
+///
+/// USDA writes tokens and strings alike as quoted literals and integers
+/// without a type suffix, so the field's registered type decides the value
+/// type. The Sdf fields come from `pxr/usd/sdf/schema.cpp`
+/// (`_RegisterStandardFields`); the plugin fields from the `SdfMetadata`
+/// sections of `pxr/usd/usd/plugInfo.json`, `usdGeom/plugInfo.json`,
+/// `usdPhysics/plugInfo.json` and `usdShade/plugInfo.json`.
+///
+/// Spec: AOUSD Core §7.6 (core metadata fields and their types).
+fn metadata_field_type(key: &str) -> MetadataFieldType {
+    use MetadataFieldType::{TokenListOp, Typed, Unknown};
+    match key {
+        "kind"
+        | "colorSpace"
+        | "colorManagementSystem"
+        | "symmetryFunction"
+        | "upAxis"
+        | "interpolation"
+        | "connectability"
+        | "renderType"
+        | "bindMaterialAs"
+        | "outputName"
+        | "constraintTargetIdentifier" => Typed("token"),
+        "documentation" | "comment" | "displayName" | "displayGroup" | "owner" | "sessionOwner"
+        | "prefix" | "suffix" | "symmetricPeer" => Typed("string"),
+        "metersPerUnit" | "kilogramsPerUnit" | "timeCodesPerSecond" | "framesPerSecond"
+        | "startTimeCode" | "endTimeCode" | "startFrame" | "endFrame" => Typed("double"),
+        "elementSize" | "framePrecision" | "unauthoredValuesIndex" => Typed("int"),
+        "arraySizeConstraint" => Typed("int64"),
+        "hidden" | "active" | "instanceable" | "noLoadHint" => Typed("bool"),
+        "allowedTokens" => Typed("token[]"),
+        "displayGroupOrder" => Typed("string[]"),
+        "colorConfiguration" => Typed("asset"),
+        "apiSchemas" => TokenListOp,
+        _ => Unknown,
+    }
+}
+
 fn convert_specifier(spec: ast::Specifier) -> Specifier {
     match spec {
         ast::Specifier::Def => Specifier::Def,
@@ -1296,6 +1498,8 @@ fn element_type_hint(hint: &str) -> &str {
 
 fn convert_int(n: i64, type_hint: &str) -> Value {
     match type_hint {
+        // USDA writes `bool` values as `0` or `1` inside dictionaries.
+        "bool" => Value::Bool(n != 0),
         "int" => Value::Int(n as i32),
         "uint" => Value::UInt(n as u32),
         "int64" => Value::Int64(n),
@@ -1557,7 +1761,7 @@ mod tests {
     use alloc::vec;
 
     use layerstack::doc::get_field;
-    use layerstack::property::{PropertyEntry, PropertySpec, get_property};
+    use layerstack::property::{PropertyEntry, PropertySpec, Variability, get_property};
 
     /// The authored attribute default of `name`.
     fn attr_default<'a>(properties: &'a [PropertyEntry], name: &TokenId) -> Option<&'a Value> {
@@ -2685,5 +2889,316 @@ def \"A\" {
         let property_type = entry.type_name.as_ref().expect("property type");
         assert!(property_type.is_array);
         assert_eq!(property_type.default_scalar, Value::Int(0));
+    }
+
+    /// Returns the prim spec at `path` from an emit result.
+    fn prim<'r>(
+        result: &'r EmitResult,
+        tokens: &mut TokenInterner,
+        paths: &PathInterner,
+        path: &str,
+    ) -> &'r PrimSpec {
+        let path = Path::parse_absolute(path, tokens).unwrap();
+        let id = paths.lookup(&path).expect("path interned");
+        result.layer.prims.get(&id).expect("prim spec")
+    }
+
+    #[test]
+    fn emit_keeps_default_samples_and_connections_together() {
+        // Spec: AOUSD Core §7.6.4.2.3 (a value, a connection, or both).
+        let src = "\
+#usda 1.0
+def \"Root\" {
+    custom float a = 1
+    float a.timeSamples = {
+        0: 2,
+        1: None,
+    }
+    float b = 4
+    float b.connect = </Root.a>
+}
+";
+        let (result, mut tokens, paths) = emit_source(src);
+        let spec = prim(&result, &mut tokens, &paths, "/Root");
+        let a = prop(&spec.properties, &tokens.intern("a"));
+        assert!(a.custom);
+        assert_eq!(a.default, Some(Value::Float(1.0)));
+        assert_eq!(
+            a.time_samples.as_deref(),
+            Some(&[(0.0, Value::Float(2.0)), (1.0, Value::Blocked)][..])
+        );
+        let b = prop(&spec.properties, &tokens.intern("b"));
+        assert!(!b.custom);
+        assert_eq!(b.default, Some(Value::Float(4.0)));
+        assert!(
+            b.targets.is_some(),
+            "the connection survives next to the value"
+        );
+    }
+
+    #[test]
+    fn emit_property_qualifiers_and_metadata() {
+        let src = "\
+#usda 1.0
+def \"A\" {
+    custom uniform token authorship:main:tool = \"painter\" (
+        doc = \"Which tool\"
+    )
+    color3f[] primvars:displayColor = [(1, 0, 0)] (
+        \"a comment\"
+        colorSpace = \"srgb_texture\"
+        customData = {
+            string source = \"scan\"
+        }
+        elementSize = 1
+        interpolation = \"constant\"
+        limits = {
+            dictionary soft = {
+                float minimum = 0
+            }
+        }
+    )
+    custom rel look:material = </A/Mat> (
+        displayName = \"Look\"
+    )
+}
+";
+        let (result, mut tokens, paths) = emit_source(src);
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        let spec = prim(&result, &mut tokens, &paths, "/A");
+        let names: Vec<_> = spec.properties.iter().map(|e| e.name).collect();
+        assert_eq!(
+            names,
+            vec![
+                tokens.intern("authorship:main:tool"),
+                tokens.intern("primvars:displayColor"),
+                tokens.intern("look:material"),
+            ],
+            "properties keep their authored order"
+        );
+
+        let tool = prop(&spec.properties, &tokens.intern("authorship:main:tool"));
+        assert!(tool.custom);
+        assert_eq!(tool.variability, Variability::Uniform);
+        assert_eq!(
+            tool.metadata(tokens.intern("documentation")),
+            Some(&FieldValue::Value(Value::string("Which tool")))
+        );
+
+        let color = prop(&spec.properties, &tokens.intern("primvars:displayColor"));
+        assert!(!color.custom);
+        assert_eq!(color.variability, Variability::Varying);
+        let interpolation = tokens.intern("constant");
+        let srgb = tokens.intern("srgb_texture");
+        assert_eq!(
+            color.metadata(tokens.intern("interpolation")),
+            Some(&FieldValue::Value(Value::Token(interpolation))),
+            "`interpolation` is a token field"
+        );
+        assert_eq!(
+            color.metadata(tokens.intern("colorSpace")),
+            Some(&FieldValue::Value(Value::Token(srgb)))
+        );
+        assert_eq!(
+            color.metadata(tokens.intern("elementSize")),
+            Some(&FieldValue::Value(Value::Int(1))),
+            "`elementSize` is an int field"
+        );
+        assert_eq!(
+            color.metadata(tokens.intern("comment")),
+            Some(&FieldValue::Value(Value::string("a comment")))
+        );
+        assert!(matches!(
+            color.metadata(tokens.intern("customData")),
+            Some(FieldValue::Value(Value::Dictionary(_)))
+        ));
+        assert_eq!(
+            color.metadata(tokens.intern("limits")),
+            Some(&FieldValue::Value(Value::Dictionary(vec![(
+                Arc::from("soft"),
+                Value::Dictionary(vec![(Arc::from("minimum"), Value::Float(0.0))]),
+            )])))
+        );
+
+        let rel = prop(&spec.properties, &tokens.intern("look:material"));
+        assert!(rel.is_relationship());
+        assert!(rel.custom);
+        assert_eq!(
+            rel.metadata(tokens.intern("displayName")),
+            Some(&FieldValue::Value(Value::string("Look")))
+        );
+    }
+
+    #[test]
+    fn emit_prim_metadata_and_property_order() {
+        let src = "\
+#usda 1.0
+def Xform \"A\" (
+    \"prim comment\"
+    prepend apiSchemas = [\"GeomModelAPI\"]
+    append apiSchemas = [\"StudioReviewAPI:main\"]
+    displayName = \"The A\"
+    doc = \"Documented\"
+    hidden = true
+    kind = \"component\"
+)
+{
+    float y = 1
+    float x = 2
+    reorder properties = [\"x\", \"y\"]
+}
+";
+        let (result, mut tokens, paths) = emit_source(src);
+        let spec = prim(&result, &mut tokens, &paths, "/A");
+        let api = tokens.intern("apiSchemas");
+        let geom = tokens.intern("GeomModelAPI");
+        let review = tokens.intern("StudioReviewAPI:main");
+        assert_eq!(
+            spec.field(api),
+            Some(&FieldValue::TokenListOp(ListOp {
+                prepend: vec![geom],
+                append: vec![review],
+                ..ListOp::default()
+            })),
+            "list-op statements for one field combine"
+        );
+        assert_eq!(
+            spec.field(tokens.intern("comment")),
+            Some(&FieldValue::Value(Value::string("prim comment")))
+        );
+        assert_eq!(
+            spec.field(tokens.intern("documentation")),
+            Some(&FieldValue::Value(Value::string("Documented")))
+        );
+        assert_eq!(
+            spec.field(tokens.intern("hidden")),
+            Some(&FieldValue::Value(Value::Bool(true)))
+        );
+        assert_eq!(
+            spec.field(tokens.intern("displayName")),
+            Some(&FieldValue::Value(Value::string("The A")))
+        );
+        assert_eq!(
+            spec.property_order,
+            Some(vec![tokens.intern("x"), tokens.intern("y")])
+        );
+    }
+
+    #[test]
+    fn emit_explicit_api_schemas_is_a_list_op() {
+        let src = "#usda 1.0\ndef \"A\" (\n    apiSchemas = [\"GeomModelAPI\"]\n)\n{\n}\n";
+        let (result, mut tokens, paths) = emit_source(src);
+        let spec = prim(&result, &mut tokens, &paths, "/A");
+        let geom = tokens.intern("GeomModelAPI");
+        assert_eq!(
+            spec.field(tokens.intern("apiSchemas")),
+            Some(&FieldValue::TokenListOp(ListOp {
+                explicit: Some(vec![geom]),
+                ..ListOp::default()
+            }))
+        );
+    }
+
+    #[test]
+    fn emit_layer_metadata() {
+        let src = "\
+#usda 1.0
+(
+    \"layer comment\"
+    customLayerData = {
+        string author = \"me\"
+    }
+    defaultPrim = \"A\"
+    doc = \"About\"
+    metersPerUnit = 1
+    timeCodesPerSecond = 24
+    upAxis = \"Z\"
+)
+def \"A\" {
+}
+";
+        let (result, mut tokens, _paths) = emit_source(src);
+        let layer = &result.layer;
+        assert_eq!(layer.default_prim, Some(tokens.intern("A")));
+        let z = tokens.intern("Z");
+        assert_eq!(
+            layer.metadata(tokens.intern("upAxis")),
+            Some(&FieldValue::Value(Value::Token(z)))
+        );
+        assert_eq!(
+            layer.metadata(tokens.intern("metersPerUnit")),
+            Some(&FieldValue::Value(Value::Double(1.0))),
+            "`metersPerUnit` is a double field even when written as an integer"
+        );
+        assert_eq!(
+            layer.metadata(tokens.intern("timeCodesPerSecond")),
+            Some(&FieldValue::Value(Value::Double(24.0)))
+        );
+        assert_eq!(
+            layer.metadata(tokens.intern("documentation")),
+            Some(&FieldValue::Value(Value::string("About")))
+        );
+        assert_eq!(
+            layer.metadata(tokens.intern("comment")),
+            Some(&FieldValue::Value(Value::string("layer comment")))
+        );
+        assert!(matches!(
+            layer.metadata(tokens.intern("customLayerData")),
+            Some(FieldValue::Value(Value::Dictionary(_)))
+        ));
+        assert!(
+            layer.metadata(tokens.intern("defaultPrim")).is_none(),
+            "`defaultPrim` is kept in its dedicated member only"
+        );
+    }
+
+    #[test]
+    fn emit_reports_attribute_relationship_name_clash() {
+        // Spec: AOUSD Core §7.3.3 (properties of one prim share a name space).
+        let src = "#usda 1.0\ndef \"A\" {\n    float x = 1\n    rel x = </B>\n}\n";
+        let (result, mut tokens, paths) = emit_source(src);
+        assert_eq!(result.diagnostics.len(), 1, "{:?}", result.diagnostics);
+        assert_eq!(
+            result.diagnostics[0].span.text(src).trim_end(),
+            "rel x = </B>"
+        );
+        let spec = prim(&result, &mut tokens, &paths, "/A");
+        let x = prop(&spec.properties, &tokens.intern("x"));
+        assert!(x.is_attribute());
+        assert!(x.targets.is_none());
+    }
+
+    #[test]
+    fn emit_variant_branch_metadata_and_properties() {
+        let src = "\
+#usda 1.0
+def \"A\" (
+    variantSets = \"v\"
+)
+{
+    variantSet \"v\" = {
+        \"one\" (
+            kind = \"group\"
+        ) {
+            uniform token mode = \"fast\" (
+                doc = \"branch doc\"
+            )
+            reorder properties = [\"mode\"]
+        }
+    }
+}
+";
+        let (result, mut tokens, paths) = emit_source(src);
+        let spec = prim(&result, &mut tokens, &paths, "/A");
+        let branch = &spec.variant_sets[&tokens.intern("v")].variants[&tokens.intern("one")];
+        let group = tokens.intern("group");
+        assert_eq!(
+            get_field(&branch.fields, &tokens.intern("kind")),
+            Some(&FieldValue::Value(Value::Token(group)))
+        );
+        let mode = prop(&branch.properties, &tokens.intern("mode"));
+        assert_eq!(mode.variability, Variability::Uniform);
+        assert!(mode.metadata(tokens.intern("documentation")).is_some());
+        assert_eq!(branch.property_order, Some(vec![tokens.intern("mode")]));
     }
 }

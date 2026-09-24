@@ -1028,8 +1028,47 @@ impl<'a> Parser<'a> {
                 }
             }
         }
-        // Unknown suffix — just emit the dot.
-        self.bump();
+        // Another attribute field (for example `.spline`): keep the
+        // declaration, report the field and skip its value rather than
+        // misreading it as further statements.
+        let span = self.current_span();
+        self.bump(); // `.`
+        let field = if self.peek() == Some(TokenKind::Ident) {
+            let text = self.current_text();
+            self.bump();
+            text
+        } else {
+            ""
+        };
+        self.error(
+            span,
+            format!("unsupported: attribute field `.{field}` is not read; its value is ignored"),
+        );
+        self.eat_trivia();
+        if self.peek() == Some(TokenKind::Equals) {
+            self.bump();
+            self.eat_trivia();
+            self.skip_value_tokens();
+        }
+    }
+
+    /// Consumes one value's tokens without building value nodes: a bracketed
+    /// group (including nested groups) or a single token.
+    fn skip_value_tokens(&mut self) {
+        let mut depth = 0_usize;
+        while let Some(kind) = self.peek() {
+            self.bump();
+            match kind {
+                TokenKind::LeftBrace | TokenKind::LeftBracket | TokenKind::LeftParen => depth += 1,
+                TokenKind::RightBrace | TokenKind::RightBracket | TokenKind::RightParen => {
+                    depth = depth.saturating_sub(1);
+                }
+                _ => {}
+            }
+            if depth == 0 {
+                return;
+            }
+        }
     }
 
     fn parse_time_samples_suffix(&mut self) {
@@ -1673,6 +1712,28 @@ fn is_trivia(kind: TokenKind) -> bool {
 mod tests {
     use super::*;
     use crate::ast::*;
+
+    #[test]
+    fn parse_reports_unsupported_attribute_field() {
+        // USDA splines (`.spline`) are not parsed; the declaration survives
+        // and the field is reported instead of being misread.
+        let src = "#usda 1.0\ndef \"A\" {\n    double a.spline = {\n        1: 0; post held,\n    }\n    double b = 1\n}\n";
+        let result = parse(src);
+        assert_eq!(result.diagnostics.len(), 1, "{:?}", result.diagnostics);
+        assert!(result.diagnostics[0].message.contains("`.spline`"));
+        let children = &result.layer.prims[0].children;
+        assert_eq!(children.len(), 2, "{children:?}");
+        let PrimChild::Attribute(a) = &children[0] else {
+            panic!("expected attribute, got {:?}", children[0]);
+        };
+        assert_eq!((a.name, a.type_name), ("a", "double"));
+        assert!(a.default.is_none());
+        let PrimChild::Attribute(b) = &children[1] else {
+            panic!("expected attribute, got {:?}", children[1]);
+        };
+        assert_eq!(b.name, "b");
+        assert!(matches!(b.default, Some(Value::Int(1))));
+    }
 
     #[test]
     fn parse_minimal_layer() {

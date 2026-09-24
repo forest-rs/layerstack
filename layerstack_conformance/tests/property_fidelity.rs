@@ -161,6 +161,15 @@ fn metadata_matches_usdcat() {
     assert_matches_usdcat("metadata");
 }
 
+/// Relative inherits, specializes, connection and relationship paths are
+/// anchored to the authoring prim; `usdcat` writes them absolute.
+///
+/// Spec: AOUSD Core §8 (paths).
+#[test]
+fn relative_paths_match_usdcat() {
+    assert_matches_usdcat("relative_paths");
+}
+
 /// The roadmap probe: a default next to time samples, and a default next to
 /// a connection.
 ///

@@ -744,9 +744,7 @@ fn error_arc_cycle_root_layer_stack_matches() {
 /// it, and match the ordered prim stacks and child names in `pcp.txt`.
 ///
 /// Not checked: `/RelocatedInheritOfChild/Object` and its cycle error (no
-/// relocates support), and the `/InheritOfChild` cycle error, because USDA
-/// ingestion drops the relative inherit path `<Child>` that closes it (its
-/// prim stack still matches).
+/// relocates support).
 #[test]
 fn error_arc_cycle_root_composes() {
     let (mut loaded, _) = load_fixture("ErrorArcCycle_root");
@@ -888,6 +886,7 @@ fn error_arc_cycle_root_composes() {
         "</Parent/Child2>: @root.usd@</Parent/Child2> inherits @root.usd@</Parent/Child1> CANNOT inherits @root.usd@</Parent/Child2>",
         "</AnotherParent/AnotherChild>: @root.usd@</AnotherParent/AnotherChild> references @model.usd@</Model> CANNOT references @root.usd@</AnotherParent>",
         "</YetAnotherParent/Child>: @root.usd@</YetAnotherParent/Child> CANNOT inherits @root.usd@</YetAnotherParent>",
+        "</InheritOfChild>: @root.usd@</InheritOfChild> CANNOT inherits @root.usd@</InheritOfChild/Child>",
         "</CoRecursiveParent1/Child1/Child2>: @root.usd@</CoRecursiveParent1/Child1/Child2> inherits @root.usd@</CoRecursiveParent2/Child2> CANNOT inherits @root.usd@</CoRecursiveParent1>",
         "</CoRecursiveParent2/Child2/Child1>: @root.usd@</CoRecursiveParent2/Child2/Child1> inherits @root.usd@</CoRecursiveParent1/Child1> CANNOT inherits @root.usd@</CoRecursiveParent2>",
         "</RelocatedInheritOfChild/Child>: @root.usd@</RelocatedInheritOfChild/Child> CANNOT inherits @root.usd@</RelocatedInheritOfChild/Child/Class>",

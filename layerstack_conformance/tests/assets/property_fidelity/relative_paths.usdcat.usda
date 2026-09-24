@@ -1,0 +1,33 @@
+#usda 1.0
+
+def "Root"
+{
+    def "Rig"
+    {
+        class "Sym"
+        {
+        }
+
+        def "Left" (
+            inherits = </Root/Rig/Sym>
+            specializes = </Root/Rig/Left/Child>
+        )
+        {
+            float mirrored.connect = </Root/Rig/Sym.weight>
+            rel peer = [
+                </Root/Rig/Right>,
+                </Root/Rig/Left.weight>,
+            ]
+            float weight = 1
+
+            def "Child"
+            {
+            }
+        }
+
+        def "Right"
+        {
+        }
+    }
+}
+

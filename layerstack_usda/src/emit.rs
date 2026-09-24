@@ -223,10 +223,10 @@ impl EmitCtx<'_> {
         for child in &prim.children {
             match child {
                 ast::PrimChild::Attribute(attr) => {
-                    self.emit_attribute(attr, &mut spec.properties);
+                    self.emit_attribute(attr, &mut spec.properties, prim_path);
                 }
                 ast::PrimChild::Relationship(rel) => {
-                    self.emit_relationship(rel, &mut spec.properties);
+                    self.emit_relationship(rel, &mut spec.properties, prim_path);
                 }
                 ast::PrimChild::Prim(child_prim) => {
                     let child_name = self.tokens.intern(child_prim.name);
@@ -284,10 +284,13 @@ impl EmitCtx<'_> {
                     merge_ref_listop(&mut spec.payloads, self.emit_arc_listop(arc, prim_path));
                 }
                 ast::PrimMeta::Inherits(paths) => {
-                    merge_path_listop(&mut spec.inherits, self.emit_path_listop(paths));
+                    merge_path_listop(&mut spec.inherits, self.emit_path_listop(paths, prim_path));
                 }
                 ast::PrimMeta::Specializes(paths) => {
-                    merge_path_listop(&mut spec.specializes, self.emit_path_listop(paths));
+                    merge_path_listop(
+                        &mut spec.specializes,
+                        self.emit_path_listop(paths, prim_path),
+                    );
                 }
                 ast::PrimMeta::Variants(selections) => {
                     for sel in selections {
@@ -411,13 +414,18 @@ impl EmitCtx<'_> {
     /// replaces another.
     ///
     /// Spec: AOUSD Core §7.6.4 (attribute spec fields), §16.2 (USDA grammar).
-    fn emit_attribute(&mut self, attr: &ast::Attribute<'_>, properties: &mut Vec<PropertyEntry>) {
+    fn emit_attribute(
+        &mut self,
+        attr: &ast::Attribute<'_>,
+        properties: &mut Vec<PropertyEntry>,
+        anchor: &str,
+    ) {
         let name_tok = self.tokens.intern(attr.name);
         let property_type = self.declared_property_type(attr.type_name, attr.is_array);
         let connection = attr
             .connection
             .as_ref()
-            .map(|conn| self.emit_connection_listop(conn));
+            .map(|conn| self.emit_connection_listop(conn, anchor));
         let time_samples = attr
             .time_samples
             .as_ref()
@@ -471,13 +479,11 @@ impl EmitCtx<'_> {
         &mut self,
         rel: &ast::Relationship<'_>,
         properties: &mut Vec<PropertyEntry>,
+        anchor: &str,
     ) {
         let name_tok = self.tokens.intern(rel.name);
         let listop = rel.targets.as_ref().map(|targets| {
-            let target_paths: Vec<TargetPath> = targets
-                .iter()
-                .filter_map(|t| TargetPath::parse(t, self.tokens, self.paths).ok())
-                .collect();
+            let target_paths = self.target_paths(targets, anchor, rel.span);
             let mut listop = ListOp::default();
             match rel.op {
                 ast::ListOpKind::Explicit => listop.explicit = Some(target_paths),
@@ -584,10 +590,10 @@ impl EmitCtx<'_> {
             for child in &branch.children {
                 match child {
                     ast::PrimChild::Attribute(attr) => {
-                        self.emit_attribute(attr, &mut variant_spec.properties);
+                        self.emit_attribute(attr, &mut variant_spec.properties, prim_path);
                     }
                     ast::PrimChild::Relationship(rel) => {
-                        self.emit_relationship(rel, &mut variant_spec.properties);
+                        self.emit_relationship(rel, &mut variant_spec.properties, prim_path);
                     }
                     ast::PrimChild::Prim(child_prim) => {
                         let child_tok = self.tokens.intern(child_prim.name);
@@ -795,10 +801,10 @@ impl EmitCtx<'_> {
                         deeper_variant_sets.push((child_idx, deeper_ctx));
                     }
                     ast::PrimChild::Attribute(attr) => {
-                        self.emit_attribute(attr, &mut variant_spec.properties);
+                        self.emit_attribute(attr, &mut variant_spec.properties, prim_path);
                     }
                     ast::PrimChild::Relationship(rel) => {
-                        self.emit_relationship(rel, &mut variant_spec.properties);
+                        self.emit_relationship(rel, &mut variant_spec.properties, prim_path);
                     }
                     _ => {}
                 }
@@ -854,10 +860,16 @@ impl EmitCtx<'_> {
                     );
                 }
                 ast::PrimMeta::Inherits(paths) => {
-                    merge_path_listop(&mut variant_spec.inherits, self.emit_path_listop(paths));
+                    merge_path_listop(
+                        &mut variant_spec.inherits,
+                        self.emit_path_listop(paths, prim_path),
+                    );
                 }
                 ast::PrimMeta::Specializes(paths) => {
-                    merge_path_listop(&mut variant_spec.specializes, self.emit_path_listop(paths));
+                    merge_path_listop(
+                        &mut variant_spec.specializes,
+                        self.emit_path_listop(paths, prim_path),
+                    );
                 }
                 ast::PrimMeta::Variants(selections) => {
                     for sel in selections {
@@ -906,11 +918,11 @@ impl EmitCtx<'_> {
             match child_child {
                 ast::PrimChild::Attribute(attr) => {
                     let properties = variant_spec.child_properties.entry(child_tok).or_default();
-                    self.emit_attribute(attr, properties);
+                    self.emit_attribute(attr, properties, child_path);
                 }
                 ast::PrimChild::Relationship(rel) => {
                     let properties = variant_spec.child_properties.entry(child_tok).or_default();
-                    self.emit_relationship(rel, properties);
+                    self.emit_relationship(rel, properties, child_path);
                 }
                 ast::PrimChild::Prim(grandchild) => {
                     // Grandchild prims: record in child_authored_children.
@@ -956,14 +968,14 @@ impl EmitCtx<'_> {
                     }
                 }
                 ast::PrimMeta::Inherits(paths) => {
-                    let listop = self.emit_path_listop(paths);
+                    let listop = self.emit_path_listop(paths, child_path);
                     if has_path_content(&listop) {
                         let entry = variant_spec.child_inherits.entry(child_tok).or_default();
                         merge_path_listop(entry, listop);
                     }
                 }
                 ast::PrimMeta::Specializes(paths) => {
-                    let listop = self.emit_path_listop(paths);
+                    let listop = self.emit_path_listop(paths, child_path);
                     if has_path_content(&listop) {
                         let entry = variant_spec.child_specializes.entry(child_tok).or_default();
                         merge_path_listop(entry, listop);
@@ -1043,7 +1055,12 @@ impl EmitCtx<'_> {
         })
     }
 
-    fn emit_path_listop(&mut self, paths: &ast::ListOpPaths<'_>) -> ListOp<PathId> {
+    /// Converts an inherits or specializes list; relative paths resolve
+    /// against the prim path `anchor`.
+    ///
+    /// Spec: AOUSD Core §8 (paths; relative paths are anchored to the prim
+    /// that authors them).
+    fn emit_path_listop(&mut self, paths: &ast::ListOpPaths<'_>, anchor: &str) -> ListOp<PathId> {
         let Some(items) = &paths.items else {
             return ListOp {
                 explicit: Some(Vec::new()),
@@ -1054,9 +1071,17 @@ impl EmitCtx<'_> {
         let path_ids: Vec<PathId> = items
             .iter()
             .filter_map(|s| {
-                Path::parse_absolute(s, self.tokens)
-                    .ok()
-                    .map(|p| self.paths.intern(p))
+                let absolute = absolute_path(s, anchor);
+                match Path::parse_absolute(&absolute, self.tokens) {
+                    Ok(path) => Some(self.paths.intern(path)),
+                    Err(_) => {
+                        self.diagnostics.push(Diagnostic::error(
+                            paths.span,
+                            format!("unsupported: arc path `<{s}>` is not a prim path; ignored"),
+                        ));
+                        None
+                    }
+                }
             })
             .collect();
 
@@ -1070,12 +1095,12 @@ impl EmitCtx<'_> {
         listop
     }
 
-    fn emit_connection_listop(&mut self, conn: &ast::Connection<'_>) -> ListOp<TargetPath> {
-        let target_paths: Vec<TargetPath> = conn
-            .targets
-            .iter()
-            .filter_map(|t| TargetPath::parse(t, self.tokens, self.paths).ok())
-            .collect();
+    fn emit_connection_listop(
+        &mut self,
+        conn: &ast::Connection<'_>,
+        anchor: &str,
+    ) -> ListOp<TargetPath> {
+        let target_paths = self.target_paths(&conn.targets, anchor, conn.span);
 
         let mut listop = ListOp::default();
         match conn.op {
@@ -1085,6 +1110,34 @@ impl EmitCtx<'_> {
             ast::ListOpKind::Delete => listop.delete = target_paths,
         }
         listop
+    }
+
+    /// Parses relationship or connection targets; relative paths resolve
+    /// against the prim path `anchor`, and unparsable ones are reported.
+    ///
+    /// Spec: AOUSD Core §8 (paths), §12.4 (targets).
+    fn target_paths(
+        &mut self,
+        targets: &[&str],
+        anchor: &str,
+        span: crate::Span,
+    ) -> Vec<TargetPath> {
+        targets
+            .iter()
+            .filter_map(|target| {
+                let absolute = absolute_path(target, anchor);
+                match TargetPath::parse(&absolute, self.tokens, self.paths) {
+                    Ok(path) => Some(path),
+                    Err(_) => {
+                        self.diagnostics.push(Diagnostic::error(
+                            span,
+                            format!("unsupported: target path `<{target}>` is not read"),
+                        ));
+                        None
+                    }
+                }
+            })
+            .collect()
     }
 
     fn declared_property_type(&mut self, type_hint: &str, is_array: bool) -> PropertyType {
@@ -1353,6 +1406,48 @@ impl EmitCtx<'_> {
 }
 
 // ── Specifier conversion ────────────────────────────────────────────────
+
+/// Makes a USDA path absolute against the prim path `anchor`: `../B`,
+/// `Child`, `.attr` and `../B.attr` are relative, `/A/B` is not.
+///
+/// Spec: AOUSD Core §8 (paths).
+fn absolute_path(path: &str, anchor: &str) -> String {
+    if path.starts_with('/') {
+        return String::from(path);
+    }
+    let mut segments: Vec<&str> = anchor.split('/').filter(|s| !s.is_empty()).collect();
+    let mut rest = path;
+    loop {
+        if let Some(tail) = rest.strip_prefix("../") {
+            segments.pop();
+            rest = tail;
+        } else if rest == ".." {
+            segments.pop();
+            rest = "";
+        } else if let Some(tail) = rest.strip_prefix("./") {
+            rest = tail;
+        } else {
+            break;
+        }
+    }
+    let mut out = String::new();
+    for segment in &segments {
+        out.push('/');
+        out.push_str(segment);
+    }
+    if rest.starts_with('.') {
+        if out.is_empty() {
+            out.push('/');
+        }
+        out.push_str(rest);
+    } else if !rest.is_empty() {
+        out.push('/');
+        out.push_str(rest);
+    } else if out.is_empty() {
+        out.push('/');
+    }
+    out
+}
 
 /// The registered value type of a metadata field, as far as ingestion needs
 /// it to convert USDA literals.
@@ -3200,5 +3295,16 @@ def \"A\" (
         assert_eq!(mode.variability, Variability::Uniform);
         assert!(mode.metadata(tokens.intern("documentation")).is_some());
         assert_eq!(branch.property_order, Some(vec![tokens.intern("mode")]));
+    }
+
+    #[test]
+    fn absolute_path_anchors_relative_paths() {
+        assert_eq!(absolute_path("/A/B", "/X"), "/A/B");
+        assert_eq!(absolute_path("../Sym", "/Root/Rig/Left"), "/Root/Rig/Sym");
+        assert_eq!(absolute_path("Child", "/Root/Left"), "/Root/Left/Child");
+        assert_eq!(absolute_path(".weight", "/Root/Left"), "/Root/Left.weight");
+        assert_eq!(absolute_path("../B.attr", "/A/C"), "/A/B.attr");
+        assert_eq!(absolute_path("../..", "/A/B"), "/");
+        assert_eq!(absolute_path("./C", "/A"), "/A/C");
     }
 }

@@ -348,12 +348,20 @@ impl<'a> LowerCtx<'a> {
             "inherits" => {
                 let pl = sig.iter().find(|s| s.0 == SyntaxKind::PathList);
                 let pl_node = pl.map(|s| self.node_from(tree, s.1));
-                Some(PrimMeta::Inherits(self.lower_path_listop(pl_node, op)))
+                Some(PrimMeta::Inherits(self.lower_path_listop(
+                    pl_node,
+                    op,
+                    node.span(),
+                )))
             }
             "specializes" => {
                 let pl = sig.iter().find(|s| s.0 == SyntaxKind::PathList);
                 let pl_node = pl.map(|s| self.node_from(tree, s.1));
-                Some(PrimMeta::Specializes(self.lower_path_listop(pl_node, op)))
+                Some(PrimMeta::Specializes(self.lower_path_listop(
+                    pl_node,
+                    op,
+                    node.span(),
+                )))
             }
             "payload" => {
                 let arc_list = sig.iter().find(|s| s.0 == SyntaxKind::ArcList);
@@ -520,6 +528,7 @@ impl<'a> LowerCtx<'a> {
                 SyntaxKind::ConnectionSuffix => {
                     let targets = self.lower_connection(self.node_from(tree, id));
                     connection = Some(Connection {
+                        span,
                         op: list_op,
                         targets,
                     });
@@ -816,18 +825,28 @@ impl<'a> LowerCtx<'a> {
         &mut self,
         list_node: Option<SyntaxNode<'_>>,
         kind: ListOpKind,
+        span: Span,
     ) -> ListOpPaths<'a> {
         let Some(node) = list_node else {
-            return ListOpPaths { kind, items: None };
+            return ListOpPaths {
+                span,
+                kind,
+                items: None,
+            };
         };
         if node
             .children_no_trivia()
             .any(|c| c.kind() == SyntaxKind::Ident && self.text(c) == "None")
         {
-            return ListOpPaths { kind, items: None };
+            return ListOpPaths {
+                span,
+                kind,
+                items: None,
+            };
         }
         let items = self.lower_path_list(node);
         ListOpPaths {
+            span,
             kind,
             items: Some(items),
         }

@@ -892,12 +892,12 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "ImpliedAndAncestralInherits_ComplexEvaluation_root",
-        causes: &[C::AncestralArcs, C::ImpliedClasses, C::DuplicateSources],
-        prims: 20,
-        props: 8,
-        values: 2,
-        diffs: &[D::MissingPrim, D::MissingSite, D::ExtraRepeat, D::Order],
-        reason: "`/Root/B` misses `root.usd /_X/_Y` and `ref.usd /Ref`, reached through the ancestral inherit `/Root` -> `/_X`",
+        causes: &[C::NestedArcDepth, C::DuplicateSources],
+        prims: 16,
+        props: 7,
+        values: 3,
+        diffs: &[D::ExtraRepeat, D::Order],
+        reason: "the inherits of a nested arc target outrank the target: `ref.usd /Ref/C/_Z` sorts before `ref.usd /Ref/C/D`, so `D.prop` resolves to `ref:weak`",
     },
     Known {
         fixture: "ImpliedAndAncestralInherits_root",
@@ -1179,12 +1179,12 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "TrickyInheritsInVariants2_root",
-        causes: &[C::VariantSpecs, C::DuplicateSources],
+        causes: &[C::VariantSpecs, C::DuplicateSources, C::NestedArcDepth],
         prims: 5,
         props: 0,
         values: 0,
-        diffs: &[D::MissingSite, D::ExtraRepeat],
-        reason: "USDA ingestion keys variant descendants by namespace path, so the `tidscene` branch's `/Sarah/FaceRig/EyesRig` replaces the selected `full` branch's",
+        diffs: &[D::MissingSite, D::ExtraRepeat, D::Order],
+        reason: "USDA ingestion keys variant descendants by namespace path, so the `tidscene` branch's `/Sarah/FaceRig/EyesRig` replaces the selected `full` branch's; `LEyeRig`'s inherit `Sarah_rig.usd /Sarah/FaceRig/EyesRig/SymEyeRig` outranks its own target",
     },
     Known {
         fixture: "TrickyInheritsInVariants_root",
@@ -1405,7 +1405,7 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "TrickySpookyInheritsInSymmetricArmRig_root",
         causes: &[C::Relocates],
-        prims: 4,
+        prims: 3,
         props: 1,
         values: 1,
         diffs: &[D::MissingPrim, D::MissingSite],

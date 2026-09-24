@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 use layerstack_usda::writer::{Document, Value};
 use layerstack_usdz::{PackageFile, write_usdz};
 
-use crate::{CustomAttribute, ExportError, Mesh, Transform};
+use crate::{CustomAttribute, ExportError, Material, Mesh, Transform};
 
 /// Path of the root layer inside packages written by [`Scene::to_usdz`].
 pub const ROOT_LAYER_PATH: &str = "scene.usda";
@@ -126,20 +126,35 @@ impl<'a> Xform<'a> {
     }
 }
 
-/// A complete export: stage settings and one root prim, which becomes the
-/// layer's `defaultPrim`.
+/// A complete export: stage settings, one root prim, which becomes the
+/// layer's `defaultPrim`, and the materials meshes bind by name.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Scene<'a> {
     /// Stage metadata.
     pub stage: StageSettings,
     /// The single root prim.
     pub root: Xform<'a>,
+    /// Materials, written in order under
+    /// `/<root>/`[`Materials`](crate::MATERIALS_SCOPE), inside the root
+    /// prim so that a reference to the file brings its materials along.
+    pub materials: Vec<Material<'a>>,
 }
 
 impl<'a> Scene<'a> {
-    /// Creates a scene.
+    /// Creates a scene without materials.
     pub fn new(stage: StageSettings, root: Xform<'a>) -> Self {
-        Self { stage, root }
+        Self {
+            stage,
+            root,
+            materials: Vec::new(),
+        }
+    }
+
+    /// Adds a material.
+    #[must_use]
+    pub fn with_material(mut self, material: Material<'a>) -> Self {
+        self.materials.push(material);
+        self
     }
 
     /// Validates the scene and maps it to an authored USDA document.
@@ -149,8 +164,12 @@ impl<'a> Scene<'a> {
     /// # Errors
     ///
     /// [`ExportError::InvalidMesh`] for inconsistent topology or primvar
-    /// sizes, [`ExportError::InvalidStage`] for unusable stage settings, and
-    /// [`ExportError::Usda`] for names or values USDA cannot represent.
+    /// sizes, or a bound material whose UV set the mesh lacks;
+    /// [`ExportError::InvalidStage`] for unusable stage settings;
+    /// [`ExportError::InvalidMaterial`] for unusable material inputs;
+    /// [`ExportError::UnknownMaterial`] for a binding to an undefined
+    /// material; and [`ExportError::Usda`] for names or values USDA cannot
+    /// represent (including duplicate material names).
     pub fn to_document(&self) -> Result<Document, ExportError> {
         crate::build::document(self)
     }
@@ -170,10 +189,12 @@ impl<'a> Scene<'a> {
     /// followed by `assets` (e.g. textures) in order. Assets must be USD,
     /// image or audio files ([`layerstack_usdz::writer::MEMBER_EXTENSIONS`]).
     /// The package must be self-contained: every asset path the scene
-    /// authors (asset-valued custom attributes, including asset arrays) must name
-    /// one of `assets` by its package path, e.g. `@textures/albedo.png@`
-    /// (a leading `./` is allowed). Those paths resolve relative to the
-    /// root layer, i.e. inside the package, wherever the package is moved.
+    /// authors (material texture files, which become `UsdUVTexture`
+    /// `inputs:file`, and asset-valued custom attributes, including asset
+    /// arrays) must name one of `assets` by its package path, e.g.
+    /// `@textures/albedo.png@` (a leading `./` is allowed). Those paths
+    /// resolve relative to the root layer, i.e. inside the package,
+    /// wherever the package is moved.
     ///
     /// # Errors
     ///
@@ -183,6 +204,9 @@ impl<'a> Scene<'a> {
     pub fn to_usdz(&self, assets: &[PackageFile<'_>]) -> Result<Vec<u8>, ExportError> {
         let mut authored = Vec::new();
         collect_xform_assets(&self.root, &mut authored);
+        for material in &self.materials {
+            authored.extend(material.textures().map(|t| t.file));
+        }
         for asset in authored {
             let path = asset.strip_prefix("./").unwrap_or(asset);
             if !assets.iter().any(|file| file.path == path) {

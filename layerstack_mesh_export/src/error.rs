@@ -21,6 +21,20 @@ pub enum ExportError {
     },
     /// `metersPerUnit` is not finite and positive.
     InvalidStage,
+    /// A material's inputs are unusable.
+    InvalidMaterial {
+        /// Prim path of the material (e.g. `/Root/Materials/Steel`).
+        path: String,
+        /// What is wrong.
+        problem: MaterialProblem,
+    },
+    /// A mesh binds a material name that the scene does not define.
+    UnknownMaterial {
+        /// Prim path of the binding prim (the mesh).
+        path: String,
+        /// The material name.
+        material: String,
+    },
     /// An authored asset path names no file in the package being written.
     UnpackagedAsset {
         /// The asset path as authored.
@@ -92,6 +106,26 @@ pub enum MeshProblem {
         /// Number of values.
         values: usize,
     },
+    /// A bound material reads textures through a UV set the mesh does not
+    /// author as a `texCoord2f[]` or `float2[]` primvar.
+    MissingTexCoords {
+        /// The material name.
+        material: String,
+        /// The UV set (primvar name without `primvars:`).
+        uv_set: String,
+    },
+}
+
+/// A specific problem with a material's inputs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum MaterialProblem {
+    /// A constant, scale, bias or threshold is NaN or infinite.
+    NonFinite {
+        /// The shader input (e.g. `inputs:roughness`).
+        input: &'static str,
+    },
+    /// A texture has an empty file path.
+    EmptyTexturePath,
 }
 
 impl fmt::Display for ExportError {
@@ -99,6 +133,10 @@ impl fmt::Display for ExportError {
         match self {
             Self::InvalidMesh { path, problem } => write!(f, "{path}: {problem}"),
             Self::InvalidStage => write!(f, "metersPerUnit must be finite and positive"),
+            Self::InvalidMaterial { path, problem } => write!(f, "{path}: {problem}"),
+            Self::UnknownMaterial { path, material } => {
+                write!(f, "{path}: binds undefined material {material:?}")
+            }
             Self::UnpackagedAsset { asset } => {
                 write!(f, "asset path {asset:?} names no file in the package")
             }
@@ -144,6 +182,19 @@ impl fmt::Display for MeshProblem {
                 f,
                 "{name} index {index} is out of range for {values} values"
             ),
+            Self::MissingTexCoords { material, uv_set } => write!(
+                f,
+                "material {material:?} reads UV set {uv_set:?}, which the mesh does not author"
+            ),
+        }
+    }
+}
+
+impl fmt::Display for MaterialProblem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NonFinite { input } => write!(f, "{input} is not finite"),
+            Self::EmptyTexturePath => write!(f, "texture file path is empty"),
         }
     }
 }

@@ -723,6 +723,58 @@ fn math_type_info(vtype: ValueType) -> (usize, usize) {
     }
 }
 
+/// Expands an inlined vector or matrix into its little-endian element bytes.
+///
+/// OpenUSD inlines a vector whose components are all exactly representable
+/// as `int8_t`, storing one `int8_t` per component, and a matrix that is
+/// zero off the diagonal with `int8_t`-representable diagonal entries,
+/// storing the diagonal (`pxr/usd/sdf/crateValueInliners.h:90`). Quaternions
+/// are never inlined.
+fn decode_inlined_math(
+    rep: &RawValueRep,
+    vtype: ValueType,
+    elem_count: usize,
+    elem_size: usize,
+) -> Result<Vec<u8>, UsdcError> {
+    let p = rep.payload();
+    let component = |i: usize| f64::from(p[i].cast_signed());
+    let components: Vec<f64> = match vtype {
+        ValueType::Matrix2d | ValueType::Matrix3d | ValueType::Matrix4d => {
+            let rows = match vtype {
+                ValueType::Matrix2d => 2,
+                ValueType::Matrix3d => 3,
+                _ => 4,
+            };
+            let mut m = vec![0.0; rows * rows];
+            for i in 0..rows {
+                m[i * rows + i] = component(i);
+            }
+            m
+        }
+        ValueType::Quatd | ValueType::Quatf | ValueType::Quath => {
+            return Err(UsdcError::Inconsistent {
+                message: "quaternion values are never inlined",
+            });
+        }
+        _ => (0..elem_count).map(component).collect(),
+    };
+
+    let mut buf = Vec::with_capacity(elem_count * elem_size);
+    for value in components {
+        match (vtype, elem_size) {
+            (ValueType::Vec2i | ValueType::Vec3i | ValueType::Vec4i, _) => {
+                #[allow(clippy::cast_possible_truncation, reason = "value is an int8")]
+                buf.extend_from_slice(&(value as i32).to_le_bytes());
+            }
+            (_, 2) => buf.extend_from_slice(&f64_to_half_bits(value).to_le_bytes()),
+            #[allow(clippy::cast_possible_truncation, reason = "value is an int8")]
+            (_, 4) => buf.extend_from_slice(&(value as f32).to_le_bytes()),
+            _ => buf.extend_from_slice(&value.to_le_bytes()),
+        }
+    }
+    Ok(buf)
+}
+
 fn decode_math_type(
     rep: &RawValueRep,
     data: &[u8],
@@ -732,14 +784,9 @@ fn decode_math_type(
     let total_bytes = elem_count * elem_size;
 
     if rep.is_inlined() && !rep.is_array() {
-        // Inlined math: small types fit in 6 payload bytes.
-        let p = rep.payload();
-        let mut buf = vec![0_u8; total_bytes];
-        let copy_len = total_bytes.min(p.len());
-        buf[..copy_len].copy_from_slice(&p[..copy_len]);
         return Ok(CrateValue::Opaque {
             value_type: vtype,
-            data: buf,
+            data: decode_inlined_math(rep, vtype, elem_count, elem_size)?,
         });
     }
 
@@ -1804,6 +1851,51 @@ mod tests {
         // -1.0 in half = 0xBC00
         let f = half_to_f32(0xBC00);
         assert!((f - (-1.0)).abs() < 1e-6);
+    }
+
+    fn inlined(vtype: ValueType, payload: [u8; 4]) -> RawValueRep {
+        let mut bytes = [0_u8; 8];
+        bytes[..4].copy_from_slice(&payload);
+        bytes[6] = vtype as u8;
+        bytes[7] = 0x40; // is_inlined
+        RawValueRep::new(bytes)
+    }
+
+    #[test]
+    fn inlined_vectors_hold_int8_components() {
+        let rep = inlined(ValueType::Vec3f, [1, 2, 0xFD, 0]);
+        let (count, size) = math_type_info(ValueType::Vec3f);
+        let bytes = decode_inlined_math(&rep, ValueType::Vec3f, count, size).unwrap();
+        let expected: Vec<u8> = [1.0_f32, 2.0, -3.0]
+            .iter()
+            .flat_map(|v| v.to_le_bytes())
+            .collect();
+        assert_eq!(bytes, expected);
+
+        let rep = inlined(ValueType::Vec2i, [0xFF, 7, 0, 0]);
+        let (count, size) = math_type_info(ValueType::Vec2i);
+        let bytes = decode_inlined_math(&rep, ValueType::Vec2i, count, size).unwrap();
+        let expected: Vec<u8> = [-1_i32, 7].iter().flat_map(|v| v.to_le_bytes()).collect();
+        assert_eq!(bytes, expected);
+    }
+
+    #[test]
+    fn inlined_matrices_hold_the_diagonal() {
+        let rep = inlined(ValueType::Matrix2d, [2, 0xFF, 0, 0]);
+        let (count, size) = math_type_info(ValueType::Matrix2d);
+        let bytes = decode_inlined_math(&rep, ValueType::Matrix2d, count, size).unwrap();
+        let expected: Vec<u8> = [2.0_f64, 0.0, 0.0, -1.0]
+            .iter()
+            .flat_map(|v| v.to_le_bytes())
+            .collect();
+        assert_eq!(bytes, expected);
+    }
+
+    #[test]
+    fn inlined_quaternions_are_rejected() {
+        let rep = inlined(ValueType::Quatf, [1, 0, 0, 0]);
+        let (count, size) = math_type_info(ValueType::Quatf);
+        assert!(decode_inlined_math(&rep, ValueType::Quatf, count, size).is_err());
     }
 
     #[test]

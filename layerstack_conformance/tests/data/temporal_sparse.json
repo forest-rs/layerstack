@@ -1,0 +1,6084 @@
+{
+ "generator": "layerstack_conformance/scripts/temporal_sparse_oracle.py",
+ "openusd_version": "0.26.8",
+ "divergences": {
+  "nan-before-first-sample": "OpenUSD gives defaults and fallbacks the sample time -inf (pxr/usd/usd/stage.cpp, `_GetValueFromResolveInfoImpl`). Before the first composed time sample, the bracketing samples are (-inf, first) and `Usd_Interpolate` computes alpha = inf/inf, so interpolating types resolve to NaN under both held and linear interpolation. Composed and flattened stages agree on the first sample's value.",
+  "override-early-stop": "After a non-composing lower sample moves the query to the upper sample's time, `_ResolveInfoResolver::ProcessLayerAtTime` stops at a weaker series whose upper sample does not compose, although its held value at that time does. Weaker opinions then drop out of the interpolated upper sample, so the value differs from the value at the upper sample's own time and from the flattened stage. The proposal's `Evaluate` (sparse-array-edits README, 'Evaluating a Strength-Ordering of Samples at a Specific Time') keeps composing and agrees with the flattened stage.",
+  "transparent-sampled-block": "A sampled block that is a weaker series' lower bracketing sample, with a composing upper sample, contributes no samples (`_GetInterpolatingSamplesImpl` clears them) while the chain continues past it, so opinions weaker than the block show through. A block discards weaker opinions (AOUSD Core 12.3.6), and OpenUSD honours that at the block's own sample time."
+ },
+ "cases": [
+  {
+   "name": "usd_basics_samples_over_default",
+   "description": "TestBasics: session-layer sparse samples compose over the root layer's dense default.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @session.usda@,\n        @base.usda@\n    ]\n)\n",
+    "session.usda": "#usda 1.0\nover \"TestBasics\"\n{\n    int[] attr.timeSamples = { 3: edit (prepend 3, append 3), 6: edit (prepend 6, append 7) }\n}\n",
+    "base.usda": "#usda 1.0\ndef \"TestBasics\"\n{\n    int[] attr = [3, 2, 1]\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/TestBasics.attr",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      3.0,
+      3.0,
+      2.0,
+      1.0,
+      3.0
+     ],
+     "flattened": [
+      3.0,
+      3.0,
+      2.0,
+      1.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      3.0,
+      3.0,
+      2.0,
+      1.0,
+      3.0
+     ],
+     "flattened": [
+      3.0,
+      3.0,
+      2.0,
+      1.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 3,
+     "interp": "held",
+     "openusd": [
+      3.0,
+      3.0,
+      2.0,
+      1.0,
+      3.0
+     ],
+     "flattened": [
+      3.0,
+      3.0,
+      2.0,
+      1.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 3,
+     "interp": "linear",
+     "openusd": [
+      3.0,
+      3.0,
+      2.0,
+      1.0,
+      3.0
+     ],
+     "flattened": [
+      3.0,
+      3.0,
+      2.0,
+      1.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 5,
+     "interp": "held",
+     "openusd": [
+      3.0,
+      3.0,
+      2.0,
+      1.0,
+      3.0
+     ],
+     "flattened": [
+      3.0,
+      3.0,
+      2.0,
+      1.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 5,
+     "interp": "linear",
+     "openusd": [
+      3.0,
+      3.0,
+      2.0,
+      1.0,
+      3.0
+     ],
+     "flattened": [
+      3.0,
+      3.0,
+      2.0,
+      1.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 6,
+     "interp": "held",
+     "openusd": [
+      6.0,
+      3.0,
+      2.0,
+      1.0,
+      7.0
+     ],
+     "flattened": [
+      6.0,
+      3.0,
+      2.0,
+      1.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 6,
+     "interp": "linear",
+     "openusd": [
+      6.0,
+      3.0,
+      2.0,
+      1.0,
+      7.0
+     ],
+     "flattened": [
+      6.0,
+      3.0,
+      2.0,
+      1.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 7,
+     "interp": "held",
+     "openusd": [
+      6.0,
+      3.0,
+      2.0,
+      1.0,
+      7.0
+     ],
+     "flattened": [
+      6.0,
+      3.0,
+      2.0,
+      1.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 7,
+     "interp": "linear",
+     "openusd": [
+      6.0,
+      3.0,
+      2.0,
+      1.0,
+      7.0
+     ],
+     "flattened": [
+      6.0,
+      3.0,
+      2.0,
+      1.0,
+      7.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"TestBasics\"\n{\n    int[] attr = [3, 2, 1]\n    int[] attr.timeSamples = {\n        3: [3, 3, 2, 1, 3],\n        6: [6, 3, 2, 1, 7],\n    }\n}\n\n"
+  },
+  {
+   "name": "usd_basics_samples_over_samples",
+   "description": "TestBasics: root-layer sparse samples hide the root default and compose under the session-layer samples.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @session.usda@,\n        @base.usda@\n    ]\n)\n",
+    "session.usda": "#usda 1.0\nover \"TestBasics\"\n{\n    int[] attr.timeSamples = { 3: edit (prepend 3, append 3), 6: edit (prepend 6, append 7) }\n}\n",
+    "base.usda": "#usda 1.0\ndef \"TestBasics\"\n{\n    int[] attr.timeSamples = { 1: edit (prepend -1, append -1), 5: edit (prepend -5, append -5), 9: edit (prepend -9, append -9) }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/TestBasics.attr",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      3.0,
+      -1.0,
+      -1.0,
+      3.0
+     ],
+     "flattened": [
+      3.0,
+      -1.0,
+      -1.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      3.0,
+      -1.0,
+      -1.0,
+      3.0
+     ],
+     "flattened": [
+      3.0,
+      -1.0,
+      -1.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 3,
+     "interp": "held",
+     "openusd": [
+      3.0,
+      -1.0,
+      -1.0,
+      3.0
+     ],
+     "flattened": [
+      3.0,
+      -1.0,
+      -1.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 3,
+     "interp": "linear",
+     "openusd": [
+      3.0,
+      -1.0,
+      -1.0,
+      3.0
+     ],
+     "flattened": [
+      3.0,
+      -1.0,
+      -1.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 4,
+     "interp": "held",
+     "openusd": [
+      3.0,
+      -1.0,
+      -1.0,
+      3.0
+     ],
+     "flattened": [
+      3.0,
+      -1.0,
+      -1.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 4,
+     "interp": "linear",
+     "openusd": [
+      3.0,
+      -1.0,
+      -1.0,
+      3.0
+     ],
+     "flattened": [
+      3.0,
+      -1.0,
+      -1.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 5,
+     "interp": "held",
+     "openusd": [
+      3.0,
+      -5.0,
+      -5.0,
+      3.0
+     ],
+     "flattened": [
+      3.0,
+      -5.0,
+      -5.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 5,
+     "interp": "linear",
+     "openusd": [
+      3.0,
+      -5.0,
+      -5.0,
+      3.0
+     ],
+     "flattened": [
+      3.0,
+      -5.0,
+      -5.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 6,
+     "interp": "held",
+     "openusd": [
+      6.0,
+      -5.0,
+      -5.0,
+      7.0
+     ],
+     "flattened": [
+      6.0,
+      -5.0,
+      -5.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 6,
+     "interp": "linear",
+     "openusd": [
+      6.0,
+      -5.0,
+      -5.0,
+      7.0
+     ],
+     "flattened": [
+      6.0,
+      -5.0,
+      -5.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 7,
+     "interp": "held",
+     "openusd": [
+      6.0,
+      -5.0,
+      -5.0,
+      7.0
+     ],
+     "flattened": [
+      6.0,
+      -5.0,
+      -5.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 7,
+     "interp": "linear",
+     "openusd": [
+      6.0,
+      -5.0,
+      -5.0,
+      7.0
+     ],
+     "flattened": [
+      6.0,
+      -5.0,
+      -5.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 9,
+     "interp": "held",
+     "openusd": [
+      6.0,
+      -9.0,
+      -9.0,
+      7.0
+     ],
+     "flattened": [
+      6.0,
+      -9.0,
+      -9.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 9,
+     "interp": "linear",
+     "openusd": [
+      6.0,
+      -9.0,
+      -9.0,
+      7.0
+     ],
+     "flattened": [
+      6.0,
+      -9.0,
+      -9.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 10,
+     "interp": "held",
+     "openusd": [
+      6.0,
+      -9.0,
+      -9.0,
+      7.0
+     ],
+     "flattened": [
+      6.0,
+      -9.0,
+      -9.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/TestBasics.attr",
+     "time": 10,
+     "interp": "linear",
+     "openusd": [
+      6.0,
+      -9.0,
+      -9.0,
+      7.0
+     ],
+     "flattened": [
+      6.0,
+      -9.0,
+      -9.0,
+      7.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"TestBasics\"\n{\n    int[] attr.timeSamples = {\n        1: [3, -1, -1, 3],\n        3: [3, -1, -1, 3],\n        5: [3, -5, -5, 3],\n        6: [6, -5, -5, 7],\n        9: [6, -9, -9, 7],\n    }\n}\n\n"
+  },
+  {
+   "name": "usd_interpolation_single_layer",
+   "description": "TestInterpolation: a sparse `resize` sample interpolates towards a later dense sample.",
+   "layers": {
+    "root.usda": "#usda 1.0\ndef \"TestInterpolation\"\n{\n    float[] attr.timeSamples = { 1: edit (resize 4), 3: [2, 4, 6, 8] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0,
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      2.0,
+      3.0,
+      4.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      3.0,
+      4.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 3,
+     "interp": "held",
+     "openusd": [
+      2.0,
+      4.0,
+      6.0,
+      8.0
+     ],
+     "flattened": [
+      2.0,
+      4.0,
+      6.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 3,
+     "interp": "linear",
+     "openusd": [
+      2.0,
+      4.0,
+      6.0,
+      8.0
+     ],
+     "flattened": [
+      2.0,
+      4.0,
+      6.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 4,
+     "interp": "held",
+     "openusd": [
+      2.0,
+      4.0,
+      6.0,
+      8.0
+     ],
+     "flattened": [
+      2.0,
+      4.0,
+      6.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 4,
+     "interp": "linear",
+     "openusd": [
+      2.0,
+      4.0,
+      6.0,
+      8.0
+     ],
+     "flattened": [
+      2.0,
+      4.0,
+      6.0,
+      8.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"TestInterpolation\"\n{\n    float[] attr.timeSamples = {\n        1: [0, 0, 0, 0],\n        3: [2, 4, 6, 8],\n    }\n}\n\n"
+  },
+  {
+   "name": "usd_interpolation_session_edit",
+   "description": "TestInterpolation: a stronger sparse sample at a different time composes over both bracketing samples before interpolating.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @session.usda@,\n        @base.usda@\n    ]\n)\n",
+    "session.usda": "#usda 1.0\nover \"TestInterpolation\"\n{\n    float[] attr.timeSamples = { 2: edit (write 8 to [1]) }\n}\n",
+    "base.usda": "#usda 1.0\ndef \"TestInterpolation\"\n{\n    float[] attr.timeSamples = { 1: edit (resize 4), 3: [2, 4, 6, 8] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      8.0,
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      8.0,
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      8.0,
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      8.0,
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      8.0,
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      8.0,
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      8.0,
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      8.0,
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      8.0,
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      8.0,
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      8.0,
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      8.0,
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 2.5,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      8.0,
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      8.0,
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 2.5,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      8.0,
+      3.0,
+      4.0
+     ],
+     "flattened": [
+      1.0,
+      8.0,
+      3.0,
+      4.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 3,
+     "interp": "held",
+     "openusd": [
+      2.0,
+      8.0,
+      6.0,
+      8.0
+     ],
+     "flattened": [
+      2.0,
+      8.0,
+      6.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 3,
+     "interp": "linear",
+     "openusd": [
+      2.0,
+      8.0,
+      6.0,
+      8.0
+     ],
+     "flattened": [
+      2.0,
+      8.0,
+      6.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 4,
+     "interp": "held",
+     "openusd": [
+      2.0,
+      8.0,
+      6.0,
+      8.0
+     ],
+     "flattened": [
+      2.0,
+      8.0,
+      6.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/TestInterpolation.attr",
+     "time": 4,
+     "interp": "linear",
+     "openusd": [
+      2.0,
+      8.0,
+      6.0,
+      8.0
+     ],
+     "flattened": [
+      2.0,
+      8.0,
+      6.0,
+      8.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"TestInterpolation\"\n{\n    float[] attr.timeSamples = {\n        1: [0, 8, 0, 0],\n        2: [0, 8, 0, 0],\n        3: [2, 8, 6, 8],\n    }\n}\n\n"
+  },
+  {
+   "name": "mixed_dense_sparse_three_layers",
+   "description": "Dense and sparse samples interleave across three layers at differing times.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @mid.usda@,\n        @weak.usda@\n    ]\n)\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 0: edit (write 10 to [0]), 4: [7, 7, 7], 6: edit (append 1) }\n}\n",
+    "mid.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 1: edit (write 20 to [1]), 3: [1, 2, 3], 5: edit (erase [0]) }\n}\n",
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 0: [0, 0, 0], 2: [4, 4, 4], 8: [8, 8, 8] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": -1,
+     "interp": "held",
+     "openusd": [
+      10.0,
+      20.0,
+      0.0
+     ],
+     "flattened": [
+      10.0,
+      20.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": -1,
+     "interp": "linear",
+     "openusd": [
+      10.0,
+      20.0,
+      0.0
+     ],
+     "flattened": [
+      10.0,
+      20.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      10.0,
+      20.0,
+      0.0
+     ],
+     "flattened": [
+      10.0,
+      20.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      10.0,
+      20.0,
+      0.0
+     ],
+     "flattened": [
+      10.0,
+      20.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": [
+      10.0,
+      20.0,
+      0.0
+     ],
+     "flattened": [
+      10.0,
+      20.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": [
+      10.0,
+      20.0,
+      0.0
+     ],
+     "flattened": [
+      10.0,
+      20.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      10.0,
+      20.0,
+      0.0
+     ],
+     "flattened": [
+      10.0,
+      20.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      10.0,
+      20.0,
+      0.0
+     ],
+     "flattened": [
+      10.0,
+      20.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1.5,
+     "interp": "held",
+     "openusd": [
+      10.0,
+      20.0,
+      0.0
+     ],
+     "flattened": [
+      10.0,
+      20.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1.5,
+     "interp": "linear",
+     "openusd": [
+      10.0,
+      20.0,
+      2.0
+     ],
+     "flattened": [
+      10.0,
+      20.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      10.0,
+      20.0,
+      4.0
+     ],
+     "flattened": [
+      10.0,
+      20.0,
+      4.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      10.0,
+      20.0,
+      4.0
+     ],
+     "flattened": [
+      10.0,
+      20.0,
+      4.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2.5,
+     "interp": "held",
+     "openusd": [
+      10.0,
+      20.0,
+      4.0
+     ],
+     "flattened": [
+      10.0,
+      20.0,
+      4.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2.5,
+     "interp": "linear",
+     "openusd": [
+      10.0,
+      11.0,
+      3.5
+     ],
+     "flattened": [
+      10.0,
+      11.0,
+      3.5
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "held",
+     "openusd": [
+      10.0,
+      2.0,
+      3.0
+     ],
+     "flattened": [
+      10.0,
+      2.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "linear",
+     "openusd": [
+      10.0,
+      2.0,
+      3.0
+     ],
+     "flattened": [
+      10.0,
+      2.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3.5,
+     "interp": "held",
+     "openusd": [
+      10.0,
+      2.0,
+      3.0
+     ],
+     "flattened": [
+      10.0,
+      2.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3.5,
+     "interp": "linear",
+     "openusd": [
+      8.5,
+      4.5,
+      5.0
+     ],
+     "flattened": [
+      8.5,
+      4.5,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "held",
+     "openusd": [
+      7.0,
+      7.0,
+      7.0
+     ],
+     "flattened": [
+      7.0,
+      7.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "linear",
+     "openusd": [
+      7.0,
+      7.0,
+      7.0
+     ],
+     "flattened": [
+      7.0,
+      7.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4.5,
+     "interp": "held",
+     "openusd": [
+      7.0,
+      7.0,
+      7.0
+     ],
+     "flattened": [
+      7.0,
+      7.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4.5,
+     "interp": "linear",
+     "openusd": [
+      6.25,
+      6.25,
+      5.5
+     ],
+     "flattened": [
+      6.25,
+      6.25,
+      5.5
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "held",
+     "openusd": [
+      7.0,
+      7.0,
+      7.0
+     ],
+     "flattened": [
+      7.0,
+      7.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "linear",
+     "openusd": [
+      5.5,
+      5.5,
+      4.0
+     ],
+     "flattened": [
+      5.5,
+      5.5,
+      4.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5.5,
+     "interp": "held",
+     "openusd": [
+      7.0,
+      7.0,
+      7.0
+     ],
+     "flattened": [
+      7.0,
+      7.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5.5,
+     "interp": "linear",
+     "openusd": [
+      4.75,
+      4.75,
+      2.5
+     ],
+     "flattened": [
+      4.75,
+      4.75,
+      2.5
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 6,
+     "interp": "held",
+     "openusd": [
+      4.0,
+      4.0,
+      1.0
+     ],
+     "flattened": [
+      4.0,
+      4.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 6,
+     "interp": "linear",
+     "openusd": [
+      4.0,
+      4.0,
+      1.0
+     ],
+     "flattened": [
+      4.0,
+      4.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 7,
+     "interp": "held",
+     "openusd": [
+      4.0,
+      4.0,
+      1.0
+     ],
+     "flattened": [
+      4.0,
+      4.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 7,
+     "interp": "linear",
+     "openusd": [
+      6.0,
+      6.0,
+      1.0
+     ],
+     "flattened": [
+      6.0,
+      6.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 8,
+     "interp": "held",
+     "openusd": [
+      8.0,
+      8.0,
+      1.0
+     ],
+     "flattened": [
+      8.0,
+      8.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 8,
+     "interp": "linear",
+     "openusd": [
+      8.0,
+      8.0,
+      1.0
+     ],
+     "flattened": [
+      8.0,
+      8.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 9,
+     "interp": "held",
+     "openusd": [
+      8.0,
+      8.0,
+      1.0
+     ],
+     "flattened": [
+      8.0,
+      8.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 9,
+     "interp": "linear",
+     "openusd": [
+      8.0,
+      8.0,
+      1.0
+     ],
+     "flattened": [
+      8.0,
+      8.0,
+      1.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    float[] x.timeSamples = {\n        0: [10, 20, 0],\n        1: [10, 20, 0],\n        2: [10, 20, 4],\n        3: [10, 2, 3],\n        4: [7, 7, 7],\n        6: [4, 4, 1],\n        8: [8, 8, 1],\n    }\n}\n\n"
+  },
+  {
+   "name": "sparse_over_sparse_differing_times",
+   "description": "Two sparse series at interleaved times compose over a dense default.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @mid.usda@,\n        @weak.usda@\n    ]\n)\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 1: edit (append 10), 3: edit (append 30) }\n}\n",
+    "mid.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 0: edit (prepend 0), 2: edit (prepend 2), 4: edit (prepend 4) }\n}\n",
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    int[] x = [5]\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": -1,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      5.0,
+      10.0
+     ],
+     "flattened": [
+      0.0,
+      5.0,
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": -1,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      5.0,
+      10.0
+     ],
+     "flattened": [
+      0.0,
+      5.0,
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      5.0,
+      10.0
+     ],
+     "flattened": [
+      0.0,
+      5.0,
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      5.0,
+      10.0
+     ],
+     "flattened": [
+      0.0,
+      5.0,
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      5.0,
+      10.0
+     ],
+     "flattened": [
+      0.0,
+      5.0,
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      5.0,
+      10.0
+     ],
+     "flattened": [
+      0.0,
+      5.0,
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1.5,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      5.0,
+      10.0
+     ],
+     "flattened": [
+      0.0,
+      5.0,
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1.5,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      5.0,
+      10.0
+     ],
+     "flattened": [
+      0.0,
+      5.0,
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      2.0,
+      5.0,
+      10.0
+     ],
+     "flattened": [
+      2.0,
+      5.0,
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      2.0,
+      5.0,
+      10.0
+     ],
+     "flattened": [
+      2.0,
+      5.0,
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2.5,
+     "interp": "held",
+     "openusd": [
+      2.0,
+      5.0,
+      10.0
+     ],
+     "flattened": [
+      2.0,
+      5.0,
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2.5,
+     "interp": "linear",
+     "openusd": [
+      2.0,
+      5.0,
+      10.0
+     ],
+     "flattened": [
+      2.0,
+      5.0,
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "held",
+     "openusd": [
+      2.0,
+      5.0,
+      30.0
+     ],
+     "flattened": [
+      2.0,
+      5.0,
+      30.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "linear",
+     "openusd": [
+      2.0,
+      5.0,
+      30.0
+     ],
+     "flattened": [
+      2.0,
+      5.0,
+      30.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3.5,
+     "interp": "held",
+     "openusd": [
+      2.0,
+      5.0,
+      30.0
+     ],
+     "flattened": [
+      2.0,
+      5.0,
+      30.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3.5,
+     "interp": "linear",
+     "openusd": [
+      2.0,
+      5.0,
+      30.0
+     ],
+     "flattened": [
+      2.0,
+      5.0,
+      30.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "held",
+     "openusd": [
+      4.0,
+      5.0,
+      30.0
+     ],
+     "flattened": [
+      4.0,
+      5.0,
+      30.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "linear",
+     "openusd": [
+      4.0,
+      5.0,
+      30.0
+     ],
+     "flattened": [
+      4.0,
+      5.0,
+      30.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "held",
+     "openusd": [
+      4.0,
+      5.0,
+      30.0
+     ],
+     "flattened": [
+      4.0,
+      5.0,
+      30.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "linear",
+     "openusd": [
+      4.0,
+      5.0,
+      30.0
+     ],
+     "flattened": [
+      4.0,
+      5.0,
+      30.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    int[] x = [5]\n    int[] x.timeSamples = {\n        0: [0, 5, 10],\n        1: [0, 5, 10],\n        2: [2, 5, 10],\n        3: [2, 5, 30],\n        4: [4, 5, 30],\n    }\n}\n\n"
+  },
+  {
+   "name": "dense_lower_sparse_upper",
+   "description": "A dense lower sample hides weaker samples until the stronger series' next (sparse) sample, which composes over the weaker series there.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 1: [0, 0], 5: edit (write 9 to [0]) }\n}\n",
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 2: [1, 1], 4: [2, 2], 6: [4, 4] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      2.25,
+      0.5
+     ],
+     "flattened": [
+      2.25,
+      0.5
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "linear",
+     "openusd": [
+      4.5,
+      1.0
+     ],
+     "flattened": [
+      4.5,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "linear",
+     "openusd": [
+      6.75,
+      1.5
+     ],
+     "flattened": [
+      6.75,
+      1.5
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4.5,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4.5,
+     "interp": "linear",
+     "openusd": [
+      7.875,
+      1.75
+     ],
+     "flattened": [
+      7.875,
+      1.75
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5.5,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5.5,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      3.0
+     ],
+     "flattened": [
+      9.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 6,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      4.0
+     ],
+     "flattened": [
+      9.0,
+      4.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 6,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      4.0
+     ],
+     "flattened": [
+      9.0,
+      4.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 7,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      4.0
+     ],
+     "flattened": [
+      9.0,
+      4.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 7,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      4.0
+     ],
+     "flattened": [
+      9.0,
+      4.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    float[] x.timeSamples = {\n        1: [0, 0],\n        5: [9, 2],\n        6: [9, 4],\n    }\n}\n\n"
+  },
+  {
+   "name": "dense_lower_sparse_upper_weak_upper_dense",
+   "description": "As `dense_lower_sparse_upper`, with a middle series whose sample held at the upper time is sparse and whose next sample is dense.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @mid.usda@,\n        @weak.usda@\n    ]\n)\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 1: [0, 0], 5: edit (write 9 to [0]) }\n}\n",
+    "mid.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 4: edit (write 7 to [1]), 6: [3, 3] }\n}\n",
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x = [1, 1]\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      4.5,
+      3.5
+     ],
+     "expected": [
+      4.5,
+      3.5
+     ],
+     "divergence": "override-early-stop"
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      6.75,
+      5.25
+     ],
+     "expected": [
+      6.75,
+      5.25
+     ],
+     "divergence": "override-early-stop"
+    },
+    {
+     "attr": "/A.x",
+     "time": 4.5,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4.5,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      7.875,
+      6.125
+     ],
+     "expected": [
+      7.875,
+      6.125
+     ],
+     "divergence": "override-early-stop"
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      7.0
+     ],
+     "flattened": [
+      9.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      7.0
+     ],
+     "flattened": [
+      9.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5.5,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      7.0
+     ],
+     "flattened": [
+      9.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5.5,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      5.0
+     ],
+     "flattened": [
+      9.0,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 6,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      3.0
+     ],
+     "flattened": [
+      9.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 6,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      3.0
+     ],
+     "flattened": [
+      9.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 7,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      3.0
+     ],
+     "flattened": [
+      9.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 7,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      3.0
+     ],
+     "flattened": [
+      9.0,
+      3.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    float[] x = [1, 1]\n    float[] x.timeSamples = {\n        1: [0, 0],\n        5: [9, 7],\n        6: [9, 3],\n    }\n}\n\n"
+  },
+  {
+   "name": "sublayer_offset_scale",
+   "description": "A sparse series behind a sublayer offset and scale composes over a dense series in stage time.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@ (offset = 10; scale = 2),\n        @weak.usda@\n    ]\n)\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 0: edit (write 9 to [0]), 1: edit (write 5 to [0]) }\n}\n",
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 10: [1, 2], 14: [3, 4] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 10,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 10,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 11,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 11,
+     "interp": "linear",
+     "openusd": [
+      7.0,
+      2.0
+     ],
+     "flattened": [
+      7.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 12,
+     "interp": "held",
+     "openusd": [
+      5.0,
+      2.0
+     ],
+     "flattened": [
+      5.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 12,
+     "interp": "linear",
+     "openusd": [
+      5.0,
+      2.0
+     ],
+     "flattened": [
+      5.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 13,
+     "interp": "held",
+     "openusd": [
+      5.0,
+      2.0
+     ],
+     "flattened": [
+      5.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 13,
+     "interp": "linear",
+     "openusd": [
+      5.0,
+      3.0
+     ],
+     "flattened": [
+      5.0,
+      3.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 14,
+     "interp": "held",
+     "openusd": [
+      5.0,
+      4.0
+     ],
+     "flattened": [
+      5.0,
+      4.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 14,
+     "interp": "linear",
+     "openusd": [
+      5.0,
+      4.0
+     ],
+     "flattened": [
+      5.0,
+      4.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 15,
+     "interp": "held",
+     "openusd": [
+      5.0,
+      4.0
+     ],
+     "flattened": [
+      5.0,
+      4.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 15,
+     "interp": "linear",
+     "openusd": [
+      5.0,
+      4.0
+     ],
+     "flattened": [
+      5.0,
+      4.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    float[] x.timeSamples = {\n        10: [9, 2],\n        12: [5, 2],\n        14: [5, 4],\n    }\n}\n\n"
+  },
+  {
+   "name": "reference_offset_scale",
+   "description": "A local sparse series composes over a referenced dense series mapped by the reference's offset and scale.",
+   "layers": {
+    "root.usda": "#usda 1.0\ndef \"A\" (\n    references = @ref.usda@</B> (offset = 5; scale = 0.5)\n)\n{\n    float[] x.timeSamples = { 6: edit (write 9 to [0]) }\n}\n",
+    "ref.usda": "#usda 1.0\ndef \"B\"\n{\n    float[] x.timeSamples = { 0: [0, 0], 4: [4, 8] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      0.0
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      0.0
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      0.0
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      0.0
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5.5,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      0.0
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5.5,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      0.0
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 6,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      0.0
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 6,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      0.0
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 6.5,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      0.0
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 6.5,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      4.0
+     ],
+     "flattened": [
+      9.0,
+      4.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 7,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      8.0
+     ],
+     "flattened": [
+      9.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 7,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      8.0
+     ],
+     "flattened": [
+      9.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 8,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      8.0
+     ],
+     "flattened": [
+      9.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 8,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      8.0
+     ],
+     "flattened": [
+      9.0,
+      8.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    float[] x.timeSamples = {\n        5: [9, 0],\n        6: [9, 0],\n        7: [9, 8],\n    }\n}\n\n"
+  },
+  {
+   "name": "nested_sublayer_offsets",
+   "description": "Offsets compose through nested sublayers for both sparse and dense series.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@ (offset = -2),\n        @mid.usda@ (offset = 2)\n    ]\n)\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 3: edit (write 9 to [1]), 5: edit (write 1 to [1]) }\n}\n",
+    "mid.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@ (scale = 2)\n    ]\n)\n",
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 0: [0, 0], 2: [4, 4] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      9.0
+     ],
+     "flattened": [
+      0.0,
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      9.0
+     ],
+     "flattened": [
+      0.0,
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      9.0
+     ],
+     "flattened": [
+      0.0,
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      9.0
+     ],
+     "flattened": [
+      0.0,
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      9.0
+     ],
+     "flattened": [
+      0.0,
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      9.0
+     ],
+     "flattened": [
+      0.0,
+      9.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      1.0
+     ],
+     "flattened": [
+      0.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      1.0
+     ],
+     "flattened": [
+      0.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      1.0
+     ],
+     "flattened": [
+      0.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "linear",
+     "openusd": [
+      1.3333333730697632,
+      1.0
+     ],
+     "flattened": [
+      1.3333333730697632,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      1.0
+     ],
+     "flattened": [
+      0.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "linear",
+     "openusd": [
+      2.6666667461395264,
+      1.0
+     ],
+     "flattened": [
+      2.6666667461395264,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 6,
+     "interp": "held",
+     "openusd": [
+      4.0,
+      1.0
+     ],
+     "flattened": [
+      4.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 6,
+     "interp": "linear",
+     "openusd": [
+      4.0,
+      1.0
+     ],
+     "flattened": [
+      4.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 7,
+     "interp": "held",
+     "openusd": [
+      4.0,
+      1.0
+     ],
+     "flattened": [
+      4.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 7,
+     "interp": "linear",
+     "openusd": [
+      4.0,
+      1.0
+     ],
+     "flattened": [
+      4.0,
+      1.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    float[] x.timeSamples = {\n        1: [0, 9],\n        2: [0, 9],\n        3: [0, 1],\n        6: [4, 1],\n    }\n}\n\n"
+  },
+  {
+   "name": "scalar_samples_behind_sublayer_offset",
+   "description": "Scalar time samples behind a sublayer offset and scale map the query time through the inverse offset, like array samples.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @anim.usda@ (offset = 10; scale = 2)\n    ]\n)\n",
+    "anim.usda": "#usda 1.0\ndef \"A\"\n{\n    double x.timeSamples = { 0: 0, 1: 10 }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": 9,
+     "interp": "held",
+     "openusd": 0.0,
+     "flattened": 0.0
+    },
+    {
+     "attr": "/A.x",
+     "time": 9,
+     "interp": "linear",
+     "openusd": 0.0,
+     "flattened": 0.0
+    },
+    {
+     "attr": "/A.x",
+     "time": 10,
+     "interp": "held",
+     "openusd": 0.0,
+     "flattened": 0.0
+    },
+    {
+     "attr": "/A.x",
+     "time": 10,
+     "interp": "linear",
+     "openusd": 0.0,
+     "flattened": 0.0
+    },
+    {
+     "attr": "/A.x",
+     "time": 11,
+     "interp": "held",
+     "openusd": 0.0,
+     "flattened": 0.0
+    },
+    {
+     "attr": "/A.x",
+     "time": 11,
+     "interp": "linear",
+     "openusd": 5.0,
+     "flattened": 5.0
+    },
+    {
+     "attr": "/A.x",
+     "time": 12,
+     "interp": "held",
+     "openusd": 10.0,
+     "flattened": 10.0
+    },
+    {
+     "attr": "/A.x",
+     "time": 12,
+     "interp": "linear",
+     "openusd": 10.0,
+     "flattened": 10.0
+    },
+    {
+     "attr": "/A.x",
+     "time": 13,
+     "interp": "held",
+     "openusd": 10.0,
+     "flattened": 10.0
+    },
+    {
+     "attr": "/A.x",
+     "time": 13,
+     "interp": "linear",
+     "openusd": 10.0,
+     "flattened": 10.0
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    double x.timeSamples = {\n        10: 0,\n        12: 10,\n    }\n}\n\n"
+  },
+  {
+   "name": "close_samples_below_tolerance",
+   "description": "Two samples of one series 0.0000005 apart, below the 1e-6 tolerance.",
+   "layers": {
+    "root.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 0: [0], 0.0000005: [10] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": -1,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": -1,
+     "interp": "linear",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1.25e-07,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1.25e-07,
+     "interp": "linear",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2.5e-07,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2.5e-07,
+     "interp": "linear",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5e-07,
+     "interp": "held",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5e-07,
+     "interp": "linear",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    float[] x.timeSamples = {\n        0: [0],\n        5e-7: [10],\n    }\n}\n\n"
+  },
+  {
+   "name": "close_samples_at_tolerance",
+   "description": "Two samples of one series 0.000001 apart, at the 1e-6 tolerance.",
+   "layers": {
+    "root.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 0: [0], 0.000001: [10] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": -1,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": -1,
+     "interp": "linear",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2.5e-07,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2.5e-07,
+     "interp": "linear",
+     "openusd": [
+      2.5
+     ],
+     "flattened": [
+      2.5
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5e-07,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5e-07,
+     "interp": "linear",
+     "openusd": [
+      5.0
+     ],
+     "flattened": [
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1e-06,
+     "interp": "held",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1e-06,
+     "interp": "linear",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    float[] x.timeSamples = {\n        0: [0],\n        0.000001: [10],\n    }\n}\n\n"
+  },
+  {
+   "name": "close_samples_above_tolerance",
+   "description": "Two samples of one series 0.000002 apart, above the 1e-6 tolerance.",
+   "layers": {
+    "root.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 0: [0], 0.000002: [10] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": -1,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": -1,
+     "interp": "linear",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5e-07,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5e-07,
+     "interp": "linear",
+     "openusd": [
+      2.5
+     ],
+     "flattened": [
+      2.5
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1e-06,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1e-06,
+     "interp": "linear",
+     "openusd": [
+      5.0
+     ],
+     "flattened": [
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2e-06,
+     "interp": "held",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2e-06,
+     "interp": "linear",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    float[] x.timeSamples = {\n        0: [0],\n        0.000002: [10],\n    }\n}\n\n"
+  },
+  {
+   "name": "close_samples_compressed_by_scale",
+   "description": "A sublayer scale compresses samples 4 layer frames apart to 4e-7 stage frames; the tolerance applies to layer times.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @anim.usda@ (scale = 0.0000001)\n    ]\n)\n",
+    "anim.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 0: [0], 4: [10] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1e-07,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1e-07,
+     "interp": "linear",
+     "openusd": [
+      2.5
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2e-07,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2e-07,
+     "interp": "linear",
+     "openusd": [
+      5.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4e-07,
+     "interp": "held",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4e-07,
+     "interp": "linear",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    }
+   ],
+   "flatten_note": "Flattening moves the samples to stage times 4e-7 apart, where the tolerance holds instead of interpolating."
+  },
+  {
+   "name": "close_samples_expanded_by_scale",
+   "description": "A sublayer scale spreads samples 5e-7 layer frames apart to 5e-6 stage frames; the tolerance applies to layer times.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @anim.usda@ (scale = 10)\n    ]\n)\n",
+    "anim.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 0: [0], 0.0000005: [10] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2.5e-06,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2.5e-06,
+     "interp": "linear",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5e-06,
+     "interp": "held",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5e-06,
+     "interp": "linear",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      10.0
+     ],
+     "flattened": [
+      10.0
+     ]
+    }
+   ],
+   "flatten_note": "Flattening moves the samples to stage times 5e-6 apart, beyond the tolerance, where they interpolate."
+  },
+  {
+   "name": "close_samples_blocked_upper",
+   "description": "A blocked upper sample, close to and far from the lower sample.",
+   "layers": {
+    "root.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] near.timeSamples = { 0: [0], 0.0000005: None }\n    float[] far.timeSamples = { 0: [0], 2: None }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.near",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.near",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.near",
+     "time": 2.5e-07,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.near",
+     "time": 2.5e-07,
+     "interp": "linear",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.near",
+     "time": 5e-07,
+     "interp": "held",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.near",
+     "time": 5e-07,
+     "interp": "linear",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.near",
+     "time": 1,
+     "interp": "held",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.near",
+     "time": 1,
+     "interp": "linear",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.far",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.far",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.far",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.far",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      0.0
+     ],
+     "flattened": [
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.far",
+     "time": 2,
+     "interp": "held",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.far",
+     "time": 2,
+     "interp": "linear",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.far",
+     "time": 3,
+     "interp": "held",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.far",
+     "time": 3,
+     "interp": "linear",
+     "openusd": null,
+     "flattened": null
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    float[] far.timeSamples = {\n        0: [0],\n        2: None,\n    }\n    float[] near.timeSamples = {\n        0: [0],\n        5e-7: None,\n    }\n}\n\n"
+  },
+  {
+   "name": "close_samples_across_series",
+   "description": "Sparse and dense samples of different series less than 1e-6 apart compose as one sample time.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 0.0000005: edit (write 9 to [0]), 2: edit (write 7 to [0]) }\n    float[] y.timeSamples = { 0.0000005: [5, 5], 2: [6, 6] }\n}\n",
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 0: [0, 0], 1: [1, 1], 2.0000005: [2, 2] }\n    float[] y.timeSamples = { 0: edit (write 1 to [1]), 1.9999995: edit (write 2 to [1]) }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      0.0
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      0.0
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2.5e-07,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      0.0
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2.5e-07,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      2.499999993688107e-07
+     ],
+     "flattened": [
+      9.0,
+      2.499999993688107e-07
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5e-07,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      0.0
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5e-07,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      4.999999987376214e-07
+     ],
+     "flattened": [
+      9.0,
+      4.999999987376214e-07
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      0.0
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      0.5
+     ],
+     "flattened": [
+      9.0,
+      0.5
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      1.0
+     ],
+     "flattened": [
+      9.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      1.0
+     ],
+     "flattened": [
+      9.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1.5,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      1.0
+     ],
+     "flattened": [
+      9.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1.5,
+     "interp": "linear",
+     "openusd": [
+      8.0,
+      1.5
+     ],
+     "flattened": [
+      8.0,
+      1.5
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      7.0,
+      1.0
+     ],
+     "flattened": [
+      7.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      7.0,
+      2.0
+     ],
+     "flattened": [
+      7.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2.00000025,
+     "interp": "held",
+     "openusd": [
+      7.0,
+      1.0
+     ],
+     "flattened": [
+      7.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2.00000025,
+     "interp": "linear",
+     "openusd": [
+      7.0,
+      2.0
+     ],
+     "flattened": [
+      7.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2.0000005,
+     "interp": "held",
+     "openusd": [
+      7.0,
+      2.0
+     ],
+     "flattened": [
+      7.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2.0000005,
+     "interp": "linear",
+     "openusd": [
+      7.0,
+      2.0
+     ],
+     "flattened": [
+      7.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "held",
+     "openusd": [
+      7.0,
+      2.0
+     ],
+     "flattened": [
+      7.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "linear",
+     "openusd": [
+      7.0,
+      2.0
+     ],
+     "flattened": [
+      7.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.y",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      5.0,
+      5.0
+     ],
+     "flattened": [
+      5.0,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.y",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      5.0,
+      5.0
+     ],
+     "flattened": [
+      5.0,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.y",
+     "time": 2.5e-07,
+     "interp": "held",
+     "openusd": [
+      5.0,
+      5.0
+     ],
+     "flattened": [
+      5.0,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.y",
+     "time": 2.5e-07,
+     "interp": "linear",
+     "openusd": [
+      5.0,
+      5.0
+     ],
+     "flattened": [
+      5.0,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.y",
+     "time": 5e-07,
+     "interp": "held",
+     "openusd": [
+      5.0,
+      5.0
+     ],
+     "flattened": [
+      5.0,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.y",
+     "time": 5e-07,
+     "interp": "linear",
+     "openusd": [
+      5.0,
+      5.0
+     ],
+     "flattened": [
+      5.0,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.y",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      5.0,
+      5.0
+     ],
+     "flattened": [
+      5.0,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.y",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      5.5,
+      5.5
+     ],
+     "flattened": [
+      5.5,
+      5.5
+     ]
+    },
+    {
+     "attr": "/A.y",
+     "time": 1.9999995,
+     "interp": "held",
+     "openusd": [
+      5.0,
+      5.0
+     ],
+     "flattened": [
+      5.0,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.y",
+     "time": 1.9999995,
+     "interp": "linear",
+     "openusd": [
+      5.999999523162842,
+      5.999999523162842
+     ],
+     "flattened": [
+      5.999999523162842,
+      5.999999523162842
+     ]
+    },
+    {
+     "attr": "/A.y",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      6.0,
+      6.0
+     ],
+     "flattened": [
+      6.0,
+      6.0
+     ]
+    },
+    {
+     "attr": "/A.y",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      6.0,
+      6.0
+     ],
+     "flattened": [
+      6.0,
+      6.0
+     ]
+    },
+    {
+     "attr": "/A.y",
+     "time": 3,
+     "interp": "held",
+     "openusd": [
+      6.0,
+      6.0
+     ],
+     "flattened": [
+      6.0,
+      6.0
+     ]
+    },
+    {
+     "attr": "/A.y",
+     "time": 3,
+     "interp": "linear",
+     "openusd": [
+      6.0,
+      6.0
+     ],
+     "flattened": [
+      6.0,
+      6.0
+     ]
+    }
+   ],
+   "flatten_note": "Under held interpolation only each series' lower sample composes, so a weaker sample just after a stronger one does not merge with it; flattening composes every sample."
+  },
+  {
+   "name": "sampled_block_in_strong_series",
+   "description": "A sampled block in the strongest series blocks while it is the held sample.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 0: edit (write 9 to [0]), 2: None, 4: [7, 7] }\n}\n",
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x = [1, 2]\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": -1,
+     "interp": "held",
+     "openusd": [
+      "NaN",
+      "NaN"
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ],
+     "expected": [
+      9,
+      2
+     ],
+     "divergence": "nan-before-first-sample"
+    },
+    {
+     "attr": "/A.x",
+     "time": -1,
+     "interp": "linear",
+     "openusd": [
+      "NaN",
+      "NaN"
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ],
+     "expected": [
+      9,
+      2
+     ],
+     "divergence": "nan-before-first-sample"
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "held",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "linear",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "held",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "linear",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "held",
+     "openusd": [
+      7.0,
+      7.0
+     ],
+     "flattened": [
+      7.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "linear",
+     "openusd": [
+      7.0,
+      7.0
+     ],
+     "flattened": [
+      7.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "held",
+     "openusd": [
+      7.0,
+      7.0
+     ],
+     "flattened": [
+      7.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "linear",
+     "openusd": [
+      7.0,
+      7.0
+     ],
+     "flattened": [
+      7.0,
+      7.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    float[] x = [1, 2]\n    float[] x.timeSamples = {\n        0: [9, 2],\n        2: None,\n        4: [7, 7],\n    }\n}\n\n"
+  },
+  {
+   "name": "block_between_edits_in_one_series",
+   "description": "A sampled block between two sparse samples of the strongest series.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 0: edit (append 7), 2: None, 4: edit (append 8) }\n}\n",
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    int[] x = [1, 2]\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": -1,
+     "interp": "held",
+     "openusd": [
+      1.0,
+      2.0,
+      7.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": -1,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      2.0,
+      7.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      1.0,
+      2.0,
+      7.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      2.0,
+      7.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      1.0,
+      2.0,
+      7.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      2.0,
+      7.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "held",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "linear",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "held",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "linear",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "held",
+     "openusd": [
+      1.0,
+      2.0,
+      8.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      2.0,
+      8.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "held",
+     "openusd": [
+      1.0,
+      2.0,
+      8.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      2.0,
+      8.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      8.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    int[] x = [1, 2]\n    int[] x.timeSamples = {\n        0: [1, 2, 7],\n        2: None,\n        4: [1, 2, 8],\n    }\n}\n\n"
+  },
+  {
+   "name": "sampled_block_in_weaker_series",
+   "description": "A sampled block in a weaker series ends the fold for the sparse sample above it; edits above materialize over the empty array.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @mid.usda@,\n        @weak.usda@\n    ]\n)\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 0: edit (append 7) }\n}\n",
+    "mid.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 0: None, 2: edit (append 5), 4: [3] }\n}\n",
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    int[] x = [1, 2]\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": -1,
+     "interp": "held",
+     "openusd": [
+      7.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": -1,
+     "interp": "linear",
+     "openusd": [
+      7.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      7.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      7.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      1.0,
+      2.0,
+      7.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      7.0
+     ],
+     "expected": [
+      7
+     ],
+     "divergence": "transparent-sampled-block"
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      2.0,
+      7.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      7.0
+     ],
+     "expected": [
+      7
+     ],
+     "divergence": "transparent-sampled-block"
+    },
+    {
+     "attr": "/A.x",
+     "time": 1.5,
+     "interp": "held",
+     "openusd": [
+      1.0,
+      2.0,
+      7.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      7.0
+     ],
+     "expected": [
+      7
+     ],
+     "divergence": "transparent-sampled-block"
+    },
+    {
+     "attr": "/A.x",
+     "time": 1.5,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      2.0,
+      7.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      7.0
+     ],
+     "expected": [
+      7
+     ],
+     "divergence": "transparent-sampled-block"
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      1.0,
+      2.0,
+      5.0,
+      7.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      5.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      2.0,
+      5.0,
+      7.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      5.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "held",
+     "openusd": [
+      1.0,
+      2.0,
+      5.0,
+      7.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      5.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      2.0,
+      5.0,
+      7.0
+     ],
+     "flattened": [
+      1.0,
+      2.0,
+      5.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "held",
+     "openusd": [
+      3.0,
+      7.0
+     ],
+     "flattened": [
+      3.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "linear",
+     "openusd": [
+      3.0,
+      7.0
+     ],
+     "flattened": [
+      3.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "held",
+     "openusd": [
+      3.0,
+      7.0
+     ],
+     "flattened": [
+      3.0,
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "linear",
+     "openusd": [
+      3.0,
+      7.0
+     ],
+     "flattened": [
+      3.0,
+      7.0
+     ]
+    }
+   ],
+   "flatten_note": "OpenUSD's Flatten() writes [1, 2, 7] at time 0, although the composed stage resolves [7] there."
+  },
+  {
+   "name": "default_block_between_series",
+   "description": "A default block between a sparse series and a dense default.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @mid.usda@,\n        @weak.usda@\n    ]\n)\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 0: edit (append 7) }\n}\n",
+    "mid.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x = None\n}\n",
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    int[] x = [1, 2]\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      7.0
+     ],
+     "flattened": [
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      7.0
+     ],
+     "flattened": [
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      7.0
+     ],
+     "flattened": [
+      7.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      7.0
+     ],
+     "flattened": [
+      7.0
+     ]
+    }
+   ],
+   "flatten_note": "Flattening writes the block as the default next to the samples; layerstack's layer model keeps one of the two."
+  },
+  {
+   "name": "block_as_upper_sample",
+   "description": "Linear interpolation towards a sampled block holds the lower sample.",
+   "layers": {
+    "root.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 0: [1, 1], 2: None }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      1.0,
+      1.0
+     ],
+     "flattened": [
+      1.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      1.0
+     ],
+     "flattened": [
+      1.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      1.0,
+      1.0
+     ],
+     "flattened": [
+      1.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      1.0
+     ],
+     "flattened": [
+      1.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "held",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "linear",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "held",
+     "openusd": null,
+     "flattened": null
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "linear",
+     "openusd": null,
+     "flattened": null
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    float[] x.timeSamples = {\n        0: [1, 1],\n        2: None,\n    }\n}\n\n"
+  },
+  {
+   "name": "sparse_default_over_weaker_samples",
+   "description": "A sparse default composes over every sample of a weaker series.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x = edit (write 9 to [0])\n}\n",
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 1: [0, 0], 3: [2, 2] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      "NaN",
+      "NaN"
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ],
+     "expected": [
+      9,
+      0
+     ],
+     "divergence": "nan-before-first-sample"
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      "NaN",
+      "NaN"
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ],
+     "expected": [
+      9,
+      0
+     ],
+     "divergence": "nan-before-first-sample"
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      0.0
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      0.0
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      0.0
+     ],
+     "flattened": [
+      9.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      1.0
+     ],
+     "flattened": [
+      9.0,
+      1.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    float[] x = []\n    float[] x.timeSamples = {\n        1: [9, 0],\n        3: [9, 2],\n    }\n}\n\n"
+  },
+  {
+   "name": "sparse_samples_over_weaker_default_int",
+   "description": "Sparse samples compose over a weaker dense default; before the first sample the first sample holds.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 2: edit (write 9 to [0]), 4: edit (write 5 to [0]) }\n}\n",
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    int[] x = [1, 2]\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "held",
+     "openusd": [
+      5.0,
+      2.0
+     ],
+     "flattened": [
+      5.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "linear",
+     "openusd": [
+      5.0,
+      2.0
+     ],
+     "flattened": [
+      5.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "held",
+     "openusd": [
+      5.0,
+      2.0
+     ],
+     "flattened": [
+      5.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "linear",
+     "openusd": [
+      5.0,
+      2.0
+     ],
+     "flattened": [
+      5.0,
+      2.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    int[] x = [1, 2]\n    int[] x.timeSamples = {\n        2: [9, 2],\n        4: [5, 2],\n    }\n}\n\n"
+  },
+  {
+   "name": "sparse_samples_over_weaker_default_float",
+   "description": "As `sparse_samples_over_weaker_default_int` with an interpolating type.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 2: edit (write 9 to [0]), 4: edit (write 5 to [0]) }\n}\n",
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x = [1, 2]\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      "NaN",
+      "NaN"
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ],
+     "expected": [
+      9,
+      2
+     ],
+     "divergence": "nan-before-first-sample"
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      "NaN",
+      "NaN"
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ],
+     "expected": [
+      9,
+      2
+     ],
+     "divergence": "nan-before-first-sample"
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "held",
+     "openusd": [
+      9.0,
+      2.0
+     ],
+     "flattened": [
+      9.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "linear",
+     "openusd": [
+      7.0,
+      2.0
+     ],
+     "flattened": [
+      7.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "held",
+     "openusd": [
+      5.0,
+      2.0
+     ],
+     "flattened": [
+      5.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "linear",
+     "openusd": [
+      5.0,
+      2.0
+     ],
+     "flattened": [
+      5.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "held",
+     "openusd": [
+      5.0,
+      2.0
+     ],
+     "flattened": [
+      5.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 5,
+     "interp": "linear",
+     "openusd": [
+      5.0,
+      2.0
+     ],
+     "flattened": [
+      5.0,
+      2.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    float[] x = [1, 2]\n    float[] x.timeSamples = {\n        2: [9, 2],\n        4: [5, 2],\n    }\n}\n\n"
+  },
+  {
+   "name": "dense_default_hides_weaker_samples",
+   "description": "A stronger dense default hides a weaker series entirely.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x = [5, 5]\n}\n",
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 1: edit (write 1 to [0]), 3: [2, 2] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      5.0,
+      5.0
+     ],
+     "flattened": [
+      5.0,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      5.0,
+      5.0
+     ],
+     "flattened": [
+      5.0,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      5.0,
+      5.0
+     ],
+     "flattened": [
+      5.0,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      5.0,
+      5.0
+     ],
+     "flattened": [
+      5.0,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      5.0,
+      5.0
+     ],
+     "flattened": [
+      5.0,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      5.0,
+      5.0
+     ],
+     "flattened": [
+      5.0,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "held",
+     "openusd": [
+      5.0,
+      5.0
+     ],
+     "flattened": [
+      5.0,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "linear",
+     "openusd": [
+      5.0,
+      5.0
+     ],
+     "flattened": [
+      5.0,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "held",
+     "openusd": [
+      5.0,
+      5.0
+     ],
+     "flattened": [
+      5.0,
+      5.0
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 4,
+     "interp": "linear",
+     "openusd": [
+      5.0,
+      5.0
+     ],
+     "flattened": [
+      5.0,
+      5.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    float[] x = [5, 5]\n}\n\n"
+  },
+  {
+   "name": "dense_arrays_interpolate_by_element_type",
+   "description": "Linear interpolation of dense array samples follows the element type: float, double and vector elements interpolate, integers hold, and arrays of different sizes hold.",
+   "layers": {
+    "root.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] f.timeSamples = { 0: [0, 0], 2: [2, 4] }\n    double[] d.timeSamples = { 0: [0, 0], 2: [2, 4] }\n    int[] i.timeSamples = { 0: [0, 0], 2: [2, 4] }\n    float3[] v.timeSamples = { 0: [(0, 0, 0)], 2: [(2, 4, 6)] }\n    float[] sized.timeSamples = { 0: [0, 0], 2: [2, 4, 6] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.f",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.f",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      2.0
+     ],
+     "flattened": [
+      1.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.d",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.d",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      2.0
+     ],
+     "flattened": [
+      1.0,
+      2.0
+     ]
+    },
+    {
+     "attr": "/A.i",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.i",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.v",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      [
+       0.0,
+       0.0,
+       0.0
+      ]
+     ],
+     "flattened": [
+      [
+       0.0,
+       0.0,
+       0.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.v",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      [
+       1.0,
+       2.0,
+       3.0
+      ]
+     ],
+     "flattened": [
+      [
+       1.0,
+       2.0,
+       3.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.sized",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.sized",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    double[] d.timeSamples = {\n        0: [0, 0],\n        2: [2, 4],\n    }\n    float[] f.timeSamples = {\n        0: [0, 0],\n        2: [2, 4],\n    }\n    int[] i.timeSamples = {\n        0: [0, 0],\n        2: [2, 4],\n    }\n    float[] sized.timeSamples = {\n        0: [0, 0],\n        2: [2, 4, 6],\n    }\n    float3[] v.timeSamples = {\n        0: [(0, 0, 0)],\n        2: [(2, 4, 6)],\n    }\n}\n\n"
+  },
+  {
+   "name": "vector_sparse_over_dense_linear",
+   "description": "A sparse vector edit composes over both bracketing dense samples before interpolating.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float3[] x.timeSamples = { 2: edit (write (9, 9, 9) to [0]) }\n}\n",
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float3[] x.timeSamples = { 1: [(0, 0, 0), (1, 1, 1)], 3: [(2, 2, 2), (3, 5, 7)] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ],
+     "flattened": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ],
+     "flattened": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ],
+     "flattened": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ],
+     "flattened": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1.5,
+     "interp": "held",
+     "openusd": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ],
+     "flattened": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 1.5,
+     "interp": "linear",
+     "openusd": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ],
+     "flattened": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ],
+     "flattened": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ],
+     "flattened": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2.5,
+     "interp": "held",
+     "openusd": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ],
+     "flattened": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 2.5,
+     "interp": "linear",
+     "openusd": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       2.0,
+       3.0,
+       4.0
+      ]
+     ],
+     "flattened": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       2.0,
+       3.0,
+       4.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "held",
+     "openusd": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       3.0,
+       5.0,
+       7.0
+      ]
+     ],
+     "flattened": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       3.0,
+       5.0,
+       7.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.x",
+     "time": 3,
+     "interp": "linear",
+     "openusd": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       3.0,
+       5.0,
+       7.0
+      ]
+     ],
+     "flattened": [
+      [
+       9.0,
+       9.0,
+       9.0
+      ],
+      [
+       3.0,
+       5.0,
+       7.0
+      ]
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    float3[] x.timeSamples = {\n        1: [(9, 9, 9), (1, 1, 1)],\n        2: [(9, 9, 9), (1, 1, 1)],\n        3: [(9, 9, 9), (3, 5, 7)],\n    }\n}\n\n"
+  }
+ ]
+}

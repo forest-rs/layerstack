@@ -125,9 +125,17 @@ capability, not for uniformity alone.
 
 ## Conformance With OpenUSD
 
-Time queries depart from three OpenUSD 26.08 results that are defects; each
-disagrees with OpenUSD's own flattened stage or with the value at the
-sample's own time:
+`layerstack_conformance/tests/temporal_sparse.rs` replays vectors recorded
+from OpenUSD 26.08 (`scripts/temporal_sparse_oracle.py`, including ports of
+`testUsdAttributeArrayEdits.cpp`): mixed dense and sparse samples at differing
+times, held and linear interpolation, sublayer and reference offsets, sampled
+and default blocks, defaults under and over samples, and element types. It
+also checks that resolving the composed stage equals resolving OpenUSD's
+flattened layer.
+
+The vectors pin three OpenUSD 26.08 results as defects instead of matching
+them; each disagrees with OpenUSD's own flattened stage or with the value at
+the sample's own time:
 
 - **NaN before the first sample.** A default or fallback under time samples
   is a sample at `-inf`, and OpenUSD interpolates towards the first sample
@@ -172,5 +180,6 @@ sample's own time:
   `cargo run -p layerstack_examples --example sparse_array_edits`
 - Array family, query modes and time queries:
   `layerstack/src/value_resolution.rs`
+- OpenUSD differential vectors: `layerstack_conformance/tests/temporal_sparse.rs`
 - Family kernel: `opinionated/src/family.rs`
 - Sparse edit kernel: `layerstack/src/array_edit.rs`

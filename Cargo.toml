@@ -4,6 +4,7 @@ members = [
     "layerstack",
     "layerstack_conformance",
     "layerstack_examples",
+    "layerstack_mesh_export",
     "layerstack_usda",
     "layerstack_usdc",
     "layerstack_usdz",

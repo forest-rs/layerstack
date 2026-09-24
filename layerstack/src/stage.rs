@@ -173,12 +173,24 @@ impl Stage {
     /// complete lists; hierarchy is left untouched. Callers must detect edits
     /// that change hierarchy (see [`Stage::hierarchy_diverges`]) and rebuild
     /// instead. Dependency data is not merged; the caller updates it.
+    ///
+    /// Arc cycle errors of the recomposed prims are replaced by the partial
+    /// composition's. Sublayer cycle errors are kept: layer stacks change
+    /// only through structural edits, which rebuild the whole stage.
     pub(crate) fn merge_prims_from(&mut self, mut partial: Self, recomposed: &[PathId]) {
         for path in recomposed {
             if let Some(index) = partial.prims.remove(path) {
                 self.prims.insert(*path, index);
             }
         }
+        let is_recomposed = |error: &CompositionError| matches!(error, CompositionError::ArcCycle(cycle) if recomposed.contains(&cycle.prim));
+        self.errors.retain(|error| !is_recomposed(error));
+        self.errors.extend(
+            partial
+                .errors
+                .into_iter()
+                .filter(|error| is_recomposed(error)),
+        );
     }
 
     /// Returns `true` if a partial composition shows that recomposing

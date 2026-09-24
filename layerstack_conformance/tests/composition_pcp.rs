@@ -6,7 +6,7 @@
 use std::path::{Path, PathBuf};
 
 use layerstack::{
-    CompositionError, LayerId, LayerStack, Stage, StageOptions, SublayerCycle, Value,
+    ArcKind, CompositionError, LayerId, LayerStack, Stage, StageOptions, SublayerCycle, Value,
 };
 
 use layerstack_conformance::{
@@ -724,4 +724,199 @@ fn reference_list_ops_with_offsets_root() {
     let (mut loaded, pcp_path) = load_fixture("ReferenceListOpsWithOffsets_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
     assert_pcp_composing(&mut loaded, &pcp_path);
+}
+
+#[test]
+#[ignore = "requires relocates: `pcp.json` expects `/RelocatedInheritOfChild/Object`, relocated from `/RelocatedInheritOfChild/Child/Object`, and layerstack does not compose relocates; `error_arc_cycle_root_composes` checks the rest"]
+fn error_arc_cycle_root_layer_stack_matches() {
+    let (mut loaded, pcp_path) = load_fixture("ErrorArcCycle_root");
+    assert_layer_stack_matches(&loaded, &pcp_path);
+    assert_pcp_composing(&mut loaded, &pcp_path);
+}
+
+/// `ErrorArcCycle_root` authors reference, inherit and ancestral cycles.
+/// Composition must terminate, report each cycle, skip the arc that closes
+/// it, and match the ordered prim stacks and child names in `pcp.txt`.
+///
+/// Not checked: `/RelocatedInheritOfChild/Object` and its cycle error (no
+/// relocates support), and the `/InheritOfChild` cycle error, because USDA
+/// ingestion drops the relative inherit path `<Child>` that closes it (its
+/// prim stack still matches).
+#[test]
+fn error_arc_cycle_root_composes() {
+    let (mut loaded, _) = load_fixture("ErrorArcCycle_root");
+    let stage = Stage::compose(
+        &mut loaded.store,
+        loaded.root_layer,
+        StageOptions::default(),
+    );
+
+    let expected: &[(&str, &[&str], &[&str])] = &[
+        (
+            "/GroupRoot",
+            &["root.usd /GroupRoot", "A.usd /GroupA", "B.usd /GroupB"],
+            &["ChildA"],
+        ),
+        ("/GroupRoot/ChildA", &["A.usd /GroupA/ChildA"], &[]),
+        ("/Parent", &["root.usd /Parent"], &["Child1", "Child2"]),
+        (
+            "/Parent/Child1",
+            &["root.usd /Parent/Child1", "root.usd /Parent/Child2"],
+            &[],
+        ),
+        (
+            "/Parent/Child2",
+            &["root.usd /Parent/Child2", "root.usd /Parent/Child1"],
+            &[],
+        ),
+        (
+            "/AnotherParent",
+            &["root.usd /AnotherParent"],
+            &["AnotherChild"],
+        ),
+        (
+            "/AnotherParent/AnotherChild",
+            &["root.usd /AnotherParent/AnotherChild", "model.usd /Model"],
+            &[],
+        ),
+        (
+            "/YetAnotherParent",
+            &["root.usd /YetAnotherParent"],
+            &["Child"],
+        ),
+        (
+            "/YetAnotherParent/Child",
+            &["root.usd /YetAnotherParent/Child"],
+            &[],
+        ),
+        (
+            "/CoRecursiveParent1",
+            &["root.usd /CoRecursiveParent1"],
+            &["Child1"],
+        ),
+        (
+            "/CoRecursiveParent1/Child1",
+            &[
+                "root.usd /CoRecursiveParent1/Child1",
+                "root.usd /CoRecursiveParent2",
+            ],
+            &["Child2"],
+        ),
+        (
+            "/CoRecursiveParent1/Child1/Child2",
+            &["root.usd /CoRecursiveParent2/Child2"],
+            &[],
+        ),
+        (
+            "/CoRecursiveParent2",
+            &["root.usd /CoRecursiveParent2"],
+            &["Child2"],
+        ),
+        (
+            "/CoRecursiveParent2/Child2",
+            &[
+                "root.usd /CoRecursiveParent2/Child2",
+                "root.usd /CoRecursiveParent1",
+            ],
+            &["Child1"],
+        ),
+        (
+            "/CoRecursiveParent2/Child2/Child1",
+            &["root.usd /CoRecursiveParent1/Child1"],
+            &[],
+        ),
+        ("/InheritOfChild", &["root.usd /InheritOfChild"], &["Child"]),
+        (
+            "/InheritOfChild/Child",
+            &["root.usd /InheritOfChild/Child"],
+            &[],
+        ),
+        (
+            "/RelocatedInheritOfChild/Child",
+            &["root.usd /RelocatedInheritOfChild/Child"],
+            &["Class"],
+        ),
+        (
+            "/RelocatedInheritOfChild/Child/Class",
+            &["root.usd /RelocatedInheritOfChild/Child/Class"],
+            &["Object"],
+        ),
+        (
+            "/RelocatedInheritOfChild/Child/Class/Object",
+            &["root.usd /RelocatedInheritOfChild/Child/Class/Object"],
+            &[],
+        ),
+    ];
+    for (prim, stack, children) in expected {
+        let path =
+            layerstack::Path::parse_absolute(prim, &mut loaded.store.tokens).expect("prim path");
+        let id = loaded.store.paths.intern(path);
+        let actual_stack: Vec<String> = stage
+            .prim_stack(id)
+            .unwrap_or_else(|| panic!("{prim} is not composed"))
+            .iter()
+            .map(|(layer, spec)| {
+                format!(
+                    "{} {}",
+                    loaded.layer_names[layer],
+                    spec.display(&loaded.store.tokens)
+                )
+            })
+            .collect();
+        assert_eq!(&actual_stack, stack, "prim stack of {prim}");
+        let actual_children: Vec<String> = stage
+            .children_of(id)
+            .unwrap_or(&[])
+            .iter()
+            .map(|child| {
+                let leaf = loaded.store.paths.resolve(*child).leaf().expect("leaf");
+                loaded.store.tokens.resolve(leaf).to_string()
+            })
+            .collect();
+        assert_eq!(&actual_children, children, "children of {prim}");
+    }
+
+    // `pcp.txt`'s errors, in its notation.
+    let mut expected_errors = vec![
+        "</GroupRoot>: @root.usd@</GroupRoot> references @A.usd@</GroupA> references @B.usd@</GroupB> CANNOT references @A.usd@</GroupA>",
+        "</Parent/Child1>: @root.usd@</Parent/Child1> inherits @root.usd@</Parent/Child2> CANNOT inherits @root.usd@</Parent/Child1>",
+        "</Parent/Child2>: @root.usd@</Parent/Child2> inherits @root.usd@</Parent/Child1> CANNOT inherits @root.usd@</Parent/Child2>",
+        "</AnotherParent/AnotherChild>: @root.usd@</AnotherParent/AnotherChild> references @model.usd@</Model> CANNOT references @root.usd@</AnotherParent>",
+        "</YetAnotherParent/Child>: @root.usd@</YetAnotherParent/Child> CANNOT inherits @root.usd@</YetAnotherParent>",
+        "</CoRecursiveParent1/Child1/Child2>: @root.usd@</CoRecursiveParent1/Child1/Child2> inherits @root.usd@</CoRecursiveParent2/Child2> CANNOT inherits @root.usd@</CoRecursiveParent1>",
+        "</CoRecursiveParent2/Child2/Child1>: @root.usd@</CoRecursiveParent2/Child2/Child1> inherits @root.usd@</CoRecursiveParent1/Child1> CANNOT inherits @root.usd@</CoRecursiveParent2>",
+        "</RelocatedInheritOfChild/Child>: @root.usd@</RelocatedInheritOfChild/Child> CANNOT inherits @root.usd@</RelocatedInheritOfChild/Child/Class>",
+    ];
+    let display = |path: layerstack::PathId| loaded.store.paths.display(path, &loaded.store.tokens);
+    let mut actual_errors: Vec<String> = stage
+        .composition_errors()
+        .iter()
+        .map(|error| {
+            let CompositionError::ArcCycle(cycle) = error else {
+                panic!("unexpected error {error:?}");
+            };
+            let last = cycle.sites.len() - 1;
+            let mut out = format!("<{}>:", display(cycle.prim));
+            for (i, site) in cycle.sites.iter().enumerate() {
+                if let Some(arc) = site.arc {
+                    let verb = match arc {
+                        ArcKind::Inherits => "inherits",
+                        ArcKind::References => "references",
+                        other => panic!("unexpected arc {other:?}"),
+                    };
+                    let cannot = if i == last { "CANNOT " } else { "" };
+                    out.push_str(&format!(" {cannot}{verb}"));
+                }
+                out.push_str(&format!(
+                    " @{}@<{}>",
+                    loaded.layer_names[&site.layer_stack],
+                    display(site.path)
+                ));
+            }
+            out
+        })
+        .collect();
+    expected_errors.sort_unstable();
+    actual_errors.sort_unstable();
+    assert_eq!(actual_errors, expected_errors);
 }

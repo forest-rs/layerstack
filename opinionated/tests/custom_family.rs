@@ -191,3 +191,34 @@ fn report_records_dense_termination() {
         ]
     );
 }
+
+#[test]
+fn fold_stops_pulling_at_dense_member_or_block() {
+    // Callers that sample or clone lazily per opinion (e.g. time-sampled
+    // domains) rely on the kernel never pulling past the member that ends the
+    // fold.
+    let dense = [
+        (CounterOp::Delta(1), "strong"),
+        (CounterOp::Total(10), "dense"),
+        (CounterOp::Delta(100), "hidden"),
+        (CounterOp::Total(1000), "hidden"),
+    ];
+    let mut pulled = 0;
+    let resolved = resolve_family_chain(&CounterFamily, pairs(&dense).inspect(|_| pulled += 1));
+    assert_eq!(resolved.resolved(), Some((11, "strong")));
+    assert_eq!(
+        pulled, 2,
+        "no opinion weaker than the dense total is pulled"
+    );
+
+    let blocked = [
+        (CounterOp::Delta(1), "strong"),
+        (CounterOp::Reset, "block"),
+        (CounterOp::Total(1000), "hidden"),
+    ];
+    let mut pulled = 0;
+    let report =
+        resolve_family_chain_report(&CounterFamily, pairs(&blocked).inspect(|_| pulled += 1));
+    assert_eq!(report.resolution.resolved(), Some((1, "strong")));
+    assert_eq!(pulled, 2, "no opinion weaker than the block is pulled");
+}

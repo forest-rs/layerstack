@@ -15,6 +15,7 @@
 
 use std::path::PathBuf;
 
+pub mod export_fixtures;
 pub mod listop_vectors;
 pub mod pcp;
 pub mod usda_real;

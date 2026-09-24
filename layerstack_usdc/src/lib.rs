@@ -6,6 +6,11 @@
 //! Reads USDC files per AOUSD Core §16.3 and produces [`Layer`] / [`PrimSpec`]
 //! structures compatible with the layerstack composition engine.
 //!
+//! Crate versions 0.7 through 0.15 are readable, following OpenUSD v26.08 for
+//! the versions after AOUSD Core 1.0.1. The [`version`] module lists what each
+//! version adds, and which errors report versions and features this reader
+//! does not support.
+//!
 //! The reader operates on a byte slice (`&[u8]`), making it suitable for both
 //! file reads and memory-mapped I/O. The crate is `no_std` by default; enable
 //! the `std` feature for convenience wrappers that accept file paths.

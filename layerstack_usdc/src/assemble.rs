@@ -28,13 +28,14 @@ use layerstack::doc::{
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp;
 use layerstack::path::{Path, PathId, PathInterner, PropertyPath, TargetPath};
-#[cfg(feature = "experimental_sparse_array_edits")]
 use layerstack::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
 use layerstack::{AssetResolver, PropertyType, ReferenceTarget, ResolvedAsset};
 
 use crate::error::UsdcError;
 use crate::section::CrateSections;
-use crate::value_rep::{CrateListOp, CrateValue, RawValueRep, decode_value};
+use crate::value_rep::{
+    CrateArrayEdit, CrateArrayEditOp, CrateListOp, CrateValue, RawValueRep, decode_value,
+};
 use crate::value_type::{SpecForm, ValueType};
 
 /// Result of assembling a USDC file into a layer.
@@ -709,9 +710,6 @@ impl AssembleCtx<'_> {
 
     /// Converts a [`CrateValue`] to a [`Value`].
     fn convert_crate_value(&mut self, cv: &CrateValue) -> Value {
-        if let Some(edit) = self.try_convert_experimental_array_edit(cv) {
-            return edit;
-        }
         match cv {
             CrateValue::None => Value::Blocked,
             CrateValue::Bool(b) => Value::Bool(*b),
@@ -786,186 +784,71 @@ impl AssembleCtx<'_> {
                 // Splines are handled as FieldValue::Spline, not plain values.
                 Value::Null
             }
+            CrateValue::ArrayEdit(edit) => Value::ArrayEdit(self.convert_array_edit(edit)),
         }
     }
 
-    #[cfg(feature = "experimental_sparse_array_edits")]
-    fn try_convert_experimental_array_edit(&mut self, cv: &CrateValue) -> Option<Value> {
-        let CrateValue::Dictionary(entries) = cv else {
-            return None;
-        };
-
-        let is_marker = entries.iter().any(|(key, value)| {
-            key == "__layerstack_sparse_array_edit__" && matches!(value, CrateValue::Bool(true))
-        });
-        if !is_marker {
-            return None;
-        }
-
-        let CrateValue::Array(op_values) = entries
-            .iter()
-            .find(|(key, _)| key == "ops")
-            .map(|(_, value)| value)?
-        else {
-            return None;
-        };
-
-        let mut ops = Vec::with_capacity(op_values.len());
-        for op_value in op_values {
-            ops.push(self.convert_experimental_array_edit_op(op_value)?);
-        }
-        Some(Value::ArrayEdit(ArrayEdit { ops }))
-    }
-
-    #[cfg(not(feature = "experimental_sparse_array_edits"))]
-    fn try_convert_experimental_array_edit(&mut self, _cv: &CrateValue) -> Option<Value> {
-        None
-    }
-
-    #[cfg(feature = "experimental_sparse_array_edits")]
-    fn convert_experimental_array_edit_op(&mut self, value: &CrateValue) -> Option<ArrayEditOp> {
-        let CrateValue::Dictionary(entries) = value else {
-            return None;
-        };
-
-        let op_name = entries.iter().find_map(|(key, value)| {
-            (key == "op").then_some(match value {
-                CrateValue::String(text) | CrateValue::Token(text) => Some(text.as_str()),
-                _ => None,
-            })?
-        })?;
-
-        match op_name {
-            "write" => Some(ArrayEditOp::Write {
-                src: self.convert_experimental_array_edit_operand(
-                    entries
-                        .iter()
-                        .find(|(key, _)| key == "src")
-                        .map(|(_, value)| value)?,
-                )?,
-                index: self.convert_experimental_array_edit_index(
-                    entries
-                        .iter()
-                        .find(|(key, _)| key == "index")
-                        .map(|(_, value)| value)?,
-                )?,
-            }),
-            "insert" => Some(ArrayEditOp::Insert {
-                src: self.convert_experimental_array_edit_operand(
-                    entries
-                        .iter()
-                        .find(|(key, _)| key == "src")
-                        .map(|(_, value)| value)?,
-                )?,
-                index: self.convert_experimental_array_edit_index(
-                    entries
-                        .iter()
-                        .find(|(key, _)| key == "index")
-                        .map(|(_, value)| value)?,
-                )?,
-            }),
-            "prepend" => Some(ArrayEditOp::Insert {
-                src: self.convert_experimental_array_edit_operand(
-                    entries
-                        .iter()
-                        .find(|(key, _)| key == "src")
-                        .map(|(_, value)| value)?,
-                )?,
-                index: ArrayIndex::Position(0),
-            }),
-            "append" => Some(ArrayEditOp::Insert {
-                src: self.convert_experimental_array_edit_operand(
-                    entries
-                        .iter()
-                        .find(|(key, _)| key == "src")
-                        .map(|(_, value)| value)?,
-                )?,
-                index: ArrayIndex::End,
-            }),
-            "erase" => Some(ArrayEditOp::Erase {
-                index: self.convert_experimental_array_edit_index(
-                    entries
-                        .iter()
-                        .find(|(key, _)| key == "index")
-                        .map(|(_, value)| value)?,
-                )?,
-            }),
-            "minsize" => Some(ArrayEditOp::MinSize {
-                len: self.convert_experimental_array_edit_len(
-                    entries
-                        .iter()
-                        .find(|(key, _)| key == "len")
-                        .map(|(_, value)| value)?,
-                )?,
-            }),
-            "maxsize" => Some(ArrayEditOp::MaxSize {
-                len: self.convert_experimental_array_edit_len(
-                    entries
-                        .iter()
-                        .find(|(key, _)| key == "len")
-                        .map(|(_, value)| value)?,
-                )?,
-            }),
-            "resize" => Some(ArrayEditOp::Resize {
-                len: self.convert_experimental_array_edit_len(
-                    entries
-                        .iter()
-                        .find(|(key, _)| key == "len")
-                        .map(|(_, value)| value)?,
-                )?,
-            }),
-            _ => None,
-        }
-    }
-
-    #[cfg(feature = "experimental_sparse_array_edits")]
-    fn convert_experimental_array_edit_operand(
-        &mut self,
-        value: &CrateValue,
-    ) -> Option<ArrayEditOperand> {
-        let CrateValue::Dictionary(entries) = value else {
-            return None;
-        };
-
-        if let Some(literal) = entries
-            .iter()
-            .find(|(key, _)| key == "literal")
-            .map(|(_, value)| value)
-        {
-            return Some(ArrayEditOperand::Literal(self.convert_crate_value(literal)));
-        }
-
-        entries
-            .iter()
-            .find(|(key, _)| key == "copyFrom")
-            .map(|(_, value)| value)
-            .and_then(|value| self.convert_experimental_array_edit_index(value))
-            .map(ArrayEditOperand::CopyFrom)
-    }
-
-    #[cfg(feature = "experimental_sparse_array_edits")]
-    fn convert_experimental_array_edit_index(&self, value: &CrateValue) -> Option<ArrayIndex> {
-        match value {
-            CrateValue::Int(v) => Some(ArrayIndex::Position(i64::from(*v))),
-            CrateValue::Int64(v) => Some(ArrayIndex::Position(*v)),
-            CrateValue::UInt(v) => Some(ArrayIndex::Position(i64::from(*v))),
-            CrateValue::UInt64(v) => i64::try_from(*v).ok().map(ArrayIndex::Position),
-            CrateValue::String(text) | CrateValue::Token(text) if text == "end" => {
-                Some(ArrayIndex::End)
+    /// Converts a native crate array edit to an [`ArrayEdit`].
+    ///
+    /// Instructions map one to one. OpenUSD's end index becomes
+    /// [`ArrayIndex::End`]; other indices keep their value, and negative ones
+    /// still count from the end. Out-of-range indices are kept and skipped
+    /// when the edit is applied, as in `VtArrayEdit`
+    /// (`pxr/base/vt/arrayEditOps.h`).
+    fn convert_array_edit(&mut self, edit: &CrateArrayEdit) -> ArrayEdit {
+        let index = |i: i64| {
+            if i == CrateArrayEdit::END {
+                ArrayIndex::End
+            } else {
+                ArrayIndex::Position(i)
             }
-            _ => None,
-        }
-    }
-
-    #[cfg(feature = "experimental_sparse_array_edits")]
-    fn convert_experimental_array_edit_len(&self, value: &CrateValue) -> Option<usize> {
-        match value {
-            CrateValue::Int(v) if *v >= 0 => usize::try_from(*v).ok(),
-            CrateValue::Int64(v) if *v >= 0 => usize::try_from(*v).ok(),
-            CrateValue::UInt(v) => usize::try_from(*v).ok(),
-            CrateValue::UInt64(v) => usize::try_from(*v).ok(),
-            _ => None,
-        }
+        };
+        let len = |len: u64| usize::try_from(len).unwrap_or(usize::MAX);
+        let ops = edit
+            .ops
+            .iter()
+            .map(|op| match *op {
+                CrateArrayEditOp::WriteLiteral {
+                    literal,
+                    index: dst,
+                } => ArrayEditOp::Write {
+                    src: ArrayEditOperand::Literal(
+                        self.convert_crate_value(&edit.literals[literal]),
+                    ),
+                    index: index(dst),
+                },
+                CrateArrayEditOp::WriteRef { src, index: dst } => ArrayEditOp::Write {
+                    src: ArrayEditOperand::CopyFrom(index(src)),
+                    index: index(dst),
+                },
+                CrateArrayEditOp::InsertLiteral {
+                    literal,
+                    index: dst,
+                } => ArrayEditOp::Insert {
+                    src: ArrayEditOperand::Literal(
+                        self.convert_crate_value(&edit.literals[literal]),
+                    ),
+                    index: index(dst),
+                },
+                CrateArrayEditOp::InsertRef { src, index: dst } => ArrayEditOp::Insert {
+                    src: ArrayEditOperand::CopyFrom(index(src)),
+                    index: index(dst),
+                },
+                CrateArrayEditOp::Erase { index: dst } => ArrayEditOp::Erase { index: index(dst) },
+                CrateArrayEditOp::MinSize { len: n } => ArrayEditOp::MinSize { len: len(n) },
+                CrateArrayEditOp::MinSizeFill { len: n, literal } => ArrayEditOp::MinSizeFill {
+                    len: len(n),
+                    fill: self.convert_crate_value(&edit.literals[literal]),
+                },
+                CrateArrayEditOp::SetSize { len: n } => ArrayEditOp::Resize { len: len(n) },
+                CrateArrayEditOp::SetSizeFill { len: n, literal } => ArrayEditOp::ResizeFill {
+                    len: len(n),
+                    fill: self.convert_crate_value(&edit.literals[literal]),
+                },
+                CrateArrayEditOp::MaxSize { len: n } => ArrayEditOp::MaxSize { len: len(n) },
+            })
+            .collect();
+        ArrayEdit { ops }
     }
 
     /// Converts a [`CrateValue`] to a [`FieldValue`], handling list ops
@@ -1462,7 +1345,7 @@ fn parse_variant_property_path(path: &str) -> Option<(String, String, String, St
 
 fn crate_value_is_array(value: &CrateValue) -> bool {
     match value {
-        CrateValue::Array(_) => true,
+        CrateValue::Array(_) | CrateValue::ArrayEdit(_) => true,
         CrateValue::TimeSamples(samples) => samples
             .iter()
             .any(|(_, sample)| crate_value_is_array(sample)),
@@ -1726,10 +1609,6 @@ fn merge_path_listop(target: &mut ListOp<PathId>, source: ListOp<PathId>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "experimental_sparse_array_edits")]
-    use crate::section::CrateSections;
-    #[cfg(feature = "experimental_sparse_array_edits")]
-    use alloc::vec;
 
     #[test]
     fn split_property_simple() {
@@ -1798,113 +1677,5 @@ mod tests {
     #[test]
     fn parent_prim_path_root() {
         assert!(parent_prim_path("/").is_none());
-    }
-
-    #[cfg(feature = "experimental_sparse_array_edits")]
-    #[test]
-    fn converts_experimental_sparse_array_edit_dictionary() {
-        struct NoopResolver;
-
-        impl AssetResolver for NoopResolver {
-            fn resolve(
-                &mut self,
-                _asset_path: &str,
-                _anchor: Option<LayerId>,
-                _tokens: &mut TokenInterner,
-                _paths: &mut PathInterner,
-            ) -> Result<ResolvedAsset, layerstack::AssetResolveError> {
-                unreachable!("asset resolution is not used in this test")
-            }
-
-            fn resolved_path(&self, _id: LayerId) -> Option<&str> {
-                None
-            }
-        }
-
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
-        let sections = CrateSections {
-            tokens: Vec::new(),
-            strings: Vec::new(),
-            fields: Vec::new(),
-            fieldsets: Vec::new(),
-            paths: Vec::new(),
-            specs: Vec::new(),
-            version: crate::version::CrateVersion::NEWEST_READABLE,
-        };
-        let mut resolver = NoopResolver;
-        let mut ctx = AssembleCtx {
-            data: &[],
-            sections: &sections,
-            tokens: &mut tokens,
-            paths: &mut paths,
-            resolver: &mut resolver,
-            layer_id: LayerId(1),
-            resolved_layers: Vec::new(),
-        };
-
-        let value = ctx.convert_crate_value(&CrateValue::Dictionary(vec![
-            (
-                String::from("__layerstack_sparse_array_edit__"),
-                CrateValue::Bool(true),
-            ),
-            (
-                String::from("ops"),
-                CrateValue::Array(vec![
-                    CrateValue::Dictionary(vec![
-                        (
-                            String::from("op"),
-                            CrateValue::String(String::from("write")),
-                        ),
-                        (
-                            String::from("src"),
-                            CrateValue::Dictionary(vec![(
-                                String::from("literal"),
-                                CrateValue::Int(7),
-                            )]),
-                        ),
-                        (String::from("index"), CrateValue::Int(0)),
-                    ]),
-                    CrateValue::Dictionary(vec![
-                        (
-                            String::from("op"),
-                            CrateValue::String(String::from("append")),
-                        ),
-                        (
-                            String::from("src"),
-                            CrateValue::Dictionary(vec![(
-                                String::from("literal"),
-                                CrateValue::Int(9),
-                            )]),
-                        ),
-                        (
-                            String::from("index"),
-                            CrateValue::String(String::from("end")),
-                        ),
-                    ]),
-                ]),
-            ),
-        ]));
-
-        match value {
-            Value::ArrayEdit(edit) => {
-                assert_eq!(edit.ops.len(), 2);
-                assert!(matches!(
-                    edit.ops[0],
-                    ArrayEditOp::Write {
-                        src: ArrayEditOperand::Literal(Value::Int(7)),
-                        index: ArrayIndex::Position(0),
-                    }
-                ));
-                assert!(matches!(
-                    edit.ops[1],
-                    ArrayEditOp::Insert {
-                        src: ArrayEditOperand::Literal(Value::Int(9)),
-                        index: ArrayIndex::End,
-                    }
-                ));
-            }
-            other => panic!("expected array edit, got {other:?}"),
-        }
     }
 }

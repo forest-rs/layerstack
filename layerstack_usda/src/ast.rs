@@ -62,6 +62,8 @@ pub struct SubLayerItem<'a> {
 /// A relocates entry: `<source> : <target>`.
 #[derive(Debug)]
 pub struct RelocateEntry<'a> {
+    /// Source span of the entry.
+    pub span: Span,
     /// Source path (without `<>` delimiters).
     pub source: &'a str,
     /// Target path (without `<>` delimiters).

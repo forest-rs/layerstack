@@ -121,8 +121,22 @@ impl EmitCtx<'_> {
                         }
                     }
                 }
-                ast::LayerMeta::Relocates(_) => {
-                    // Relocates are not yet supported in layerstack v0.1.
+                ast::LayerMeta::Relocates(entries) => {
+                    // Relocates (AOUSD Core §10, relocates arcs) are not
+                    // modelled: the layer has nowhere to store them and
+                    // composition does not apply them. Report each entry
+                    // instead of dropping it silently, since the composed
+                    // namespace will differ from the authored intent.
+                    for entry in entries {
+                        self.diagnostics.push(Diagnostic::error(
+                            entry.span,
+                            format!(
+                                "unsupported: relocates `<{}>: <{}>` is ignored; \
+                                 layerstack does not compose relocates",
+                                entry.source, entry.target
+                            ),
+                        ));
+                    }
                 }
                 ast::LayerMeta::Doc(_) => {
                     // Layer-level metadata fields don't map to PrimSpec.
@@ -1974,6 +1988,33 @@ def \"A\" {
         } else {
             panic!("expected TimeSamples");
         }
+    }
+
+    #[test]
+    fn emit_relocates_reports_unsupported() {
+        let src = "\
+#usda 1.0
+(
+    relocates = {
+        </Rig/Anim>: </Anim>
+        </Rig/Other>: </Other>
+    }
+)
+def \"Rig\" {
+}
+";
+        let (result, _tokens, _paths) = emit_source(src);
+        assert_eq!(result.diagnostics.len(), 2, "one diagnostic per entry");
+        let first = &result.diagnostics[0];
+        assert_eq!(first.severity, crate::diagnostic::Severity::Error);
+        assert!(
+            first.message.contains("relocates") && first.message.contains("</Rig/Anim>: </Anim>"),
+            "message names the ignored entry: {}",
+            first.message
+        );
+        assert_eq!(first.span.text(src), "</Rig/Anim>: </Anim>");
+        // The rest of the layer is still emitted.
+        assert_eq!(result.layer.prims.len(), 2, "pseudo-root and /Rig");
     }
 
     #[test]

@@ -1060,4 +1060,41 @@ mod tests {
             array_value(&[1, 2])
         );
     }
+
+    #[test]
+    fn sampled_block_hides_weaker_array_at_time() {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let prim = paths.intern(Path::parse_absolute("/A", &mut tokens).expect("valid path"));
+        let field = tokens.intern("x");
+
+        let mut index = PrimIndex::default();
+        let key = test_key(LayerId(1), prim);
+        index.add_property_type(field, key.clone(), int_array_type());
+        index.add_opinion(Opinion {
+            key: key.clone(),
+            field,
+            value: FieldValue::TimeSamples(vec![(0.0, Value::Blocked)]),
+            layer_offset: LayerOffset::IDENTITY,
+        });
+        index.add_opinion(Opinion {
+            key: OpinionKey {
+                layer_strength: 1,
+                ..key.clone()
+            },
+            field,
+            value: FieldValue::Value(array_value(&[42])),
+            layer_offset: LayerOffset::IDENTITY,
+        });
+
+        // Spec: AOUSD Core §12.3.6 (individual time samples can be blocked).
+        let stage = Stage::from_parts(HashMap::from([(prim, index)]), HashMap::new(), false, None);
+        for time in [0.0, 1.0] {
+            assert_eq!(
+                stage.resolve_value_at_time(prim, field, time, InterpolationType::Held),
+                None,
+                "the sampled block must hide the weaker array at t={time}"
+            );
+        }
+    }
 }

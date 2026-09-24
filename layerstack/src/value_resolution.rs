@@ -78,7 +78,7 @@ enum Sampling {
 ///
 /// The family folds authored [`Opinion`]s directly. [`Value::Array`] is the
 /// dense member, [`Value::ArrayEdit`] the sparse edit, and [`Value::Blocked`]
-/// the block. The seed is
+/// the block, whether authored as a default or as a time sample. The seed is
 /// the schema fallback when one is present (materialized over the empty array
 /// if it is itself an edit), otherwise the empty array. The carried
 /// [`PropertyType`] lets edits perform typed materialization
@@ -111,6 +111,11 @@ impl ArrayFamily<'_> {
         match value {
             Value::Array(items) => FamilyMember::Dense(items),
             Value::ArrayEdit(edit) => FamilyMember::Sparse(edit),
+            // A sampled block blocks exactly like an authored default block.
+            //
+            // Spec: AOUSD Core §12.3.6 (blocked attributes: individual time
+            // samples can be blocked).
+            Value::Blocked => FamilyMember::Block,
             _ => Self::foreign(),
         }
     }
@@ -727,6 +732,116 @@ mod tests {
         assert_eq!(
             visited, 2,
             "the fold must stop at the first block without visiting weaker opinions"
+        );
+    }
+
+    fn resolve_at(
+        opinions: &[Opinion],
+        time: f64,
+        interp: InterpolationType,
+    ) -> SparseResolveResult {
+        resolve_sparse_value(
+            opinions,
+            SparseQuery::AtTime { time, interp },
+            Some(&int_array_type()),
+        )
+    }
+
+    #[test]
+    fn sampled_block_blocks_weaker_dense_array() {
+        let (spec_path, field) = test_ids();
+        let opinions = vec![
+            array_opinion(
+                spec_path,
+                field,
+                FieldValue::TimeSamples(vec![(0.0, Value::Blocked)]),
+                0,
+            ),
+            array_opinion(spec_path, field, FieldValue::Value(array_value(&[42])), 1),
+        ];
+
+        for time in [-1.0, 0.0, 5.0] {
+            for interp in [InterpolationType::Held, InterpolationType::Linear] {
+                assert_eq!(
+                    resolve_at(&opinions, time, interp),
+                    SparseResolveResult::Blocked,
+                    "a sampled block must hide the weaker array at t={time} ({interp:?})"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn sampled_block_applies_only_where_it_is_the_held_sample() {
+        let (spec_path, field) = test_ids();
+        let opinions = vec![
+            array_opinion(
+                spec_path,
+                field,
+                FieldValue::TimeSamples(vec![
+                    (0.0, write_edit(9, 0)),
+                    (2.0, Value::Blocked),
+                    (4.0, array_value(&[7])),
+                ]),
+                0,
+            ),
+            array_opinion(spec_path, field, FieldValue::Value(array_value(&[1, 2])), 1),
+        ];
+
+        let held = InterpolationType::Held;
+        assert_eq!(
+            resolve_at(&opinions, 1.0, held),
+            SparseResolveResult::Resolved(array_value(&[9, 2])),
+            "held edit sample before the block composes over the weaker array"
+        );
+        assert_eq!(
+            resolve_at(&opinions, 2.0, held),
+            SparseResolveResult::Blocked,
+            "exact block sample"
+        );
+        assert_eq!(
+            resolve_at(&opinions, 3.0, held),
+            SparseResolveResult::Blocked,
+            "held block sample"
+        );
+        assert_eq!(
+            resolve_at(&opinions, 3.0, InterpolationType::Linear),
+            SparseResolveResult::Blocked,
+            "arrays do not interpolate, so a block holds under linear interpolation too"
+        );
+        assert_eq!(
+            resolve_at(&opinions, 4.0, held),
+            SparseResolveResult::Resolved(array_value(&[7])),
+            "exact dense sample after the block"
+        );
+    }
+
+    #[test]
+    fn layer_offset_maps_query_time_before_sampling_a_block() {
+        let (spec_path, field) = test_ids();
+        let mut strong = array_opinion(
+            spec_path,
+            field,
+            FieldValue::TimeSamples(vec![(0.0, array_value(&[1])), (1.0, Value::Blocked)]),
+            0,
+        );
+        // Stage time 11 maps to layer time 1, the block sample.
+        strong.layer_offset = LayerOffset {
+            offset: -10.0,
+            scale: 1.0,
+        };
+        let opinions = vec![
+            strong,
+            array_opinion(spec_path, field, FieldValue::Value(array_value(&[42])), 1),
+        ];
+
+        assert_eq!(
+            resolve_at(&opinions, 10.0, InterpolationType::Held),
+            SparseResolveResult::Resolved(array_value(&[1]))
+        );
+        assert_eq!(
+            resolve_at(&opinions, 11.0, InterpolationType::Held),
+            SparseResolveResult::Blocked
         );
     }
 }

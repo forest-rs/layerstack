@@ -1,0 +1,17 @@
+#usda 1.0
+(
+    subLayers = [
+        @./ui_hints_weak.usda@
+    ]
+)
+
+over "Root"
+{
+    float softness (
+        limits = {
+            dictionary soft = {
+                float minimum = 2
+            }
+        }
+    )
+}

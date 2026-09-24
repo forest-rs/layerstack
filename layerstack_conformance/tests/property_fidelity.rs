@@ -20,9 +20,9 @@ use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack::{
     AssetResolveError, AssetResolver, FieldValue, InMemoryStore, InterpolationType, LayerId,
-    PropertyPath, ResolvedAsset, Stage, StageOptions, Value,
+    PropertyPath, ResolvedAsset, ResolvedValue, Stage, StageOptions, Value, Variability,
 };
-use layerstack_conformance::authored::{Names, dump_layer};
+use layerstack_conformance::authored::{Names, dump_layer, render_value};
 use layerstack_conformance::workspace_root;
 use layerstack_usda::emit::emit;
 use layerstack_usda::lower::lower;
@@ -250,4 +250,106 @@ fn probe_keeps_every_authored_slot() {
         "the default survives removing the connection"
     );
     assert_eq!(stage.resolve_target_list_path(b), None);
+}
+
+/// Nested UI-hint `limits` metadata composes by dictionary combining: a
+/// stronger soft minimum keeps the weaker soft maximum and hard limits.
+///
+/// Expected values come from `ui_hints.flattened.usda`, Apple `usdcat
+/// --flatten` of `ui_hints.usda` (only its generated `doc` was shortened).
+///
+/// Spec: AOUSD Core §12.2.5 (dictionaries combine);
+/// `OpenUSD-proposals/proposals/ui-hints/README.md` (weaker entries
+/// survive).
+#[test]
+fn ui_hint_limits_combine_like_usdcat_flatten() {
+    let mut loaded =
+        layerstack_conformance::usda_real::load_entry_usda(&assets_dir().join("ui_hints.usda"));
+    let prim = loaded.store.path("/Root");
+    let softness = loaded.store.tokens.intern("softness");
+    let stage = Stage::compose(
+        &mut loaded.store,
+        loaded.root_layer,
+        StageOptions::default(),
+    );
+
+    let mut flattened = load_usda(&assets_dir().join("ui_hints.flattened.usda"));
+    let flat_softness = flattened.property_path("/Root.softness");
+
+    for key_name in ["limits", "customData"] {
+        let key = loaded.store.tokens.intern(key_name);
+        let resolved = stage
+            .resolve_property_metadata(prim, softness, key)
+            .unwrap_or_else(|| panic!("{key_name} resolves"));
+        let ResolvedValue::Dictionary(entries) = resolved.value else {
+            panic!("{key_name} is a dictionary");
+        };
+        let flat_key = flattened.tokens.intern(key_name);
+        let Some(FieldValue::Value(expected)) = flattened.layers[&LayerId(1)]
+            .property(flat_softness)
+            .and_then(|spec| spec.metadata(flat_key))
+        else {
+            panic!("flattened {key_name}");
+        };
+        let actual = render_value(
+            &Value::Dictionary(entries),
+            Names {
+                tokens: &loaded.store.tokens,
+                paths: &loaded.store.paths,
+            },
+        );
+        let expected = render_value(
+            expected,
+            Names {
+                tokens: &flattened.tokens,
+                paths: &flattened.paths,
+            },
+        );
+        assert_eq!(actual, expected, "{key_name} differs from usdcat --flatten");
+    }
+    assert_eq!(
+        stage
+            .resolve_field_path(PropertyPath::new(prim, softness))
+            .map(|r| r.value),
+        Some(Value::Float(0.5)),
+        "the weaker default survives the stronger declaration-only spec"
+    );
+}
+
+/// Unknown applied schemas and namespaced uniform properties survive, and
+/// declarations resolve per Core §12.2.3–§12.2.4.
+#[test]
+fn unknown_schemas_and_uniform_namespaced_properties_survive() {
+    let mut store = assert_matches_usdcat("metadata");
+    let prim = store.path("/Root");
+    let api = store.tokens.intern("apiSchemas");
+    let review = store.tokens.intern("StudioReviewAPI:main");
+    let tool = store.tokens.intern("authorship:main:tool");
+    let inputs = store.tokens.intern("authorship:main:inputs");
+    let softness = store.tokens.intern("softness");
+    let color = store.tokens.intern("primvars:displayColor");
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    let schemas = stage
+        .resolve_token_list(prim, api)
+        .expect("apiSchemas")
+        .value;
+    assert!(schemas.contains(&review), "unknown applied schema kept");
+
+    let tool = stage
+        .resolve_property_declaration(prim, tool)
+        .expect("tool");
+    assert_eq!(tool.variability, Variability::Uniform);
+    assert!(!tool.custom);
+    let inputs = stage
+        .resolve_property_declaration(prim, inputs)
+        .expect("inputs");
+    assert_eq!(inputs.variability, Variability::Uniform);
+    assert!(inputs.custom);
+    assert_eq!(inputs.type_name.map(|t| t.is_array), Some(true));
+
+    assert_eq!(
+        stage.resolve_property_order(prim, &store),
+        Some(vec![softness, color])
+    );
 }

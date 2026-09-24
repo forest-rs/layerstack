@@ -286,6 +286,7 @@ dependencies = [
  "layerstack",
  "layerstack_mesh_export",
  "layerstack_usda",
+ "layerstack_usdz",
 ]
 
 [[package]]

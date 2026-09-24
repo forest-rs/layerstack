@@ -16,6 +16,7 @@ std = []
 
 [dependencies]
 layerstack = { path = "../layerstack" }
+layerstack_usda = { path = "../layerstack_usda" }
 lz4_flex = { workspace = true }
 smallvec = { workspace = true }
 

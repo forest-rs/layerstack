@@ -16,6 +16,7 @@ use crate::compression::{lz4_decompress, read_compressed_ints};
 use crate::error::UsdcError;
 use crate::toc::{SectionEntry, Toc};
 use crate::value_type::SpecForm;
+use crate::version::CrateVersion;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -60,6 +61,11 @@ pub struct CrateSections {
     pub paths: Vec<String>,
     /// Spec definitions from the SPECS section.
     pub specs: Vec<SpecDef>,
+    /// The file's format version, from the header.
+    ///
+    /// Value decoding uses it to reject encodings the declared version
+    /// cannot contain.
+    pub version: CrateVersion,
 }
 
 // ---------------------------------------------------------------------------
@@ -68,8 +74,13 @@ pub struct CrateSections {
 
 /// Parses all six sections from the given file data and TOC.
 ///
-/// Sections that are absent from the TOC produce empty vectors.
-pub fn parse_sections(data: &[u8], toc: &Toc) -> Result<CrateSections, UsdcError> {
+/// Sections that are absent from the TOC produce empty vectors. `version` is
+/// the header's format version and is recorded in the result.
+pub fn parse_sections(
+    data: &[u8],
+    toc: &Toc,
+    version: CrateVersion,
+) -> Result<CrateSections, UsdcError> {
     let tokens = if let Some(entry) = toc.tokens {
         parse_tokens(data, &entry)?
     } else {
@@ -113,6 +124,7 @@ pub fn parse_sections(data: &[u8], toc: &Toc) -> Result<CrateSections, UsdcError
         fieldsets,
         paths,
         specs,
+        version,
     })
 }
 

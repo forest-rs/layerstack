@@ -9,14 +9,10 @@
 //! Spec: AOUSD Core §16.3.2.
 
 use crate::error::UsdcError;
+use crate::version::CrateVersion;
 
 /// Magic bytes at the start of every USDC file.
 const MAGIC: &[u8; 8] = b"PXR-USDC";
-
-/// Minimum supported format version (inclusive).
-const MIN_VERSION: (u8, u8) = (0, 7);
-/// Maximum supported format version (inclusive).
-const MAX_VERSION: (u8, u8) = (0, 12);
 
 /// Parsed USDC file header.
 ///
@@ -31,7 +27,9 @@ pub struct Header {
 
 /// Parses the 32-byte USDC header from the start of `data`.
 ///
-/// Validates the magic bytes, version range, and reserved fields.
+/// Validates the magic bytes and the version range. Versions outside
+/// [`CrateVersion::OLDEST_READABLE`]..=[`CrateVersion::NEWEST_READABLE`]
+/// fail with [`UsdcError::UnsupportedVersion`]; see [`crate::version`].
 ///
 /// Spec: AOUSD Core §16.3.2.
 ///
@@ -69,7 +67,7 @@ pub fn parse_header(data: &[u8]) -> Result<Header, UsdcError> {
     // Bytes 11–15: reserved (5 bytes, must be zero).
     // We warn-and-continue in the Python reference; here we just ignore.
 
-    if major != MIN_VERSION.0 || minor < MIN_VERSION.1 || minor > MAX_VERSION.1 || patch != 0 {
+    if !CrateVersion::new(major, minor, patch).is_readable() {
         return Err(UsdcError::UnsupportedVersion {
             major,
             minor,
@@ -87,6 +85,15 @@ pub fn parse_header(data: &[u8]) -> Result<Header, UsdcError> {
         version: [major, minor, patch],
         toc_offset,
     })
+}
+
+impl Header {
+    /// The header's format version as a [`CrateVersion`].
+    #[must_use]
+    pub fn crate_version(&self) -> CrateVersion {
+        let [major, minor, patch] = self.version;
+        CrateVersion::new(major, minor, patch)
+    }
 }
 
 #[cfg(test)]
@@ -125,6 +132,35 @@ mod tests {
             parse_header(&buf),
             Err(UsdcError::UnsupportedVersion { .. })
         ));
+    }
+
+    fn header_with_version(major: u8, minor: u8, patch: u8) -> [u8; 32] {
+        let mut buf = [0_u8; 32];
+        buf[..8].copy_from_slice(b"PXR-USDC");
+        buf[8] = major;
+        buf[9] = minor;
+        buf[10] = patch;
+        buf
+    }
+
+    #[test]
+    fn readable_version_range() {
+        for minor in 7..=12 {
+            let h = parse_header(&header_with_version(0, minor, 0)).unwrap();
+            assert_eq!(h.crate_version(), CrateVersion::new(0, minor, 0));
+        }
+        // Patch levels are forward compatible.
+        assert!(parse_header(&header_with_version(0, 12, 3)).is_ok());
+        for (major, minor) in [(0, 6), (0, 13), (0, 255), (1, 0)] {
+            assert_eq!(
+                parse_header(&header_with_version(major, minor, 0)),
+                Err(UsdcError::UnsupportedVersion {
+                    major,
+                    minor,
+                    patch: 0
+                })
+            );
+        }
     }
 
     #[test]

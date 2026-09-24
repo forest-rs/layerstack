@@ -8,12 +8,15 @@
 use alloc::string::String;
 use core::fmt;
 
+use crate::version::CrateVersion;
+
 /// Errors that can occur while reading a USDC file.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UsdcError {
     /// Invalid magic bytes (expected `PXR-USDC`).
     InvalidMagic,
-    /// Unsupported crate format version.
+    /// Crate format version outside the readable range
+    /// ([`CrateVersion::OLDEST_READABLE`]..=[`CrateVersion::NEWEST_READABLE`]).
     UnsupportedVersion {
         /// Major version byte.
         major: u8,
@@ -67,6 +70,16 @@ pub enum UsdcError {
         /// Description of the inconsistency.
         message: &'static str,
     },
+    /// A value uses an encoding introduced after the file's declared
+    /// version, so the file is malformed.
+    FeatureRequiresVersion {
+        /// The encoding that was found.
+        feature: &'static str,
+        /// The version that introduced it.
+        required: CrateVersion,
+        /// The version the file declares.
+        found: CrateVersion,
+    },
 }
 
 impl fmt::Display for UsdcError {
@@ -77,7 +90,13 @@ impl fmt::Display for UsdcError {
                 major,
                 minor,
                 patch,
-            } => write!(f, "unsupported USDC version {major}.{minor}.{patch}"),
+            } => write!(
+                f,
+                "unsupported USDC version {major}.{minor}.{patch} (readable: {} to {}.{}.x)",
+                CrateVersion::OLDEST_READABLE,
+                CrateVersion::NEWEST_READABLE.major,
+                CrateVersion::NEWEST_READABLE.minor,
+            ),
             Self::UnexpectedEof {
                 section,
                 offset,
@@ -102,6 +121,14 @@ impl fmt::Display for UsdcError {
             Self::UnknownSpecForm { form } => write!(f, "unknown spec form: {form}"),
             Self::PathReconstruction => write!(f, "path reconstruction failed"),
             Self::Inconsistent { message } => write!(f, "inconsistent data: {message}"),
+            Self::FeatureRequiresVersion {
+                feature,
+                required,
+                found,
+            } => write!(
+                f,
+                "{feature} requires USDC version {required}, but the file declares {found}"
+            ),
         }
     }
 }

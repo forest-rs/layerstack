@@ -37,6 +37,7 @@ pub mod toc;
 )]
 pub mod value_rep;
 pub mod value_type;
+pub mod version;
 
 // Scene assembly converts decoded sections into Layer/PrimSpec structures.
 // Like value_rep, it pervasively casts u64 indices to usize.
@@ -53,6 +54,7 @@ use layerstack::path::PathInterner;
 
 pub use assemble::AssembleResult;
 pub use error::UsdcError;
+pub use version::CrateVersion;
 
 /// Reads a USDC binary file from a byte slice and produces a [`Layer`].
 ///
@@ -100,6 +102,6 @@ pub fn read_usdc(
 ) -> Result<AssembleResult, UsdcError> {
     let hdr = header::parse_header(data)?;
     let toc_sections = toc::parse_toc(data, hdr.toc_offset)?;
-    let sections = section::parse_sections(data, &toc_sections)?;
+    let sections = section::parse_sections(data, &toc_sections, hdr.crate_version())?;
     assemble::assemble(data, &sections, layer_id, tokens, paths, resolver)
 }

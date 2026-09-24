@@ -8,13 +8,16 @@
 //! UV seams are expressed without duplicating points: every face is its own
 //! UV island, so no face-varying indices are shared across an edge.
 //!
+//! The package uses the `ARKit` / AR Quick Look profile (a single USDC root
+//! layer) unless `generic` is given, which writes a USDA root layer.
+//!
 //! ```sh
-//! cargo run -p layerstack_examples --example mesh_to_usdz -- cube.usdz
-//! usdchecker cube.usdz   # optional, if OpenUSD is installed
+//! cargo run -p layerstack_examples --example mesh_to_usdz -- cube.usdz [arkit|generic]
+//! usdchecker --arkit cube.usdz   # optional, if OpenUSD is installed
 //! ```
 
 use layerstack_mesh_export::{
-    Faces, Mesh, Primvar, Scene, StageSettings, Transform, UpAxis, Xform,
+    Faces, Mesh, Primvar, Scene, StageSettings, Transform, UpAxis, UsdzProfile, Xform,
 };
 
 const POINTS: [[f32; 3]; 8] = [
@@ -51,9 +54,13 @@ const FACE_NORMALS: [[f32; 3]; 6] = [
 const UVS: [[f32; 2]; 4] = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let out = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "cube.usdz".into());
+    let mut args = std::env::args().skip(1);
+    let out = args.next().unwrap_or_else(|| "cube.usdz".into());
+    let profile = match args.next().as_deref() {
+        None | Some("arkit") => UsdzProfile::Arkit,
+        Some("generic") => UsdzProfile::Generic,
+        Some(other) => return Err(format!("unknown profile {other:?}").into()),
+    };
 
     let counts = [4_u32; 6];
     let indices: Vec<u32> = FACES.iter().flatten().copied().collect();
@@ -83,10 +90,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_mesh(cube);
     let scene = Scene::new(StageSettings::new(UpAxis::Z, 1.0), root);
 
-    let bytes = scene.to_usdz(&[])?;
+    let bytes = scene.to_usdz(profile, &[])?;
     std::fs::write(&out, &bytes)?;
     println!(
-        "wrote {out}: {} bytes, {} points, {} faces, {} face corners",
+        "wrote {out} ({profile:?} profile, root layer {}): {} bytes, {} points, {} faces, {} face corners",
+        profile.root_layer_path(),
         bytes.len(),
         POINTS.len(),
         counts.len(),

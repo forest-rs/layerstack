@@ -9,7 +9,7 @@ use layerstack_usda::parser::parse;
 
 use crate::{
     ExportError, Faces, Interpolation, Mesh, MeshProblem, Primvar, PrimvarData, Scene,
-    StageSettings, Transform, UpAxis, Value, Xform,
+    StageSettings, Transform, UpAxis, UsdzProfile, Value, Xform,
 };
 
 const TRI_POINTS: [[f32; 3]; 3] = [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0], [0.0, 1.0, -0.5]];
@@ -264,25 +264,34 @@ fn usdz_requires_authored_assets_to_be_packaged() {
     let mesh = Mesh::new("Tri", &TRI_POINTS, Faces::Triangles(&[0, 1, 2]))
         .with_attribute("exedra:albedo", Value::Asset("./textures/a.png".into()));
     let scene = tri_scene(mesh);
-    assert_eq!(
-        scene.to_usdz(&[]),
-        Err(ExportError::UnpackagedAsset {
-            asset: "./textures/a.png".into()
-        }),
-        "missing texture"
-    );
-    let bytes = scene
-        .to_usdz(&[crate::PackageFile::new("textures/a.png", png)])
-        .expect("texture packaged");
-    let archive = layerstack_usdz::zip::ZipArchive::parse(&bytes).unwrap();
-    let names: Vec<&str> = archive.entries().iter().map(|e| &*e.name).collect();
-    assert_eq!(names, [crate::ROOT_LAYER_PATH, "textures/a.png"], "entries");
+    for profile in [UsdzProfile::Generic, UsdzProfile::Arkit] {
+        assert_eq!(
+            scene.to_usdz(profile, &[]),
+            Err(ExportError::UnpackagedAsset {
+                asset: "./textures/a.png".into()
+            }),
+            "missing texture ({profile:?})"
+        );
+        let bytes = scene
+            .to_usdz(profile, &[crate::PackageFile::new("textures/a.png", png)])
+            .expect("texture packaged");
+        let archive = layerstack_usdz::zip::ZipArchive::parse(&bytes).unwrap();
+        let names: Vec<&str> = archive.entries().iter().map(|e| &*e.name).collect();
+        assert_eq!(
+            names,
+            [profile.root_layer_path(), "textures/a.png"],
+            "entries ({profile:?})"
+        );
+    }
 
     assert_eq!(
-        scene.to_usdz(&[
-            crate::PackageFile::new("textures/a.png", png),
-            crate::PackageFile::new("data.json", b"{}"),
-        ]),
+        scene.to_usdz(
+            UsdzProfile::Generic,
+            &[
+                crate::PackageFile::new("textures/a.png", png),
+                crate::PackageFile::new("data.json", b"{}"),
+            ]
+        ),
         Err(ExportError::Usdz(
             layerstack_usdz::UsdzWriteError::UnsupportedMemberType {
                 path: "data.json".into()
@@ -290,4 +299,56 @@ fn usdz_requires_authored_assets_to_be_packaged() {
         )),
         "packages hold only USD, image and audio members"
     );
+}
+
+#[test]
+fn profiles_choose_the_root_layer_format() {
+    let scene = tri_scene(Mesh::new("Tri", &TRI_POINTS, Faces::Triangles(&[0, 1, 2])));
+    let root_layer = |profile| {
+        let bytes = scene.to_usdz(profile, &[]).unwrap();
+        let archive = layerstack_usdz::zip::ZipArchive::parse(&bytes).unwrap();
+        archive.entry_data(&archive.entries()[0]).to_vec()
+    };
+    assert_eq!(
+        root_layer(UsdzProfile::Generic),
+        scene.to_usda().unwrap().into_bytes(),
+        "generic: USDA text"
+    );
+    assert_eq!(
+        root_layer(UsdzProfile::Arkit),
+        scene.to_usdc().unwrap(),
+        "ARKit: the USDC layer"
+    );
+    assert_eq!(UsdzProfile::Generic.root_layer_path(), "scene.usda", "name");
+    assert_eq!(UsdzProfile::Arkit.root_layer_path(), "scene.usdc", "name");
+
+    let png = b"png";
+    for (path, allowed) in [
+        ("textures/a.png", true),
+        ("textures/a.jpg", true),
+        ("audio/a.wav", true),
+        ("textures/a.exr", false),
+        ("layers/extra.usda", false),
+        ("layers/extra.usdc", false),
+    ] {
+        let result = scene.to_usdz(UsdzProfile::Arkit, &[crate::PackageFile::new(path, png)]);
+        if allowed {
+            assert!(result.is_ok(), "{path} allowed: {result:?}");
+        } else {
+            assert_eq!(
+                result,
+                Err(ExportError::ProfileMember {
+                    path: path.into(),
+                    profile: UsdzProfile::Arkit
+                }),
+                "{path} excluded"
+            );
+            assert!(
+                scene
+                    .to_usdz(UsdzProfile::Generic, &[crate::PackageFile::new(path, png)])
+                    .is_ok(),
+                "{path} allowed in the generic profile"
+            );
+        }
+    }
 }

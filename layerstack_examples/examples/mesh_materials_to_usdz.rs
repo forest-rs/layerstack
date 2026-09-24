@@ -12,17 +12,19 @@
 //! - `Paint` on -Y, +Y and -X: constant blue.
 //!
 //! Both textures are generated here and stored in the package, which is
-//! self-contained: every authored asset path names a package file.
+//! self-contained: every authored asset path names a package file. The
+//! package uses the `ARKit` / AR Quick Look profile (a single USDC root
+//! layer) unless `generic` is given, which writes a USDA root layer.
 //!
 //! ```sh
-//! cargo run -p layerstack_examples --example mesh_materials_to_usdz -- cube.usdz
-//! usdchecker cube.usdz   # optional, if OpenUSD is installed
+//! cargo run -p layerstack_examples --example mesh_materials_to_usdz -- cube.usdz [arkit|generic]
+//! usdchecker --arkit cube.usdz   # optional, if OpenUSD is installed
 //! usdview cube.usdz      # or usdrecord, through a layer that adds a camera
 //! ```
 
 use layerstack_mesh_export::{
     Channel, ColorInput, Faces, FamilyType, FloatInput, Material, Mesh, PackageFile, Primvar,
-    Scene, StageSettings, Texture, Transform, UpAxis, Xform,
+    Scene, StageSettings, Texture, Transform, UpAxis, UsdzProfile, Xform,
 };
 
 const POINTS: [[f32; 3]; 8] = [
@@ -66,9 +68,13 @@ const CHECKER_FACES: [u32; 3] = [1, 4, 0];
 const PAINT_FACES: [u32; 3] = [2, 3, 5];
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let out = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| "cube.usdz".into());
+    let mut args = std::env::args().skip(1);
+    let out = args.next().unwrap_or_else(|| "cube.usdz".into());
+    let profile = match args.next().as_deref() {
+        None | Some("arkit") => UsdzProfile::Arkit,
+        Some("generic") => UsdzProfile::Generic,
+        Some(other) => return Err(format!("unknown profile {other:?}").into()),
+    };
 
     let counts = [4_u32; 6];
     let indices: Vec<u32> = FACES.iter().flatten().copied().collect();
@@ -122,13 +128,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_material(checker)
         .with_material(paint);
 
-    let bytes = scene.to_usdz(&[
-        PackageFile::new("textures/albedo.png", &albedo),
-        PackageFile::new("textures/roughness.png", &roughness),
-    ])?;
+    let bytes = scene.to_usdz(
+        profile,
+        &[
+            PackageFile::new("textures/albedo.png", &albedo),
+            PackageFile::new("textures/roughness.png", &roughness),
+        ],
+    )?;
     std::fs::write(&out, &bytes)?;
     println!(
-        "wrote {out}: {} bytes, {} faces, materials Checker (faces {CHECKER_FACES:?}) and Paint (faces {PAINT_FACES:?})",
+        "wrote {out} ({profile:?} profile, root layer {}): {} bytes, {} faces, materials Checker (faces {CHECKER_FACES:?}) and Paint (faces {PAINT_FACES:?})",
+        profile.root_layer_path(),
         bytes.len(),
         counts.len(),
     );

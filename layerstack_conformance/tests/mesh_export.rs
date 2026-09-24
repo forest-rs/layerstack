@@ -18,8 +18,8 @@ use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset, Stage, StageOptions,
 };
 use layerstack_mesh_export::{
-    Faces, Mesh, PackageFile, Primvar, PrimvarData, ROOT_LAYER_PATH, Scene, StageSettings,
-    Transform, UpAxis, Value as AuthoredValue, Xform,
+    Faces, Mesh, PackageFile, Primvar, PrimvarData, Scene, StageSettings, Transform, UpAxis,
+    UsdzProfile, Value as AuthoredValue, Xform,
 };
 use layerstack_usda::ast;
 
@@ -361,38 +361,65 @@ fn usda_roundtrip_through_parser_and_stage() {
 }
 
 #[test]
-fn usdz_roundtrip_through_package_reader() {
-    let png = b"\x89PNG\r\n\x1a\n not a real image";
-    let bytes = scene()
-        .to_usdz(&[PackageFile::new("textures/checker.png", png)])
-        .expect("package");
-
-    let archive = layerstack_usdz::zip::ZipArchive::parse(&bytes).expect("valid USDZ");
-    let names: Vec<&str> = archive.entries().iter().map(|e| &*e.name).collect();
-    assert_eq!(names, [ROOT_LAYER_PATH, "textures/checker.png"], "entries");
-    for entry in archive.entries() {
-        assert_eq!(entry.data_offset % 64, 0, "{} aligned", entry.name);
-    }
-    let texture = archive.find("textures/checker.png").expect("texture");
-    assert_eq!(archive.entry_data(texture), png, "texture bytes");
-    let layer_entry = &archive.entries()[0];
-    assert_eq!(
-        archive.entry_data(layer_entry),
-        scene().to_usda().unwrap().as_bytes(),
-        "root layer is the USDA export"
-    );
-
+fn usdc_roundtrip_through_reader_and_stage() {
+    let bytes = scene().to_usdc().expect("export");
+    assert_eq!(bytes, scene().to_usdc().unwrap(), "deterministic output");
+    assert_eq!(&bytes[..8], b"PXR-USDC", "crate file");
     let mut store = InMemoryStore::default();
-    let result = layerstack_usdz::read_usdz(
+    let result = layerstack_usdc::read_usdc(
         &bytes,
         LayerId(1),
         &mut store.tokens,
         &mut store.paths,
         &mut NoAssets,
     )
-    .expect("read_usdz verifies CRCs and layout");
+    .expect("the workspace reader reads the writer's output");
     store.insert_layer(result.layer);
     assert_stage_matches_scene(&mut store);
+}
+
+#[test]
+fn usdz_roundtrip_through_package_reader() {
+    let png = b"\x89PNG\r\n\x1a\n not a real image";
+    for profile in [UsdzProfile::Generic, UsdzProfile::Arkit] {
+        let bytes = scene()
+            .to_usdz(profile, &[PackageFile::new("textures/checker.png", png)])
+            .expect("package");
+
+        let archive = layerstack_usdz::zip::ZipArchive::parse(&bytes).expect("valid USDZ");
+        let names: Vec<&str> = archive.entries().iter().map(|e| &*e.name).collect();
+        assert_eq!(
+            names,
+            [profile.root_layer_path(), "textures/checker.png"],
+            "entries ({profile:?})"
+        );
+        for entry in archive.entries() {
+            assert_eq!(entry.data_offset % 64, 0, "{} aligned", entry.name);
+        }
+        let texture = archive.find("textures/checker.png").expect("texture");
+        assert_eq!(archive.entry_data(texture), png, "texture bytes");
+        let layer = match profile {
+            UsdzProfile::Generic => scene().to_usda().unwrap().into_bytes(),
+            UsdzProfile::Arkit => scene().to_usdc().unwrap(),
+        };
+        assert_eq!(
+            archive.entry_data(&archive.entries()[0]),
+            layer,
+            "root layer is the {profile:?} export"
+        );
+
+        let mut store = InMemoryStore::default();
+        let result = layerstack_usdz::read_usdz(
+            &bytes,
+            LayerId(1),
+            &mut store.tokens,
+            &mut store.paths,
+            &mut NoAssets,
+        )
+        .expect("read_usdz verifies CRCs and layout");
+        store.insert_layer(result.layer);
+        assert_stage_matches_scene(&mut store);
+    }
 }
 
 // ── Acceptance cases for the bounded mesh profile ──────────────────────
@@ -755,10 +782,13 @@ fn moved_usdz_resolves_every_internal_asset() {
         StageSettings::new(UpAxis::Z, 1.0),
         Xform::new("Root").with_mesh(mesh),
     )
-    .to_usdz(&[
-        PackageFile::new("textures/albedo.png", &albedo),
-        PackageFile::new("textures/detail/roughness.png", &roughness),
-    ])
+    .to_usdz(
+        UsdzProfile::Generic,
+        &[
+            PackageFile::new("textures/albedo.png", &albedo),
+            PackageFile::new("textures/detail/roughness.png", &roughness),
+        ],
+    )
     .unwrap();
 
     // ...the package is written somewhere else and the sources disappear.
@@ -817,6 +847,20 @@ fn load_usdz(bytes: &[u8]) -> InMemoryStore {
         &mut NoAssets,
     )
     .expect("valid package");
+    store.insert_layer(result.layer);
+    store
+}
+
+fn load_usdc(bytes: &[u8]) -> InMemoryStore {
+    let mut store = InMemoryStore::default();
+    let result = layerstack_usdc::read_usdc(
+        bytes,
+        LayerId(1),
+        &mut store.tokens,
+        &mut store.paths,
+        &mut NoAssets,
+    )
+    .expect("valid crate file");
     store.insert_layer(result.layer);
     store
 }
@@ -1023,7 +1067,10 @@ fn materials_round_trip_through_readers() {
     };
     let partition = two_material_cube();
     assert_two_material_cube(&mut load_usda(&partition.to_usda().unwrap()));
-    assert_two_material_cube(&mut load_usdz(&partition.to_usdz(&[]).unwrap()));
+    assert_two_material_cube(&mut load_usdc(&partition.to_usdc().unwrap()));
+    for profile in [UsdzProfile::Generic, UsdzProfile::Arkit] {
+        assert_two_material_cube(&mut load_usdz(&partition.to_usdz(profile, &[]).unwrap()));
+    }
 
     let textured = textured_cube();
     assert_textured_cube(&mut load_usda(&textured.to_usda().unwrap()));
@@ -1032,14 +1079,17 @@ fn materials_round_trip_through_readers() {
         .iter()
         .map(|(path, bytes)| PackageFile::new(path, bytes))
         .collect();
-    let bytes = textured.to_usdz(&files).unwrap();
+    assert_textured_cube(&mut load_usdc(&textured.to_usdc().unwrap()));
+    let arkit = textured.to_usdz(UsdzProfile::Arkit, &files).unwrap();
+    assert_textured_cube(&mut load_usdz(&arkit));
+    let bytes = textured.to_usdz(UsdzProfile::Generic, &files).unwrap();
     assert_textured_cube(&mut load_usdz(&bytes));
     let archive = layerstack_usdz::zip::ZipArchive::parse(&bytes).unwrap();
     let names: Vec<&str> = archive.entries().iter().map(|e| &*e.name).collect();
     assert_eq!(
         names,
         [
-            ROOT_LAYER_PATH,
+            UsdzProfile::Generic.root_layer_path(),
             "textures/albedo.png",
             "textures/orm.png",
             "textures/ridges_normal.png"

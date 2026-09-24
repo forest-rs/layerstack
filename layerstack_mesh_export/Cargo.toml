@@ -1,6 +1,6 @@
 [package]
 name = "layerstack_mesh_export"
-description = "Polygon mesh export to USDA/USDZ (UsdGeomMesh) for layerstack."
+description = "Polygon mesh export to USDA/USDC/USDZ (UsdGeomMesh) for layerstack."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,6 +12,7 @@ categories = ["graphics", "encoding"]
 
 [dependencies]
 layerstack_usda = { path = "../layerstack_usda" }
+layerstack_usdc = { path = "../layerstack_usdc" }
 layerstack_usdz = { path = "../layerstack_usdz" }
 
 [lints]

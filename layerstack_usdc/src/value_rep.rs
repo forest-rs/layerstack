@@ -35,6 +35,7 @@ use crate::version::CrateVersion;
 /// - bit 7 (0x80): `is_array`
 /// - bit 6 (0x40): `is_inlined`
 /// - bit 5 (0x20): `is_compressed`
+/// - bit 4 (0x10): `is_array_edit` (crate 0.14 and later)
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct RawValueRep {
     /// The raw 8 bytes.
@@ -83,6 +84,13 @@ impl RawValueRep {
     #[must_use]
     pub fn is_compressed(&self) -> bool {
         self.flags() & 0x20 != 0
+    }
+
+    /// Whether this is a native array edit (`VtArrayEdit`), introduced in
+    /// crate 0.14 (`_IsArrayEditBit`, `pxr/usd/sdf/crateFile.h:87`).
+    #[must_use]
+    pub fn is_array_edit(&self) -> bool {
+        self.flags() & 0x10 != 0
     }
 
     /// The payload interpreted as a little-endian u48 offset (for non-inlined
@@ -169,6 +177,97 @@ pub enum CrateValue {
     RelocatesMap(Vec<(String, String)>),
     /// Decoded spline data (§16.3.10.33).
     Spline(SplineData),
+    /// A native array edit (crate 0.14 and later).
+    ArrayEdit(CrateArrayEdit),
+}
+
+/// A decoded native array edit (`VtArrayEdit`).
+///
+/// Instructions refer to array elements by index: negative indices count
+/// from the end, and [`CrateArrayEdit::END`] is the position past the last
+/// element. Literal operands index into [`CrateArrayEdit::literals`]; the
+/// decoder has already checked that they are in range.
+#[derive(Clone, Debug)]
+pub struct CrateArrayEdit {
+    /// The element type of the edited array.
+    pub element_type: ValueType,
+    /// Literal elements referenced by the instructions.
+    pub literals: Vec<CrateValue>,
+    /// Instructions, in application order.
+    pub ops: Vec<CrateArrayEditOp>,
+}
+
+impl CrateArrayEdit {
+    /// The index past the last element (`Vt_ArrayEditOps::EndIndex`).
+    pub const END: i64 = i64::MIN;
+}
+
+/// One array edit instruction (`Vt_ArrayEditOps::Op`,
+/// `pxr/base/vt/arrayEditOps.h`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CrateArrayEditOp {
+    /// Overwrite the element at `index` with a literal.
+    WriteLiteral {
+        /// Index into [`CrateArrayEdit::literals`].
+        literal: usize,
+        /// Destination index.
+        index: i64,
+    },
+    /// Overwrite the element at `index` with the element at `src`.
+    WriteRef {
+        /// Source index in the array being edited.
+        src: i64,
+        /// Destination index.
+        index: i64,
+    },
+    /// Insert a literal at `index`.
+    InsertLiteral {
+        /// Index into [`CrateArrayEdit::literals`].
+        literal: usize,
+        /// Insertion index.
+        index: i64,
+    },
+    /// Insert a copy of the element at `src` at `index`.
+    InsertRef {
+        /// Source index in the array being edited.
+        src: i64,
+        /// Insertion index.
+        index: i64,
+    },
+    /// Erase the element at `index`.
+    Erase {
+        /// Index to erase.
+        index: i64,
+    },
+    /// Grow to at least `len` elements with value-initialized elements.
+    MinSize {
+        /// Minimum length.
+        len: u64,
+    },
+    /// Grow to at least `len` elements, filling with a literal.
+    MinSizeFill {
+        /// Minimum length.
+        len: u64,
+        /// Index into [`CrateArrayEdit::literals`] of the fill value.
+        literal: usize,
+    },
+    /// Resize to `len` elements with value-initialized elements.
+    SetSize {
+        /// New length.
+        len: u64,
+    },
+    /// Resize to `len` elements, filling with a literal.
+    SetSizeFill {
+        /// New length.
+        len: u64,
+        /// Index into [`CrateArrayEdit::literals`] of the fill value.
+        literal: usize,
+    },
+    /// Shrink to at most `len` elements.
+    MaxSize {
+        /// Maximum length.
+        len: u64,
+    },
 }
 
 /// A decoded list operation.
@@ -213,6 +312,9 @@ pub fn decode_value(
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
     let vtype = rep.value_type()?;
+    if rep.is_array_edit() {
+        return decode_array_edit(rep, data, sections, vtype);
+    }
 
     match vtype {
         ValueType::Unknown => Err(UsdcError::Inconsistent {
@@ -1430,6 +1532,172 @@ fn decode_payload(
 }
 
 // ---------------------------------------------------------------------------
+// Array edit decoder (crate 0.14)
+// ---------------------------------------------------------------------------
+
+/// Decodes a native array edit.
+///
+/// A zero payload is the identity edit. Otherwise the payload is the offset
+/// of a literal-array `ValueRep`, an `int64[]` instruction `ValueRep`, and a
+/// discarded byte (the former `isDense` flag), as written by
+/// `_ValueHandler::PackArrayEdit` (`pxr/usd/sdf/crateFile.cpp:1793`). The
+/// literal array must have the edit's element type. Instructions are decoded
+/// by [`parse_array_edit_instructions`].
+fn decode_array_edit(
+    rep: &RawValueRep,
+    data: &[u8],
+    sections: &CrateSections,
+    element_type: ValueType,
+) -> Result<CrateValue, UsdcError> {
+    require_version(sections, CrateVersion::ARRAY_EDITS, "array edit")?;
+    if rep.is_array() || rep.is_inlined() || rep.is_compressed() {
+        return Err(UsdcError::Inconsistent {
+            message: "array edit value rep has array, inlined or compressed flags",
+        });
+    }
+    if matches!(
+        element_type,
+        ValueType::Unknown | ValueType::Relocates | ValueType::Spline
+    ) || !element_type.supports_array()
+    {
+        return Err(UsdcError::Inconsistent {
+            message: "array edit of a type that has no arrays",
+        });
+    }
+
+    let off = payload_offset_usize(rep)?;
+    if off == 0 {
+        return Ok(CrateValue::ArrayEdit(CrateArrayEdit {
+            element_type,
+            literals: Vec::new(),
+            ops: Vec::new(),
+        }));
+    }
+
+    let literals_rep = RawValueRep::new(read_u64_at(data, off)?.to_le_bytes());
+    let indexes_rep = RawValueRep::new(read_u64_at(data, off + 8)?.to_le_bytes());
+    // The former `isDense` flag; OpenUSD reads and discards it.
+    read_u8(data, &mut (off + 16))?;
+
+    let is_plain_array = |rep: &RawValueRep, vtype: ValueType| {
+        rep.is_array() && !rep.is_array_edit() && rep.value_type().ok() == Some(vtype)
+    };
+    if !is_plain_array(&literals_rep, element_type) {
+        return Err(UsdcError::Inconsistent {
+            message: "array edit literals are not an array of the element type",
+        });
+    }
+    if !is_plain_array(&indexes_rep, ValueType::Int64) {
+        return Err(UsdcError::Inconsistent {
+            message: "array edit instructions are not an int64 array",
+        });
+    }
+
+    let CrateValue::Array(literals) = decode_value(&literals_rep, data, sections)? else {
+        return Err(UsdcError::Inconsistent {
+            message: "array edit literals did not decode to an array",
+        });
+    };
+    let CrateValue::Array(indexes) = decode_value(&indexes_rep, data, sections)? else {
+        return Err(UsdcError::Inconsistent {
+            message: "array edit instructions did not decode to an array",
+        });
+    };
+    let instructions = indexes
+        .into_iter()
+        .map(|value| match value {
+            CrateValue::Int64(v) => Ok(v),
+            _ => Err(UsdcError::Inconsistent {
+                message: "array edit instruction is not an int64",
+            }),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let ops = parse_array_edit_instructions(&instructions, literals.len())?;
+
+    Ok(CrateValue::ArrayEdit(CrateArrayEdit {
+        element_type,
+        literals,
+        ops,
+    }))
+}
+
+/// Decodes the `int64` instruction stream of an array edit.
+///
+/// The stream is a sequence of groups. Each group starts with a header whose
+/// low 56 bits are a repeat count and whose high 8 bits are the op
+/// (`Vt_ArrayEditOps::OpAndCount`), followed by `count` argument tuples of
+/// the op's arity (`pxr/base/vt/arrayEditOps.h`). A stream with an unknown
+/// op, a non-positive count, missing arguments, an out-of-range literal
+/// index or a negative size is malformed and rejected. Element indices are
+/// not range-checked here: like OpenUSD, instructions whose indices fall
+/// outside the array being edited are skipped when the edit is applied.
+fn parse_array_edit_instructions(
+    instructions: &[i64],
+    num_literals: usize,
+) -> Result<Vec<CrateArrayEditOp>, UsdcError> {
+    let malformed = |message| UsdcError::Inconsistent { message };
+    let literal = |index: i64| {
+        usize::try_from(index)
+            .ok()
+            .filter(|i| *i < num_literals)
+            .ok_or(malformed("array edit literal index out of range"))
+    };
+    let size = |len: i64| u64::try_from(len).map_err(|_| malformed("array edit size is negative"));
+
+    let mut ops = Vec::new();
+    let mut rest = instructions;
+    while let Some((&header, tail)) = rest.split_first() {
+        let op = header.to_le_bytes()[7];
+        // Sign-extend the 56-bit count field.
+        let count = (header << 8) >> 8;
+        let arity: usize = match op {
+            0..=3 | 6 | 8 => 2,
+            4 | 5 | 7 | 9 => 1,
+            _ => return Err(malformed("unknown array edit op")),
+        };
+        if count <= 0 {
+            return Err(malformed("array edit op count is not positive"));
+        }
+        let needed = usize::try_from(count)
+            .ok()
+            .and_then(|count| count.checked_mul(arity))
+            .filter(|needed| *needed <= tail.len())
+            .ok_or(malformed("array edit op is missing arguments"))?;
+        let (args, next) = tail.split_at(needed);
+        for tuple in args.chunks_exact(arity) {
+            let a1 = tuple[0];
+            let a2 = tuple.get(1).copied().unwrap_or(-1);
+            ops.push(match op {
+                0 => CrateArrayEditOp::WriteLiteral {
+                    literal: literal(a1)?,
+                    index: a2,
+                },
+                1 => CrateArrayEditOp::WriteRef { src: a1, index: a2 },
+                2 => CrateArrayEditOp::InsertLiteral {
+                    literal: literal(a1)?,
+                    index: a2,
+                },
+                3 => CrateArrayEditOp::InsertRef { src: a1, index: a2 },
+                4 => CrateArrayEditOp::Erase { index: a1 },
+                5 => CrateArrayEditOp::MinSize { len: size(a1)? },
+                6 => CrateArrayEditOp::MinSizeFill {
+                    len: size(a1)?,
+                    literal: literal(a2)?,
+                },
+                7 => CrateArrayEditOp::SetSize { len: size(a1)? },
+                8 => CrateArrayEditOp::SetSizeFill {
+                    len: size(a1)?,
+                    literal: literal(a2)?,
+                },
+                _ => CrateArrayEditOp::MaxSize { len: size(a1)? },
+            });
+        }
+        rest = next;
+    }
+    Ok(ops)
+}
+
+// ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 
@@ -2113,6 +2381,118 @@ mod tests {
         ] {
             assert!(parse(&blob, newest).is_err(), "{blob:?}");
         }
+    }
+
+    /// An `OpAndCount` header: count in the low 56 bits, op in the high 8.
+    fn op_header(op: u8, count: i64) -> i64 {
+        (i64::from(op) << 56) | (count & 0x00FF_FFFF_FFFF_FFFF)
+    }
+
+    #[test]
+    fn array_edit_instructions_decode() {
+        let end = CrateArrayEdit::END;
+        let instructions = [
+            op_header(7, 1),
+            1024,
+            op_header(0, 2),
+            0,
+            2,
+            1,
+            4,
+            op_header(1, 1),
+            5,
+            6,
+            op_header(4, 2),
+            9,
+            -1,
+            op_header(2, 1),
+            0,
+            end,
+            op_header(6, 1),
+            3,
+            1,
+        ];
+        let ops = parse_array_edit_instructions(&instructions, 2).unwrap();
+        assert_eq!(
+            ops,
+            [
+                CrateArrayEditOp::SetSize { len: 1024 },
+                CrateArrayEditOp::WriteLiteral {
+                    literal: 0,
+                    index: 2
+                },
+                CrateArrayEditOp::WriteLiteral {
+                    literal: 1,
+                    index: 4
+                },
+                CrateArrayEditOp::WriteRef { src: 5, index: 6 },
+                CrateArrayEditOp::Erase { index: 9 },
+                CrateArrayEditOp::Erase { index: -1 },
+                CrateArrayEditOp::InsertLiteral {
+                    literal: 0,
+                    index: end
+                },
+                CrateArrayEditOp::MinSizeFill { len: 3, literal: 1 },
+            ]
+        );
+        assert!(parse_array_edit_instructions(&[], 0).unwrap().is_empty());
+    }
+
+    #[test]
+    fn malformed_array_edit_instructions_are_rejected() {
+        for (instructions, literals) in [
+            // Unknown op.
+            (vec![op_header(10, 1), 0], 0),
+            // Non-positive counts.
+            (vec![op_header(4, 0)], 0),
+            (vec![op_header(4, -1), 0], 0),
+            // Missing arguments.
+            (vec![op_header(0, 2), 0, 1, 0], 1),
+            (vec![op_header(4, 1)], 0),
+            // Literal index out of range.
+            (vec![op_header(2, 1), 1, 0], 1),
+            (vec![op_header(8, 1), 4, -1], 1),
+            // Negative size.
+            (vec![op_header(9, 1), -3], 0),
+        ] {
+            assert!(
+                parse_array_edit_instructions(&instructions, literals).is_err(),
+                "{instructions:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn array_edit_needs_crate_0_14() {
+        let mut bytes = [0_u8; 8];
+        bytes[6] = ValueType::Int as u8;
+        bytes[7] = 0x10; // is_array_edit, identity
+        let rep = RawValueRep::new(bytes);
+        let mut sections = CrateSections {
+            tokens: vec![],
+            strings: vec![],
+            fields: vec![],
+            fieldsets: vec![],
+            paths: vec![],
+            specs: vec![],
+            version: CrateVersion::SPLINE_TANGENT_ALGORITHMS,
+        };
+        assert_eq!(
+            decode_value(&rep, &[], &sections).err(),
+            Some(UsdcError::FeatureRequiresVersion {
+                feature: "array edit",
+                required: CrateVersion::ARRAY_EDITS,
+                found: CrateVersion::SPLINE_TANGENT_ALGORITHMS,
+            })
+        );
+        sections.version = CrateVersion::ARRAY_EDITS;
+        match decode_value(&rep, &[], &sections) {
+            Ok(CrateValue::ArrayEdit(edit)) => assert!(edit.ops.is_empty()),
+            other => panic!("expected the identity edit, got {other:?}"),
+        }
+        // An array edit cannot also be an array.
+        bytes[7] |= 0x80;
+        assert!(decode_value(&RawValueRep::new(bytes), &[], &sections).is_err());
     }
 
     #[test]

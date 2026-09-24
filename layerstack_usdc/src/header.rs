@@ -145,13 +145,13 @@ mod tests {
 
     #[test]
     fn readable_version_range() {
-        for minor in 7..=13 {
+        for minor in 7..=15 {
             let h = parse_header(&header_with_version(0, minor, 0)).unwrap();
             assert_eq!(h.crate_version(), CrateVersion::new(0, minor, 0));
         }
         // Patch levels are forward compatible.
-        assert!(parse_header(&header_with_version(0, 13, 3)).is_ok());
-        for (major, minor) in [(0, 6), (0, 14), (0, 255), (1, 0)] {
+        assert!(parse_header(&header_with_version(0, 15, 3)).is_ok());
+        for (major, minor) in [(0, 6), (0, 16), (0, 255), (1, 0)] {
             assert_eq!(
                 parse_header(&header_with_version(major, minor, 0)),
                 Err(UsdcError::UnsupportedVersion {

@@ -23,11 +23,18 @@
 //! | 0.11 | relocates in layer metadata | yes |
 //! | 0.12 | splines (Ts binary format 1) | yes |
 //! | 0.13 | spline tangent algorithms (Ts binary format 2) | yes; the algorithms are validated and dropped, and the tangents OpenUSD stored with them are kept |
-//! | 0.14 | native array edits (`VtArrayEdit`) | no: [`UsdcError::UnsupportedVersion`] |
-//! | 0.15 | spline `loopBoundaryTime` and `GfTimeCode`-valued splines (Ts binary format 3) | no: [`UsdcError::UnsupportedVersion`] |
+//! | 0.14 | native array edits (`VtArrayEdit`) | yes, as [`Value::ArrayEdit`] |
+//! | 0.15 | spline `loopBoundaryTime` and `GfTimeCode`-valued splines (Ts binary format 3) | the format is read; those two features fail with [`UsdcError::UnsupportedFeature`] |
 //!
+//! Value type 60 (`SdfAnimationBlock`) is not tied to a version: OpenUSD
+//! v26.08 writes it without raising the file version. This reader does not
+//! decode it and fails with [`UsdcError::UnknownValueType`].
+//!
+//! [`Value::ArrayEdit`]: layerstack::doc::Value::ArrayEdit
 //! [`UsdcError::UnsupportedVersion`]: crate::UsdcError::UnsupportedVersion
 //! [`UsdcError::FeatureRequiresVersion`]: crate::UsdcError::FeatureRequiresVersion
+//! [`UsdcError::UnsupportedFeature`]: crate::UsdcError::UnsupportedFeature
+//! [`UsdcError::UnknownValueType`]: crate::UsdcError::UnknownValueType
 
 use core::fmt;
 
@@ -49,8 +56,8 @@ pub struct CrateVersion {
 impl CrateVersion {
     /// The oldest version this reader accepts, 0.7.0.
     pub const OLDEST_READABLE: Self = Self::new(0, 7, 0);
-    /// The newest version this reader accepts, 0.13 (any patch level).
-    pub const NEWEST_READABLE: Self = Self::new(0, 13, 0);
+    /// The newest version this reader accepts, 0.15 (any patch level).
+    pub const NEWEST_READABLE: Self = Self::new(0, 15, 0);
 
     /// Version 0.12.0, which introduced splines.
     pub const SPLINES: Self = Self::new(0, 12, 0);
@@ -81,9 +88,9 @@ impl CrateVersion {
     /// ```
     /// use layerstack_usdc::version::CrateVersion;
     ///
-    /// assert!(CrateVersion::new(0, 13, 0).is_readable());
-    /// assert!(CrateVersion::new(0, 13, 1).is_readable());
-    /// assert!(!CrateVersion::new(0, 14, 0).is_readable());
+    /// assert!(CrateVersion::new(0, 15, 0).is_readable());
+    /// assert!(CrateVersion::new(0, 15, 1).is_readable());
+    /// assert!(!CrateVersion::new(0, 16, 0).is_readable());
     /// assert!(!CrateVersion::new(0, 6, 0).is_readable());
     /// assert!(!CrateVersion::new(1, 0, 0).is_readable());
     /// ```

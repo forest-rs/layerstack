@@ -194,3 +194,55 @@ impl AssetResolver for UsdcFileResolver {
         self.layer_names.get(&id).map(|s| s.as_str())
     }
 }
+
+// ── Structural decode ───────────────────────────────────────────────────
+
+/// A crate file decoded to what it states, independent of table layout:
+/// the version, and per spec path its form and its fields in stored order,
+/// each value decoded (and printed) by this workspace's reader.
+///
+/// Two files with equal structures hold the same specs, fields and values,
+/// whatever their token, string, path and field table order, value
+/// placement, deduplication or compression.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CrateStructure {
+    /// The header's version.
+    pub version: layerstack_usdc::CrateVersion,
+    /// Spec path to `(form, [(field, value)])`.
+    pub specs: BTreeMap<String, (String, Vec<(String, String)>)>,
+}
+
+/// Decodes `data` into a [`CrateStructure`].
+///
+/// # Errors
+///
+/// Any reader error for the header, TOC, sections or a field value.
+pub fn crate_structure(data: &[u8]) -> Result<CrateStructure, layerstack_usdc::UsdcError> {
+    use layerstack_usdc::value_rep::{RawValueRep, decode_value};
+    let header = layerstack_usdc::header::parse_header(data)?;
+    let toc = layerstack_usdc::toc::parse_toc(data, header.toc_offset)?;
+    let s = layerstack_usdc::section::parse_sections(data, &toc, header.crate_version())?;
+    let mut specs = BTreeMap::new();
+    for spec in &s.specs {
+        let mut fields = Vec::new();
+        let mut i = spec.fieldset_index as usize;
+        while let Some(&index) = s.fieldsets.get(i).filter(|&&f| f >= 0) {
+            let field = s.fields[index as usize];
+            let rep = RawValueRep::new(field.value_rep);
+            let value = decode_value(&rep, data, &s)?;
+            fields.push((
+                s.tokens[field.token_index as usize].clone(),
+                format!("{:?} {value:?}", rep.value_type()?),
+            ));
+            i += 1;
+        }
+        specs.insert(
+            s.paths[spec.path_index as usize].clone(),
+            (format!("{:?}", spec.form), fields),
+        );
+    }
+    Ok(CrateStructure {
+        version: header.crate_version(),
+        specs,
+    })
+}

@@ -59,6 +59,12 @@ impl CrateVersion {
     /// The newest version this reader accepts, 0.15 (any patch level).
     pub const NEWEST_READABLE: Self = Self::new(0, 15, 0);
 
+    /// Version 0.8.0, OpenUSD's version for newly created files
+    /// (`DEFAULT_NEW_VERSION`, `USD_WRITE_NEW_USDC_FILES_AS_VERSION` in
+    /// `crateFile.cpp`) and the version the writer starts from.
+    pub const NEW_FILE_DEFAULT: Self = Self::new(0, 8, 0);
+    /// Version 0.9.0, which introduced `timecode` and `timecode[]` values.
+    pub const TIMECODES: Self = Self::new(0, 9, 0);
     /// Version 0.12.0, which introduced splines.
     pub const SPLINES: Self = Self::new(0, 12, 0);
     /// Version 0.13.0, which introduced spline tangent algorithms.

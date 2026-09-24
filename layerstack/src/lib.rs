@@ -67,6 +67,7 @@ pub(crate) mod arcs;
 pub mod array_edit;
 pub mod asset;
 pub(crate) mod compose;
+pub mod composition_error;
 pub mod dependency_map;
 pub mod doc;
 pub mod interner;
@@ -86,6 +87,7 @@ pub mod live_stage;
 
 pub use array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
 pub use asset::{AssetResolveError, AssetResolver, ResolvedAsset};
+pub use composition_error::{CompositionError, SublayerCycle};
 pub use dependency_map::ArcDependency;
 pub use doc::{
     FieldEntry, FieldValue, InMemoryStore, InterpolationType, Layer, LayerId, LayerOffset,

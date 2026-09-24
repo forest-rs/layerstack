@@ -12,6 +12,7 @@ use hashbrown::HashMap;
 use invalidation::InvalidationGraph;
 
 use crate::{
+    composition_error::CompositionError,
     dependency_map::{ArcDependency, CompositionDeps},
     doc::{
         FieldValue, InterpolationType, LayerId, LayerStore, Specifier, Value,
@@ -120,6 +121,7 @@ pub struct Stage {
     children: HashMap<PathId, Vec<PathId>>,
     with_provenance: bool,
     deps: Option<CompositionDeps>,
+    errors: Vec<CompositionError>,
 }
 
 impl Stage {
@@ -139,7 +141,27 @@ impl Stage {
             children,
             with_provenance,
             deps,
+            errors: Vec::new(),
         }
+    }
+
+    /// Attaches the composition errors found while building this stage.
+    pub(crate) fn with_composition_errors(mut self, errors: Vec<CompositionError>) -> Self {
+        self.errors = errors;
+        self
+    }
+
+    /// Returns the composition errors found while composing this stage, in
+    /// the order they were found.
+    ///
+    /// Composition errors are not fatal: whatever an error names was ignored
+    /// and everything else was composed as normal, so the stage is usable
+    /// either way.
+    ///
+    /// Spec: AOUSD Core §10.6 (composition errors).
+    #[must_use]
+    pub fn composition_errors(&self) -> &[CompositionError] {
+        &self.errors
     }
 
     /// Replaces the prim indexes of `recomposed` with those from a partial

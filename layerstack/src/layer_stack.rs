@@ -12,7 +12,10 @@ use alloc::vec::Vec;
 
 use hashbrown::HashSet;
 
-use crate::doc::{LayerId, LayerOffset, LayerStore};
+use crate::{
+    composition_error::SublayerCycle,
+    doc::{LayerId, LayerOffset, LayerStore},
+};
 
 /// An ordered set of layers gathered recursively from sublayers.
 ///
@@ -32,10 +35,28 @@ pub struct LayerStack {
 impl LayerStack {
     /// Gathers the layer stack rooted at `root`.
     ///
-    /// Cycles are treated as non-fatal and are ignored for the purposes of
-    /// gathering.
+    /// A sublayer that would form a cycle is ignored; composition reports it
+    /// as a [`SublayerCycle`] through
+    /// [`Stage::composition_errors`](crate::Stage::composition_errors).
     #[must_use]
     pub fn gather(store: &dyn LayerStore, root: LayerId) -> Self {
+        Self::gather_reporting(store, root, &mut Vec::new())
+    }
+
+    /// Gathers the layer stack rooted at `root`, appending each sublayer
+    /// cycle it ignores to `cycles`.
+    ///
+    /// A sublayer forms a cycle when it is already on the chain of sublayers
+    /// from `root` to the layer that names it. A layer repeated elsewhere in
+    /// the hierarchy is not a cycle and appears once per occurrence.
+    ///
+    /// Spec: AOUSD Core §10.3.1 (a sublayer that would form a cycle is a
+    /// composition error and is ignored).
+    pub(crate) fn gather_reporting(
+        store: &dyn LayerStore,
+        root: LayerId,
+        cycles: &mut Vec<SublayerCycle>,
+    ) -> Self {
         fn visit(
             store: &dyn LayerStore,
             id: LayerId,
@@ -43,17 +64,30 @@ impl LayerStack {
             visiting: &mut HashSet<LayerId>,
             out: &mut Vec<LayerId>,
             offsets: &mut Vec<LayerOffset>,
+            cycles: &mut Vec<SublayerCycle>,
         ) {
-            if !visiting.insert(id) {
-                return;
-            }
-
+            visiting.insert(id);
             out.push(id);
             offsets.push(accumulated);
             if let Some(layer) = store.layer(id) {
                 for sub in &layer.sublayers {
+                    if visiting.contains(&sub.layer) {
+                        cycles.push(SublayerCycle {
+                            layer: id,
+                            sublayer: sub.layer,
+                        });
+                        continue;
+                    }
                     let child_offset = accumulated.compose(sub.offset);
-                    visit(store, sub.layer, child_offset, visiting, out, offsets);
+                    visit(
+                        store,
+                        sub.layer,
+                        child_offset,
+                        visiting,
+                        out,
+                        offsets,
+                        cycles,
+                    );
                 }
             }
 
@@ -69,6 +103,7 @@ impl LayerStack {
             &mut HashSet::new(),
             &mut layers,
             &mut offsets,
+            cycles,
         );
         Self { layers, offsets }
     }
@@ -153,8 +188,39 @@ mod tests {
             prims: HashMap::new(),
         });
 
-        let stack = LayerStack::gather(&store, LayerId(1));
+        let mut cycles = Vec::new();
+        let stack = LayerStack::gather_reporting(&store, LayerId(1), &mut cycles);
         assert_eq!(stack.layers, vec![LayerId(1), LayerId(2), LayerId(3)]);
+        assert_eq!(
+            cycles,
+            vec![SublayerCycle {
+                layer: LayerId(3),
+                sublayer: LayerId(2),
+            }]
+        );
+    }
+
+    #[test]
+    fn duplicate_sublayers_are_not_cycles() {
+        // A layer reached along two sibling paths is repeated, not cyclic.
+        let mut store = InMemoryStore::default();
+        store.insert_layer(Layer {
+            id: LayerId(1),
+            sublayers: subs(&[2, 2]),
+            default_prim: None,
+            prims: HashMap::new(),
+        });
+        store.insert_layer(Layer {
+            id: LayerId(2),
+            sublayers: vec![],
+            default_prim: None,
+            prims: HashMap::new(),
+        });
+
+        let mut cycles = Vec::new();
+        let stack = LayerStack::gather_reporting(&store, LayerId(1), &mut cycles);
+        assert_eq!(stack.layers, vec![LayerId(1), LayerId(2), LayerId(2)]);
+        assert!(cycles.is_empty());
     }
 
     #[test]

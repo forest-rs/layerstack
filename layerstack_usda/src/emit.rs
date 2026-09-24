@@ -1021,16 +1021,11 @@ impl EmitCtx<'_> {
 
     fn emit_arc_ref(&mut self, arc_ref: &ast::ArcRef<'_>) -> Option<Reference> {
         let layer_id = if let Some(asset) = arc_ref.asset {
-            match self.resolve_asset(asset) {
-                Some(resolved) => {
-                    let id = resolved.layer_id;
-                    if let Some(layer) = resolved.layer {
-                        self.resolved_layers.push(layer);
-                    }
-                    id
-                }
-                None => return None,
+            let resolved = self.resolve_asset(asset)?;
+            if let Some(layer) = resolved.layer {
+                self.resolved_layers.push(layer);
             }
+            resolved.layer_id
         } else {
             // Self-reference (same layer).
             self.layer_id

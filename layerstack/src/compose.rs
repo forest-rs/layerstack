@@ -80,44 +80,25 @@ fn combined_variant_sites(
     out
 }
 
+/// Maps a forwarded opinion's source spec path through an optional
+/// provenance namespace remap.
+///
+/// Variant selections named in the path are kept as authored: they identify
+/// the branch the opinion came from, and `prune_unselected_variant_specs`
+/// relies on them to drop opinions from unselected branches. (Rewriting them
+/// to the selected variant would relabel leaked opinions as legitimate ones.)
 fn normalize_forwarded_spec_path(
     store: &mut dyn LayerStore,
     spec_path: &SpecPath,
     provenance_remap: Option<(PathId, PathId)>,
-    stronger_selections: &HashMap<TokenId, TokenId>,
 ) -> SpecPath {
-    let mut out = if let Some((dest_root, src_root)) = provenance_remap {
+    if let Some((dest_root, src_root)) = provenance_remap {
         let dest_root = store.paths().resolve(dest_root).clone();
         let src_root = store.paths().resolve(src_root).clone();
         remap_spec_path(store, spec_path, &dest_root, &src_root)
     } else {
         spec_path.clone()
-    };
-
-    let mut selection_sites = spec_path_selection_sites(store, &out);
-    if selection_sites.is_empty() {
-        return out;
     }
-
-    let mut changed = false;
-    for site in &mut selection_sites {
-        if let Some(selected) = stronger_selections.get(&site.set)
-            && *selected != site.variant
-        {
-            site.variant = *selected;
-            changed = true;
-        }
-    }
-
-    if !changed {
-        return out;
-    }
-
-    out = SpecPath::from_variant_selection_sites(out.prim_path(), &selection_sites, store.paths());
-    if let Some(property) = spec_path.property() {
-        out = out.with_property(property);
-    }
-    out
 }
 
 fn normalized_prim_spec_path(
@@ -125,10 +106,9 @@ fn normalized_prim_spec_path(
     prim_path: PathId,
     outer_variant_sites: &[VariantSelectionSite],
     provenance_remap: Option<(PathId, PathId)>,
-    stronger_selections: &HashMap<TokenId, TokenId>,
 ) -> SpecPath {
     let raw = prim_spec_path(store, prim_path, outer_variant_sites);
-    normalize_forwarded_spec_path(store, &raw, provenance_remap, stronger_selections)
+    normalize_forwarded_spec_path(store, &raw, provenance_remap)
 }
 
 fn normalized_property_spec_path(
@@ -137,10 +117,9 @@ fn normalized_property_spec_path(
     outer_variant_sites: &[VariantSelectionSite],
     property: TokenId,
     provenance_remap: Option<(PathId, PathId)>,
-    stronger_selections: &HashMap<TokenId, TokenId>,
 ) -> SpecPath {
     let raw = property_spec_path(store, prim_path, outer_variant_sites, property);
-    normalize_forwarded_spec_path(store, &raw, provenance_remap, stronger_selections)
+    normalize_forwarded_spec_path(store, &raw, provenance_remap)
 }
 
 fn normalized_variant_spec_path(
@@ -148,10 +127,9 @@ fn normalized_variant_spec_path(
     prim_path: PathId,
     selection_sites: &[VariantSelectionSite],
     provenance_remap: Option<(PathId, PathId)>,
-    stronger_selections: &HashMap<TokenId, TokenId>,
 ) -> SpecPath {
     let raw = variant_spec_path(store, prim_path, selection_sites);
-    normalize_forwarded_spec_path(store, &raw, provenance_remap, stronger_selections)
+    normalize_forwarded_spec_path(store, &raw, provenance_remap)
 }
 
 fn normalized_variant_property_spec_path(
@@ -160,10 +138,9 @@ fn normalized_variant_property_spec_path(
     selection_sites: &[VariantSelectionSite],
     property: TokenId,
     provenance_remap: Option<(PathId, PathId)>,
-    stronger_selections: &HashMap<TokenId, TokenId>,
 ) -> SpecPath {
     let raw = variant_property_spec_path(store, prim_path, selection_sites, property);
-    normalize_forwarded_spec_path(store, &raw, provenance_remap, stronger_selections)
+    normalize_forwarded_spec_path(store, &raw, provenance_remap)
 }
 
 /// Composes a stage from a root layer.
@@ -246,6 +223,8 @@ pub(crate) fn compose_stage(
         prim.finalize();
     }
 
+    prune_unselected_variant_specs(store, &mut prims);
+
     apply_child_order(
         store,
         &authored_children_opinions,
@@ -266,6 +245,246 @@ pub(crate) fn compose_stage(
 
     let dependencies = dep_builder.map(DependencyBuilder::finish);
     Stage::from_parts(prims, children, options.with_provenance, dependencies)
+}
+
+/// Resolves the variant selections that govern a composed prim, in strength
+/// order.
+///
+/// Sources are visited strongest-first. A variant node (a source whose spec
+/// path ends in `{set=variant}`) contributes the selections authored inside
+/// that branch at the node's own strength, so a selection authored in a
+/// stronger variant beats one authored on a weaker referenced prim. Sets not
+/// resolved this way fall back to [`composed_variant_selections`].
+///
+/// Spec: AOUSD Core §10.5 (the strongest variant selection opinion in the
+/// prim index wins, independent of which arc introduced the variant set).
+fn strength_ordered_variant_selections(
+    store: &dyn LayerStore,
+    prim_index: &PrimIndex,
+) -> HashMap<TokenId, TokenId> {
+    use crate::spec_path::SpecComponent;
+
+    let mut selections: HashMap<TokenId, TokenId> = HashMap::new();
+    for source in &prim_index.sources {
+        let Some(spec) = store
+            .layer(source.layer_id)
+            .and_then(|layer| layer.prims.get(&source.lookup_path))
+        else {
+            continue;
+        };
+        let authored = match source.spec_path.components().last() {
+            Some(SpecComponent::VariantSelection { set, variant }) => spec
+                .variant_sets
+                .get(set)
+                .and_then(|set_spec| set_spec.variants.get(variant))
+                .map(|variant_spec| &variant_spec.variant_selections),
+            _ => Some(&spec.variant_selections),
+        };
+        for (set, variant) in authored.into_iter().flatten() {
+            selections.entry(*set).or_insert(*variant);
+        }
+    }
+    for (set, variant) in composed_variant_selections(store, prim_index) {
+        selections.entry(set).or_insert(variant);
+    }
+    selections
+}
+
+/// Resolves the variant selections of a composed prim from its prim index.
+///
+/// Sources are visited strongest-first, so the strongest selection authored
+/// directly on a source spec wins, regardless of which arc introduced it;
+/// then selections authored inside selected branches are chained in.
+///
+/// Spec: AOUSD Core §10.5 (variant selection).
+fn composed_variant_selections(
+    store: &dyn LayerStore,
+    prim_index: &PrimIndex,
+) -> HashMap<TokenId, TokenId> {
+    let mut selections: HashMap<TokenId, TokenId> = HashMap::new();
+    for source in &prim_index.sources {
+        let Some(layer) = store.layer(source.layer_id) else {
+            continue;
+        };
+        let Some(spec) = layer.prims.get(&source.lookup_path) else {
+            continue;
+        };
+        for (set, variant) in &spec.variant_selections {
+            selections.entry(*set).or_insert(*variant);
+        }
+    }
+
+    // Expand selections from within selected variant branches (chaining).
+    loop {
+        let mut new_sels = HashMap::new();
+        for source in &prim_index.sources {
+            let Some(layer) = store.layer(source.layer_id) else {
+                continue;
+            };
+            let Some(spec) = layer.prims.get(&source.lookup_path) else {
+                continue;
+            };
+            for (set, selected_variant) in &selections {
+                if let Some(set_spec) = spec.variant_sets.get(set)
+                    && let Some(variant_spec) = set_spec.variants.get(selected_variant)
+                {
+                    for (inner_set, inner_variant) in &variant_spec.variant_selections {
+                        if !selections.contains_key(inner_set) {
+                            new_sels.entry(*inner_set).or_insert(*inner_variant);
+                        }
+                    }
+                }
+            }
+        }
+        if new_sels.is_empty() {
+            break;
+        }
+        selections.extend(new_sels);
+    }
+    selections
+}
+
+/// Removes opinions and sources whose source spec lies inside an unselected
+/// variant branch.
+///
+/// Every opinion carries its source identity as a [`SpecPath`], which names
+/// each variant branch on the way to the authored spec
+/// (`/Model{x=a}Child.attr`). An opinion may only contribute while every one
+/// of those branches is selected. The arc passes cannot decide this on their
+/// own: USDA ingestion also stores prims introduced inside a variant branch in
+/// `Layer::prims` under their namespace path, so they are found by namespace
+/// lookup, and the selection that governs a variant set may be authored by a
+/// sibling arc that has not been expanded yet.
+///
+/// Arcs map namespace structure one-to-one, so the composed prim hosting a
+/// variant set is the ancestor of the destination prim at the same relative
+/// depth as the variant host is to the source spec. The selection is taken
+/// from that composed host's prim index (strongest selection across all
+/// arcs), falling back to the selection authored on the host in the source
+/// layer when the host lies outside the composed namespace. When no selection
+/// is known for a set at all (fallback selections are not modeled yet), the
+/// opinion is kept rather than guessed away.
+///
+/// Spec: AOUSD Core §10.5 (only the selected variant of each variant set
+/// contributes opinions). Where the Core is silent (§4.2), this follows
+/// `OpenUSD` v26.08: `pxr/usd/pcp/primIndex.cpp:4471` adds a variant arc only
+/// for the selection found by `_ComposeVariantSelection` (`:4130`), which
+/// searches the whole prim index in strength order.
+fn prune_unselected_variant_specs(store: &dyn LayerStore, prims: &mut HashMap<PathId, PrimIndex>) {
+    let mut selection_cache: HashMap<PathId, HashMap<TokenId, TokenId>> = HashMap::new();
+
+    let prim_paths: Vec<PathId> = prims.keys().copied().collect();
+    for prim_path in prim_paths {
+        let mut rejected: HashSet<(LayerId, SpecPath)> = HashSet::new();
+        {
+            let index = &prims[&prim_path];
+            let mut checked: HashSet<(LayerId, &SpecPath)> = HashSet::new();
+            let all_keys = index
+                .sources
+                .iter()
+                .chain(index.opinions_by_field.values().flatten().map(|op| &op.key));
+            for key in all_keys {
+                if !checked.insert((key.layer_id, &key.spec_path)) {
+                    continue;
+                }
+                if !spec_path_branches_selected(
+                    store,
+                    prims,
+                    &mut selection_cache,
+                    prim_path,
+                    key.layer_id,
+                    &key.spec_path,
+                ) {
+                    rejected.insert((key.layer_id, key.spec_path.clone()));
+                }
+            }
+        }
+        if rejected.is_empty() {
+            continue;
+        }
+
+        let is_rejected =
+            |key: &OpinionKey| rejected.contains(&(key.layer_id, key.spec_path.clone()));
+        let index = prims.get_mut(&prim_path).expect("prim exists");
+        index.sources.retain(|key| !is_rejected(key));
+        for opinions in index.opinions_by_field.values_mut() {
+            opinions.retain(|op| !is_rejected(&op.key));
+        }
+        index
+            .opinions_by_field
+            .retain(|_, opinions| !opinions.is_empty());
+        index
+            .property_types_by_field
+            .retain(|_, (key, _)| !is_rejected(key));
+    }
+}
+
+/// Returns `true` unless `spec_path` names a variant branch that is not
+/// selected for the composed prim `prim_path`.
+fn spec_path_branches_selected(
+    store: &dyn LayerStore,
+    prims: &HashMap<PathId, PrimIndex>,
+    selection_cache: &mut HashMap<PathId, HashMap<TokenId, TokenId>>,
+    prim_path: PathId,
+    layer_id: LayerId,
+    spec_path: &SpecPath,
+) -> bool {
+    use crate::spec_path::SpecComponent;
+
+    let components = spec_path.components();
+    if !components
+        .iter()
+        .any(|c| matches!(c, SpecComponent::VariantSelection { .. }))
+    {
+        return true;
+    }
+    let spec_depth = components
+        .iter()
+        .filter(|c| matches!(c, SpecComponent::Prim(_)))
+        .count();
+    let paths = store.paths();
+    let dest = paths.resolve(prim_path).clone();
+
+    let mut host_segments: Vec<TokenId> = Vec::new();
+    for component in components {
+        let (set, variant) = match *component {
+            SpecComponent::Prim(segment) => {
+                host_segments.push(segment);
+                continue;
+            }
+            SpecComponent::VariantSelection { set, variant } => (set, variant),
+        };
+
+        // Walk up from the destination prim by the host's relative depth.
+        let mut composed_host = Some(dest.clone());
+        for _ in host_segments.len()..spec_depth {
+            composed_host = composed_host.and_then(|p| p.parent());
+        }
+        let composed_selection = composed_host
+            .and_then(|p| paths.lookup(&p))
+            .filter(|id| prims.contains_key(id))
+            .and_then(|id| {
+                selection_cache
+                    .entry(id)
+                    .or_insert_with(|| strength_ordered_variant_selections(store, &prims[&id]))
+                    .get(&set)
+                    .copied()
+            });
+        let selection = composed_selection.or_else(|| {
+            let host = paths.lookup(&crate::path::Path::root().join(&host_segments))?;
+            store
+                .layer(layer_id)?
+                .prims
+                .get(&host)?
+                .variant_selections
+                .get(&set)
+                .copied()
+        });
+        if selection.is_some_and(|selected| selected != variant) {
+            return false;
+        }
+    }
+    true
 }
 
 /// Filters children maps by removing variant-only children that don't belong
@@ -296,7 +515,7 @@ fn filter_variant_children(
         let mut variant_set_order: Vec<TokenId> = Vec::new();
 
         // First, resolve variant selections and variant set order from all opinion sources.
-        let mut selections: HashMap<TokenId, TokenId> = HashMap::new();
+        let selections = composed_variant_selections(store, prim_index);
         for source in &prim_index.sources {
             let Some(layer) = store.layer(source.layer_id) else {
                 continue;
@@ -304,41 +523,11 @@ fn filter_variant_children(
             let Some(spec) = layer.prims.get(&source.lookup_path) else {
                 continue;
             };
-            for (set, variant) in &spec.variant_selections {
-                selections.entry(*set).or_insert(*variant);
-            }
             // Use the first non-empty variant_set_order we find.
-            if variant_set_order.is_empty() && !spec.variant_set_order.is_empty() {
+            if !spec.variant_set_order.is_empty() {
                 variant_set_order = spec.variant_set_order.clone();
-            }
-        }
-
-        // Expand selections from within selected variant branches (chaining).
-        loop {
-            let mut new_sels = HashMap::new();
-            for source in &prim_index.sources {
-                let Some(layer) = store.layer(source.layer_id) else {
-                    continue;
-                };
-                let Some(spec) = layer.prims.get(&source.lookup_path) else {
-                    continue;
-                };
-                for (set, selected_variant) in &selections {
-                    if let Some(set_spec) = spec.variant_sets.get(set)
-                        && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                    {
-                        for (inner_set, inner_variant) in &variant_spec.variant_selections {
-                            if !selections.contains_key(inner_set) {
-                                new_sels.entry(*inner_set).or_insert(*inner_variant);
-                            }
-                        }
-                    }
-                }
-            }
-            if new_sels.is_empty() {
                 break;
             }
-            selections.extend(new_sels);
         }
 
         // Then check each source for variant sets.
@@ -1506,11 +1695,21 @@ fn add_local_and_variant_opinions(
 
             let accumulated_offset = local_stack.offset_at(layer_strength_idx);
             let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
+            // A spec reached through variant branches (see
+            // `PrimSpec::outer_variant_sites`) holds variant opinions, which are
+            // weaker than local opinions from every layer of the stack.
+            //
+            // Spec: AOUSD Core §10.4 (LIVERPS: local before variants).
+            let (is_local, arc_kind) = if spec.outer_variant_sites.is_empty() {
+                (true, ArcKind::Local)
+            } else {
+                (false, ArcKind::Variants)
+            };
             out.get_mut(&path)
                 .expect("path exists")
                 .add_source(OpinionKey {
-                    is_local: true,
-                    arc_kind: ArcKind::Local,
+                    is_local,
+                    arc_kind,
                     nested_arc_kind: None,
                     namespace_depth,
                     authored: true,
@@ -1523,8 +1722,8 @@ fn add_local_and_variant_opinions(
 
             for entry in &spec.fields {
                 let key = OpinionKey {
-                    is_local: true,
-                    arc_kind: ArcKind::Local,
+                    is_local,
+                    arc_kind,
                     nested_arc_kind: None,
                     namespace_depth,
                     authored: true,
@@ -1554,8 +1753,8 @@ fn add_local_and_variant_opinions(
             if !spec.authored_children.is_empty() {
                 authored_children_out.entry(path).or_default().push((
                     OpinionKey {
-                        is_local: true,
-                        arc_kind: ArcKind::Local,
+                        is_local,
+                        arc_kind,
                         nested_arc_kind: None,
                         namespace_depth,
                         authored: true,
@@ -1572,8 +1771,8 @@ fn add_local_and_variant_opinions(
             if let Some(order) = &spec.prim_order {
                 prim_order_out.entry(path).or_default().push((
                     OpinionKey {
-                        is_local: true,
-                        arc_kind: ArcKind::Local,
+                        is_local,
+                        arc_kind,
                         nested_arc_kind: None,
                         namespace_depth,
                         authored: true,
@@ -2009,8 +2208,6 @@ fn add_inherit_edge_opinions(
                 let Some(spec) = layer.prims.get(remote_path_id) else {
                     continue;
                 };
-                let stronger_selections =
-                    resolve_full_variant_selections(store, local_stack, *dest_path_id);
                 if let Some(d) = deps.as_deref_mut() {
                     d.add_layer_opinion(layer_id, *dest_path_id);
                 }
@@ -2031,7 +2228,6 @@ fn add_inherit_edge_opinions(
                                 *remote_path_id,
                                 &spec.outer_variant_sites,
                                 provenance_remap,
-                                &stronger_selections,
                             ),
                         },
                         order.clone(),
@@ -2058,7 +2254,6 @@ fn add_inherit_edge_opinions(
                                     *remote_path_id,
                                     &spec.outer_variant_sites,
                                     provenance_remap,
-                                    &stronger_selections,
                                 ),
                             },
                             spec.authored_children.clone(),
@@ -2082,7 +2277,6 @@ fn add_inherit_edge_opinions(
                             *remote_path_id,
                             &spec.outer_variant_sites,
                             provenance_remap,
-                            &stronger_selections,
                         ),
                     },
                 ));
@@ -2096,7 +2290,6 @@ fn add_inherit_edge_opinions(
                             &spec.outer_variant_sites,
                             entry.name,
                             provenance_remap,
-                            &stronger_selections,
                         ),
                         entry.name,
                         entry.value.clone(),
@@ -2141,7 +2334,6 @@ fn add_inherit_edge_opinions(
                                     *remote_path_id,
                                     &branch_selections,
                                     provenance_remap,
-                                    &stronger_selections,
                                 ),
                             },
                         ));
@@ -2155,7 +2347,6 @@ fn add_inherit_edge_opinions(
                                     &branch_selections,
                                     entry.name,
                                     provenance_remap,
-                                    &stronger_selections,
                                 ),
                                 entry.name,
                                 entry.value.clone(),
@@ -2205,7 +2396,6 @@ fn add_inherit_edge_opinions(
                                         &child_selections,
                                         entry.name,
                                         provenance_remap,
-                                        &stronger_selections,
                                     ),
                                     entry.name,
                                     entry.value.clone(),
@@ -2263,18 +2453,12 @@ fn add_inherit_edge_opinions(
     for &(remote_path_id, dest_path_id) in &mapping {
         let src_index = out.get(&remote_path_id).cloned();
         if let Some(src_index) = src_index {
-            let stronger_selections =
-                resolve_full_variant_selections(store, local_stack, dest_path_id);
             for source in &src_index.sources {
                 if source.arc_kind == ArcKind::Local {
                     continue;
                 }
-                let spec_path = normalize_forwarded_spec_path(
-                    store,
-                    &source.spec_path,
-                    provenance_remap,
-                    &stronger_selections,
-                );
+                let spec_path =
+                    normalize_forwarded_spec_path(store, &source.spec_path, provenance_remap);
                 out.get_mut(&dest_path_id)
                     .expect("path exists")
                     .add_source(OpinionKey {
@@ -2299,7 +2483,6 @@ fn add_inherit_edge_opinions(
                         store,
                         &opinion.key.spec_path,
                         provenance_remap,
-                        &stronger_selections,
                     );
                     out.get_mut(&dest_path_id)
                         .expect("path exists")
@@ -2858,8 +3041,6 @@ fn add_reference_edge_opinions(
             let Some(remote_spec) = remote_layer.prims.get(remote_path_id) else {
                 continue;
             };
-            let stronger_selections =
-                resolve_full_variant_selections(store, stage_stack, *dest_path_id);
             if let Some(d) = deps.as_deref_mut() {
                 d.add_layer_opinion(remote_layer_id, *dest_path_id);
             }
@@ -2878,7 +3059,6 @@ fn add_reference_edge_opinions(
                     *remote_path_id,
                     &remote_spec.outer_variant_sites,
                     provenance_remap,
-                    &stronger_selections,
                 ),
             };
             pending_sources.push((*dest_path_id, base_key.clone()));
@@ -2895,7 +3075,6 @@ fn add_reference_edge_opinions(
                             &remote_spec.outer_variant_sites,
                             entry.name,
                             provenance_remap,
-                            &stronger_selections,
                         )),
                     entry.value.clone(),
                     entry.property_type.clone(),
@@ -2943,7 +3122,6 @@ fn add_reference_edge_opinions(
                                     *remote_path_id,
                                     &branch_selections,
                                     provenance_remap,
-                                    &stronger_selections,
                                 ),
                             },
                         ));
@@ -2967,7 +3145,6 @@ fn add_reference_edge_opinions(
                                         &branch_selections,
                                         entry.name,
                                         provenance_remap,
-                                        &stronger_selections,
                                     ),
                                 },
                                 entry.value.clone(),
@@ -3012,7 +3189,6 @@ fn add_reference_edge_opinions(
                                                 remote_child_source,
                                                 &branch_selections,
                                                 provenance_remap,
-                                                &stronger_selections,
                                             ),
                                         },
                                         gc_list.clone(),
@@ -3068,7 +3244,6 @@ fn add_reference_edge_opinions(
                                                 &child_selections,
                                                 entry.name,
                                                 provenance_remap,
-                                                &stronger_selections,
                                             ),
                                         },
                                         entry.value.clone(),
@@ -3093,7 +3268,6 @@ fn add_reference_edge_opinions(
                                             remote_child_source,
                                             &child_selections,
                                             provenance_remap,
-                                            &stronger_selections,
                                         ),
                                     });
                             }
@@ -3185,7 +3359,6 @@ fn add_reference_edge_opinions(
                                 *remote_path_id,
                                 &branch_selections,
                                 provenance_remap,
-                                &stronger_selections,
                             ),
                         },
                     ));
@@ -3207,7 +3380,6 @@ fn add_reference_edge_opinions(
                                 &branch_selections,
                                 entry.name,
                                 provenance_remap,
-                                &stronger_selections,
                             ),
                         };
                         let index = out.get_mut(dest_path_id).expect("path exists");
@@ -3254,7 +3426,6 @@ fn add_reference_edge_opinions(
                                             remote_child_source,
                                             &branch_selections,
                                             provenance_remap,
-                                            &stronger_selections,
                                         ),
                                     },
                                     gc_list.clone(),
@@ -3304,7 +3475,6 @@ fn add_reference_edge_opinions(
                                         remote_child_source,
                                         &child_selections,
                                         provenance_remap,
-                                        &stronger_selections,
                                     ),
                                 });
                             for entry in child_fields {
@@ -3324,7 +3494,6 @@ fn add_reference_edge_opinions(
                                         &child_selections,
                                         entry.name,
                                         provenance_remap,
-                                        &stronger_selections,
                                     ),
                                 };
                                 let index = out.get_mut(&child_path_id).expect("path exists");
@@ -3552,18 +3721,12 @@ fn add_reference_edge_opinions(
     for &(remote_path_id, dest_path_id) in &mapping {
         let src_index = out.get(&remote_path_id).cloned();
         if let Some(src_index) = src_index {
-            let stronger_selections =
-                resolve_full_variant_selections(store, stage_stack, dest_path_id);
             for source in &src_index.sources {
                 if source.arc_kind == ArcKind::Local {
                     continue;
                 }
-                let spec_path = normalize_forwarded_spec_path(
-                    store,
-                    &source.spec_path,
-                    provenance_remap,
-                    &stronger_selections,
-                );
+                let spec_path =
+                    normalize_forwarded_spec_path(store, &source.spec_path, provenance_remap);
                 out.get_mut(&dest_path_id)
                     .expect("path exists")
                     .add_source(OpinionKey {
@@ -3588,7 +3751,6 @@ fn add_reference_edge_opinions(
                         store,
                         &opinion.key.spec_path,
                         provenance_remap,
-                        &stronger_selections,
                     );
                     out.get_mut(&dest_path_id)
                         .expect("path exists")
@@ -3801,8 +3963,6 @@ fn add_payload_edge_opinions(
             let Some(remote_spec) = remote_layer.prims.get(remote_path_id) else {
                 continue;
             };
-            let stronger_selections =
-                resolve_full_variant_selections(store, stage_stack, *dest_path_id);
             if let Some(d) = deps.as_deref_mut() {
                 d.add_layer_opinion(remote_layer_id, *dest_path_id);
             }
@@ -3823,7 +3983,6 @@ fn add_payload_edge_opinions(
                         *remote_path_id,
                         &remote_spec.outer_variant_sites,
                         provenance_remap,
-                        &stronger_selections,
                     ),
                 },
             ));
@@ -3845,7 +4004,6 @@ fn add_payload_edge_opinions(
                         &remote_spec.outer_variant_sites,
                         entry.name,
                         provenance_remap,
-                        &stronger_selections,
                     ),
                 };
                 let index = out.get_mut(dest_path_id).expect("path exists");
@@ -3877,7 +4035,6 @@ fn add_payload_edge_opinions(
                             *remote_path_id,
                             &remote_spec.outer_variant_sites,
                             provenance_remap,
-                            &stronger_selections,
                         ),
                     },
                     order.clone(),
@@ -3904,7 +4061,6 @@ fn add_payload_edge_opinions(
                                 *remote_path_id,
                                 &remote_spec.outer_variant_sites,
                                 provenance_remap,
-                                &stronger_selections,
                             ),
                         },
                         remote_spec.authored_children.clone(),
@@ -3947,7 +4103,6 @@ fn add_payload_edge_opinions(
                                 *remote_path_id,
                                 &branch_selections,
                                 provenance_remap,
-                                &stronger_selections,
                             ),
                         },
                     ));
@@ -3969,7 +4124,6 @@ fn add_payload_edge_opinions(
                                 &branch_selections,
                                 entry.name,
                                 provenance_remap,
-                                &stronger_selections,
                             ),
                         };
                         let index = out.get_mut(dest_path_id).expect("path exists");
@@ -4288,8 +4442,6 @@ fn add_specializes_edge_opinions(
                         .lookup(&selection_base_path.join(&rel))
                         .unwrap_or(selection_root)
                 };
-                let stronger_selections =
-                    resolve_full_variant_selections(store, local_stack, selection_path_id);
                 if let Some(d) = deps.as_deref_mut() {
                     d.add_layer_opinion(layer_id, *dest_path_id);
                 }
@@ -4310,7 +4462,6 @@ fn add_specializes_edge_opinions(
                                 *remote_path_id,
                                 &spec.outer_variant_sites,
                                 provenance_remap,
-                                &stronger_selections,
                             ),
                         },
                         order.clone(),
@@ -4337,7 +4488,6 @@ fn add_specializes_edge_opinions(
                                     *remote_path_id,
                                     &spec.outer_variant_sites,
                                     provenance_remap,
-                                    &stronger_selections,
                                 ),
                             },
                             spec.authored_children.clone(),
@@ -4361,7 +4511,6 @@ fn add_specializes_edge_opinions(
                             *remote_path_id,
                             &spec.outer_variant_sites,
                             provenance_remap,
-                            &stronger_selections,
                         ),
                     },
                 ));
@@ -4375,7 +4524,6 @@ fn add_specializes_edge_opinions(
                             &spec.outer_variant_sites,
                             entry.name,
                             provenance_remap,
-                            &stronger_selections,
                         ),
                         entry.name,
                         entry.value.clone(),
@@ -4420,7 +4568,6 @@ fn add_specializes_edge_opinions(
                                     *remote_path_id,
                                     &branch_selections,
                                     provenance_remap,
-                                    &stronger_selections,
                                 ),
                             },
                         ));
@@ -4434,7 +4581,6 @@ fn add_specializes_edge_opinions(
                                     &branch_selections,
                                     entry.name,
                                     provenance_remap,
-                                    &stronger_selections,
                                 ),
                                 entry.name,
                                 entry.value.clone(),
@@ -4484,30 +4630,12 @@ fn add_specializes_edge_opinions(
     for &(remote_path_id, dest_path_id) in &mapping {
         let src_index = out.get(&remote_path_id).cloned();
         if let Some(src_index) = src_index {
-            let selection_path_id = {
-                let rel = store
-                    .paths()
-                    .resolve(remote_path_id)
-                    .strip_prefix(&specialized_path)
-                    .expect("mapping source should stay under specialized root")
-                    .to_vec();
-                store
-                    .paths()
-                    .lookup(&selection_base_path.join(&rel))
-                    .unwrap_or(selection_root)
-            };
-            let stronger_selections =
-                resolve_full_variant_selections(store, local_stack, selection_path_id);
             for source in &src_index.sources {
                 if source.arc_kind == ArcKind::Local {
                     continue;
                 }
-                let spec_path = normalize_forwarded_spec_path(
-                    store,
-                    &source.spec_path,
-                    provenance_remap,
-                    &stronger_selections,
-                );
+                let spec_path =
+                    normalize_forwarded_spec_path(store, &source.spec_path, provenance_remap);
                 out.get_mut(&dest_path_id)
                     .expect("path exists")
                     .add_source(OpinionKey {
@@ -4532,7 +4660,6 @@ fn add_specializes_edge_opinions(
                         store,
                         &opinion.key.spec_path,
                         provenance_remap,
-                        &stronger_selections,
                     );
                     out.get_mut(&dest_path_id)
                         .expect("path exists")
@@ -4785,32 +4912,14 @@ fn add_specializes_edge_opinions(
     // Late-copy accumulated sources after nested arc propagation so specializes
     // can inherit weaker referenced opinions authored on the specialized prim.
     for &(remote_path_id, dest_path_id) in &mapping {
-        let selection_path_id = {
-            let rel = store
-                .paths()
-                .resolve(remote_path_id)
-                .strip_prefix(&specialized_path)
-                .expect("mapping source should stay under specialized root")
-                .to_vec();
-            store
-                .paths()
-                .lookup(&selection_base_path.join(&rel))
-                .unwrap_or(selection_root)
-        };
-        let stronger_selections =
-            resolve_full_variant_selections(store, local_stack, selection_path_id);
         let src_index = out.get(&remote_path_id).cloned();
         if let Some(src_index) = src_index {
             for source in &src_index.sources {
                 if source.arc_kind == ArcKind::Local {
                     continue;
                 }
-                let spec_path = normalize_forwarded_spec_path(
-                    store,
-                    &source.spec_path,
-                    provenance_remap,
-                    &stronger_selections,
-                );
+                let spec_path =
+                    normalize_forwarded_spec_path(store, &source.spec_path, provenance_remap);
                 out.get_mut(&dest_path_id)
                     .expect("path exists")
                     .add_source(OpinionKey {
@@ -4835,7 +4944,6 @@ fn add_specializes_edge_opinions(
                         store,
                         &opinion.key.spec_path,
                         provenance_remap,
-                        &stronger_selections,
                     );
                     out.get_mut(&dest_path_id)
                         .expect("path exists")

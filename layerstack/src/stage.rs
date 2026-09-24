@@ -422,9 +422,17 @@ impl Stage {
                     //
                     // Spec: §12.3.2.1 (layer offset/scale remap time).
                     let mapped_time = opinion.layer_offset.map_time(time);
-                    let value = interpolate_samples(samples, mapped_time, interp);
-                    return value.map(|v| Resolved {
-                        value: v,
+                    let value = interpolate_samples(samples, mapped_time, interp)?;
+                    // A blocked sample in effect at the query time resolves to
+                    // no value, exactly like a blocked default.
+                    //
+                    // Spec: AOUSD Core §12.3.6 (individual time samples can be
+                    // blocked).
+                    if value == Value::Blocked {
+                        return None;
+                    }
+                    return Some(Resolved {
+                        value,
                         provenance: self.provenance_for(field, opinion),
                     });
                 }

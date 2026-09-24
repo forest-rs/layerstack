@@ -1114,6 +1114,75 @@ fn time_samples_non_numeric_falls_back_to_held() {
     );
 }
 
+/// Resolves `/P.x` at `time` where `/P.x` carries only `samples`.
+fn resolve_sampled_property(
+    samples: Vec<(f64, Value)>,
+    property_type: PropertyType,
+    time: f64,
+    interp: InterpolationType,
+) -> Option<Value> {
+    let mut store = InMemoryStore::default();
+    let property = store.property_path("/P.x");
+    let mut layer = Layer::new(LayerId(1));
+    layer.set_typed_property(property, FieldValue::TimeSamples(samples), property_type);
+    store.insert_layer(layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    stage
+        .resolve_value_at_time(property.prim_path(), property.property(), time, interp)
+        .map(|resolved| resolved.value)
+}
+
+#[test]
+fn blocked_time_samples_resolve_to_no_value() {
+    // Spec: AOUSD Core §12.3.6 — individual time samples can be blocked, and
+    // a block in effect resolves to no value, never to a `Blocked` value.
+    let cases = [
+        ("int[]", PropertyType::new("int[]", true, Value::Int(0))),
+        (
+            "double",
+            PropertyType::new("double", false, Value::Double(0.0)),
+        ),
+    ];
+    for (name, property_type) in cases {
+        for (time, what) in [(0.0, "exact"), (1.0, "held"), (-1.0, "before first")] {
+            assert_eq!(
+                resolve_sampled_property(
+                    vec![(0.0, Value::Blocked)],
+                    property_type.clone(),
+                    time,
+                    InterpolationType::Held,
+                ),
+                None,
+                "{name}: {what} query over an all-block sample series"
+            );
+        }
+    }
+}
+
+#[test]
+fn blocked_time_sample_applies_only_where_it_is_in_effect() {
+    let property_type = PropertyType::new("double", false, Value::Double(0.0));
+    let samples = vec![
+        (0.0, Value::Double(1.0)),
+        (2.0, Value::Blocked),
+        (4.0, Value::Double(5.0)),
+    ];
+    let at = |time, interp| {
+        resolve_sampled_property(samples.clone(), property_type.clone(), time, interp)
+    };
+
+    assert_eq!(at(1.0, InterpolationType::Held), Some(Value::Double(1.0)));
+    assert_eq!(at(2.0, InterpolationType::Held), None, "exact block");
+    assert_eq!(at(3.0, InterpolationType::Held), None, "held block");
+    assert_eq!(
+        at(3.0, InterpolationType::Linear),
+        None,
+        "linear from a block"
+    );
+    assert_eq!(at(4.0, InterpolationType::Held), Some(Value::Double(5.0)));
+}
+
 #[test]
 fn time_samples_override_default_value() {
     use layerstack::InterpolationType;

@@ -366,13 +366,7 @@ impl EmitCtx<'_> {
 
         // TimeSamples.
         if let Some(samples) = &attr.time_samples {
-            let ts: Vec<(f64, Value)> = samples
-                .iter()
-                .filter_map(|s| {
-                    let val = s.value.as_ref()?;
-                    Some((s.time, self.convert_value(val, attr.type_name)))
-                })
-                .collect();
+            let ts = self.convert_time_samples(samples, attr.type_name);
             set_property_field_vec(
                 &mut spec.fields,
                 name_tok,
@@ -498,13 +492,7 @@ impl EmitCtx<'_> {
                                 );
                             }
                         } else if let Some(samples) = &attr.time_samples {
-                            let ts: Vec<(f64, Value)> = samples
-                                .iter()
-                                .filter_map(|s| {
-                                    let val = s.value.as_ref()?;
-                                    Some((s.time, self.convert_value(val, attr.type_name)))
-                                })
-                                .collect();
+                            let ts = self.convert_time_samples(samples, attr.type_name);
                             set_property_field_vec(
                                 &mut variant_spec.fields,
                                 attr_tok,
@@ -884,13 +872,7 @@ impl EmitCtx<'_> {
                             );
                         }
                     } else if let Some(samples) = &attr.time_samples {
-                        let ts: Vec<(f64, Value)> = samples
-                            .iter()
-                            .filter_map(|s| {
-                                let val = s.value.as_ref()?;
-                                Some((s.time, self.convert_value(val, attr.type_name)))
-                            })
-                            .collect();
+                        let ts = self.convert_time_samples(samples, attr.type_name);
                         set_property_field_vec(
                             child_fields,
                             attr_tok,
@@ -1128,6 +1110,28 @@ impl EmitCtx<'_> {
     }
 
     // ── Value conversion ────────────────────────────────────────────
+
+    /// Converts authored time samples, keeping blocked samples.
+    ///
+    /// A `None` sample is a value block in effect from its time until the
+    /// next sample (AOUSD Core §12.3.6: individual time samples can be
+    /// blocked), so it stays in the series as [`Value::Blocked`].
+    fn convert_time_samples(
+        &mut self,
+        samples: &[ast::TimeSample<'_>],
+        type_hint: &str,
+    ) -> Vec<(f64, Value)> {
+        samples
+            .iter()
+            .map(|s| {
+                let value = s
+                    .value
+                    .as_ref()
+                    .map_or(Value::Blocked, |v| self.convert_value(v, type_hint));
+                (s.time, value)
+            })
+            .collect()
+    }
 
     fn convert_value(&mut self, val: &ast::Value<'_>, type_hint: &str) -> Value {
         match val {
@@ -1988,6 +1992,37 @@ def \"A\" {
         } else {
             panic!("expected TimeSamples");
         }
+    }
+
+    #[test]
+    fn emit_keeps_blocked_time_samples() {
+        let src = "\
+#usda 1.0
+def \"A\" {
+    float x.timeSamples = {
+        1: 10.0,
+        2: None,
+        3: 30.0,
+    }
+}
+";
+        let (result, mut tokens, paths) = emit_source(src);
+        let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
+        let a_id = paths.lookup(&a_path).unwrap();
+        let spec = result.layer.prims.get(&a_id).unwrap();
+        let x_tok = tokens.intern("x");
+        let Some(FieldValue::TimeSamples(ts)) = get_field(&spec.fields, &x_tok) else {
+            panic!("expected TimeSamples");
+        };
+        assert_eq!(
+            ts,
+            &vec![
+                (1.0, Value::Float(10.0)),
+                (2.0, Value::Blocked),
+                (3.0, Value::Float(30.0)),
+            ],
+            "a `None` sample blocks from its time on, so it must stay in the series"
+        );
     }
 
     #[test]

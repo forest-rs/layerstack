@@ -1107,9 +1107,12 @@ fn decode_time_samples(
     let values_rel = read_u64_at(data, current_offset)? as usize;
     let val_off = current_offset + values_rel;
 
-    // 4. Decode timecodes (should be a Double array).
+    // 4. Decode timecodes. OpenUSD packs them as a `std::vector<double>`
+    //    (`TimeSamples::times`, `pxr/usd/sdf/crateFile.cpp:1596`), which is
+    //    the `DoubleVector` type, not a `double[]` array.
     let tc_value = decode_value(&tc_rep, data, sections)?;
-    let timecodes: Vec<f64> = match &tc_value {
+    let timecodes: Vec<f64> = match tc_value {
+        CrateValue::DoubleVector(times) => times,
         CrateValue::Array(arr) => arr
             .iter()
             .filter_map(|v| match v {
@@ -1118,16 +1121,21 @@ fn decode_time_samples(
                 _ => None,
             })
             .collect(),
-        CrateValue::Double(d) => vec![*d],
+        CrateValue::Double(d) => vec![d],
         _ => vec![],
     };
 
-    // 5. Read value reps.
+    // 5. Read value reps, one per time.
     let num_values = read_u64_at(data, val_off)? as usize;
+    if num_values != timecodes.len() {
+        return Err(UsdcError::Inconsistent {
+            message: "timeSamples has a different number of times and values",
+        });
+    }
     let mut samples = Vec::with_capacity(num_values);
     let reps_start = val_off + 8;
 
-    for i in 0..num_values {
+    for (i, time) in timecodes.into_iter().enumerate() {
         let rep_off = reps_start + i * 8;
         if rep_off + 8 > data.len() {
             return Err(UsdcError::UnexpectedEof {
@@ -1140,12 +1148,7 @@ fn decode_time_samples(
         vr_bytes.copy_from_slice(&data[rep_off..rep_off + 8]);
         let vr = RawValueRep::new(vr_bytes);
         let val = decode_value(&vr, data, sections)?;
-        let tc = if i < timecodes.len() {
-            timecodes[i]
-        } else {
-            0.0
-        };
-        samples.push((tc, val));
+        samples.push((time, val));
     }
 
     Ok(CrateValue::TimeSamples(samples))

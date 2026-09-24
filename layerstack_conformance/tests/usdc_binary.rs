@@ -340,6 +340,12 @@ fn gen_timesamples_parses() {
     match field {
         FieldValue::TimeSamples(ts) => {
             assert!(!ts.is_empty(), "expected non-empty time samples");
+            // Times are stored as a `DoubleVector` and must be decoded, not
+            // defaulted.
+            assert!(
+                ts.windows(2).all(|pair| pair[0].0 < pair[1].0),
+                "sample times must be strictly increasing: {ts:?}"
+            );
             // Each frame's time roughly equals its value.
             for (time, value) in &ts[..ts.len().saturating_sub(1)] {
                 if let Value::Double(v) = value {

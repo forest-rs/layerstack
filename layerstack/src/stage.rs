@@ -177,6 +177,30 @@ impl Stage {
         })
     }
 
+    /// Returns the source sites that contribute specs or opinions to `prim`,
+    /// as `(layer, prim path within that layer)` pairs, deduplicated.
+    ///
+    /// Both the lookup path and the namespace path of each provenance spec
+    /// path are reported: variant-branch opinions are looked up on the variant
+    /// host but authored at the child path. Over-reporting is intended; this
+    /// feeds invalidation, where a missed site is a correctness bug and an
+    /// extra site only costs recomposition.
+    pub(crate) fn source_sites(&self, prim: PathId) -> Vec<(LayerId, PathId)> {
+        let Some(index) = self.prims.get(&prim) else {
+            return Vec::new();
+        };
+        let keys = index
+            .sources
+            .iter()
+            .chain(index.opinions_by_field.values().flatten().map(|op| &op.key));
+        let mut sites = hashbrown::HashSet::new();
+        for key in keys {
+            sites.insert((key.layer_id, key.lookup_path));
+            sites.insert((key.layer_id, key.spec_path.prim_path()));
+        }
+        sites.into_iter().collect()
+    }
+
     /// Returns all prim paths present in the stage.
     pub(crate) fn prim_paths(&self) -> impl Iterator<Item = PathId> + '_ {
         self.prims.keys().copied()

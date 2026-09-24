@@ -5,7 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
-use layerstack::{LayerId, LayerStack, Stage, StageOptions};
+use layerstack::{LayerId, LayerStack, PropertyPath, Stage, StageOptions, Value};
 
 use layerstack_conformance::{
     pcp::load_pcp_json,
@@ -243,6 +243,55 @@ fn assert_pcp_composing(loaded: &mut LoadedStage, pcp_path: &Path) {
                 );
             }
         }
+    }
+}
+
+/// Asserts composed scalar values (and the provenance of the winning opinion)
+/// through the public [`Stage`] APIs.
+///
+/// Membership checks against `pcp.json` stacks cannot detect a wrong winner:
+/// a stack can contain every expected opinion in the wrong order. These
+/// assertions pin the strongest opinion, whose layer/spec come from the
+/// ordered stacks in the fixture's `pcp.txt`.
+///
+/// Each entry is `(property path, expected value, winning layer, winning spec)`.
+fn assert_scalar_values(loaded: &mut LoadedStage, expected: &[(&str, Value, &str, &str)]) {
+    let stage = Stage::compose(
+        &mut loaded.store,
+        loaded.root_layer,
+        StageOptions {
+            with_provenance: true,
+            ..StageOptions::default()
+        },
+    );
+    for (prop_path, value, layer_name, spec) in expected {
+        let path =
+            PropertyPath::parse(prop_path, &mut loaded.store.tokens, &mut loaded.store.paths)
+                .expect("property path");
+        let resolved = stage
+            .resolve_field_path(path)
+            .unwrap_or_else(|| panic!("no resolved value for {prop_path}"));
+        assert_eq!(
+            &resolved.value, value,
+            "wrong composed value for {prop_path}"
+        );
+
+        let provenance = resolved
+            .provenance
+            .unwrap_or_else(|| panic!("missing provenance for {prop_path}"));
+        let actual_layer = loaded
+            .layer_names
+            .get(&provenance.layer)
+            .cloned()
+            .unwrap_or_default();
+        let expected_spec =
+            layerstack::SpecPath::parse(spec, &mut loaded.store.tokens, &mut loaded.store.paths)
+                .expect("expected spec path");
+        assert!(
+            actual_layer == *layer_name && provenance.spec_path == expected_spec,
+            "wrong winning opinion for {prop_path}: got {actual_layer} {}, expected {layer_name} {spec}",
+            provenance.spec_path.display(&loaded.store.tokens)
+        );
     }
 }
 
@@ -503,6 +552,37 @@ fn basic_variant_with_reference_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("BasicVariantWithReference_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
     assert_pcp_composing(&mut loaded, &pcp_path);
+    // The local opinion inside the selected variant is stronger than the
+    // internal reference / inherit to `_prototype` (LIVRPS).
+    assert_scalar_values(
+        &mut loaded,
+        &[
+            (
+                "/ModelRefWithChildren/InstanceViaReference.attr2",
+                Value::Int(456),
+                "model.usd",
+                "/Model{vset=with_children}InstanceViaReference.attr2",
+            ),
+            (
+                "/ModelRefWithChildren/InstanceViaClass.attr2",
+                Value::Int(789),
+                "model.usd",
+                "/Model{vset=with_children}InstanceViaClass.attr2",
+            ),
+            (
+                "/ModelRefWithChildren/_prototype.attr2",
+                Value::Int(123),
+                "model.usd",
+                "/Model{vset=with_children}_prototype.attr2",
+            ),
+            (
+                "/ModelRefWithChildren.modelRootAttribute",
+                Value::Int(123),
+                "model.usd",
+                "/Model.modelRootAttribute",
+            ),
+        ],
+    );
 }
 
 #[test]

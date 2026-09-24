@@ -2381,3 +2381,125 @@ fn array_value_strongest_wins() {
         Value::Array(vec![Value::Float(1.0), Value::Float(2.0)])
     );
 }
+
+/// A reference authored inside referenced content is weaker than the
+/// referenced site's own opinions, even though it is authored at a deeper
+/// namespace depth than the outer reference.
+///
+/// Spec: AOUSD Core §10.4 (LIVERPS applies recursively within an arc's target).
+#[test]
+fn nested_reference_is_weaker_than_referenced_site_opinions() {
+    let mut store = InMemoryStore::default();
+
+    let field_x = store.tokens.intern("x");
+    let child_tok = store.tokens.intern("Child");
+    let proto_tok = store.tokens.intern("Proto");
+    let root = store.path("/Root");
+    let root_child = store.path("/Root/Child");
+    let model = store.path("/Model");
+    let model_child = store.path("/Model/Child");
+    let proto = store.path("/Model/Proto");
+
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.insert_prim(
+        root,
+        PrimSpec::def().with_reference(Reference::new(LayerId(2), model)),
+    );
+    store.insert_layer(root_layer);
+
+    let mut lib = Layer::new(LayerId(2));
+    let mut model_spec = PrimSpec::def();
+    model_spec.authored_children = vec![child_tok, proto_tok];
+    lib.insert_prim(model, model_spec);
+    lib.insert_prim(
+        model_child,
+        PrimSpec::def()
+            .with_reference(Reference::new(LayerId(2), proto))
+            .with_field(field_x, 456_i64),
+    );
+    lib.insert_prim(proto, PrimSpec::def().with_field(field_x, 123_i64));
+    store.insert_layer(lib);
+
+    let stage = Stage::compose(
+        &mut store,
+        LayerId(1),
+        StageOptions {
+            with_provenance: true,
+            ..StageOptions::default()
+        },
+    );
+    let resolved = stage
+        .resolve_field(root_child, field_x)
+        .expect("field exists");
+    assert_eq!(
+        resolved.value,
+        Value::Int64(456),
+        "referenced site must win"
+    );
+    let prov = resolved.provenance.expect("provenance enabled");
+    assert_eq!(
+        prov.layer,
+        LayerId(2),
+        "winner comes from the library layer"
+    );
+    assert_eq!(
+        prov.spec_path.prim_path(),
+        model_child,
+        "winner is the referenced site, not the nested reference target"
+    );
+
+    let opinions = stage.explain_field(root_child, field_x).expect("opinions");
+    assert_eq!(opinions.len(), 2, "both opinions participate");
+    assert_eq!(
+        (opinions[0].key.arc_kind, opinions[0].key.nested_arc_kind),
+        (ArcKind::References, None),
+        "direct referenced opinion is strongest"
+    );
+    assert_eq!(
+        (opinions[1].key.arc_kind, opinions[1].key.nested_arc_kind),
+        (ArcKind::References, Some(ArcKind::References)),
+        "nested reference stays in the outer reference bucket"
+    );
+}
+
+/// A reference authored inside payload content stays at payload strength, so
+/// it cannot defeat the payload target's own opinions.
+///
+/// Spec: AOUSD Core §10.4 (LIVERPS applies recursively within an arc's target).
+#[test]
+fn reference_nested_in_payload_is_weaker_than_payload_site() {
+    let mut store = InMemoryStore::default();
+
+    let field_x = store.tokens.intern("x");
+    let p = store.path("/P");
+    let model = store.path("/Model");
+    let other = store.path("/Other");
+
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.insert_prim(
+        p,
+        PrimSpec::def().with_payload(Reference::new(LayerId(2), model)),
+    );
+    store.insert_layer(root_layer);
+
+    let mut lib = Layer::new(LayerId(2));
+    lib.insert_prim(
+        model,
+        PrimSpec::def()
+            .with_reference(Reference::new(LayerId(2), other))
+            .with_field(field_x, 2_i64),
+    );
+    lib.insert_prim(other, PrimSpec::def().with_field(field_x, 1_i64));
+    store.insert_layer(lib);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let resolved = stage.resolve_field(p, field_x).expect("field exists");
+    assert_eq!(resolved.value, Value::Int64(2), "payload site must win");
+    let opinions = stage.explain_field(p, field_x).expect("opinions");
+    assert!(
+        opinions
+            .iter()
+            .all(|op| op.key.arc_kind == ArcKind::Payloads),
+        "everything under the payload stays at payload strength"
+    );
+}

@@ -2503,3 +2503,59 @@ fn reference_nested_in_payload_is_weaker_than_payload_site() {
         "everything under the payload stays at payload strength"
     );
 }
+
+/// A class specialized inside referenced content contributes its children,
+/// not just its opinions.
+///
+/// Spec: AOUSD Core §10 (specializes arc), §11 (population).
+#[test]
+fn specializes_inside_reference_populates_class_children() {
+    let mut store = InMemoryStore::default();
+
+    let field_x = store.tokens.intern("x");
+    let c_tok = store.tokens.intern("C");
+    let cls_tok = store.tokens.intern("Cls");
+    let child_tok = store.tokens.intern("TChild");
+    let root = store.path("/R");
+    let model = store.path("/Model");
+    let model_c = store.path("/Model/C");
+    let model_cls = store.path("/Model/Cls");
+    let model_cls_child = store.path("/Model/Cls/TChild");
+    let r_c = store.path("/R/C");
+    let r_c_child = store.path("/R/C/TChild");
+
+    let mut root_layer = Layer::new(LayerId(1));
+    root_layer.insert_prim(
+        root,
+        PrimSpec::def().with_reference(Reference::new(LayerId(2), model)),
+    );
+    store.insert_layer(root_layer);
+
+    let mut lib = Layer::new(LayerId(2));
+    let mut model_spec = PrimSpec::def();
+    model_spec.authored_children = vec![c_tok, cls_tok];
+    lib.insert_prim(model, model_spec);
+    let mut c_spec = PrimSpec::def();
+    c_spec.specializes = ListOp {
+        prepend: vec![model_cls],
+        ..ListOp::default()
+    };
+    lib.insert_prim(model_c, c_spec);
+    let mut cls_spec = PrimSpec::default().with_field(field_x, 10_i64);
+    cls_spec.specifier = Some(layerstack::Specifier::Class);
+    cls_spec.authored_children = vec![child_tok];
+    lib.insert_prim(model_cls, cls_spec);
+    lib.insert_prim(model_cls_child, PrimSpec::def());
+    store.insert_layer(lib);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    assert_eq!(
+        stage.resolve_field(r_c, field_x).map(|r| r.value),
+        Some(Value::Int64(10)),
+        "specialized opinions compose"
+    );
+    assert!(
+        stage.has_prim(r_c_child),
+        "specialized class children are populated"
+    );
+}

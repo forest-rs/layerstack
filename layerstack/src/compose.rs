@@ -16,10 +16,12 @@ use hashbrown::{HashMap, HashSet};
 
 use crate::{
     arcs::{
-        resolve_direct_references_for_prim, resolve_inherits_for_prim, resolve_payloads_for_prim,
-        resolve_reference_target_path, resolve_references_for_prim, resolve_specializes_for_prim,
-        resolve_variant_branch_payloads, resolve_variant_branch_references,
-        resolve_variant_child_references, resolve_variant_selections_for_prim,
+        SelectionScope, resolve_branch_payloads_in, resolve_direct_references_for_prim,
+        resolve_inherits_for_prim, resolve_inherits_for_prim_in, resolve_payloads_for_prim,
+        resolve_payloads_for_prim_in, resolve_reference_target_path, resolve_references_for_prim,
+        resolve_specializes_for_prim, resolve_specializes_for_prim_in,
+        resolve_variant_branch_payloads, resolve_variant_child_references,
+        resolve_variant_references_in, resolve_variant_selections_for_prim, spec_arcs_apply,
     },
     dependency_map::{ArcDependency, DependencyBuilder},
     doc::{FieldValue, LayerId, LayerOffset, LayerStore, Reference},
@@ -243,8 +245,62 @@ pub(crate) fn compose_stage(
 
     prune_deactivated(store, &mut prims, &mut children);
 
+    // Runs last so the ordering passes above see the populated child lists;
+    // removal only drops entries.
+    remove_prims_without_specs(store, &mut prims, &mut children);
+
+    if let Some(builder) = dep_builder.as_mut() {
+        builder.retain_prims(&prims);
+    }
     let dependencies = dep_builder.map(DependencyBuilder::finish);
     Stage::from_parts(prims, children, options.with_provenance, dependencies)
+}
+
+/// Removes populated prims whose prim index holds no spec, together with
+/// spec-less descendants.
+///
+/// Population over-approximates: to discover prims introduced through
+/// variant-scoped arcs before selections are known, it expands the arcs of
+/// every branch (`collect_all_variant_*`). Arc expansion then follows only the
+/// selected branches, so a prim reached solely through an unselected branch
+/// ends up with no specs. Such a path is not a prim: a prim exists only where
+/// its composed prim index contains at least one spec. A spec-less prim that
+/// still has children with specs is kept, so this never changes hierarchy
+/// above a real prim.
+///
+/// Spec: AOUSD Core §11 (stage population from composed prim indexes);
+/// `OpenUSD` only populates prims whose index has specs
+/// (`PcpPrimIndex::HasSpecs`).
+fn remove_prims_without_specs(
+    store: &dyn LayerStore,
+    prims: &mut HashMap<PathId, PrimIndex>,
+    children: &mut HashMap<PathId, Vec<PathId>>,
+) {
+    let Some(root) = store.paths().lookup(&crate::path::Path::root()) else {
+        return;
+    };
+    loop {
+        let removable: Vec<PathId> = prims
+            .iter()
+            .filter(|(path, index)| {
+                **path != root
+                    && index.sources.is_empty()
+                    && children.get(*path).is_none_or(Vec::is_empty)
+            })
+            .map(|(path, _)| *path)
+            .collect();
+        if removable.is_empty() {
+            return;
+        }
+        for path in &removable {
+            prims.remove(path);
+            children.remove(path);
+        }
+        let removed: HashSet<PathId> = removable.into_iter().collect();
+        for list in children.values_mut() {
+            list.retain(|child| !removed.contains(child));
+        }
+    }
 }
 
 /// Resolves the variant selections that govern a composed prim, in strength
@@ -1441,7 +1497,7 @@ fn resolve_full_variant_selections(
     }
 
     // Also gather selections from inherit targets (weaker than local, per LIVERPS).
-    let inherits = resolve_inherits_for_prim(store, local_stack, path);
+    let inherits = resolve_inherits_for_prim(store, local_stack, path, SelectionScope::Stack);
     for inherit_target in inherits.iter().copied() {
         let inherit_selections =
             resolve_variant_selections_for_prim(store, local_stack, inherit_target);
@@ -1492,6 +1548,9 @@ fn resolve_full_variant_selections(
             let Some(spec) = layer.prims.get(&path) else {
                 continue;
             };
+            if !spec_arcs_apply(store, local_stack, path, spec, SelectionScope::Stack) {
+                continue;
+            }
             ops.push(spec.references.clone());
         }
         crate::listop::resolve_list_chain::<Reference>(&[], ops)
@@ -1552,6 +1611,9 @@ fn resolve_full_variant_selections(
             let Some(spec) = layer.prims.get(&path) else {
                 continue;
             };
+            if !spec_arcs_apply(store, local_stack, path, spec, SelectionScope::Stack) {
+                continue;
+            }
             ops.push(spec.payloads.clone());
         }
         crate::listop::resolve_list_chain::<Reference>(&[], ops)
@@ -1639,6 +1701,270 @@ fn resolve_variant_child_selections_for_prim(
     }
 
     selected
+}
+
+/// Returns the variant selections of every variant host enclosing
+/// `remote_path` (the prim itself and each ancestor), keyed by host path in
+/// `remote_stack`'s namespace, as decided by the composition in progress.
+///
+/// Inside the arc's namespace (`arc_target` and below) each host maps to a
+/// destination prim. Its selections are read strongest-first from that
+/// prim's index as composed so far, which already holds every stronger site
+/// (the referencing prim and any layers referenced in between), and fall
+/// back to the selections forwarded from the stage and target stacks. Hosts
+/// above `arc_target` lie outside the arc, so only the target layer stack
+/// selects their variants.
+///
+/// `cache` memoizes hosts within one arc expansion: every host maps to one
+/// destination there.
+///
+/// Spec: AOUSD Core §10.5 (the strongest selection wins across arcs).
+/// `OpenUSD` searches the prim index built so far in strength order
+/// (`pxr/usd/pcp/primIndex.cpp`, `_ComposeVariantSelection`).
+fn enclosing_variant_selections(
+    store: &dyn LayerStore,
+    out: &HashMap<PathId, PrimIndex>,
+    stage_stack: &LayerStack,
+    remote_stack: &LayerStack,
+    arc_target: PathId,
+    remote_path: PathId,
+    dest_path: PathId,
+    cache: &mut HashMap<PathId, HashMap<TokenId, TokenId>>,
+) -> HashMap<PathId, HashMap<TokenId, TokenId>> {
+    let paths = store.paths();
+    let parent_of = |id: PathId| {
+        paths
+            .resolve(id)
+            .parent()
+            .and_then(|parent| paths.lookup(&parent))
+    };
+    let mut enclosing = HashMap::new();
+    let mut remote = Some(remote_path);
+    let mut dest = Some(dest_path);
+    while let Some(host) = remote {
+        let selections = cache
+            .entry(host)
+            .or_insert_with(|| match dest {
+                Some(dest_host) => {
+                    let mut selections = out
+                        .get(&dest_host)
+                        .map(|index| {
+                            let mut sources = index.sources.clone();
+                            sources.sort_by(|a, b| a.cmp_strongest_first(b));
+                            let so_far = PrimIndex {
+                                sources,
+                                ..PrimIndex::default()
+                            };
+                            strength_ordered_variant_selections(store, &so_far)
+                        })
+                        .unwrap_or_default();
+                    for (set, variant) in resolve_forwarded_variant_selections(
+                        store,
+                        stage_stack,
+                        dest_host,
+                        remote_stack,
+                        host,
+                    ) {
+                        selections.entry(set).or_insert(variant);
+                    }
+                    selections
+                }
+                None => resolve_full_variant_selections(store, remote_stack, host),
+            })
+            .clone();
+        enclosing.insert(host, selections);
+        dest = if host == arc_target {
+            None
+        } else {
+            dest.and_then(parent_of)
+        };
+        remote = parent_of(host);
+    }
+    enclosing
+}
+
+/// The arcs authored for one prim of an arc's target namespace, admitted for
+/// the variant selections in force at the composed destination.
+///
+/// This is the single place that decides which arcs nested inside another arc
+/// are followed, whichever outer arc (reference, payload, inherit or
+/// specialize) brought the content in.
+#[derive(Debug, Default)]
+struct AdmittedArcs {
+    inherits: Vec<PathId>,
+    specializes: Vec<PathId>,
+    references: Vec<Reference>,
+    payloads: Vec<Reference>,
+}
+
+/// Resolves the arcs authored for `remote_path` in `data_stack` that apply
+/// when it is composed as `dest_path` through an arc targeting `arc_target`.
+///
+/// Arcs on the prim's own specs, on its own selected variant branches, and
+/// authored for it inside its parent's selected branches are all included.
+/// Every enclosing variant host's selection comes from
+/// [`enclosing_variant_selections`], so a stronger site (the prim bringing the
+/// content in, or an arc in between) decides which branch's arcs apply, at any
+/// depth below the branch.
+///
+/// Spec: AOUSD Core §10.5 (arcs inside the selected variant only); `OpenUSD`
+/// adds arcs only beneath the selected variant node, choosing the selection by
+/// searching the prim index built so far (`pxr/usd/pcp/primIndex.cpp`).
+fn admitted_arcs(
+    store: &dyn LayerStore,
+    out: &HashMap<PathId, PrimIndex>,
+    stage_stack: &LayerStack,
+    data_stack: &LayerStack,
+    arc_target: PathId,
+    remote_path: PathId,
+    dest_path: PathId,
+    cache: &mut HashMap<PathId, HashMap<TokenId, TokenId>>,
+) -> AdmittedArcs {
+    let enclosing = enclosing_variant_selections(
+        store,
+        out,
+        stage_stack,
+        data_stack,
+        arc_target,
+        remote_path,
+        dest_path,
+        cache,
+    );
+    let selections = enclosing.get(&remote_path).cloned().unwrap_or_default();
+    let parent_selections = store
+        .paths()
+        .resolve(remote_path)
+        .parent()
+        .and_then(|parent| store.paths().lookup(&parent))
+        .and_then(|parent| enclosing.get(&parent).cloned())
+        .unwrap_or_default();
+    let scope = SelectionScope::Composed(&enclosing);
+
+    let mut references = resolve_direct_references_for_prim(store, data_stack, remote_path, scope);
+    references.extend(resolve_variant_references_in(
+        store,
+        data_stack,
+        remote_path,
+        &selections,
+        &parent_selections,
+    ));
+    let mut payloads =
+        resolve_payloads_for_prim_in(store, data_stack, remote_path, &parent_selections, scope);
+    payloads.extend(resolve_branch_payloads_in(
+        store,
+        data_stack,
+        remote_path,
+        &selections,
+    ));
+    AdmittedArcs {
+        inherits: resolve_inherits_for_prim_in(
+            store,
+            data_stack,
+            remote_path,
+            &selections,
+            &parent_selections,
+            scope,
+        ),
+        specializes: resolve_specializes_for_prim_in(
+            store,
+            data_stack,
+            remote_path,
+            &selections,
+            &parent_selections,
+            scope,
+        ),
+        references,
+        payloads,
+    }
+}
+
+/// Returns the source prims of an arc's target namespace that exist only as
+/// specs of variant branches that are not selected for their destination.
+///
+/// `pairs` lists `(source prim, destination used for selection)`. A source
+/// prim with no spec, or with any spec outside variant branches, is kept.
+/// Otherwise it is rejected unless one of its branch specs is selected at
+/// every enclosing host inside the arc's namespace, as decided by
+/// [`enclosing_variant_selections`]; hosts with no known selection, and hosts
+/// above the arc target, count as selected. Callers drop rejected prims
+/// (and their descendants) from the arc's namespace mapping, so neither their
+/// specs nor opinions accumulated on the same path elsewhere in the stage
+/// (for example a class composed with its own default selection) are carried
+/// across the arc.
+///
+/// Spec: AOUSD Core §10.5 (only the selected variant contributes).
+fn unselected_branch_prims(
+    store: &dyn LayerStore,
+    out: &HashMap<PathId, PrimIndex>,
+    stage_stack: &LayerStack,
+    data_stack: &LayerStack,
+    arc_target: PathId,
+    pairs: &[(PathId, PathId)],
+    cache: &mut HashMap<PathId, HashMap<TokenId, TokenId>>,
+) -> HashSet<PathId> {
+    let mut rejected = HashSet::new();
+    for &(remote_path, dest_path) in pairs {
+        let specs: Vec<&crate::doc::PrimSpec> = data_stack
+            .layers
+            .iter()
+            .filter_map(|id| store.layer(*id))
+            .filter_map(|layer| layer.prims.get(&remote_path))
+            .collect();
+        if specs.is_empty() || specs.iter().any(|spec| spec.outer_variant_sites.is_empty()) {
+            continue;
+        }
+        let enclosing = enclosing_variant_selections(
+            store,
+            out,
+            stage_stack,
+            data_stack,
+            arc_target,
+            remote_path,
+            dest_path,
+            cache,
+        );
+        let target_path = store.paths().resolve(arc_target);
+        let selected = specs.iter().any(|spec| {
+            spec.outer_variant_sites.iter().all(|site| {
+                // Hosts above the arc target belong to an enclosing arc's
+                // namespace, whose selections this arc cannot see; leave
+                // those to `prune_unselected_variant_specs`.
+                let inside = store
+                    .paths()
+                    .resolve(site.host_path)
+                    .strip_prefix(target_path)
+                    .is_some();
+                !inside
+                    || enclosing
+                        .get(&site.host_path)
+                        .and_then(|selections| selections.get(&site.set))
+                        .is_none_or(|selected| *selected == site.variant)
+            })
+        });
+        if !selected {
+            rejected.insert(remote_path);
+        }
+    }
+    rejected
+}
+
+/// Returns `true` when `path` is one of `roots` or lies beneath one.
+fn is_at_or_under(store: &dyn LayerStore, path: PathId, roots: &HashSet<PathId>) -> bool {
+    if roots.is_empty() {
+        return false;
+    }
+    let mut cursor = Some(store.paths().resolve(path).clone());
+    while let Some(current) = cursor {
+        if store
+            .paths()
+            .lookup(&current)
+            .is_some_and(|id| roots.contains(&id))
+        {
+            return true;
+        }
+        cursor = current.parent();
+    }
+    false
 }
 
 fn resolve_forwarded_variant_selections(
@@ -2020,7 +2346,8 @@ fn add_reference_opinions(
     let mut visited_inherits: HashSet<(PathId, PathId)> = HashSet::new();
     let mut visited_specializes: HashSet<(PathId, PathId)> = HashSet::new();
     for dest_root in paths.iter().copied() {
-        let refs = resolve_references_for_prim(store, local_stack, dest_root);
+        let refs =
+            resolve_references_for_prim(store, local_stack, dest_root, SelectionScope::Stack);
         // Also resolve variant child references with full selection chaining.
         let variant_child_refs =
             resolve_variant_child_references(store, local_stack, local_stack, dest_root);
@@ -2075,7 +2402,8 @@ fn add_inherit_opinions(
     let mut visited_specializes: HashSet<(PathId, PathId)> = HashSet::new();
     let mut visited_refs: HashSet<(PathId, LayerId, PathId)> = HashSet::new();
     for dest_root in paths.iter().copied() {
-        let inherits = resolve_inherits_for_prim(store, local_stack, dest_root);
+        let inherits =
+            resolve_inherits_for_prim(store, local_stack, dest_root, SelectionScope::Stack);
         for (arc_list_index, inherited_root) in inherits.into_iter().enumerate() {
             let arc_list_index = u16::try_from(arc_list_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -2169,6 +2497,23 @@ fn add_inherit_edge_opinions(
             mapping.push((remote_path_id, dest_path_id));
         }
     }
+
+    let mut host_selection_cache = HashMap::new();
+    // Branch-only source prims whose branch is not selected for the
+    // destination take no part in this arc.
+    let unselected = {
+        let pairs: Vec<(PathId, PathId)> = mapping.clone();
+        unselected_branch_prims(
+            store,
+            out,
+            local_stack,
+            local_stack,
+            inherited_root,
+            &pairs,
+            &mut host_selection_cache,
+        )
+    };
+    mapping.retain(|(remote, _)| !is_at_or_under(store, *remote, &unselected));
 
     let (arc_kind, nested_arc_kind) = match outer_arc_kind {
         Some(outer) => (outer, Some(ArcKind::Inherits)),
@@ -2497,7 +2842,21 @@ fn add_inherit_edge_opinions(
     }
 
     for &(remote_path_id, dest_path_id) in &mapping {
-        let nested_inherits = resolve_inherits_for_prim(store, local_stack, remote_path_id);
+        let AdmittedArcs {
+            inherits: nested_inherits,
+            specializes: nested_specializes,
+            references: nested_refs,
+            payloads: nested_payloads,
+        } = admitted_arcs(
+            store,
+            out,
+            local_stack,
+            local_stack,
+            inherited_root,
+            remote_path_id,
+            dest_path_id,
+            &mut host_selection_cache,
+        );
         for (nested_index, nested) in nested_inherits.into_iter().enumerate() {
             let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -2604,7 +2963,6 @@ fn add_inherit_edge_opinions(
         // namespace including its specializes.
         //
         // Spec: AOUSD Core §10 (LIVERPS composition ordering).
-        let nested_specializes = resolve_specializes_for_prim(store, local_stack, remote_path_id);
         for (spec_index, specialized) in nested_specializes.into_iter().enumerate() {
             let spec_index = u16::try_from(spec_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -2683,7 +3041,6 @@ fn add_inherit_edge_opinions(
         // for inherits: the inherited namespace's references contribute opinions.
         //
         // Spec: AOUSD Core §10 (LIVERPS composition ordering).
-        let nested_refs = resolve_references_for_prim(store, local_stack, remote_path_id);
         for (ref_index, nested_ref) in nested_refs.into_iter().enumerate() {
             let ref_index = u16::try_from(ref_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -2706,6 +3063,32 @@ fn add_inherit_edge_opinions(
                 deps.as_deref_mut(),
             );
         }
+
+        // Propagate payloads from the inherited class, as for references.
+        //
+        // Spec: AOUSD Core §10 (LIVERPS composition ordering).
+        for (payload_index, nested_payload) in nested_payloads.into_iter().enumerate() {
+            let payload_index = u16::try_from(payload_index).unwrap_or(u16::MAX);
+            let namespace_depth =
+                u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
+            add_payload_edge_opinions(
+                store,
+                local_stack,
+                dest_path_id,
+                nested_payload,
+                Some(arc_kind),
+                namespace_depth,
+                payload_index,
+                out,
+                visited_refs,
+                visited,
+                visited_specializes,
+                prim_order_out,
+                authored_children_out,
+                None,
+                deps.as_deref_mut(),
+            );
+        }
     }
 
     // Propagate opinions for paths that exist in the PrimIndex (from reference
@@ -2714,7 +3097,7 @@ fn add_inherit_edge_opinions(
     let mapping_set: HashSet<PathId> = mapping.iter().map(|(r, _)| *r).collect();
     let all_out_paths: Vec<PathId> = out.keys().copied().collect();
     for src_path_id in all_out_paths {
-        if mapping_set.contains(&src_path_id) {
+        if mapping_set.contains(&src_path_id) || is_at_or_under(store, src_path_id, &unselected) {
             continue;
         }
         let rel: Vec<_> = {
@@ -3007,6 +3390,7 @@ fn add_reference_edge_opinions(
     // referenced layer stack.
     //
     // Spec: §12.3.2.1 (sublayer offsets compose when nested).
+    let mut host_selection_cache = HashMap::new();
     for (layer_strength_idx, remote_layer_id) in remote_stack.layers.iter().copied().enumerate() {
         let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
         let ref_offset = reference
@@ -3526,7 +3910,17 @@ fn add_reference_edge_opinions(
     }
 
     for &(remote_path_id, dest_path_id) in &mapping {
-        let inherits = resolve_inherits_for_prim(store, &remote_stack, remote_path_id);
+        let arcs = admitted_arcs(
+            store,
+            out,
+            stage_stack,
+            &remote_stack,
+            reference_path,
+            remote_path_id,
+            dest_path_id,
+            &mut host_selection_cache,
+        );
+        let inherits = arcs.inherits;
         for (inherit_index, inherited_root) in inherits.into_iter().enumerate() {
             let inherit_index = u16::try_from(inherit_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -3583,27 +3977,11 @@ fn add_reference_edge_opinions(
             );
         }
 
-        // Use direct refs only — variant branch and child refs are resolved
-        // separately below with the combined_stack for proper selection handling.
-        let nested = resolve_direct_references_for_prim(store, &remote_stack, remote_path_id);
-        // Also resolve variant-scoped child references using combined_stack
-        // for selections, so referencing layer's variant selections override
-        // the referenced layer's defaults.
-        let variant_child_refs =
-            resolve_variant_child_references(store, &remote_stack, &combined_stack, remote_path_id);
-        // Also resolve variant branch-level references (arcs on the variant
-        // branch header itself, e.g. `"full" (add references = ...) {}`).
-        let variant_branch_refs = resolve_variant_branch_references(
-            store,
-            &remote_stack,
-            &combined_stack,
-            remote_path_id,
-        );
-        let all_nested = nested
-            .into_iter()
-            .chain(variant_child_refs)
-            .chain(variant_branch_refs);
-        for (nested_index, nested_ref) in all_nested.enumerate() {
+        // Direct references, references on the prim's selected branch
+        // headers, and references authored for it inside its parent's
+        // selected branches.
+        let all_nested = arcs.references;
+        for (nested_index, nested_ref) in all_nested.into_iter().enumerate() {
             let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
@@ -3627,7 +4005,7 @@ fn add_reference_edge_opinions(
         }
 
         // Handle nested payloads inside referenced content.
-        let nested_payloads = resolve_payloads_for_prim(store, &remote_stack, remote_path_id);
+        let nested_payloads = arcs.payloads;
         for (nested_index, nested_payload) in nested_payloads.into_iter().enumerate() {
             let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -3656,7 +4034,7 @@ fn add_reference_edge_opinions(
         // Spec: AOUSD Core §10 (specializes arcs within referenced layers
         // contribute opinions at the Specializes position, nested under
         // the References arc).
-        let specializes = resolve_specializes_for_prim(store, &remote_stack, remote_path_id);
+        let specializes = arcs.specializes;
         for (spec_index, specialized_root) in specializes.into_iter().enumerate() {
             let spec_index = u16::try_from(spec_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -3803,7 +4181,8 @@ fn add_payload_opinions(
     let mut visited_inherits: HashSet<(PathId, PathId)> = HashSet::new();
     let mut visited_specializes: HashSet<(PathId, PathId)> = HashSet::new();
     for dest_root in paths.iter().copied() {
-        let payloads = resolve_payloads_for_prim(store, local_stack, dest_root);
+        let payloads =
+            resolve_payloads_for_prim(store, local_stack, dest_root, SelectionScope::Stack);
         // Also resolve variant branch-level payloads.
         let branch_payloads =
             resolve_variant_branch_payloads(store, local_stack, local_stack, dest_root);
@@ -3937,6 +4316,7 @@ fn add_payload_edge_opinions(
         }
     }
 
+    let mut host_selection_cache = HashMap::new();
     for (layer_strength_idx, remote_layer_id) in remote_stack.layers.iter().copied().enumerate() {
         let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
         let payload_offset = reference
@@ -4138,7 +4518,17 @@ fn add_payload_edge_opinions(
 
     // Handle nested arcs inside payload targets.
     for (remote_path_id, dest_path_id) in mapping {
-        let inherits = resolve_inherits_for_prim(store, &remote_stack, remote_path_id);
+        let arcs = admitted_arcs(
+            store,
+            out,
+            stage_stack,
+            &remote_stack,
+            reference_path,
+            remote_path_id,
+            dest_path_id,
+            &mut host_selection_cache,
+        );
+        let inherits = arcs.inherits;
         for (inherit_index, inherited_root) in inherits.into_iter().enumerate() {
             let inherit_index = u16::try_from(inherit_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -4189,9 +4579,9 @@ fn add_payload_edge_opinions(
             );
         }
 
-        // Use direct refs only — variant branch refs are handled by
-        // add_reference_edge_opinions internally with proper selection stacks.
-        let nested = resolve_direct_references_for_prim(store, &remote_stack, remote_path_id);
+        // Direct references and those authored for this prim inside its own
+        // or its parent's selected variant branches.
+        let nested = arcs.references;
         for (nested_index, nested_ref) in nested.into_iter().enumerate() {
             let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -4216,7 +4606,7 @@ fn add_payload_edge_opinions(
         }
 
         // Handle nested payloads inside payload targets.
-        let nested_payloads = resolve_payloads_for_prim(store, &remote_stack, remote_path_id);
+        let nested_payloads = arcs.payloads;
         for (nested_index, nested_payload) in nested_payloads.into_iter().enumerate() {
             let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -4241,7 +4631,7 @@ fn add_payload_edge_opinions(
         }
 
         // Handle nested specializes inside payload targets.
-        let specializes = resolve_specializes_for_prim(store, &remote_stack, remote_path_id);
+        let specializes = arcs.specializes;
         for (spec_index, specialized_root) in specializes.into_iter().enumerate() {
             let spec_index = u16::try_from(spec_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -4302,7 +4692,8 @@ fn add_specializes_opinions(
     // inherits but sits at the weakest position in LIVERPS.
     let mut visited: HashSet<(PathId, PathId)> = HashSet::new();
     for dest_root in paths.iter().copied() {
-        let specializes = resolve_specializes_for_prim(store, local_stack, dest_root);
+        let specializes =
+            resolve_specializes_for_prim(store, local_stack, dest_root, SelectionScope::Stack);
         for (arc_list_index, specialized_root) in specializes.into_iter().enumerate() {
             let arc_list_index = u16::try_from(arc_list_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -4391,6 +4782,38 @@ fn add_specializes_edge_opinions(
             mapping.push((remote_path_id, dest_path_id));
         }
     }
+
+    let mut host_selection_cache = HashMap::new();
+    // Branch-only source prims whose branch is not selected for the
+    // destination take no part in this arc.
+    let unselected = {
+        let pairs: Vec<(PathId, PathId)> = mapping
+            .iter()
+            .map(|&(remote, _)| {
+                let rel = store
+                    .paths()
+                    .resolve(remote)
+                    .strip_prefix(&specialized_path)
+                    .expect("mapping source should stay under specialized root")
+                    .to_vec();
+                let selection = store
+                    .paths()
+                    .lookup(&selection_base_path.join(&rel))
+                    .unwrap_or(selection_root);
+                (remote, selection)
+            })
+            .collect();
+        unselected_branch_prims(
+            store,
+            out,
+            local_stack,
+            local_stack,
+            specialized_root,
+            &pairs,
+            &mut host_selection_cache,
+        )
+    };
+    mapping.retain(|(remote, _)| !is_at_or_under(store, *remote, &unselected));
 
     let (arc_kind, nested_arc_kind) = match outer_arc_kind {
         Some(outer) => (outer, Some(ArcKind::Specializes)),
@@ -4687,7 +5110,17 @@ fn add_specializes_edge_opinions(
                 .lookup(&selection_base_path.join(&rel))
                 .unwrap_or(selection_root)
         };
-        let nested_specializes = resolve_specializes_for_prim(store, local_stack, remote_path_id);
+        let arcs = admitted_arcs(
+            store,
+            out,
+            local_stack,
+            local_stack,
+            specialized_root,
+            remote_path_id,
+            selection_path_id,
+            &mut host_selection_cache,
+        );
+        let nested_specializes = arcs.specializes;
         for (nested_index, nested) in nested_specializes.into_iter().enumerate() {
             let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -4782,7 +5215,17 @@ fn add_specializes_edge_opinions(
                 .lookup(&selection_base_path.join(&rel))
                 .unwrap_or(selection_root)
         };
-        let nested_inherits = resolve_inherits_for_prim(store, local_stack, remote_path_id);
+        let arcs = admitted_arcs(
+            store,
+            out,
+            local_stack,
+            local_stack,
+            specialized_root,
+            remote_path_id,
+            selection_path_id,
+            &mut host_selection_cache,
+        );
+        let nested_inherits = arcs.inherits;
         for (nested_index, inherited) in nested_inherits.into_iter().enumerate() {
             let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -4871,8 +5314,29 @@ fn add_specializes_edge_opinions(
     let mut visited_refs: HashSet<(PathId, LayerId, PathId)> = HashSet::new();
     let mut visited_inherits: HashSet<(PathId, PathId)> = HashSet::new();
     for &(remote_path_id, dest_path_id) in &mapping {
-        let refs = resolve_references_for_prim(store, local_stack, remote_path_id);
-        for (ref_index, reference) in refs.into_iter().enumerate() {
+        let selection_path_id = {
+            let rel = store
+                .paths()
+                .resolve(remote_path_id)
+                .strip_prefix(&specialized_path)
+                .expect("mapping source should stay under specialized root")
+                .to_vec();
+            store
+                .paths()
+                .lookup(&selection_base_path.join(&rel))
+                .unwrap_or(selection_root)
+        };
+        let arcs = admitted_arcs(
+            store,
+            out,
+            local_stack,
+            local_stack,
+            specialized_root,
+            remote_path_id,
+            selection_path_id,
+            &mut host_selection_cache,
+        );
+        for (ref_index, reference) in arcs.references.into_iter().enumerate() {
             let ref_index = u16::try_from(ref_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
@@ -4885,6 +5349,31 @@ fn add_specializes_edge_opinions(
                 Some(arc_kind),
                 namespace_depth,
                 ref_index,
+                out,
+                &mut visited_refs,
+                &mut visited_inherits,
+                visited,
+                prim_order_out,
+                authored_children_out,
+                None,
+                deps.as_deref_mut(),
+            );
+        }
+
+        // Payloads authored in the specialized class propagate like its
+        // references.
+        for (payload_index, payload) in arcs.payloads.into_iter().enumerate() {
+            let payload_index = u16::try_from(payload_index).unwrap_or(u16::MAX);
+            let namespace_depth =
+                u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
+            add_payload_edge_opinions(
+                store,
+                local_stack,
+                dest_path_id,
+                payload,
+                Some(arc_kind),
+                namespace_depth,
+                payload_index,
                 out,
                 &mut visited_refs,
                 &mut visited_inherits,

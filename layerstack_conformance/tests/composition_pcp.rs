@@ -613,6 +613,27 @@ fn basic_instancing_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("BasicInstancing_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
     assert_pcp_composing(&mut loaded, &pcp_path);
+    // `set.usd` authors `geom.x = 2.0` under the instanceable
+    // `/Set/InstancedProp`, but that site comes from `/Set_1`'s reference,
+    // an arc above the instance, so only the instance's own arcs (and the
+    // classes they imply) contribute. The uninstanced sibling keeps it.
+    assert_scalar_values(
+        &mut loaded,
+        &[
+            (
+                "/Set_1/InstancedProp/geom.x",
+                Value::Double(3.5),
+                "root.usd",
+                "/_class_Prop/geom.x",
+            ),
+            (
+                "/Set_1/UninstancedProp/geom.x",
+                Value::Double(3.0),
+                "root.usd",
+                "/Set_1/UninstancedProp/geom.x",
+            ),
+        ],
+    );
 }
 
 #[test]

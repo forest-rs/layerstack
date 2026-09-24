@@ -67,8 +67,8 @@
 //!   some nested variant specs ([`Cause::VariantSpecs`]), internal arcs
 //!   authored in sublayers ([`Cause::InternalArcAnchoring`]),
 //!   declaration-only defaults ([`Cause::DeclarationDefault`]), conflicting
-//!   property spec types ([`Cause::PropertyTypeConflict`]), instancing
-//!   ([`Cause::Instancing`]), asset-path expressions
+//!   property spec types ([`Cause::PropertyTypeConflict`]), asset-path
+//!   expressions
 //!   ([`Cause::ExpressionVariables`]), variant fallbacks
 //!   ([`Cause::FallbackVariants`]) and arc cycles ([`SKIPPED`]).
 //!
@@ -524,10 +524,6 @@ enum Cause {
     /// A property spec whose type conflicts with the defining spec is kept;
     /// OpenUSD ignores it.
     PropertyTypeConflict,
-    /// Under an instance, sites of arcs introduced at the instance's
-    /// ancestors survive; OpenUSD marks those nodes inert
-    /// (`pxr/usd/pcp/instancing.h`, `Pcp_ChildNodeIsInstanceable`).
-    Instancing,
 
     // Unsupported features.
     /// Relocates (AOUSD Core §10.3.2.6) are not composed; USDA ingestion
@@ -600,15 +596,6 @@ const KNOWN: &[Known] = &[
         reason: "`/A` lists `A.usd /A` twice: the reference target's sources are forwarded again under a nested reference kind",
     },
     Known {
-        fixture: "BasicInstancingAndNestedInstances_root",
-        causes: &[C::Instancing],
-        prims: 2,
-        props: 0,
-        values: 0,
-        diffs: &[D::ExtraSite],
-        reason: "`set.usd /Set/PropInstance_1/geom`, an ancestral arc's site, survives under the instance",
-    },
-    Known {
         fixture: "BasicInstancingAndVariants_root",
         causes: &[C::DuplicateSources],
         prims: 6,
@@ -619,12 +606,12 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "BasicInstancing_root",
-        causes: &[C::Instancing, C::ImpliedClasses],
-        prims: 4,
-        props: 4,
-        values: 1,
-        diffs: &[D::ExtraSite, D::Order],
-        reason: "`set.usd /Set/InstancedProp/geom`, an ancestral arc's site, survives under the instance, so `geom.x` is 2.0, not 3.5; implied `/_class_Prop` ranks after `set.usd /Set/InstancedProp`",
+        causes: &[C::ImpliedClasses],
+        prims: 3,
+        props: 3,
+        values: 0,
+        diffs: &[D::Order],
+        reason: "implied `root.usd /_class_Prop` ranks after `set.usd /Set/InstancedProp`, and `prop.usd /_class_Prop` before `prop.usd /Prop`",
     },
     Known {
         fixture: "BasicListEditingWithInherits_root",

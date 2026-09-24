@@ -1,11 +1,11 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! USDA (text format) parser for layerstack.
+//! USDA (text format) parser and writer for layerstack.
 //!
 //! This crate provides a production-quality parser for the USDA scene
-//! description format as specified in AOUSD Core §16.2. It is designed
-//! around three layers:
+//! description format as specified in AOUSD Core §16.2, plus a deterministic
+//! writer. It is organized in these layers:
 //!
 //! 1. **Lexer** ([`lexer`]) — Tokenizes USDA source into a stream of
 //!    [`Token`](lexer::Token)s with span information. Whitespace, comments,
@@ -23,6 +23,11 @@
 //!
 //! 4. **Emit** ([`emit`]) — Converts the AST into layerstack's [`Layer`] /
 //!    [`PrimSpec`] document model for composition.
+//!
+//! 5. **Writer** ([`writer`]) — Serializes an explicit *authored* document
+//!    (prims, typed attributes with `custom`/`uniform` qualifiers, and
+//!    layer/prim/attribute metadata) to deterministic USDA text. It does not
+//!    go through [`Layer`], which drops those authoring details.
 //!
 //! The parser supports error recovery: malformed input produces partial
 //! trees with diagnostics rather than hard failures.
@@ -114,3 +119,5 @@ pub mod lower;
     reason = "USDA value conversions intentionally narrow numeric types"
 )]
 pub mod emit;
+
+pub mod writer;

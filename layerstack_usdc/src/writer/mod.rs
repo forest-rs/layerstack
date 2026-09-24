@@ -9,6 +9,9 @@
 //! This layer knows nothing about any authoring model: callers state every
 //! field (`specifier`, `typeName`, `primChildren`, `properties`, `default`,
 //! metadata, ...) explicitly, as OpenUSD's `Sdf_CrateData` stores them.
+//! [`write_document`] is such a caller: it lowers an authored
+//! [`layerstack_usda::writer::Document`] to the specs OpenUSD's text parser
+//! stores for the same document's USDA.
 //!
 //! # Format
 //!
@@ -52,6 +55,7 @@
 //! Spec: AOUSD Core §16.3 (crate file format).
 
 mod compress;
+pub mod document;
 mod encode;
 mod error;
 mod path;
@@ -61,6 +65,7 @@ mod tests;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+pub use document::write_document;
 pub use error::UsdcWriteError;
 pub use layerstack::doc::Specifier;
 

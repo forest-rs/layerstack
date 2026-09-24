@@ -6,6 +6,9 @@
 use alloc::string::String;
 use core::fmt;
 
+use layerstack_usda::writer::WriteError;
+
+use super::document::FieldType;
 use crate::value_type::SpecForm;
 
 /// Why a crate file could not be written.
@@ -93,6 +96,26 @@ pub enum UsdcWriteError {
         /// What is wrong with it.
         reason: &'static str,
     },
+    /// The authored document is invalid; the USDA writer rejects it too.
+    Document(WriteError),
+    /// A document's metadata key is not registered for its owner (see
+    /// [`super::document::metadata_field`]).
+    UnknownMetadata {
+        /// Path of the owning spec.
+        path: String,
+        /// The metadata key.
+        key: String,
+    },
+    /// A document's metadata value does not have the field's registered
+    /// type (a `float` or integer for a `double` field, for example).
+    MetadataType {
+        /// Path of the owning spec.
+        path: String,
+        /// The metadata key.
+        key: String,
+        /// The registered type.
+        expected: FieldType,
+    },
     /// The layer exceeds a limit of the format: more than `u32::MAX - 1`
     /// tokens, strings, paths, fields or field set entries, or a file larger
     /// than the 48-bit offsets of value representations can address.
@@ -123,9 +146,25 @@ impl fmt::Display for UsdcWriteError {
                 field,
                 reason,
             } => write!(f, "{path}: {field}: {reason}"),
+            Self::Document(e) => write!(f, "{e}"),
+            Self::UnknownMetadata { path, key } => {
+                write!(f, "{path}: {key:?} is not registered metadata here")
+            }
+            Self::MetadataType {
+                path,
+                key,
+                expected,
+            } => write!(f, "{path}: {key} needs a {expected:?} value"),
             Self::TooLarge => write!(f, "layer exceeds the crate format's limits"),
         }
     }
 }
 
-impl core::error::Error for UsdcWriteError {}
+impl core::error::Error for UsdcWriteError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Document(e) => Some(e),
+            _ => None,
+        }
+    }
+}

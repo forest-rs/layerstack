@@ -14,6 +14,7 @@ use layerstack_conformance::{
     pcp::load_pcp_json,
     scalar::assert_scalar_values,
     usda_real::{LoadedStage, load_entry_usda},
+    usdc::load_entry_usdc,
     workspace_root,
 };
 
@@ -34,6 +35,14 @@ fn load_fixture(name: &str) -> (LoadedStage, PathBuf) {
     let entry_usda = dir.join("usda").join(&pcp.entry);
     assert!(entry_usda.is_file(), "missing USDA entry at {entry_usda:?}");
     (load_entry_usda(&entry_usda), pcp_path)
+}
+
+/// Loads a fixture from its crate files instead of the `usda` copies.
+fn load_fixture_crate(name: &str) -> (LoadedStage, PathBuf) {
+    let dir = assets_dir().join(name);
+    let pcp_path = dir.join("pcp.json");
+    let pcp = load_pcp_json(&pcp_path);
+    (load_entry_usdc(&dir.join(&pcp.entry)), pcp_path)
 }
 
 fn layer_stack_names(loaded: &LoadedStage) -> Vec<String> {
@@ -726,6 +735,15 @@ fn basic_time_offset_root() {
 #[test]
 fn reference_list_ops_with_offsets_root() {
     let (mut loaded, pcp_path) = load_fixture("ReferenceListOpsWithOffsets_root");
+    assert_layer_stack_matches(&loaded, &pcp_path);
+    assert_pcp_composing(&mut loaded, &pcp_path);
+}
+
+/// The same fixture read from its crate files, whose reference list ops
+/// carry layer offsets and (empty) custom data per reference.
+#[test]
+fn reference_list_ops_with_offsets_root_crate() {
+    let (mut loaded, pcp_path) = load_fixture_crate("ReferenceListOpsWithOffsets_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
     assert_pcp_composing(&mut loaded, &pcp_path);
 }

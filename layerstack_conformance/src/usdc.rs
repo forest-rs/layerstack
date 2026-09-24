@@ -156,14 +156,19 @@ impl AssetResolver for UsdcFileResolver {
             .and_then(|e| e.to_str())
             .unwrap_or("");
 
+        // `.usd` names either format; the crate magic identifies binary files.
+        let data = match ext {
+            "usdc" | "usd" => std::fs::read(&resolved_path).map_err(|e| {
+                AssetResolveError::LoadError(Arc::from(format!(
+                    "failed to read {}: {e}",
+                    resolved_path.display()
+                )))
+            })?,
+            _ => Vec::new(),
+        };
+
         match ext {
-            "usdc" => {
-                let data = std::fs::read(&resolved_path).map_err(|e| {
-                    AssetResolveError::LoadError(Arc::from(format!(
-                        "failed to read {}: {e}",
-                        resolved_path.display()
-                    )))
-                })?;
+            "usdc" | "usd" if data.starts_with(b"PXR-USDC") => {
                 let result = layerstack_usdc::read_usdc(&data, layer_id, tokens, paths, self)
                     .map_err(|e| {
                         AssetResolveError::LoadError(Arc::from(format!(

@@ -63,6 +63,8 @@ impl CrateVersion {
     /// (`DEFAULT_NEW_VERSION`, `USD_WRITE_NEW_USDC_FILES_AS_VERSION` in
     /// `crateFile.cpp`) and the version the writer starts from.
     pub const NEW_FILE_DEFAULT: Self = Self::new(0, 8, 0);
+    /// Version 0.8.0, which introduced payload layer offsets.
+    pub const PAYLOAD_LAYER_OFFSETS: Self = Self::new(0, 8, 0);
     /// Version 0.9.0, which introduced `timecode` and `timecode[]` values.
     pub const TIMECODES: Self = Self::new(0, 9, 0);
     /// Version 0.12.0, which introduced splines.

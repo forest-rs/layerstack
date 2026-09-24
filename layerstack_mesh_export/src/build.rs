@@ -8,12 +8,19 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use layerstack_usda::writer::{Attribute, Document, Metadatum, Prim, Value};
+use layerstack_usda::writer::{Attribute, Document, ListOp, Metadatum, Prim, Relationship, Value};
 
 use crate::{
-    CustomAttribute, ExportError, Faces, Interpolation, Mesh, MeshProblem, Node, Orientation,
-    Primvar, Scene, Transform, UpAxis, Xform,
+    CustomAttribute, ExportError, Faces, Interpolation, MATERIALS_SCOPE, Material, Mesh,
+    MeshProblem, Node, Orientation, Primvar, PrimvarData, Scene, Transform, UpAxis, Xform,
 };
+
+/// What mesh prims need to know about the scene's materials.
+struct Materials<'s, 'a> {
+    defined: &'s [Material<'a>],
+    /// Prim path of the materials scope.
+    scope: String,
+}
 
 pub(crate) fn document(scene: &Scene<'_>) -> Result<Document, ExportError> {
     let stage = scene.stage;
@@ -28,17 +35,38 @@ pub(crate) fn document(scene: &Scene<'_>) -> Result<Document, ExportError> {
         UpAxis::Y => "Y",
         UpAxis::Z => "Z",
     };
+    let materials = Materials {
+        defined: &scene.materials,
+        scope: format!("/{}/{MATERIALS_SCOPE}", scene.root.name),
+    };
+    // Materials live inside the root prim, so the `defaultPrim` carries
+    // them into any referencing stage and bindings never point outside
+    // the asset.
+    let mut scope = Prim::def("Scope", MATERIALS_SCOPE);
+    for material in &scene.materials {
+        scope
+            .children
+            .push(crate::shading::material_prim(material, &materials.scope)?);
+    }
+    let mut root = xform_prim(&scene.root, "", &materials)?;
+    if !scope.children.is_empty() {
+        root.children.push(scope);
+    }
     Ok(Document {
         default_prim: Some(scene.root.name.into()),
         metadata: vec![
             Metadatum::new("metersPerUnit", Value::Double(stage.meters_per_unit)),
             Metadatum::new("upAxis", Value::Token(up_axis.into())),
         ],
-        prims: vec![xform_prim(&scene.root, "")?],
+        prims: vec![root],
     })
 }
 
-fn xform_prim(xform: &Xform<'_>, parent: &str) -> Result<Prim, ExportError> {
+fn xform_prim(
+    xform: &Xform<'_>,
+    parent: &str,
+    materials: &Materials<'_, '_>,
+) -> Result<Prim, ExportError> {
     let path = format!("{parent}/{}", xform.name);
     let mut prim = Prim::def("Xform", xform.name);
     if let Some(kind) = xform.kind {
@@ -49,8 +77,8 @@ fn xform_prim(xform: &Xform<'_>, parent: &str) -> Result<Prim, ExportError> {
     push_custom(&mut prim.attributes, &xform.attributes);
     for child in &xform.children {
         prim.children.push(match child {
-            Node::Xform(x) => xform_prim(x, &path)?,
-            Node::Mesh(m) => mesh_prim(m, &path)?,
+            Node::Xform(x) => xform_prim(x, &path, materials)?,
+            Node::Mesh(m) => mesh_prim(m, &path, materials)?,
         });
     }
     Ok(prim)
@@ -78,7 +106,11 @@ impl Sites {
     }
 }
 
-fn mesh_prim(mesh: &Mesh<'_>, parent: &str) -> Result<Prim, ExportError> {
+fn mesh_prim(
+    mesh: &Mesh<'_>,
+    parent: &str,
+    materials: &Materials<'_, '_>,
+) -> Result<Prim, ExportError> {
     let path = format!("{parent}/{}", mesh.name);
     let fail = |problem| ExportError::InvalidMesh {
         path: path.clone(),
@@ -197,7 +229,64 @@ fn mesh_prim(mesh: &Mesh<'_>, parent: &str) -> Result<Prim, ExportError> {
 
     let mut prim = Prim::def("Mesh", mesh.name);
     prim.attributes = attrs;
+    if let Some(name) = mesh.material {
+        let binding = material_binding(mesh, &path, name, materials)?;
+        apply_binding(&mut prim, binding);
+    }
     Ok(prim)
+}
+
+/// Resolves a binding by material name, checking that the mesh authors
+/// every UV set the material's textures read. Returns the material path.
+fn material_binding(
+    mesh: &Mesh<'_>,
+    path: &str,
+    name: &str,
+    materials: &Materials<'_, '_>,
+) -> Result<String, ExportError> {
+    let material = materials
+        .defined
+        .iter()
+        .find(|m| m.name == name)
+        .ok_or_else(|| ExportError::UnknownMaterial {
+            path: path.into(),
+            material: name.into(),
+        })?;
+    let has_uv_set = |uv_set: &str| {
+        (uv_set == "st" && mesh.uvs.is_some())
+            || mesh.primvars.iter().any(|p| {
+                p.name == uv_set
+                    && matches!(
+                        p.primvar.values,
+                        PrimvarData::TexCoord2(_) | PrimvarData::Float2(_)
+                    )
+            })
+    };
+    if let Some(texture) = material.textures().find(|t| !has_uv_set(t.uv_set)) {
+        return Err(ExportError::InvalidMesh {
+            path: path.into(),
+            problem: MeshProblem::MissingTexCoords {
+                material: name.into(),
+                uv_set: texture.uv_set.into(),
+            },
+        });
+    }
+    Ok(format!("{}/{name}", materials.scope))
+}
+
+/// A direct, all-purpose binding at the default strength: the
+/// `MaterialBindingAPI` applied through `prepend apiSchemas`, and the
+/// `material:binding` relationship targeting the material
+/// (`pxr/usd/usdShade/materialBindingAPI.h:82`). `usdShadeValidators`'
+/// `MaterialBindingApiAppliedValidator` rejects the relationship without
+/// the applied schema.
+fn apply_binding(prim: &mut Prim, material: String) {
+    prim.metadata.push(Metadatum::new(
+        "apiSchemas",
+        Value::TokenListOp(ListOp::prepend(vec![String::from("MaterialBindingAPI")])),
+    ));
+    prim.relationships
+        .push(Relationship::new("material:binding", material));
 }
 
 /// Converts topology to USD's `int[]` counts and indices, checking counts,

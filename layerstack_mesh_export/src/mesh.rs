@@ -279,6 +279,10 @@ pub struct Mesh<'a> {
     pub orientation: Orientation,
     /// Whether back faces should be rendered too (`doubleSided`).
     pub double_sided: bool,
+    /// Name of the scene [`Material`](crate::Material) bound to the whole
+    /// mesh, written as a direct `material:binding` with the
+    /// `MaterialBindingAPI` applied.
+    pub material: Option<&'a str>,
 }
 
 impl<'a> Mesh<'a> {
@@ -295,6 +299,7 @@ impl<'a> Mesh<'a> {
             attributes: Vec::new(),
             orientation: Orientation::RightHanded,
             double_sided: false,
+            material: None,
         }
     }
 
@@ -330,6 +335,13 @@ impl<'a> Mesh<'a> {
     #[must_use]
     pub fn with_attribute(mut self, name: &'a str, value: Value) -> Self {
         self.attributes.push(CustomAttribute::new(name, value));
+        self
+    }
+
+    /// Binds a scene material to the whole mesh, by name.
+    #[must_use]
+    pub fn with_material(mut self, material: &'a str) -> Self {
+        self.material = Some(material);
         self
     }
 }

@@ -44,14 +44,38 @@
 //! `usdchecker --arkit` does not by itself establish compatibility with
 //! those viewers.
 //!
-//! Materials are not exported yet: direct material bindings, face subsets
-//! and a portable shader subset (`UsdPreviewSurface`) are the next scope.
+//! # Materials
+//!
+//! A [`Material`] is written under `/<root>/Materials` as a `Material` prim
+//! whose surface is a `UsdPreviewSurface` shader in the metallic workflow.
+//! Each input is a constant or a texture: textures become `UsdUVTexture`
+//! shaders reading `primvars:st` (or another UV set) through a
+//! `UsdPrimvarReader_float2`, with `sourceColorSpace` fixed by the input
+//! (`sRGB` for base and emissive color, `raw` for data), explicit wrap
+//! modes, and the `scale`/`bias` remap the specification prescribes for
+//! normal maps. Channels of one image (e.g. packed occlusion, roughness
+//! and metallic) share one texture shader. See [`Material`] for the
+//! inputs and their fallbacks.
+//!
+//! A mesh binds a material by name ([`Mesh::with_material`]): the mesh gets
+//! the `MaterialBindingAPI` schema and a direct `material:binding`
+//! relationship. Bindings are checked: the material must exist and the
+//! mesh must author every UV set its textures read.
+//!
+//! Known limits, by design of this profile: bindings are direct, of
+//! default strength and for all purposes (no collection-based bindings,
+//! `bindMaterialAs`, or purpose-specific `material:binding:<purpose>`);
+//! the only shading model is `UsdPreviewSurface` (no `MaterialX` or other
+//! render contexts, no specular workflow, clearcoat, `ior` or
+//! displacement); and texture coordinates are not transformed
+//! (`UsdTransform2d`).
 //!
 //! # Example
 //!
 //! ```
 //! use layerstack_mesh_export::{
-//!     Faces, Mesh, Primvar, Scene, StageSettings, Transform, UpAxis, Xform,
+//!     Channel, ColorInput, Faces, FloatInput, Material, Mesh, PackageFile, Primvar, Scene,
+//!     StageSettings, Texture, Transform, UpAxis, Xform,
 //! };
 //!
 //! let points = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0]];
@@ -59,16 +83,30 @@
 //! let uvs = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
 //! let quad = Mesh::new("Quad", &points, Faces::Polygons { counts: &[4], indices: &[0, 1, 2, 3] })
 //!     .with_normals(Primvar::vertex(&normals))
-//!     .with_uvs(Primvar::vertex(&uvs));
+//!     .with_uvs(Primvar::vertex(&uvs))
+//!     .with_material("Painted");
+//!
+//! // A glTF-style material: base color texture, packed metal/roughness.
+//! let base = Texture::new("textures/base.png");
+//! let metal_rough = Texture::new("textures/metal_rough.png");
+//! let painted = Material::new("Painted")
+//!     .with_diffuse_color(ColorInput::texture(base))
+//!     .with_roughness(FloatInput::texture(metal_rough, Channel::G))
+//!     .with_metallic(FloatInput::texture(metal_rough, Channel::B));
 //!
 //! let root = Xform::new("Root")
 //!     .with_transform(Transform::from_translation([0.0, 0.0, 2.0]))
 //!     .with_mesh(quad);
-//! let scene = Scene::new(StageSettings::new(UpAxis::Z, 1.0), root);
+//! let scene = Scene::new(StageSettings::new(UpAxis::Z, 1.0), root).with_material(painted);
 //!
 //! let usda = scene.to_usda()?;
 //! assert!(usda.contains("uniform token subdivisionScheme = \"none\""));
-//! let usdz = scene.to_usdz(&[])?;
+//! assert!(usda.contains("rel material:binding = </Root/Materials/Painted>"));
+//! # let png: &[u8] = b"\x89PNG\r\n\x1a\n";
+//! let usdz = scene.to_usdz(&[
+//!     PackageFile::new("textures/base.png", png),
+//!     PackageFile::new("textures/metal_rough.png", png),
+//! ])?;
 //! assert_eq!(&usdz[..4], b"PK\x03\x04");
 //! # Ok::<(), layerstack_mesh_export::ExportError>(())
 //! ```
@@ -92,6 +130,16 @@
 //! (`orientation`, `doubleSided`), and
 //! [`boundable.h`](https://openusd.org/dev/api/class_usd_geom_boundable.html)
 //! (`extent`).
+//!
+//! Materials follow the `UsdPreviewSurface` specification (OpenUSD
+//! `docs/spec_usdpreviewsurface.rst`: inputs, fallbacks, color spaces,
+//! normal-map remapping, texture orientation), the node definitions in
+//! `pxr/usd/plugin/usdShaders/shaders/shaderDefs.usda` (input and output
+//! types), and the `UsdShade` headers:
+//! [`material.h`](https://openusd.org/dev/api/class_usd_shade_material.html)
+//! (`outputs:surface`) and
+//! [`materialBindingAPI.h`](https://openusd.org/dev/api/class_usd_shade_material_binding_a_p_i.html)
+//! (direct bindings).
 
 #![no_std]
 
@@ -99,18 +147,23 @@ extern crate alloc;
 
 mod build;
 mod error;
+mod material;
 mod mesh;
 mod scene;
+mod shading;
 mod transform;
 
-pub use error::{ExportError, MeshProblem};
+pub use error::{ExportError, MaterialProblem, MeshProblem};
 pub use layerstack_usda::writer::Value;
 pub use layerstack_usdz::PackageFile;
+pub use material::{Channel, ColorInput, FloatInput, MATERIALS_SCOPE, Material, Texture, Wrap};
 pub use mesh::{
     CustomAttribute, CustomPrimvar, Faces, Interpolation, Mesh, Orientation, Primvar, PrimvarData,
 };
 pub use scene::{Node, ROOT_LAYER_PATH, Scene, StageSettings, UpAxis, Xform};
 pub use transform::Transform;
 
+#[cfg(test)]
+mod material_tests;
 #[cfg(test)]
 mod tests;

@@ -291,6 +291,7 @@ version = "0.1.0"
 dependencies = [
  "layerstack",
  "smallvec",
+ "unicode-ident",
 ]
 
 [[package]]

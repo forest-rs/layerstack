@@ -342,7 +342,8 @@ impl<'a> Lexer<'a> {
 
     /// Lexes an identifier or keyword.
     fn lex_ident(&mut self, start: u32) -> Token {
-        // First char is already validated as XID_Start or `_`.
+        // First char is already validated as `XID_Start` or `_`
+        // (`crate::ident`, AOUSD Core §7.3.3, §16.2.8).
         // Advance past it (may be multi-byte UTF-8).
         let ch = self.current_char();
         self.advance(ch.len_utf8() as u32);
@@ -350,7 +351,7 @@ impl<'a> Lexer<'a> {
         // Continue with XID_Continue characters.
         while self.pos < self.bytes.len() as u32 {
             let ch = self.current_char();
-            if unicode_xid_continue(ch) {
+            if crate::ident::is_continue(ch) {
                 self.advance(ch.len_utf8() as u32);
             } else {
                 break;
@@ -491,7 +492,7 @@ impl Iterator for Lexer<'_> {
             // Non-ASCII: check for Unicode XID_Start.
             _ if b >= 0x80 => {
                 let ch = self.current_char();
-                if unicode_xid_start(ch) {
+                if crate::ident::is_start(ch) {
                     self.lex_ident(start)
                 } else {
                     // Skip the full character.
@@ -509,22 +510,6 @@ impl Iterator for Lexer<'_> {
 
         Some(tok)
     }
-}
-
-// ── Unicode identifier support ─────────────────────────────────────────
-
-/// Checks if `c` is a valid identifier start per UAX #31 (`XID_Start` or `_`).
-///
-/// Spec: AOUSD Core §7.3.3, §16.2.8.
-fn unicode_xid_start(c: char) -> bool {
-    c == '_' || c.is_alphabetic()
-}
-
-/// Checks if `c` is a valid identifier continuation per UAX #31 (`XID_Continue`).
-fn unicode_xid_continue(c: char) -> bool {
-    // XID_Continue includes XID_Start plus digits, combining marks, etc.
-    // `char::is_alphanumeric()` covers letters + digits; `_` is separate.
-    c == '_' || c.is_alphanumeric()
 }
 
 // ── Convenience ────────────────────────────────────────────────────────
@@ -762,6 +747,22 @@ mod tests {
                 (TokenKind::Ident, "over"),
                 (TokenKind::Ident, "class"),
             ]
+        );
+    }
+
+    #[test]
+    fn identifiers_use_xid_tables() {
+        // U+0301 (combining acute) is XID_Continue; U+00B2 (superscript two)
+        // is alphanumeric but not XID_Continue, so it ends the identifier.
+        let tokens = tok_no_trivia("cafe\u{301} x\u{b2}");
+        assert_eq!(
+            tokens,
+            [
+                (TokenKind::Ident, "cafe\u{301}"),
+                (TokenKind::Ident, "x"),
+                (TokenKind::Error, "\u{b2}"),
+            ],
+            "identifier boundaries"
         );
     }
 

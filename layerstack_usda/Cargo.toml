@@ -17,6 +17,7 @@ std = []
 [dependencies]
 layerstack = { path = "../layerstack" }
 smallvec = { workspace = true }
+unicode-ident = { workspace = true }
 
 [dev-dependencies]
 

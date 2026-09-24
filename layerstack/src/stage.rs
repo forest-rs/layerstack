@@ -22,7 +22,7 @@ use crate::{
     listop::{ListOp, resolve_list_chain},
     path::{PathId, PropertyPath, TargetPath},
     prim_index::{Opinion, OpinionKey, OpinionValue, PrimIndex},
-    property::{PropertySpec, PropertyType},
+    property::{PropertyKind, PropertySpec, PropertyType, Variability},
     schema::SchemaRegistry,
     spec_path::SpecPath,
     spline::{SplineData, SplineDataType},
@@ -85,6 +85,23 @@ enum Lookup {
     Property,
     /// Only the prim metadata field.
     Metadata,
+}
+
+/// How a composed property is declared.
+///
+/// See [`Stage::resolve_property_declaration`].
+///
+/// Spec: AOUSD Core §12.2.2–§12.2.4.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PropertyDeclaration {
+    /// Attribute or relationship.
+    pub kind: PropertyKind,
+    /// The declared attribute type, if any.
+    pub type_name: Option<PropertyType>,
+    /// The resolved variability.
+    pub variability: Variability,
+    /// Whether any opinion declares the property `custom`.
+    pub custom: bool,
 }
 
 /// Controls partial population.
@@ -669,6 +686,138 @@ impl Stage {
         }
 
         None
+    }
+
+    /// Resolves a metadata field of a composed property, such as
+    /// `interpolation`, `customData` or `limits`.
+    ///
+    /// The strongest property opinion that authors `key` wins. Dictionaries
+    /// combine recursively across all opinions, so a stronger `limits.soft`
+    /// minimum keeps a weaker `limits.soft` maximum; a value block discards
+    /// weaker opinions. Token and path list ops chain.
+    ///
+    /// Spec: AOUSD Core §12.2 (metadata resolution), §12.2.5 (dictionaries
+    /// combine), §12.2.6 (list ops). The UI hints proposal relies on the
+    /// same combining for nested `limits` dictionaries
+    /// (`OpenUSD-proposals/proposals/ui-hints/README.md`).
+    #[must_use]
+    pub fn resolve_property_metadata(
+        &self,
+        prim: PathId,
+        property: TokenId,
+        key: TokenId,
+    ) -> Option<Resolved<ResolvedValue>> {
+        let opinions = self.prims.get(&prim)?.property_opinions(property)?;
+        let authored: Vec<(&Opinion, &FieldValue)> = opinions
+            .iter()
+            .filter_map(|op| Some((op, op.value.as_property()?.metadata(key)?)))
+            .collect();
+        let (strongest, value) = *authored.first()?;
+        let provenance = self.provenance_for(property, strongest);
+        let value = match value {
+            FieldValue::Value(Value::Blocked) => return None,
+            FieldValue::Value(Value::Dictionary(_)) => {
+                let dictionaries = authored
+                    .iter()
+                    .map_while(|(_, value)| match value {
+                        FieldValue::Value(Value::Blocked) => None,
+                        other => Some(other),
+                    })
+                    .filter_map(|value| match value {
+                        FieldValue::Value(Value::Dictionary(entries)) => Some(entries.as_slice()),
+                        _ => None,
+                    });
+                ResolvedValue::Dictionary(combine_dictionary_chain(dictionaries))
+            }
+            FieldValue::Value(value) => ResolvedValue::Scalar(value.clone()),
+            FieldValue::TokenListOp(_) => {
+                let ops = authored.iter().filter_map(|(_, value)| match value {
+                    FieldValue::TokenListOp(list) => Some(list.clone()),
+                    _ => None,
+                });
+                ResolvedValue::TokenList(resolve_list_chain::<TokenId>(&[], ops))
+            }
+            FieldValue::PathListOp(_) => {
+                let ops = authored.iter().filter_map(|(_, value)| match value {
+                    FieldValue::PathListOp(list) => Some(list.clone()),
+                    _ => None,
+                });
+                ResolvedValue::PathList(resolve_list_chain::<TargetPath>(&[], ops))
+            }
+        };
+        Some(Resolved { value, provenance })
+    }
+
+    /// Resolves how a composed property is declared: its kind, type,
+    /// variability and `custom` qualifier.
+    ///
+    /// Returns `None` when no property spec contributes to `property` (for
+    /// example when only prim metadata of that name is authored).
+    ///
+    /// - The kind and type come from the strongest property opinion that
+    ///   authors them.
+    /// - `custom` is `true` if any opinion authors it (Core §12.2.4).
+    /// - Variability comes from the weakest opinion (Core §12.2.3), since no
+    ///   prim definition is consulted here.
+    ///
+    /// Spec: AOUSD Core §12.2.2–§12.2.4.
+    #[must_use]
+    pub fn resolve_property_declaration(
+        &self,
+        prim: PathId,
+        property: TokenId,
+    ) -> Option<PropertyDeclaration> {
+        let index = self.prims.get(&prim)?;
+        let opinions = index.property_opinions(property)?;
+        let mut specs = opinions.iter().filter_map(|op| op.value.as_property());
+        let strongest = specs.next()?;
+        let mut declaration = PropertyDeclaration {
+            kind: strongest.kind,
+            type_name: index.property_type_for(&property).cloned(),
+            variability: strongest.variability,
+            custom: strongest.custom,
+        };
+        for spec in specs {
+            declaration.custom |= spec.custom;
+            declaration.variability = spec.variability;
+        }
+        Some(declaration)
+    }
+
+    /// Resolves the property ordering (`reorder properties`) of a composed
+    /// prim: the strongest authored `propertyOrder`.
+    ///
+    /// OpenUSD sorts composed property names and then moves the names listed
+    /// here to the front, in order (`UsdPrim::ApplyPropertyOrder`,
+    /// `pxr/usd/usd/prim.cpp`).
+    ///
+    /// Spec: AOUSD Core §7.6.2.2.2 (`propertyChildren`), §12.2 (strongest
+    /// opinion).
+    #[must_use]
+    pub fn resolve_property_order(
+        &self,
+        prim: PathId,
+        store: &dyn LayerStore,
+    ) -> Option<Vec<TokenId>> {
+        use crate::spec_path::SpecComponent;
+
+        let index = self.prims.get(&prim)?;
+        index.sources.iter().find_map(|source| {
+            let spec = store
+                .layer(source.layer_id)?
+                .prims
+                .get(&source.lookup_path)?;
+            match source.spec_path.components().last() {
+                Some(SpecComponent::VariantSelection { set, variant }) => spec
+                    .variant_sets
+                    .get(set)?
+                    .variants
+                    .get(variant)?
+                    .property_order
+                    .clone(),
+                _ => spec.property_order.clone(),
+            }
+        })
     }
 
     /// Returns the sorted opinion stack for `(prim, field)` (strongest-first).

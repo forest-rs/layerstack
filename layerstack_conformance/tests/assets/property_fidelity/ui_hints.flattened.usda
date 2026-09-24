@@ -1,0 +1,24 @@
+#usda 1.0
+(
+    doc = "Flattened by Apple usdcat 0.25.11 from ui_hints.usda"
+)
+
+def "Root"
+{
+    float softness = 0.5 (
+        customData = {
+            string owner = "lookdev"
+        }
+        limits = {
+            dictionary hard = {
+                float maximum = 15
+                float minimum = -5
+            }
+            dictionary soft = {
+                float maximum = 10
+                float minimum = 2
+            }
+        }
+    )
+}
+

@@ -111,7 +111,8 @@ pub use schema::{PropertyDefinition, SchemaDefinition, SchemaRegistry};
 pub use spec_path::{SpecComponent, SpecPath, SpecPathError};
 pub use spline::SplineData;
 pub use stage::{
-    PopulationMask, Provenance, Resolved, ResolvedValue, Stage, StageOptions, Traverse,
+    PopulationMask, PropertyDeclaration, Provenance, Resolved, ResolvedValue, Stage, StageOptions,
+    Traverse,
 };
 
 pub use live_stage::LiveStage;

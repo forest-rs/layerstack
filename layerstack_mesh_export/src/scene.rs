@@ -164,7 +164,8 @@ impl<'a> Scene<'a> {
     /// # Errors
     ///
     /// [`ExportError::InvalidMesh`] for inconsistent topology or primvar
-    /// sizes, or a bound material whose UV set the mesh lacks;
+    /// sizes, material subsets that do not form their family, or a bound
+    /// material whose UV set the mesh lacks;
     /// [`ExportError::InvalidStage`] for unusable stage settings;
     /// [`ExportError::InvalidMaterial`] for unusable material inputs;
     /// [`ExportError::UnknownMaterial`] for a binding to an undefined

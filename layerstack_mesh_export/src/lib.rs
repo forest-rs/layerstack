@@ -59,8 +59,14 @@
 //!
 //! A mesh binds a material by name ([`Mesh::with_material`]): the mesh gets
 //! the `MaterialBindingAPI` schema and a direct `material:binding`
-//! relationship. Bindings are checked: the material must exist and the
-//! mesh must author every UV set its textures read.
+//! relationship. Per-face materials ([`Mesh::with_material_subset`]) are
+//! `GeomSubset` children in the `materialBind` family, each with its own
+//! binding, and the mesh authors the family's type
+//! ([`FamilyType::Partition`] or [`FamilyType::NonOverlapping`]).
+//! Bindings are checked: the material must exist, the mesh must author
+//! every UV set its textures read, and the subsets must form the declared
+//! family (indices in range, no face twice, every face covered by a
+//! partition), as `UsdGeomSubset::ValidateFamily` requires.
 //!
 //! Known limits, by design of this profile: bindings are direct, of
 //! default strength and for all purposes (no collection-based bindings,
@@ -158,7 +164,8 @@ pub use layerstack_usda::writer::Value;
 pub use layerstack_usdz::PackageFile;
 pub use material::{Channel, ColorInput, FloatInput, MATERIALS_SCOPE, Material, Texture, Wrap};
 pub use mesh::{
-    CustomAttribute, CustomPrimvar, Faces, Interpolation, Mesh, Orientation, Primvar, PrimvarData,
+    CustomAttribute, CustomPrimvar, Faces, FamilyType, Interpolation, MaterialSubset, Mesh,
+    Orientation, Primvar, PrimvarData,
 };
 pub use scene::{Node, ROOT_LAYER_PATH, Scene, StageSettings, UpAxis, Xform};
 pub use transform::Transform;

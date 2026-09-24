@@ -171,9 +171,10 @@ fn main() {
     // The root layer has no opinions of its own. It lists sublayers in
     // strength order: first listed = strongest.
     //
-    // The layer offset on the base sublayer means:
-    //   mapped_time = query_time * scale + offset
-    //   With offset=-10, scale=1: querying global frame 10 reads base frame 0.
+    // The layer offset on the base sublayer maps base-local frames onto the
+    // global timeline:
+    //   global_time = local_time * scale + offset
+    //   With offset=10, scale=1: querying global frame 10 reads base frame 0.
     //   The base layer's content is shifted 10 frames later on the timeline.
     //
     // In video editor terms, this is like dragging the base clip 10 frames
@@ -185,12 +186,12 @@ fn main() {
         // Override layer — no time offset (plays at global time).
         SublayerEntry::new(LayerId(2)),
         // Base layer — shifted 10 frames later on the global timeline.
-        // offset=-10 means: mapped_time = query_time - 10.
+        // offset=10 means: local_time = global_time - 10.
         // So global frame 10 reads base-local frame 0.
         SublayerEntry {
             layer: LayerId(1),
             offset: LayerOffset {
-                offset: -10.0,
+                offset: 10.0,
                 scale: 1.0,
             },
         },

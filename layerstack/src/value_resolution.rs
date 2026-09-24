@@ -838,7 +838,7 @@ mod tests {
         );
         // Stage time 11 maps to layer time 1, the block sample.
         strong.layer_offset = LayerOffset {
-            offset: -10.0,
+            offset: 10.0,
             scale: 1.0,
         };
         let opinions = vec![

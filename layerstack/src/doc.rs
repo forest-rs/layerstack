@@ -417,6 +417,28 @@ pub enum FieldValue {
     ///
     /// Spec: AOUSD Core §12.4 (`ListOps`), applied to path lists.
     PathListOp(ListOp<TargetPath>),
+    /// A list-op field over strings (`stringlistop`), such as `clipSets`.
+    StringListOp(ListOp<Arc<str>>),
+    /// A list-op field over `int` values (`intlistop`).
+    IntListOp(ListOp<i32>),
+    /// A list-op field over `uint` values (`uintlistop`).
+    UIntListOp(ListOp<u32>),
+    /// A list-op field over `int64` values (`int64listop`), such as
+    /// `PointInstancer`'s `inactiveIds`.
+    Int64ListOp(ListOp<i64>),
+    /// A list-op field over `uint64` values (`uint64listop`).
+    UInt64ListOp(ListOp<u64>),
+}
+
+impl FieldValue {
+    /// Returns `true` for the list-op variants.
+    ///
+    /// Reference and payload list ops are composition arcs and live in
+    /// [`PrimSpec::references`] and [`PrimSpec::payloads`].
+    #[must_use]
+    pub fn is_list_op(&self) -> bool {
+        !matches!(self, Self::Value(_))
+    }
 }
 
 impl From<Value> for FieldValue {

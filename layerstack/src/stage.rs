@@ -73,6 +73,78 @@ pub enum ResolvedValue {
     ///
     /// Spec: AOUSD Core §6.6.2.1 (dictionary combining), §12.2.5.
     Dictionary(Vec<(Arc<str>, Value)>),
+    /// A string or integer list resolved by chaining `ListOps` (for
+    /// example `clipSets` or `inactiveIds`); each element keeps its value
+    /// type (`Value::String`, `Value::Int`, `Value::UInt`, `Value::Int64` or
+    /// `Value::UInt64`).
+    ///
+    /// Spec: AOUSD Core §12.2.6 (list op resolution).
+    ValueList(Vec<Value>),
+}
+
+/// Chains the list ops of `values` (strongest first) whose variant matches
+/// `strongest`, or returns `None` when `strongest` is not a list op.
+///
+/// Spec: AOUSD Core §12.2.6 (list op resolution).
+fn resolve_field_list<'a>(
+    strongest: &FieldValue,
+    values: impl Iterator<Item = &'a FieldValue> + Clone,
+) -> Option<ResolvedValue> {
+    fn chain<'a, T: Clone + Eq + 'a>(
+        values: impl Iterator<Item = &'a FieldValue>,
+        pick: impl Fn(&'a FieldValue) -> Option<&'a ListOp<T>>,
+    ) -> Vec<T> {
+        resolve_list_chain::<T>(&[], values.filter_map(pick).cloned())
+    }
+    fn wrap<T>(items: Vec<T>, value: impl Fn(T) -> Value) -> ResolvedValue {
+        ResolvedValue::ValueList(items.into_iter().map(value).collect())
+    }
+    Some(match strongest {
+        FieldValue::Value(_) => return None,
+        FieldValue::TokenListOp(_) => ResolvedValue::TokenList(chain(values, |v| match v {
+            FieldValue::TokenListOp(list) => Some(list),
+            _ => None,
+        })),
+        FieldValue::PathListOp(_) => ResolvedValue::PathList(chain(values, |v| match v {
+            FieldValue::PathListOp(list) => Some(list),
+            _ => None,
+        })),
+        FieldValue::StringListOp(_) => wrap(
+            chain(values, |v| match v {
+                FieldValue::StringListOp(list) => Some(list),
+                _ => None,
+            }),
+            Value::String,
+        ),
+        FieldValue::IntListOp(_) => wrap(
+            chain(values, |v| match v {
+                FieldValue::IntListOp(list) => Some(list),
+                _ => None,
+            }),
+            Value::Int,
+        ),
+        FieldValue::UIntListOp(_) => wrap(
+            chain(values, |v| match v {
+                FieldValue::UIntListOp(list) => Some(list),
+                _ => None,
+            }),
+            Value::UInt,
+        ),
+        FieldValue::Int64ListOp(_) => wrap(
+            chain(values, |v| match v {
+                FieldValue::Int64ListOp(list) => Some(list),
+                _ => None,
+            }),
+            Value::Int64,
+        ),
+        FieldValue::UInt64ListOp(_) => wrap(
+            chain(values, |v| match v {
+                FieldValue::UInt64ListOp(list) => Some(list),
+                _ => None,
+            }),
+            Value::UInt64,
+        ),
+    })
 }
 
 /// Which of a prim's same-named objects a query reads.
@@ -366,7 +438,9 @@ impl Stage {
                 value: Value::Dictionary(d),
                 provenance: resolved.provenance,
             }),
-            ResolvedValue::TokenList(_) | ResolvedValue::PathList(_) => None,
+            ResolvedValue::TokenList(_)
+            | ResolvedValue::PathList(_)
+            | ResolvedValue::ValueList(_) => None,
         }
     }
 
@@ -394,7 +468,8 @@ impl Stage {
             }),
             ResolvedValue::Scalar(_)
             | ResolvedValue::PathList(_)
-            | ResolvedValue::Dictionary(_) => None,
+            | ResolvedValue::Dictionary(_)
+            | ResolvedValue::ValueList(_) => None,
         }
     }
 
@@ -529,19 +604,6 @@ impl Stage {
                     provenance: targets.provenance,
                 });
             }
-            OpinionValue::Field(FieldValue::TokenListOp(_)) => {
-                let ops: Vec<ListOp<TokenId>> = opinions
-                    .iter()
-                    .filter_map(|op| match &op.value {
-                        OpinionValue::Field(FieldValue::TokenListOp(list)) => Some(list.clone()),
-                        _ => None,
-                    })
-                    .collect();
-                return Some(Resolved {
-                    value: ResolvedValue::TokenList(resolve_list_chain::<TokenId>(&[], ops)),
-                    provenance: self.provenance_for(field, strongest),
-                });
-            }
             OpinionValue::Field(FieldValue::PathListOp(_)) => {
                 let targets = self.resolve_targets_by(prim, field, lookup)?;
                 return Some(Resolved {
@@ -549,7 +611,14 @@ impl Stage {
                     provenance: targets.provenance,
                 });
             }
-            OpinionValue::Field(FieldValue::Value(_)) | OpinionValue::Property(_) => {}
+            OpinionValue::Field(list) if list.is_list_op() => {
+                let values = opinions.iter().filter_map(|op| op.value.as_field());
+                return Some(Resolved {
+                    value: resolve_field_list(list, values)?,
+                    provenance: self.provenance_for(field, strongest),
+                });
+            }
+            OpinionValue::Field(_) | OpinionValue::Property(_) => {}
         }
 
         self.resolve_default(field, opinions, index.property_type_for(&field), None)
@@ -730,20 +799,7 @@ impl Stage {
                 ResolvedValue::Dictionary(combine_dictionary_chain(dictionaries))
             }
             FieldValue::Value(value) => ResolvedValue::Scalar(value.clone()),
-            FieldValue::TokenListOp(_) => {
-                let ops = authored.iter().filter_map(|(_, value)| match value {
-                    FieldValue::TokenListOp(list) => Some(list.clone()),
-                    _ => None,
-                });
-                ResolvedValue::TokenList(resolve_list_chain::<TokenId>(&[], ops))
-            }
-            FieldValue::PathListOp(_) => {
-                let ops = authored.iter().filter_map(|(_, value)| match value {
-                    FieldValue::PathListOp(list) => Some(list.clone()),
-                    _ => None,
-                });
-                ResolvedValue::PathList(resolve_list_chain::<TargetPath>(&[], ops))
-            }
+            list => resolve_field_list(list, authored.iter().map(|(_, value)| *value))?,
         };
         Some(Resolved { value, provenance })
     }
@@ -1122,12 +1178,7 @@ impl Stage {
                     ResolvedValue::Dictionary(combine_dictionary_chain([d]))
                 }
                 FieldValue::Value(v) => ResolvedValue::Scalar(v),
-                FieldValue::TokenListOp(op) => {
-                    ResolvedValue::TokenList(resolve_list_chain::<TokenId>(&[], [op]))
-                }
-                FieldValue::PathListOp(op) => {
-                    ResolvedValue::PathList(resolve_list_chain::<TargetPath>(&[], [op]))
-                }
+                list => resolve_field_list(&list, core::iter::once(&list))?,
             },
             provenance: None,
         })
@@ -1158,7 +1209,9 @@ impl Stage {
                 value: Value::Dictionary(d),
                 provenance: resolved.provenance,
             }),
-            ResolvedValue::TokenList(_) | ResolvedValue::PathList(_) => None,
+            ResolvedValue::TokenList(_)
+            | ResolvedValue::PathList(_)
+            | ResolvedValue::ValueList(_) => None,
         }
     }
 

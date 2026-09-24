@@ -955,19 +955,48 @@ impl AssembleCtx<'_> {
                         Ok(converted) => Some(FieldValue::PathListOp(converted)),
                         Err(error) => {
                             self.report(spec_path, Some(field), alloc::format!("{error}"));
-                            None
+                            return None;
                         }
                     }
                 }
-                other => {
-                    self.report(
-                        spec_path,
-                        Some(field),
-                        alloc::format!("unsupported: {other:?} metadata is not read"),
-                    );
-                    None
-                }
-            },
+                ValueType::StringListOp => convert_scalar_listop(listop, |v| match v {
+                    CrateValue::String(s) => Some(Arc::from(s.as_str())),
+                    _ => None,
+                })
+                .map(FieldValue::StringListOp),
+                ValueType::IntListOp => convert_scalar_listop(listop, |v| match v {
+                    CrateValue::Int(v) => Some(*v),
+                    _ => None,
+                })
+                .map(FieldValue::IntListOp),
+                ValueType::UIntListOp => convert_scalar_listop(listop, |v| match v {
+                    CrateValue::UInt(v) => Some(*v),
+                    _ => None,
+                })
+                .map(FieldValue::UIntListOp),
+                ValueType::Int64ListOp => convert_scalar_listop(listop, |v| match v {
+                    CrateValue::Int64(v) => Some(*v),
+                    _ => None,
+                })
+                .map(FieldValue::Int64ListOp),
+                ValueType::UInt64ListOp => convert_scalar_listop(listop, |v| match v {
+                    CrateValue::UInt64(v) => Some(*v),
+                    _ => None,
+                })
+                .map(FieldValue::UInt64ListOp),
+                // Reference and payload list ops are arcs, read by their
+                // dedicated fields; unregistered-value list ops have no
+                // element type.
+                _ => None,
+            }
+            .or_else(|| {
+                self.report(
+                    spec_path,
+                    Some(field),
+                    alloc::format!("unsupported: {:?} metadata is not read", listop.op_type),
+                );
+                None
+            }),
             // `SdfPermission` (deprecated, Core §7.6.2.7): stored as the token
             // USDA spells it with.
             CrateValue::Permission(0) => Some(FieldValue::Value(Value::Token(
@@ -1530,6 +1559,26 @@ fn parse_variant_property_path(path: &str) -> Option<(String, String, String, St
 
 /// Orders `properties` by their position in `children` (`propertyChildren`),
 /// keeping properties not listed there after the listed ones, in order.
+/// Converts a list op whose items are plain scalars, or returns `None` when
+/// an item has an unexpected type.
+///
+/// Spec: AOUSD Core §16.3.10 (list op encoding).
+fn convert_scalar_listop<T>(
+    listop: &CrateListOp,
+    item: impl Fn(&CrateValue) -> Option<T>,
+) -> Option<ListOp<T>> {
+    let items = |values: &[CrateValue]| values.iter().map(&item).collect::<Option<Vec<T>>>();
+    Some(ListOp {
+        explicit: match &listop.explicit_items {
+            Some(values) => Some(items(values)?),
+            None => None,
+        },
+        prepend: items(&listop.prepended_items)?,
+        append: items(&listop.appended_items)?,
+        delete: items(&listop.deleted_items)?,
+    })
+}
+
 fn sort_by_children(properties: &mut [PropertyEntry], children: &[TokenId]) {
     properties.sort_by_key(|entry| {
         children

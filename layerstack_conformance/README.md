@@ -15,7 +15,11 @@ composition logic remains in the `layerstack` crate.
 `scripts/export_interop.sh [OUT_DIR]` writes the exporter fixtures from
 `src/export_fixtures.rs` and checks them with OpenUSD's `usdcat` and
 `usdchecker` (default and `--arkit` validators) and Python's `zipfile`
-(`scripts/check_usdz_layout.py`), including negative controls. It records tool
-versions and the selected validator rules in `OUT_DIR/report.txt`. It is not
-run by CI; `tests/export_interop.rs` runs the `usdcat`/`usdchecker` subset when
-those tools are on `PATH` and skips otherwise.
+(`scripts/check_usdz_layout.py`), including negative controls. Material
+fixtures are also checked for texture color spaces as `usdcat` reads them and,
+when `usdrecord` is available, rendered through a camera wrapper layer
+(`scripts/render_check.py`): the two-material cube must show both materials'
+colors and the textured cube both texture hues. It records tool versions, the
+selected validator rules and the renders in `OUT_DIR`. It is not run by CI;
+`tests/export_interop.rs` runs the `usdcat`/`usdchecker` subset when those
+tools are on `PATH` and skips otherwise.

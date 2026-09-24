@@ -13,6 +13,7 @@ use alloc::{collections::BTreeSet, vec::Vec};
 use hashbrown::{HashMap, HashSet};
 
 use crate::{
+    arc_cycle::ArcChain,
     arcs::{
         SelectionScope, collect_all_variant_branch_payloads, collect_all_variant_branch_references,
         collect_all_variant_child_references, resolve_inherits_for_prim, resolve_payloads_for_prim,
@@ -21,7 +22,7 @@ use crate::{
     doc::LayerStore,
     doc::{LayerId, Reference},
     layer_stack::LayerStack,
-    path::{Path, PathId},
+    path::{Path, PathId, PathInterner},
     stage::PopulationMask,
 };
 
@@ -54,14 +55,21 @@ fn gather_populated_paths(
 
     // Expand using references and inherits (including descendants and nested arcs).
     //
+    // Every expansion follows arcs through an `ArcChain` rooted at the prim
+    // being expanded, so an arc that would close a cycle is not followed and
+    // the recursion terminates.
+    //
     // Spec: AOUSD Core §10 (composition arcs) and §11 (stage population).
+    let stage_layer_stack = layer_stack_root(local_stack);
     let mut queue: Vec<PathId> = paths.iter().copied().collect();
     let mut idx = 0_usize;
     let mut visited_refs: HashSet<(PathId, LayerId, PathId)> = HashSet::new();
     let mut visited_inherits: HashSet<(PathId, PathId)> = HashSet::new();
+    let mut mapped_from = MappedFrom::new();
     while idx < queue.len() {
         let path = queue[idx];
         idx += 1;
+        let mut chain = ArcChain::new(stage_layer_stack, path);
 
         let inherits =
             resolve_inherits_for_prim(store, local_stack, path, SelectionScope::Discover);
@@ -74,6 +82,8 @@ fn gather_populated_paths(
                 &mut paths,
                 &mut queue,
                 &mut visited_inherits,
+                &mut chain,
+                &mut mapped_from,
             );
         }
 
@@ -87,6 +97,8 @@ fn gather_populated_paths(
                 &mut queue,
                 &mut visited_refs,
                 &mut visited_inherits,
+                &mut chain,
+                &mut mapped_from,
             );
         }
 
@@ -104,6 +116,8 @@ fn gather_populated_paths(
                 &mut queue,
                 &mut visited_refs,
                 &mut visited_inherits,
+                &mut chain,
+                &mut mapped_from,
             );
         }
 
@@ -119,6 +133,8 @@ fn gather_populated_paths(
                 &mut queue,
                 &mut visited_refs,
                 &mut visited_inherits,
+                &mut chain,
+                &mut mapped_from,
             );
         }
 
@@ -135,6 +151,8 @@ fn gather_populated_paths(
                 &mut queue,
                 &mut visited_refs,
                 &mut visited_inherits,
+                &mut chain,
+                &mut mapped_from,
             );
         }
 
@@ -149,6 +167,8 @@ fn gather_populated_paths(
                 &mut queue,
                 &mut visited_refs,
                 &mut visited_inherits,
+                &mut chain,
+                &mut mapped_from,
             );
         }
 
@@ -165,6 +185,8 @@ fn gather_populated_paths(
                 &mut paths,
                 &mut queue,
                 &mut visited_inherits,
+                &mut chain,
+                &mut mapped_from,
             );
         }
     }
@@ -175,12 +197,19 @@ fn gather_populated_paths(
     // The visited_inherits set contains all (dest, src) inherit/specializes
     // pairs discovered during population.
     let inherit_pairs: Vec<(PathId, PathId)> = visited_inherits.into_iter().collect();
-    propagate_populated_through_inherits(store, &inherit_pairs, &mut paths, &mut queue);
+    propagate_populated_through_inherits(
+        store,
+        &inherit_pairs,
+        &mut mapped_from,
+        &mut paths,
+        &mut queue,
+    );
 
     // Process any newly added paths from inherit propagation.
     while idx < queue.len() {
         let path = queue[idx];
         idx += 1;
+        let mut chain = ArcChain::new(stage_layer_stack, path);
 
         let inherits =
             resolve_inherits_for_prim(store, local_stack, path, SelectionScope::Discover);
@@ -193,6 +222,8 @@ fn gather_populated_paths(
                 &mut paths,
                 &mut queue,
                 &mut HashSet::new(),
+                &mut chain,
+                &mut mapped_from,
             );
         }
     }
@@ -208,10 +239,17 @@ fn expand_inherit_paths(
     paths: &mut BTreeSet<PathId>,
     queue: &mut Vec<PathId>,
     visited: &mut HashSet<(PathId, PathId)>,
+    chain: &mut ArcChain,
+    mapped_from: &mut MappedFrom,
 ) {
+    let layer_stack = layer_stack_root(stack);
+    if chain.closes_cycle(store.paths(), dest_root, layer_stack, inherited_root) {
+        return;
+    }
     if !visited.insert((dest_root, inherited_root)) {
         return;
     }
+    chain.push(layer_stack, inherited_root, dest_root);
 
     let src_root = store.paths().resolve(inherited_root).clone();
     let dest_root_path = store.paths().resolve(dest_root).clone();
@@ -242,6 +280,7 @@ fn expand_inherit_paths(
         let dest_path_id = store.paths_mut().intern(dest_root_path.join(&rel));
         if paths.insert(dest_path_id) {
             queue.push(dest_path_id);
+            mapped_from.insert(dest_path_id, (remote_path_id, rel.len()));
         }
 
         let nested =
@@ -255,9 +294,12 @@ fn expand_inherit_paths(
                 paths,
                 queue,
                 visited,
+                chain,
+                mapped_from,
             );
         }
     }
+    chain.pop();
 }
 
 fn expand_reference_paths(
@@ -268,13 +310,19 @@ fn expand_reference_paths(
     queue: &mut Vec<PathId>,
     visited: &mut HashSet<(PathId, LayerId, PathId)>,
     visited_inherits: &mut HashSet<(PathId, PathId)>,
+    chain: &mut ArcChain,
+    mapped_from: &mut MappedFrom,
 ) {
     let Some(reference_path) = resolve_reference_target_path(store, &reference) else {
         return;
     };
+    if chain.closes_cycle(store.paths(), dest_root, reference.layer, reference_path) {
+        return;
+    }
     if !visited.insert((dest_root, reference.layer, reference_path)) {
         return;
     }
+    chain.push(reference.layer, reference_path, dest_root);
 
     let remote_stack = LayerStack::gather(store, reference.layer);
     let target = store.paths().resolve(reference_path).clone();
@@ -307,6 +355,8 @@ fn expand_reference_paths(
         if paths.insert(dest_path_id) {
             queue.push(dest_path_id);
         }
+        // Referenced content has specs of its own at this path.
+        mapped_from.remove(&dest_path_id);
 
         let inherits = resolve_inherits_for_prim(
             store,
@@ -323,6 +373,8 @@ fn expand_reference_paths(
                 paths,
                 queue,
                 visited_inherits,
+                chain,
+                mapped_from,
             );
         }
 
@@ -345,6 +397,8 @@ fn expand_reference_paths(
                 paths,
                 queue,
                 visited_inherits,
+                chain,
+                mapped_from,
             );
         }
 
@@ -363,6 +417,8 @@ fn expand_reference_paths(
                 queue,
                 visited,
                 visited_inherits,
+                chain,
+                mapped_from,
             );
         }
 
@@ -378,6 +434,8 @@ fn expand_reference_paths(
                 queue,
                 visited,
                 visited_inherits,
+                chain,
+                mapped_from,
             );
         }
 
@@ -393,6 +451,8 @@ fn expand_reference_paths(
                 queue,
                 visited,
                 visited_inherits,
+                chain,
+                mapped_from,
             );
         }
 
@@ -408,6 +468,8 @@ fn expand_reference_paths(
                 queue,
                 visited,
                 visited_inherits,
+                chain,
+                mapped_from,
             );
         }
 
@@ -427,6 +489,8 @@ fn expand_reference_paths(
                 queue,
                 visited,
                 visited_inherits,
+                chain,
+                mapped_from,
             );
         }
     }
@@ -462,8 +526,11 @@ fn expand_reference_paths(
             paths,
             queue,
             &mut HashSet::new(),
+            chain,
+            mapped_from,
         );
     }
+    chain.pop();
 
     // Note: `paths_mut()` borrows the store mutably, so we materialize any
     // `strip_prefix` results before interning to avoid borrow conflicts.
@@ -475,9 +542,17 @@ fn expand_reference_paths(
 ///
 /// This function takes a set of (destination, source) inherit/specializes
 /// pairs collected during population and propagates populated paths through them.
+///
+/// Mapping stops where it would close an arc cycle (see
+/// [`propagation_closes_cycle`]); otherwise inherits that feed each other
+/// (`/A/B` inherits `/C` while `/C/D` inherits `/A`) would map paths into
+/// each other forever. Every path this adds is recorded in `mapped_from`.
+///
+/// Spec: AOUSD Core §10.3.2.3 (inherits), §10.6 (composition errors).
 fn propagate_populated_through_inherits(
     store: &mut dyn LayerStore,
     inherit_pairs: &[(PathId, PathId)],
+    mapped_from: &mut MappedFrom,
     paths: &mut BTreeSet<PathId>,
     queue: &mut Vec<PathId>,
 ) {
@@ -501,18 +576,92 @@ fn propagate_populated_through_inherits(
                     rel.to_vec()
                 };
                 let dest_path = dest_root.join(&rel);
+                if propagation_closes_cycle(
+                    store.paths(),
+                    mapped_from,
+                    &dest_path,
+                    *populated,
+                    rel.len(),
+                ) {
+                    continue;
+                }
                 let dest_id = store.paths_mut().intern(dest_path);
                 if !paths.contains(&dest_id) {
-                    to_add.push(dest_id);
+                    to_add.push((dest_id, *populated, rel.len()));
                 }
             }
-            for id in to_add {
-                paths.insert(id);
-                queue.push(id);
-                changed = true;
+            for (id, from, rel_len) in to_add {
+                if paths.insert(id) {
+                    queue.push(id);
+                    mapped_from.insert(id, (from, rel_len));
+                    changed = true;
+                }
             }
         }
     }
+}
+
+/// Maps a path populated through an inherit or specializes arc to the path
+/// it was mapped from and the length of the relative path the mapping
+/// carried: `(source/rel, rel.len())` for a path `dest/rel`.
+type MappedFrom = HashMap<PathId, (PathId, usize)>;
+
+/// Returns `true` when mapping `from` to `candidate` (both extended by the
+/// same `rel_len` trailing segments) would close an arc cycle.
+///
+/// `from` may itself have been mapped from another path, and so on. Each
+/// step of that chain is one inherit arc from `dest` to `source`, recovered
+/// by trimming the step's relative path. The arc closes a cycle when
+/// `source` and `candidate`, trimmed to the same depth, are prefix-related:
+/// this is the rule of [`ArcChain`], applied to the chain of mappings, with
+/// `candidate` as the prim being composed. An arc repeated on the chain is a
+/// cycle as well, which also bounds the walk.
+fn propagation_closes_cycle(
+    paths: &PathInterner,
+    mapped_from: &MappedFrom,
+    candidate: &Path,
+    from: PathId,
+    rel_len: usize,
+) -> bool {
+    let trim = |path: &Path, rel_len: usize| -> Option<Path> {
+        let segments = path.segments();
+        let keep = segments.len().checked_sub(rel_len)?;
+        Some(Path::root().join(&segments[..keep]))
+    };
+    let mut arcs: Vec<(Path, Path)> = Vec::new();
+    let mut site = candidate.clone();
+    let (mut next, mut rel_len) = (from, rel_len);
+    loop {
+        let (Some(dest), Some(source), Some(at_depth)) = (
+            trim(&site, rel_len),
+            trim(paths.resolve(next), rel_len),
+            trim(candidate, rel_len),
+        ) else {
+            return false;
+        };
+        if source.is_prefix_of(&at_depth) || at_depth.is_prefix_of(&source) {
+            return true;
+        }
+        let arc = (dest, source);
+        if arcs.contains(&arc) {
+            return true;
+        }
+        arcs.push(arc);
+        let Some(&(previous, previous_rel_len)) = mapped_from.get(&next) else {
+            return false;
+        };
+        site = paths.resolve(next).clone();
+        (next, rel_len) = (previous, previous_rel_len);
+    }
+}
+
+/// Returns the root layer that identifies `stack` for arc cycle detection.
+fn layer_stack_root(stack: &LayerStack) -> LayerId {
+    stack
+        .layers
+        .first()
+        .copied()
+        .expect("a gathered layer stack contains its root layer")
 }
 
 fn add_ancestor_paths(store: &mut dyn LayerStore, paths: &mut BTreeSet<PathId>) {
@@ -586,4 +735,132 @@ fn build_children_index(
     }
 
     children
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::doc::{InMemoryStore, Layer, PrimSpec};
+    use alloc::{string::String, vec};
+
+    /// Populates the stage rooted at `root` and returns its prim paths,
+    /// sorted.
+    fn populated(store: &mut InMemoryStore, root: LayerId) -> Vec<String> {
+        let stack = LayerStack::gather(store, root);
+        let (paths, _) = populate(store, &stack, None);
+        let mut names: Vec<String> = paths
+            .into_iter()
+            .map(|id| store.paths.display(id, &store.tokens))
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[test]
+    fn inheriting_an_ancestor_terminates() {
+        // `/A/B` inherits `/A`: mapping `/A`'s namespace onto `/A/B` would
+        // yield `/A/B/B`, `/A/B/B/B`, ... The arc is a cycle and is not
+        // followed.
+        let mut store = InMemoryStore::default();
+        let a = store.path("/A");
+        let b = store.path("/A/B");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(a, PrimSpec::def());
+        layer.insert_prim(b, PrimSpec::over().with_inherit(a));
+        store.insert_layer(layer);
+
+        assert_eq!(populated(&mut store, LayerId(1)), vec!["/", "/A", "/A/B"]);
+    }
+
+    #[test]
+    fn co_recursive_inherits_terminate() {
+        // `/P1/C1` inherits `/P2` and `/P2/C2` inherits `/P1`, so each maps
+        // the other's child under its own. OpenUSD composes `/P1/C1/C2` and
+        // `/P2/C2/C1` and rejects the arcs that would go further
+        // (`ErrorArcCycle_root`, `CoRecursiveParent*`).
+        let mut store = InMemoryStore::default();
+        let p1 = store.path("/P1");
+        let c1 = store.path("/P1/C1");
+        let p2 = store.path("/P2");
+        let c2 = store.path("/P2/C2");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(p1, PrimSpec::def());
+        layer.insert_prim(c1, PrimSpec::over().with_inherit(p2));
+        layer.insert_prim(p2, PrimSpec::def());
+        layer.insert_prim(c2, PrimSpec::over().with_inherit(p1));
+        store.insert_layer(layer);
+
+        assert_eq!(
+            populated(&mut store, LayerId(1)),
+            vec![
+                "/",
+                "/P1",
+                "/P1/C1",
+                "/P1/C1/C2",
+                "/P2",
+                "/P2/C2",
+                "/P2/C2/C1"
+            ]
+        );
+    }
+
+    #[test]
+    fn referencing_an_ancestor_terminates() {
+        // `/P/C` references `/M` in another layer, which references `/P`
+        // back: mapped onto `/P/C`, that would nest `/P/C/C/...` without end.
+        let mut store = InMemoryStore::default();
+        let p = store.path("/P");
+        let c = store.path("/P/C");
+        let m = store.path("/M");
+        let mut root = Layer::new(LayerId(1));
+        root.insert_prim(p, PrimSpec::def());
+        root.insert_prim(
+            c,
+            PrimSpec::over().with_reference(Reference::new(LayerId(2), m)),
+        );
+        store.insert_layer(root);
+        let mut model = Layer::new(LayerId(2));
+        model.insert_prim(
+            m,
+            PrimSpec::def().with_reference(Reference::new(LayerId(1), p)),
+        );
+        store.insert_layer(model);
+
+        assert_eq!(populated(&mut store, LayerId(1)), vec!["/", "/P", "/P/C"]);
+    }
+
+    #[test]
+    fn mutual_references_terminate() {
+        // `/R` references `/A`, which references `/B`, which references
+        // `/A` again (`ErrorArcCycle_root`, `GroupRoot`).
+        let mut store = InMemoryStore::default();
+        let r = store.path("/R");
+        let a = store.path("/A");
+        let a_child = store.path("/A/Child");
+        let b = store.path("/B");
+        let mut root = Layer::new(LayerId(1));
+        root.insert_prim(
+            r,
+            PrimSpec::def().with_reference(Reference::new(LayerId(2), a)),
+        );
+        store.insert_layer(root);
+        let mut layer_a = Layer::new(LayerId(2));
+        layer_a.insert_prim(
+            a,
+            PrimSpec::def().with_reference(Reference::new(LayerId(3), b)),
+        );
+        layer_a.insert_prim(a_child, PrimSpec::def());
+        store.insert_layer(layer_a);
+        let mut layer_b = Layer::new(LayerId(3));
+        layer_b.insert_prim(
+            b,
+            PrimSpec::def().with_reference(Reference::new(LayerId(2), a)),
+        );
+        store.insert_layer(layer_b);
+
+        assert_eq!(
+            populated(&mut store, LayerId(1)),
+            vec!["/", "/R", "/R/Child"]
+        );
+    }
 }

@@ -12,6 +12,8 @@
 //! ([`ArcKind`], [`LayerId`]) and layer-opinion maps are stored separately for
 //! diagnostic and notification queries.
 
+use alloc::vec::Vec;
+
 use hashbrown::{HashMap, HashSet};
 use invalidation::{CycleHandling, InvalidationGraph};
 
@@ -93,6 +95,34 @@ impl DependencyBuilder {
     pub(crate) fn add_layer_opinion(&mut self, layer: LayerId, prim: PathId) {
         self.layer_to_prims.entry(layer).or_default().insert(prim);
         self.prim_to_layers.entry(prim).or_default().insert(layer);
+    }
+
+    /// Drops every recorded dependency whose dependent prim is not in `prims`.
+    ///
+    /// Composition records dependencies while expanding arcs, before variant
+    /// pruning and spec-less prim removal decide the final prim set. A
+    /// dependency on a prim that is not composed would make invalidation
+    /// target a path that does not exist.
+    pub(crate) fn retain_prims<V>(&mut self, prims: &HashMap<PathId, V>) {
+        let dropped: Vec<ArcDependency> = self
+            .arc_set
+            .iter()
+            .filter(|dep| !prims.contains_key(&dep.target))
+            .copied()
+            .collect();
+        for dep in dropped {
+            self.arc_set.remove(&dep);
+            let _ = self
+                .graph
+                .remove_dependency(dep.target, dep.source, OPINION_EDIT);
+        }
+        for layer_prims in self.layer_to_prims.values_mut() {
+            layer_prims.retain(|prim| prims.contains_key(prim));
+        }
+        self.layer_to_prims
+            .retain(|_, layer_prims| !layer_prims.is_empty());
+        self.prim_to_layers
+            .retain(|prim, _| prims.contains_key(prim));
     }
 
     /// Consumes the builder and produces [`CompositionDeps`].

@@ -14,7 +14,7 @@ use hashbrown::{HashMap, HashSet};
 
 use crate::{
     arcs::{
-        collect_all_variant_branch_payloads, collect_all_variant_branch_references,
+        SelectionScope, collect_all_variant_branch_payloads, collect_all_variant_branch_references,
         collect_all_variant_child_references, resolve_inherits_for_prim, resolve_payloads_for_prim,
         resolve_reference_target_path, resolve_references_for_prim, resolve_specializes_for_prim,
     },
@@ -63,7 +63,8 @@ fn gather_populated_paths(
         let path = queue[idx];
         idx += 1;
 
-        let inherits = resolve_inherits_for_prim(store, local_stack, path);
+        let inherits =
+            resolve_inherits_for_prim(store, local_stack, path, SelectionScope::Discover);
         for inherited_root in inherits {
             expand_inherit_paths(
                 store,
@@ -76,7 +77,7 @@ fn gather_populated_paths(
             );
         }
 
-        let refs = resolve_references_for_prim(store, local_stack, path);
+        let refs = resolve_references_for_prim(store, local_stack, path, SelectionScope::Discover);
         for reference in refs {
             expand_reference_paths(
                 store,
@@ -123,7 +124,8 @@ fn gather_populated_paths(
 
         // Payloads behave like references for population purposes.
         // Spec: AOUSD Core §10 (payloads arc, §5.1.22).
-        let payloads = resolve_payloads_for_prim(store, local_stack, path);
+        let payloads =
+            resolve_payloads_for_prim(store, local_stack, path, SelectionScope::Discover);
         for payload in payloads {
             expand_reference_paths(
                 store,
@@ -152,7 +154,8 @@ fn gather_populated_paths(
 
         // Specializes behaves like inherits for population purposes.
         // Spec: AOUSD Core §10 (specializes arc, §5.1.33).
-        let specializes = resolve_specializes_for_prim(store, local_stack, path);
+        let specializes =
+            resolve_specializes_for_prim(store, local_stack, path, SelectionScope::Discover);
         for specialized_root in specializes {
             expand_inherit_paths(
                 store,
@@ -179,7 +182,8 @@ fn gather_populated_paths(
         let path = queue[idx];
         idx += 1;
 
-        let inherits = resolve_inherits_for_prim(store, local_stack, path);
+        let inherits =
+            resolve_inherits_for_prim(store, local_stack, path, SelectionScope::Discover);
         for inherited_root in inherits {
             expand_inherit_paths(
                 store,
@@ -240,7 +244,8 @@ fn expand_inherit_paths(
             queue.push(dest_path_id);
         }
 
-        let nested = resolve_inherits_for_prim(store, stack, remote_path_id);
+        let nested =
+            resolve_inherits_for_prim(store, stack, remote_path_id, SelectionScope::Discover);
         for nested_inherit in nested {
             expand_inherit_paths(
                 store,
@@ -303,7 +308,12 @@ fn expand_reference_paths(
             queue.push(dest_path_id);
         }
 
-        let inherits = resolve_inherits_for_prim(store, &remote_stack, remote_path_id);
+        let inherits = resolve_inherits_for_prim(
+            store,
+            &remote_stack,
+            remote_path_id,
+            SelectionScope::Discover,
+        );
         for inherited_root in inherits {
             expand_inherit_paths(
                 store,
@@ -320,7 +330,12 @@ fn expand_reference_paths(
         // inherits, as they do at the stage's own layer stack.
         //
         // Spec: AOUSD Core §10 (specializes arc), §11 (population).
-        let specializes = resolve_specializes_for_prim(store, &remote_stack, remote_path_id);
+        let specializes = resolve_specializes_for_prim(
+            store,
+            &remote_stack,
+            remote_path_id,
+            SelectionScope::Discover,
+        );
         for specialized_root in specializes {
             expand_inherit_paths(
                 store,
@@ -333,7 +348,12 @@ fn expand_reference_paths(
             );
         }
 
-        let nested_refs = resolve_references_for_prim(store, &remote_stack, remote_path_id);
+        let nested_refs = resolve_references_for_prim(
+            store,
+            &remote_stack,
+            remote_path_id,
+            SelectionScope::Discover,
+        );
         for nested in nested_refs {
             expand_reference_paths(
                 store,
@@ -392,7 +412,12 @@ fn expand_reference_paths(
         }
 
         // Expand direct payloads from the remote prim.
-        let payloads = resolve_payloads_for_prim(store, &remote_stack, remote_path_id);
+        let payloads = resolve_payloads_for_prim(
+            store,
+            &remote_stack,
+            remote_path_id,
+            SelectionScope::Discover,
+        );
         for payload in payloads {
             expand_reference_paths(
                 store,

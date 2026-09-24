@@ -80,6 +80,12 @@ pub enum UsdcError {
         /// The version the file declares.
         found: CrateVersion,
     },
+    /// A readable version's encoding that Layerstack cannot represent, such
+    /// as a spline `loopBoundaryTime`. Reported instead of dropping data.
+    UnsupportedFeature {
+        /// The feature that was found.
+        feature: &'static str,
+    },
 }
 
 impl fmt::Display for UsdcError {
@@ -129,6 +135,9 @@ impl fmt::Display for UsdcError {
                 f,
                 "{feature} requires USDC version {required}, but the file declares {found}"
             ),
+            Self::UnsupportedFeature { feature } => {
+                write!(f, "unsupported USDC feature: {feature}")
+            }
         }
     }
 }

@@ -373,6 +373,25 @@ fn gen_timesamples_parses() {
 // ---------------------------------------------------------------------------
 
 #[test]
+fn gen_pathexpression_is_typed() {
+    // `usdcat`: `pathExpression[] array = ["/root/Spam", "/root/Eggs"]` and
+    // `pathExpression single = "/root/Foo"`. Crate files store them like
+    // asset paths (Core §16.3.10.14); they must not read as assets.
+    let mut parsed = read_gen("pathexpression");
+    assert_eq!(
+        parsed.expect_value("/root", "single"),
+        Value::PathExpression("/root/Foo".into())
+    );
+    assert_eq!(
+        parsed.expect_value("/root", "array"),
+        Value::Array(vec![
+            Value::PathExpression("/root/Spam".into()),
+            Value::PathExpression("/root/Eggs".into()),
+        ])
+    );
+}
+
+#[test]
 fn gen_relocates_reports_unsupported() {
     // Relocates are not modelled; assembly says so instead of dropping them.
     let parsed = read_gen("relocates");

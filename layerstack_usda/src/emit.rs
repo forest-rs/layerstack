@@ -1266,6 +1266,7 @@ impl EmitCtx<'_> {
             ast::Value::String(s) => match type_hint {
                 "token" => Value::Token(self.tokens.intern(s)),
                 "asset" => Value::Asset(Arc::from(*s)),
+                "pathExpression" => Value::PathExpression(Arc::from(*s)),
                 _ => Value::String(Arc::from(*s)),
             },
             ast::Value::Identifier(s) => Value::Token(self.tokens.intern(s)),
@@ -1901,6 +1902,7 @@ fn default_scalar_for_type(type_hint: &str, tokens: &mut TokenInterner) -> Value
         "string" => Value::String(Arc::from("")),
         "token" => Value::Token(tokens.intern("")),
         "asset" => Value::Asset(Arc::from("")),
+        "pathExpression" => Value::PathExpression(Arc::from("")),
         "timecode" => Value::TimeCode(0.0),
         "double2" => Value::Vec2d([0.0; 2]),
         "double3" => Value::Vec3d([0.0; 3]),
@@ -3389,6 +3391,21 @@ def \"A\" (
         assert_eq!(mode.variability, Variability::Uniform);
         assert!(mode.metadata(tokens.intern("documentation")).is_some());
         assert_eq!(branch.property_order, Some(vec![tokens.intern("mode")]));
+    }
+
+    #[test]
+    fn emit_path_expression_is_typed() {
+        let src = "#usda 1.0\ndef \"A\" {\n    pathExpression e = \"/A/B //C\"\n    pathExpression[] l = [\"/X\"]\n}\n";
+        let (result, mut tokens, paths) = emit_source(src);
+        let spec = prim(&result, &mut tokens, &paths, "/A");
+        assert_eq!(
+            attr_default(&spec.properties, &tokens.intern("e")),
+            Some(&Value::PathExpression(Arc::from("/A/B //C")))
+        );
+        assert_eq!(
+            attr_default(&spec.properties, &tokens.intern("l")),
+            Some(&Value::Array(vec![Value::PathExpression(Arc::from("/X"))]))
+        );
     }
 
     #[test]

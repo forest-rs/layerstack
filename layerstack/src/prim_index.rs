@@ -68,7 +68,13 @@ pub struct OpinionKey {
     ///
     /// This supports a single level of arc nesting (e.g. reference→inherit),
     /// treating shorter arc chains as stronger than longer ones when the outer
-    /// arc kind ties.
+    /// arc kind ties. Arcs nested more deeply keep the outermost arc kind in
+    /// [`OpinionKey::arc_kind`] and the first nested arc kind here, so a
+    /// reference authored inside referenced content is
+    /// `(References, Some(References))` and stays weaker than the referenced
+    /// site's own opinions.
+    ///
+    /// Spec: AOUSD Core §10.4 (strength ordering within an arc's target).
     pub nested_arc_kind: Option<ArcKind>,
     /// Namespace depth of the site where the opinion is introduced (tie-breaker).
     ///

@@ -1858,6 +1858,7 @@ fn add_reference_opinions(
                 local_stack,
                 dest_root,
                 reference,
+                None,
                 namespace_depth,
                 arc_list_index,
                 out,
@@ -2521,6 +2522,7 @@ fn add_inherit_edge_opinions(
                 local_stack,
                 dest_path_id,
                 nested_ref,
+                Some(arc_kind),
                 namespace_depth,
                 ref_index,
                 out,
@@ -2742,6 +2744,7 @@ fn add_reference_edge_opinions(
     stage_stack: &LayerStack,
     dest_root: PathId,
     reference: Reference,
+    outer_arc_kind: Option<ArcKind>,
     namespace_depth: u16,
     arc_list_index: u16,
     out: &mut HashMap<PathId, PrimIndex>,
@@ -2753,6 +2756,24 @@ fn add_reference_edge_opinions(
     provenance_remap: Option<(PathId, PathId)>,
     mut deps: Option<&mut DependencyBuilder>,
 ) {
+    // Arcs nested inside another arc stay in the outer arc's strength
+    // bucket: the target site's own opinions (and its variants) are stronger
+    // than arcs authored at that site. A nested reference is therefore ranked as
+    // `(outer, Some(References))`, never as a direct arc of the root layer stack.
+    //
+    // Spec: AOUSD Core §10.4 (LIVERPS strength ordering is applied recursively
+    // within each arc's target prim index). `OpenUSD` makes this explicit by
+    // ranking a node above all of its descendants and comparing siblings below
+    // the common ancestor (`pxr/usd/pcp/strengthOrdering.cpp:309`).
+    //
+    // Limitation: the flat `OpinionKey` records only the outermost arc and one
+    // nested kind. Arcs nested two or more levels deep share this bucket and are
+    // ordered by the remaining tie-breakers, not by their position in the arc
+    // graph; that needs a composition-context (node path) representation.
+    let (edge_arc_kind, edge_direct_nested, edge_variant_nested) = match outer_arc_kind {
+        Some(outer) => (outer, Some(ArcKind::References), Some(ArcKind::References)),
+        None => (ArcKind::References, None, Some(ArcKind::Variants)),
+    };
     if !out.contains_key(&dest_root) {
         return;
     }
@@ -2844,8 +2865,8 @@ fn add_reference_edge_opinions(
             }
             let base_key = OpinionKey {
                 is_local: false,
-                arc_kind: ArcKind::References,
-                nested_arc_kind: None,
+                arc_kind: edge_arc_kind,
+                nested_arc_kind: edge_direct_nested,
                 namespace_depth,
                 authored: true,
                 arc_list_index,
@@ -2909,8 +2930,8 @@ fn add_reference_edge_opinions(
                             *dest_path_id,
                             OpinionKey {
                                 is_local: false,
-                                arc_kind: ArcKind::References,
-                                nested_arc_kind: Some(ArcKind::Variants),
+                                arc_kind: edge_arc_kind,
+                                nested_arc_kind: edge_variant_nested,
                                 namespace_depth,
                                 authored: true,
                                 arc_list_index,
@@ -2932,8 +2953,8 @@ fn add_reference_edge_opinions(
                                 entry.name,
                                 OpinionKey {
                                     is_local: false,
-                                    arc_kind: ArcKind::References,
-                                    nested_arc_kind: Some(ArcKind::Variants),
+                                    arc_kind: edge_arc_kind,
+                                    nested_arc_kind: edge_variant_nested,
                                     namespace_depth,
                                     authored: true,
                                     arc_list_index,
@@ -2978,8 +2999,8 @@ fn add_reference_edge_opinions(
                                     .push((
                                         OpinionKey {
                                             is_local: false,
-                                            arc_kind: ArcKind::References,
-                                            nested_arc_kind: Some(ArcKind::Variants),
+                                            arc_kind: edge_arc_kind,
+                                            nested_arc_kind: edge_variant_nested,
                                             namespace_depth: child_ns,
                                             authored: true,
                                             arc_list_index,
@@ -3033,8 +3054,8 @@ fn add_reference_edge_opinions(
                                         entry.name,
                                         OpinionKey {
                                             is_local: false,
-                                            arc_kind: ArcKind::References,
-                                            nested_arc_kind: Some(ArcKind::Variants),
+                                            arc_kind: edge_arc_kind,
+                                            nested_arc_kind: edge_variant_nested,
                                             namespace_depth: child_ns,
                                             authored: true,
                                             arc_list_index,
@@ -3059,8 +3080,8 @@ fn add_reference_edge_opinions(
                                     .expect("path exists")
                                     .add_source(OpinionKey {
                                         is_local: false,
-                                        arc_kind: ArcKind::References,
-                                        nested_arc_kind: Some(ArcKind::Variants),
+                                        arc_kind: edge_arc_kind,
+                                        nested_arc_kind: edge_variant_nested,
                                         namespace_depth: child_ns,
                                         authored: true,
                                         arc_list_index,
@@ -3085,8 +3106,8 @@ fn add_reference_edge_opinions(
                 prim_order_out.entry(*dest_path_id).or_default().push((
                     OpinionKey {
                         is_local: false,
-                        arc_kind: ArcKind::References,
-                        nested_arc_kind: None,
+                        arc_kind: edge_arc_kind,
+                        nested_arc_kind: edge_direct_nested,
                         namespace_depth,
                         authored: true,
                         arc_list_index,
@@ -3110,8 +3131,8 @@ fn add_reference_edge_opinions(
                     .push((
                         OpinionKey {
                             is_local: false,
-                            arc_kind: ArcKind::References,
-                            nested_arc_kind: None,
+                            arc_kind: edge_arc_kind,
+                            nested_arc_kind: edge_direct_nested,
                             namespace_depth,
                             authored: true,
                             arc_list_index,
@@ -3151,8 +3172,8 @@ fn add_reference_edge_opinions(
                         *dest_path_id,
                         OpinionKey {
                             is_local: false,
-                            arc_kind: ArcKind::References,
-                            nested_arc_kind: Some(ArcKind::Variants),
+                            arc_kind: edge_arc_kind,
+                            nested_arc_kind: edge_variant_nested,
                             namespace_depth,
                             authored: true,
                             arc_list_index,
@@ -3172,8 +3193,8 @@ fn add_reference_edge_opinions(
                     for entry in &variant_spec.fields {
                         let key = OpinionKey {
                             is_local: false,
-                            arc_kind: ArcKind::References,
-                            nested_arc_kind: Some(ArcKind::Variants),
+                            arc_kind: edge_arc_kind,
+                            nested_arc_kind: edge_variant_nested,
                             namespace_depth,
                             authored: true,
                             arc_list_index,
@@ -3220,8 +3241,8 @@ fn add_reference_edge_opinions(
                                 .push((
                                     OpinionKey {
                                         is_local: false,
-                                        arc_kind: ArcKind::References,
-                                        nested_arc_kind: Some(ArcKind::Variants),
+                                        arc_kind: edge_arc_kind,
+                                        nested_arc_kind: edge_variant_nested,
                                         namespace_depth: child_ns,
                                         authored: true,
                                         arc_list_index,
@@ -3270,8 +3291,8 @@ fn add_reference_edge_opinions(
                                 .expect("path exists")
                                 .add_source(OpinionKey {
                                     is_local: false,
-                                    arc_kind: ArcKind::References,
-                                    nested_arc_kind: Some(ArcKind::Variants),
+                                    arc_kind: edge_arc_kind,
+                                    nested_arc_kind: edge_variant_nested,
                                     namespace_depth: child_ns,
                                     authored: true,
                                     arc_list_index,
@@ -3289,8 +3310,8 @@ fn add_reference_edge_opinions(
                             for entry in child_fields {
                                 let key = OpinionKey {
                                     is_local: false,
-                                    arc_kind: ArcKind::References,
-                                    nested_arc_kind: Some(ArcKind::Variants),
+                                    arc_kind: edge_arc_kind,
+                                    nested_arc_kind: edge_variant_nested,
                                     namespace_depth: child_ns,
                                     authored: true,
                                     arc_list_index,
@@ -3368,7 +3389,7 @@ fn add_reference_edge_opinions(
                     stage_stack,
                     dest_path_id,
                     translated,
-                    Some(ArcKind::References),
+                    Some(edge_arc_kind),
                     namespace_depth,
                     inherit_index,
                     out,
@@ -3389,7 +3410,7 @@ fn add_reference_edge_opinions(
                 &combined_stack,
                 dest_path_id,
                 inherited_root,
-                Some(ArcKind::References),
+                Some(edge_arc_kind),
                 namespace_depth,
                 inherit_index,
                 out,
@@ -3434,6 +3455,7 @@ fn add_reference_edge_opinions(
                 &combined_stack,
                 dest_path_id,
                 nested_ref,
+                Some(edge_arc_kind),
                 namespace_depth,
                 nested_index,
                 out,
@@ -3458,6 +3480,7 @@ fn add_reference_edge_opinions(
                 &combined_stack,
                 dest_path_id,
                 nested_payload,
+                Some(edge_arc_kind),
                 namespace_depth,
                 nested_index,
                 out,
@@ -3490,7 +3513,7 @@ fn add_reference_edge_opinions(
                     dest_path_id,
                     dest_path_id,
                     translated,
-                    Some(ArcKind::References),
+                    Some(edge_arc_kind),
                     namespace_depth,
                     spec_index,
                     out,
@@ -3509,7 +3532,7 @@ fn add_reference_edge_opinions(
                 dest_path_id,
                 remote_path_id,
                 specialized_root,
-                Some(ArcKind::References),
+                Some(edge_arc_kind),
                 namespace_depth,
                 spec_index,
                 out,
@@ -3545,8 +3568,8 @@ fn add_reference_edge_opinions(
                     .expect("path exists")
                     .add_source(OpinionKey {
                         is_local: false,
-                        arc_kind: ArcKind::References,
-                        nested_arc_kind: Some(source.arc_kind),
+                        arc_kind: edge_arc_kind,
+                        nested_arc_kind: edge_direct_nested.or(Some(source.arc_kind)),
                         namespace_depth,
                         authored: true,
                         arc_list_index,
@@ -3572,8 +3595,8 @@ fn add_reference_edge_opinions(
                         .add_opinion(Opinion {
                             key: OpinionKey {
                                 is_local: false,
-                                arc_kind: ArcKind::References,
-                                nested_arc_kind: Some(opinion.key.arc_kind),
+                                arc_kind: edge_arc_kind,
+                                nested_arc_kind: edge_direct_nested.or(Some(opinion.key.arc_kind)),
                                 namespace_depth,
                                 authored: true,
                                 arc_list_index,
@@ -3655,6 +3678,7 @@ fn add_payload_opinions(
                 local_stack,
                 dest_root,
                 payload,
+                None,
                 namespace_depth,
                 arc_list_index,
                 out,
@@ -3675,6 +3699,7 @@ fn add_payload_edge_opinions(
     stage_stack: &LayerStack,
     dest_root: PathId,
     reference: Reference,
+    outer_arc_kind: Option<ArcKind>,
     namespace_depth: u16,
     arc_list_index: u16,
     out: &mut HashMap<PathId, PrimIndex>,
@@ -3686,6 +3711,24 @@ fn add_payload_edge_opinions(
     provenance_remap: Option<(PathId, PathId)>,
     mut deps: Option<&mut DependencyBuilder>,
 ) {
+    // Arcs nested inside another arc stay in the outer arc's strength
+    // bucket: the target site's own opinions (and its variants) are stronger
+    // than arcs authored at that site. A nested payload is therefore ranked as
+    // `(outer, Some(Payloads))`, never as a direct arc of the root layer stack.
+    //
+    // Spec: AOUSD Core §10.4 (LIVERPS strength ordering is applied recursively
+    // within each arc's target prim index). `OpenUSD` makes this explicit by
+    // ranking a node above all of its descendants and comparing siblings below
+    // the common ancestor (`pxr/usd/pcp/strengthOrdering.cpp:309`).
+    //
+    // Limitation: the flat `OpinionKey` records only the outermost arc and one
+    // nested kind. Arcs nested two or more levels deep share this bucket and are
+    // ordered by the remaining tie-breakers, not by their position in the arc
+    // graph; that needs a composition-context (node path) representation.
+    let (edge_arc_kind, edge_direct_nested, edge_variant_nested) = match outer_arc_kind {
+        Some(outer) => (outer, Some(ArcKind::Payloads), Some(ArcKind::Payloads)),
+        None => (ArcKind::Payloads, None, Some(ArcKind::Variants)),
+    };
     // Payloads mirror reference edge opinions with ArcKind::Payloads.
     if !out.contains_key(&dest_root) {
         return;
@@ -3767,8 +3810,8 @@ fn add_payload_edge_opinions(
                 *dest_path_id,
                 OpinionKey {
                     is_local: false,
-                    arc_kind: ArcKind::Payloads,
-                    nested_arc_kind: None,
+                    arc_kind: edge_arc_kind,
+                    nested_arc_kind: edge_direct_nested,
                     namespace_depth,
                     authored: true,
                     arc_list_index,
@@ -3788,8 +3831,8 @@ fn add_payload_edge_opinions(
             for entry in &remote_spec.fields {
                 let key = OpinionKey {
                     is_local: false,
-                    arc_kind: ArcKind::Payloads,
-                    nested_arc_kind: None,
+                    arc_kind: edge_arc_kind,
+                    nested_arc_kind: edge_direct_nested,
                     namespace_depth,
                     authored: true,
                     arc_list_index,
@@ -3821,8 +3864,8 @@ fn add_payload_edge_opinions(
                 prim_order_out.entry(*dest_path_id).or_default().push((
                     OpinionKey {
                         is_local: false,
-                        arc_kind: ArcKind::Payloads,
-                        nested_arc_kind: None,
+                        arc_kind: edge_arc_kind,
+                        nested_arc_kind: edge_direct_nested,
                         namespace_depth,
                         authored: true,
                         arc_list_index,
@@ -3848,8 +3891,8 @@ fn add_payload_edge_opinions(
                     .push((
                         OpinionKey {
                             is_local: false,
-                            arc_kind: ArcKind::Payloads,
-                            nested_arc_kind: None,
+                            arc_kind: edge_arc_kind,
+                            nested_arc_kind: edge_direct_nested,
                             namespace_depth,
                             authored: true,
                             arc_list_index,
@@ -3891,8 +3934,8 @@ fn add_payload_edge_opinions(
                         *dest_path_id,
                         OpinionKey {
                             is_local: false,
-                            arc_kind: ArcKind::Payloads,
-                            nested_arc_kind: Some(ArcKind::Variants),
+                            arc_kind: edge_arc_kind,
+                            nested_arc_kind: edge_variant_nested,
                             namespace_depth,
                             authored: true,
                             arc_list_index,
@@ -3912,8 +3955,8 @@ fn add_payload_edge_opinions(
                     for entry in &variant_spec.fields {
                         let key = OpinionKey {
                             is_local: false,
-                            arc_kind: ArcKind::Payloads,
-                            nested_arc_kind: Some(ArcKind::Variants),
+                            arc_kind: edge_arc_kind,
+                            nested_arc_kind: edge_variant_nested,
                             namespace_depth,
                             authored: true,
                             arc_list_index,
@@ -3967,7 +4010,7 @@ fn add_payload_edge_opinions(
                     stage_stack,
                     dest_path_id,
                     translated,
-                    Some(ArcKind::Payloads),
+                    Some(edge_arc_kind),
                     namespace_depth,
                     inherit_index,
                     out,
@@ -3988,7 +4031,7 @@ fn add_payload_edge_opinions(
                 &combined_stack,
                 dest_path_id,
                 inherited_root,
-                Some(ArcKind::Payloads),
+                Some(edge_arc_kind),
                 namespace_depth,
                 inherit_index,
                 out,
@@ -4016,6 +4059,7 @@ fn add_payload_edge_opinions(
                 &combined_stack,
                 dest_path_id,
                 nested_ref,
+                Some(edge_arc_kind),
                 namespace_depth,
                 nested_index,
                 out,
@@ -4040,6 +4084,7 @@ fn add_payload_edge_opinions(
                 &combined_stack,
                 dest_path_id,
                 nested_payload,
+                Some(edge_arc_kind),
                 namespace_depth,
                 nested_index,
                 out,
@@ -4068,7 +4113,7 @@ fn add_payload_edge_opinions(
                     dest_path_id,
                     dest_path_id,
                     translated,
-                    Some(ArcKind::Payloads),
+                    Some(edge_arc_kind),
                     namespace_depth,
                     spec_index,
                     out,
@@ -4087,7 +4132,7 @@ fn add_payload_edge_opinions(
                 dest_path_id,
                 remote_path_id,
                 specialized_root,
-                Some(ArcKind::Payloads),
+                Some(edge_arc_kind),
                 namespace_depth,
                 spec_index,
                 out,
@@ -4722,6 +4767,7 @@ fn add_specializes_edge_opinions(
                 local_stack,
                 dest_path_id,
                 reference,
+                Some(arc_kind),
                 namespace_depth,
                 ref_index,
                 out,
@@ -4859,9 +4905,20 @@ fn apply_authored_children_base_order(
     // Build a layer ordering map from inherit/specializes opinions. These
     // opinions walk the combined stack and their `layer_strength` reflects the
     // correct position of each layer in the unified composition order.
+    //
+    // References and payloads nested inside another arc keep
+    // `nested_arc_kind = Some(References | Payloads)` for strength ordering,
+    // but they do not walk the combined stack and so are not a reliable layer
+    // position source; treat them like direct opinions here.
+    let walks_combined_stack = |key: &OpinionKey| {
+        matches!(
+            key.nested_arc_kind,
+            Some(kind) if !matches!(kind, ArcKind::References | ArcKind::Payloads)
+        )
+    };
     let mut layer_position: HashMap<LayerId, u16> = HashMap::new();
     for (key, _) in opinions {
-        if key.nested_arc_kind.is_some() {
+        if walks_combined_stack(key) {
             layer_position
                 .entry(key.layer_id)
                 .and_modify(|pos| *pos = (*pos).min(key.layer_strength))
@@ -4908,9 +4965,9 @@ fn apply_authored_children_base_order(
             (false, true) => return Ordering::Greater,
             _ => {}
         }
-        match (a.0.nested_arc_kind, b.0.nested_arc_kind) {
-            (None, Some(_)) => return Ordering::Less,
-            (Some(_), None) => return Ordering::Greater,
+        match (walks_combined_stack(&a.0), walks_combined_stack(&b.0)) {
+            (false, true) => return Ordering::Less,
+            (true, false) => return Ordering::Greater,
             _ => {}
         }
         a.0.layer_strength.cmp(&b.0.layer_strength)

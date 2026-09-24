@@ -1,174 +1,116 @@
 # Generic Sparse Composition
 
-This note explains the gap between the current sparse-array-edit implementation
-and the broader architecture proposed in
-`OpenUSD-proposals/proposals/sparse-array-edits/README.md`.
+This note describes how `layerstack` resolves sparse attribute values today,
+how that relates to the general framework proposed in
+`OpenUSD-proposals/proposals/sparse-array-edits/README.md`, and what remains
+open.
 
 ## Current State
 
-`layerstack` now supports sparse array edits as authored values:
+`layerstack` supports sparse array edits as authored values:
 
-- `Value::ArrayEdit`
-- `ArrayEdit`
-- typed property metadata in `PropertyType`
+- `Value::ArrayEdit` / `ArrayEdit` (`layerstack/src/array_edit.rs`)
+- typed property metadata in `PropertyType`, used for `minsize`/`resize` fill
 
-Resolution works correctly for this family:
+Sparse resolution lives in `layerstack/src/value_resolution.rs`, not in
+`Stage`. `Stage` only linearizes opinions, fetches the schema fallback and
+property type, calls `resolve_sparse_value`, and packages provenance.
 
-- sparse array edit over dense array
-- sparse array edit over sparse array edit
-- schema fallback as weakest dense seed when the field is array-valued
-- held/interpolated time-sampled sparse array edits
+The strong-over-weak fold itself is `opinionated`'s family kernel
+(`opinionated/src/family.rs`):
 
-The implementation seam is explicit in `layerstack/src/stage.rs`:
+- `OpinionFamily` is the family contract: `classify` an authored operation
+  into `FamilyMember::{Dense, Sparse, Block, Foreign}`, `apply` one edit over a
+  weaker dense value, and provide the weakest `seed`.
+- `resolve_family_chain` walks strongest to weakest, accumulates sparse edits
+  until a dense member or block ends the fold, then applies them weakest-first
+  over the dense value or the seed. It consumes the chain lazily, so opinions
+  hidden behind the terminating member are never classified.
 
-- `resolve_array_value_chain`
-- `resolve_array_value_at_time_chain`
-- `compose_array_value_over`
-- `materialize_array_value`
-- `opinion_can_yield_array_family`
+`layerstack`'s `ArrayFamily` implements `OpinionFamily<Opinion>`:
 
-That is the key limitation. `Stage` knows what an array family is and has
-dedicated code for it.
+- `Value::Array` is dense, `Value::ArrayEdit` is sparse, and `Value::Blocked`
+  is a block, whether authored as a default or as a time sample.
+- Time sampling happens inside `classify`, so the kernel stays time-agnostic
+  and only opinions the fold reaches are sampled.
+- The seed is the schema fallback when supplied (materialized over `[]` if it
+  is itself an edit), otherwise the empty array.
 
-## Why This Is Narrower Than The Proposal
+Resolution covers:
 
-The proposal is not really about arrays. Arrays are the first motivating case.
-The deeper change is to USD value resolution:
+- sparse edit over dense array, and sparse over sparse (associative, pinned by
+  `sparse_over_sparse_fold_matches_grouped_composition`)
+- schema fallback as the weakest dense seed for default-value queries
+- held time-sampled sparse edits, with layer offsets applied per opinion
+- value blocks, authored or sampled
 
-- some authored values are dense and self-sufficient
-- some authored values are sparse and require weaker opinions to resolve
-- composition should fold those values generically, not as one-off field logic
+### Block semantics
 
-Our current code still has these array-specific assumptions:
+A block discards every weaker authored opinion (AOUSD Core §12.3.6). If
+nothing stronger contributed, the result is blocked and the caller falls back
+to the schema fallback. Sparse edits stronger than the block compose over the
+weakest dense value that survives it: the fallback seed, or the empty array,
+since the proposal requires a resolved array to always be dense.
 
-1. Sparse-family detection is hardcoded as
-   `Value::Array(_) | Value::ArrayEdit(_)`.
-2. Composition dispatch lives in `Stage`, not in a reusable value-resolution
-   kernel.
-3. Materialization rules are array-specific: unresolved sparse values are
-   finalized by composing over `[]` plus typed defaults.
-4. Time-sampled sparse resolution is implemented by sampling first and then
-   calling array-specific composition helpers.
+## Relation To The Proposal
 
-That means adding another sparse family, such as a generalized path-expression
-or future sparse dictionary type, would require reopening `Stage` and adding
-another parallel set of branches and helper functions.
+The proposal generalizes value resolution to any value type with an
+`isDense` predicate and an associative `over` operator. The kernel expresses
+exactly that shape, and a second family defined outside `opinionated`
+(`opinionated/tests/custom_family.rs`) folds over it, so the seam is proven
+beyond arrays. Within `layerstack`, arrays remain the only sparse family:
+no second sparse value type (path expressions with `%_`, sparse dictionaries)
+exists in the core model yet.
 
-## Target Shape
+Not every family goes through the `OpinionFamily` kernel, and not every
+shared algorithm is a family:
 
-The next refactor should move from “array-specialized sparse resolution” to
-“generic sparse-family resolution.”
+- **Dictionaries** are delegated to `opinionated`, but to its dedicated
+  recursive combiner (`combine_dictionary_chain` with a `DictionaryAdapter`
+  that `layerstack` implements for `Value`), not to the family kernel.
+  The kernel applies accumulated edits weakest-first, which is only valid for
+  an associative `over`. Recursive dictionary combining (AOUSD Core §6.6.2.1)
+  is not associative when a key holds a dictionary in one opinion and a
+  non-dictionary in another, and OpenUSD folds such chains strongest-first
+  (AOUSD Core §4.2; `MetadataValueComposer` in `pxr/usd/usd/stage.cpp`).
+  `layerstack` still selects the participating opinions: a block discards
+  weaker ones, and a schema fallback is the weakest dictionary.
+- **List ops** share `opinionated`'s `ListOp` implementation directly.
+- **Scalars** stay strongest-wins in `Stage`; routing them through the kernel
+  would add indirection without removing code.
 
-The right center of gravity is a new internal resolver module in `layerstack`,
-not more logic in `Stage`.
+A family should move onto the kernel when that removes code or adds a
+capability, not for uniformity alone.
 
-Suggested structure:
+## Open Gaps
 
-1. Add `layerstack/src/value_resolution.rs`.
-   Responsibility:
-   - identify the value family present in an opinion chain
-   - fold strong-over-weak opinions for that family
-   - materialize any remaining sparse value into a dense result
-2. Introduce a small internal family discriminator.
-   Example shape:
-   - `enum ValueFamily { Scalar, Dictionary, PathList, Array, ... }`
-   - `enum FamilyMember<'a> { Dense(&'a Value), Sparse(&'a Value), Unsupported }`
-3. Move sparse-family operations behind one internal interface.
-   Example responsibilities:
-   - `can_yield(opinion) -> bool`
-   - `compose_over(strong, weak, property_type) -> Option<Value>`
-   - `materialize(value, property_type) -> Option<Value>`
-4. Keep `Stage` orchestration-only.
-   `Stage` should:
-   - linearize opinions
-   - fetch schema fallback and property typing
-   - delegate family composition to `value_resolution`
-   - package provenance
-
-## Concrete Refactor Plan
-
-### Phase 1: Isolate the current array resolver
-
-Move the array-specific helpers out of `stage.rs` into
-`value_resolution.rs` without changing behavior.
-
-That yields:
-
-- `resolve_sparse_family_chain(...)`
-- `resolve_sparse_family_at_time_chain(...)`
-- `ArrayFamily` as the first implementation
-
-This step is mostly code motion plus API cleanup.
-
-### Phase 2: Separate family selection from family implementation
-
-Add an internal dispatcher that can inspect:
-
-- authored `FieldValue`
-- sampled `Value`
-- schema fallback `FieldValue`
-
-and answer:
-
-- is this chain sparse-composable?
-- if yes, which family owns it?
-
-For now the dispatcher only returns `Array`.
-That is still useful because it removes the array checks from `Stage`.
-
-### Phase 3: Normalize dense and sparse family operations
-
-Unify family behavior under one internal trait-like contract. This does not
-need to be a public Rust trait; an enum plus match-based dispatch is enough and
-keeps the core crate simpler.
-
-The important invariant is:
-
-- `compose_over(strong, weak)` must be associative within a family
-
-That preserves flattening semantics.
-
-### Phase 4: Generalize time-sampled family folding
-
-Today the algorithm is:
-
-- walk strongest-to-weakest opinions
-- sample each time-sampled opinion at the query time
-- filter to arrays
-- compose arrays
-
-That should become:
-
-- walk strongest-to-weakest opinions
-- sample each opinion into an optional family member
-- feed those members into the family resolver
-
-This makes the timeseries logic family-agnostic.
-
-### Phase 5: Admit a second sparse family
-
-The design is only proven once a second family can use the same framework.
-Two reasonable candidates:
-
-- path expressions, if or when they become distinct in the core model
-- sparse dictionaries, if the repository grows that need
-
-Until then, “generic” remains a design intention rather than an earned shape.
+- **Linear interpolation of sparse series.** The proposal evaluates
+  interpolated sparse values by composing bracketing samples
+  (`GetBracketingSamples`, shifting the query to `hi.time` after a dense
+  `lo`). `layerstack` samples each opinion independently and arrays never
+  lerp, so array values are effectively held under linear interpolation.
+  This matches the proposal for held interpolation but not for numeric
+  arrays under linear interpolation.
+- **Schema fallback at a time.** `Stage::resolve_value_at_time` does not seed
+  sparse resolution with a schema fallback; edits materialize over `[]`.
+- **Value clips.** Not implemented, so clip series do not participate in the
+  linearization.
+- **Diagnostics.** `resolve_family_chain_report` is available but unused;
+  `Stage` reports the strongest opinion as provenance rather than the full
+  contributing chain the proposal's `UsdResolveInfoSourceComposed` describes.
 
 ## What Should Not Change
-
-These parts of the current implementation are correct and should remain:
 
 - sparse opinions are authored values, not out-of-band resolver state
 - resolved public values stay dense
 - property typing is preserved close to authored fields
 - schema fallback participates as the weakest dense seed for sparse families
+- the kernel stays time-agnostic; sampling belongs to the domain family
 
 ## Practical Reading
 
 - Runnable example:
-  `layerstack_examples/examples/sparse_array_edits.rs`
-- Current array-specific resolver:
-  `layerstack/src/stage.rs`
-- Sparse edit kernel:
-  `layerstack/src/array_edit.rs`
+  `cargo run -p layerstack_examples --example sparse_array_edits`
+- Array family and query modes: `layerstack/src/value_resolution.rs`
+- Family kernel: `opinionated/src/family.rs`
+- Sparse edit kernel: `layerstack/src/array_edit.rs`

@@ -128,10 +128,17 @@ impl EmitCtx<'_> {
                     // Layer-level metadata fields don't map to PrimSpec.
                 }
                 ast::LayerMeta::Custom(entry) => {
-                    if entry.key == "defaultPrim"
-                        && let ast::MetadataValue::String(name) = &entry.value
-                    {
-                        layer.default_prim = Some(self.tokens.intern(name));
+                    // Spec: AOUSD Core §7.6.1.2.3 (`defaultPrim: token`),
+                    // authored as a quoted string in USDA layer metadata.
+                    if entry.key == "defaultPrim" {
+                        let name = match &entry.value {
+                            ast::MetadataValue::Value(ast::Value::String(name)) => Some(*name),
+                            ast::MetadataValue::String(name) => Some(name.as_str()),
+                            _ => None,
+                        };
+                        if let Some(name) = name {
+                            layer.default_prim = Some(self.tokens.intern(name));
+                        }
                     }
                 }
             }
@@ -2427,6 +2434,17 @@ def Scope "D" (
             }
             other => panic!("expected TokenListOp, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn emit_default_prim() {
+        let src = "#usda 1.0\n(\n    defaultPrim = \"Root\"\n)\n\ndef Xform \"Root\"\n{\n}\n";
+        let (result, mut tokens, _paths) = emit_source(src);
+        assert_eq!(
+            result.layer.default_prim,
+            Some(tokens.intern("Root")),
+            "defaultPrim is read from layer metadata"
+        );
     }
 
     #[test]

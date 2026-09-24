@@ -257,3 +257,37 @@ fn rejects_inconsistent_meshes() {
         "names are validated by the writer"
     );
 }
+
+#[test]
+fn usdz_requires_authored_assets_to_be_packaged() {
+    let png = b"png";
+    let mesh = Mesh::new("Tri", &TRI_POINTS, Faces::Triangles(&[0, 1, 2]))
+        .with_attribute("exedra:albedo", Value::Asset("./textures/a.png".into()));
+    let scene = tri_scene(mesh);
+    assert_eq!(
+        scene.to_usdz(&[]),
+        Err(ExportError::UnpackagedAsset {
+            asset: "./textures/a.png".into()
+        }),
+        "missing texture"
+    );
+    let bytes = scene
+        .to_usdz(&[crate::PackageFile::new("textures/a.png", png)])
+        .expect("texture packaged");
+    let archive = layerstack_usdz::zip::ZipArchive::parse(&bytes).unwrap();
+    let names: Vec<&str> = archive.entries().iter().map(|e| &*e.name).collect();
+    assert_eq!(names, [crate::ROOT_LAYER_PATH, "textures/a.png"], "entries");
+
+    assert_eq!(
+        scene.to_usdz(&[
+            crate::PackageFile::new("textures/a.png", png),
+            crate::PackageFile::new("data.json", b"{}"),
+        ]),
+        Err(ExportError::Usdz(
+            layerstack_usdz::UsdzWriteError::UnsupportedMemberType {
+                path: "data.json".into()
+            }
+        )),
+        "packages hold only USD, image and audio members"
+    );
+}

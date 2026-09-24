@@ -635,7 +635,7 @@ fn tricky_inherits_in_variants_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "still needs child-source provenance alignment for LEyeRig/SymEyeRig in variant descendants"]
+#[ignore = "USDA ingestion keys variant-introduced descendants by namespace path, so the `tidscene` branch's `/Sarah/FaceRig/EyesRig` overwrites the selected `full` branch's spec; needs per-branch spec storage"]
 fn tricky_inherits_in_variants2_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("TrickyInheritsInVariants2_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
@@ -675,6 +675,36 @@ fn basic_instancing_and_variants_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("BasicInstancingAndVariants_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
     assert_pcp_composing(&mut loaded, &pcp_path);
+    // Only the selected variant (`x = "a"` / `x = "b"`) may contribute.
+    assert_scalar_values(
+        &mut loaded,
+        &[
+            (
+                "/InstancedModel.x",
+                Value::Double(1.0),
+                "root.usd",
+                "/InstancedModel{x=a}.x",
+            ),
+            (
+                "/InstancedModel/geom.x",
+                Value::Double(1.0),
+                "root.usd",
+                "/InstancedModel{x=a}geom.x",
+            ),
+            (
+                "/UninstancedModel.x",
+                Value::Double(4.0),
+                "root.usd",
+                "/UninstancedModel{x=b}.x",
+            ),
+            (
+                "/UninstancedModel/geom.x",
+                Value::Double(4.0),
+                "root.usd",
+                "/UninstancedModel{x=b}geom.x",
+            ),
+        ],
+    );
 }
 
 #[test]

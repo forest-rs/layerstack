@@ -6,10 +6,9 @@
 //! This module owns sparse-family detection and chain construction for
 //! attribute value families that require composed sparse opinions. The
 //! strong-over-weak fold itself is delegated to [`opinionated`]'s family
-//! kernel via [`resolve_family_chain`]: each query mode samples authored
-//! opinions into family member values first (the kernel is time-agnostic),
-//! and [`ArrayFamily`] expresses the sparse array-edit semantics over
-//! [`OpinionFamily`].
+//! kernel via [`resolve_family_chain`]: [`ArrayFamily`] expresses the sparse
+//! array-edit semantics over [`OpinionFamily`] and samples each authored
+//! opinion as the kernel reaches it (the kernel itself is time-agnostic).
 
 use alloc::vec::Vec;
 
@@ -57,38 +56,92 @@ enum SparseValueFamily {
     Array,
 }
 
+/// How [`ArrayFamily`] reads one authored opinion into a family member.
+///
+/// The kernel is time-agnostic, so sampling happens inside
+/// [`ArrayFamily::classify`]: an opinion is only sampled when the fold actually
+/// reaches it.
+#[derive(Clone, Copy, Debug)]
+enum Sampling {
+    /// Read default values; time samples do not participate.
+    Default,
+    /// Read default values and time samples at `time`.
+    AtTime {
+        /// Query time, before each opinion's layer offset is applied.
+        time: f64,
+        /// Interpolation mode.
+        interp: InterpolationType,
+    },
+}
+
 /// The sparse array-edit family, expressed over [`opinionated`]'s kernel.
 ///
-/// [`Value::Array`] is the dense member, [`Value::ArrayEdit`] the sparse edit,
-/// and [`Value::Blocked`] the block. The seed is the schema fallback when one
-/// is present (materialized over the empty array if it is itself an edit),
-/// otherwise the empty array. The carried [`PropertyType`] lets edits perform
-/// typed materialization (`minsize`/`resize` fill values) during apply.
+/// The family folds authored [`Opinion`]s directly. [`Value::Array`] is the
+/// dense member, [`Value::ArrayEdit`] the sparse edit, and [`Value::Blocked`]
+/// the block. The seed is
+/// the schema fallback when one is present (materialized over the empty array
+/// if it is itself an edit), otherwise the empty array. The carried
+/// [`PropertyType`] lets edits perform typed materialization
+/// (`minsize`/`resize` fill values) during apply.
+///
+/// Because the kernel pulls opinions lazily and stops at the first dense
+/// member or block, opinions hidden behind them are never sampled or cloned,
+/// and each participating value is cloned (or sampled) exactly once.
 #[derive(Clone, Copy, Debug)]
 struct ArrayFamily<'a> {
     /// Typed property metadata for edit materialization.
     property_type: Option<&'a PropertyType>,
     /// Optional weakest dense seed, such as a schema fallback.
     fallback: Option<&'a Value>,
+    /// How opinions are read into members.
+    sampling: Sampling,
 }
 
-impl OpinionFamily<Value> for ArrayFamily<'_> {
-    type Value = Vec<Value>;
-    type Edit = ArrayEdit;
-
-    fn classify(&self, op: &Value) -> FamilyMember<Self::Value, Self::Edit> {
-        match op {
+impl ArrayFamily<'_> {
+    fn classify_borrowed(value: &Value) -> FamilyMember<Vec<Value>, ArrayEdit> {
+        match value {
             Value::Array(items) => FamilyMember::Dense(items.clone()),
             Value::ArrayEdit(edit) => FamilyMember::Sparse(edit.clone()),
             Value::Blocked => FamilyMember::Block,
-            // Chain construction filters foreign values before the fold
-            // reaches classify, so this arm is defensive. `OpinionKind`
-            // cannot name domain families, so the reason degrades to a
-            // set-over-set mismatch.
-            _ => FamilyMember::Foreign(IgnoreReason::IncompatibleOperation {
-                resolved: OpinionKind::Set,
-                ignored: OpinionKind::Set,
-            }),
+            _ => Self::foreign(),
+        }
+    }
+
+    fn classify_owned(value: Value) -> FamilyMember<Vec<Value>, ArrayEdit> {
+        match value {
+            Value::Array(items) => FamilyMember::Dense(items),
+            Value::ArrayEdit(edit) => FamilyMember::Sparse(edit),
+            _ => Self::foreign(),
+        }
+    }
+
+    fn foreign() -> FamilyMember<Vec<Value>, ArrayEdit> {
+        // `OpinionKind` cannot name domain families, so the reason degrades
+        // to a set-over-set mismatch. The reason is never observed: the lean
+        // kernel entry point records no events.
+        FamilyMember::Foreign(IgnoreReason::IncompatibleOperation {
+            resolved: OpinionKind::Set,
+            ignored: OpinionKind::Set,
+        })
+    }
+}
+
+impl OpinionFamily<Opinion> for ArrayFamily<'_> {
+    type Value = Vec<Value>;
+    type Edit = ArrayEdit;
+
+    fn classify(&self, opinion: &Opinion) -> FamilyMember<Self::Value, Self::Edit> {
+        match (&opinion.value, self.sampling) {
+            (FieldValue::Value(value), _) => Self::classify_borrowed(value),
+            (FieldValue::TimeSamples(samples), Sampling::AtTime { time, interp }) => {
+                // Spec: AOUSD Core §12.3.2.1 (layer offset and scale).
+                let mapped_time = opinion.layer_offset.map_time(time);
+                match interpolate_samples(samples, mapped_time, interp) {
+                    Some(value) => Self::classify_owned(value),
+                    None => Self::foreign(),
+                }
+            }
+            _ => Self::foreign(),
         }
     }
 
@@ -167,104 +220,66 @@ impl SparseValueFamily {
         query: SparseQuery<'_>,
         property_type: Option<&PropertyType>,
     ) -> SparseResolveResult {
-        match query {
-            SparseQuery::Default { fallback } => {
-                self.resolve_default(opinions, fallback, property_type)
-            }
-            SparseQuery::AtTime { time, interp } => {
-                self.resolve_at_time(opinions, time, interp, property_type)
-            }
-        }
-    }
-
-    /// Resolves a default-value query by folding the family kernel over the
-    /// authored dense/sparse opinions.
-    ///
-    /// A stronger dense opinion outside the family ends the chain: weaker
-    /// family members stay hidden behind it, and any accumulated edits
-    /// materialize over the seed.
-    fn resolve_default(
-        self,
-        opinions: &[Opinion],
-        fallback: Option<&Value>,
-        property_type: Option<&PropertyType>,
-    ) -> SparseResolveResult {
-        let mut chain = Vec::new();
-        for opinion in opinions {
-            match &opinion.value {
-                FieldValue::Value(Value::Blocked) => chain.push(Value::Blocked),
-                FieldValue::Value(value) if self.matches(value) => chain.push(value.clone()),
-                FieldValue::Value(_) => break,
-                _ => {}
-            }
-        }
-        self.fold(&chain, fallback, property_type)
-    }
-
-    fn resolve_at_time(
-        self,
-        opinions: &[Opinion],
-        time: f64,
-        interp: InterpolationType,
-        property_type: Option<&PropertyType>,
-    ) -> SparseResolveResult {
-        let mut chain = Vec::new();
-        for opinion in opinions {
-            match &opinion.value {
-                FieldValue::Value(Value::Blocked) => chain.push(Value::Blocked),
-                FieldValue::Value(value) if self.matches(value) => chain.push(value.clone()),
-                FieldValue::TimeSamples(samples) => {
-                    // The kernel is time-agnostic: sample the opinion into a
-                    // family member before it is classified.
-                    let mapped_time = opinion.layer_offset.map_time(time);
-                    if let Some(value) = interpolate_samples(samples, mapped_time, interp)
-                        && self.matches(&value)
-                    {
-                        chain.push(value);
-                    }
-                }
-                _ => {}
-            }
-        }
-        self.fold(&chain, None, property_type)
-    }
-
-    /// Folds pre-sampled family member values through [`opinionated`]'s
-    /// chain kernel.
-    fn fold(
-        self,
-        chain: &[Value],
-        fallback: Option<&Value>,
-        property_type: Option<&PropertyType>,
-    ) -> SparseResolveResult {
         match self {
-            Self::Array => {
-                let family = ArrayFamily {
-                    property_type,
-                    fallback,
-                };
-                match resolve_family_chain(&family, chain.iter().map(|op| (op, &()))) {
-                    FamilyResolution::Resolved { value, .. } => {
-                        SparseResolveResult::Resolved(Value::Array(value))
-                    }
-                    FamilyResolution::Blocked { .. } => SparseResolveResult::Blocked,
-                    // No opinion contributed: an array-family fallback still
-                    // resolves on its own; otherwise the family does not
-                    // apply to this chain.
-                    FamilyResolution::Absent if fallback.is_some() => {
-                        SparseResolveResult::Resolved(Value::Array(family.seed()))
-                    }
-                    FamilyResolution::Absent => SparseResolveResult::NotApplicable,
+            Self::Array => match query {
+                SparseQuery::Default { fallback } => {
+                    let family = ArrayFamily {
+                        property_type,
+                        fallback,
+                        sampling: Sampling::Default,
+                    };
+                    // A stronger dense default outside the family ends the
+                    // chain: weaker family members stay hidden behind it, and
+                    // any accumulated edits materialize over the seed.
+                    fold_array_chain(
+                        &family,
+                        opinions
+                            .iter()
+                            .take_while(|opinion| !is_foreign_default(&opinion.value)),
+                    )
                 }
-            }
+                SparseQuery::AtTime { time, interp } => {
+                    let family = ArrayFamily {
+                        property_type,
+                        fallback: None,
+                        sampling: Sampling::AtTime { time, interp },
+                    };
+                    fold_array_chain(&family, opinions.iter())
+                }
+            },
         }
     }
+}
 
-    fn matches(self, value: &Value) -> bool {
-        matches!(
-            (self, value),
-            (Self::Array, Value::Array(_) | Value::ArrayEdit(_))
-        )
+/// Returns `true` for a dense default value outside the array family.
+fn is_foreign_default(value: &FieldValue) -> bool {
+    matches!(
+        value,
+        FieldValue::Value(value)
+            if !matches!(value, Value::Array(_) | Value::ArrayEdit(_) | Value::Blocked)
+    )
+}
+
+/// Folds a strongest-to-weakest opinion chain through [`opinionated`]'s
+/// family kernel.
+///
+/// `opinions` is consumed lazily: the kernel stops pulling at the first dense
+/// member or block, so weaker opinions are neither sampled nor cloned.
+fn fold_array_chain<'o>(
+    family: &ArrayFamily<'_>,
+    opinions: impl Iterator<Item = &'o Opinion>,
+) -> SparseResolveResult {
+    match resolve_family_chain(family, opinions.map(|opinion| (opinion, &()))) {
+        FamilyResolution::Resolved { value, .. } => {
+            SparseResolveResult::Resolved(Value::Array(value))
+        }
+        FamilyResolution::Blocked { .. } => SparseResolveResult::Blocked,
+        // No opinion contributed: an array-family fallback still resolves on
+        // its own; otherwise the family does not apply to this chain.
+        FamilyResolution::Absent if family.fallback.is_some() => {
+            SparseResolveResult::Resolved(Value::Array(family.seed()))
+        }
+        FamilyResolution::Absent => SparseResolveResult::NotApplicable,
     }
 }
 
@@ -629,6 +644,89 @@ mod tests {
         assert_eq!(
             full, grouped,
             "sparse family folding should preserve associative grouped composition"
+        );
+    }
+
+    fn write_edit(value: i32, index: i64) -> Value {
+        Value::ArrayEdit(ArrayEdit {
+            ops: vec![ArrayEditOp::Write {
+                src: ArrayEditOperand::Literal(Value::Int(value)),
+                index: ArrayIndex::Position(index),
+            }],
+        })
+    }
+
+    /// Folds `opinions` through the production adapter and reports how many
+    /// opinions the kernel pulled (and therefore classified or sampled).
+    fn fold_counting(
+        family: &ArrayFamily<'_>,
+        opinions: &[Opinion],
+    ) -> (SparseResolveResult, usize) {
+        let mut visited = 0;
+        let resolved = fold_array_chain(family, opinions.iter().inspect(|_| visited += 1));
+        (resolved, visited)
+    }
+
+    #[test]
+    fn opinions_hidden_by_a_dense_value_are_not_sampled() {
+        let (spec_path, field) = test_ids();
+        let opinions = vec![
+            array_opinion(
+                spec_path,
+                field,
+                FieldValue::TimeSamples(vec![(0.0, write_edit(9, 0))]),
+                0,
+            ),
+            array_opinion(spec_path, field, FieldValue::Value(array_value(&[1, 2])), 1),
+            array_opinion(
+                spec_path,
+                field,
+                FieldValue::TimeSamples(vec![(0.0, array_value(&[5, 5, 5]))]),
+                2,
+            ),
+            array_opinion(spec_path, field, FieldValue::Value(array_value(&[3])), 3),
+        ];
+        let property_type = int_array_type();
+        let family = ArrayFamily {
+            property_type: Some(&property_type),
+            fallback: None,
+            sampling: Sampling::AtTime {
+                time: 0.0,
+                interp: InterpolationType::Held,
+            },
+        };
+
+        let (resolved, visited) = fold_counting(&family, &opinions);
+        assert_eq!(
+            resolved,
+            SparseResolveResult::Resolved(array_value(&[9, 2]))
+        );
+        assert_eq!(
+            visited, 2,
+            "the fold must stop at the first dense value without sampling weaker opinions"
+        );
+    }
+
+    #[test]
+    fn opinions_hidden_by_a_block_are_not_visited() {
+        let (spec_path, field) = test_ids();
+        let opinions = vec![
+            array_opinion(spec_path, field, FieldValue::Value(write_edit(9, 0)), 0),
+            array_opinion(spec_path, field, FieldValue::Value(Value::Blocked), 1),
+            array_opinion(spec_path, field, FieldValue::Value(array_value(&[1, 2])), 2),
+            array_opinion(spec_path, field, FieldValue::Value(write_edit(7, 1)), 3),
+        ];
+        let property_type = int_array_type();
+        let family = ArrayFamily {
+            property_type: Some(&property_type),
+            fallback: None,
+            sampling: Sampling::Default,
+        };
+
+        let (_, visited) = fold_counting(&family, &opinions);
+        assert_eq!(
+            visited, 2,
+            "the fold must stop at the first block without visiting weaker opinions"
         );
     }
 }

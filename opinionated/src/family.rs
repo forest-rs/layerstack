@@ -164,6 +164,11 @@ pub struct FamilyReport<T, P> {
 /// never terminate the fold. Provenance is the strongest contributing
 /// (non-foreign, non-block) opinion.
 ///
+/// The chain is consumed lazily: once a dense member or block ends the fold,
+/// no weaker opinion is pulled from the iterator or classified. Callers whose
+/// [`OpinionFamily::classify`] samples or clones can therefore pass their
+/// whole opinion stack without paying for hidden opinions.
+///
 /// Use [`resolve_family_chain_report`] when diagnostic events are needed.
 #[must_use]
 pub fn resolve_family_chain<'a, Op, F, P>(

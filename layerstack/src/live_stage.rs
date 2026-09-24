@@ -175,7 +175,13 @@ impl LiveStage {
 
     /// Recomposes affected prims and returns the set of prims that were updated.
     ///
-    /// - If a structural change was notified, performs a full rebuild and returns all prims.
+    /// - If a structural change was notified, performs a full rebuild and
+    ///   returns every prim path of the new stage plus every path that the
+    ///   previous stage had and the new one lacks (removed prims), sorted by
+    ///   [`PathId`]. Removal is computed as a before/after difference; callers
+    ///   can tell removed paths apart with [`Stage::has_prim`]. Surviving
+    ///   paths are reported whether or not they changed: the rebuild does not
+    ///   classify value, hierarchy, or asset changes per path.
     /// - If no prims are invalidated, returns an empty vec.
     /// - Otherwise, drains the invalidation set (expanding lazy roots to all
     ///   transitive dependents), performs a scoped recomposition, and updates
@@ -304,9 +310,13 @@ impl LiveStage {
         }
     }
 
+    /// Recomposes the whole stage and returns every path in the new stage
+    /// plus every path removed relative to the old one (see
+    /// [`recompose`](Self::recompose)), sorted by [`PathId`].
     fn full_rebuild(&mut self, store: &mut dyn LayerStore) -> Vec<PathId> {
         self.needs_full_rebuild = false;
         self.tracker.clear(OPINION_EDIT);
+        let old_prims: HashSet<PathId> = self.stage.prim_paths().collect();
 
         let opts = StageOptions {
             with_dependencies: true,
@@ -323,7 +333,12 @@ impl LiveStage {
         self.prim_to_layers = deps.prim_to_layers;
         self.reindex_all_sources();
 
-        self.stage.prim_paths().collect()
+        // A before/after difference, not an edit log: removed paths are those
+        // the old stage had and the new one lacks.
+        let mut changed: Vec<PathId> = self.stage.prim_paths().collect();
+        changed.extend(old_prims.into_iter().filter(|p| !self.stage.has_prim(*p)));
+        changed.sort_unstable();
+        changed
     }
 
     /// Rebuilds the source-site index from the whole stage.
@@ -493,6 +508,47 @@ mod tests {
             live.stage().has_prim(prim_q),
             "new prim should be in the stage"
         );
+    }
+
+    /// A structural rebuild reports removed prims as well as the new stage's
+    /// prims, computed as a before/after difference.
+    #[test]
+    fn structural_rebuild_reports_removed_prims() {
+        let mut store = InMemoryStore::default();
+        let a = p(&mut store, "/A");
+        let b = p(&mut store, "/B");
+        let b_child = p(&mut store, "/B/Child");
+        let c = p(&mut store, "/C");
+        let root = p(&mut store, "/");
+
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(a, PrimSpec::def());
+        layer.insert_prim(b, PrimSpec::def());
+        layer.insert_prim(b_child, PrimSpec::def());
+        store.insert_layer(layer);
+
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+
+        {
+            let layer = store.layers.get_mut(&LayerId(1)).unwrap();
+            layer.prims.remove(&b);
+            layer.prims.remove(&b_child);
+            layer.insert_prim(c, PrimSpec::def());
+        }
+        live.notify_structural_change();
+        let updated = live.recompose(&mut store);
+
+        let mut expected = vec![root, a, b, b_child, c];
+        expected.sort_unstable();
+        assert_eq!(updated, expected, "new-stage paths plus removed paths");
+        let removed: Vec<PathId> = updated
+            .iter()
+            .copied()
+            .filter(|path| !live.stage().has_prim(*path))
+            .collect();
+        let mut expected_removed = vec![b, b_child];
+        expected_removed.sort_unstable();
+        assert_eq!(removed, expected_removed, "removed paths are identifiable");
     }
 
     #[test]

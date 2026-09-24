@@ -198,6 +198,8 @@ pub struct Relationship<'a> {
 /// An attribute connection.
 #[derive(Debug)]
 pub struct Connection<'a> {
+    /// Source span of the connection statement.
+    pub span: Span,
     /// The list-op kind.
     pub op: ListOpKind,
     /// Connected paths.
@@ -383,6 +385,8 @@ pub struct ArcRef<'a> {
 /// A list-op applied to path lists (inherits, specializes).
 #[derive(Debug)]
 pub struct ListOpPaths<'a> {
+    /// Source span of the metadata entry.
+    pub span: Span,
     /// The kind of list operation.
     pub kind: ListOpKind,
     /// The paths (`None` for `= None`).

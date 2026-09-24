@@ -5,9 +5,10 @@
 //!
 //! Round-trip tests read the writer's output with this workspace's own
 //! parser, so a mistake shared by reader and writer goes unnoticed. These
-//! fixtures are meant for external tools instead: `usdcat`, `usdchecker` and
-//! Python's `zipfile`, driven by `layerstack_conformance/scripts/export_interop.sh`
-//! and, when `usdcat` is on `PATH`, by the `export_interop` test.
+//! fixtures are meant for external tools instead: `usdcat`, `usdchecker`,
+//! Python's `zipfile` and, for the material fixtures, `usdrecord` renders,
+//! driven by `layerstack_conformance/scripts/export_interop.sh` and, when
+//! `usdcat` is on `PATH`, by the `export_interop` test.
 //!
 //! Every [`Fixture`] with [`Expect::Valid`] must be accepted by those tools.
 //! [`Expect::Invalid`] fixtures are negative controls: they show that the
@@ -16,7 +17,8 @@
 use std::path::{Path, PathBuf};
 
 use layerstack_mesh_export::{
-    Faces, Mesh, PackageFile, Primvar, PrimvarData, Scene, StageSettings, Transform, UpAxis, Xform,
+    Channel, ColorInput, Faces, FamilyType, FloatInput, Material, Mesh, PackageFile, Primvar,
+    PrimvarData, Scene, StageSettings, Texture, Transform, UpAxis, Xform,
 };
 use layerstack_usda::writer::{Attribute, Document, Metadatum, Prim, Value};
 
@@ -38,8 +40,20 @@ pub struct Fixture {
     pub expect: Expect,
 }
 
-/// An 8x8 RGB checker PNG (stored-deflate IDAT, valid CRCs).
+/// An 8x8 grey RGB checker PNG.
 pub fn checker_png() -> Vec<u8> {
+    rgb_png(8, 8, |x, y| {
+        let v = if (x + y) % 2 == 0 { 0x20 } else { 0xff };
+        [v, v, v]
+    })
+}
+
+/// An 8-bit RGB PNG of `pixel(x, y)` (stored-deflate IDAT, valid CRCs).
+///
+/// # Panics
+///
+/// Panics if the image data exceeds one stored deflate block (64 KiB).
+pub fn rgb_png(width: u32, height: u32, pixel: impl Fn(u32, u32) -> [u8; 3]) -> Vec<u8> {
     fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
         out.extend_from_slice(&u32::try_from(data.len()).unwrap().to_be_bytes());
         let start = out.len();
@@ -49,11 +63,10 @@ pub fn checker_png() -> Vec<u8> {
         out.extend_from_slice(&crc.to_be_bytes());
     }
     let mut raw = Vec::new();
-    for y in 0..8 {
+    for y in 0..height {
         raw.push(0); // filter: none
-        for x in 0..8 {
-            let v = if (x + y) % 2 == 0 { 0x20 } else { 0xff };
-            raw.extend_from_slice(&[v, v, v]);
+        for x in 0..width {
+            raw.extend_from_slice(&pixel(x, y));
         }
     }
     // zlib stream with one stored block, then Adler-32.
@@ -71,8 +84,8 @@ pub fn checker_png() -> Vec<u8> {
 
     let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
     let mut ihdr = Vec::new();
-    ihdr.extend_from_slice(&8_u32.to_be_bytes());
-    ihdr.extend_from_slice(&8_u32.to_be_bytes());
+    ihdr.extend_from_slice(&width.to_be_bytes());
+    ihdr.extend_from_slice(&height.to_be_bytes());
     ihdr.extend_from_slice(&[8, 2, 0, 0, 0]); // 8-bit RGB
     chunk(&mut png, b"IHDR", &ihdr);
     chunk(&mut png, b"IDAT", &zlib);
@@ -343,6 +356,241 @@ fn primvars_scene<'a>(
     Scene::new(StageSettings::new(UpAxis::Z, 1.0), root)
 }
 
+// ── Materials ───────────────────────────────────────────────────────────
+
+/// A unit cube centred on the origin: shared corners, flat per-face
+/// normals and one UV island per face (face-varying).
+const CUBE_POINTS: [[f32; 3]; 8] = [
+    [-0.5, -0.5, -0.5],
+    [0.5, -0.5, -0.5],
+    [0.5, 0.5, -0.5],
+    [-0.5, 0.5, -0.5],
+    [-0.5, -0.5, 0.5],
+    [0.5, -0.5, 0.5],
+    [0.5, 0.5, 0.5],
+    [-0.5, 0.5, 0.5],
+];
+const CUBE_COUNTS: [u32; 6] = [4; 6];
+/// Faces in order -Z, +Z, -Y, +Y, +X, -X.
+const CUBE_INDICES: [u32; 24] = [
+    0, 3, 2, 1, 4, 5, 6, 7, 0, 1, 5, 4, 2, 3, 7, 6, 1, 2, 6, 5, 3, 0, 4, 7,
+];
+const CUBE_NORMALS: [[f32; 3]; 6] = [
+    [0.0, 0.0, -1.0],
+    [0.0, 0.0, 1.0],
+    [0.0, -1.0, 0.0],
+    [0.0, 1.0, 0.0],
+    [1.0, 0.0, 0.0],
+    [-1.0, 0.0, 0.0],
+];
+const CUBE_UVS: [[f32; 2]; 24] = {
+    let square = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+    let mut out = [[0.0; 2]; 24];
+    let mut i = 0;
+    while i < 24 {
+        out[i] = square[i % 4];
+        i += 1;
+    }
+    out
+};
+
+/// The `usdchecker` rule that rejects a normal map read as sRGB.
+pub const SRGB_NORMAL_MAP_VALIDATOR: &str = "NormalMapTextureValidator.InvalidSourceColorSpace";
+
+/// Faces of the red subset in [`two_material_cube`]: +Z, +X and -Z.
+pub const RED_FACES: [u32; 3] = [1, 4, 0];
+/// Faces of the blue subset in [`two_material_cube`]: -Y, +Y and -X.
+pub const BLUE_FACES: [u32; 3] = [2, 3, 5];
+
+fn cube() -> Mesh<'static> {
+    Mesh::new(
+        "Cube",
+        &CUBE_POINTS,
+        Faces::Polygons {
+            counts: &CUBE_COUNTS,
+            indices: &CUBE_INDICES,
+        },
+    )
+    .with_normals(Primvar::uniform(&CUBE_NORMALS[..]))
+    .with_uvs(Primvar::face_varying(&CUBE_UVS[..]))
+}
+
+fn cube_scene(
+    mesh: Mesh<'static>,
+    materials: impl IntoIterator<Item = Material<'static>>,
+) -> Scene<'static> {
+    let mut scene = Scene::new(
+        StageSettings::new(UpAxis::Z, 1.0),
+        Xform::new("Root").with_kind("component").with_mesh(mesh),
+    );
+    scene.materials = materials.into_iter().collect();
+    scene
+}
+
+/// A 64x64 checker of orange and teal 8x8 cells: a base-color texture
+/// whose two hues are easy to find in a render.
+pub fn albedo_png() -> Vec<u8> {
+    rgb_png(64, 64, |x, y| {
+        if (x / 8 + y / 8) % 2 == 0 {
+            [230, 120, 20]
+        } else {
+            [20, 150, 160]
+        }
+    })
+}
+
+/// Packed occlusion (R = 1), roughness (G = 0.55) and metallic (B = 0),
+/// read as raw data.
+pub fn orm_png() -> Vec<u8> {
+    rgb_png(4, 4, |_, _| [255, 140, 0])
+}
+
+/// A tangent-space normal map of vertical ridges: 8-pixel bands tilted
+/// towards -X and +X, encoded as `n * 0.5 + 0.5`.
+pub fn ridges_normal_png() -> Vec<u8> {
+    rgb_png(64, 64, |x, _| {
+        if (x / 8) % 2 == 0 {
+            [74, 128, 238]
+        } else {
+            [182, 128, 238]
+        }
+    })
+}
+
+/// The textured material: sRGB base color, a packed raw ORM image and a
+/// raw normal map.
+fn textured_material() -> Material<'static> {
+    let orm = Texture::new("textures/orm.png");
+    Material::new("Textured")
+        .with_diffuse_color(ColorInput::texture(Texture::new("textures/albedo.png")))
+        .with_occlusion(FloatInput::texture(orm, Channel::R))
+        .with_roughness(FloatInput::texture(orm, Channel::G))
+        .with_metallic(FloatInput::texture(orm, Channel::B))
+        .with_normal_map(Texture::new("textures/ridges_normal.png"))
+}
+
+/// A cube whose faces are split between two constant materials by a
+/// `materialBind` partition: red on [`RED_FACES`], blue on
+/// [`BLUE_FACES`].
+pub fn two_material_cube() -> Scene<'static> {
+    cube_scene(
+        cube()
+            .with_material_subset("RedFaces", &RED_FACES, "Red")
+            .with_material_subset("BlueFaces", &BLUE_FACES, "Blue")
+            .with_subset_family(FamilyType::Partition),
+        [
+            Material::new("Red")
+                .with_diffuse_color([0.8, 0.05, 0.05])
+                .with_roughness(0.5),
+            Material::new("Blue")
+                .with_diffuse_color([0.05, 0.1, 0.8])
+                .with_roughness(0.5),
+        ],
+    )
+}
+
+/// A cube with one textured material ([`albedo_png`], [`orm_png`],
+/// [`ridges_normal_png`]).
+pub fn textured_cube() -> Scene<'static> {
+    cube_scene(cube().with_material("Textured"), [textured_material()])
+}
+
+/// The texture files [`textured_cube`] authors, by package path.
+pub fn textured_cube_files() -> Vec<(&'static str, Vec<u8>)> {
+    vec![
+        ("textures/albedo.png", albedo_png()),
+        ("textures/orm.png", orm_png()),
+        ("textures/ridges_normal.png", ridges_normal_png()),
+    ]
+}
+
+fn package(scene: &Scene<'_>, files: &[(&str, Vec<u8>)]) -> Vec<u8> {
+    let files: Vec<PackageFile<'_>> = files
+        .iter()
+        .map(|(path, bytes)| PackageFile::new(path, bytes))
+        .collect();
+    scene.to_usdz(&files).unwrap()
+}
+
+fn material_fixtures(dir: &Path, out: &mut Vec<Fixture>) {
+    let untextured = cube_scene(
+        cube().with_material("Plain"),
+        [Material::new("Plain")
+            .with_diffuse_color([0.7, 0.7, 0.2])
+            .with_emissive_color([0.05, 0.0, 0.0])
+            .with_roughness(0.3)
+            .with_metallic(0.0)
+            .with_opacity(1.0)],
+    );
+    let text = untextured.to_usda().unwrap();
+    write(
+        dir,
+        "material_untextured.usda",
+        text.as_bytes(),
+        Expect::Valid,
+        out,
+    );
+    write(
+        dir,
+        "material_untextured.usdz",
+        &untextured.to_usdz(&[]).unwrap(),
+        Expect::Valid,
+        out,
+    );
+    write(
+        dir,
+        "material_textured.usdz",
+        &package(&textured_cube(), &textured_cube_files()),
+        Expect::Valid,
+        out,
+    );
+    write(
+        dir,
+        "material_partition.usdz",
+        &two_material_cube().to_usdz(&[]).unwrap(),
+        Expect::Valid,
+        out,
+    );
+    let normal_only = cube_scene(
+        cube().with_material("Ridged"),
+        [Material::new("Ridged")
+            .with_diffuse_color([0.6, 0.6, 0.6])
+            .with_normal_map(Texture::new("textures/ridges_normal.png"))],
+    );
+    write(
+        dir,
+        "material_normal_map.usdz",
+        &package(
+            &normal_only,
+            &[("textures/ridges_normal.png", ridges_normal_png())],
+        ),
+        Expect::Valid,
+        out,
+    );
+
+    // Negative control for the color-space rule: the same normal map read
+    // as sRGB, which `NormalMapTextureValidator` must reject. The exporter
+    // cannot produce this, so the layer is edited after export.
+    let srgb = normal_only.to_usda().unwrap().replace(
+        "token inputs:sourceColorSpace = \"raw\"",
+        "token inputs:sourceColorSpace = \"sRGB\"",
+    );
+    assert!(srgb.contains("\"sRGB\""), "control edits the color space");
+    let normal = ridges_normal_png();
+    let control = layerstack_usdz::write_usdz(&[
+        PackageFile::new("scene.usda", srgb.as_bytes()),
+        PackageFile::new("textures/ridges_normal.png", &normal),
+    ])
+    .unwrap();
+    write(
+        dir,
+        "control_srgb_normal_map.usdz",
+        &control,
+        Expect::Invalid(SRGB_NORMAL_MAP_VALIDATOR),
+        out,
+    );
+}
+
 fn write(dir: &Path, name: &str, bytes: &[u8], expect: Expect, out: &mut Vec<Fixture>) {
     let path = dir.join(name);
     std::fs::write(&path, bytes).unwrap_or_else(|e| panic!("write {}: {e}", path.display()));
@@ -452,6 +700,8 @@ pub fn write_all(dir: &Path) -> Vec<Fixture> {
     ])
     .unwrap();
     write(dir, "package.usdz", &package, Expect::Valid, &mut out);
+
+    material_fixtures(dir, &mut out);
 
     // Negative control: correct layout, but the layer refers to a texture
     // that is not in the package. Built with the raw packager, since the

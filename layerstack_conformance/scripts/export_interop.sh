@@ -5,19 +5,25 @@
 # Optional, independent compatibility gate for exporter output.
 #
 # Writes the fixtures from `layerstack_conformance::export_fixtures`
-# (identifiers, value types, metadata, primvars, packages) and checks them
-# with tools that share no code with Layerstack:
+# (identifiers, value types, metadata, primvars, packages, materials) and
+# checks them with tools that share no code with Layerstack:
 #
 #   - usdcat                  every fixture must open;
 #   - usdchecker              default validators, then `--arkit` (which adds
 #                             the USDZ package validators such as byte
 #                             alignment and member file types);
-#   - python3 zipfile         archive layout (check_usdz_layout.py).
+#   - python3 zipfile         archive layout (check_usdz_layout.py);
+#   - usdcat | grep           texture color spaces as OpenUSD reads them:
+#                             sRGB for base color, raw for data and normals;
+#   - usdrecord               renders of the two-material cube and the
+#                             textured cube through a camera wrapper layer,
+#                             whose pixels must show each material's hues
+#                             (render_check.py). Skipped without usdrecord.
 #
-# Negative controls (a package with a missing asset, and a Python-written
-# archive with unaligned data) must be rejected, proving the selected
-# validators detect those problems. Tool versions and the selected validator
-# rules are recorded in the report.
+# Negative controls (a package with a missing asset, a normal map read as
+# sRGB, and a Python-written archive with unaligned data) must be rejected,
+# proving the selected validators detect those problems. Tool versions and
+# the selected validator rules are recorded in the report.
 #
 # Not part of CI and not a build dependency. Usage:
 #
@@ -106,6 +112,33 @@ while read -r expect path; do
         fi
     fi
 done <<< "$listing"
+
+log "== color spaces (material_textured.usdz)"
+usdcat "$out/material_textured.usdz" > "$out/material_textured.usdcat.usda" 2>&1
+spaces="$(grep -o 'inputs:file = @[^@]*@\|sourceColorSpace = "[A-Za-z]*"' "$out/material_textured.usdcat.usda" | paste -d' ' - - | sed 's/inputs:file = //')"
+printf '%s\n' "$spaces" | sed 's/^/   /' | tee -a "$report"
+for expected in '@textures/albedo.png@ sourceColorSpace = "sRGB"' \
+                '@textures/orm.png@ sourceColorSpace = "raw"' \
+                '@textures/ridges_normal.png@ sourceColorSpace = "raw"'; do
+    printf '%s\n' "$spaces" | grep -qF "$expected" || fail "expected $expected"
+done
+
+log "== renders"
+if command -v usdrecord > /dev/null; then
+    log "usdrecord:  $(command -v usdrecord)"
+    render() { # fixture, hues
+        local name="render_${1%.usdz}"
+        if run "$name" python3 "$root/layerstack_conformance/scripts/render_check.py" "$out/$1" "$out/$name.png" "$2"; then
+            log "   $1: $(tail -1 "$out/$name.log")"
+        else
+            fail "render of $1 lacks $2 (see $name.log, $name.png)"
+        fi
+    }
+    render material_partition.usdz red,blue
+    render material_textured.usdz orange,teal
+else
+    log "   skipped: usdrecord is not on PATH"
+fi
 
 log "== result: $failures failure(s); logs in $out"
 [ "$failures" -eq 0 ]

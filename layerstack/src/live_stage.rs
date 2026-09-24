@@ -51,6 +51,11 @@ pub struct LiveStage {
     layer_to_prims: HashMap<LayerId, HashSet<PathId>>,
     /// Prim → layers that contribute opinions to it.
     prim_to_layers: HashMap<PathId, HashSet<LayerId>>,
+    /// Source site `(layer, prim path in that layer)` → composed prims whose
+    /// prim index draws specs or opinions from it.
+    source_to_prims: HashMap<(LayerId, PathId), HashSet<PathId>>,
+    /// Composed prim → source sites recorded in `source_to_prims`.
+    prim_to_sources: HashMap<PathId, Vec<(LayerId, PathId)>>,
     root: LayerId,
     options: StageOptions,
     needs_full_rebuild: bool,
@@ -68,16 +73,20 @@ impl LiveStage {
         let tracker =
             InvalidationTracker::from_graph_with_cycle_handling(deps.graph, CycleHandling::Ignore);
 
-        Self {
+        let mut live = Self {
             stage,
             tracker,
             arc_metadata: deps.arcs,
             layer_to_prims: deps.layer_to_prims,
             prim_to_layers: deps.prim_to_layers,
+            source_to_prims: HashMap::new(),
+            prim_to_sources: HashMap::new(),
             root,
             options,
             needs_full_rebuild: false,
-        }
+        };
+        live.reindex_all_sources();
+        live
     }
 
     /// Notifies that opinions in `layer` have been edited.
@@ -93,20 +102,49 @@ impl LiveStage {
         }
     }
 
-    /// Notifies that opinions for specific prims within `layer` have changed.
+    /// Notifies that the prim specs at `prims` within `layer` have had
+    /// opinions edited.
     ///
-    /// This is more precise than [`notify_layer_edit`](Self::notify_layer_edit):
-    /// only the named prims are marked dirty (plus their transitive dependents
-    /// at drain time), rather than every prim that receives opinions from the
-    /// layer. Prims not actually connected to `layer` are silently ignored.
+    /// `prims` are source paths in `layer`'s own namespace, not composed
+    /// stage paths. Each is mapped through the composed prim indexes to every
+    /// composed prim that draws a spec or opinion from that site (see
+    /// [`composed_prims_for_source`](Self::composed_prims_for_source)); those
+    /// prims are marked dirty, and their transitive dependents are expanded
+    /// at drain time. For example, editing `/Source` in a library layer that
+    /// is referenced at `/A` marks `/A`.
+    ///
+    /// This is more precise than [`notify_layer_edit`](Self::notify_layer_edit).
+    /// Source paths that no composed prim currently draws on are ignored:
+    /// adding a spec there, or editing composition arcs, is a structural
+    /// change and must be reported with
+    /// [`notify_structural_change`](Self::notify_structural_change).
     pub fn notify_layer_prim_edits(&mut self, layer: LayerId, prims: &[PathId]) {
-        if let Some(layer_prims) = self.layer_to_prims.get(&layer) {
-            for &prim in prims {
-                if layer_prims.contains(&prim) {
+        for &source in prims {
+            if let Some(dests) = self.source_to_prims.get(&(layer, source)) {
+                for &prim in dests {
                     self.tracker.mark(prim, OPINION_EDIT);
                 }
             }
         }
+    }
+
+    /// Returns the composed prims whose prim index draws specs or opinions
+    /// from the prim spec at `source` within `layer`, sorted by [`PathId`].
+    ///
+    /// The mapping is taken from the composed prim indexes (local opinions,
+    /// variants, and every arc, including nested ones), so a library prim
+    /// referenced from several places maps to each referencing prim. It
+    /// reflects the last composition; it is updated by
+    /// [`recompose`](Self::recompose).
+    #[must_use]
+    pub fn composed_prims_for_source(&self, layer: LayerId, source: PathId) -> Vec<PathId> {
+        let mut prims: Vec<PathId> = self
+            .source_to_prims
+            .get(&(layer, source))
+            .map(|set| set.iter().copied().collect())
+            .unwrap_or_default();
+        prims.sort_unstable();
+        prims
     }
 
     /// Notifies that a specific prim's opinions have changed (any layer).
@@ -202,6 +240,7 @@ impl LiveStage {
         // Incrementally update dependency edges for each affected prim.
         for &prim in &affected {
             self.update_prim_edges(prim, &partial_deps);
+            self.reindex_sources(prim);
         }
 
         affected
@@ -282,8 +321,41 @@ impl LiveStage {
         self.arc_metadata = deps.arcs;
         self.layer_to_prims = deps.layer_to_prims;
         self.prim_to_layers = deps.prim_to_layers;
+        self.reindex_all_sources();
 
         self.stage.prim_paths().collect()
+    }
+
+    /// Rebuilds the source-site index from the whole stage.
+    fn reindex_all_sources(&mut self) {
+        self.source_to_prims.clear();
+        self.prim_to_sources.clear();
+        let prims: Vec<PathId> = self.stage.prim_paths().collect();
+        for prim in prims {
+            self.reindex_sources(prim);
+        }
+    }
+
+    /// Replaces the source-site index entries for `prim` with those of its
+    /// current prim index.
+    fn reindex_sources(&mut self, prim: PathId) {
+        if let Some(old) = self.prim_to_sources.remove(&prim) {
+            for site in old {
+                if let Some(dests) = self.source_to_prims.get_mut(&site) {
+                    dests.remove(&prim);
+                    if dests.is_empty() {
+                        self.source_to_prims.remove(&site);
+                    }
+                }
+            }
+        }
+        let sites = self.stage.source_sites(prim);
+        for &site in &sites {
+            self.source_to_prims.entry(site).or_default().insert(prim);
+        }
+        if !sites.is_empty() {
+            self.prim_to_sources.insert(prim, sites);
+        }
     }
 }
 
@@ -999,6 +1071,79 @@ mod tests {
             live.prim_to_layers, fresh_deps.prim_to_layers,
             "prim → layer dependencies differ"
         );
+
+        let fresh_live = LiveStage::compose(store, live.root, live.options.clone());
+        assert_eq!(
+            live.source_to_prims, fresh_live.source_to_prims,
+            "source site → prim index differs"
+        );
+    }
+
+    /// Regression: `notify_layer_prim_edits` documented paths "within the
+    /// edited layer" but filtered them against composed destination paths,
+    /// so editing a referenced library prim invalidated nothing.
+    #[test]
+    fn source_edit_in_referenced_layer_updates_referencing_prims() {
+        let mut store = InMemoryStore::default();
+        let field_x = store.tokens.intern("x");
+        let source = p(&mut store, "/Source");
+        let other = p(&mut store, "/Other");
+        let a = p(&mut store, "/A");
+        let b = p(&mut store, "/B");
+        let c = p(&mut store, "/C");
+        let d = p(&mut store, "/D");
+
+        let mut root = Layer::new(LayerId(1));
+        root.insert_prim(
+            a,
+            PrimSpec::def().with_reference(Reference::new(LayerId(2), source)),
+        );
+        root.insert_prim(
+            b,
+            PrimSpec::def().with_reference(Reference::new(LayerId(2), source)),
+        );
+        root.insert_prim(c, PrimSpec::def().with_field(field_x, 3_i64));
+        root.insert_prim(
+            d,
+            PrimSpec::def().with_reference(Reference::new(LayerId(2), other)),
+        );
+        store.insert_layer(root);
+
+        let mut library = Layer::new(LayerId(2));
+        library.insert_prim(source, PrimSpec::def().with_field(field_x, 1_i64));
+        library.insert_prim(other, PrimSpec::def().with_field(field_x, 7_i64));
+        store.insert_layer(library);
+
+        let options = StageOptions {
+            with_provenance: true,
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+        assert_eq!(live.composed_prims_for_source(LayerId(2), source), [a, b]);
+        assert_eq!(live.composed_prims_for_source(LayerId(1), c), [c]);
+        assert!(
+            live.composed_prims_for_source(LayerId(2), a).is_empty(),
+            "`/A` is not a path in the library layer"
+        );
+
+        store
+            .layers
+            .get_mut(&LayerId(2))
+            .unwrap()
+            .set_property(PropertyPath::new(source, field_x), 2_i64);
+        live.notify_layer_prim_edits(LayerId(2), &[source]);
+        let mut updated = live.recompose(&mut store);
+        updated.sort_unstable();
+        assert_eq!(updated, [a, b], "exactly the referencing prims recompose");
+        assert_eq!(
+            live.stage().resolve_field(a, field_x).unwrap().value,
+            Value::Int64(2)
+        );
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+
+        // Destination paths are not source paths of the library layer.
+        live.notify_layer_prim_edits(LayerId(2), &[a]);
+        assert!(live.recompose(&mut store).is_empty());
     }
 
     /// Regression: recomposing one sibling used to replace the root's child

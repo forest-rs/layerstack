@@ -11,8 +11,9 @@ use alloc::vec::Vec;
 use layerstack_usda::writer::{Attribute, Document, ListOp, Metadatum, Prim, Relationship, Value};
 
 use crate::{
-    CustomAttribute, ExportError, Faces, Interpolation, MATERIALS_SCOPE, Material, Mesh,
-    MeshProblem, Node, Orientation, Primvar, PrimvarData, Scene, Transform, UpAxis, Xform,
+    CustomAttribute, ExportError, Faces, FamilyType, Interpolation, MATERIALS_SCOPE, Material,
+    MaterialSubset, Mesh, MeshProblem, Node, Orientation, Primvar, PrimvarData, Scene, Transform,
+    UpAxis, Xform,
 };
 
 /// What mesh prims need to know about the scene's materials.
@@ -230,17 +231,93 @@ fn mesh_prim(
     let mut prim = Prim::def("Mesh", mesh.name);
     prim.attributes = attrs;
     if let Some(name) = mesh.material {
-        let binding = material_binding(mesh, &path, name, materials)?;
+        let binding = material_binding(mesh, &path, &path, name, materials)?;
         apply_binding(&mut prim, binding);
+    }
+    if !mesh.material_subsets.is_empty() {
+        check_family(&mesh.material_subsets, mesh.subset_family, sites.faces).map_err(fail)?;
+        // `UsdShadeMaterialBindingAPI::SetMaterialBindSubsetsFamilyType`
+        // (materialBindingAPI.h:934) authors this attribute on the mesh.
+        prim.attributes.push(
+            Attribute::new(
+                "subsetFamily:materialBind:familyType",
+                "token",
+                Value::Token(mesh.subset_family.token().into()),
+            )
+            .uniform(),
+        );
+        for subset in &mesh.material_subsets {
+            let subset_path = format!("{path}/{}", subset.name);
+            let binding = material_binding(mesh, &path, &subset_path, subset.material, materials)?;
+            prim.children
+                .push(subset_prim(subset, binding).map_err(fail)?);
+        }
     }
     Ok(prim)
 }
 
-/// Resolves a binding by material name, checking that the mesh authors
-/// every UV set the material's textures read. Returns the material path.
+/// Checks that `subsets` form a valid `family` over `faces` faces, as
+/// `UsdGeomSubset::ValidateFamily` does (`pxr/usd/usdGeom/subset.cpp`):
+/// indices in range, no index twice (both restricted types), and full
+/// coverage for a partition.
+fn check_family(
+    subsets: &[MaterialSubset<'_>],
+    family: FamilyType,
+    faces: usize,
+) -> Result<(), MeshProblem> {
+    let mut covered = vec![false; faces];
+    for subset in subsets {
+        for &face in subset.faces {
+            let Some(seen) = covered.get_mut(face as usize) else {
+                return Err(MeshProblem::SubsetFaceOutOfRange {
+                    subset: subset.name.into(),
+                    face,
+                    faces,
+                });
+            };
+            if core::mem::replace(seen, true) {
+                return Err(MeshProblem::OverlappingSubsets {
+                    subset: subset.name.into(),
+                    face,
+                });
+            }
+        }
+    }
+    if family == FamilyType::Partition
+        && let Some(face) = covered.iter().position(|c| !c)
+    {
+        return Err(MeshProblem::IncompletePartition { face });
+    }
+    Ok(())
+}
+
+/// A `GeomSubset` of faces in the `materialBind` family, with its own
+/// direct binding (`pxr/usd/usdGeom/subset.h`: `elementType` and
+/// `familyName` are uniform tokens, `indices` an `int[]`).
+fn subset_prim(subset: &MaterialSubset<'_>, material: String) -> Result<Prim, MeshProblem> {
+    let indices = subset
+        .faces
+        .iter()
+        .map(|&face| to_int(face))
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut prim = Prim::def("GeomSubset", subset.name);
+    prim.attributes
+        .push(Attribute::new("elementType", "token", Value::Token("face".into())).uniform());
+    prim.attributes
+        .push(Attribute::new("familyName", "token", Value::Token("materialBind".into())).uniform());
+    prim.attributes
+        .push(Attribute::new("indices", "int[]", Value::IntArray(indices)));
+    apply_binding(&mut prim, material);
+    Ok(prim)
+}
+
+/// Resolves the binding on `binding_path` (the mesh or one of its
+/// subsets) by material name, checking that the mesh authors every UV set
+/// the material's textures read. Returns the material path.
 fn material_binding(
     mesh: &Mesh<'_>,
-    path: &str,
+    mesh_path: &str,
+    binding_path: &str,
     name: &str,
     materials: &Materials<'_, '_>,
 ) -> Result<String, ExportError> {
@@ -249,7 +326,7 @@ fn material_binding(
         .iter()
         .find(|m| m.name == name)
         .ok_or_else(|| ExportError::UnknownMaterial {
-            path: path.into(),
+            path: binding_path.into(),
             material: name.into(),
         })?;
     let has_uv_set = |uv_set: &str| {
@@ -264,7 +341,7 @@ fn material_binding(
     };
     if let Some(texture) = material.textures().find(|t| !has_uv_set(t.uv_set)) {
         return Err(ExportError::InvalidMesh {
-            path: path.into(),
+            path: mesh_path.into(),
             problem: MeshProblem::MissingTexCoords {
                 material: name.into(),
                 uv_set: texture.uv_set.into(),

@@ -28,9 +28,10 @@ pub enum ExportError {
         /// What is wrong.
         problem: MaterialProblem,
     },
-    /// A mesh binds a material name that the scene does not define.
+    /// A mesh or material subset binds a material name that the scene does
+    /// not define.
     UnknownMaterial {
-        /// Prim path of the binding prim (the mesh).
+        /// Prim path of the binding prim (the mesh or its `GeomSubset`).
         path: String,
         /// The material name.
         material: String,
@@ -105,6 +106,28 @@ pub enum MeshProblem {
         index: u32,
         /// Number of values.
         values: usize,
+    },
+    /// A material subset names a face the mesh does not have.
+    SubsetFaceOutOfRange {
+        /// Subset name.
+        subset: String,
+        /// The face index.
+        face: u32,
+        /// Number of faces.
+        faces: usize,
+    },
+    /// A face appears twice among the material subsets (in one subset or
+    /// in two), which neither family type allows.
+    OverlappingSubsets {
+        /// Name of the subset holding the second occurrence.
+        subset: String,
+        /// The face index.
+        face: u32,
+    },
+    /// The subsets are declared a partition but leave a face uncovered.
+    IncompletePartition {
+        /// The first uncovered face.
+        face: usize,
     },
     /// A bound material reads textures through a UV set the mesh does not
     /// author as a `texCoord2f[]` or `float2[]` primvar.
@@ -182,6 +205,20 @@ impl fmt::Display for MeshProblem {
                 f,
                 "{name} index {index} is out of range for {values} values"
             ),
+            Self::SubsetFaceOutOfRange {
+                subset,
+                face,
+                faces,
+            } => write!(
+                f,
+                "subset {subset:?} names face {face}, but the mesh has {faces}"
+            ),
+            Self::OverlappingSubsets { subset, face } => {
+                write!(f, "face {face} appears again in subset {subset:?}")
+            }
+            Self::IncompletePartition { face } => {
+                write!(f, "face {face} is in no subset of the partition")
+            }
             Self::MissingTexCoords { material, uv_set } => write!(
                 f,
                 "material {material:?} reads UV set {uv_set:?}, which the mesh does not author"

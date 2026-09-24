@@ -253,6 +253,51 @@ pub enum Orientation {
     LeftHanded,
 }
 
+/// How a mesh's material subsets divide its faces: the
+/// `subsetFamily:materialBind:familyType` authored on the mesh.
+///
+/// Both types forbid a face from appearing twice across the family, since
+/// a face cannot be bound to two materials (`unrestricted` is invalid for
+/// `materialBind`).
+///
+/// Spec: `pxr/usd/usdGeom/subset.h:254` (family types),
+/// `pxr/usd/usdShade/materialBindingAPI.h:867` (`materialBind` family).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum FamilyType {
+    /// Subsets never share a face; faces outside every subset keep the
+    /// mesh's own binding, if any (USD's fallback for `materialBind`).
+    #[default]
+    NonOverlapping,
+    /// Every face is in exactly one subset.
+    Partition,
+}
+
+impl FamilyType {
+    pub(crate) fn token(self) -> &'static str {
+        match self {
+            Self::NonOverlapping => "nonOverlapping",
+            Self::Partition => "partition",
+        }
+    }
+}
+
+/// Faces bound to one material, written as a `GeomSubset` child of the
+/// mesh (`elementType = "face"`, `familyName = "materialBind"`) with its
+/// own direct binding.
+///
+/// Spec: `pxr/usd/usdGeom/subset.h` (`GeomSubset`),
+/// `pxr/usd/usdShade/materialBindingAPI.h:867` (per-face bindings).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MaterialSubset<'a> {
+    /// Prim name; must be a USD identifier, unique among the mesh's
+    /// subsets.
+    pub name: &'a str,
+    /// Face indices (`indices`), written in the given order.
+    pub faces: &'a [u32],
+    /// Name of the scene material bound to these faces.
+    pub material: &'a str,
+}
+
 /// One polygon mesh, written as a `Mesh` prim.
 ///
 /// All buffers are borrowed; nothing is copied until the scene is
@@ -281,8 +326,14 @@ pub struct Mesh<'a> {
     pub double_sided: bool,
     /// Name of the scene [`Material`](crate::Material) bound to the whole
     /// mesh, written as a direct `material:binding` with the
-    /// `MaterialBindingAPI` applied.
+    /// `MaterialBindingAPI` applied. With [`Self::material_subsets`], it
+    /// covers the faces outside every subset.
     pub material: Option<&'a str>,
+    /// Per-face material bindings.
+    pub material_subsets: Vec<MaterialSubset<'a>>,
+    /// How [`Self::material_subsets`] divide the faces; authored whenever
+    /// there are subsets, and checked before anything is written.
+    pub subset_family: FamilyType,
 }
 
 impl<'a> Mesh<'a> {
@@ -300,6 +351,8 @@ impl<'a> Mesh<'a> {
             orientation: Orientation::RightHanded,
             double_sided: false,
             material: None,
+            material_subsets: Vec::new(),
+            subset_family: FamilyType::NonOverlapping,
         }
     }
 
@@ -342,6 +395,30 @@ impl<'a> Mesh<'a> {
     #[must_use]
     pub fn with_material(mut self, material: &'a str) -> Self {
         self.material = Some(material);
+        self
+    }
+
+    /// Binds a scene material to some faces, through a `GeomSubset` named
+    /// `name`.
+    #[must_use]
+    pub fn with_material_subset(
+        mut self,
+        name: &'a str,
+        faces: &'a [u32],
+        material: &'a str,
+    ) -> Self {
+        self.material_subsets.push(MaterialSubset {
+            name,
+            faces,
+            material,
+        });
+        self
+    }
+
+    /// Sets how the material subsets divide the faces.
+    #[must_use]
+    pub fn with_subset_family(mut self, family: FamilyType) -> Self {
+        self.subset_family = family;
         self
     }
 }

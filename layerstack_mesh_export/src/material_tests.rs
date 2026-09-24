@@ -9,9 +9,9 @@ use layerstack_usda::parser::parse;
 use layerstack_usda::writer::WriteError;
 
 use crate::{
-    Channel, ColorInput, ExportError, Faces, FloatInput, Material, MaterialProblem, Mesh,
-    MeshProblem, PackageFile, Primvar, PrimvarData, Scene, StageSettings, Texture, UpAxis, Wrap,
-    Xform,
+    Channel, ColorInput, ExportError, Faces, FamilyType, FloatInput, Material, MaterialProblem,
+    Mesh, MeshProblem, PackageFile, Primvar, PrimvarData, Scene, StageSettings, Texture, UpAxis,
+    Wrap, Xform,
 };
 
 const POINTS: [[f32; 3]; 3] = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
@@ -425,4 +425,160 @@ fn usdz_requires_textures_to_be_packaged() {
         .to_usdz(&all)
         .expect("self-contained package");
     assert_eq!(&bytes[..4], b"PK\x03\x04", "zip signature");
+}
+
+// Two quads and a triangle.
+const PANEL_POINTS: [[f32; 3]; 6] = [
+    [0.0, 0.0, 0.0],
+    [1.0, 0.0, 0.0],
+    [1.0, 1.0, 0.0],
+    [0.0, 1.0, 0.0],
+    [2.0, 0.0, 0.0],
+    [2.0, 1.0, 0.0],
+];
+const PANEL_COUNTS: [u32; 3] = [4, 4, 3];
+const PANEL_INDICES: [u32; 11] = [0, 1, 2, 3, 1, 4, 5, 2, 2, 5, 3];
+
+fn panel() -> Mesh<'static> {
+    Mesh::new(
+        "Panel",
+        &PANEL_POINTS,
+        Faces::Polygons {
+            counts: &PANEL_COUNTS,
+            indices: &PANEL_INDICES,
+        },
+    )
+}
+
+fn red_blue() -> Vec<Material<'static>> {
+    alloc::vec![
+        Material::new("Red").with_diffuse_color([1.0, 0.0, 0.0]),
+        Material::new("Blue").with_diffuse_color([0.0, 0.0, 1.0]),
+    ]
+}
+
+#[test]
+fn face_partition_writes_bound_subsets() {
+    let mesh = panel()
+        .with_material_subset("RedFaces", &[0, 2], "Red")
+        .with_material_subset("BlueFaces", &[1], "Blue")
+        .with_subset_family(FamilyType::Partition);
+    let text = scene(mesh, red_blue()).to_usda().unwrap();
+    let expected = r#"        uniform token subdivisionScheme = "none"
+        uniform token subsetFamily:materialBind:familyType = "partition"
+
+        def GeomSubset "RedFaces" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            uniform token elementType = "face"
+            uniform token familyName = "materialBind"
+            int[] indices = [0, 2]
+            rel material:binding = </Root/Materials/Red>
+        }
+
+        def GeomSubset "BlueFaces" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            uniform token elementType = "face"
+            uniform token familyName = "materialBind"
+            int[] indices = [1]
+            rel material:binding = </Root/Materials/Blue>
+        }
+    }
+"#;
+    assert!(text.contains(expected), "{text}");
+    assert!(
+        text.contains("    def Mesh \"Panel\"\n"),
+        "the mesh itself has no binding: {text}"
+    );
+    assert!(parse(&text).diagnostics.is_empty(), "re-parses");
+}
+
+#[test]
+fn non_overlapping_subsets_leave_other_faces_to_the_mesh_binding() {
+    let mesh = panel()
+        .with_material("Red")
+        .with_material_subset("BlueFaces", &[1], "Blue");
+    let text = scene(mesh, red_blue()).to_usda().unwrap();
+    for line in [
+        "rel material:binding = </Root/Materials/Red>",
+        "uniform token subsetFamily:materialBind:familyType = \"nonOverlapping\"",
+        "rel material:binding = </Root/Materials/Blue>",
+    ] {
+        assert!(text.contains(line), "{line}\n{text}");
+    }
+}
+
+#[test]
+fn rejects_subsets_that_do_not_form_the_family() {
+    let problem = |mesh: Mesh<'static>| match scene(mesh, red_blue()).to_usda() {
+        Err(ExportError::InvalidMesh { path, problem }) => {
+            assert_eq!(path, "/Root/Panel", "mesh path");
+            problem
+        }
+        other => panic!("expected InvalidMesh, got {other:?}"),
+    };
+    assert_eq!(
+        problem(panel().with_material_subset("S", &[3], "Red")),
+        MeshProblem::SubsetFaceOutOfRange {
+            subset: "S".into(),
+            face: 3,
+            faces: 3
+        },
+        "face out of range"
+    );
+    assert_eq!(
+        problem(panel().with_material_subset("S", &[1, 1], "Red")),
+        MeshProblem::OverlappingSubsets {
+            subset: "S".into(),
+            face: 1
+        },
+        "face repeated within a subset"
+    );
+    assert_eq!(
+        problem(
+            panel()
+                .with_material_subset("A", &[0, 1], "Red")
+                .with_material_subset("B", &[1, 2], "Blue")
+        ),
+        MeshProblem::OverlappingSubsets {
+            subset: "B".into(),
+            face: 1
+        },
+        "face in two subsets"
+    );
+    assert_eq!(
+        problem(
+            panel()
+                .with_material_subset("A", &[0, 2], "Red")
+                .with_subset_family(FamilyType::Partition)
+        ),
+        MeshProblem::IncompletePartition { face: 1 },
+        "partition must cover every face"
+    );
+    assert_eq!(
+        scene(panel().with_material_subset("A", &[0], "Green"), red_blue()).to_usda(),
+        Err(ExportError::UnknownMaterial {
+            path: "/Root/Panel/A".into(),
+            material: "Green".into()
+        }),
+        "subset bound to an undefined material"
+    );
+    assert_eq!(
+        scene(
+            panel().with_material_subset("A", &[0], "Painted"),
+            alloc::vec![painted()]
+        )
+        .to_usda(),
+        Err(ExportError::InvalidMesh {
+            path: "/Root/Panel".into(),
+            problem: MeshProblem::MissingTexCoords {
+                material: "Painted".into(),
+                uv_set: "st".into()
+            }
+        }),
+        "a subset's textured material needs the mesh's UV set"
+    );
 }

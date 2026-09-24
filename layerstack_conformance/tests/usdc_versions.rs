@@ -228,6 +228,8 @@ fn fixtures_declare_the_expected_versions() {
         ("array_edits_strong.usdc", "0.14.0"),
         ("spline_loop_boundary.usdc", "0.15.0"),
         ("spline_time_valued.usdc", "0.15.0"),
+        ("sublayers_weak.usdc", "0.8.0"),
+        ("sublayers_root.usdc", "0.8.0"),
     ] {
         let data = fixture_bytes(name);
         let found = format!("{}.{}.{}", data[8], data[9], data[10]);
@@ -258,6 +260,43 @@ fn version_newer_than_readable_is_rejected() {
             patch: next.patch,
         })
     );
+}
+
+/// Values of the offset sublayer's time samples, which Layerstack maps
+/// through the sublayer offset differently from OpenUSD.
+fn is_offset_sample(mismatch: &Mismatch) -> bool {
+    mismatch.attribute == "/Prim.animated" && mismatch.time.is_some()
+}
+
+/// `subLayers` is a string vector and `subLayerOffsets` holds the weak
+/// layer's offset (10) and scale (2).
+#[test]
+fn sublayers_match_openusd() {
+    let unexpected: Vec<_> = compare_with_openusd("sublayers_root.usdc")
+        .into_iter()
+        .filter(|mismatch| !is_offset_sample(mismatch))
+        .collect();
+    assert!(unexpected.is_empty(), "{unexpected:#?}");
+    // The authored offset and scale are recorded on the sublayer entry.
+    let loaded = load_entry_usdc(&fixtures_dir().join("sublayers_root.usdc"));
+    let root = &loaded.store.layers[&loaded.root_layer];
+    assert_eq!(root.sublayers.len(), 1);
+    assert_eq!(root.sublayers[0].offset.offset, 10.0);
+    assert_eq!(root.sublayers[0].offset.scale, 2.0);
+}
+
+#[test]
+#[ignore = "OpenUSD's `SdfLayerOffset` maps sublayer time to stage time as \
+            `offset + scale * time`, so a stage query reads the sublayer at \
+            `(time - offset) / scale`; Layerstack's `LayerOffset::map_time` reads it \
+            at `time * scale + offset`. The USDC and USDA readers both store the \
+            authored offset; the mapping belongs to core value resolution."]
+fn sublayer_offset_time_mapping_matches_openusd() {
+    let known: Vec<_> = compare_with_openusd("sublayers_root.usdc")
+        .into_iter()
+        .filter(is_offset_sample)
+        .collect();
+    assert!(known.is_empty(), "{known:#?}");
 }
 
 // ---------------------------------------------------------------------------

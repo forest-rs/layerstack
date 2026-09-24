@@ -230,19 +230,22 @@ impl AssembleCtx<'_> {
     ) -> Result<(), UsdcError> {
         let mut root_children = Vec::new();
         let mut prim_order: Option<Vec<TokenId>> = None;
+        let mut sublayer_paths: &[String] = &[];
+        let mut sublayer_offsets: &[(f64, f64)] = &[];
 
         for (name, value) in fields {
             match name.as_str() {
+                // OpenUSD stores `subLayers` as a `std::vector<std::string>`
+                // (`StringVector`) and `subLayerOffsets` as a
+                // `LayerOffsetVector` parallel to it.
                 "subLayers" => {
-                    if let CrateValue::PathVector(paths) = value {
-                        for asset_path in paths {
-                            if let Some(resolved) = self.resolve_asset(asset_path) {
-                                layer.sublayers.push(SublayerEntry::new(resolved.layer_id));
-                                if let Some(sub_layer) = resolved.layer {
-                                    self.resolved_layers.push(sub_layer);
-                                }
-                            }
-                        }
+                    if let CrateValue::PathVector(paths) | CrateValue::StringVector(paths) = value {
+                        sublayer_paths = paths;
+                    }
+                }
+                "subLayerOffsets" => {
+                    if let CrateValue::LayerOffsetVector(offsets) = value {
+                        sublayer_offsets = offsets;
                     }
                 }
                 "primChildren" => {
@@ -259,6 +262,20 @@ impl AssembleCtx<'_> {
                 _ => {
                     // Other pseudo-root fields (defaultPrim, doc, etc.)
                     // are handled via the root prim spec below.
+                }
+            }
+        }
+
+        // Spec: AOUSD Core §12.3.2.1 (sublayer offsets).
+        for (i, asset_path) in sublayer_paths.iter().enumerate() {
+            if let Some(resolved) = self.resolve_asset(asset_path) {
+                let mut entry = SublayerEntry::new(resolved.layer_id);
+                if let Some(&(offset, scale)) = sublayer_offsets.get(i) {
+                    entry.offset = LayerOffset { offset, scale };
+                }
+                layer.sublayers.push(entry);
+                if let Some(sub_layer) = resolved.layer {
+                    self.resolved_layers.push(sub_layer);
                 }
             }
         }

@@ -798,3 +798,247 @@ fn moved_usdz_resolves_every_internal_asset() {
         "nested texture bytes"
     );
 }
+
+// ── Materials ──────────────────────────────────────────────────────────
+
+/// Reads a USDZ package's root layer into a fresh store (root layer 1).
+fn load_usdz(bytes: &[u8]) -> InMemoryStore {
+    let mut store = InMemoryStore::default();
+    let result = layerstack_usdz::read_usdz(
+        bytes,
+        LayerId(1),
+        &mut store.tokens,
+        &mut store.paths,
+        &mut NoAssets,
+    )
+    .expect("valid package");
+    store.insert_layer(result.layer);
+    store
+}
+
+/// Targets of a relationship or connection, as path strings.
+fn targets(stage: &Stage, store: &mut InMemoryStore, prim: &str, name: &str) -> Vec<String> {
+    let prim_id = store.path(prim);
+    let field = store.tokens.intern(name);
+    stage
+        .resolve_target_list(prim_id, field)
+        .unwrap_or_else(|| panic!("{prim}.{name} has targets"))
+        .value
+        .into_iter()
+        .map(|t| t.display(&store.paths, &store.tokens))
+        .collect()
+}
+
+fn type_name(stage: &Stage, store: &mut InMemoryStore, prim: &str) -> String {
+    let prim_id = store.path(prim);
+    let ty = stage
+        .resolve_type_name(prim_id, store)
+        .unwrap_or_else(|| panic!("{prim} is typed"));
+    store.tokens.resolve(ty).to_string()
+}
+
+fn token(stage: &Stage, store: &mut InMemoryStore, prim: &str, name: &str) -> String {
+    match attr(stage, store, prim, name) {
+        Value::Token(t) => store.tokens.resolve(t).to_string(),
+        other => panic!("{prim}.{name}: expected a token, got {other:?}"),
+    }
+}
+
+fn api_schemas(stage: &Stage, store: &mut InMemoryStore, prim: &str) -> Vec<String> {
+    let prim_id = store.path(prim);
+    let field = store.tokens.intern("apiSchemas");
+    stage
+        .resolve_token_list(prim_id, field)
+        .unwrap_or_else(|| panic!("{prim} applies API schemas"))
+        .value
+        .into_iter()
+        .map(|t| store.tokens.resolve(t).to_string())
+        .collect()
+}
+
+fn assert_two_material_cube(store: &mut InMemoryStore) {
+    use layerstack_conformance::export_fixtures::{BLUE_FACES, RED_FACES};
+    let stage = Stage::compose(store, LayerId(1), StageOptions::default());
+    assert_eq!(
+        token(
+            &stage,
+            store,
+            "/Root/Cube",
+            "subsetFamily:materialBind:familyType"
+        ),
+        "partition",
+        "family type on the mesh"
+    );
+    for (subset, material, faces) in [
+        ("RedFaces", "Red", RED_FACES),
+        ("BlueFaces", "Blue", BLUE_FACES),
+    ] {
+        let path = format!("/Root/Cube/{subset}");
+        assert_eq!(type_name(&stage, store, &path), "GeomSubset", "{path} type");
+        assert_eq!(
+            api_schemas(&stage, store, &path),
+            ["MaterialBindingAPI"],
+            "{path} applies MaterialBindingAPI"
+        );
+        assert_eq!(
+            targets(&stage, store, &path, "material:binding"),
+            [format!("/Root/Materials/{material}")],
+            "{path} binding"
+        );
+        assert_eq!(
+            as_u32s(&attr(&stage, store, &path, "indices")),
+            faces,
+            "{path} indices"
+        );
+        assert_eq!(
+            token(&stage, store, &path, "elementType"),
+            "face",
+            "{path} elementType"
+        );
+        assert_eq!(
+            token(&stage, store, &path, "familyName"),
+            "materialBind",
+            "{path} familyName"
+        );
+        let material_path = format!("/Root/Materials/{material}");
+        assert_eq!(
+            type_name(&stage, store, &material_path),
+            "Material",
+            "{material_path} type"
+        );
+        assert_eq!(
+            targets(&stage, store, &material_path, "outputs:surface"),
+            [format!("{material_path}/PreviewSurface.outputs:surface")],
+            "{material_path} surface output"
+        );
+        assert_eq!(
+            token(
+                &stage,
+                store,
+                &format!("{material_path}/PreviewSurface"),
+                "info:id"
+            ),
+            "UsdPreviewSurface",
+            "{material_path} shader id"
+        );
+    }
+    assert_eq!(
+        attr(
+            &stage,
+            store,
+            "/Root/Materials/Red/PreviewSurface",
+            "inputs:diffuseColor"
+        ),
+        Value::Vec3f([0.8, 0.05, 0.05]),
+        "constant base color"
+    );
+}
+
+fn assert_textured_cube(store: &mut InMemoryStore) {
+    let stage = Stage::compose(store, LayerId(1), StageOptions::default());
+    let m = "/Root/Materials/Textured";
+    assert_eq!(
+        api_schemas(&stage, store, "/Root/Cube"),
+        ["MaterialBindingAPI"],
+        "mesh applies MaterialBindingAPI"
+    );
+    assert_eq!(
+        targets(&stage, store, "/Root/Cube", "material:binding"),
+        [m],
+        "direct binding"
+    );
+    let surface = format!("{m}/PreviewSurface");
+    for (input, target) in [
+        ("inputs:diffuseColor", "DiffuseColorTexture.outputs:rgb"),
+        ("inputs:occlusion", "MetallicTexture.outputs:r"),
+        ("inputs:roughness", "MetallicTexture.outputs:g"),
+        ("inputs:metallic", "MetallicTexture.outputs:b"),
+        ("inputs:normal", "NormalTexture.outputs:rgb"),
+    ] {
+        assert_eq!(
+            targets(&stage, store, &surface, input),
+            [format!("{m}/{target}")],
+            "{input} connection"
+        );
+    }
+    for (node, file, color_space) in [
+        ("DiffuseColorTexture", "textures/albedo.png", "sRGB"),
+        ("MetallicTexture", "textures/orm.png", "raw"),
+        ("NormalTexture", "textures/ridges_normal.png", "raw"),
+    ] {
+        let path = format!("{m}/{node}");
+        assert_eq!(
+            token(&stage, store, &path, "info:id"),
+            "UsdUVTexture",
+            "{path} id"
+        );
+        assert_eq!(
+            attr(&stage, store, &path, "inputs:file"),
+            Value::Asset(file.into()),
+            "{path} file"
+        );
+        assert_eq!(
+            token(&stage, store, &path, "inputs:sourceColorSpace"),
+            color_space,
+            "{path} color space"
+        );
+        assert_eq!(
+            targets(&stage, store, &path, "inputs:st"),
+            [format!("{m}/TexCoordReader.outputs:result")],
+            "{path} texture coordinates"
+        );
+    }
+    let normal = format!("{m}/NormalTexture");
+    assert_eq!(
+        attr(&stage, store, &normal, "inputs:scale"),
+        Value::Vec4f([2.0, 2.0, 2.0, 1.0]),
+        "normal map scale"
+    );
+    assert_eq!(
+        attr(&stage, store, &normal, "inputs:bias"),
+        Value::Vec4f([-1.0, -1.0, -1.0, 0.0]),
+        "normal map bias"
+    );
+    assert_eq!(
+        attr(
+            &stage,
+            store,
+            &format!("{m}/TexCoordReader"),
+            "inputs:varname"
+        ),
+        Value::String("st".into()),
+        "primvar reader reads st"
+    );
+}
+
+#[test]
+fn materials_round_trip_through_readers() {
+    use layerstack_conformance::export_fixtures::{
+        textured_cube, textured_cube_files, two_material_cube,
+    };
+    let partition = two_material_cube();
+    assert_two_material_cube(&mut load_usda(&partition.to_usda().unwrap()));
+    assert_two_material_cube(&mut load_usdz(&partition.to_usdz(&[]).unwrap()));
+
+    let textured = textured_cube();
+    assert_textured_cube(&mut load_usda(&textured.to_usda().unwrap()));
+    let files = textured_cube_files();
+    let files: Vec<PackageFile<'_>> = files
+        .iter()
+        .map(|(path, bytes)| PackageFile::new(path, bytes))
+        .collect();
+    let bytes = textured.to_usdz(&files).unwrap();
+    assert_textured_cube(&mut load_usdz(&bytes));
+    let archive = layerstack_usdz::zip::ZipArchive::parse(&bytes).unwrap();
+    let names: Vec<&str> = archive.entries().iter().map(|e| &*e.name).collect();
+    assert_eq!(
+        names,
+        [
+            ROOT_LAYER_PATH,
+            "textures/albedo.png",
+            "textures/orm.png",
+            "textures/ridges_normal.png"
+        ],
+        "textures are packaged after the layer"
+    );
+}

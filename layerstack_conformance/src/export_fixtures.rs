@@ -10,9 +10,14 @@
 //! driven by `layerstack_conformance/scripts/export_interop.sh` and, when
 //! `usdcat` is on `PATH`, by the `export_interop` test.
 //!
-//! Every [`Fixture`] with [`Expect::Valid`] must be accepted by those tools.
-//! [`Expect::Invalid`] fixtures are negative controls: they show that the
-//! selected validators really detect the problem they name.
+//! Every [`Fixture`] with [`Expect::Valid`] or [`Expect::ValidArkit`] must
+//! be accepted by those tools. [`Expect::Invalid`] fixtures are negative
+//! controls: they show that the selected validators really detect the
+//! problem they name.
+//!
+//! [`documents`] are also written as USDC, so a USDA and a USDC file of the
+//! same authored layer can be compared through OpenUSD (`usdcat`), and as
+//! both USDZ profiles.
 
 use std::path::{Path, PathBuf};
 
@@ -21,12 +26,16 @@ use layerstack_mesh_export::{
     PrimvarData, Scene, StageSettings, Texture, Transform, UpAxis, UsdzProfile, Xform,
 };
 use layerstack_usda::writer::{Attribute, Document, Metadatum, Prim, Value};
+use layerstack_usdc::writer::write_document;
 
 /// What an external validator should conclude about a fixture.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Expect {
     /// Exporter output; every tool must accept it.
     Valid,
+    /// An `ARKit`-profile package: valid, and its only USD layer is a USDC
+    /// root.
+    ValidArkit,
     /// A negative control; the named validator must reject it.
     Invalid(&'static str),
 }
@@ -272,6 +281,8 @@ fn metadata() -> Document {
     );
     let mut doc = Document::new();
     stage_metadata(&mut doc, "Root");
+    // A double that is not exactly a float: USDA and USDC must agree on it.
+    doc.metadata[0].value = Value::Double(0.1);
     doc.metadata.push(Metadatum::new(
         "doc",
         Value::String("Exporter fixture.".into()),
@@ -504,12 +515,12 @@ pub fn textured_cube_files() -> Vec<(&'static str, Vec<u8>)> {
     ]
 }
 
-fn package(scene: &Scene<'_>, files: &[(&str, Vec<u8>)]) -> Vec<u8> {
+fn package(scene: &Scene<'_>, profile: UsdzProfile, files: &[(&str, Vec<u8>)]) -> Vec<u8> {
     let files: Vec<PackageFile<'_>> = files
         .iter()
         .map(|(path, bytes)| PackageFile::new(path, bytes))
         .collect();
-    scene.to_usdz(UsdzProfile::Generic, &files).unwrap()
+    scene.to_usdz(profile, &files).unwrap()
 }
 
 fn material_fixtures(dir: &Path, out: &mut Vec<Fixture>) {
@@ -537,22 +548,25 @@ fn material_fixtures(dir: &Path, out: &mut Vec<Fixture>) {
         Expect::Valid,
         out,
     );
-    write(
-        dir,
-        "material_textured.usdz",
-        &package(&textured_cube(), &textured_cube_files()),
-        Expect::Valid,
-        out,
-    );
-    write(
-        dir,
-        "material_partition.usdz",
-        &two_material_cube()
-            .to_usdz(UsdzProfile::Generic, &[])
-            .unwrap(),
-        Expect::Valid,
-        out,
-    );
+    for (suffix, profile, expect) in [
+        ("", UsdzProfile::Generic, Expect::Valid),
+        ("_arkit", UsdzProfile::Arkit, Expect::ValidArkit),
+    ] {
+        write(
+            dir,
+            &format!("material_textured{suffix}.usdz"),
+            &package(&textured_cube(), profile, &textured_cube_files()),
+            expect,
+            out,
+        );
+        write(
+            dir,
+            &format!("material_partition{suffix}.usdz"),
+            &two_material_cube().to_usdz(profile, &[]).unwrap(),
+            expect,
+            out,
+        );
+    }
     let normal_only = cube_scene(
         cube().with_material("Ridged"),
         [Material::new("Ridged")
@@ -564,6 +578,7 @@ fn material_fixtures(dir: &Path, out: &mut Vec<Fixture>) {
         "material_normal_map.usdz",
         &package(
             &normal_only,
+            UsdzProfile::Generic,
             &[("textures/ridges_normal.png", ridges_normal_png())],
         ),
         Expect::Valid,
@@ -593,38 +608,8 @@ fn material_fixtures(dir: &Path, out: &mut Vec<Fixture>) {
     );
 }
 
-fn write(dir: &Path, name: &str, bytes: &[u8], expect: Expect, out: &mut Vec<Fixture>) {
-    let path = dir.join(name);
-    std::fs::write(&path, bytes).unwrap_or_else(|e| panic!("write {}: {e}", path.display()));
-    out.push(Fixture { path, expect });
-}
-
-/// Writes every fixture into `dir` (created if needed) and returns them.
-///
-/// # Panics
-///
-/// Panics if the exporter rejects a fixture or a file cannot be written.
-pub fn write_all(dir: &Path) -> Vec<Fixture> {
-    std::fs::create_dir_all(dir).unwrap();
-    let mut out = Vec::new();
-    for (name, doc) in [
-        ("identifiers", identifiers()),
-        ("types", types()),
-        ("metadata", metadata()),
-    ] {
-        let text = doc.to_usda().unwrap_or_else(|e| panic!("{name}: {e}"));
-        write(
-            dir,
-            &format!("{name}.usda"),
-            text.as_bytes(),
-            Expect::Valid,
-            &mut out,
-        );
-        let usdz = layerstack_usdz::write_usdz(&[PackageFile::new("scene.usda", text.as_bytes())])
-            .unwrap();
-        write(dir, &format!("{name}.usdz"), &usdz, Expect::Valid, &mut out);
-    }
-
+/// The primvars scene with its buffers, as an owned document.
+fn primvars() -> Document {
     let normal = [[0.0, 0.0, 1.0]];
     let normal_idx = [0; 7];
     let st = [
@@ -643,7 +628,7 @@ pub fn write_all(dir: &Path) -> Vec<Fixture> {
     let ids = [10, 11, 12, 13, 14];
     let regions = [1, 2];
     let tint = [[1.0, 1.0, 1.0, 0.5]];
-    let scene = primvars_scene(
+    primvars_scene(
         &normal,
         &normal_idx,
         &st,
@@ -654,21 +639,266 @@ pub fn write_all(dir: &Path) -> Vec<Fixture> {
         &ids,
         &regions,
         &tint,
+    )
+    .to_document()
+    .unwrap()
+}
+
+/// The unit cube of the `mesh_to_usdz` example: 8 shared points, six quads,
+/// face-varying normals and UVs (every face its own UV island), resting on
+/// the ground plane.
+fn cube_document() -> Document {
+    const POINTS: [[f32; 3]; 8] = [
+        [-0.5, -0.5, -0.5],
+        [0.5, -0.5, -0.5],
+        [0.5, 0.5, -0.5],
+        [-0.5, 0.5, -0.5],
+        [-0.5, -0.5, 0.5],
+        [0.5, -0.5, 0.5],
+        [0.5, 0.5, 0.5],
+        [-0.5, 0.5, 0.5],
+    ];
+    let faces: [[u32; 4]; 6] = [
+        [0, 3, 2, 1],
+        [4, 5, 6, 7],
+        [0, 1, 5, 4],
+        [2, 3, 7, 6],
+        [1, 2, 6, 5],
+        [3, 0, 4, 7],
+    ];
+    let face_normals = [
+        [0.0, 0.0, -1.0],
+        [0.0, 0.0, 1.0],
+        [0.0, -1.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [-1.0, 0.0, 0.0],
+    ];
+    let square = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
+    let indices: Vec<u32> = faces.iter().flatten().copied().collect();
+    let normals: Vec<[f32; 3]> = face_normals
+        .iter()
+        .flat_map(|n| std::iter::repeat_n(*n, 4))
+        .collect();
+    let uvs: Vec<[f32; 2]> = (0..6).flat_map(|_| square).collect();
+    let cube = Mesh::new(
+        "Cube",
+        &POINTS,
+        Faces::Polygons {
+            counts: &[4; 6],
+            indices: &indices,
+        },
+    )
+    .with_normals(Primvar::face_varying(&normals[..]))
+    .with_uvs(Primvar::face_varying(&uvs[..]));
+    let root = Xform::new("Root")
+        .with_kind("component")
+        .with_transform(Transform::from_translation([0.0, 0.0, 0.5]))
+        .with_mesh(cube);
+    Scene::new(StageSettings::new(UpAxis::Z, 1.0), root)
+        .to_document()
+        .unwrap()
+}
+
+/// A quad and a triangle sharing an edge, without primvars.
+fn quad_triangle() -> Document {
+    let mesh = Mesh::new(
+        "Panel",
+        &QUAD_TRI_POINTS,
+        Faces::Polygons {
+            counts: &QUAD_TRI_COUNTS,
+            indices: &QUAD_TRI_INDICES,
+        },
     );
-    write(
-        dir,
-        "primvars.usda",
-        scene.to_usda().unwrap().as_bytes(),
-        Expect::Valid,
-        &mut out,
+    Scene::new(
+        StageSettings::new(UpAxis::Z, 1.0),
+        Xform::new("Root").with_mesh(mesh),
+    )
+    .to_document()
+    .unwrap()
+}
+
+/// Two quads folded along a shared edge: shared positions, a hard normal
+/// edge, and a UV seam whose indices differ while their values repeat.
+fn uv_seam() -> Document {
+    let points = [
+        [0.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0],
+        [1.0, 1.0, 0.0],
+        [0.0, 1.0, 0.0],
+        [1.0, 0.0, 1.0],
+        [1.0, 1.0, 1.0],
+    ];
+    let normals = [
+        [0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0],
+        [0.0, 0.0, 1.0],
+        [-1.0, 0.0, 0.0],
+        [-1.0, 0.0, 0.0],
+        [-1.0, 0.0, 0.0],
+        [-1.0, 0.0, 0.0],
+    ];
+    let uvs = [
+        [0.0, 0.0],
+        [1.0, 0.0],
+        [1.0, 1.0],
+        [0.0, 1.0],
+        [1.0, 0.0],
+        [1.0, 1.0],
+        [2.0, 0.0],
+        [2.0, 1.0],
+    ];
+    let mesh = Mesh::new(
+        "Fold",
+        &points,
+        Faces::Polygons {
+            counts: &[4, 4],
+            indices: &[0, 1, 2, 3, 1, 4, 5, 2],
+        },
+    )
+    .with_normals(Primvar::face_varying(&normals[..]))
+    .with_uvs(Primvar::face_varying(&uvs[..]).with_indices(&[0, 1, 2, 3, 4, 6, 7, 5]));
+    Scene::new(
+        StageSettings::new(UpAxis::Z, 1.0),
+        Xform::new("Root").with_mesh(mesh),
+    )
+    .to_document()
+    .unwrap()
+}
+
+/// An asymmetric wedge under nested, non-commuting transforms (a rotation,
+/// then a mirror and a move), in centimeters with Y up.
+fn nested_transforms() -> Document {
+    let points = [
+        [0.0, 0.0, 0.0],
+        [100.0, 0.0, 0.0],
+        [100.0, 50.0, 0.0],
+        [0.0, 50.0, 0.0],
+        [0.0, 0.0, 25.0],
+        [0.0, 50.0, 25.0],
+    ];
+    let wedge = Mesh::new(
+        "Wedge",
+        &points,
+        Faces::Polygons {
+            counts: &[4, 4, 3, 3, 4],
+            indices: &[0, 3, 2, 1, 0, 1, 4, 3, 4, 5, 3, 0, 4, 1, 1, 2, 5, 4],
+        },
     );
-    write(
-        dir,
-        "primvars.usdz",
-        &scene.to_usdz(UsdzProfile::Generic, &[]).unwrap(),
-        Expect::Valid,
-        &mut out,
+    let rotate = Transform::from_affine_3x4([
+        [0.0, -1.0, 0.0, 0.0],
+        [1.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+    ]);
+    let mirror_and_move = Transform::from_affine_3x4([
+        [-1.0, 0.0, 0.0, 100.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+    ]);
+    let root = Xform::new("Root").with_transform(rotate).with_xform(
+        Xform::new("Mirrored")
+            .with_transform(mirror_and_move)
+            .with_mesh(wedge),
     );
+    Scene::new(StageSettings::new(UpAxis::Y, 0.01), root)
+        .to_document()
+        .unwrap()
+}
+
+/// Every authored document of the fixture set, by file stem: identifiers,
+/// value types, metadata, and the mesh scenes (the cube, the two-material
+/// and textured material cubes, a quad and a triangle, a UV seam, nested
+/// transforms, and every primvar interpolation).
+pub fn documents() -> Vec<(&'static str, Document)> {
+    vec![
+        ("identifiers", identifiers()),
+        ("types", types()),
+        ("metadata", metadata()),
+        ("primvars", primvars()),
+        ("cube", cube_document()),
+        (
+            "materials_partition",
+            two_material_cube().to_document().unwrap(),
+        ),
+        ("materials_textured", textured_cube().to_document().unwrap()),
+        ("quad_triangle", quad_triangle()),
+        ("uv_seam", uv_seam()),
+        ("nested_transforms", nested_transforms()),
+    ]
+}
+
+fn write(dir: &Path, name: &str, bytes: &[u8], expect: Expect, out: &mut Vec<Fixture>) {
+    let path = dir.join(name);
+    std::fs::write(&path, bytes).unwrap_or_else(|e| panic!("write {}: {e}", path.display()));
+    out.push(Fixture { path, expect });
+}
+
+/// Writes every fixture into `dir` (created if needed) and returns them.
+///
+/// # Panics
+///
+/// Panics if the exporter rejects a fixture or a file cannot be written.
+pub fn write_all(dir: &Path) -> Vec<Fixture> {
+    std::fs::create_dir_all(dir).unwrap();
+    let mut out = Vec::new();
+    for (name, doc) in documents() {
+        let text = doc.to_usda().unwrap_or_else(|e| panic!("{name}: {e}"));
+        write(
+            dir,
+            &format!("{name}.usda"),
+            text.as_bytes(),
+            Expect::Valid,
+            &mut out,
+        );
+        let usdc = write_document(&doc).unwrap_or_else(|e| panic!("{name}: {e}"));
+        write(dir, &format!("{name}.usdc"), &usdc, Expect::Valid, &mut out);
+        // Files the document's asset paths name, beside the layers and in
+        // the packages.
+        let assets = if name == "materials_textured" {
+            textured_cube_files()
+        } else {
+            Vec::new()
+        };
+        for (path, bytes) in &assets {
+            let path = dir.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        }
+        fn members<'a>(
+            root: &'a str,
+            layer: &'a [u8],
+            assets: &'a [(&str, Vec<u8>)],
+        ) -> Vec<PackageFile<'a>> {
+            let mut files = vec![PackageFile::new(root, layer)];
+            files.extend(
+                assets
+                    .iter()
+                    .map(|(path, bytes)| PackageFile::new(path, bytes)),
+            );
+            files
+        }
+        let usdz = layerstack_usdz::write_usdz(&members(
+            UsdzProfile::Generic.root_layer_path(),
+            text.as_bytes(),
+            &assets,
+        ))
+        .unwrap();
+        write(dir, &format!("{name}.usdz"), &usdz, Expect::Valid, &mut out);
+        let arkit = layerstack_usdz::write_usdz(&members(
+            UsdzProfile::Arkit.root_layer_path(),
+            &usdc,
+            &assets,
+        ))
+        .unwrap();
+        write(
+            dir,
+            &format!("{name}_arkit.usdz"),
+            &arkit,
+            Expect::ValidArkit,
+            &mut out,
+        );
+    }
 
     // A package with nested media members referenced from the layer.
     let png = checker_png();
@@ -692,19 +922,21 @@ pub fn write_all(dir: &Path) -> Vec<Fixture> {
             "audio/silence.wav".into(),
         ]),
     );
-    let package = Scene::new(
+    let scene = Scene::new(
         StageSettings::new(UpAxis::Z, 1.0),
         Xform::new("Root").with_mesh(mesh),
-    )
-    .to_usdz(
-        UsdzProfile::Generic,
-        &[
-            PackageFile::new("textures/checker.png", &png),
-            PackageFile::new("audio/silence.wav", &wav),
-        ],
-    )
-    .unwrap();
-    write(dir, "package.usdz", &package, Expect::Valid, &mut out);
+    );
+    let media = [
+        PackageFile::new("textures/checker.png", &png),
+        PackageFile::new("audio/silence.wav", &wav),
+    ];
+    for (name, profile, expect) in [
+        ("package.usdz", UsdzProfile::Generic, Expect::Valid),
+        ("package_arkit.usdz", UsdzProfile::Arkit, Expect::ValidArkit),
+    ] {
+        let package = scene.to_usdz(profile, &media).unwrap();
+        write(dir, name, &package, expect, &mut out);
+    }
 
     material_fixtures(dir, &mut out);
 

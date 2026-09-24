@@ -51,20 +51,42 @@ pub enum ArrayEditOp {
         /// Index to remove.
         index: ArrayIndex,
     },
-    /// Grow the array to at least `len`.
+    /// Grow the array to at least `len`, filling new elements with the
+    /// property type's default element.
     MinSize {
         /// Minimum number of elements after editing.
         len: usize,
+    },
+    /// Grow the array to at least `len`, filling new elements with `fill`.
+    ///
+    /// This is OpenUSD's `minsize N fill <literal>` (`OpMinSizeFill` in
+    /// `pxr/base/vt/arrayEditOps.h`).
+    MinSizeFill {
+        /// Minimum number of elements after editing.
+        len: usize,
+        /// Value given to each element added by the edit.
+        fill: Value,
     },
     /// Shrink the array to at most `len`.
     MaxSize {
         /// Maximum number of elements after editing.
         len: usize,
     },
-    /// Resize the array to exactly `len`.
+    /// Resize the array to exactly `len`, filling new elements with the
+    /// property type's default element.
     Resize {
         /// Final number of elements after editing.
         len: usize,
+    },
+    /// Resize the array to exactly `len`, filling new elements with `fill`.
+    ///
+    /// This is OpenUSD's `resize N fill <literal>` (`OpSetSizeFill` in
+    /// `pxr/base/vt/arrayEditOps.h`).
+    ResizeFill {
+        /// Final number of elements after editing.
+        len: usize,
+        /// Value given to each element added by the edit.
+        fill: Value,
     },
 }
 
@@ -149,6 +171,9 @@ impl ArrayEdit {
                 ArrayEditOp::MinSize { len } => {
                     grow_to(array, *len, property_type);
                 }
+                ArrayEditOp::MinSizeFill { len, fill } => {
+                    fill_to(array, *len, fill);
+                }
                 ArrayEditOp::MaxSize { len } => {
                     array.truncate(*len);
                 }
@@ -158,6 +183,10 @@ impl ArrayEdit {
                     } else {
                         grow_to(array, *len, property_type);
                     }
+                }
+                ArrayEditOp::ResizeFill { len, fill } => {
+                    array.truncate(*len);
+                    fill_to(array, *len, fill);
                 }
             }
         }
@@ -207,8 +236,12 @@ fn grow_to(array: &mut Vec<Value>, len: usize, property_type: Option<&PropertyTy
         return;
     };
 
-    while array.len() < len {
-        array.push(fill.clone());
+    fill_to(array, len, &fill);
+}
+
+fn fill_to(array: &mut Vec<Value>, len: usize, fill: &Value) {
+    if array.len() < len {
+        array.resize(len, fill.clone());
     }
 }
 
@@ -254,5 +287,142 @@ mod tests {
 
         let result = edit.compose_over_array(&[], Some(&int_array_type()));
         assert_eq!(result, int_array(&[0, 0, 0]));
+    }
+
+    // Vectors ported from OpenUSD v26.08 `pxr/base/vt/testenv/testVtArrayEdit.cpp`
+    // (`testBuilderAndComposition`) and `testVtArrayEdit.py`.
+
+    fn lit(value: i32) -> ArrayEditOperand {
+        ArrayEditOperand::Literal(Value::Int(value))
+    }
+
+    fn edit(ops: Vec<ArrayEditOp>) -> ArrayEdit {
+        ArrayEdit { ops }
+    }
+
+    fn apply(edit: &ArrayEdit, weaker: &[i32]) -> Vec<Value> {
+        edit.compose_over_array(&int_array(weaker), Some(&int_array_type()))
+    }
+
+    fn zero_nine() -> ArrayEdit {
+        edit(vec![
+            ArrayEditOp::Insert {
+                src: lit(0),
+                index: ArrayIndex::Position(0),
+            },
+            ArrayEditOp::Insert {
+                src: lit(9),
+                index: ArrayIndex::End,
+            },
+        ])
+    }
+
+    fn mix_and_trim() -> ArrayEdit {
+        edit(vec![
+            ArrayEditOp::Write {
+                src: ArrayEditOperand::CopyFrom(ArrayIndex::Position(-1)),
+                index: ArrayIndex::Position(2),
+            },
+            ArrayEditOp::Write {
+                src: ArrayEditOperand::CopyFrom(ArrayIndex::Position(0)),
+                index: ArrayIndex::Position(4),
+            },
+            ArrayEditOp::Erase {
+                index: ArrayIndex::Position(-1),
+            },
+            ArrayEditOp::Erase {
+                index: ArrayIndex::Position(0),
+            },
+        ])
+    }
+
+    #[test]
+    fn vt_prepend_append_and_self_composition() {
+        let zero_nine = zero_nine();
+        assert_eq!(apply(&zero_nine, &[]), int_array(&[0, 9]));
+        assert_eq!(apply(&zero_nine, &[5]), int_array(&[0, 5, 9]));
+
+        let zero09_nine = zero_nine.compose_over(&zero_nine);
+        assert_eq!(apply(&zero09_nine, &[]), int_array(&[0, 0, 9, 9]));
+        assert_eq!(
+            apply(&zero09_nine, &[3, 4, 5]),
+            int_array(&[0, 0, 3, 4, 5, 9, 9])
+        );
+    }
+
+    #[test]
+    fn vt_references_and_out_of_bounds_ops() {
+        let mix_and_trim = mix_and_trim();
+        assert_eq!(
+            apply(&mix_and_trim, &[0, 0, 3, 4, 5, 9, 9]),
+            int_array(&[0, 9, 4, 0, 9])
+        );
+        // Out-of-bounds operations are ignored.
+        assert_eq!(apply(&mix_and_trim, &[4, 5, 6, 7]), int_array(&[5, 7]));
+
+        let composed = mix_and_trim.compose_over(&zero_nine());
+        assert_eq!(
+            apply(&composed, &[1, 2, 3, 4, 5, 6, 7]),
+            int_array(&[1, 9, 3, 0, 5, 6, 7])
+        );
+        assert_eq!(apply(&composed, &[4, 5]), int_array(&[4, 9]));
+    }
+
+    #[test]
+    fn vt_size_ops() {
+        let min_size10 = edit(vec![ArrayEditOp::MinSize { len: 10 }]);
+        assert_eq!(apply(&min_size10, &[]), int_array(&[0; 10]));
+        assert_eq!(apply(&min_size10, &[7; 15]), int_array(&[7; 15]));
+
+        let min_size10_fill9 = edit(vec![ArrayEditOp::MinSizeFill {
+            len: 10,
+            fill: Value::Int(9),
+        }]);
+        assert_eq!(apply(&min_size10_fill9, &[]), int_array(&[9; 10]));
+        assert_eq!(apply(&min_size10_fill9, &[7; 15]), int_array(&[7; 15]));
+
+        let max_size15 = edit(vec![ArrayEditOp::MaxSize { len: 15 }]);
+        assert_eq!(apply(&max_size15, &[]), int_array(&[]));
+        assert_eq!(apply(&max_size15, &[2; 20]), int_array(&[2; 15]));
+
+        let size10to15 = max_size15.compose_over(&min_size10);
+        assert_eq!(
+            apply(&size10to15, &[1; 7]),
+            int_array(&[1, 1, 1, 1, 1, 1, 1, 0, 0, 0])
+        );
+        assert_eq!(apply(&size10to15, &[2; 20]), int_array(&[2; 15]));
+        assert_eq!(apply(&size10to15, &[3; 13]), int_array(&[3; 13]));
+
+        let size7 = edit(vec![ArrayEditOp::Resize { len: 7 }]);
+        assert_eq!(apply(&size7, &[1; 7]), int_array(&[1; 7]));
+        assert_eq!(apply(&size7, &[]), int_array(&[0; 7]));
+        assert_eq!(apply(&size7, &[9; 27]), int_array(&[9; 7]));
+
+        let size7_fill3 = edit(vec![ArrayEditOp::ResizeFill {
+            len: 7,
+            fill: Value::Int(3),
+        }]);
+        assert_eq!(apply(&size7_fill3, &[1; 7]), int_array(&[1; 7]));
+        assert_eq!(apply(&size7_fill3, &[]), int_array(&[3; 7]));
+        assert_eq!(apply(&size7_fill3, &[9; 27]), int_array(&[9; 7]));
+    }
+
+    #[test]
+    fn vt_nested_prepend_append_composition() {
+        let prepend_append = |front: i32, back: i32| {
+            edit(vec![
+                ArrayEditOp::Insert {
+                    src: lit(front),
+                    index: ArrayIndex::Position(0),
+                },
+                ArrayEditOp::Insert {
+                    src: lit(back),
+                    index: ArrayIndex::End,
+                },
+            ])
+        };
+        let composed = prepend_append(0, 9)
+            .compose_over(&prepend_append(1, 8).compose_over(&prepend_append(2, 7)));
+        assert_eq!(apply(&composed, &[]), int_array(&[0, 1, 2, 7, 8, 9]));
     }
 }

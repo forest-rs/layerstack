@@ -1018,38 +1018,8 @@ fn decode_dictionary_at(
         let key_idx = read_u32_le(data, &mut pos)? as usize;
         let key = lookup_string(sections, key_idx);
 
-        // Value: u64 relative offset from the current position to the
-        // 8-byte `ValueRep`. The Python reference does:
-        //   seek_from = filehandle.tell()
-        //   offset = read_int() + seek_from   # read u64, add position
-        //   seek(offset); rep = read_int()    # read ValueRep at target
-        //   current = filehandle.tell()       # right after ValueRep
-        //   ... process ...
-        //   seek(current)                     # next entry starts here
-        //
-        // So the relative offset is from the position of the offset field
-        // itself, and the next entry continues from right after the ValueRep
-        // at the target location.
-        let seek_from = pos;
-        let value_rel_offset = read_u64_at(data, pos)? as usize;
-        let rep_offset = seek_from.saturating_add(value_rel_offset);
-        if rep_offset.saturating_add(8) > data.len() {
-            return Err(UsdcError::UnexpectedEof {
-                section: "dictionary value rep",
-                offset: rep_offset as u64,
-                expected: 8,
-            });
-        }
-
-        let mut rep_bytes = [0_u8; 8];
-        rep_bytes.copy_from_slice(&data[rep_offset..rep_offset + 8]);
-        let child_rep = RawValueRep::new(rep_bytes);
-        let child_val = decode_value(&child_rep, data, sections)?;
-
-        // Advance pos to right after the ValueRep (mirroring Python's
-        // `self.filehandle.seek(current)` where current = rep_offset + 8).
-        pos = rep_offset + 8;
-
+        // Value: a `VtValue` reached through a relative offset.
+        let child_val = read_vt_value(data, &mut pos, sections)?;
         entries.push((key, child_val));
     }
 
@@ -1079,8 +1049,8 @@ fn decode_list_op(
     }
 
     // First byte: header flags.
-    let header = data[off];
-    let mut pos = off + 1;
+    let mut pos = off;
+    let header = read_u8(data, &mut pos)?;
 
     let make_explicit = header & (1 << 0) != 0;
     let add_explicit = header & (1 << 1) != 0;
@@ -1152,115 +1122,166 @@ fn decode_list_op(
     }))
 }
 
-/// Reads a list of items for a list op component.
+/// Reads one list op component: a `u64` item count, then the items one
+/// after another (`Read<vector<T>>`, `pxr/usd/sdf/crateFile.cpp:1146`).
+///
+/// Items are read sequentially because some have variable length: a
+/// reference carries its `customData` dictionary, and an unregistered value
+/// is a `VtValue` reached through a relative offset.
 ///
 /// Returns `(items, bytes_consumed)`.
+///
+/// Spec: AOUSD Core §16.3.10.
 fn read_list_op_items(
     vtype: ValueType,
     data: &[u8],
     pos: usize,
     sections: &CrateSections,
 ) -> Result<(Vec<CrateValue>, usize), UsdcError> {
-    let num = read_u64_at(data, pos)? as usize;
+    let num = read_u64_at(data, pos)?;
     let mut cursor = pos + 8;
 
-    let element_size = match vtype {
-        ValueType::TokenListOp | ValueType::PathListOp | ValueType::StringListOp => 4,
-        ValueType::IntListOp | ValueType::UIntListOp => 4,
-        ValueType::Int64ListOp | ValueType::UInt64ListOp => 8,
-        ValueType::ReferenceListOp => 36, // INDEX + INDEX + LAYER_OFFSET + VALUE_REP
-        ValueType::PayloadListOp => 20,   // INDEX + INDEX + LAYER_OFFSET
-        ValueType::UnregisteredValueListOp => 8,
-        _ => {
-            return Err(UsdcError::Inconsistent {
-                message: "unsupported list op type",
-            });
-        }
-    };
+    // Every item occupies at least four bytes, so a count the remaining data
+    // cannot hold is malformed. Checking first bounds the allocation.
+    if num > (data.len().saturating_sub(cursor) / 4) as u64 {
+        return Err(UsdcError::UnexpectedEof {
+            section: "list op items",
+            offset: cursor as u64,
+            expected: num.saturating_mul(4),
+        });
+    }
+    let num = num as usize;
 
     let mut items = Vec::with_capacity(num);
     for _ in 0..num {
-        let item_data = &data[cursor..cursor + element_size];
         let item = match vtype {
             ValueType::TokenListOp => {
-                let idx = u32::from_le_bytes(item_data[..4].try_into().unwrap()) as usize;
+                let idx = read_u32_le(data, &mut cursor)? as usize;
                 CrateValue::Token(lookup_token(sections, idx))
             }
             ValueType::PathListOp => {
-                let idx = u32::from_le_bytes(item_data[..4].try_into().unwrap()) as usize;
-                let path = if idx < sections.paths.len() {
-                    sections.paths[idx].clone()
-                } else {
-                    String::new()
-                };
-                CrateValue::String(path)
+                let idx = read_u32_le(data, &mut cursor)? as usize;
+                CrateValue::String(lookup_path(sections, idx))
             }
             ValueType::StringListOp => {
-                let idx = u32::from_le_bytes(item_data[..4].try_into().unwrap()) as usize;
+                let idx = read_u32_le(data, &mut cursor)? as usize;
                 CrateValue::String(lookup_string(sections, idx))
             }
-            ValueType::IntListOp => {
-                let v = i32::from_le_bytes(item_data[..4].try_into().unwrap());
-                CrateValue::Int(v)
-            }
-            ValueType::UIntListOp => {
-                let v = u32::from_le_bytes(item_data[..4].try_into().unwrap());
-                CrateValue::UInt(v)
-            }
+            ValueType::IntListOp => CrateValue::Int(read_i32_le(data, &mut cursor)?),
+            ValueType::UIntListOp => CrateValue::UInt(read_u32_le(data, &mut cursor)?),
             ValueType::Int64ListOp => {
-                let v = i64::from_le_bytes(item_data[..8].try_into().unwrap());
+                let v = read_u64_at(data, cursor)?.cast_signed();
+                cursor += 8;
                 CrateValue::Int64(v)
             }
             ValueType::UInt64ListOp => {
-                let v = u64::from_le_bytes(item_data[..8].try_into().unwrap());
+                let v = read_u64_at(data, cursor)?;
+                cursor += 8;
                 CrateValue::UInt64(v)
             }
-            ValueType::ReferenceListOp | ValueType::PayloadListOp => {
-                decode_reference_data(item_data, sections)?
+            ValueType::ReferenceListOp => decode_reference_at(data, &mut cursor, sections)?,
+            ValueType::PayloadListOp => decode_payload_at(data, &mut cursor, sections)?,
+            ValueType::UnregisteredValueListOp => read_vt_value(data, &mut cursor, sections)?,
+            _ => {
+                return Err(UsdcError::Inconsistent {
+                    message: "unsupported list op type",
+                });
             }
-            ValueType::UnregisteredValueListOp => {
-                let mut rb = [0_u8; 8];
-                rb.copy_from_slice(item_data);
-                let child_rep = RawValueRep::new(rb);
-                decode_value(&child_rep, data, sections)?
-            }
-            _ => CrateValue::None,
         };
         items.push(item);
-        cursor += element_size;
     }
 
     Ok((items, cursor - pos))
 }
 
-fn decode_reference_data(
-    item_data: &[u8],
+/// Reads a `VtValue` stored in place (`Read<VtValue>`,
+/// `pxr/usd/sdf/crateFile.cpp:1314`): an `i64` offset, relative to the
+/// offset field, to the value's `ValueRep`. `pos` ends just past the
+/// `ValueRep`, where the next item starts.
+fn read_vt_value(
+    data: &[u8],
+    pos: &mut usize,
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
-    let asset_path_idx = u32::from_le_bytes(item_data[..4].try_into().unwrap()) as usize;
-    let prim_path_idx = u32::from_le_bytes(item_data[4..8].try_into().unwrap()) as usize;
+    let start = *pos;
+    let relative = read_u64_at(data, start)?;
+    let rep_offset = usize::try_from(relative)
+        .ok()
+        .and_then(|relative| start.checked_add(relative))
+        .ok_or(UsdcError::UnexpectedEof {
+            section: "VtValue value rep",
+            offset: start as u64,
+            expected: 8,
+        })?;
+    let child_rep = RawValueRep::new(read_u64_at(data, rep_offset)?.to_le_bytes());
+    *pos = rep_offset + 8;
+    decode_value(&child_rep, data, sections)
+}
 
-    let asset_path = lookup_string(sections, asset_path_idx);
-    let prim_path = if prim_path_idx < sections.paths.len() {
-        sections.paths[prim_path_idx].clone()
-    } else {
-        String::new()
-    };
+/// Looks up a path by index, or the empty string when out of range.
+fn lookup_path(sections: &CrateSections, idx: usize) -> String {
+    sections.paths.get(idx).cloned().unwrap_or_default()
+}
 
-    let offset_bytes = &item_data[8..];
-    let layer_offset = if offset_bytes.len() >= 8 {
-        f64::from_le_bytes(offset_bytes[..8].try_into().unwrap())
-    } else {
-        0.0
-    };
-    let layer_scale = if offset_bytes.len() >= 16 {
-        f64::from_le_bytes(offset_bytes[8..16].try_into().unwrap())
-    } else {
-        1.0
-    };
+/// Reads an `SdfReference` (`Write(SdfReference)`,
+/// `pxr/usd/sdf/crateFile.cpp:1529`): a string index for the asset path, a
+/// path index for the prim path, the layer offset as two `f64`s (offset,
+/// scale), and the `customData` dictionary.
+///
+/// The custom data is decoded to validate it and to find the end of the
+/// item, then dropped: `layerstack::doc::Reference` has no custom data.
+fn decode_reference_at(
+    data: &[u8],
+    pos: &mut usize,
+    sections: &CrateSections,
+) -> Result<CrateValue, UsdcError> {
+    let asset_path = lookup_string(sections, read_u32_le(data, pos)? as usize);
+    let prim_path = lookup_path(sections, read_u32_le(data, pos)? as usize);
+    let layer_offset = read_f64_le(data, pos)?;
+    let layer_scale = read_f64_le(data, pos)?;
+    let (_custom_data, end) = decode_dictionary_at(data, *pos, sections)?;
+    *pos = end;
+    Ok(reference_dictionary(
+        asset_path,
+        prim_path,
+        layer_offset,
+        layer_scale,
+    ))
+}
 
-    // Encode as a dictionary for the assembler to interpret.
-    Ok(CrateValue::Dictionary(vec![
+/// Reads an `SdfPayload` (`Write(SdfPayload)`,
+/// `pxr/usd/sdf/crateFile.cpp:1535`): a string index for the asset path and
+/// a path index for the prim path, then, from crate 0.8, the layer offset as
+/// two `f64`s. Earlier files have no payload layer offsets
+/// (`pxr/usd/sdf/crateFile.cpp:1303`).
+fn decode_payload_at(
+    data: &[u8],
+    pos: &mut usize,
+    sections: &CrateSections,
+) -> Result<CrateValue, UsdcError> {
+    let asset_path = lookup_string(sections, read_u32_le(data, pos)? as usize);
+    let prim_path = lookup_path(sections, read_u32_le(data, pos)? as usize);
+    let (layer_offset, layer_scale) = if sections.version.has(CrateVersion::PAYLOAD_LAYER_OFFSETS) {
+        (read_f64_le(data, pos)?, read_f64_le(data, pos)?)
+    } else {
+        (0.0, 1.0)
+    };
+    Ok(reference_dictionary(
+        asset_path,
+        prim_path,
+        layer_offset,
+        layer_scale,
+    ))
+}
+
+/// Encodes a reference or payload as the dictionary the assembler reads.
+fn reference_dictionary(
+    asset_path: String,
+    prim_path: String,
+    layer_offset: f64,
+    layer_scale: f64,
+) -> CrateValue {
+    CrateValue::Dictionary(vec![
         (String::from("assetPath"), CrateValue::AssetPath(asset_path)),
         (String::from("primPath"), CrateValue::String(prim_path)),
         (
@@ -1268,7 +1289,7 @@ fn decode_reference_data(
             CrateValue::Double(layer_offset),
         ),
         (String::from("layerScale"), CrateValue::Double(layer_scale)),
-    ]))
+    ])
 }
 
 // ---------------------------------------------------------------------------
@@ -1566,15 +1587,7 @@ fn decode_payload(
     if off == 0 {
         return Ok(CrateValue::None);
     }
-    // Payload: 20 bytes (INDEX + INDEX + LAYER_OFFSET).
-    if off + 20 > data.len() {
-        return Err(UsdcError::UnexpectedEof {
-            section: "Payload",
-            offset: off as u64,
-            expected: 20,
-        });
-    }
-    decode_reference_data(&data[off..off + 20], sections)
+    decode_payload_at(data, &mut { off }, sections)
 }
 
 // ---------------------------------------------------------------------------
@@ -2559,6 +2572,125 @@ mod tests {
         // An array edit cannot also be an array.
         bytes[7] |= 0x80;
         assert!(decode_value(&RawValueRep::new(bytes), &[], &sections).is_err());
+    }
+
+    fn sections_with(version: CrateVersion) -> CrateSections {
+        CrateSections {
+            tokens: vec!["./ref.usd".into(), "note".into()],
+            strings: vec![0, 1],
+            fields: vec![],
+            fieldsets: vec![],
+            paths: vec!["/".into(), "/Ref".into()],
+            specs: vec![],
+            version,
+        }
+    }
+
+    fn list_op_rep(vtype: ValueType, offset: u8) -> RawValueRep {
+        let mut bytes = [0_u8; 8];
+        bytes[0] = offset;
+        bytes[6] = vtype as u8;
+        RawValueRep::new(bytes)
+    }
+
+    fn reference_fields(value: &CrateValue) -> (String, String, f64, f64) {
+        let CrateValue::Dictionary(entries) = value else {
+            panic!("expected a reference dictionary, got {value:?}");
+        };
+        match entries.as_slice() {
+            [
+                (_, CrateValue::AssetPath(asset)),
+                (_, CrateValue::String(prim)),
+                (_, CrateValue::Double(offset)),
+                (_, CrateValue::Double(scale)),
+            ] => (asset.clone(), prim.clone(), *offset, *scale),
+            other => panic!("unexpected reference entries {other:?}"),
+        }
+    }
+
+    /// References are variable-length: each carries its `customData`
+    /// dictionary after the layer offset (`Write(SdfReference)`,
+    /// `pxr/usd/sdf/crateFile.cpp:1529`).
+    #[test]
+    fn reference_list_op_items_carry_custom_data() {
+        let mut data = vec![0_u8; 8];
+        data.push(1 << 5); // prepended items
+        data.extend_from_slice(&2_u64.to_le_bytes());
+        // Reference 1: custom data { note: 7 }.
+        data.extend_from_slice(&0_u32.to_le_bytes());
+        data.extend_from_slice(&1_u32.to_le_bytes());
+        data.extend_from_slice(&10.0_f64.to_le_bytes());
+        data.extend_from_slice(&2.0_f64.to_le_bytes());
+        data.extend_from_slice(&1_u64.to_le_bytes());
+        data.extend_from_slice(&1_u32.to_le_bytes());
+        data.extend_from_slice(&8_i64.to_le_bytes());
+        data.extend_from_slice(&[7, 0, 0, 0, 0, 0, ValueType::Int as u8, 0x40]);
+        // Reference 2: no custom data.
+        data.extend_from_slice(&0_u32.to_le_bytes());
+        data.extend_from_slice(&1_u32.to_le_bytes());
+        data.extend_from_slice(&45.0_f64.to_le_bytes());
+        data.extend_from_slice(&0.5_f64.to_le_bytes());
+        data.extend_from_slice(&0_u64.to_le_bytes());
+
+        let sections = sections_with(CrateVersion::NEWEST_READABLE);
+        let rep = list_op_rep(ValueType::ReferenceListOp, 8);
+        let Ok(CrateValue::ListOp(op)) = decode_value(&rep, &data, &sections) else {
+            panic!("expected a list op");
+        };
+        let refs: Vec<_> = op.prepended_items.iter().map(reference_fields).collect();
+        let r = |offset, scale| {
+            (
+                String::from("./ref.usd"),
+                String::from("/Ref"),
+                offset,
+                scale,
+            )
+        };
+        assert_eq!(refs, [r(10.0, 2.0), r(45.0, 0.5)]);
+
+        // Truncated anywhere, the list op fails without panicking.
+        for len in 0..data.len() {
+            assert!(
+                decode_value(&rep, &data[..len], &sections).is_err(),
+                "{len}"
+            );
+        }
+    }
+
+    /// Payloads have layer offsets from crate 0.8 (`Write(SdfPayload)`,
+    /// `pxr/usd/sdf/crateFile.cpp:1535`).
+    #[test]
+    fn payload_list_op_items_have_offsets() {
+        let mut data = vec![0_u8; 8];
+        data.push(1 << 6); // appended items
+        data.extend_from_slice(&1_u64.to_le_bytes());
+        data.extend_from_slice(&0_u32.to_le_bytes());
+        data.extend_from_slice(&1_u32.to_le_bytes());
+        data.extend_from_slice(&3.0_f64.to_le_bytes());
+        data.extend_from_slice(&4.0_f64.to_le_bytes());
+
+        let sections = sections_with(CrateVersion::NEWEST_READABLE);
+        let rep = list_op_rep(ValueType::PayloadListOp, 8);
+        let Ok(CrateValue::ListOp(op)) = decode_value(&rep, &data, &sections) else {
+            panic!("expected a list op");
+        };
+        let payloads: Vec<_> = op.appended_items.iter().map(reference_fields).collect();
+        assert_eq!(
+            payloads,
+            [(String::from("./ref.usd"), String::from("/Ref"), 3.0, 4.0)]
+        );
+
+        // A crate 0.7 payload is only the asset and prim path.
+        let payload = &data[17..25];
+        let mut old = vec![0_u8; 8];
+        old.extend_from_slice(payload);
+        let rep = list_op_rep(ValueType::Payload, 8);
+        let sections = sections_with(CrateVersion::OLDEST_READABLE);
+        let value = decode_value(&rep, &old, &sections).unwrap();
+        assert_eq!(
+            reference_fields(&value),
+            (String::from("./ref.usd"), String::from("/Ref"), 0.0, 1.0)
+        );
     }
 
     #[test]

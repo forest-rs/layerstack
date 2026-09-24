@@ -503,7 +503,7 @@ impl core::error::Error for WriteError {}
 
 /// `([XID_Start] / '_') [XID_Continue]*` — §7.3.3 (`PrimName`), with the
 /// Unicode XID tables the lexer also uses, so written names always re-parse
-/// here and in `OpenUSD` (`pxr/usd/sdf/path.cpp`, `_IsValidIdentifier`).
+/// here and in OpenUSD (`pxr/usd/sdf/path.cpp`, `_IsValidIdentifier`).
 fn is_identifier(name: &str) -> bool {
     let mut chars = name.chars();
     chars.next().is_some_and(crate::ident::is_start) && chars.all(crate::ident::is_continue)
@@ -601,7 +601,7 @@ struct Shape {
 
 /// Maps a USD attribute value type name to its storage shape.
 ///
-/// The accepted names are a subset of the `OpenUSD` `Sdf` value type registry
+/// The accepted names are a subset of the OpenUSD `Sdf` value type registry
 /// (`pxr/usd/sdf/schema.cpp`, `_RegisterStandardTypes`; `pxr/usd/sdf/types.h`,
 /// `SDF_VALUE_TYPES` plus the role aliases), each optionally with `[]`.
 /// Deliberately excluded: `dictionary` (metadata only, never an attribute

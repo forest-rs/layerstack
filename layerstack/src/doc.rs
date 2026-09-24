@@ -344,7 +344,7 @@ impl opinionated::DictionaryAdapter<Arc<str>, Value> for ValueDictionaries {
 /// - For a key on both sides the stronger value wins, unless both values are
 ///   dictionaries, which combine recursively.
 /// - The result is ordered by key at every nesting level, including nested
-///   dictionaries contributed by only one side, matching `OpenUSD`'s
+///   dictionaries contributed by only one side, matching OpenUSD's
 ///   `VtDictionary`.
 ///
 /// Delegates to [`opinionated::combine_dictionaries`].
@@ -363,7 +363,7 @@ pub fn combine_dictionaries(
 /// The chain folds strongest-first, `((d0 ∪ d1) ∪ d2) ∪ …`. Combining is not
 /// associative when a key holds a dictionary in one opinion and a
 /// non-dictionary in another, and the spec does not say how a chain is folded,
-/// so `OpenUSD` governs (AOUSD Core §4.2): `MetadataValueComposer` in
+/// so OpenUSD governs (AOUSD Core §4.2): `MetadataValueComposer` in
 /// `pxr/usd/usd/stage.cpp` composes the stronger partial result over each
 /// weaker opinion via `VtDictionaryOverRecursive`. A schema fallback is the
 /// last, weakest element of the chain. The result is ordered by key at every

@@ -37,7 +37,7 @@
 //! Paths are used as given; the packager does not discover or rewrite
 //! dependencies.
 //!
-//! The package targets the **generic USDZ profile** (`OpenUSD`
+//! The package targets the **generic USDZ profile** (OpenUSD
 //! `docs/spec_usdz.rst`): a USDA default layer plus media. It is not the
 //! `ARKit` / AR Quick Look profile, which expects a single USDC layer
 //! (`spec_usdz.rst:210`, `pxr/usd/usdUtils/usdzPackage.h:71`); passing
@@ -75,7 +75,7 @@
 //!
 //! # References
 //!
-//! Conventions follow the `OpenUSD` reference implementation (v26.08 headers;
+//! Conventions follow the OpenUSD reference implementation (v26.08 headers;
 //! `pxr/usd/usdGeom/...`), which documents the `UsdGeom` domain schemas
 //! that AOUSD Core (§2.1) leaves out of scope:
 //! [`mesh.h`](https://openusd.org/dev/api/class_usd_geom_mesh.html) (topology,

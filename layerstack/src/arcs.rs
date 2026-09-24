@@ -68,7 +68,7 @@ pub(crate) enum SelectionScope<'a> {
 /// by `scope`.
 ///
 /// Spec: AOUSD Core §10.5 (only the selected variant contributes, including
-/// the arcs authored inside it); `OpenUSD` adds arcs only beneath the selected
+/// the arcs authored inside it); OpenUSD adds arcs only beneath the selected
 /// variant node (`pxr/usd/pcp/primIndex.cpp`, `_AddVariantArc`).
 pub(crate) fn spec_arcs_apply(
     store: &dyn LayerStore,

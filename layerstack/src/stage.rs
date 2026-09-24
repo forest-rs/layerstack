@@ -768,7 +768,7 @@ impl Stage {
                     SparseResolveResult::NotApplicable => {}
                 }
                 // A dictionary fallback is the weakest opinion in the combining
-                // chain, as in `OpenUSD`'s `MetadataValueComposer::ConsumeUsdFallback`.
+                // chain, as in OpenUSD's `MetadataValueComposer::ConsumeUsdFallback`.
                 //
                 // Spec: AOUSD Core §6.6.2.1, §13.3.2.4 (fallback value resolution).
                 if let (

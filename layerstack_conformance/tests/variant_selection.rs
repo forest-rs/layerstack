@@ -288,7 +288,7 @@ fn arc_model(name: &str, arc: &str, target_a: &str, target_b: &str) -> String {
 /// neither their target's children, their opinions, nor their dependency
 /// edges may reach the composed stage.
 ///
-/// Spec: AOUSD Core §10.5; `OpenUSD` only adds arcs of the selected variant
+/// Spec: AOUSD Core §10.5; OpenUSD only adds arcs of the selected variant
 /// node (`pxr/usd/pcp/primIndex.cpp`, `_AddVariantArc`).
 #[test]
 fn arcs_in_unselected_variant_branch_are_not_followed() {
@@ -488,7 +488,7 @@ def "A" (
 /// selection, so none of its branches contribute), nor override `/A/C`'s
 /// own selection.
 ///
-/// Spec: AOUSD Core §10.5; `OpenUSD` resolves a set's selection at the site
+/// Spec: AOUSD Core §10.5; OpenUSD resolves a set's selection at the site
 /// hosting the set (`pxr/usd/pcp/primIndex.cpp`, `_ComposeVariantSelection`).
 #[test]
 fn same_named_variant_sets_on_different_hosts_do_not_alias() {
@@ -591,7 +591,7 @@ def "Model" (
 /// descendants, arcs and opinions participate, however deep below the branch
 /// they sit. The library's own default (`b`) must not veto them.
 ///
-/// Spec: AOUSD Core §10.5; `OpenUSD` resolves the selection in the prim index
+/// Spec: AOUSD Core §10.5; OpenUSD resolves the selection in the prim index
 /// composed so far, strongest first (`pxr/usd/pcp/primIndex.cpp`,
 /// `_ComposeVariantSelection`).
 #[test]
@@ -996,7 +996,7 @@ fn matrix_cell(outer: MatrixArc, inner: MatrixArc, selection: MatrixSelection) -
 /// (whole opinion stack), arc-target children, the other branch's content,
 /// and dependency data.
 ///
-/// Spec: AOUSD Core §10.5; `OpenUSD` resolves a set's selection by searching
+/// Spec: AOUSD Core §10.5; OpenUSD resolves a set's selection by searching
 /// the prim index composed so far, strongest first, and adds arcs only
 /// beneath the selected variant node (`pxr/usd/pcp/primIndex.cpp`).
 #[test]

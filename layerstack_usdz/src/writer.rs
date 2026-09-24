@@ -4,7 +4,7 @@
 //! USDZ package writer.
 //!
 //! Produces the constrained ZIP layout that USDZ requires (AOUSD Core
-//! §16.4.1; `OpenUSD` USDZ specification, "Layout",
+//! §16.4.1; OpenUSD USDZ specification, "Layout",
 //! <https://openusd.org/dev/spec_usdz.html#layout>):
 //!
 //! - every entry is stored (compression method 0), unencrypted, with its
@@ -260,7 +260,7 @@ fn validate(files: &[PackageFile<'_>]) -> Result<(), UsdzWriteError> {
     Ok(())
 }
 
-/// File extensions a USDZ package may contain, exactly as the `OpenUSD`
+/// File extensions a USDZ package may contain, exactly as the OpenUSD
 /// USDZ specification lists them (`docs/spec_usdz.rst`, "Usdz
 /// Specification" table and "File Types"): USD layers, PNG/JPEG/OpenEXR/AVIF
 /// images, and M4A/MP3/WAV audio. AOUSD Core §16.4.1.5 recommends the same

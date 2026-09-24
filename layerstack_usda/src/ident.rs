@@ -5,7 +5,7 @@
 //!
 //! An identifier is `([XID_Start] / '_') [XID_Continue]*` (AOUSD Core
 //! §7.3.3, §16.2.8), using the Unicode `XID_Start` / `XID_Continue`
-//! properties exactly. `OpenUSD` applies the same rule
+//! properties exactly. OpenUSD applies the same rule
 //! (`pxr/usd/sdf/path.cpp`, `_IsValidIdentifier`). Approximations such as
 //! `char::is_alphanumeric` are wrong in both directions: they admit
 //! characters like `²` (U+00B2) and reject combining marks such as U+0301.

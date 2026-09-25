@@ -380,7 +380,7 @@ mod tests {
 
     use super::*;
     use crate::{
-        FieldValue, HashMap, Layer, PrimSpec, Reference, SublayerEntry, Value,
+        FieldValue, HashMap, Layer, PrimSpec, PropertySpec, Reference, SublayerEntry, Value,
         doc::InMemoryStore,
         interner::TokenId,
         path::{Path, PropertyPath},
@@ -389,6 +389,11 @@ mod tests {
     fn p(store: &mut InMemoryStore, s: &str) -> PathId {
         let path = Path::parse_absolute(s, &mut store.tokens).expect("valid path");
         store.paths.intern(path)
+    }
+
+    /// An attribute spec authoring only the default `value`.
+    fn attr(value: i64) -> PropertySpec {
+        PropertySpec::attribute().with_default(value)
     }
 
     #[test]
@@ -401,6 +406,7 @@ mod tests {
             id: LayerId(1),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         let mut spec = PrimSpec::default();
@@ -426,6 +432,7 @@ mod tests {
             id: LayerId(1),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         layer.insert_prim(prim, PrimSpec::default());
@@ -446,6 +453,7 @@ mod tests {
             id: LayerId(1),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         let mut spec = PrimSpec::default();
@@ -514,6 +522,7 @@ mod tests {
             id: LayerId(1),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         layer.insert_prim(prim, PrimSpec::default());
@@ -591,6 +600,7 @@ mod tests {
             id: LayerId(1),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         let mut p_spec = PrimSpec::default();
@@ -602,6 +612,7 @@ mod tests {
             id: LayerId(2),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         let mut q_spec = PrimSpec::default();
@@ -647,6 +658,7 @@ mod tests {
             id: LayerId(2),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         let mut spec2 = PrimSpec::default();
@@ -658,6 +670,7 @@ mod tests {
             id: LayerId(1),
             sublayers: vec![SublayerEntry::new(LayerId(2))],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         let mut spec1 = PrimSpec::default();
@@ -714,6 +727,7 @@ mod tests {
             id: LayerId(1),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         // /Class_C defines x = 42.
@@ -767,6 +781,7 @@ mod tests {
             id: LayerId(1),
             sublayers: vec![SublayerEntry::new(LayerId(2))],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         let mut a_spec = PrimSpec::default();
@@ -778,6 +793,7 @@ mod tests {
             id: LayerId(2),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         let mut b_spec = PrimSpec::default();
@@ -826,6 +842,7 @@ mod tests {
             id: LayerId(1),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         let mut spec = PrimSpec::default();
@@ -867,6 +884,7 @@ mod tests {
             id: LayerId(1),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         let mut p_spec = PrimSpec::default();
@@ -879,6 +897,7 @@ mod tests {
             id: LayerId(2),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         let mut q_spec = PrimSpec::default();
@@ -919,6 +938,7 @@ mod tests {
             id: LayerId(1),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         let mut a_spec = PrimSpec::default();
@@ -968,6 +988,7 @@ mod tests {
             id: LayerId(1),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         let mut a_spec = PrimSpec::default();
@@ -1020,6 +1041,7 @@ mod tests {
             id: LayerId(1),
             sublayers: vec![SublayerEntry::new(LayerId(2))],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         let mut a_spec = PrimSpec::default();
@@ -1031,6 +1053,7 @@ mod tests {
             id: LayerId(2),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         let mut b_spec = PrimSpec::default();
@@ -1062,6 +1085,7 @@ mod tests {
             id: LayerId(1),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         };
         for &(prim, val) in &[(prim_a, 1), (prim_b, 2), (prim_c, 3)] {
@@ -1136,6 +1160,17 @@ mod tests {
                     fresh.explain_field(prim, field),
                     "opinion stack differs for {prim:?}.{field:?}"
                 );
+                let property = PropertyPath::new(prim, field);
+                assert_eq!(
+                    stage.resolve_property_path(property),
+                    fresh.resolve_property_path(property),
+                    "property value differs for {prim:?}.{field:?}"
+                );
+                assert_eq!(
+                    stage.explain_property_path(property),
+                    fresh.explain_property_path(property),
+                    "property opinion stack differs for {prim:?}.{field:?}"
+                );
             }
         }
 
@@ -1186,7 +1221,7 @@ mod tests {
             b,
             PrimSpec::def().with_reference(Reference::new(LayerId(2), source)),
         );
-        root.insert_prim(c, PrimSpec::def().with_field(field_x, 3_i64));
+        root.insert_prim(c, PrimSpec::def().with_property(field_x, attr(3_i64)));
         root.insert_prim(
             d,
             PrimSpec::def().with_reference(Reference::new(LayerId(2), other)),
@@ -1194,8 +1229,8 @@ mod tests {
         store.insert_layer(root);
 
         let mut library = Layer::new(LayerId(2));
-        library.insert_prim(source, PrimSpec::def().with_field(field_x, 1_i64));
-        library.insert_prim(other, PrimSpec::def().with_field(field_x, 7_i64));
+        library.insert_prim(source, PrimSpec::def().with_property(field_x, attr(1_i64)));
+        library.insert_prim(other, PrimSpec::def().with_property(field_x, attr(7_i64)));
         store.insert_layer(library);
 
         let options = StageOptions {
@@ -1214,13 +1249,16 @@ mod tests {
             .layers
             .get_mut(&LayerId(2))
             .unwrap()
-            .set_property(PropertyPath::new(source, field_x), 2_i64);
+            .set_property(PropertyPath::new(source, field_x), attr(2_i64));
         live.notify_layer_prim_edits(LayerId(2), &[source]);
         let mut updated = live.recompose(&mut store);
         updated.sort_unstable();
         assert_eq!(updated, [a, b], "exactly the referencing prims recompose");
         assert_eq!(
-            live.stage().resolve_field(a, field_x).unwrap().value,
+            live.stage()
+                .resolve_field_path(PropertyPath::new(a, field_x))
+                .unwrap()
+                .value,
             Value::Int64(2)
         );
         assert_matches_fresh(&live, &mut store, &[field_x]);
@@ -1243,9 +1281,9 @@ mod tests {
         let child = p(&mut store, "/A/Child");
 
         let mut layer = Layer::new(LayerId(1));
-        layer.insert_prim(prim_a, PrimSpec::def().with_field(field_x, 1_i64));
-        layer.insert_prim(child, PrimSpec::def().with_field(field_x, 5_i64));
-        layer.insert_prim(prim_b, PrimSpec::def().with_field(field_x, 2_i64));
+        layer.insert_prim(prim_a, PrimSpec::def().with_property(field_x, attr(1_i64)));
+        layer.insert_prim(child, PrimSpec::def().with_property(field_x, attr(5_i64)));
+        layer.insert_prim(prim_b, PrimSpec::def().with_property(field_x, attr(2_i64)));
         // `/C` references `/A`, so editing `/A` also recomposes `/C`.
         layer.insert_prim(
             prim_c,
@@ -1264,7 +1302,7 @@ mod tests {
             .layers
             .get_mut(&LayerId(1))
             .unwrap()
-            .set_property(PropertyPath::new(prim_a, field_x), 10_i64);
+            .set_property(PropertyPath::new(prim_a, field_x), attr(10_i64));
         live.notify_prim_edit(prim_a);
         let updated = live.recompose(&mut store);
         assert!(updated.contains(&prim_a), "A recomposed");
@@ -1272,7 +1310,10 @@ mod tests {
         assert!(!updated.contains(&prim_b), "B untouched");
         assert_matches_fresh(&live, &mut store, &[field_x]);
         assert_eq!(
-            live.stage().resolve_field(prim_c, field_x).unwrap().value,
+            live.stage()
+                .resolve_field_path(PropertyPath::new(prim_c, field_x))
+                .unwrap()
+                .value,
             Value::Int64(10),
             "reference sees the edit"
         );
@@ -1282,7 +1323,7 @@ mod tests {
             .layers
             .get_mut(&LayerId(1))
             .unwrap()
-            .set_property(PropertyPath::new(prim_b, field_x), 20_i64);
+            .set_property(PropertyPath::new(prim_b, field_x), attr(20_i64));
         live.notify_layer_prim_edits(LayerId(1), &[prim_b]);
         let updated = live.recompose(&mut store);
         assert_eq!(updated, vec![prim_b], "only B recomposed");
@@ -1292,7 +1333,7 @@ mod tests {
             .layers
             .get_mut(&LayerId(1))
             .unwrap()
-            .set_property(PropertyPath::new(prim_a, field_x), 11_i64);
+            .set_property(PropertyPath::new(prim_a, field_x), attr(11_i64));
         live.notify_layer_prim_edits(LayerId(1), &[prim_a]);
         let updated = live.recompose(&mut store);
         assert!(updated.contains(&prim_c), "C still depends on A");

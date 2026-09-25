@@ -9,10 +9,15 @@ extern crate alloc;
 
 use layerstack::{
     ArcKind, ArrayEdit, ArrayEditOp, FieldEntry, FieldValue, InterpolationType, Layer, LayerId,
-    ListOp, PrimSpec, PropertyType, Reference, ResolvedValue, SchemaDefinition, SchemaRegistry,
-    Stage, StageOptions, SublayerEntry, TargetPath, Value, VariantSetSpec, VariantSpec,
-    doc::InMemoryStore,
+    ListOp, PrimSpec, PropertyPath, PropertySpec, PropertyType, Reference, ResolvedValue,
+    SchemaDefinition, SchemaRegistry, Stage, StageOptions, SublayerEntry, TargetPath, Value,
+    VariantSetSpec, VariantSpec, doc::InMemoryStore,
 };
+
+/// An attribute spec authoring only `samples`.
+fn sampled(samples: Vec<(f64, Value)>) -> PropertySpec {
+    PropertySpec::attribute().with_time_samples(samples)
+}
 
 #[test]
 fn sublayer_strength_local_beats_sublayer() {
@@ -54,7 +59,10 @@ fn property_path_queries_match_prim_plus_field_queries() {
     let property_path = store.property_path("/P.x");
 
     let mut layer = Layer::new(LayerId(1));
-    layer.insert_prim(prim, PrimSpec::default().with_field(field_x, 7_i64));
+    layer.insert_prim(
+        prim,
+        PrimSpec::default().with_property(field_x, PropertySpec::attribute().with_default(7_i64)),
+    );
     store.insert_layer(layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -77,7 +85,7 @@ fn property_path_queries_match_prim_plus_field_queries() {
 }
 
 #[test]
-fn property_path_time_queries_match_prim_plus_field_queries() {
+fn property_path_time_queries_read_properties_not_metadata() {
     let mut store = InMemoryStore::default();
 
     let field_x = store.tokens.intern("x");
@@ -87,23 +95,25 @@ fn property_path_time_queries_match_prim_plus_field_queries() {
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(
         prim,
-        PrimSpec::default().with_field(
+        PrimSpec::default().with_property(
             field_x,
-            FieldValue::TimeSamples(vec![(1.0, Value::Double(10.0)), (3.0, Value::Double(30.0))]),
+            sampled(vec![(1.0, Value::Double(10.0)), (3.0, Value::Double(30.0))]),
         ),
     );
     store.insert_layer(layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
-    let by_field = stage
-        .resolve_value_at_time(prim, field_x, 2.0, InterpolationType::Held)
-        .expect("sampled property exists");
     let by_property_path = stage
         .resolve_property_path_at_time(property_path, 2.0, InterpolationType::Held)
         .expect("sampled property exists");
-
-    assert_eq!(by_property_path.value, by_field.value);
+    assert_eq!(by_property_path.value, Value::Double(10.0));
+    // The name-based query reads prim metadata, and `/P` authors no `x`
+    // metadata.
+    assert_eq!(
+        stage.resolve_value_at_time(prim, field_x, 2.0, InterpolationType::Held),
+        None
+    );
 }
 
 #[test]
@@ -188,7 +198,6 @@ fn property_path_query_helpers_cover_field_and_target_lists() {
     let token_a = store.tokens.intern("A");
     let token_b = store.tokens.intern("B");
     let prim = store.path("/P");
-    let labels_path = store.property_path("/P.labels");
     let input_path = store.property_path("/P.inputs:surface");
     let shader_output = store.property_path("/Q.outputs:surface");
 
@@ -203,9 +212,9 @@ fn property_path_query_helpers_cover_field_and_target_lists() {
                     ..ListOp::default()
                 }),
             )
-            .with_field(
+            .with_property(
                 input,
-                FieldValue::PathListOp(ListOp {
+                PropertySpec::attribute().with_targets(ListOp {
                     explicit: Some(vec![TargetPath::property(shader_output)]),
                     ..ListOp::default()
                 }),
@@ -215,13 +224,16 @@ fn property_path_query_helpers_cover_field_and_target_lists() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
+    // `labels` is prim metadata, so property-path queries do not see it.
     assert_eq!(
         stage
-            .resolve_token_list_path(labels_path)
+            .resolve_token_list(prim, labels)
             .expect("labels")
             .value,
         vec![token_a, token_b]
     );
+    let labels_path = PropertyPath::new(prim, labels);
+    assert!(!stage.has_property_path(labels_path));
     assert_eq!(
         stage
             .resolve_target_list_path(input_path)
@@ -237,7 +249,7 @@ fn layer_property_helpers_author_without_manual_prim_lookup() {
 
     let property = store.property_path("/P.answer");
     let mut layer = Layer::new(LayerId(1));
-    layer.set_property(property, 42_i64);
+    layer.set_property(property, PropertySpec::attribute().with_default(42_i64));
     store.insert_layer(layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -256,12 +268,12 @@ fn layer_typed_property_helper_preserves_sparse_array_defaults() {
 
     let property = store.property_path("/P.indices");
     let mut layer = Layer::new(LayerId(1));
-    layer.set_typed_property(
+    layer.set_property(
         property,
-        Value::ArrayEdit(ArrayEdit {
-            ops: vec![ArrayEditOp::Resize { len: 3 }],
-        }),
-        PropertyType::new("int[]", true, Value::Int(0)),
+        PropertySpec::typed_attribute(PropertyType::new("int[]", true, Value::Int(0)))
+            .with_default(Value::ArrayEdit(ArrayEdit {
+                ops: vec![ArrayEditOp::Resize { len: 3 }],
+            })),
     );
     store.insert_layer(layer);
 
@@ -394,7 +406,6 @@ fn variants_selection_is_strength_ordered() {
             fields: vec![FieldEntry {
                 name: field_x,
                 value: Value::Int64(1).into(),
-                property_type: None,
             }],
             ..Default::default()
         },
@@ -406,7 +417,6 @@ fn variants_selection_is_strength_ordered() {
             fields: vec![FieldEntry {
                 name: field_x,
                 value: Value::Int64(2).into(),
-                property_type: None,
             }],
             ..Default::default()
         },
@@ -923,9 +933,9 @@ fn time_samples_held_interpolation() {
 
     let mut layer = Layer::new(LayerId(1));
     let mut spec = PrimSpec::default();
-    spec.set_field(
+    spec.set_property(
         field,
-        FieldValue::TimeSamples(vec![
+        sampled(vec![
             (1.0, Value::Double(10.0)),
             (3.0, Value::Double(30.0)),
             (5.0, Value::Double(50.0)),
@@ -939,14 +949,22 @@ fn time_samples_held_interpolation() {
     // Exact samples.
     assert_eq!(
         stage
-            .resolve_value_at_time(p, field, 1.0, InterpolationType::Held)
+            .resolve_property_path_at_time(
+                PropertyPath::new(p, field),
+                1.0,
+                InterpolationType::Held
+            )
             .unwrap()
             .value,
         Value::Double(10.0)
     );
     assert_eq!(
         stage
-            .resolve_value_at_time(p, field, 3.0, InterpolationType::Held)
+            .resolve_property_path_at_time(
+                PropertyPath::new(p, field),
+                3.0,
+                InterpolationType::Held
+            )
             .unwrap()
             .value,
         Value::Double(30.0)
@@ -955,14 +973,22 @@ fn time_samples_held_interpolation() {
     // Between samples: held returns earlier value.
     assert_eq!(
         stage
-            .resolve_value_at_time(p, field, 2.0, InterpolationType::Held)
+            .resolve_property_path_at_time(
+                PropertyPath::new(p, field),
+                2.0,
+                InterpolationType::Held
+            )
             .unwrap()
             .value,
         Value::Double(10.0)
     );
     assert_eq!(
         stage
-            .resolve_value_at_time(p, field, 4.0, InterpolationType::Held)
+            .resolve_property_path_at_time(
+                PropertyPath::new(p, field),
+                4.0,
+                InterpolationType::Held
+            )
             .unwrap()
             .value,
         Value::Double(30.0)
@@ -971,7 +997,11 @@ fn time_samples_held_interpolation() {
     // Before first sample: return first value.
     assert_eq!(
         stage
-            .resolve_value_at_time(p, field, 0.0, InterpolationType::Held)
+            .resolve_property_path_at_time(
+                PropertyPath::new(p, field),
+                0.0,
+                InterpolationType::Held
+            )
             .unwrap()
             .value,
         Value::Double(10.0)
@@ -980,7 +1010,11 @@ fn time_samples_held_interpolation() {
     // After last sample: return last value.
     assert_eq!(
         stage
-            .resolve_value_at_time(p, field, 100.0, InterpolationType::Held)
+            .resolve_property_path_at_time(
+                PropertyPath::new(p, field),
+                100.0,
+                InterpolationType::Held
+            )
             .unwrap()
             .value,
         Value::Double(50.0)
@@ -997,9 +1031,9 @@ fn time_samples_linear_interpolation() {
 
     let mut layer = Layer::new(LayerId(1));
     let mut spec = PrimSpec::default();
-    spec.set_field(
+    spec.set_property(
         field,
-        FieldValue::TimeSamples(vec![
+        sampled(vec![
             (0.0, Value::Double(0.0)),
             (10.0, Value::Double(100.0)),
         ]),
@@ -1012,7 +1046,11 @@ fn time_samples_linear_interpolation() {
     // Midpoint: linear interpolation.
     assert_eq!(
         stage
-            .resolve_value_at_time(p, field, 5.0, InterpolationType::Linear)
+            .resolve_property_path_at_time(
+                PropertyPath::new(p, field),
+                5.0,
+                InterpolationType::Linear
+            )
             .unwrap()
             .value,
         Value::Double(50.0)
@@ -1021,7 +1059,11 @@ fn time_samples_linear_interpolation() {
     // Quarter point.
     assert_eq!(
         stage
-            .resolve_value_at_time(p, field, 2.5, InterpolationType::Linear)
+            .resolve_property_path_at_time(
+                PropertyPath::new(p, field),
+                2.5,
+                InterpolationType::Linear
+            )
             .unwrap()
             .value,
         Value::Double(25.0)
@@ -1030,7 +1072,11 @@ fn time_samples_linear_interpolation() {
     // Exact sample.
     assert_eq!(
         stage
-            .resolve_value_at_time(p, field, 0.0, InterpolationType::Linear)
+            .resolve_property_path_at_time(
+                PropertyPath::new(p, field),
+                0.0,
+                InterpolationType::Linear
+            )
             .unwrap()
             .value,
         Value::Double(0.0)
@@ -1039,14 +1085,22 @@ fn time_samples_linear_interpolation() {
     // Beyond range: clamp.
     assert_eq!(
         stage
-            .resolve_value_at_time(p, field, -1.0, InterpolationType::Linear)
+            .resolve_property_path_at_time(
+                PropertyPath::new(p, field),
+                -1.0,
+                InterpolationType::Linear
+            )
             .unwrap()
             .value,
         Value::Double(0.0)
     );
     assert_eq!(
         stage
-            .resolve_value_at_time(p, field, 20.0, InterpolationType::Linear)
+            .resolve_property_path_at_time(
+                PropertyPath::new(p, field),
+                20.0,
+                InterpolationType::Linear
+            )
             .unwrap()
             .value,
         Value::Double(100.0)
@@ -1063,9 +1117,9 @@ fn time_samples_linear_int_interpolation() {
 
     let mut layer = Layer::new(LayerId(1));
     let mut spec = PrimSpec::default();
-    spec.set_field(
+    spec.set_property(
         field,
-        FieldValue::TimeSamples(vec![(0.0, Value::Int64(0)), (10.0, Value::Int64(100))]),
+        sampled(vec![(0.0, Value::Int64(0)), (10.0, Value::Int64(100))]),
     );
     layer.insert_prim(p, spec);
     store.insert_layer(layer);
@@ -1075,7 +1129,11 @@ fn time_samples_linear_int_interpolation() {
     // Midpoint: linear interpolation, rounded to nearest int.
     assert_eq!(
         stage
-            .resolve_value_at_time(p, field, 5.0, InterpolationType::Linear)
+            .resolve_property_path_at_time(
+                PropertyPath::new(p, field),
+                5.0,
+                InterpolationType::Linear
+            )
             .unwrap()
             .value,
         Value::Int64(50)
@@ -1092,9 +1150,9 @@ fn time_samples_non_numeric_falls_back_to_held() {
 
     let mut layer = Layer::new(LayerId(1));
     let mut spec = PrimSpec::default();
-    spec.set_field(
+    spec.set_property(
         field,
-        FieldValue::TimeSamples(vec![
+        sampled(vec![
             (1.0, Value::string("hello")),
             (5.0, Value::string("world")),
         ]),
@@ -1107,7 +1165,11 @@ fn time_samples_non_numeric_falls_back_to_held() {
     // Linear on non-numeric falls back to held (earlier value).
     assert_eq!(
         stage
-            .resolve_value_at_time(p, field, 3.0, InterpolationType::Linear)
+            .resolve_property_path_at_time(
+                PropertyPath::new(p, field),
+                3.0,
+                InterpolationType::Linear
+            )
             .unwrap()
             .value,
         Value::string("hello")
@@ -1124,12 +1186,15 @@ fn resolve_sampled_property(
     let mut store = InMemoryStore::default();
     let property = store.property_path("/P.x");
     let mut layer = Layer::new(LayerId(1));
-    layer.set_typed_property(property, FieldValue::TimeSamples(samples), property_type);
+    layer.set_property(
+        property,
+        PropertySpec::typed_attribute(property_type).with_time_samples(samples),
+    );
     store.insert_layer(layer);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
     stage
-        .resolve_value_at_time(property.prim_path(), property.property(), time, interp)
+        .resolve_property_path_at_time(property, time, interp)
         .map(|resolved| resolved.value)
 }
 
@@ -1195,16 +1260,16 @@ fn time_samples_override_default_value() {
     let mut root = Layer::new(LayerId(1));
     root.sublayers = vec![SublayerEntry::new(LayerId(2))];
     let mut root_spec = PrimSpec::default();
-    root_spec.set_field(
-        field,
-        FieldValue::TimeSamples(vec![(1.0, Value::Double(10.0))]),
-    );
+    root_spec.set_property(field, sampled(vec![(1.0, Value::Double(10.0))]));
     root.insert_prim(p, root_spec);
     store.insert_layer(root);
 
     // Sublayer: default value.
     let mut sub = Layer::new(LayerId(2));
-    sub.insert_prim(p, PrimSpec::default().with_field(field, 999.0));
+    sub.insert_prim(
+        p,
+        PrimSpec::default().with_property(field, PropertySpec::attribute().with_default(999.0)),
+    );
     store.insert_layer(sub);
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
@@ -1212,17 +1277,61 @@ fn time_samples_override_default_value() {
     // TimeSamples from stronger layer takes priority.
     assert_eq!(
         stage
-            .resolve_value_at_time(p, field, 1.0, InterpolationType::Held)
+            .resolve_property_path_at_time(
+                PropertyPath::new(p, field),
+                1.0,
+                InterpolationType::Held
+            )
             .unwrap()
             .value,
         Value::Double(10.0)
     );
 
-    // Default resolve (no time) returns the stronger timeSamples, which yields None
-    // since we don't have a time context. But resolve_value checks the *first* opinion
-    // which is TimeSamples, so it returns None. The weaker default is not reached.
-    // For the default value, the user should use resolve_value_at_time.
-    assert!(stage.resolve_value(p, field).is_none());
+    // A default-time query ignores time samples and finds the weaker authored
+    // default (AOUSD Core §12.3.1).
+    assert_eq!(
+        stage
+            .resolve_field_path(PropertyPath::new(p, field))
+            .map(|r| r.value),
+        Some(Value::Double(999.0))
+    );
+}
+
+#[test]
+fn stronger_default_hides_weaker_time_samples() {
+    // Spec: AOUSD Core §12.3.2 visits specs strongest first; OpenUSD's
+    // `ProcessLayerAtTime` stops at the first spec with samples, a spline or
+    // a default.
+    let mut store = InMemoryStore::default();
+    let field = store.tokens.intern("x");
+    let p = store.path("/P");
+
+    let mut root = Layer::new(LayerId(1));
+    root.sublayers = vec![SublayerEntry::new(LayerId(2))];
+    root.insert_prim(
+        p,
+        PrimSpec::default().with_property(field, PropertySpec::attribute().with_default(1.0)),
+    );
+    store.insert_layer(root);
+
+    let mut sub = Layer::new(LayerId(2));
+    sub.insert_prim(
+        p,
+        PrimSpec::default().with_property(field, sampled(vec![(0.0, Value::Double(5.0))])),
+    );
+    store.insert_layer(sub);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    assert_eq!(
+        stage
+            .resolve_property_path_at_time(
+                PropertyPath::new(p, field),
+                0.0,
+                InterpolationType::Held
+            )
+            .map(|r| r.value),
+        Some(Value::Double(1.0))
+    );
 }
 
 // ── Dependency map integration tests ───────────────────────────────────────
@@ -1677,9 +1786,10 @@ fn authored_opinion_beats_schema_fallback() {
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(
         p,
-        PrimSpec::def()
-            .with_type_name(mesh_tok)
-            .with_field(double_sided_tok, Value::Bool(true)),
+        PrimSpec::def().with_type_name(mesh_tok).with_property(
+            double_sided_tok,
+            PropertySpec::attribute().with_default(true),
+        ),
     );
     store.insert_layer(layer);
 
@@ -2222,9 +2332,11 @@ fn dictionary_combines_over_schema_fallback() {
     let mut layer = Layer::new(LayerId(1));
     layer.insert_prim(
         p,
-        PrimSpec::def()
-            .with_type_name(mesh)
-            .with_field(field, dict(&[("settings", dict(&[("a", Value::Int(1))]))])),
+        PrimSpec::def().with_type_name(mesh).with_property(
+            field,
+            PropertySpec::attribute()
+                .with_default(dict(&[("settings", dict(&[("a", Value::Int(1))]))])),
+        ),
     );
     store.insert_layer(layer);
 
@@ -2558,4 +2670,201 @@ fn specializes_inside_reference_populates_class_children() {
         stage.has_prim(r_c_child),
         "specialized class children are populated"
     );
+}
+
+/// Builds `/P` authoring prim metadata `kind = "component"` and a property
+/// `kind` with default 42, in one layer or split across two, and composes.
+fn metadata_property_collision(
+    split: Option<bool>,
+) -> (
+    Stage,
+    InMemoryStore,
+    layerstack::PathId,
+    layerstack::TokenId,
+) {
+    let mut store = InMemoryStore::default();
+    let p = store.path("/P");
+    let kind = store.tokens.intern("kind");
+    let component = store.tokens.intern("component");
+    let metadata = PrimSpec::def().with_field(kind, Value::Token(component));
+    let property =
+        PrimSpec::def().with_property(kind, PropertySpec::attribute().custom().with_default(42.0));
+    let mut root = Layer::new(LayerId(1));
+    match split {
+        None => {
+            let mut both = metadata;
+            both.properties = property.properties;
+            root.insert_prim(p, both);
+        }
+        Some(metadata_stronger) => {
+            root.sublayers = vec![SublayerEntry::new(LayerId(2))];
+            let mut sub = Layer::new(LayerId(2));
+            let (strong, weak) = if metadata_stronger {
+                (metadata, property)
+            } else {
+                (property, metadata)
+            };
+            root.insert_prim(p, strong);
+            sub.insert_prim(p, weak);
+            store.insert_layer(sub);
+        }
+    }
+    store.insert_layer(root);
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    (stage, store, p, kind)
+}
+
+/// Prim metadata and properties are different objects even when they share
+/// a name: `def "P" (kind = "component") { custom double kind = 42 }`.
+/// OpenUSD 26.08 returns 42 for the attribute `/P.kind` and `component` for
+/// the prim's `kind` metadata.
+///
+/// Spec: AOUSD Core §7.3 (property specs are children of the prim spec;
+/// metadata fields are fields of the spec itself), §7.4.
+#[test]
+fn prim_metadata_and_property_with_one_name_stay_separate() {
+    for split in [None, Some(true), Some(false)] {
+        let (stage, mut store, p, kind) = metadata_property_collision(split);
+        let component = store.tokens.intern("component");
+        let attribute = PropertyPath::new(p, kind);
+        assert_eq!(
+            stage.resolve_field_path(attribute).map(|r| r.value),
+            Some(Value::Double(42.0)),
+            "attribute query ({split:?})"
+        );
+        assert_eq!(
+            stage.resolve_value(p, kind).map(|r| r.value),
+            Some(ResolvedValue::Scalar(Value::Token(component))),
+            "metadata query ({split:?})"
+        );
+        assert!(
+            stage
+                .explain_property_path(attribute)
+                .is_some_and(|ops| ops.iter().all(|op| op.value.as_property().is_some())),
+            "the attribute's stack holds only property opinions ({split:?})"
+        );
+    }
+}
+
+/// A property named `apiSchemas` does not hide the prim's applied schemas:
+/// schema fallback reads the `apiSchemas` metadata field only.
+///
+/// Spec: AOUSD Core §13.2.1 (`apiSchemas`), §13.3.2.4 (fallback values).
+#[test]
+fn property_named_api_schemas_does_not_hide_applied_schemas() {
+    let mut store = InMemoryStore::default();
+    let p = store.path("/P");
+    let api_schemas = store.tokens.intern("apiSchemas");
+    let test_api = store.tokens.intern("TestAPI");
+    let answer = store.tokens.intern("answer");
+
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(
+        p,
+        PrimSpec::def()
+            .with_field(
+                api_schemas,
+                FieldValue::TokenListOp(ListOp {
+                    prepend: vec![test_api],
+                    ..ListOp::default()
+                }),
+            )
+            .with_property(
+                api_schemas,
+                PropertySpec::attribute().custom().with_default(42.0),
+            ),
+    );
+    store.insert_layer(layer);
+
+    let mut registry = SchemaRegistry::new();
+    registry.register(SchemaDefinition::api(test_api).with_property(answer, Value::Int(7)));
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    assert_eq!(
+        stage
+            .resolve_field_with_schema(p, answer, &store, &registry, Some(api_schemas))
+            .map(|r| r.value),
+        Some(Value::Int(7)),
+        "the applied schema's fallback survives a property named `apiSchemas`"
+    );
+    assert_eq!(
+        stage.resolve_token_list(p, api_schemas).map(|r| r.value),
+        Some(vec![test_api])
+    );
+    assert_eq!(
+        stage
+            .resolve_field_path(PropertyPath::new(p, api_schemas))
+            .map(|r| r.value),
+        Some(Value::Double(42.0))
+    );
+}
+
+/// Properties named `active` or `instanceable` are not the prim's `active`
+/// and `instanceable` metadata: they neither deactivate the prim nor make it
+/// an instance.
+///
+/// Spec: AOUSD Core §7.6.2.4.2 (`active`), §7.6.2.4.3 (`instanceable`).
+#[test]
+fn properties_named_like_population_metadata_do_not_affect_population() {
+    let mut store = InMemoryStore::default();
+    let root = store.path("/");
+    let p = store.path("/P");
+    let child = store.path("/P/Child");
+    let r = store.path("/R");
+    let r_child = store.path("/R/Child");
+    let active = store.tokens.intern("active");
+    let instanceable = store.tokens.intern("instanceable");
+    let child_name = store.tokens.intern("Child");
+    let p_name = store.tokens.intern("P");
+    let r_name = store.tokens.intern("R");
+
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(
+        root,
+        PrimSpec::default().with_children(vec![p_name, r_name]),
+    );
+    layer.insert_prim(
+        p,
+        PrimSpec::def()
+            .with_children(vec![child_name])
+            .with_property(active, PropertySpec::attribute().with_default(false))
+            .with_property(instanceable, PropertySpec::attribute().with_default(true)),
+    );
+    layer.insert_prim(child, PrimSpec::def());
+    // `/R` references `/P`; were `instanceable` read from the property,
+    // `/R`'s local descendant opinions would be stripped.
+    layer.insert_prim(
+        r,
+        PrimSpec::def()
+            .with_children(vec![child_name])
+            .with_reference(Reference::new(LayerId(1), p))
+            .with_property(instanceable, PropertySpec::attribute().with_default(true)),
+    );
+    let marker = store.tokens.intern("marker");
+    layer.insert_prim(
+        r_child,
+        PrimSpec::over().with_property(marker, PropertySpec::attribute().with_default(1)),
+    );
+    store.insert_layer(layer);
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    assert!(
+        stage.has_prim(p),
+        "a property named `active` does not deactivate"
+    );
+    assert!(stage.has_prim(child));
+    assert_eq!(
+        stage
+            .resolve_field_path(PropertyPath::new(r_child, marker))
+            .map(|r| r.value),
+        Some(Value::Int(1)),
+        "a property named `instanceable` does not make `/R` an instance"
+    );
+    assert_eq!(
+        stage
+            .resolve_field_path(PropertyPath::new(p, active))
+            .map(|r| r.value),
+        Some(Value::Bool(false))
+    );
+    assert_eq!(stage.resolve_field(p, active), None, "no `active` metadata");
 }

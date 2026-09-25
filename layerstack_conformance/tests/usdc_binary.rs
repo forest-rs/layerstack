@@ -18,10 +18,10 @@
 
 use std::path::{Path, PathBuf};
 
-use layerstack::doc::{FieldValue, LayerId, Value, get_field};
+use layerstack::doc::{LayerId, Value};
 use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
-use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset};
+use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, PropertySpec, ResolvedAsset};
 use layerstack_conformance::workspace_root;
 
 /// Path to the binary test assets relative to the workspace root.
@@ -64,29 +64,28 @@ struct ParsedUsdc {
 }
 
 impl ParsedUsdc {
-    /// Resolves a field value at a given prim path and field name.
-    fn field(&mut self, prim_path: &str, field_name: &str) -> Option<FieldValue> {
+    /// Returns the authored property spec at a given prim path and name.
+    fn property(&mut self, prim_path: &str, name: &str) -> Option<PropertySpec> {
         let path = layerstack::path::Path::parse_absolute(prim_path, &mut self.store.tokens)
             .expect("invalid path");
         let path_id = self.store.paths.lookup(&path)?;
+        let name_tok = self.store.tokens.intern(name);
         let layer = self.store.layers.get(&self.layer_id)?;
-        let prim = layer.prims.get(&path_id)?;
-        let field_tok = self.store.tokens.intern(field_name);
-        get_field(&prim.fields, &field_tok).cloned()
+        layer.prims.get(&path_id)?.property(name_tok).cloned()
     }
 
-    /// Returns field value for a given prim path and field, panicking on None.
-    fn expect_field(&mut self, prim_path: &str, field_name: &str) -> FieldValue {
-        self.field(prim_path, field_name)
-            .unwrap_or_else(|| panic!("expected field {field_name:?} on prim {prim_path:?}"))
+    /// Returns the property spec at a given prim path and name, panicking on
+    /// None.
+    fn expect_property(&mut self, prim_path: &str, name: &str) -> PropertySpec {
+        self.property(prim_path, name)
+            .unwrap_or_else(|| panic!("expected property {name:?} on prim {prim_path:?}"))
     }
 
-    /// Returns a simple Value from a field (unwrapping `FieldValue::Value`).
-    fn expect_value(&mut self, prim_path: &str, field_name: &str) -> Value {
-        match self.expect_field(prim_path, field_name) {
-            FieldValue::Value(v) => v,
-            other => panic!("expected Value at {prim_path}.{field_name}, got {other:?}"),
-        }
+    /// Returns the authored default value of an attribute.
+    fn expect_value(&mut self, prim_path: &str, name: &str) -> Value {
+        self.expect_property(prim_path, name)
+            .default
+            .unwrap_or_else(|| panic!("expected a default at {prim_path}.{name}"))
     }
 
     /// Helper to check if a prim exists.
@@ -336,9 +335,9 @@ fn gen_timesamples_parses() {
     assert!(parsed.has_prim("/root"));
 
     // The animated attribute should have time samples.
-    let field = parsed.expect_field("/root", "animated");
-    match field {
-        FieldValue::TimeSamples(ts) => {
+    let property = parsed.expect_property("/root", "animated");
+    match property.time_samples {
+        Some(ts) => {
             assert!(!ts.is_empty(), "expected non-empty time samples");
             // Times are stored as a `DoubleVector` and must be decoded, not
             // defaulted.
@@ -353,7 +352,7 @@ fn gen_timesamples_parses() {
                 }
             }
         }
-        _ => panic!("expected TimeSamples, got {field:?}"),
+        None => panic!("expected TimeSamples, got {property:?}"),
     }
 }
 

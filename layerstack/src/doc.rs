@@ -17,9 +17,12 @@ use crate::{
     interner::TokenInterner,
     listop::ListOp,
     path::{PathId, PathInterner, PropertyPath, TargetPath},
-    property::PropertyType,
+    prim_index::OpinionValue,
+    property::{
+        PropertyEntry, PropertySpec, PropertyType, get_property, get_property_mut, remove_property,
+        set_property_vec,
+    },
     spec_path::VariantSelectionSite,
-    spline::SplineData,
 };
 
 /// Identifies a layer by stable ID.
@@ -306,6 +309,12 @@ impl From<i32> for Value {
     }
 }
 
+impl From<i64> for Value {
+    fn from(v: i64) -> Self {
+        Self::Int64(v)
+    }
+}
+
 impl From<f32> for Value {
     fn from(v: f32) -> Self {
         Self::Float(v)
@@ -379,52 +388,35 @@ pub fn combine_dictionary_chain(
     opinionated::combine_dictionary_chain(&ValueDictionaries, opinions)
 }
 
-/// A named field entry on a prim spec or variant spec.
+/// A named field entry: one authored metadata field on a layer, prim,
+/// variant or property spec.
 ///
-/// This pairs a field name (interned token) with its value, and carries
-/// per-field metadata such as whether the field was declared `custom`.
+/// Properties are not fields: they are stored as [`PropertySpec`]s in
+/// [`PrimSpec::properties`] and [`VariantSpec::properties`].
 ///
-/// Spec: AOUSD Core §6 (scene description data model), §7 (opinions).
+/// Spec: AOUSD Core §7.4 (metadata fields).
 #[derive(Clone, Debug, PartialEq)]
 pub struct FieldEntry {
     /// The interned field name.
     pub name: TokenId,
     /// The field value.
     pub value: FieldValue,
-    /// Optional declared property type for authored attributes.
-    pub property_type: Option<PropertyType>,
 }
 
-/// A field value stored on a prim spec.
+/// The value of one authored metadata field.
+///
+/// Spec: AOUSD Core §7.4 (metadata fields), §12.2 (metadata resolution).
 #[derive(Clone, Debug, PartialEq)]
 pub enum FieldValue {
-    /// A scalar (strongest wins).
+    /// A plain value (strongest wins; dictionaries combine).
     Value(Value),
-    /// A list-op field over tokens (resolved by chaining).
+    /// A list-op field over tokens (resolved by chaining), such as
+    /// `apiSchemas`.
     TokenListOp(ListOp<TokenId>),
-    /// A list-op field over relationship or connection target paths.
-    ///
-    /// This is used for relationship targets, attribute connections, and other
-    /// concrete target-path list fields.
+    /// A list-op field over target paths (resolved by chaining).
     ///
     /// Spec: AOUSD Core §12.4 (`ListOps`), applied to path lists.
     PathListOp(ListOp<TargetPath>),
-    /// Time-varying samples: sorted `(timeCode, value)` pairs.
-    ///
-    /// `TimeSamples` take priority over default values per §12.3.
-    /// Interpolation between samples uses the layer's interpolation type
-    /// (Held or Linear, §12.5).
-    ///
-    /// Spec: AOUSD Core §12.3.2.2 (timeSamples metadata).
-    TimeSamples(Vec<(f64, Value)>),
-    /// Spline-based time-varying data.
-    ///
-    /// Splines sit between `TimeSamples` and default values in the
-    /// resolution priority order. They provide smooth Bézier or Hermite
-    /// interpolation between knots.
-    ///
-    /// Spec: AOUSD Core §12.3.3 (spline opinions), §16.3.10.33 (encoding).
-    Spline(SplineData),
 }
 
 impl From<Value> for FieldValue {
@@ -657,8 +649,14 @@ impl Reference {
 /// Opinions for a variant branch.
 #[derive(Clone, Debug, Default)]
 pub struct VariantSpec {
-    /// Authored fields within this variant.
+    /// Authored metadata fields on the prim hosting the variant set, within
+    /// this variant.
     pub fields: Vec<FieldEntry>,
+    /// Authored property specs on the prim hosting the variant set, within
+    /// this variant, in authored order.
+    ///
+    /// Spec: AOUSD Core §7.6.7 (variant specs contribute prim spec fields).
+    pub properties: Vec<PropertyEntry>,
     /// Child prim names introduced by this variant branch.
     ///
     /// These children are only populated when this variant is selected.
@@ -692,12 +690,19 @@ pub struct VariantSpec {
     /// keyed by the child prim name. These grandchildren are only visible when
     /// this variant is selected.
     pub child_authored_children: HashMap<TokenId, Vec<TokenId>>,
-    /// Field opinions for child prims within this variant branch.
+    /// Metadata field opinions for child prims within this variant branch.
+    ///
+    /// When a child prim (e.g. `over "Child" (kind = "group")`) inside a
+    /// variant branch authors metadata, it is recorded here keyed by the child
+    /// prim name. These opinions apply only when this variant is selected.
+    pub child_fields: HashMap<TokenId, Vec<FieldEntry>>,
+    /// Property opinions for child prims within this variant branch.
     ///
     /// When a child prim (e.g. `class "Child" { bool attr = 0 }`) inside a
-    /// variant branch defines field values, they are recorded here keyed by the
-    /// child prim name. These opinions apply only when this variant is selected.
-    pub child_fields: HashMap<TokenId, Vec<FieldEntry>>,
+    /// variant branch authors properties, they are recorded here keyed by the
+    /// child prim name. These opinions apply only when this variant is
+    /// selected.
+    pub child_properties: HashMap<TokenId, Vec<PropertyEntry>>,
     /// References arcs on this variant branch itself.
     ///
     /// When a variant branch header includes composition arcs
@@ -754,6 +759,11 @@ impl VariantSpec {
                 self.fields.push(entry);
             }
         }
+        for entry in other.properties {
+            if get_property(&self.properties, entry.name).is_none() {
+                self.properties.push(entry);
+            }
+        }
         for (k, v) in other.child_references {
             self.child_references.entry(k).or_insert(v);
         }
@@ -782,6 +792,14 @@ impl VariantSpec {
                 }
             }
         }
+        for (k, v) in other.child_properties {
+            let existing = self.child_properties.entry(k).or_default();
+            for entry in v {
+                if get_property(existing, entry.name).is_none() {
+                    existing.push(entry);
+                }
+            }
+        }
         for (child, selections) in other.child_variant_selections {
             let existing = self.child_variant_selections.entry(child).or_default();
             for (set, variant) in selections {
@@ -795,6 +813,87 @@ impl VariantSpec {
             self.outer_variant_sites = other.outer_variant_sites;
         }
     }
+}
+
+impl VariantSpec {
+    /// Returns the metadata and property opinions authored for child prims
+    /// in this branch, grouped by child name.
+    pub(crate) fn child_entries(&self) -> Vec<(TokenId, Vec<ComposedEntry<'_>>)> {
+        let mut out: Vec<(TokenId, Vec<ComposedEntry<'_>>)> = Vec::new();
+        for (child, fields) in &self.child_fields {
+            out.push((*child, composed_entries(fields, &[]).collect()));
+        }
+        for (child, properties) in &self.child_properties {
+            let entries = composed_entries(&[], properties);
+            match out.iter_mut().find(|(name, _)| name == child) {
+                Some((_, existing)) => existing.extend(entries),
+                None => out.push((*child, entries.collect())),
+            }
+        }
+        out
+    }
+
+    /// Returns the metadata and property opinions authored for the child
+    /// prim `child` in this branch, or `None` when the branch authors none.
+    pub(crate) fn child_entries_for(&self, child: TokenId) -> Option<Vec<ComposedEntry<'_>>> {
+        let fields = self.child_fields.get(&child);
+        let properties = self.child_properties.get(&child);
+        if fields.is_none() && properties.is_none() {
+            return None;
+        }
+        Some(
+            composed_entries(
+                fields.map_or(&[][..], Vec::as_slice),
+                properties.map_or(&[][..], Vec::as_slice),
+            )
+            .collect(),
+        )
+    }
+}
+
+/// One authored entry of a spec that composition turns into an opinion: a
+/// metadata field or a property.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum ComposedEntry<'a> {
+    Field(&'a FieldEntry),
+    Property(&'a PropertyEntry),
+}
+
+impl<'a> ComposedEntry<'a> {
+    /// The field or property name.
+    pub(crate) fn name(self) -> TokenId {
+        match self {
+            Self::Field(entry) => entry.name,
+            Self::Property(entry) => entry.name,
+        }
+    }
+
+    /// The opinion payload for this entry.
+    pub(crate) fn value(self) -> OpinionValue {
+        match self {
+            Self::Field(entry) => OpinionValue::Field(entry.value.clone()),
+            Self::Property(entry) => OpinionValue::Property(Box::new(entry.spec.clone())),
+        }
+    }
+
+    /// The declared attribute type, for a typed attribute.
+    pub(crate) fn property_type(self) -> Option<&'a PropertyType> {
+        match self {
+            Self::Field(_) => None,
+            Self::Property(entry) => entry.spec.type_name.as_ref(),
+        }
+    }
+}
+
+/// Iterates the metadata fields, then the properties, of one spec.
+pub(crate) fn composed_entries<'a>(
+    fields: &'a [FieldEntry],
+    properties: &'a [PropertyEntry],
+) -> impl Iterator<Item = ComposedEntry<'a>> {
+    fields
+        .iter()
+        .map(ComposedEntry::Field)
+        .chain(properties.iter().map(ComposedEntry::Property))
 }
 
 /// A variant set: a named collection of variants.
@@ -819,8 +918,23 @@ pub struct PrimSpec {
     ///
     /// Spec: AOUSD Core §7.6 (typeName field), §12.2.3 (type name resolution).
     pub type_name: Option<TokenId>,
-    /// Authored fields.
+    /// Authored metadata fields not modeled by a dedicated member, in
+    /// authored order: for example `kind`, `apiSchemas`, `hidden`,
+    /// `customData`, `assetInfo`, `displayName`, `documentation` and
+    /// `comment`.
+    ///
+    /// Spec: AOUSD Core §7.6.2 (prim spec fields).
     pub fields: Vec<FieldEntry>,
+    /// Authored property specs, in authored order (`propertyChildren`).
+    ///
+    /// Spec: AOUSD Core §7.6.2.2.2 (`propertyChildren`), §7.3.7.
+    pub properties: Vec<PropertyEntry>,
+    /// Authored property ordering (`reorder properties = [...]`).
+    ///
+    /// OpenUSD sorts composed property names and then applies the strongest
+    /// `propertyOrder` opinion (`UsdPrim::ApplyPropertyOrder` in
+    /// `pxr/usd/usd/prim.cpp`).
+    pub property_order: Option<Vec<TokenId>>,
     /// Variant selections required to reach this concrete prim spec in its
     /// defining layer.
     ///
@@ -939,6 +1053,41 @@ impl PrimSpec {
         self
     }
 
+    /// Returns an authored metadata field, if present.
+    #[must_use]
+    pub fn field(&self, token: TokenId) -> Option<&FieldValue> {
+        get_field(&self.fields, &token)
+    }
+
+    /// Inserts or replaces a property spec, returning `&mut Self` for
+    /// chaining. A replaced property keeps its authored position.
+    pub fn set_property(&mut self, name: TokenId, spec: PropertySpec) -> &mut Self {
+        set_property_vec(&mut self.properties, name, spec);
+        self
+    }
+
+    /// Inserts or replaces a property spec (builder, consuming).
+    pub fn with_property(mut self, name: TokenId, spec: PropertySpec) -> Self {
+        set_property_vec(&mut self.properties, name, spec);
+        self
+    }
+
+    /// Returns the authored property named `name`, if present.
+    #[must_use]
+    pub fn property(&self, name: TokenId) -> Option<&PropertySpec> {
+        get_property(&self.properties, name)
+    }
+
+    /// Returns the authored property named `name` mutably, if present.
+    pub fn property_mut(&mut self, name: TokenId) -> Option<&mut PropertySpec> {
+        get_property_mut(&mut self.properties, name)
+    }
+
+    /// Removes the property named `name`, returning its spec.
+    pub fn remove_property(&mut self, name: TokenId) -> Option<PropertySpec> {
+        remove_property(&mut self.properties, name)
+    }
+
     /// Appends a reference arc.
     pub fn add_reference(&mut self, reference: Reference) -> &mut Self {
         self.references.append.push(reference);
@@ -1013,36 +1162,13 @@ impl PrimSpec {
 
 /// Inserts or replaces a field in a `Vec<FieldEntry>` by name.
 ///
-/// If a field with the given name already exists, its value is replaced.
-/// Otherwise a new entry is appended.
+/// If a field with the given name already exists, its value is replaced in
+/// place. Otherwise a new entry is appended.
 pub fn set_field_vec(fields: &mut Vec<FieldEntry>, name: TokenId, value: FieldValue) {
     if let Some(entry) = fields.iter_mut().find(|e| e.name == name) {
         entry.value = value;
     } else {
-        fields.push(FieldEntry {
-            name,
-            value,
-            property_type: None,
-        });
-    }
-}
-
-/// Inserts or replaces a typed property field in a `Vec<FieldEntry>` by name.
-pub fn set_property_field_vec(
-    fields: &mut Vec<FieldEntry>,
-    name: TokenId,
-    value: FieldValue,
-    property_type: PropertyType,
-) {
-    if let Some(entry) = fields.iter_mut().find(|e| e.name == name) {
-        entry.value = value;
-        entry.property_type = Some(property_type);
-    } else {
-        fields.push(FieldEntry {
-            name,
-            value,
-            property_type: Some(property_type),
-        });
+        fields.push(FieldEntry { name, value });
     }
 }
 
@@ -1065,28 +1191,14 @@ pub fn get_field_mut<'a>(
 /// Inserts a field only if no entry with the same name exists.
 pub fn insert_field_if_absent(fields: &mut Vec<FieldEntry>, name: TokenId, value: FieldValue) {
     if !fields.iter().any(|e| e.name == name) {
-        fields.push(FieldEntry {
-            name,
-            value,
-            property_type: None,
-        });
+        fields.push(FieldEntry { name, value });
     }
 }
 
-/// Inserts a typed property field only if no entry with the same name exists.
-pub fn insert_property_field_if_absent(
-    fields: &mut Vec<FieldEntry>,
-    name: TokenId,
-    value: FieldValue,
-    property_type: PropertyType,
-) {
-    if !fields.iter().any(|e| e.name == name) {
-        fields.push(FieldEntry {
-            name,
-            value,
-            property_type: Some(property_type),
-        });
-    }
+/// Removes a field by name, returning its value.
+pub fn remove_field(fields: &mut Vec<FieldEntry>, name: TokenId) -> Option<FieldValue> {
+    let index = fields.iter().position(|e| e.name == name)?;
+    Some(fields.remove(index).value)
 }
 
 /// A document layer.
@@ -1101,6 +1213,14 @@ pub struct Layer {
     /// Spec: AOUSD Core §10 (references/payloads) uses `defaultPrim` to resolve
     /// asset targets when no explicit prim path is authored.
     pub default_prim: Option<TokenId>,
+    /// All other authored layer metadata, in authored order: for example
+    /// `upAxis`, `metersPerUnit`, `timeCodesPerSecond`, `framesPerSecond`,
+    /// `startTimeCode`, `endTimeCode`, `customLayerData`, `documentation`
+    /// and `comment`.
+    ///
+    /// Spec: AOUSD Core §7.6.1 (layer spec fields), §12.2.7 (layer metadata
+    /// is read from the root layer, not composed).
+    pub metadata: Vec<FieldEntry>,
     /// Prim specs keyed by prim path.
     pub prims: HashMap<PathId, PrimSpec>,
 }
@@ -1112,6 +1232,7 @@ impl Layer {
             id,
             sublayers: Vec::new(),
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         }
     }
@@ -1121,38 +1242,45 @@ impl Layer {
         self.prims.insert(path, spec);
     }
 
-    /// Inserts or replaces a property field by concrete [`PropertyPath`].
-    ///
-    /// If the owning prim does not yet exist in this layer, a default
-    /// [`PrimSpec`] is created first.
-    pub fn set_property(
-        &mut self,
-        property_path: PropertyPath,
-        value: impl Into<FieldValue>,
-    ) -> &mut Self {
-        let spec = self.prims.entry(property_path.prim_path()).or_default();
-        set_field_vec(&mut spec.fields, property_path.property(), value.into());
+    /// Returns an authored layer metadata field, if present.
+    #[must_use]
+    pub fn metadata(&self, key: TokenId) -> Option<&FieldValue> {
+        get_field(&self.metadata, &key)
+    }
+
+    /// Inserts or replaces a layer metadata field.
+    pub fn set_metadata(&mut self, key: TokenId, value: impl Into<FieldValue>) -> &mut Self {
+        set_field_vec(&mut self.metadata, key, value.into());
         self
     }
 
-    /// Inserts or replaces a typed property field by concrete [`PropertyPath`].
+    /// Inserts or replaces a property spec by concrete [`PropertyPath`].
     ///
     /// If the owning prim does not yet exist in this layer, a default
     /// [`PrimSpec`] is created first.
-    pub fn set_typed_property(
-        &mut self,
-        property_path: PropertyPath,
-        value: impl Into<FieldValue>,
-        property_type: PropertyType,
-    ) -> &mut Self {
-        let spec = self.prims.entry(property_path.prim_path()).or_default();
-        set_property_field_vec(
-            &mut spec.fields,
-            property_path.property(),
-            value.into(),
-            property_type,
-        );
+    pub fn set_property(&mut self, property_path: PropertyPath, spec: PropertySpec) -> &mut Self {
+        self.prims
+            .entry(property_path.prim_path())
+            .or_default()
+            .set_property(property_path.property(), spec);
         self
+    }
+
+    /// Returns the property spec at `property_path`, if authored in this
+    /// layer.
+    #[must_use]
+    pub fn property(&self, property_path: PropertyPath) -> Option<&PropertySpec> {
+        self.prims
+            .get(&property_path.prim_path())?
+            .property(property_path.property())
+    }
+
+    /// Returns the property spec at `property_path` mutably, if authored in
+    /// this layer.
+    pub fn property_mut(&mut self, property_path: PropertyPath) -> Option<&mut PropertySpec> {
+        self.prims
+            .get_mut(&property_path.prim_path())?
+            .property_mut(property_path.property())
     }
 }
 

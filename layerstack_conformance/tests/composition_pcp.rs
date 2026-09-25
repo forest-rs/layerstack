@@ -6,7 +6,8 @@
 use std::path::{Path, PathBuf};
 
 use layerstack::{
-    ArcKind, CompositionError, LayerId, LayerStack, Stage, StageOptions, SublayerCycle, Value,
+    ArcKind, CompositionError, LayerId, LayerStack, PropertyPath, Stage, StageOptions,
+    SublayerCycle, Value,
 };
 
 use layerstack_conformance::{
@@ -148,8 +149,10 @@ fn assert_pcp_composing(loaded: &mut LoadedStage, pcp_path: &Path) {
         if let Some(props) = expectations.property_names {
             for prop in props {
                 let tok = loaded.store.tokens.intern(&prop);
+                // A declared property need not author a value, so ask for
+                // its opinions rather than a resolved value.
                 assert!(
-                    stage.resolve_value(prim_id, tok).is_some(),
+                    stage.has_property_path(PropertyPath::new(prim_id, tok)),
                     "missing property/field {prim_path}.{prop}"
                 );
             }
@@ -162,7 +165,9 @@ fn assert_pcp_composing(loaded: &mut LoadedStage, pcp_path: &Path) {
                     .unwrap_or_else(|| panic!("unexpected property stack key {prop_path}"));
                 let dest_field = loaded.store.tokens.intern(suffix);
 
-                let Some(opinions) = stage.explain_field(prim_id, dest_field) else {
+                let Some(opinions) =
+                    stage.explain_property_path(PropertyPath::new(prim_id, dest_field))
+                else {
                     panic!("missing property opinions for {prop_path}");
                 };
 
@@ -197,7 +202,7 @@ fn assert_pcp_composing(loaded: &mut LoadedStage, pcp_path: &Path) {
                 let field = loaded.store.tokens.intern(suffix);
 
                 let resolved = stage
-                    .resolve_path_list(prim_id, field)
+                    .resolve_target_list_path(PropertyPath::new(prim_id, field))
                     .unwrap_or_else(|| panic!("missing relationship targets for {prop_path}"));
 
                 let expected_targets: Vec<_> = expected
@@ -226,7 +231,7 @@ fn assert_pcp_composing(loaded: &mut LoadedStage, pcp_path: &Path) {
                 let field = loaded.store.tokens.intern(suffix);
 
                 let resolved = stage
-                    .resolve_path_list(prim_id, field)
+                    .resolve_target_list_path(PropertyPath::new(prim_id, field))
                     .unwrap_or_else(|| panic!("missing attribute connections for {prop_path}"));
 
                 let expected_targets: Vec<_> = expected

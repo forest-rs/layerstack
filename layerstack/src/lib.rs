@@ -94,8 +94,7 @@ pub use doc::{
     FieldEntry, FieldValue, InMemoryStore, InterpolationType, Layer, LayerId, LayerOffset,
     LayerStore, PrimSpec, Reference, ReferenceTarget, Specifier, SublayerEntry, Value,
     VariantSetSpec, VariantSpec, combine_dictionaries, combine_dictionary_chain, get_field,
-    get_field_mut, insert_field_if_absent, insert_property_field_if_absent, set_field_vec,
-    set_property_field_vec,
+    get_field_mut, insert_field_if_absent, remove_field, set_field_vec,
 };
 pub use interner::{TokenId, TokenInterner};
 pub use layer_stack::LayerStack;
@@ -104,8 +103,10 @@ pub use path::{
     Path, PathError, PathId, PathInterner, PropertyPath, PropertyPathError, TargetPath,
     TargetPathError,
 };
-pub use prim_index::{ArcKind, Opinion, OpinionKey};
-pub use property::PropertyType;
+pub use prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue};
+pub use property::{
+    PropertyEntry, PropertyKind, PropertySpec, PropertyType, TimeSample, Variability,
+};
 pub use schema::{PropertyDefinition, SchemaDefinition, SchemaRegistry};
 pub use spec_path::{SpecComponent, SpecPath, SpecPathError};
 pub use spline::SplineData;

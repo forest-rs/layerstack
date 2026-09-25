@@ -14,12 +14,12 @@
 
 use std::path::PathBuf;
 
-use layerstack::doc::{FieldValue, InterpolationType, LayerId, Value, get_field};
+use layerstack::doc::{InterpolationType, LayerId, Value};
 use layerstack::interner::TokenInterner;
 use layerstack::path::{Path, PathInterner};
 use layerstack::{
     ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, AssetResolveError, AssetResolver,
-    ResolvedAsset, ResolvedValue, Stage, StageOptions,
+    PropertyPath, PropertySpec, ResolvedAsset, ResolvedValue, Stage, StageOptions,
 };
 use layerstack_conformance::usdc::load_entry_usdc;
 use layerstack_conformance::workspace_root;
@@ -161,13 +161,12 @@ fn compare_file_with_openusd(root: &std::path::Path, expected: &Json) -> Vec<Mis
             let field = store.tokens.intern(name);
             let attribute = format!("{prim_path}.{name}");
 
-            let default =
-                stage
-                    .resolve_value(prim, field)
-                    .and_then(|resolved| match resolved.value {
-                        ResolvedValue::Scalar(value) => Some(value),
-                        _ => None,
-                    });
+            let default = stage
+                .resolve_property_path(PropertyPath::new(prim, field))
+                .and_then(|resolved| match resolved.value {
+                    ResolvedValue::Scalar(value) => Some(value),
+                    _ => None,
+                });
             let openusd = &record["default"];
             let matches = match &default {
                 Some(value) => value_matches(value, openusd, &store.tokens),
@@ -186,7 +185,11 @@ fn compare_file_with_openusd(root: &std::path::Path, expected: &Json) -> Vec<Mis
                 let time = sample[0].as_f64().expect("time");
                 let openusd = &sample[1];
                 let value = stage
-                    .resolve_value_at_time(prim, field, time, InterpolationType::Linear)
+                    .resolve_property_path_at_time(
+                        PropertyPath::new(prim, field),
+                        time,
+                        InterpolationType::Linear,
+                    )
                     .map(|resolved| resolved.value);
                 let matches = match &value {
                     Some(value) => value_matches(value, openusd, &store.tokens),
@@ -376,7 +379,7 @@ fn time_valued_spline_is_reported() {
 // ---------------------------------------------------------------------------
 
 /// Decodes `name` alone and returns the authored value of `prim.attribute`.
-fn authored(name: &str, prim: &str, attribute: &str) -> FieldValue {
+fn authored(name: &str, prim: &str, attribute: &str) -> PropertySpec {
     let mut tokens = TokenInterner::default();
     let mut paths = PathInterner::default();
     let result = layerstack_usdc::read_usdc(
@@ -389,14 +392,14 @@ fn authored(name: &str, prim: &str, attribute: &str) -> FieldValue {
     .unwrap_or_else(|e| panic!("failed to read {name}: {e}"));
     let path = Path::parse_absolute(prim, &mut tokens).expect("prim path");
     let spec = &result.layer.prims[&paths.lookup(&path).expect("prim")];
-    get_field(&spec.fields, &tokens.intern(attribute))
+    spec.property(tokens.intern(attribute))
         .unwrap_or_else(|| panic!("no {prim}.{attribute}"))
         .clone()
 }
 
 fn authored_edit(prim: &str, attribute: &str) -> ArrayEdit {
-    match authored("array_edits_strong.usdc", prim, attribute) {
-        FieldValue::Value(Value::ArrayEdit(edit)) => edit,
+    match authored("array_edits_strong.usdc", prim, attribute).default {
+        Some(Value::ArrayEdit(edit)) => edit,
         other => panic!("{prim}.{attribute} is not an array edit: {other:?}"),
     }
 }
@@ -517,8 +520,8 @@ fn array_edits_decode_to_the_authored_instructions() {
     }
 
     // Time samples hold edits too.
-    match authored("array_edits_strong.usdc", "/BasicsSamples", "attr") {
-        FieldValue::TimeSamples(samples) => {
+    match authored("array_edits_strong.usdc", "/BasicsSamples", "attr").time_samples {
+        Some(samples) => {
             assert_eq!(samples.len(), 2);
             assert!(
                 samples
@@ -548,8 +551,6 @@ fn array_edit_needs_crate_0_14() {
 /// Each is asserted by an ignored test below, so they stay visible.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum KnownDifference {
-    /// A spec's default beside its own time samples.
-    DefaultBesideSamples,
     /// Interpolating between a sparse and a dense time sample.
     SparseSampleInterpolation,
     /// A sparse default over a blocked default.
@@ -559,10 +560,6 @@ enum KnownDifference {
 fn known_difference(root: &str, mismatch: &Mismatch) -> Option<KnownDifference> {
     let attribute = mismatch.attribute.as_str();
     match (attribute, mismatch.time) {
-        ("/BasicsSamples.attr", None) if root == "array_edits_strong.usdc" => {
-            Some(KnownDifference::DefaultBesideSamples)
-        }
-        ("/BasicsBothSamples.attr", None) => Some(KnownDifference::DefaultBesideSamples),
         ("/Interp.attr" | "/InterpRoot.attr", Some(time)) if time > 1.0 && time < 3.0 => {
             Some(KnownDifference::SparseSampleInterpolation)
         }
@@ -594,20 +591,31 @@ fn array_edit_mismatches(kind: KnownDifference) -> (Vec<Mismatch>, Vec<Mismatch>
 /// default and at every recorded time, apart from the known differences.
 #[test]
 fn array_edits_match_openusd() {
-    let (unexpected, _) = array_edit_mismatches(KnownDifference::DefaultBesideSamples);
+    let (unexpected, _) = array_edit_mismatches(KnownDifference::SparseSampleInterpolation);
     assert!(
         unexpected.is_empty(),
         "array edits differ from OpenUSD 26.08:\n{unexpected:#?}"
     );
 }
 
+/// A spec's default beside its own time samples resolves at default time
+/// (AOUSD Core §12.3.1): `/BasicsSamples.attr` and `/BasicsBothSamples.attr`
+/// are checked by [`array_edits_match_openusd`], since they are no longer a
+/// known difference.
 #[test]
-#[ignore = "Layerstack keeps one opinion per property spec, so a spec's default is \
-            dropped when it also has time samples; OpenUSD resolves the default \
-            separately (AOUSD Core §12.3). Belongs to the property-fidelity work."]
 fn array_edit_default_beside_samples_matches_openusd() {
-    let (_, known) = array_edit_mismatches(KnownDifference::DefaultBesideSamples);
-    assert!(known.is_empty(), "{known:#?}");
+    let mismatches: Vec<_> = ["array_edits_weak.usdc", "array_edits_strong.usdc"]
+        .into_iter()
+        .flat_map(compare_with_openusd)
+        .filter(|m| {
+            m.time.is_none()
+                && matches!(
+                    m.attribute.as_str(),
+                    "/BasicsSamples.attr" | "/BasicsBothSamples.attr"
+                )
+        })
+        .collect();
+    assert!(mismatches.is_empty(), "{mismatches:#?}");
 }
 
 #[test]
@@ -696,13 +704,17 @@ fn failing_vectors(vectors: &[Vector]) -> Vec<String> {
         let prim_id = store.paths.intern(path);
         let value = match time {
             None => stage
-                .resolve_value(prim_id, field)
+                .resolve_property_path(PropertyPath::new(prim_id, field))
                 .and_then(|resolved| match resolved.value {
                     ResolvedValue::Scalar(value) => Some(value),
                     _ => None,
                 }),
             Some(time) => stage
-                .resolve_value_at_time(prim_id, field, time, InterpolationType::Linear)
+                .resolve_property_path_at_time(
+                    PropertyPath::new(prim_id, field),
+                    time,
+                    InterpolationType::Linear,
+                )
                 .map(|resolved| resolved.value),
         };
         let json: Json = serde_json::from_str(expected).expect("vector");
@@ -720,9 +732,6 @@ fn test_usd_attribute_array_edits_vectors() {
 }
 
 #[test]
-#[ignore = "Layerstack keeps one opinion per property spec, so a spec's default is \
-            dropped when it also has time samples. Belongs to the property-fidelity \
-            work."]
 fn test_usd_attribute_array_edits_default_beside_samples() {
     let failing = failing_vectors(TEST_BASICS_DEFAULT_BESIDE_SAMPLES);
     assert!(failing.is_empty(), "{failing:#?}");

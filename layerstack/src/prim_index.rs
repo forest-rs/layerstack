@@ -9,17 +9,19 @@
 //!
 //! Spec: AOUSD Core §10 (composition arcs and strength ordering) and §12 (value resolution).
 
-use alloc::vec::Vec;
+use alloc::{boxed::Box, vec::Vec};
 use core::cmp::Ordering;
 
 use hashbrown::HashMap;
 
 use crate::{
-    doc::{FieldValue, LayerId, LayerOffset},
+    doc::{FieldValue, LayerId, LayerOffset, Value},
     interner::TokenId,
-    path::PathId,
-    property::PropertyType,
+    listop::ListOp,
+    path::{PathId, TargetPath},
+    property::{PropertySpec, PropertyType, TimeSample},
     spec_path::SpecPath,
+    spline::SplineData,
 };
 
 /// Composition arc kind (LIVERPS ordering).
@@ -171,18 +173,147 @@ impl OpinionKey {
 pub struct Opinion {
     /// Strength key used for sorting.
     pub key: OpinionKey,
-    /// The field token being authored.
+    /// The field token being authored: a prim metadata field name or a
+    /// property name.
     pub field: TokenId,
-    /// The authored value.
-    pub value: FieldValue,
+    /// The authored content this opinion contributes.
+    pub value: OpinionValue,
     /// Accumulated layer offset from all arcs leading to this opinion (§12.3.2.1).
     pub layer_offset: LayerOffset,
 }
 
-/// A per-prim composition result, keyed by field token.
+/// The authored content one [`Opinion`] contributes.
+///
+/// A composed prim keeps prim metadata fields and properties in one name
+/// space, keyed by [`Opinion::field`]. A metadata opinion carries its single
+/// value; a property opinion carries the whole authored [`PropertySpec`], so
+/// its default, time samples, spline, targets and metadata stay separate and
+/// value precedence is applied at query time.
+///
+/// Spec: AOUSD Core §12.2 (metadata resolution), §12.3 (attribute value
+/// resolution), §12.4 (relationships and connections).
+#[derive(Clone, Debug, PartialEq)]
+pub enum OpinionValue {
+    /// A prim metadata field value.
+    Field(FieldValue),
+    /// A property spec with all of its authored slots.
+    Property(Box<PropertySpec>),
+}
+
+impl OpinionValue {
+    /// Returns the value a default-time query reads from this opinion: a
+    /// metadata [`FieldValue::Value`], or a property's authored
+    /// [`PropertySpec::default`].
+    ///
+    /// Spec: AOUSD Core §12.3.1 (default values ignore time samples).
+    #[must_use]
+    pub fn default_value(&self) -> Option<&Value> {
+        match self {
+            Self::Field(FieldValue::Value(value)) => Some(value),
+            Self::Field(_) => None,
+            Self::Property(spec) => spec.default.as_ref(),
+        }
+    }
+
+    /// Returns the authored, non-empty time samples of a property opinion.
+    ///
+    /// An explicitly authored empty sample map contributes no value, as in
+    /// OpenUSD's `_HasTimeSamples` (`pxr/usd/usd/stage.cpp`).
+    #[must_use]
+    pub fn time_samples(&self) -> Option<&[TimeSample]> {
+        match self {
+            Self::Property(spec) => spec.time_samples.as_deref().filter(|s| !s.is_empty()),
+            Self::Field(_) => None,
+        }
+    }
+
+    /// Returns the authored spline of a property opinion.
+    #[must_use]
+    pub fn spline(&self) -> Option<&SplineData> {
+        match self {
+            Self::Property(spec) => spec.spline.as_ref(),
+            Self::Field(_) => None,
+        }
+    }
+
+    /// Returns the authored target paths: a property's connection or target
+    /// path list, or a metadata [`FieldValue::PathListOp`].
+    #[must_use]
+    pub fn targets(&self) -> Option<&ListOp<TargetPath>> {
+        match self {
+            Self::Field(FieldValue::PathListOp(list)) => Some(list),
+            Self::Field(_) => None,
+            Self::Property(spec) => spec.targets.as_ref(),
+        }
+    }
+
+    /// Returns the metadata field value, for a metadata opinion.
+    #[must_use]
+    pub fn as_field(&self) -> Option<&FieldValue> {
+        match self {
+            Self::Field(value) => Some(value),
+            Self::Property(_) => None,
+        }
+    }
+
+    /// Returns the property spec, for a property opinion.
+    #[must_use]
+    pub fn as_property(&self) -> Option<&PropertySpec> {
+        match self {
+            Self::Property(spec) => Some(spec),
+            Self::Field(_) => None,
+        }
+    }
+
+    /// Returns `true` when this opinion authors a value block as its default.
+    #[must_use]
+    pub fn is_blocked_default(&self) -> bool {
+        matches!(self.default_value(), Some(Value::Blocked))
+    }
+}
+
+impl From<FieldValue> for OpinionValue {
+    fn from(value: FieldValue) -> Self {
+        Self::Field(value)
+    }
+}
+
+impl From<PropertySpec> for OpinionValue {
+    fn from(spec: PropertySpec) -> Self {
+        Self::Property(Box::new(spec))
+    }
+}
+
+/// The identity of a composed field: a prim metadata field or a property.
+///
+/// A prim's metadata fields and its properties are different objects even
+/// when they share a name (`def "P" (kind = "component") { double kind }`),
+/// so they are indexed and resolved apart.
+///
+/// Spec: AOUSD Core §7.3 (property specs are children of the prim spec;
+/// metadata are fields of the spec itself), §7.4.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum FieldKey {
+    /// A prim metadata field.
+    Metadata(TokenId),
+    /// A property.
+    Property(TokenId),
+}
+
+impl FieldKey {
+    /// The key an opinion is indexed under.
+    pub(crate) fn of(opinion: &Opinion) -> Self {
+        match opinion.value {
+            OpinionValue::Field(_) => Self::Metadata(opinion.field),
+            OpinionValue::Property(_) => Self::Property(opinion.field),
+        }
+    }
+}
+
+/// A per-prim composition result, keyed by field identity.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct PrimIndex {
-    pub(crate) opinions_by_field: HashMap<TokenId, Vec<Opinion>>,
+    pub(crate) opinions_by_field: HashMap<FieldKey, Vec<Opinion>>,
     /// Every contributing property declaration, keyed by field. The
     /// composed type is the strongest surviving declaration's, so filtering
     /// out an opinion's declaration lets a weaker one take over.
@@ -193,9 +324,23 @@ pub(crate) struct PrimIndex {
 impl PrimIndex {
     pub(crate) fn add_opinion(&mut self, opinion: Opinion) {
         self.opinions_by_field
-            .entry(opinion.field)
+            .entry(FieldKey::of(&opinion))
             .or_default()
             .push(opinion);
+    }
+
+    /// The opinions of the property `name`.
+    pub(crate) fn property_opinions(&self, name: TokenId) -> Option<&[Opinion]> {
+        self.opinions_by_field
+            .get(&FieldKey::Property(name))
+            .map(Vec::as_slice)
+    }
+
+    /// The opinions of the prim metadata field `key`.
+    pub(crate) fn metadata_opinions(&self, key: TokenId) -> Option<&[Opinion]> {
+        self.opinions_by_field
+            .get(&FieldKey::Metadata(key))
+            .map(Vec::as_slice)
     }
 
     pub(crate) fn add_source(&mut self, key: OpinionKey) {

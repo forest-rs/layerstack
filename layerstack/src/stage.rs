@@ -21,7 +21,8 @@ use crate::{
     interner::TokenId,
     listop::{ListOp, resolve_list_chain},
     path::{PathId, PropertyPath, TargetPath},
-    prim_index::{Opinion, OpinionKey, PrimIndex},
+    prim_index::{Opinion, OpinionKey, OpinionValue, PrimIndex},
+    property::{PropertySpec, PropertyType},
     schema::SchemaRegistry,
     spec_path::SpecPath,
     spline::{SplineData, SplineDataType},
@@ -72,6 +73,18 @@ pub enum ResolvedValue {
     ///
     /// Spec: AOUSD Core §6.6.2.1 (dictionary combining), §12.2.5.
     Dictionary(Vec<(Arc<str>, Value)>),
+}
+
+/// Which of a prim's same-named objects a query reads.
+///
+/// Spec: AOUSD Core §7.3 (a property spec is a child of the prim spec, a
+/// metadata field a field of it; the two may share a name).
+#[derive(Clone, Copy, Debug)]
+enum Lookup {
+    /// Only the property.
+    Property,
+    /// Only the prim metadata field.
+    Metadata,
 }
 
 /// Controls partial population.
@@ -310,13 +323,23 @@ impl Stage {
             .unwrap_or_default()
     }
 
-    /// Resolves a field on a prim.
+    /// Resolves a prim metadata field (never a property; see
+    /// [`Stage::resolve_value`]).
     ///
     /// Returns scalar and dictionary values. For `ListOp` fields, use
     /// [`Stage::resolve_token_list`] or [`Stage::resolve_target_list`].
     #[must_use]
     pub fn resolve_field(&self, prim: PathId, field: TokenId) -> Option<Resolved<Value>> {
-        let resolved = self.resolve_value(prim, field)?;
+        self.resolve_field_by(prim, field, Lookup::Metadata)
+    }
+
+    fn resolve_field_by(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        lookup: Lookup,
+    ) -> Option<Resolved<Value>> {
+        let resolved = self.resolve_value_by(prim, field, lookup)?;
         match resolved.value {
             ResolvedValue::Scalar(v) => Some(Resolved {
                 value: v,
@@ -330,14 +353,23 @@ impl Stage {
         }
     }
 
-    /// Resolves a token `ListOp` field on a prim.
+    /// Resolves a token `ListOp` prim metadata field, such as `apiSchemas`.
     #[must_use]
     pub fn resolve_token_list(
         &self,
         prim: PathId,
         field: TokenId,
     ) -> Option<Resolved<Vec<TokenId>>> {
-        let resolved = self.resolve_value(prim, field)?;
+        self.resolve_token_list_by(prim, field, Lookup::Metadata)
+    }
+
+    fn resolve_token_list_by(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        lookup: Lookup,
+    ) -> Option<Resolved<Vec<TokenId>>> {
+        let resolved = self.resolve_value_by(prim, field, lookup)?;
         match resolved.value {
             ResolvedValue::TokenList(v) => Some(Resolved {
                 value: v,
@@ -349,23 +381,54 @@ impl Stage {
         }
     }
 
-    /// Resolves a target-path `ListOp` field on a prim.
+    /// Resolves a path list-op prim metadata field. For the connections of
+    /// an attribute or the targets of a relationship, use
+    /// [`Stage::resolve_target_list_path`].
+    ///
+    /// For an attribute the composed list is its connection paths; for a
+    /// relationship, its target paths. Every opinion that authors targets contributes to the
+    /// list-op chain, independently of any value the attribute also authors:
+    /// connections never participate in attribute value resolution.
+    ///
+    /// Returns `None` when no opinion authors targets, except for a declared
+    /// relationship, whose composed target list is then empty.
+    ///
+    /// Spec: AOUSD Core §7.6.4.2.3 (attributes may have a value, a
+    /// connection, or both), §12.2.6 (list op resolution), §12.4
+    /// (relationships and attribute connections).
     #[must_use]
     pub fn resolve_target_list(
         &self,
         prim: PathId,
         field: TokenId,
     ) -> Option<Resolved<Vec<TargetPath>>> {
-        let resolved = self.resolve_value(prim, field)?;
-        match resolved.value {
-            ResolvedValue::PathList(v) => Some(Resolved {
-                value: v,
-                provenance: resolved.provenance,
-            }),
-            ResolvedValue::Scalar(_)
-            | ResolvedValue::TokenList(_)
-            | ResolvedValue::Dictionary(_) => None,
+        self.resolve_targets_by(prim, field, Lookup::Metadata)
+    }
+
+    fn resolve_targets_by(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        lookup: Lookup,
+    ) -> Option<Resolved<Vec<TargetPath>>> {
+        let (_, opinions) = self.opinions(prim, field, lookup)?;
+        let strongest_with_targets = opinions.iter().find(|op| op.value.targets().is_some());
+        let is_relationship = opinions.iter().any(|op| {
+            op.value
+                .as_property()
+                .is_some_and(PropertySpec::is_relationship)
+        });
+        if strongest_with_targets.is_none() && !is_relationship {
+            return None;
         }
+        let ops: Vec<ListOp<TargetPath>> = opinions
+            .iter()
+            .filter_map(|op| op.value.targets().cloned())
+            .collect();
+        Some(Resolved {
+            value: resolve_list_chain::<TargetPath>(&[], ops),
+            provenance: self.provenance_for(field, strongest_with_targets.unwrap_or(&opinions[0])),
+        })
     }
 
     /// Resolves a target-path `ListOp` field on a prim.
@@ -381,94 +444,164 @@ impl Stage {
         self.resolve_target_list(prim, field)
     }
 
-    /// Resolves a field on a prim.
+    /// Resolves a prim metadata field.
     ///
-    /// - Scalar fields return the strongest scalar opinion.
-    /// - Token list fields chain `ListOps` across all contributing opinions.
+    /// The name-based queries (this one, [`Stage::resolve_field`],
+    /// [`Stage::resolve_token_list`], [`Stage::resolve_target_list`],
+    /// [`Stage::resolve_value_at_time`], [`Stage::explain_field`] and
+    /// [`Stage::resolve_dictionary`]) read prim metadata only. Properties are
+    /// read through the property-path queries, such as
+    /// [`Stage::resolve_property_path`]. A prim may author a metadata field
+    /// and a property with the same name (`kind` or `apiSchemas`, for
+    /// example); the two never stand in for each other.
     ///
-    /// Spec: AOUSD Core §12 (value resolution).
+    /// Default-time rules, shared with the property-path queries:
+    ///
+    /// - A metadata field or attribute resolves to the strongest authored
+    ///   default: property opinions that author no default (only time samples,
+    ///   a spline or connections) are skipped, never treated as a value.
+    ///   Dictionaries combine; sparse array edits compose.
+    /// - A relationship resolves to its composed target list.
+    /// - Token and path list-op fields chain their list ops.
+    ///
+    /// Time samples and splines never answer a default-time query; use
+    /// [`Stage::resolve_value_at_time`] for numeric times.
+    ///
+    /// Spec: AOUSD Core §7.3 (a property spec is a child of the prim spec,
+    /// a metadata field a field of it).
+    ///
+    /// Spec: AOUSD Core §12.2 (metadata resolution), §12.3.1 (default
+    /// values: "the specs for that attribute in each composed layer are
+    /// queried for an authored default value"), §12.4 (relationships).
+    /// OpenUSD reads only `default` fields at the default time
+    /// (`ProcessLayerAtDefault` in `pxr/usd/usd/stage.cpp`).
     #[must_use]
     pub fn resolve_value(&self, prim: PathId, field: TokenId) -> Option<Resolved<ResolvedValue>> {
+        self.resolve_value_by(prim, field, Lookup::Metadata)
+    }
+
+    /// Returns the prim index and the opinions `lookup` selects.
+    fn opinions(
+        &self,
+        prim: PathId,
+        name: TokenId,
+        lookup: Lookup,
+    ) -> Option<(&PrimIndex, &[Opinion])> {
         let index = self.prims.get(&prim)?;
-        let opinions = index.opinions_by_field.get(&field)?;
+        let opinions = match lookup {
+            Lookup::Property => index.property_opinions(name),
+            Lookup::Metadata => index.metadata_opinions(name),
+        }?;
+        Some((index, opinions))
+    }
+
+    fn resolve_value_by(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        lookup: Lookup,
+    ) -> Option<Resolved<ResolvedValue>> {
+        let (index, opinions) = self.opinions(prim, field, lookup)?;
         let strongest = opinions.first()?;
 
-        if matches!(strongest.value, FieldValue::Value(Value::Blocked)) {
-            // Value block: suppress all weaker opinions, return no value.
-            // Spec: AOUSD Core §12.3 (value blocking).
-            return None;
+        match &strongest.value {
+            OpinionValue::Property(spec) if spec.is_relationship() => {
+                let targets = self.resolve_targets_by(prim, field, lookup)?;
+                return Some(Resolved {
+                    value: ResolvedValue::PathList(targets.value),
+                    provenance: targets.provenance,
+                });
+            }
+            OpinionValue::Field(FieldValue::TokenListOp(_)) => {
+                let ops: Vec<ListOp<TokenId>> = opinions
+                    .iter()
+                    .filter_map(|op| match &op.value {
+                        OpinionValue::Field(FieldValue::TokenListOp(list)) => Some(list.clone()),
+                        _ => None,
+                    })
+                    .collect();
+                return Some(Resolved {
+                    value: ResolvedValue::TokenList(resolve_list_chain::<TokenId>(&[], ops)),
+                    provenance: self.provenance_for(field, strongest),
+                });
+            }
+            OpinionValue::Field(FieldValue::PathListOp(_)) => {
+                let targets = self.resolve_targets_by(prim, field, lookup)?;
+                return Some(Resolved {
+                    value: ResolvedValue::PathList(targets.value),
+                    provenance: targets.provenance,
+                });
+            }
+            OpinionValue::Field(FieldValue::Value(_)) | OpinionValue::Property(_) => {}
         }
 
-        match resolve_sparse_value(
-            opinions,
-            SparseQuery::Default { fallback: None },
-            index.property_type_for(&field),
-        ) {
+        self.resolve_default(field, opinions, index.property_type_for(&field), None)
+    }
+
+    /// Resolves the default-time value of a chain of opinions, optionally
+    /// over a schema fallback.
+    fn resolve_default(
+        &self,
+        field: TokenId,
+        opinions: &[Opinion],
+        property_type: Option<&PropertyType>,
+        fallback: Option<&Value>,
+    ) -> Option<Resolved<ResolvedValue>> {
+        let strongest_default = opinions
+            .iter()
+            .find(|opinion| opinion.value.default_value().is_some());
+
+        match resolve_sparse_value(opinions, SparseQuery::Default { fallback }, property_type) {
             SparseResolveResult::Resolved(value) => {
                 return Some(Resolved {
                     value: ResolvedValue::Scalar(value),
-                    provenance: self.provenance_for(field, strongest),
+                    provenance: strongest_default.and_then(|op| self.provenance_for(field, op)),
                 });
             }
             SparseResolveResult::Blocked => return None,
             SparseResolveResult::NotApplicable => {}
         }
 
-        match &strongest.value {
-            FieldValue::Value(Value::Dictionary(_)) => Some(Resolved {
-                value: ResolvedValue::Dictionary(resolve_dictionary_chain(opinions, None)),
-                provenance: self.provenance_for(field, strongest),
-            }),
-            FieldValue::Value(v) => Some(Resolved {
-                value: ResolvedValue::Scalar(v.clone()),
-                provenance: self.provenance_for(field, strongest),
-            }),
-            FieldValue::TokenListOp(_) => {
-                let ops: Vec<ListOp<TokenId>> = opinions
-                    .iter()
-                    .filter_map(|op| match &op.value {
-                        FieldValue::TokenListOp(list) => Some(list.clone()),
+        let strongest_default = strongest_default?;
+        match strongest_default.value.default_value()? {
+            // Value block: suppress all weaker opinions, return no value.
+            // Spec: AOUSD Core §12.3.6 (blocked attributes).
+            Value::Blocked => None,
+            Value::Dictionary(_) => Some(Resolved {
+                value: ResolvedValue::Dictionary(resolve_dictionary_chain(
+                    opinions,
+                    fallback.and_then(|fallback| match fallback {
+                        Value::Dictionary(seed) => Some(seed.as_slice()),
                         _ => None,
-                    })
-                    .collect();
-                Some(Resolved {
-                    value: ResolvedValue::TokenList(resolve_list_chain::<TokenId>(&[], ops)),
-                    provenance: self.provenance_for(field, strongest),
-                })
-            }
-            FieldValue::PathListOp(_) => {
-                let ops: Vec<ListOp<TargetPath>> = opinions
-                    .iter()
-                    .filter_map(|op| match &op.value {
-                        FieldValue::PathListOp(list) => Some(list.clone()),
-                        _ => None,
-                    })
-                    .collect();
-                Some(Resolved {
-                    value: ResolvedValue::PathList(resolve_list_chain::<TargetPath>(&[], ops)),
-                    provenance: self.provenance_for(field, strongest),
-                })
-            }
-            FieldValue::TimeSamples(_) | FieldValue::Spline(_) => {
-                // When resolved without a time, timeSamples/splines return no
-                // scalar value. Use resolve_value_at_time() for time-varying queries.
-                None
-            }
+                    }),
+                )),
+                provenance: self.provenance_for(field, strongest_default),
+            }),
+            value => Some(Resolved {
+                value: ResolvedValue::Scalar(value.clone()),
+                provenance: self.provenance_for(field, strongest_default),
+            }),
         }
     }
 
-    /// Resolves a time-varying field on a prim at a specific time.
+    /// Resolves a time-varying field on a prim at a specific numeric time.
     ///
-    /// `TimeSamples` take priority over default values per §12.3. The strongest
-    /// opinion with timeSamples is used. If no timeSamples exist, falls back to
-    /// `resolve_value`.
+    /// Opinions are visited strongest first. For each, authored time samples
+    /// answer the query; failing those, a spline; failing that, the authored
+    /// default. The first opinion that authors any of them wins, so a
+    /// stronger default hides weaker samples, and a spec's own samples hide
+    /// its default. Opinions that author none of them (for example only
+    /// connections) are skipped.
     ///
     /// Array-valued attributes compose instead: every opinion's samples
     /// bracketing `time` compose strongest over weakest (sparse array edits
     /// over dense arrays), and the composed bracketing samples are then held
     /// or interpolated, as in OpenUSD.
     ///
-    /// Spec: AOUSD Core §12.3.2.2 (timeSamples), §12.5 (interpolation).
+    /// Spec: AOUSD Core §12.3.2 (time based: time samples have priority over
+    /// splines), §12.3.2.1 (layer offset and scale), §12.3.3 (splines),
+    /// §12.3.6 (blocked samples), §12.5 (interpolation). OpenUSD applies the
+    /// same per-spec order in `ProcessLayerAtTime` (`pxr/usd/usd/stage.cpp`).
     #[must_use]
     pub fn resolve_value_at_time(
         &self,
@@ -477,8 +610,18 @@ impl Stage {
         time: f64,
         interp: InterpolationType,
     ) -> Option<Resolved<Value>> {
-        let index = self.prims.get(&prim)?;
-        let opinions = index.opinions_by_field.get(&field)?;
+        self.resolve_value_at_time_by(prim, field, time, interp, Lookup::Metadata)
+    }
+
+    fn resolve_value_at_time_by(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        time: f64,
+        interp: InterpolationType,
+        lookup: Lookup,
+    ) -> Option<Resolved<Value>> {
+        let (index, opinions) = self.opinions(prim, field, lookup)?;
 
         match resolve_sparse_value(
             opinions,
@@ -499,62 +642,30 @@ impl Stage {
             SparseResolveResult::NotApplicable => {}
         }
 
-        // Per §12.3: check each spec in strength order for timeSamples first,
-        // then fall back to default value.
         for opinion in opinions {
-            match &opinion.value {
-                FieldValue::Value(Value::Blocked) => return None,
-                FieldValue::TimeSamples(samples) => {
-                    // Apply the opinion's accumulated layer offset to remap
-                    // the query time before interpolating.
-                    //
-                    // Spec: §12.3.2.1 (layer offset/scale remap time).
-                    let mapped_time = opinion.layer_offset.map_time(time);
-                    let value = interpolate_samples(samples, mapped_time, interp)?;
-                    // A blocked sample in effect at the query time resolves to
-                    // no value, exactly like a blocked default.
-                    //
-                    // Spec: AOUSD Core §12.3.6 (individual time samples can be
-                    // blocked).
-                    if value == Value::Blocked {
-                        return None;
-                    }
-                    return Some(Resolved {
-                        value,
-                        provenance: self.provenance_for(field, opinion),
-                    });
-                }
-                _ => {}
-            }
-        }
-
-        // No timeSamples found: check for spline opinions (§12.3.3).
-        // Splines sit between timeSamples and default in resolution priority.
-        for opinion in opinions {
-            if let FieldValue::Spline(spline) = &opinion.value {
-                let mapped_time = opinion.layer_offset.map_time(time);
-                if let Some(val) = spline.evaluate(mapped_time) {
-                    let value = spline_to_value(spline, val);
-                    return Some(Resolved {
-                        value,
-                        provenance: self.provenance_for(field, opinion),
-                    });
-                }
-                // Spline returned None (Block extrapolation) — no value.
+            // Apply the opinion's accumulated layer offset to remap the query
+            // time before sampling.
+            let mapped_time = opinion.layer_offset.map_time(time);
+            let value = if let Some(samples) = opinion.value.time_samples() {
+                interpolate_samples(samples, mapped_time, interp)?
+            } else if let Some(spline) = opinion.value.spline() {
+                // A spline that evaluates to nothing (block extrapolation or
+                // a blocked segment) yields no value.
+                spline_to_value(spline, spline.evaluate(mapped_time)?)
+            } else if let Some(value) = opinion.value.default_value() {
+                value.clone()
+            } else {
+                continue;
+            };
+            // A block in effect at the query time, as a sample or a default,
+            // resolves to no value.
+            if value == Value::Blocked {
                 return None;
             }
-        }
-
-        // No timeSamples or splines found: fall back to scalar default.
-        for opinion in opinions {
-            if let FieldValue::Value(v) = &opinion.value
-                && *v != Value::Blocked
-            {
-                return Some(Resolved {
-                    value: v.clone(),
-                    provenance: self.provenance_for(field, opinion),
-                });
-            }
+            return Some(Resolved {
+                value,
+                provenance: self.provenance_for(field, opinion),
+            });
         }
 
         None
@@ -568,9 +679,8 @@ impl Stage {
     /// Spec: AOUSD Core §12 (value resolution) and §10.4 (strength ordering).
     #[must_use]
     pub fn explain_field(&self, prim: PathId, field: TokenId) -> Option<&[Opinion]> {
-        let index = self.prims.get(&prim)?;
-        let opinions = index.opinions_by_field.get(&field)?;
-        Some(opinions.as_slice())
+        self.opinions(prim, field, Lookup::Metadata)
+            .map(|(_, opinions)| opinions)
     }
 
     /// Resolves a concrete property path.
@@ -579,22 +689,21 @@ impl Stage {
         &self,
         property_path: PropertyPath,
     ) -> Option<Resolved<ResolvedValue>> {
-        self.resolve_value(property_path.prim_path(), property_path.property())
+        self.resolve_value_by(
+            property_path.prim_path(),
+            property_path.property(),
+            Lookup::Property,
+        )
     }
 
     /// Resolves a scalar or dictionary field via concrete [`PropertyPath`].
     #[must_use]
     pub fn resolve_field_path(&self, property_path: PropertyPath) -> Option<Resolved<Value>> {
-        self.resolve_field(property_path.prim_path(), property_path.property())
-    }
-
-    /// Resolves a token-list field via concrete [`PropertyPath`].
-    #[must_use]
-    pub fn resolve_token_list_path(
-        &self,
-        property_path: PropertyPath,
-    ) -> Option<Resolved<Vec<TokenId>>> {
-        self.resolve_token_list(property_path.prim_path(), property_path.property())
+        self.resolve_field_by(
+            property_path.prim_path(),
+            property_path.property(),
+            Lookup::Property,
+        )
     }
 
     /// Resolves a target-list field via concrete [`PropertyPath`].
@@ -603,7 +712,11 @@ impl Stage {
         &self,
         property_path: PropertyPath,
     ) -> Option<Resolved<Vec<TargetPath>>> {
-        self.resolve_target_list(property_path.prim_path(), property_path.property())
+        self.resolve_targets_by(
+            property_path.prim_path(),
+            property_path.property(),
+            Lookup::Property,
+        )
     }
 
     /// Resolves a concrete property path at a specific time.
@@ -614,18 +727,24 @@ impl Stage {
         time: f64,
         interp: InterpolationType,
     ) -> Option<Resolved<Value>> {
-        self.resolve_value_at_time(
+        self.resolve_value_at_time_by(
             property_path.prim_path(),
             property_path.property(),
             time,
             interp,
+            Lookup::Property,
         )
     }
 
     /// Returns the sorted opinion stack for a concrete property path.
     #[must_use]
     pub fn explain_property_path(&self, property_path: PropertyPath) -> Option<&[Opinion]> {
-        self.explain_field(property_path.prim_path(), property_path.property())
+        self.opinions(
+            property_path.prim_path(),
+            property_path.property(),
+            Lookup::Property,
+        )
+        .map(|(_, opinions)| opinions)
     }
 
     /// Returns `true` if the stage contains opinions for a concrete property path.
@@ -774,15 +893,19 @@ impl Stage {
         None
     }
 
-    /// Resolves a field on a prim with schema fallback.
+    /// Resolves a property on a prim with schema fallback.
     ///
-    /// Like [`Stage::resolve_value`], but when no authored opinion exists,
+    /// Like [`Stage::resolve_property_path`], but when no authored opinion exists,
     /// consults the schema registry for a fallback value based on the prim's
     /// resolved type name and applied API schemas.
     ///
     /// `api_schemas_token` is the interned token for `"apiSchemas"`. Pass it
     /// so the resolver can look up applied API schemas on the prim. If `None`,
     /// only the typed schema (and its built-ins / auto-applies) are consulted.
+    ///
+    /// Only properties are read here; the applied schemas come from the
+    /// prim metadata field `apiSchemas`, never from a property that happens
+    /// to share its name.
     ///
     /// Spec: AOUSD Core §13.3.2.4 (fallback value resolution).
     #[must_use]
@@ -794,10 +917,8 @@ impl Stage {
         registry: &SchemaRegistry,
         api_schemas_token: Option<TokenId>,
     ) -> Option<Resolved<ResolvedValue>> {
-        let authored = self
-            .prims
-            .get(&prim)
-            .and_then(|index| index.opinions_by_field.get(&field));
+        let index = self.prims.get(&prim);
+        let authored = index.and_then(|index| index.property_opinions(field));
 
         let type_name = self.resolve_type_name(prim, store);
         let applied = api_schemas_token
@@ -806,52 +927,37 @@ impl Stage {
             .unwrap_or_default();
         let fallback = registry.resolve_fallback(type_name, &applied, field);
 
-        if let Some(opinions) = authored {
-            let strongest = opinions.first()?;
-            if matches!(strongest.value, FieldValue::Value(Value::Blocked)) {
-                // fall through to schema fallback
-            } else {
-                let property_type = self.prims.get(&prim)?.property_type_for(&field);
+        if let (Some(index), Some(opinions)) = (index, authored) {
+            let is_value_field = matches!(
+                opinions.first()?.value,
+                OpinionValue::Field(FieldValue::Value(_)) | OpinionValue::Property(_)
+            ) && !opinions[0]
+                .value
+                .as_property()
+                .is_some_and(PropertySpec::is_relationship);
+            if is_value_field {
+                // A dictionary fallback is the weakest opinion in the
+                // combining chain, as in OpenUSD's
+                // `MetadataValueComposer::ConsumeUsdFallback`; an array
+                // fallback seeds sparse edits. A block falls through to the
+                // fallback itself.
+                //
+                // Spec: AOUSD Core §6.6.2.1, §12.3.6, §13.3.2.4 (fallback
+                // value resolution).
                 let fallback_value = match fallback.as_ref() {
                     Some(FieldValue::Value(value)) => Some(value),
                     _ => None,
                 };
-                match resolve_sparse_value(
+                if let Some(resolved) = self.resolve_default(
+                    field,
                     opinions,
-                    SparseQuery::Default {
-                        fallback: fallback_value,
-                    },
-                    property_type,
+                    index.property_type_for(&field),
+                    fallback_value,
                 ) {
-                    SparseResolveResult::Resolved(value) => {
-                        return Some(Resolved {
-                            value: ResolvedValue::Scalar(value),
-                            provenance: self.provenance_for(field, strongest),
-                        });
-                    }
-                    SparseResolveResult::Blocked => {}
-                    SparseResolveResult::NotApplicable => {}
-                }
-                // A dictionary fallback is the weakest opinion in the combining
-                // chain, as in OpenUSD's `MetadataValueComposer::ConsumeUsdFallback`.
-                //
-                // Spec: AOUSD Core §6.6.2.1, §13.3.2.4 (fallback value resolution).
-                if let (
-                    FieldValue::Value(Value::Dictionary(_)),
-                    Some(FieldValue::Value(Value::Dictionary(seed))),
-                ) = (&strongest.value, fallback.as_ref())
-                {
-                    return Some(Resolved {
-                        value: ResolvedValue::Dictionary(resolve_dictionary_chain(
-                            opinions,
-                            Some(seed),
-                        )),
-                        provenance: self.provenance_for(field, strongest),
-                    });
-                }
-                if let Some(resolved) = self.resolve_value(prim, field) {
                     return Some(resolved);
                 }
+            } else if let Some(resolved) = self.resolve_value_by(prim, field, Lookup::Property) {
+                return Some(resolved);
             }
         }
 
@@ -870,13 +976,12 @@ impl Stage {
                 FieldValue::PathListOp(op) => {
                     ResolvedValue::PathList(resolve_list_chain::<TargetPath>(&[], [op]))
                 }
-                FieldValue::TimeSamples(_) | FieldValue::Spline(_) => return None,
             },
             provenance: None,
         })
     }
 
-    /// Resolves a scalar field on a prim with schema fallback.
+    /// Resolves a scalar property on a prim with schema fallback.
     ///
     /// Like [`Stage::resolve_field`], but falls back to the schema registry.
     ///
@@ -1040,9 +1145,10 @@ fn resolve_dictionary_chain(
 ) -> Vec<(Arc<str>, Value)> {
     let authored = opinions
         .iter()
-        .take_while(|opinion| !matches!(opinion.value, FieldValue::Value(Value::Blocked)))
-        .filter_map(|opinion| match &opinion.value {
-            FieldValue::Value(Value::Dictionary(entries)) => Some(entries.as_slice()),
+        .filter_map(|opinion| opinion.value.default_value())
+        .take_while(|value| !matches!(value, Value::Blocked))
+        .filter_map(|value| match value {
+            Value::Dictionary(entries) => Some(entries.as_slice()),
             _ => None,
         });
     combine_dictionary_chain(authored.chain(fallback))
@@ -1061,6 +1167,14 @@ mod tests {
     };
     use alloc::sync::Arc;
     use alloc::vec;
+
+    /// Test-only opinion payload: a property authoring only time samples.
+    fn samples(samples: Vec<(f64, Value)>) -> OpinionValue {
+        OpinionValue::from(PropertySpec {
+            time_samples: Some(samples),
+            ..PropertySpec::default()
+        })
+    }
 
     fn array_value(values: &[i32]) -> Value {
         Value::Array(values.iter().copied().map(Value::Int).collect())
@@ -1106,7 +1220,8 @@ mod tests {
                     src: ArrayEditOperand::Literal(Value::Int(9)),
                     index: ArrayIndex::Position(0),
                 }],
-            })),
+            }))
+            .into(),
             layer_offset: LayerOffset::IDENTITY,
         });
         index.add_opinion(Opinion {
@@ -1115,7 +1230,7 @@ mod tests {
                 ..key.clone()
             },
             field,
-            value: FieldValue::Value(array_value(&[1, 2])),
+            value: FieldValue::Value(array_value(&[1, 2])).into(),
             layer_offset: LayerOffset::IDENTITY,
         });
 
@@ -1145,7 +1260,7 @@ mod tests {
         index.add_opinion(Opinion {
             key: key.clone(),
             field,
-            value: FieldValue::TimeSamples(vec![
+            value: samples(vec![
                 (0.0, identity.clone()),
                 (2.0, override_sample),
                 (3.0, identity),
@@ -1158,21 +1273,31 @@ mod tests {
                 ..key.clone()
             },
             field,
-            value: FieldValue::Value(array_value(&[1, 2])),
+            value: PropertySpec::attribute()
+                .with_default(array_value(&[1, 2]))
+                .into(),
             layer_offset: LayerOffset::IDENTITY,
         });
 
         let stage = Stage::from_parts(HashMap::from([(prim, index)]), HashMap::new(), false, None);
         assert_eq!(
             stage
-                .resolve_value_at_time(prim, field, 2.5, InterpolationType::Held)
+                .resolve_property_path_at_time(
+                    PropertyPath::new(prim, field),
+                    2.5,
+                    InterpolationType::Held
+                )
                 .expect("resolved override")
                 .value,
             array_value(&[9, 2])
         );
         assert_eq!(
             stage
-                .resolve_value_at_time(prim, field, 3.5, InterpolationType::Held)
+                .resolve_property_path_at_time(
+                    PropertyPath::new(prim, field),
+                    3.5,
+                    InterpolationType::Held
+                )
                 .expect("resolved reset")
                 .value,
             array_value(&[1, 2])
@@ -1192,7 +1317,7 @@ mod tests {
         index.add_opinion(Opinion {
             key: key.clone(),
             field,
-            value: FieldValue::TimeSamples(vec![(0.0, Value::Blocked)]),
+            value: samples(vec![(0.0, Value::Blocked)]),
             layer_offset: LayerOffset::IDENTITY,
         });
         index.add_opinion(Opinion {
@@ -1201,7 +1326,9 @@ mod tests {
                 ..key.clone()
             },
             field,
-            value: FieldValue::Value(array_value(&[42])),
+            value: PropertySpec::attribute()
+                .with_default(array_value(&[42]))
+                .into(),
             layer_offset: LayerOffset::IDENTITY,
         });
 
@@ -1258,7 +1385,14 @@ mod tests {
                     ..key.clone()
                 },
                 field,
-                value,
+                // Schema fallbacks are for properties: author each value as an
+                // attribute default.
+                value: match value {
+                    FieldValue::Value(default) => {
+                        PropertySpec::attribute().with_default(default).into()
+                    }
+                    other => other.into(),
+                },
                 layer_offset: LayerOffset::IDENTITY,
             });
         }
@@ -1288,7 +1422,9 @@ mod tests {
             FieldValue::Value(array_value(&[1, 2])),
         ]);
 
-        let without_schema = stage.resolve_value(prim, field).expect("edit resolves");
+        let without_schema = stage
+            .resolve_property_path(PropertyPath::new(prim, field))
+            .expect("edit resolves");
         assert_eq!(
             without_schema.value,
             ResolvedValue::Scalar(array_value(&[7])),
@@ -1313,7 +1449,10 @@ mod tests {
             FieldValue::Value(array_value(&[1, 2])),
         ]);
 
-        assert_eq!(stage.resolve_value(prim, field), None);
+        assert_eq!(
+            stage.resolve_property_path(PropertyPath::new(prim, field)),
+            None
+        );
         let with_schema = stage
             .resolve_value_with_schema(prim, field, &store, &registry, None)
             .expect("fallback resolves");

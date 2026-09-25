@@ -147,7 +147,7 @@ fn attr(stage: &Stage, store: &mut InMemoryStore, prim: &str, name: &str) -> Val
     let prim_id = store.path(prim);
     let field = store.tokens.intern(name);
     stage
-        .resolve_field(prim_id, field)
+        .resolve_field_path(layerstack::PropertyPath::new(prim_id, field))
         .unwrap_or_else(|| panic!("{prim}.{name} resolves"))
         .value
 }
@@ -158,12 +158,10 @@ fn declared_type(store: &mut InMemoryStore, prim: &str, name: &str) -> String {
     let field = store.tokens.intern(name);
     let layer = store.layers.get(&LayerId(1)).expect("root layer");
     let entry = layer.prims[&prim_id]
-        .fields
-        .iter()
-        .find(|e| e.name == field)
+        .property(field)
         .unwrap_or_else(|| panic!("{prim}.{name} authored"));
     let ty = entry
-        .property_type
+        .type_name
         .as_ref()
         .expect("attribute has a declared type");
     format!("{}{}", ty.type_name, if ty.is_array { "[]" } else { "" })
@@ -691,6 +689,13 @@ fn authored_assets(layer: &layerstack::Layer) -> Vec<String> {
                 visit(value, &mut out);
             }
         }
+        for property in &spec.properties {
+            let spec = &property.spec;
+            let samples = spec.time_samples.iter().flatten().map(|(_, value)| value);
+            for value in spec.default.iter().chain(samples) {
+                visit(value, &mut out);
+            }
+        }
     }
     out.sort();
     out
@@ -821,7 +826,7 @@ fn targets(stage: &Stage, store: &mut InMemoryStore, prim: &str, name: &str) -> 
     let prim_id = store.path(prim);
     let field = store.tokens.intern(name);
     stage
-        .resolve_target_list(prim_id, field)
+        .resolve_target_list_path(layerstack::PropertyPath::new(prim_id, field))
         .unwrap_or_else(|| panic!("{prim}.{name} has targets"))
         .value
         .into_iter()

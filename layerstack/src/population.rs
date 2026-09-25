@@ -12,6 +12,7 @@ use alloc::{collections::BTreeSet, rc::Rc, vec::Vec};
 
 use hashbrown::{HashMap, HashSet};
 
+use crate::variant_fallbacks::VariantFallbacks;
 use crate::{
     arc_cycle::ArcChain,
     arcs::{
@@ -162,6 +163,10 @@ fn gather_populated_paths(
     local_stack: &LayerStack,
     relocations: &mut Relocations,
 ) -> BTreeSet<PathId> {
+    // Population reads no variant fallbacks: a branch whose set has no
+    // authored selection counts as selected, so population
+    // over-approximates, and composition prunes what it does not select.
+    let fallbacks = &VariantFallbacks::default();
     // Keep this ordered set: deterministic iteration here helps keep derived
     // path interning stable across runs.
     let mut paths = BTreeSet::new();
@@ -190,8 +195,13 @@ fn gather_populated_paths(
         idx += 1;
         let mut chain = Chain::new(stage_layer_stack, path, relocations);
 
-        let inherits =
-            resolve_inherits_for_prim(store, local_stack, path, SelectionScope::Discover);
+        let inherits = resolve_inherits_for_prim(
+            store,
+            fallbacks,
+            local_stack,
+            path,
+            SelectionScope::Discover,
+        );
         for inherited_root in inherits {
             expand_inherit_paths(
                 store,
@@ -208,6 +218,7 @@ fn gather_populated_paths(
 
         let refs = resolve_references_for_prim(
             store,
+            fallbacks,
             local_stack,
             path,
             SelectionScope::Discover,
@@ -249,8 +260,13 @@ fn gather_populated_paths(
 
         // Expand references from variant branch headers of this prim itself.
         // E.g. `"full" (add references = @...@) {}` on the prim's variant set.
-        let branch_refs =
-            collect_all_variant_branch_references(store, local_stack, path, stage_layer_stack);
+        let branch_refs = collect_all_variant_branch_references(
+            store,
+            fallbacks,
+            local_stack,
+            path,
+            stage_layer_stack,
+        );
         for reference in branch_refs {
             expand_reference_paths(
                 store,
@@ -269,6 +285,7 @@ fn gather_populated_paths(
         // Spec: AOUSD Core §10 (payloads arc, §5.1.22).
         let payloads = resolve_payloads_for_prim(
             store,
+            fallbacks,
             local_stack,
             path,
             SelectionScope::Discover,
@@ -289,8 +306,13 @@ fn gather_populated_paths(
         }
 
         // Expand payloads from variant branch headers (all branches).
-        let branch_payloads =
-            collect_all_variant_branch_payloads(store, local_stack, path, stage_layer_stack);
+        let branch_payloads = collect_all_variant_branch_payloads(
+            store,
+            fallbacks,
+            local_stack,
+            path,
+            stage_layer_stack,
+        );
         for payload in branch_payloads {
             expand_reference_paths(
                 store,
@@ -307,8 +329,13 @@ fn gather_populated_paths(
 
         // Specializes behaves like inherits for population purposes.
         // Spec: AOUSD Core §10 (specializes arc, §5.1.33).
-        let specializes =
-            resolve_specializes_for_prim(store, local_stack, path, SelectionScope::Discover);
+        let specializes = resolve_specializes_for_prim(
+            store,
+            fallbacks,
+            local_stack,
+            path,
+            SelectionScope::Discover,
+        );
         for specialized_root in specializes {
             expand_inherit_paths(
                 store,
@@ -344,8 +371,13 @@ fn gather_populated_paths(
         idx += 1;
         let mut chain = Chain::new(stage_layer_stack, path, relocations);
 
-        let inherits =
-            resolve_inherits_for_prim(store, local_stack, path, SelectionScope::Discover);
+        let inherits = resolve_inherits_for_prim(
+            store,
+            fallbacks,
+            local_stack,
+            path,
+            SelectionScope::Discover,
+        );
         for inherited_root in inherits {
             expand_inherit_paths(
                 store,
@@ -375,6 +407,8 @@ fn expand_inherit_paths(
     chain: &mut Chain<'_>,
     mapped_from: &mut MappedFrom,
 ) {
+    // No variant fallbacks, as in `gather_populated_paths`.
+    let fallbacks = &VariantFallbacks::default();
     let layer_stack = layer_stack_root(stack);
     if chain.closes_cycle(store.paths(), dest_root, layer_stack, inherited_root) {
         return;
@@ -419,8 +453,13 @@ fn expand_inherit_paths(
             mapped_from.insert(dest_path_id, (remote_path_id, rel.len()));
         }
 
-        let nested =
-            resolve_inherits_for_prim(store, stack, remote_path_id, SelectionScope::Discover);
+        let nested = resolve_inherits_for_prim(
+            store,
+            fallbacks,
+            stack,
+            remote_path_id,
+            SelectionScope::Discover,
+        );
         for nested_inherit in nested {
             expand_inherit_paths(
                 store,
@@ -440,6 +479,7 @@ fn expand_inherit_paths(
         // namespace in the destination as well.
         let mut nested_refs = resolve_references_for_prim(
             store,
+            fallbacks,
             stack,
             remote_path_id,
             SelectionScope::Discover,
@@ -447,6 +487,7 @@ fn expand_inherit_paths(
         );
         nested_refs.extend(resolve_payloads_for_prim(
             store,
+            fallbacks,
             stack,
             remote_path_id,
             SelectionScope::Discover,
@@ -492,6 +533,8 @@ fn expand_reference_paths(
     chain: &mut Chain<'_>,
     mapped_from: &mut MappedFrom,
 ) {
+    // No variant fallbacks, as in `gather_populated_paths`.
+    let fallbacks = &VariantFallbacks::default();
     let Some(reference_path) = reference.target_path(store) else {
         return;
     };
@@ -543,6 +586,7 @@ fn expand_reference_paths(
 
         let inherits = resolve_inherits_for_prim(
             store,
+            fallbacks,
             &remote_stack,
             remote_path_id,
             SelectionScope::Discover,
@@ -567,6 +611,7 @@ fn expand_reference_paths(
         // Spec: AOUSD Core §10 (specializes arc), §11 (population).
         let specializes = resolve_specializes_for_prim(
             store,
+            fallbacks,
             &remote_stack,
             remote_path_id,
             SelectionScope::Discover,
@@ -587,6 +632,7 @@ fn expand_reference_paths(
 
         let nested_refs = resolve_references_for_prim(
             store,
+            fallbacks,
             &remote_stack,
             remote_path_id,
             SelectionScope::Discover,
@@ -630,6 +676,7 @@ fn expand_reference_paths(
         // Expand variant branch-level references from ALL variant branches.
         let branch_refs = collect_all_variant_branch_references(
             store,
+            fallbacks,
             &remote_stack,
             remote_path_id,
             reference.layer,
@@ -651,6 +698,7 @@ fn expand_reference_paths(
         // Expand variant branch-level payloads from ALL variant branches.
         let branch_payloads = collect_all_variant_branch_payloads(
             store,
+            fallbacks,
             &remote_stack,
             remote_path_id,
             reference.layer,
@@ -672,6 +720,7 @@ fn expand_reference_paths(
         // Expand direct payloads from the remote prim.
         let payloads = resolve_payloads_for_prim(
             store,
+            fallbacks,
             &remote_stack,
             remote_path_id,
             SelectionScope::Discover,
@@ -802,6 +851,8 @@ fn expand_ancestral_paths_from(
     mapped_from: &mut MappedFrom,
     skip: usize,
 ) {
+    // No variant fallbacks, as in `gather_populated_paths`.
+    let fallbacks = &VariantFallbacks::default();
     let anchor = layer_stack_root(stack);
     let target_path = store.paths().resolve(target).clone();
     let mut ancestors = Vec::new();
@@ -846,18 +897,19 @@ fn expand_ancestral_paths_from(
             store.paths_mut().intern(joined)
         };
         let scope = SelectionScope::Discover;
-        let mut references = resolve_references_for_prim(store, stack, ancestor, scope, anchor);
+        let mut references =
+            resolve_references_for_prim(store, fallbacks, stack, ancestor, scope, anchor);
         references.extend(collect_all_variant_child_references(
             store, stack, ancestor, anchor,
         ));
         references.extend(collect_all_variant_branch_references(
-            store, stack, ancestor, anchor,
+            store, fallbacks, stack, ancestor, anchor,
         ));
         references.extend(resolve_payloads_for_prim(
-            store, stack, ancestor, scope, anchor,
+            store, fallbacks, stack, ancestor, scope, anchor,
         ));
         references.extend(collect_all_variant_branch_payloads(
-            store, stack, ancestor, anchor,
+            store, fallbacks, stack, ancestor, anchor,
         ));
         for reference in references {
             let Some(path) = reference.target_path(store) else {
@@ -879,8 +931,10 @@ fn expand_ancestral_paths_from(
                 mapped_from,
             );
         }
-        let mut classes = resolve_inherits_for_prim(store, stack, ancestor, scope);
-        classes.extend(resolve_specializes_for_prim(store, stack, ancestor, scope));
+        let mut classes = resolve_inherits_for_prim(store, fallbacks, stack, ancestor, scope);
+        classes.extend(resolve_specializes_for_prim(
+            store, fallbacks, stack, ancestor, scope,
+        ));
         for class in classes {
             let class = mapped(store, class);
             expand_inherit_paths(

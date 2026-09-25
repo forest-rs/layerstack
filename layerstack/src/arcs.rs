@@ -16,6 +16,7 @@ use alloc::vec::Vec;
 
 use hashbrown::HashMap;
 
+use crate::variant_fallbacks::VariantFallbacks;
 use crate::{
     doc::{
         Layer, LayerId, LayerStore, PrimSpec, Reference, ReferenceTarget, VariantSpec,
@@ -147,6 +148,7 @@ pub(crate) enum SelectionScope<'a> {
 /// variant node (`pxr/usd/pcp/primIndex.cpp`, `_AddVariantArc`).
 pub(crate) fn spec_arcs_apply(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     stack: &LayerStack,
     prim: PathId,
     spec: &PrimSpec,
@@ -167,7 +169,7 @@ pub(crate) fn spec_arcs_apply(
     {
         return false;
     }
-    spec_branches_selected(store, stack, spec, scope)
+    spec_branches_selected(store, fallbacks, stack, spec, scope)
 }
 
 /// Returns `true` unless a branch enclosing `spec` (its
@@ -177,6 +179,7 @@ pub(crate) fn spec_arcs_apply(
 /// Spec: AOUSD Core §10.3.2.5 (only the selected variant contributes).
 fn spec_branches_selected(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     stack: &LayerStack,
     spec: &PrimSpec,
     scope: SelectionScope<'_>,
@@ -189,7 +192,7 @@ fn spec_branches_selected(
     spec.outer_variant_sites.iter().all(|site| {
         let selected = match enclosing.and_then(|hosts| hosts.get(&site.host_path)) {
             Some(composed) => composed.get(&site.set).copied(),
-            None => resolve_variant_selections_for_prim(store, stack, site.host_path)
+            None => resolve_variant_selections_for_prim(store, fallbacks, stack, site.host_path)
                 .get(&site.set)
                 .copied(),
         };
@@ -201,6 +204,7 @@ fn spec_branches_selected(
 /// selections apply (see [`spec_arcs_apply`]).
 fn arc_specs<'a>(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     stack: &LayerStack,
     layer: &'a Layer,
     prim: PathId,
@@ -208,7 +212,7 @@ fn arc_specs<'a>(
 ) -> Vec<&'a PrimSpec> {
     layer
         .prim_specs(prim)
-        .filter(|spec| spec_arcs_apply(store, stack, prim, spec, scope))
+        .filter(|spec| spec_arcs_apply(store, fallbacks, stack, prim, spec, scope))
         .collect()
 }
 
@@ -221,6 +225,7 @@ fn arc_specs<'a>(
 /// §10.3.2.5 (variants).
 fn variant_host_specs<'a>(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     stack: &LayerStack,
     layer: &'a Layer,
     prim: PathId,
@@ -228,7 +233,7 @@ fn variant_host_specs<'a>(
 ) -> Vec<&'a PrimSpec> {
     layer
         .prim_specs(prim)
-        .filter(|spec| spec_branches_selected(store, stack, spec, scope))
+        .filter(|spec| spec_branches_selected(store, fallbacks, stack, spec, scope))
         .collect()
 }
 
@@ -245,6 +250,8 @@ fn variant_host_specs<'a>(
 /// (`pxr/usd/pcp/primIndex.cpp`, `_AddVariantArc`, `_AddArc`).
 pub(crate) struct ArcAuthoring<'a> {
     pub(crate) store: &'a dyn LayerStore,
+    /// The stage's variant fallbacks.
+    pub(crate) fallbacks: &'a VariantFallbacks,
     pub(crate) stack: &'a LayerStack,
     pub(crate) prim: PathId,
     /// The variant selections of `prim`'s own variant sets.
@@ -274,6 +281,7 @@ impl ArcAuthoring<'_> {
     ) -> (Vec<VariantSelectionSite>, Option<usize>) {
         let Self {
             store,
+            fallbacks,
             stack,
             prim,
             selections,
@@ -307,7 +315,7 @@ impl ArcAuthoring<'_> {
             for spec in layer.prim_specs(prim) {
                 if !spec.outer_variant_sites.is_empty()
                     && adds(spec_arcs(spec), layer.id)
-                    && spec_branches_selected(store, stack, spec, scope)
+                    && spec_branches_selected(store, fallbacks, stack, spec, scope)
                 {
                     return (spec.outer_variant_sites.clone(), Some(index));
                 }
@@ -319,7 +327,7 @@ impl ArcAuthoring<'_> {
             .collect();
         selected.sort_unstable();
         for (index, layer) in layers() {
-            for spec in variant_host_specs(store, stack, layer, prim, scope) {
+            for spec in variant_host_specs(store, fallbacks, stack, layer, prim, scope) {
                 for &(set, variant) in &selected {
                     let Some(branch) = spec
                         .variant_sets
@@ -531,29 +539,32 @@ fn finish_arc_list<T: Clone + Eq>(
 /// parent (empty when `prim` has no parent).
 fn stack_selections(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     stack: &LayerStack,
     prim: PathId,
 ) -> (HashMap<TokenId, TokenId>, HashMap<TokenId, TokenId>) {
-    let selections = resolve_variant_selections_for_prim(store, stack, prim);
+    let selections = resolve_variant_selections_for_prim(store, fallbacks, stack, prim);
     let parent_selections = store
         .paths()
         .resolve(prim)
         .parent()
         .and_then(|parent| store.paths().lookup(&parent))
-        .map(|parent| resolve_variant_selections_for_prim(store, stack, parent))
+        .map(|parent| resolve_variant_selections_for_prim(store, fallbacks, stack, parent))
         .unwrap_or_default();
     (selections, parent_selections)
 }
 
 pub(crate) fn resolve_inherits_for_prim(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     local_stack: &LayerStack,
     prim: PathId,
     scope: SelectionScope<'_>,
 ) -> Vec<PathId> {
-    let (selections, parent_selections) = stack_selections(store, local_stack, prim);
+    let (selections, parent_selections) = stack_selections(store, fallbacks, local_stack, prim);
     resolve_inherits_for_prim_in(
         store,
+        fallbacks,
         local_stack,
         prim,
         &selections,
@@ -570,6 +581,7 @@ pub(crate) fn resolve_inherits_for_prim(
 /// composed destination, so a referencing layer's selection is honoured.
 pub(crate) fn resolve_inherits_for_prim_in(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     local_stack: &LayerStack,
     prim: PathId,
     selections: &HashMap<TokenId, TokenId>,
@@ -581,7 +593,7 @@ pub(crate) fn resolve_inherits_for_prim_in(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        for spec in arc_specs(store, local_stack, layer, prim, scope) {
+        for spec in arc_specs(store, fallbacks, local_stack, layer, prim, scope) {
             ops.push(spec.inherits.clone());
         }
     }
@@ -590,7 +602,7 @@ pub(crate) fn resolve_inherits_for_prim_in(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        for spec in variant_host_specs(store, local_stack, layer, prim, scope) {
+        for spec in variant_host_specs(store, fallbacks, local_stack, layer, prim, scope) {
             for (set_tok, selected_variant) in selections {
                 if let Some(set_spec) = spec.variant_sets.get(set_tok)
                     && let Some(variant_spec) = set_spec.variants.get(selected_variant)
@@ -637,12 +649,20 @@ pub(crate) fn resolve_inherits_for_prim_in(
 /// Spec: AOUSD Core §10.3.2.5.1 (computing variant selection).
 pub(crate) fn resolve_variant_selections_for_prim(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     local_stack: &LayerStack,
     prim: PathId,
 ) -> HashMap<TokenId, TokenId> {
     let mut selected = HashMap::new();
     for layer in local_stack.layers.iter().filter_map(|id| store.layer(*id)) {
-        for spec in variant_host_specs(store, local_stack, layer, prim, SelectionScope::Stack) {
+        for spec in variant_host_specs(
+            store,
+            fallbacks,
+            local_stack,
+            layer,
+            prim,
+            SelectionScope::Stack,
+        ) {
             for (set, variant) in &spec.variant_selections {
                 selected.entry(*set).or_insert(*variant);
             }
@@ -656,6 +676,7 @@ pub(crate) fn resolve_variant_selections_for_prim(
 /// refs are resolved separately with proper selection stacks.
 pub(crate) fn resolve_direct_references_for_prim(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     local_stack: &LayerStack,
     prim: PathId,
     scope: SelectionScope<'_>,
@@ -666,7 +687,7 @@ pub(crate) fn resolve_direct_references_for_prim(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        for spec in arc_specs(store, local_stack, layer, prim, scope) {
+        for spec in arc_specs(store, fallbacks, local_stack, layer, prim, scope) {
             ops.push(anchor_internal_arcs(&spec.references, *layer_id, anchor));
         }
     }
@@ -675,6 +696,7 @@ pub(crate) fn resolve_direct_references_for_prim(
 
 pub(crate) fn resolve_references_for_prim(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     local_stack: &LayerStack,
     prim: PathId,
     scope: SelectionScope<'_>,
@@ -685,7 +707,7 @@ pub(crate) fn resolve_references_for_prim(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        for spec in arc_specs(store, local_stack, layer, prim, scope) {
+        for spec in arc_specs(store, fallbacks, local_stack, layer, prim, scope) {
             ops.push(anchor_internal_arcs(&spec.references, *layer_id, anchor));
         }
     }
@@ -693,12 +715,12 @@ pub(crate) fn resolve_references_for_prim(
     // Also check this prim's own variant branch-level references.
     // When a variant branch header has `(add references = ...)`, those references
     // apply to the prim owning the variant set when selected.
-    let selections = resolve_variant_selections_for_prim(store, local_stack, prim);
+    let selections = resolve_variant_selections_for_prim(store, fallbacks, local_stack, prim);
     for layer_id in &local_stack.layers {
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        for spec in variant_host_specs(store, local_stack, layer, prim, scope) {
+        for spec in variant_host_specs(store, fallbacks, local_stack, layer, prim, scope) {
             for (set_tok, selected_variant) in &selections {
                 if let Some(set_spec) = spec.variant_sets.get(set_tok)
                     && let Some(variant_spec) = set_spec.variants.get(selected_variant)
@@ -714,7 +736,8 @@ pub(crate) fn resolve_references_for_prim(
 
     // Also check the prim's specs inside its parent's selected branches.
     if let Some(parent_id) = parent_of(store, prim) {
-        let parent_selections = resolve_variant_selections_for_prim(store, local_stack, parent_id);
+        let parent_selections =
+            resolve_variant_selections_for_prim(store, fallbacks, local_stack, parent_id);
         for layer in local_stack.layers.iter().filter_map(|id| store.layer(*id)) {
             push_branch_ops(
                 layer,
@@ -753,6 +776,7 @@ pub(crate) fn resolve_references_for_prim(
 /// Spec: AOUSD Core §10.5 (arcs inside the selected variant only).
 pub(crate) fn resolve_variant_references_in(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     data_stack: &LayerStack,
     prim: PathId,
     selections: &HashMap<TokenId, TokenId>,
@@ -762,8 +786,13 @@ pub(crate) fn resolve_variant_references_in(
 ) -> Vec<Reference> {
     let mut ops = Vec::new();
     if let Some(parent_id) = parent_of(store, prim) {
-        let inherits =
-            resolve_inherits_for_prim(store, data_stack, parent_id, SelectionScope::Stack);
+        let inherits = resolve_inherits_for_prim(
+            store,
+            fallbacks,
+            data_stack,
+            parent_id,
+            SelectionScope::Stack,
+        );
         for check_path in core::iter::once(parent_id).chain(inherits) {
             let Some(child) = child_of(store, check_path, prim) else {
                 continue;
@@ -785,7 +814,7 @@ pub(crate) fn resolve_variant_references_in(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        for spec in variant_host_specs(store, data_stack, layer, prim, scope) {
+        for spec in variant_host_specs(store, fallbacks, data_stack, layer, prim, scope) {
             for (set_tok, selected_variant) in selections {
                 if let Some(set_spec) = spec.variant_sets.get(set_tok)
                     && let Some(variant_spec) = set_spec.variants.get(selected_variant)
@@ -805,6 +834,7 @@ pub(crate) fn resolve_variant_references_in(
 /// selected variants (`"full" (payload = ...) {}`), for the given selections.
 pub(crate) fn resolve_branch_payloads_in(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     data_stack: &LayerStack,
     prim: PathId,
     selections: &HashMap<TokenId, TokenId>,
@@ -816,7 +846,7 @@ pub(crate) fn resolve_branch_payloads_in(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        for spec in variant_host_specs(store, data_stack, layer, prim, scope) {
+        for spec in variant_host_specs(store, fallbacks, data_stack, layer, prim, scope) {
             for (set_tok, selected_variant) in selections {
                 if let Some(set_spec) = spec.variant_sets.get(set_tok)
                     && let Some(variant_spec) = set_spec.variants.get(selected_variant)
@@ -841,6 +871,7 @@ pub(crate) fn resolve_branch_payloads_in(
 /// Includes variant selection chaining through inherited variant sets.
 pub(crate) fn resolve_variant_child_references(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     data_stack: &LayerStack,
     selections_stack: &LayerStack,
     prim: PathId,
@@ -851,8 +882,13 @@ pub(crate) fn resolve_variant_child_references(
     };
 
     // Resolve parent selections with inherit-based chaining.
-    let inherits =
-        resolve_inherits_for_prim(store, selections_stack, parent_id, SelectionScope::Stack);
+    let inherits = resolve_inherits_for_prim(
+        store,
+        fallbacks,
+        selections_stack,
+        parent_id,
+        SelectionScope::Stack,
+    );
     let mut parent_selections = HashMap::new();
     for layer_id in &selections_stack.layers {
         let Some(layer) = store.layer(*layer_id) else {
@@ -966,6 +1002,7 @@ pub(crate) fn collect_all_variant_child_references(
 /// potentially-referenced prims are discovered.
 pub(crate) fn collect_all_variant_branch_references(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     local_stack: &LayerStack,
     prim: PathId,
     anchor: LayerId,
@@ -975,7 +1012,14 @@ pub(crate) fn collect_all_variant_branch_references(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        for spec in variant_host_specs(store, local_stack, layer, prim, SelectionScope::Discover) {
+        for spec in variant_host_specs(
+            store,
+            fallbacks,
+            local_stack,
+            layer,
+            prim,
+            SelectionScope::Discover,
+        ) {
             for (_set_tok, set_spec) in &spec.variant_sets {
                 for (_variant_tok, variant_spec) in &set_spec.variants {
                     let vr = &variant_spec.references;
@@ -998,12 +1042,19 @@ pub(crate) fn collect_all_variant_branch_references(
 /// for payload arcs on variant branch headers.
 pub(crate) fn resolve_variant_branch_payloads(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     data_stack: &LayerStack,
     selections_stack: &LayerStack,
     prim: PathId,
     anchor: LayerId,
 ) -> Vec<Reference> {
-    let inherits = resolve_inherits_for_prim(store, selections_stack, prim, SelectionScope::Stack);
+    let inherits = resolve_inherits_for_prim(
+        store,
+        fallbacks,
+        selections_stack,
+        prim,
+        SelectionScope::Stack,
+    );
     let mut selections = HashMap::new();
     for layer_id in &selections_stack.layers {
         let Some(layer) = store.layer(*layer_id) else {
@@ -1086,6 +1137,7 @@ pub(crate) fn resolve_variant_branch_payloads(
 /// potentially-loaded prims are discovered.
 pub(crate) fn collect_all_variant_branch_payloads(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     local_stack: &LayerStack,
     prim: PathId,
     anchor: LayerId,
@@ -1095,7 +1147,14 @@ pub(crate) fn collect_all_variant_branch_payloads(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        for spec in variant_host_specs(store, local_stack, layer, prim, SelectionScope::Discover) {
+        for spec in variant_host_specs(
+            store,
+            fallbacks,
+            local_stack,
+            layer,
+            prim,
+            SelectionScope::Discover,
+        ) {
             for (_set_tok, set_spec) in &spec.variant_sets {
                 for (_variant_tok, variant_spec) in &set_spec.variants {
                     let vp = &variant_spec.payloads;
@@ -1118,13 +1177,15 @@ pub(crate) fn collect_all_variant_branch_payloads(
 /// Spec: AOUSD Core §10 (specializes arc, §5.1.33).
 pub(crate) fn resolve_specializes_for_prim(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     local_stack: &LayerStack,
     prim: PathId,
     scope: SelectionScope<'_>,
 ) -> Vec<PathId> {
-    let (selections, parent_selections) = stack_selections(store, local_stack, prim);
+    let (selections, parent_selections) = stack_selections(store, fallbacks, local_stack, prim);
     resolve_specializes_for_prim_in(
         store,
+        fallbacks,
         local_stack,
         prim,
         &selections,
@@ -1137,6 +1198,7 @@ pub(crate) fn resolve_specializes_for_prim(
 /// see [`resolve_inherits_for_prim_in`].
 pub(crate) fn resolve_specializes_for_prim_in(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     local_stack: &LayerStack,
     prim: PathId,
     selections: &HashMap<TokenId, TokenId>,
@@ -1148,7 +1210,7 @@ pub(crate) fn resolve_specializes_for_prim_in(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        for spec in arc_specs(store, local_stack, layer, prim, scope) {
+        for spec in arc_specs(store, fallbacks, local_stack, layer, prim, scope) {
             ops.push(spec.specializes.clone());
         }
     }
@@ -1157,7 +1219,7 @@ pub(crate) fn resolve_specializes_for_prim_in(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        for spec in variant_host_specs(store, local_stack, layer, prim, scope) {
+        for spec in variant_host_specs(store, fallbacks, local_stack, layer, prim, scope) {
             for (set_tok, selected_variant) in selections {
                 if let Some(set_spec) = spec.variant_sets.get(set_tok)
                     && let Some(variant_spec) = set_spec.variants.get(selected_variant)
@@ -1202,19 +1264,29 @@ pub(crate) fn resolve_specializes_for_prim_in(
 /// Spec: AOUSD Core §10 (payloads arc, §5.1.22).
 pub(crate) fn resolve_payloads_for_prim(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     local_stack: &LayerStack,
     prim: PathId,
     scope: SelectionScope<'_>,
     anchor: LayerId,
 ) -> Vec<Reference> {
-    let (_, parent_selections) = stack_selections(store, local_stack, prim);
-    resolve_payloads_for_prim_in(store, local_stack, prim, &parent_selections, scope, anchor)
+    let (_, parent_selections) = stack_selections(store, fallbacks, local_stack, prim);
+    resolve_payloads_for_prim_in(
+        store,
+        fallbacks,
+        local_stack,
+        prim,
+        &parent_selections,
+        scope,
+        anchor,
+    )
 }
 
 /// Resolves the payloads of `prim` with explicit selections for its parent's
 /// variant sets; see [`resolve_inherits_for_prim_in`].
 pub(crate) fn resolve_payloads_for_prim_in(
     store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
     local_stack: &LayerStack,
     prim: PathId,
     parent_selections: &HashMap<TokenId, TokenId>,
@@ -1226,7 +1298,7 @@ pub(crate) fn resolve_payloads_for_prim_in(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        for spec in arc_specs(store, local_stack, layer, prim, scope) {
+        for spec in arc_specs(store, fallbacks, local_stack, layer, prim, scope) {
             ops.push(anchor_internal_arcs(&spec.payloads, *layer_id, anchor));
         }
     }

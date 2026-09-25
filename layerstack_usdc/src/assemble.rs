@@ -27,7 +27,9 @@ use layerstack::doc::{
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp;
 use layerstack::path::{Path, PathId, PathInterner, PropertyPath, TargetPath};
-use layerstack::property::{PropertyKind, PropertySpec, property_entry, set_property_vec};
+use layerstack::property::{
+    PropertyEntry, PropertyKind, PropertySpec, Variability, property_entry, set_property_vec,
+};
 use layerstack::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
 use layerstack::{AssetResolver, PropertyType, ReferenceTarget, ResolvedAsset};
 
@@ -46,6 +48,23 @@ pub struct AssembleResult {
     /// Layers produced by resolving asset paths (sublayers, references,
     /// payloads). The caller should insert these into their store.
     pub resolved_layers: Vec<Layer>,
+    /// Authored content the layer model could not represent.
+    ///
+    /// Assembly reports what it leaves out instead of dropping it silently;
+    /// an empty list means every spec and field was represented.
+    pub diagnostics: Vec<AssembleDiagnostic>,
+}
+
+/// Authored content that assembly could not represent in the layer model.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AssembleDiagnostic {
+    /// Path of the spec as written in the file (for example `/A.b` or
+    /// `/A{v=x}B`).
+    pub spec_path: String,
+    /// The field concerned, when the problem is one field of the spec.
+    pub field: Option<String>,
+    /// What was not represented, and why.
+    pub message: String,
 }
 
 /// Assembles decoded USDC sections into a [`Layer`].
@@ -70,6 +89,7 @@ pub fn assemble(
         resolver,
         layer_id,
         resolved_layers: Vec::new(),
+        diagnostics: Vec::new(),
     };
 
     let layer = ctx.assemble_layer()?;
@@ -77,6 +97,7 @@ pub fn assemble(
     Ok(AssembleResult {
         layer,
         resolved_layers: ctx.resolved_layers,
+        diagnostics: ctx.diagnostics,
     })
 }
 
@@ -92,9 +113,19 @@ struct AssembleCtx<'a> {
     resolver: &'a mut dyn AssetResolver,
     layer_id: LayerId,
     resolved_layers: Vec<Layer>,
+    diagnostics: Vec<AssembleDiagnostic>,
 }
 
 impl AssembleCtx<'_> {
+    /// Records content that could not be represented.
+    fn report(&mut self, spec_path: &str, field: Option<&str>, message: impl Into<String>) {
+        self.diagnostics.push(AssembleDiagnostic {
+            spec_path: String::from(spec_path),
+            field: field.map(String::from),
+            message: message.into(),
+        });
+    }
+
     /// Assembles all specs into a [`Layer`].
     fn assemble_layer(&mut self) -> Result<Layer, UsdcError> {
         let mut layer = Layer::new(self.layer_id);
@@ -116,6 +147,8 @@ impl AssembleCtx<'_> {
 
         // Build a path-to-spec-index map grouped by prim path for child lookup.
         let mut prim_specs_map: HashMap<String, PrimSpec> = HashMap::new();
+        // Authored property order (`propertyChildren`) per prim path.
+        let mut property_children: HashMap<String, Vec<TokenId>> = HashMap::new();
 
         // Process PseudoRoot specs first.
         for (i, spec) in self.sections.specs.iter().enumerate() {
@@ -128,37 +161,50 @@ impl AssembleCtx<'_> {
         for (i, spec) in self.sections.specs.iter().enumerate() {
             if spec.form == SpecForm::Prim {
                 let path_str = self.lookup_path(spec.path_index)?;
-                let prim = self.build_prim_spec(&spec_fields[i])?;
+                if path_str.contains('{') {
+                    self.report(
+                        &path_str,
+                        None,
+                        "unsupported: prim specs inside variant branches are not read",
+                    );
+                    continue;
+                }
+                let (prim, children) = self.build_prim_spec(&path_str, &spec_fields[i])?;
+                if let Some(children) = children {
+                    property_children.insert(path_str.clone(), children);
+                }
                 prim_specs_map.insert(path_str, prim);
             }
         }
 
-        // Process Attribute specs — add fields to their parent prim.
+        // Process Attribute and Relationship specs — add them to their
+        // parent prim. Specs under variant paths are handled with the
+        // variant specs below.
         for (i, spec) in self.sections.specs.iter().enumerate() {
-            if spec.form == SpecForm::Attribute {
-                let path_str = self.lookup_path(spec.path_index)?;
-                if let Ok(property_path) = PropertyPath::parse(&path_str, self.tokens, self.paths) {
-                    let prim_path = self.paths.display(property_path.prim_path(), self.tokens);
-                    let attr_name = String::from(self.tokens.resolve(property_path.property()));
-                    if let Some(prim) = prim_specs_map.get_mut(&prim_path) {
-                        self.apply_attribute_fields(&spec_fields[i], &attr_name, prim)?;
-                    }
-                }
+            let is_attribute = spec.form == SpecForm::Attribute;
+            if !is_attribute && spec.form != SpecForm::Relationship {
+                continue;
             }
-        }
-
-        // Process Relationship specs — add fields to their parent prim.
-        for (i, spec) in self.sections.specs.iter().enumerate() {
-            if spec.form == SpecForm::Relationship {
-                let path_str = self.lookup_path(spec.path_index)?;
-                if let Ok(property_path) = PropertyPath::parse(&path_str, self.tokens, self.paths) {
-                    let prim_path = self.paths.display(property_path.prim_path(), self.tokens);
-                    let rel_name = String::from(self.tokens.resolve(property_path.property()));
-                    if let Some(prim) = prim_specs_map.get_mut(&prim_path) {
-                        self.apply_relationship_fields(&spec_fields[i], &rel_name, prim)?;
-                    }
-                }
+            let path_str = self.lookup_path(spec.path_index)?;
+            if path_str.contains('{') {
+                continue;
             }
+            let Ok(property_path) = PropertyPath::parse(&path_str, self.tokens, self.paths) else {
+                self.report(&path_str, None, "property spec path could not be parsed");
+                continue;
+            };
+            let prim_path = self.paths.display(property_path.prim_path(), self.tokens);
+            let name = String::from(self.tokens.resolve(property_path.property()));
+            let Some(mut prim) = prim_specs_map.remove(&prim_path) else {
+                self.report(&path_str, None, "property spec has no owning prim spec");
+                continue;
+            };
+            if is_attribute {
+                self.apply_attribute_fields(&path_str, &spec_fields[i], &name, &mut prim)?;
+            } else {
+                self.apply_relationship_fields(&path_str, &spec_fields[i], &name, &mut prim)?;
+            }
+            prim_specs_map.insert(prim_path, prim);
         }
 
         // Process Connection specs — add connection paths to attribute on parent.
@@ -177,6 +223,37 @@ impl AssembleCtx<'_> {
 
         // Process VariantSet and Variant specs.
         self.process_variant_specs(&spec_fields, &mut prim_specs_map)?;
+
+        // Report specs of forms the layer model does not hold.
+        for (i, spec) in self.sections.specs.iter().enumerate() {
+            let handled = matches!(
+                spec.form,
+                SpecForm::PseudoRoot
+                    | SpecForm::Prim
+                    | SpecForm::Attribute
+                    | SpecForm::Relationship
+                    | SpecForm::Connection
+                    | SpecForm::VariantSet
+                    | SpecForm::Variant
+            );
+            if !handled && !spec_fields[i].is_empty() {
+                let path_str = self.lookup_path(spec.path_index)?;
+                self.report(
+                    &path_str,
+                    None,
+                    alloc::format!("unsupported: {:?} spec fields are not read", spec.form),
+                );
+            }
+        }
+
+        // Keep the authored property order (`propertyChildren`).
+        //
+        // Spec: AOUSD Core §7.6.2.2.2 (`propertyChildren`).
+        for (path, order) in &property_children {
+            if let Some(prim) = prim_specs_map.get_mut(path) {
+                sort_by_children(&mut prim.properties, order);
+            }
+        }
 
         // Establish parent-child relationships.
         self.build_child_relationships(&mut prim_specs_map);
@@ -223,7 +300,10 @@ impl AssembleCtx<'_> {
         Ok(result)
     }
 
-    /// Processes a `PseudoRoot` spec to extract layer metadata.
+    /// Processes a `PseudoRoot` spec: sublayers, root prim order and layer
+    /// metadata.
+    ///
+    /// Spec: AOUSD Core §7.6.1 (layer spec fields).
     fn process_pseudo_root(
         &mut self,
         fields: &[(String, CrateValue)],
@@ -260,9 +340,15 @@ impl AssembleCtx<'_> {
                         layer.default_prim = Some(self.tokens.intern(name));
                     }
                 }
+                "layerRelocates" | "relocates" => {
+                    // Relocates (AOUSD Core §10) are not modelled.
+                    self.report("/", Some(name), "unsupported: relocates are not read");
+                }
                 _ => {
-                    // Other pseudo-root fields (defaultPrim, doc, etc.)
-                    // are handled via the root prim spec below.
+                    if let Some(field_value) = self.convert_metadata("/", name, value) {
+                        let key = self.tokens.intern(name);
+                        set_field_vec(&mut layer.metadata, key, field_value);
+                    }
                 }
             }
         }
@@ -296,9 +382,17 @@ impl AssembleCtx<'_> {
         Ok(())
     }
 
-    /// Builds a [`PrimSpec`] from decoded fields.
-    fn build_prim_spec(&mut self, fields: &[(String, CrateValue)]) -> Result<PrimSpec, UsdcError> {
+    /// Builds a [`PrimSpec`] from decoded fields, also returning the
+    /// authored property order (`propertyChildren`) when present.
+    ///
+    /// Spec: AOUSD Core §7.6.2 (prim spec fields).
+    fn build_prim_spec(
+        &mut self,
+        spec_path: &str,
+        fields: &[(String, CrateValue)],
+    ) -> Result<(PrimSpec, Option<Vec<TokenId>>), UsdcError> {
         let mut spec = PrimSpec::default();
+        let mut property_children = None;
 
         for (name, value) in fields {
             match name.as_str() {
@@ -325,19 +419,31 @@ impl AssembleCtx<'_> {
                 "primOrder" => {
                     spec.prim_order = Some(self.extract_token_names(value));
                 }
+                // `SdfChildrenKeys->PropertyChildren` is spelled `properties`
+                // (`pxr/usd/sdf/schema.h`).
+                "properties" => {
+                    property_children = Some(self.extract_token_names(value));
+                }
+                "propertyOrder" => {
+                    spec.property_order = Some(self.extract_token_names(value));
+                }
+                // Derived from the variant set specs themselves.
+                "variantSetChildren" => {}
                 "references" => {
                     if let CrateValue::ListOp(listop) = value {
                         let converted = self.convert_ref_listop(listop)?;
                         merge_ref_listop(&mut spec.references, converted);
                     }
                 }
-                "payloads" => {
+                // Spec: AOUSD Core §7.6.2.3.2 (`payload`).
+                "payload" => {
                     if let CrateValue::ListOp(listop) = value {
                         let converted = self.convert_ref_listop(listop)?;
                         merge_ref_listop(&mut spec.payloads, converted);
                     }
                 }
-                "inherits" => {
+                // Spec: AOUSD Core §7.6.2.3.3 (`inheritPaths`).
+                "inheritPaths" => {
                     if let CrateValue::ListOp(listop) = value {
                         let converted = self.convert_path_listop(listop)?;
                         merge_path_listop(&mut spec.inherits, converted);
@@ -367,47 +473,44 @@ impl AssembleCtx<'_> {
                         }
                     }
                 }
-                "instanceable" => {
+                "instanceable" if matches!(value, CrateValue::Bool(_)) => {
                     if let CrateValue::Bool(b) = value {
                         spec.instanceable = Some(*b);
                     }
                 }
-                "active" => {
+                "active" if matches!(value, CrateValue::Bool(_)) => {
                     if let CrateValue::Bool(b) = value {
                         spec.active = Some(*b);
                     }
                 }
-                "kind" => {
-                    let key = self.tokens.intern("kind");
-                    let val = self.convert_crate_value(value);
-                    set_field_vec(&mut spec.fields, key, FieldValue::Value(val));
-                }
-                "documentation" => {
-                    let key = self.tokens.intern("documentation");
-                    let val = self.convert_crate_value(value);
-                    set_field_vec(&mut spec.fields, key, FieldValue::Value(val));
+                "relocates" => {
+                    // Relocates (AOUSD Core §10) are not modelled.
+                    self.report(spec_path, Some(name), "unsupported: relocates are not read");
                 }
                 _ => {
-                    // Generic metadata field.
-                    let key = self.tokens.intern(name);
-                    let field_value = self.convert_field_value(value);
-                    set_field_vec(&mut spec.fields, key, field_value);
+                    // Generic metadata field (`kind`, `documentation`,
+                    // `apiSchemas`, `customData`, `hidden`, …).
+                    if let Some(field_value) = self.convert_metadata(spec_path, name, value) {
+                        let key = self.tokens.intern(name);
+                        set_field_vec(&mut spec.fields, key, field_value);
+                    }
                 }
             }
         }
 
-        Ok(spec)
+        Ok((spec, property_children))
     }
 
     /// Adds an attribute spec to its parent prim.
     fn apply_attribute_fields(
         &mut self,
+        spec_path: &str,
         fields: &[(String, CrateValue)],
         attr_name: &str,
         prim: &mut PrimSpec,
     ) -> Result<(), UsdcError> {
         let name_tok = self.tokens.intern(attr_name);
-        let spec = self.build_attribute_spec(fields)?;
+        let spec = self.build_attribute_spec(spec_path, fields)?;
         prim.set_property(name_tok, spec);
         Ok(())
     }
@@ -415,12 +518,13 @@ impl AssembleCtx<'_> {
     /// Adds a relationship spec to its parent prim.
     fn apply_relationship_fields(
         &mut self,
+        spec_path: &str,
         fields: &[(String, CrateValue)],
         rel_name: &str,
         prim: &mut PrimSpec,
     ) -> Result<(), UsdcError> {
         let name_tok = self.tokens.intern(rel_name);
-        let spec = self.build_relationship_spec(fields)?;
+        let spec = self.build_relationship_spec(spec_path, fields)?;
         prim.set_property(name_tok, spec);
         Ok(())
     }
@@ -476,6 +580,7 @@ impl AssembleCtx<'_> {
             }
         }
 
+        let mut variant_property_children = Vec::new();
         for (i, spec) in self.sections.specs.iter().enumerate() {
             if spec.form == SpecForm::Variant {
                 let path_str = self.lookup_path(spec.path_index)?;
@@ -485,12 +590,8 @@ impl AssembleCtx<'_> {
                 {
                     let vset_tok = self.tokens.intern(&vset_name);
                     let branch_tok = self.tokens.intern(&branch_name);
-                    let vset = prim
-                        .variant_sets
-                        .entry(vset_tok)
-                        .or_insert_with(VariantSetSpec::default);
-
                     let mut variant = VariantSpec::default();
+                    let mut property_children = None;
 
                     // Process variant fields.
                     for (name, value) in &spec_fields[i] {
@@ -498,6 +599,13 @@ impl AssembleCtx<'_> {
                             "primChildren" => {
                                 variant.authored_children = self.extract_token_names(value);
                             }
+                            "properties" => {
+                                property_children = Some(self.extract_token_names(value));
+                            }
+                            "propertyOrder" => {
+                                variant.property_order = Some(self.extract_token_names(value));
+                            }
+                            "variantSetChildren" => {}
                             "variantSelection" => {
                                 if let CrateValue::VariantSelectionMap(pairs) = value {
                                     for (sn, bn) in pairs {
@@ -514,14 +622,14 @@ impl AssembleCtx<'_> {
                                     merge_ref_listop(&mut variant.references, converted);
                                 }
                             }
-                            "payloads" => {
+                            "payload" => {
                                 if let CrateValue::ListOp(listop) = value
                                     && let Ok(converted) = self.convert_ref_listop(listop)
                                 {
                                     merge_ref_listop(&mut variant.payloads, converted);
                                 }
                             }
-                            "inherits" => {
+                            "inheritPaths" => {
                                 if let CrateValue::ListOp(listop) = value
                                     && let Ok(converted) = self.convert_path_listop(listop)
                                 {
@@ -537,14 +645,28 @@ impl AssembleCtx<'_> {
                             }
                             _ => {
                                 // Generic variant field.
-                                let key = self.tokens.intern(name);
-                                let fv = self.convert_field_value(value);
-                                set_field_vec(&mut variant.fields, key, fv);
+                                if let Some(fv) = self.convert_metadata(&path_str, name, value) {
+                                    let key = self.tokens.intern(name);
+                                    set_field_vec(&mut variant.fields, key, fv);
+                                }
                             }
                         }
                     }
 
+                    let vset = prim
+                        .variant_sets
+                        .entry(vset_tok)
+                        .or_insert_with(VariantSetSpec::default);
+                    if let Some(order) = property_children {
+                        variant_property_children.push((prim_path, vset_tok, branch_tok, order));
+                    }
                     vset.variants.insert(branch_tok, variant);
+                } else {
+                    self.report(
+                        &path_str,
+                        None,
+                        "unsupported: variant specs below a variant branch are not read",
+                    );
                 }
             }
         }
@@ -555,25 +677,40 @@ impl AssembleCtx<'_> {
         for (i, spec) in self.sections.specs.iter().enumerate() {
             if spec.form == SpecForm::Attribute || spec.form == SpecForm::Relationship {
                 let path_str = self.lookup_path(spec.path_index)?;
+                if !path_str.contains('{') {
+                    continue;
+                }
                 // Check if this is under a variant context.
                 if let Some((prim_path, vset_name, branch_name, prop_name)) =
                     parse_variant_property_path(&path_str)
                     && let Some(prim) = prim_specs.get_mut(&prim_path)
+                    && let Some(vset) = prim.variant_sets.get_mut(&self.tokens.intern(&vset_name))
+                    && let Some(variant) = vset.variants.get_mut(&self.tokens.intern(&branch_name))
                 {
-                    let vset_tok = self.tokens.intern(&vset_name);
-                    let branch_tok = self.tokens.intern(&branch_name);
-                    if let Some(vset) = prim.variant_sets.get_mut(&vset_tok)
-                        && let Some(variant) = vset.variants.get_mut(&branch_tok)
-                    {
-                        let prop_tok = self.tokens.intern(&prop_name);
-                        let property = if spec.form == SpecForm::Attribute {
-                            self.build_attribute_spec(&spec_fields[i])?
-                        } else {
-                            self.build_relationship_spec(&spec_fields[i])?
-                        };
-                        set_property_vec(&mut variant.properties, prop_tok, property);
-                    }
+                    let prop_tok = self.tokens.intern(&prop_name);
+                    let property = if spec.form == SpecForm::Attribute {
+                        self.build_attribute_spec(&path_str, &spec_fields[i])?
+                    } else {
+                        self.build_relationship_spec(&path_str, &spec_fields[i])?
+                    };
+                    set_property_vec(&mut variant.properties, prop_tok, property);
+                } else {
+                    self.report(
+                        &path_str,
+                        None,
+                        "unsupported: properties of prims inside variant branches are not read",
+                    );
                 }
+            }
+        }
+
+        for (prim_path, vset_tok, branch_tok, order) in variant_property_children {
+            if let Some(variant) = prim_specs
+                .get_mut(&prim_path)
+                .and_then(|prim| prim.variant_sets.get_mut(&vset_tok))
+                .and_then(|vset| vset.variants.get_mut(&branch_tok))
+            {
+                sort_by_children(&mut variant.properties, &order);
             }
         }
 
@@ -754,32 +891,64 @@ impl AssembleCtx<'_> {
         ArrayEdit { ops }
     }
 
-    /// Converts a [`CrateValue`] to a [`FieldValue`], handling list ops
-    /// and time samples specially.
-    fn convert_field_value(&mut self, cv: &CrateValue) -> FieldValue {
+    /// Converts a metadata field's [`CrateValue`] to a [`FieldValue`].
+    ///
+    /// Returns `None`, after recording a diagnostic, for values the layer
+    /// model cannot hold as metadata, rather than storing a placeholder.
+    ///
+    /// Spec: AOUSD Core §7.4 (metadata fields), §12.2.6 (list ops).
+    fn convert_metadata(
+        &mut self,
+        spec_path: &str,
+        field: &str,
+        cv: &CrateValue,
+    ) -> Option<FieldValue> {
         match cv {
-            CrateValue::ListOp(listop) => {
-                match listop.op_type {
-                    ValueType::TokenListOp => {
-                        let converted = self.convert_token_listop(listop);
-                        FieldValue::TokenListOp(converted)
-                    }
-                    ValueType::PathListOp => {
-                        if let Ok(converted) =
-                            self.convert_connection_value(&CrateValue::ListOp(listop.clone()))
-                        {
-                            FieldValue::PathListOp(converted)
-                        } else {
-                            FieldValue::Value(Value::Null)
+            CrateValue::ListOp(listop) => match listop.op_type {
+                ValueType::TokenListOp => {
+                    Some(FieldValue::TokenListOp(self.convert_token_listop(listop)))
+                }
+                ValueType::PathListOp => {
+                    match self.convert_connection_value(&CrateValue::ListOp(listop.clone())) {
+                        Ok(converted) => Some(FieldValue::PathListOp(converted)),
+                        Err(error) => {
+                            self.report(spec_path, Some(field), alloc::format!("{error}"));
+                            None
                         }
                     }
-                    _ => {
-                        // Other list op types: convert items to array values.
-                        FieldValue::Value(self.convert_crate_value(cv))
-                    }
                 }
+                other => {
+                    self.report(
+                        spec_path,
+                        Some(field),
+                        alloc::format!("unsupported: {other:?} metadata is not read"),
+                    );
+                    None
+                }
+            },
+            // `SdfPermission` (deprecated, Core §7.6.2.7): stored as the token
+            // USDA spells it with.
+            CrateValue::Permission(0) => Some(FieldValue::Value(Value::Token(
+                self.tokens.intern("public"),
+            ))),
+            CrateValue::Permission(1) => Some(FieldValue::Value(Value::Token(
+                self.tokens.intern("private"),
+            ))),
+            CrateValue::TimeSamples(_)
+            | CrateValue::Spline(_)
+            | CrateValue::VariantSelectionMap(_)
+            | CrateValue::RelocatesMap(_)
+            | CrateValue::Specifier(_)
+            | CrateValue::Variability(_)
+            | CrateValue::Permission(_) => {
+                self.report(
+                    spec_path,
+                    Some(field),
+                    "unsupported: this value type is not read as metadata",
+                );
+                None
             }
-            _ => FieldValue::Value(self.convert_crate_value(cv)),
+            _ => Some(FieldValue::Value(self.convert_crate_value(cv))),
         }
     }
 
@@ -790,6 +959,7 @@ impl AssembleCtx<'_> {
     /// attribute may have a value, a connection, or both).
     fn build_attribute_spec(
         &mut self,
+        spec_path: &str,
         fields: &[(String, CrateValue)],
     ) -> Result<PropertySpec, UsdcError> {
         let mut spec = PropertySpec::typed_attribute(self.attribute_property_type(fields));
@@ -807,10 +977,50 @@ impl AssembleCtx<'_> {
                 ("connectionPaths", value) => {
                     spec.targets = Some(self.convert_connection_value(value)?);
                 }
-                _ => {}
+                // Read by `attribute_property_type`; `connectionChildren`
+                // restates `connectionPaths`.
+                ("typeName" | "connectionChildren", _) => {}
+                _ => self.apply_property_field(spec_path, name, value, &mut spec),
             }
         }
         Ok(spec)
+    }
+
+    /// Applies a field shared by attribute and relationship specs: the
+    /// qualifiers, or a metadata entry.
+    ///
+    /// Spec: AOUSD Core §7.6.3 (property spec fields), §7.6.4.1.2
+    /// (`variability`).
+    fn apply_property_field(
+        &mut self,
+        spec_path: &str,
+        name: &str,
+        value: &CrateValue,
+        spec: &mut PropertySpec,
+    ) {
+        match (name, value) {
+            ("custom", CrateValue::Bool(custom)) => spec.custom = *custom,
+            ("variability", CrateValue::Variability(variability)) => {
+                spec.variability = match variability {
+                    0 => Variability::Varying,
+                    1 => Variability::Uniform,
+                    other => {
+                        self.report(
+                            spec_path,
+                            Some(name),
+                            alloc::format!("unknown variability {other}; kept as varying"),
+                        );
+                        Variability::Varying
+                    }
+                };
+            }
+            _ => {
+                if let Some(field_value) = self.convert_metadata(spec_path, name, value) {
+                    let key = self.tokens.intern(name);
+                    set_field_vec(&mut spec.metadata, key, field_value);
+                }
+            }
+        }
     }
 
     /// Builds a relationship [`PropertySpec`] from its crate fields.
@@ -818,12 +1028,16 @@ impl AssembleCtx<'_> {
     /// Spec: AOUSD Core §7.6.5 (relationship spec fields).
     fn build_relationship_spec(
         &mut self,
+        spec_path: &str,
         fields: &[(String, CrateValue)],
     ) -> Result<PropertySpec, UsdcError> {
         let mut spec = PropertySpec::relationship();
         for (name, value) in fields {
-            if name == "targetPaths" {
-                spec.targets = Some(self.convert_connection_value(value)?);
+            match name.as_str() {
+                "targetPaths" => spec.targets = Some(self.convert_connection_value(value)?),
+                // `targetChildren` restates `targetPaths`.
+                "targetChildren" => {}
+                _ => self.apply_property_field(spec_path, name, value, &mut spec),
             }
         }
         Ok(spec)
@@ -1181,10 +1395,13 @@ fn parse_variant_set_path(path: &str) -> Option<(String, String)> {
 
 /// Parses a variant path like `/Prim{varSetName=branchName}` →
 /// `("/Prim", "varSetName", "branchName")`.
+///
+/// Returns `None` for variants nested below another variant branch, such as
+/// `/Prim{a=x}{b=y}` or `/Prim{a=x}Child{b=y}`.
 fn parse_variant_path(path: &str) -> Option<(String, String, String)> {
     let open = path.find('{')?;
     let close = path.find('}')?;
-    if close <= open + 1 {
+    if close <= open + 1 || close + 1 != path.len() {
         return None;
     }
     let prim_path = &path[..open];
@@ -1211,10 +1428,10 @@ fn parse_variant_property_path(path: &str) -> Option<(String, String, String, St
         return None;
     }
 
-    let after_brace = &path[close + 1..];
-    let dot_pos = after_brace.find('.')?;
-    let prop_name = &after_brace[dot_pos + 1..];
-    if prop_name.is_empty() {
+    // Only properties directly on the variant: `/Prim{set=branch}.name`,
+    // not `/Prim{set=branch}Child.name`.
+    let prop_name = path[close + 1..].strip_prefix('.')?;
+    if prop_name.is_empty() || prop_name.contains('{') {
         return None;
     }
 
@@ -1233,6 +1450,17 @@ fn parse_variant_property_path(path: &str) -> Option<(String, String, String, St
         String::from(branch_name),
         String::from(prop_name),
     ))
+}
+
+/// Orders `properties` by their position in `children` (`propertyChildren`),
+/// keeping properties not listed there after the listed ones, in order.
+fn sort_by_children(properties: &mut [PropertyEntry], children: &[TokenId]) {
+    properties.sort_by_key(|entry| {
+        children
+            .iter()
+            .position(|child| *child == entry.name)
+            .unwrap_or(usize::MAX)
+    });
 }
 
 fn crate_value_is_array(value: &CrateValue) -> bool {

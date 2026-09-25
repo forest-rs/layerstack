@@ -480,7 +480,15 @@ fn build_paths(
                 }
 
                 let element = &tokens[token_idx];
-                let sep = if is_property { "." } else { "/" };
+                // Variant selections attach to their prim without a separator,
+                // and so does a prim below a selection: `/A{v=x}B.attr`.
+                let sep = if is_property {
+                    "."
+                } else if element.starts_with('{') || parent.ends_with('}') {
+                    ""
+                } else {
+                    "/"
+                };
                 let path = if parent == "/" {
                     alloc::format!("{sep}{element}")
                 } else {

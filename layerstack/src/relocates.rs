@@ -661,6 +661,8 @@ pub(crate) struct Relocations {
     proposed: HashMap<PathId, LiftedRelocate>,
     /// Every layer of the layer stacks whose tables were computed.
     layers: HashSet<LayerId>,
+    /// Stage paths that an opinion moved by a relocation lands on.
+    reached: HashSet<PathId>,
     /// Errors found computing tables, not yet reported.
     errors: Vec<CompositionError>,
 }
@@ -765,16 +767,24 @@ impl Relocations {
     /// Records that population placed the stage path `path`, through a
     /// relocation when `moved`; `new` when the path was not populated yet.
     pub(crate) fn place(&mut self, path: PathId, moved: bool, new: bool) {
-        if !moved {
+        if moved {
+            self.reached.insert(path);
+            if new {
+                self.moved.insert(path);
+            }
+        } else {
             self.moved.remove(&path);
-        } else if new {
-            self.moved.insert(path);
         }
     }
 
     /// Takes the stage paths population placed only through a relocation.
     pub(crate) fn take_moved(&mut self) -> HashSet<PathId> {
         core::mem::take(&mut self.moved)
+    }
+
+    /// Returns `true` when a relocation moved an opinion onto `path`.
+    pub(crate) fn is_reached(&self, path: PathId) -> bool {
+        self.reached.contains(&path)
     }
 
     /// Returns `true` when `path` is at or beneath a prohibited stage path.
@@ -1015,6 +1025,31 @@ mod tests {
             )),
             "{errors:?}"
         );
+    }
+
+    #[test]
+    fn a_rename_needs_a_source_the_arcs_above_it_bring() {
+        // Spec: AOUSD Core §11.3.1. `/World/Src` is authored only in the
+        // relocating layer stack, whose opinions there are ignored: the
+        // rename replaces no child, so `/World/Dst` does not exist either.
+        use crate::doc::PrimSpec;
+        let mut store = InMemoryStore::default();
+        let (world, src, dst) = (
+            path(&mut store, "/World"),
+            path(&mut store, "/World/Src"),
+            path(&mut store, "/World/Dst"),
+        );
+        let mut root = Layer::new(LayerId(1));
+        root.relocates = vec![Relocate {
+            source: src,
+            target: Some(dst),
+        }];
+        root.insert_prim(world, PrimSpec::def());
+        root.insert_prim(src, PrimSpec::def());
+        store.insert_layer(root);
+        let stage = crate::Stage::compose(&mut store, LayerId(1), crate::StageOptions::default());
+        assert!(stage.has_prim(world));
+        assert!(!stage.has_prim(src) && !stage.has_prim(dst));
     }
 
     #[test]

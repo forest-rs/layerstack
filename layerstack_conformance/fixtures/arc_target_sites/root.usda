@@ -76,3 +76,39 @@ def "Spruce" (
 )
 {
 }
+
+# The first shape again, with a selected variant on the class reached twice:
+# its branch stays with the registration that stays, and appears once.
+def "Maple" (
+    inherits = [</Bud>, </Burl>]
+)
+{
+}
+
+class "Bud" (
+    specializes = </Pith>
+)
+{
+}
+
+class "Pith" (
+    specializes = </Burl>
+)
+{
+    int x = 3
+}
+
+class "Burl" (
+    variants = {
+        string grain = "fine"
+    }
+    prepend variantSets = "grain"
+)
+{
+    int x = 4
+    variantSet "grain" = {
+        "fine" {
+            int y = 8
+        }
+    }
+}

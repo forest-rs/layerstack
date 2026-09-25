@@ -20,7 +20,7 @@ use crate::{
     interner::TokenId,
     listop::ListOp,
     path::{PathId, TargetPath},
-    prim_index_graph::{NodeId, NodeStrength, PrimIndexGraph},
+    prim_index_graph::{NodeId, PrimIndexGraph},
     property::{PropertySpec, PropertyType, TimeSample},
     spec_path::SpecPath,
     spline::SplineData,
@@ -306,18 +306,20 @@ impl PrimIndex {
 
     /// Keeps only the sources, opinions and property declarations whose key
     /// satisfies `keep`, dropping fields left without opinions or
-    /// declarations. `keep` also sees the strength of the key's node.
-    pub(crate) fn retain_keys(&mut self, mut keep: impl FnMut(&NodeStrength, &OpinionKey) -> bool) {
+    /// declarations. `keep` also sees the prim's graph.
+    pub(crate) fn retain_keys(
+        &mut self,
+        mut keep: impl FnMut(&PrimIndexGraph, &OpinionKey) -> bool,
+    ) {
         let graph = &self.graph;
-        self.sources
-            .retain(|key| keep(graph.strength(key.node), key));
+        self.sources.retain(|key| keep(graph, key));
         for opinions in self.opinions_by_field.values_mut() {
-            opinions.retain(|opinion| keep(graph.strength(opinion.key.node), &opinion.key));
+            opinions.retain(|opinion| keep(graph, &opinion.key));
         }
         self.opinions_by_field
             .retain(|_, opinions| !opinions.is_empty());
         for declarations in self.property_types_by_field.values_mut() {
-            declarations.retain(|(key, _)| keep(graph.strength(key.node), key));
+            declarations.retain(|(key, _)| keep(graph, key));
         }
         self.property_types_by_field
             .retain(|_, declarations| !declarations.is_empty());

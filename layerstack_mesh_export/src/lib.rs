@@ -247,7 +247,7 @@ pub use mesh::{
 };
 pub use names::{SiblingNames, sanitize_name};
 pub use scene::{Node, Scene, StageSettings, UpAxis, UsdzProfile, Xform};
-pub use transform::Transform;
+pub use transform::{NotRigid, SHEAR_TOLERANCE, Transform};
 
 #[cfg(test)]
 mod instancer_tests;

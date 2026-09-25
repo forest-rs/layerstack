@@ -6,9 +6,11 @@
 //!
 //! Each prototype is written once: a tree (an `Xform` of a trunk and a
 //! crown, each with its own material) and a rock (a bare mesh). Every
-//! placement is only an index into the prototypes, a position, a turn
-//! about +Z, a scale and a stable id, so a thousand trees cost a few
-//! numbers each rather than a copy of their geometry.
+//! placement starts as an affine transform, which
+//! `PointInstancer::push_affine` splits into a position, a rotation and a
+//! (possibly mirrored) scale; with a stable id, that is all an instance
+//! costs, so a thousand trees are a few numbers each rather than a copy of
+//! their geometry.
 //!
 //! The package uses the `ARKit` / AR Quick Look profile (a single USDC root
 //! layer) unless `generic` is given, which writes a USDA root layer.
@@ -19,7 +21,8 @@
 //! ```
 
 use layerstack_mesh_export::{
-    Faces, Material, Mesh, PointInstancer, Scene, StageSettings, UpAxis, UsdzProfile, Xform,
+    Faces, Material, Mesh, PointInstancer, Scene, StageSettings, Transform, UpAxis, UsdzProfile,
+    Xform,
 };
 
 /// A square trunk, 0.3 m wide and 1 m tall, standing on the origin.
@@ -74,34 +77,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(other) => return Err(format!("unknown profile {other:?}").into()),
     };
 
-    // A 30 x 30 grid, 3 m apart, jittered by a small fixed hash so the
-    // output is reproducible; every fifth placement is a rock.
-    let mut proto_indices = Vec::new();
-    let mut positions = Vec::new();
-    let mut orientations = Vec::new();
-    let mut scales = Vec::new();
-    let mut ids = Vec::new();
-    for row in 0..30_u16 {
-        for column in 0..30_u16 {
-            let i = u32::from(row) * 30 + u32::from(column);
-            let hash = i.wrapping_mul(2_654_435_761).to_le_bytes();
-            let unit = |byte: usize| f32::from(hash[byte]) / 255.0;
-            proto_indices.push(if i % 5 == 0 { ROCKS } else { TREE });
-            positions.push([
-                (f32::from(column) - 14.5) * 3.0 + unit(0) - 0.5,
-                (f32::from(row) - 14.5) * 3.0 + unit(1) - 0.5,
-                0.0,
-            ]);
-            // A turn about +Z as a unit quaternion `[x, y, z, w]`.
-            let half_angle = unit(2) * std::f32::consts::PI;
-            orientations.push([0.0, 0.0, half_angle.sin(), half_angle.cos()]);
-            let size = 0.7 + 0.6 * unit(3);
-            scales.push([size, size, size]);
-            // Stable ids, such as the placement's key in the source model.
-            ids.push(10_000 + i64::from(i));
-        }
-    }
-
     let tree = Xform::new("Tree")
         .with_mesh(
             Mesh::new("Trunk", &TRUNK, Faces::polygons(&[4; 6], &BOX_INDICES))
@@ -117,12 +92,47 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         );
     let rock = Mesh::new("Rock", &ROCK, Faces::triangles(&ROCK_INDICES)).with_material("Stone");
     // Prototype order is the `protoIndices` numbering: the tree is 0.
-    let field = PointInstancer::new("Field", &proto_indices, &positions)
+    let mut field = PointInstancer::new("Field", Vec::new(), Vec::new())
         .with_prototype(tree)
-        .with_prototype(rock)
-        .with_orientations(&orientations)
-        .with_scales(&scales)
-        .with_ids(&ids);
+        .with_prototype(rock);
+
+    // A 30 x 30 grid, 3 m apart, jittered by a small fixed hash so the
+    // output is reproducible; every fifth placement is a rock. Each
+    // placement is the affine transform a modeling kernel would hold,
+    // column-vector rows `[R · S | t]`; `push_affine` splits it into the
+    // instancer's position, orientation and scale.
+    let mut ids = Vec::new();
+    for row in 0..30_u16 {
+        for column in 0..30_u16 {
+            let i = u32::from(row) * 30 + u32::from(column);
+            let hash = i.wrapping_mul(2_654_435_761).to_le_bytes();
+            let unit = |byte: usize| f64::from(hash[byte]) / 255.0;
+            let rock = i % 5 == 0;
+            let (sin, cos) = (unit(2) * std::f64::consts::TAU).sin_cos();
+            let size = 0.7 + 0.6 * unit(3);
+            // Rocks are stretched along their own X, and every other one
+            // is mirrored, which becomes a negative scale.
+            let (sx, sy) = if rock {
+                let mirror = if i % 2 == 0 { -1.0 } else { 1.0 };
+                (mirror * size * 1.4, size)
+            } else {
+                (size, size)
+            };
+            let x = (f64::from(column) - 14.5) * 3.0 + unit(0) - 0.5;
+            let y = (f64::from(row) - 14.5) * 3.0 + unit(1) - 0.5;
+            let placement = Transform::from_affine_3x4([
+                [cos * sx, -sin * sy, 0.0, x],
+                [sin * sx, cos * sy, 0.0, y],
+                [0.0, 0.0, size, 0.0],
+            ]);
+            field.push_affine(if rock { ROCKS } else { TREE }, &placement)?;
+            // Stable ids, such as the placement's key in the source model.
+            ids.push(10_000 + i64::from(i));
+        }
+    }
+    let field = field.with_ids(ids);
+    let rocks = field.proto_indices.iter().filter(|&&p| p == ROCKS).count();
+    let instances = field.proto_indices.len();
     let scene = Scene::new(
         StageSettings::new(UpAxis::Z, 1.0),
         Xform::new("Root")
@@ -144,15 +154,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         usda.contains("quatf[] orientationsf = ["),
         "orientations are single-precision quaternions"
     );
+    assert!(
+        usda.contains("float3[] scales = [(-"),
+        "the first rock is mirrored"
+    );
 
     let bytes = scene.to_usdz(profile, &[])?;
     std::fs::write(&out, &bytes)?;
-    let rocks = proto_indices.iter().filter(|&&p| p == ROCKS).count();
     println!(
         "wrote {out} ({profile:?} profile, root layer {}): {} bytes, {} trees and {rocks} rocks",
         profile.root_layer_path(),
         bytes.len(),
-        proto_indices.len() - rocks,
+        instances - rocks,
     );
     Ok(())
 }

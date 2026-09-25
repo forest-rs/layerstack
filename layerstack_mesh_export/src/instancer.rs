@@ -4,11 +4,15 @@
 //! Repeated geometry: `UsdGeomPointInstancer`.
 
 use alloc::borrow::Cow;
+use alloc::vec;
 use alloc::vec::Vec;
 
 use layerstack_usda::writer::Value;
 
-use crate::{CustomAttribute, InstancerProblem, Mesh, Node, Transform, Xform};
+use crate::{CustomAttribute, InstancerProblem, Mesh, Node, NotRigid, Transform, Xform};
+
+/// The unit quaternion of no rotation, `[x, y, z, w]`.
+const IDENTITY_ROTATION: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
 
 /// Name of the `Scope` under a [`PointInstancer`] that holds its
 /// prototypes.
@@ -203,6 +207,58 @@ impl<'a> PointInstancer<'a> {
     pub fn with_ids(mut self, ids: impl Into<Cow<'a, [i64]>>) -> Self {
         self.ids = Some(ids.into());
         self
+    }
+
+    /// Appends an instance of prototype `proto_index` placed by
+    /// `transform`, the prototype-to-instancer transform (a 3×4 affine
+    /// matrix through [`Transform::from_affine_3x4`], or a 4×4 one through
+    /// [`Transform::from_usd_rows`]), and returns its index.
+    ///
+    /// The transform is split into a scale, a rotation and a translation
+    /// (`UsdGeomPointInstancer`, "Computing an Instance Transform"); a
+    /// mirror becomes a negative X scale. They are appended to
+    /// [`Self::positions`], [`Self::orientations`] and [`Self::scales`]
+    /// at `f32`, the precision USD stores. Orientations and scales are
+    /// created only once an instance needs them, filled with the identity
+    /// for the instances before it, so an instancer of pure translations
+    /// authors neither. Borrowed arrays are copied into owned ones first.
+    /// [`Self::ids`] and any other per-instance data are not extended.
+    ///
+    /// # Errors
+    ///
+    /// [`NotRigid`] when `transform` is not a scale, a rotation and a
+    /// translation (within [`SHEAR_TOLERANCE`](crate::SHEAR_TOLERANCE));
+    /// nothing is appended then.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "instances are stored as the `float` USD authors"
+    )]
+    pub fn push_affine(
+        &mut self,
+        proto_index: u32,
+        transform: &Transform,
+    ) -> Result<usize, NotRigid> {
+        let parts = transform.decompose()?;
+        let instance = self.proto_indices.len();
+        let orientation = parts.orientation.map(|c| c as f32);
+        let scale = parts.scale.map(|c| c as f32);
+        if self.orientations.is_some() || orientation != IDENTITY_ROTATION {
+            self.orientations
+                .get_or_insert_with(|| vec![IDENTITY_ROTATION; instance].into())
+                .to_mut()
+                .push(orientation);
+        }
+        if self.scales.is_some() || scale != [1.0; 3] {
+            self.scales
+                .get_or_insert_with(|| vec![[1.0; 3]; instance].into())
+                .to_mut()
+                .push(scale);
+        }
+        self.proto_indices.to_mut().push(proto_index);
+        self.positions
+            .to_mut()
+            .push(parts.translation.map(|c| c as f32));
+        Ok(instance)
     }
 
     /// Sets the instancer's local transform.

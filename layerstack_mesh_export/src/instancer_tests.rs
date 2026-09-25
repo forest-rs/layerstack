@@ -426,3 +426,89 @@ fn nested_instancers_bound_their_placements() {
     );
     assert!(text.contains("rel prototypes = </Root/Field/Prototypes/Clump/Prototypes/Tri>"));
 }
+
+/// `p · M` for a row-vector affine `M`.
+fn apply(m: &[[f64; 4]; 4], p: [f64; 3]) -> [f64; 3] {
+    core::array::from_fn(|j| p[0] * m[0][j] + p[1] * m[1][j] + p[2] * m[2][j] + m[3][j])
+}
+
+#[test]
+fn push_affine_splits_transforms_into_instance_arrays() {
+    let mut field = PointInstancer::new("Field", vec![], vec![]).with_prototype(tri());
+    let moved = Transform::from_translation([1.0, 2.0, 3.0]);
+    assert_eq!(field.push_affine(0, &moved), Ok(0));
+    assert!(
+        field.orientations.is_none() && field.scales.is_none(),
+        "a translation needs neither"
+    );
+    // A quarter turn about Z, scaled 2x along the prototype's X, then
+    // mirrored in Y: column-vector rows `R · diag(2, -1, 1)`.
+    let mirrored = Transform::from_affine_3x4([
+        [0.0, 1.0, 0.0, 10.0],
+        [2.0, 0.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.5],
+    ]);
+    assert_eq!(field.push_affine(0, &mirrored), Ok(1));
+    assert_eq!(field.proto_indices.as_ref(), [0, 0]);
+    assert_eq!(
+        field.positions.as_ref(),
+        [[1.0, 2.0, 3.0], [10.0, 0.0, 0.5]]
+    );
+    let orientations = field.orientations.as_deref().unwrap();
+    assert_eq!(orientations[0], [0.0, 0.0, 0.0, 1.0], "identity filled in");
+    let scales = field.scales.as_deref().unwrap();
+    assert_eq!(scales[0], [1.0; 3], "unit scale filled in");
+    assert!(scales[1][0] < 0.0, "the mirror is a negative X scale");
+
+    // The instance transforms the schema composes are the given ones.
+    for (instance, source) in [moved, mirrored].iter().enumerate() {
+        let composed = crate::instancer::instance_matrix(
+            field.positions[instance],
+            Some(orientations[instance].map(f64::from)),
+            Some(scales[instance]),
+        );
+        for p in [
+            [0.0, 0.0, 0.0],
+            [1.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 0.0, 1.0],
+        ] {
+            let (got, want) = (apply(&composed, p), apply(&source.usd_rows(), p));
+            for axis in 0..3 {
+                assert!(
+                    (got[axis] - want[axis]).abs() < 1e-6,
+                    "instance {instance}, {p:?}: {got:?} vs {want:?}"
+                );
+            }
+        }
+    }
+    // The instancer is valid as built.
+    let text = scene(field).to_usda().unwrap();
+    assert!(
+        text.contains("float3[] scales = [(1, 1, 1), (-2, 1, 1)]"),
+        "{text}"
+    );
+}
+
+#[test]
+fn push_affine_rejects_shear_and_copies_borrowed_arrays() {
+    let indices = [0];
+    let positions = [[0.0; 3]];
+    let mut field = PointInstancer::new("Field", &indices, &positions).with_prototype(tri());
+    let sheared = Transform::from_affine_3x4([
+        [1.0, 0.5, 0.0, 0.0],
+        [0.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+    ]);
+    assert!(matches!(
+        field.push_affine(0, &sheared),
+        Err(crate::NotRigid::Sheared { .. })
+    ));
+    assert_eq!(field.proto_indices.len(), 1, "nothing appended");
+    assert_eq!(
+        field.push_affine(0, &Transform::from_translation([4.0, 0.0, 0.0])),
+        Ok(1)
+    );
+    assert_eq!(field.positions.as_ref(), [[0.0; 3], [4.0, 0.0, 0.0]]);
+    assert_eq!(positions, [[0.0; 3]], "the borrowed input is untouched");
+}

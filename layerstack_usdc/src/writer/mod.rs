@@ -294,8 +294,16 @@ pub enum Value {
     TokenVector(Vec<String>),
     /// `SdfTokenListOp` (e.g. `apiSchemas`).
     TokenListOp(ListOp<String>),
-    /// `SdfStringListOp` (e.g. `variantSetNames`).
+    /// `SdfStringListOp` (e.g. `variantSetNames`, `clipSets`).
     StringListOp(ListOp<String>),
+    /// `SdfIntListOp`.
+    IntListOp(ListOp<i32>),
+    /// `SdfUIntListOp`.
+    UIntListOp(ListOp<u32>),
+    /// `SdfInt64ListOp` (e.g. `inactiveIds`).
+    Int64ListOp(ListOp<i64>),
+    /// `SdfUInt64ListOp`.
+    UInt64ListOp(ListOp<u64>),
     /// `SdfPathListOp` (e.g. `targetPaths`, `connectionPaths`,
     /// `inheritPaths`, `specializes`).
     PathListOp(ListOp<String>),

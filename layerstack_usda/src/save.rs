@@ -24,8 +24,9 @@
 //!
 //! - layer metadata, including `defaultPrim` and bare-string comments, and
 //!   sublayers with their layer offsets;
-//! - prim specs with their specifier, `typeName`, metadata (`apiSchemas`
-//!   and other token list ops included, `active` and `instanceable`),
+//! - prim specs with their specifier, `typeName`, metadata (list ops of
+//!   tokens, strings and integers included, such as `apiSchemas`,
+//!   `clipSets` and `inactiveIds`, and `active` and `instanceable`),
 //!   composition arcs (references, payloads, inherits and specializes, in
 //!   any list-op form), children in authored order, `reorder
 //!   nameChildren`, `reorder properties` and `reorder rootPrims`;
@@ -36,7 +37,10 @@
 //! - relationship specs with `custom`, explicit or list-edited targets and
 //!   metadata;
 //! - properties in one authored order, attributes and relationships
-//!   interleaved.
+//!   interleaved;
+//! - values of every scalar, vector, quaternion and matrix type (`half`
+//!   and the other binary16 types kept as their bit patterns), and arrays
+//!   of them.
 //!
 //! Arcs are written from what was authored, never from what they resolved
 //! to: a sublayer, reference or payload by its authored asset path (an arc
@@ -54,12 +58,10 @@
 //! - [`SaveError::Unsupported`]: variant sets, variant selections and
 //!   specs authored inside variant branches; splines; sparse array edits
 //!   (as a default or a time sample); list ops mixing an explicit list with
-//!   edits;
-//!   `varying` relationships; list-op metadata other than token list ops;
-//!   and values the writers have no representation for (`half`, `uchar`,
-//!   `uint64`, quaternions, `matrix2d`/`matrix3d`, `pathExpression`,
-//!   `opaque`, `timecode` outside an attribute default, and arrays whose
-//!   element type is not recorded, such as an empty array in a dictionary);
+//!   edits; `varying` relationships; path list-op metadata; and values the
+//!   writers have no representation for (`pathExpression`, `opaque`,
+//!   `timecode` outside an attribute value, and arrays whose element type
+//!   is not recorded, such as an empty array in a dictionary);
 //! - [`SaveError::Invalid`]: a layer the file formats cannot hold as it
 //!   stands, such as a prim spec that no parent lists among its children,
 //!   an attribute without a type, a relationship with time samples, or a
@@ -195,7 +197,8 @@ pub enum Unsupported {
     MixedListOp,
     /// A `varying` relationship.
     VaryingRelationship,
-    /// List-op metadata of this kind (only token list ops are written).
+    /// List-op metadata of this kind (path list ops, which USDA metadata
+    /// has no syntax for).
     ListOpMetadata(&'static str),
     /// A value of this kind.
     Value(&'static str),
@@ -594,23 +597,21 @@ impl Lowering<'_> {
                 FieldValue::TokenListOp(op) => {
                     Value::TokenListOp(self.list_op(op, &path, |t| Ok(self.name(*t)))?)
                 }
+                FieldValue::StringListOp(op) => {
+                    Value::StringListOp(self.list_op(op, &path, |s| Ok(String::from(&**s)))?)
+                }
+                FieldValue::IntListOp(op) => Value::IntListOp(self.list_op(op, &path, |x| Ok(*x))?),
+                FieldValue::UIntListOp(op) => {
+                    Value::UIntListOp(self.list_op(op, &path, |x| Ok(*x))?)
+                }
+                FieldValue::Int64ListOp(op) => {
+                    Value::Int64ListOp(self.list_op(op, &path, |x| Ok(*x))?)
+                }
+                FieldValue::UInt64ListOp(op) => {
+                    Value::UInt64ListOp(self.list_op(op, &path, |x| Ok(*x))?)
+                }
                 FieldValue::PathListOp(_) => {
                     return unsupported(path, Unsupported::ListOpMetadata("path list op"));
-                }
-                FieldValue::StringListOp(_) => {
-                    return unsupported(path, Unsupported::ListOpMetadata("string list op"));
-                }
-                FieldValue::IntListOp(_) => {
-                    return unsupported(path, Unsupported::ListOpMetadata("int list op"));
-                }
-                FieldValue::UIntListOp(_) => {
-                    return unsupported(path, Unsupported::ListOpMetadata("uint list op"));
-                }
-                FieldValue::Int64ListOp(_) => {
-                    return unsupported(path, Unsupported::ListOpMetadata("int64 list op"));
-                }
-                FieldValue::UInt64ListOp(_) => {
-                    return unsupported(path, Unsupported::ListOpMetadata("uint64 list op"));
                 }
             };
             let key = match key {
@@ -654,9 +655,12 @@ impl Lowering<'_> {
         let no = |kind: &'static str| unsupported(path, Unsupported::Value(kind));
         Ok(match value {
             L::Bool(v) => Value::Bool(*v),
+            L::UChar(v) => Value::UChar(*v),
             L::Int(v) => Value::Int(*v),
             L::UInt(v) => Value::UInt(*v),
             L::Int64(v) => Value::Int64(*v),
+            L::UInt64(v) => Value::UInt64(*v),
+            L::Half(v) => Value::Half(*v),
             L::Float(v) => Value::Float(*v),
             L::Double(v) => Value::Double(*v),
             // The writers hold a `timecode` default as a double and store
@@ -675,9 +679,16 @@ impl Lowering<'_> {
             L::Vec2i(v) => Value::Int2(*v),
             L::Vec3i(v) => Value::Int3(*v),
             L::Vec4i(v) => Value::Int4(*v),
-            L::Matrix4d(m) => Value::Matrix4d(core::array::from_fn(|r| {
-                core::array::from_fn(|c| m[r * 4 + c])
-            })),
+            L::Vec2h(v) => Value::Half2(*v),
+            L::Vec3h(v) => Value::Half3(*v),
+            L::Vec4h(v) => Value::Half4(*v),
+            // Both hold a quaternion as `i, j, k, r`.
+            L::Quath(q) => Value::Quath(*q),
+            L::Quatf(q) => Value::Quatf(*q),
+            L::Quatd(q) => Value::Quatd(*q),
+            L::Matrix2d(m) => Value::Matrix2d(rows(m)),
+            L::Matrix3d(m) => Value::Matrix3d(rows(m)),
+            L::Matrix4d(m) => Value::Matrix4d(rows(m)),
             // Outside an attribute default the writers' validation rejects
             // a block, naming the owner.
             L::Blocked => Value::Block,
@@ -692,13 +703,6 @@ impl Lowering<'_> {
             ),
             L::Array(items) => self.array(items, site, path)?,
             L::ArrayEdit(_) => return unsupported(path, Unsupported::ArrayEdit),
-            L::Half(_) => return no("half"),
-            L::UChar(_) => return no("uchar"),
-            L::UInt64(_) => return no("uint64"),
-            L::Vec2h(_) | L::Vec3h(_) | L::Vec4h(_) => return no("half vector"),
-            L::Quatd(_) | L::Quatf(_) | L::Quath(_) => return no("quaternion"),
-            L::Matrix2d(_) => return no("matrix2d"),
-            L::Matrix3d(_) => return no("matrix3d"),
             L::PathExpression(_) => return no("pathExpression"),
             L::Opaque { .. } => return no("opaque"),
             L::Null => return no("null"),
@@ -760,13 +764,30 @@ fn empty_array_like(element: &Value) -> Option<Value> {
     Value::empty_array_of(&format!("{}[]", element.canonical_type_name()))
 }
 
+/// A row-major `N`×`N` matrix from its flat entries.
+fn rows<const N: usize, const M: usize>(m: &[f64; M]) -> [[f64; N]; N] {
+    core::array::from_fn(|r| core::array::from_fn(|c| m[r * N + c]))
+}
+
 /// Appends `element` to `array` when it has the array's element type.
 fn push_element(array: &mut Value, element: Value) -> bool {
     match (array, element) {
         (Value::BoolArray(a), Value::Bool(v)) => a.push(v),
+        (Value::UCharArray(a), Value::UChar(v)) => a.push(v),
         (Value::IntArray(a), Value::Int(v)) => a.push(v),
         (Value::UIntArray(a), Value::UInt(v)) => a.push(v),
         (Value::Int64Array(a), Value::Int64(v)) => a.push(v),
+        (Value::UInt64Array(a), Value::UInt64(v)) => a.push(v),
+        (Value::HalfArray(a), Value::Half(v)) => a.push(v),
+        (Value::Half2Array(a), Value::Half2(v)) => a.push(v),
+        (Value::Half3Array(a), Value::Half3(v)) => a.push(v),
+        (Value::Half4Array(a), Value::Half4(v)) => a.push(v),
+        (Value::QuathArray(a), Value::Quath(v)) => a.push(v),
+        (Value::QuatfArray(a), Value::Quatf(v)) => a.push(v),
+        (Value::QuatdArray(a), Value::Quatd(v)) => a.push(v),
+        (Value::Matrix2dArray(a), Value::Matrix2d(v)) => a.push(v),
+        (Value::Matrix3dArray(a), Value::Matrix3d(v)) => a.push(v),
+        (Value::Matrix4dArray(a), Value::Matrix4d(v)) => a.push(v),
         (Value::FloatArray(a), Value::Float(v)) => a.push(v),
         (Value::DoubleArray(a), Value::Double(v)) => a.push(v),
         (Value::StringArray(a), Value::String(v)) => a.push(v),

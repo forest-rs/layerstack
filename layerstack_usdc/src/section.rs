@@ -154,25 +154,21 @@ fn parse_tokens(data: &[u8], entry: &SectionEntry) -> Result<Vec<String>, UsdcEr
     let uncompressed_size = read_u64(section, 8);
     let compressed_size = read_u64(section, 16);
 
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "section data sizes are well under 4 GiB"
-    )]
-    let csz = compressed_size as usize;
-    if section.len() < 24 + csz {
+    let Some(compressed) = usize::try_from(compressed_size)
+        .ok()
+        .and_then(|csz| section[24..].get(..csz))
+    else {
         return Err(UsdcError::UnexpectedEof {
             section: "TOKENS compressed data",
             offset: entry.offset + 24,
             expected: compressed_size,
         });
-    }
-
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "section data sizes are well under 4 GiB"
-    )]
-    let usz = uncompressed_size as usize;
-    let decompressed = lz4_decompress(&section[24..24 + csz], usz)?;
+    };
+    // `lz4_decompress` checks the size against the compressed data.
+    let usz = usize::try_from(uncompressed_size).map_err(|_| UsdcError::DecompressionFailed {
+        context: "TOKENS size exceeds the address space",
+    })?;
+    let decompressed = lz4_decompress(compressed, usz)?;
 
     // Split on null bytes; the final null produces a trailing empty string.
     let text = core::str::from_utf8(&decompressed).map_err(|_| UsdcError::Inconsistent {
@@ -219,28 +215,22 @@ fn parse_strings(data: &[u8], entry: &SectionEntry) -> Result<Vec<u32>, UsdcErro
     }
 
     let num_strings = read_u64(section, 0);
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "string count bounded by file size"
-    )]
-    let count = num_strings as usize;
-    let needed = 8 + count * 4;
-    if section.len() < needed {
+    let indices = &section[8..];
+    if num_strings > (indices.len() / 4) as u64 {
         return Err(UsdcError::UnexpectedEof {
             section: "STRINGS indices",
             offset: entry.offset + 8,
-            expected: (count * 4) as u64,
+            expected: num_strings.saturating_mul(4),
         });
     }
 
-    let mut indices = Vec::with_capacity(count);
-    for i in 0..count {
-        let off = 8 + i * 4;
-        let idx = u32::from_le_bytes(section[off..off + 4].try_into().unwrap());
-        indices.push(idx);
-    }
-
-    Ok(indices)
+    Ok(indices
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .take(usize::try_from(num_strings).unwrap_or(usize::MAX))
+        .map(|idx| u32::from_le_bytes(*idx))
+        .collect())
 }
 
 // ---------------------------------------------------------------------------
@@ -285,41 +275,43 @@ fn parse_fields(data: &[u8], entry: &SectionEntry) -> Result<Vec<FieldDef>, Usdc
     }
 
     let reps_size = read_u64(section, reps_start);
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "reps data sizes are well under 4 GiB"
-    )]
-    let rsz = reps_size as usize;
     let reps_data_start = reps_start + 8;
-    if section.len() < reps_data_start + rsz {
+    let Some(reps) = usize::try_from(reps_size)
+        .ok()
+        .and_then(|rsz| section[reps_data_start..].get(..rsz))
+    else {
         return Err(UsdcError::UnexpectedEof {
             section: "FIELDS reps data",
             offset: entry.offset + reps_data_start as u64,
             expected: reps_size,
         });
-    }
+    };
 
-    let uncompressed_reps_size = count * 8;
-    let decompressed_reps = lz4_decompress(
-        &section[reps_data_start..reps_data_start + rsz],
-        uncompressed_reps_size,
-    )?;
-
-    let mut fields = Vec::with_capacity(count);
-    for (i, &idx_val) in indices_i64.iter().enumerate() {
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "token indices are u32-range values"
-        )]
-        let token_index = idx_val as u32;
-        let rep_off = i * 8;
-        let mut value_rep = [0_u8; 8];
-        value_rep.copy_from_slice(&decompressed_reps[rep_off..rep_off + 8]);
-        fields.push(FieldDef {
-            token_index,
-            value_rep,
+    let reps_len = count.checked_mul(8).ok_or(UsdcError::Inconsistent {
+        message: "FIELDS count exceeds the address space",
+    })?;
+    let decompressed_reps = lz4_decompress(reps, reps_len)?;
+    if decompressed_reps.len() != reps_len {
+        return Err(UsdcError::Inconsistent {
+            message: "FIELDS value reps have the wrong size",
         });
     }
+
+    let fields = indices_i64
+        .iter()
+        .zip(decompressed_reps.as_chunks::<8>().0)
+        .map(|(&idx_val, rep)| {
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "token indices are u32-range values"
+            )]
+            let token_index = idx_val as u32;
+            FieldDef {
+                token_index,
+                value_rep: *rep,
+            }
+        })
+        .collect();
 
     Ok(fields)
 }
@@ -409,7 +401,14 @@ fn parse_paths(
     cursor = &cursor[c2..];
     let (jumps, _c3) = read_compressed_ints(cursor, n_encoded, 4)?;
 
-    // Reconstruct paths.
+    // The table holds the encoded paths, and OpenUSD tolerates unused
+    // entries. The count comes from the file, so unused entries are limited
+    // to one per byte of the section before the table is allocated.
+    if n_paths > n_encoded.saturating_add(section.len()) {
+        return Err(UsdcError::Inconsistent {
+            message: "PATHS count exceeds the encoded paths",
+        });
+    }
     let mut paths = vec![String::new(); n_paths];
     build_paths(
         &path_indices,
@@ -443,6 +442,21 @@ fn build_paths(
         return Ok(());
     }
 
+    let corrupt = UsdcError::PathReconstruction;
+    // Like OpenUSD (`_ReadCompressedPaths`, `pxr/usd/sdf/crateFile.cpp:3935`),
+    // the path indexes must be in range and distinct, and the jumps must stay
+    // in the table. A valid encoding visits each entry once; a corrupt one
+    // whose jumps overlap could revisit entries exponentially often.
+    let mut targets = vec![false; paths.len()];
+    for &target in path_indices {
+        let target = usize::try_from(target).map_err(|_| UsdcError::PathReconstruction)?;
+        match targets.get_mut(target) {
+            Some(seen @ false) => *seen = true,
+            _ => return Err(corrupt),
+        }
+    }
+    let mut visited = vec![false; path_indices.len()];
+
     // Stack frames: (start_index, parent_path, is_first_iteration)
     let mut stack: Vec<(usize, String, bool)> = vec![(0, String::new(), true)];
 
@@ -453,19 +467,20 @@ fn build_paths(
             if idx >= path_indices.len() {
                 break;
             }
+            if core::mem::replace(&mut visited[idx], true) {
+                return Err(UsdcError::PathReconstruction);
+            }
 
             #[allow(
                 clippy::cast_possible_truncation,
-                reason = "path_indices are u32-range"
+                reason = "path indexes were checked against the table"
             )]
             let target = path_indices[idx] as usize;
 
             if first && parent.is_empty() {
                 // Root node.
                 parent = String::from("/");
-                if target < paths.len() {
-                    paths[target] = parent.clone();
-                }
+                paths[target] = parent.clone();
             } else {
                 let token_idx_raw = element_token_indices[idx];
                 let is_property = token_idx_raw < 0;
@@ -473,13 +488,12 @@ fn build_paths(
                     clippy::cast_possible_truncation,
                     reason = "token indices are u32-range"
                 )]
-                let token_idx = token_idx_raw.unsigned_abs() as usize;
-
-                if token_idx >= tokens.len() {
+                let Some(element) = usize::try_from(token_idx_raw.unsigned_abs())
+                    .ok()
+                    .and_then(|token_idx| tokens.get(token_idx))
+                else {
                     return Err(UsdcError::PathReconstruction);
-                }
-
-                let element = &tokens[token_idx];
+                };
                 // Variant selections attach to their prim without a separator,
                 // and so does a prim below a selection: `/A{v=x}B.attr`, as
                 // OpenUSD rebuilds paths with `SdfPath::AppendElementToken`
@@ -497,9 +511,7 @@ fn build_paths(
                     alloc::format!("{parent}{sep}{element}")
                 };
 
-                if target < paths.len() {
-                    paths[target] = path;
-                }
+                paths[target] = path;
             }
             first = false;
 
@@ -510,24 +522,19 @@ fn build_paths(
             if has_child {
                 if has_sibling {
                     // Push sibling for later processing with the same parent.
-                    #[allow(
-                        clippy::cast_possible_truncation,
-                        reason = "jump values are small offsets"
-                    )]
-                    let sibling_idx = idx + jump as usize;
+                    let Some(sibling_idx) = usize::try_from(jump)
+                        .ok()
+                        .and_then(|jump| idx.checked_add(jump))
+                        .filter(|sibling| *sibling < path_indices.len())
+                    else {
+                        return Err(UsdcError::PathReconstruction);
+                    };
                     stack.push((sibling_idx, parent.clone(), false));
                 }
 
                 // Descend into child: advance to next index with current path
                 // as new parent.
-                #[allow(
-                    clippy::cast_possible_truncation,
-                    reason = "path_indices are u32-range"
-                )]
-                let target = path_indices[idx] as usize;
-                if target < paths.len() {
-                    parent = paths[target].clone();
-                }
+                parent = paths[target].clone();
                 idx += 1;
             } else if has_sibling {
                 // No children but has sibling: advance to the next entry
@@ -610,30 +617,28 @@ fn parse_specs(data: &[u8], entry: &SectionEntry) -> Result<Vec<SpecDef>, UsdcEr
 
 /// Returns the slice of `data` corresponding to the given section entry.
 fn section_slice<'a>(data: &'a [u8], entry: &SectionEntry) -> Result<&'a [u8], UsdcError> {
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "section offsets validated by TOC parser"
-    )]
-    let start = entry.offset as usize;
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "section sizes validated by TOC parser"
-    )]
-    let size = entry.size as usize;
-    let end = start + size;
-    if end > data.len() {
-        return Err(UsdcError::SectionOutOfBounds {
+    // Checked here as well as by the TOC parser, since `SectionEntry` is
+    // public. Once the section lies within `data`, offsets within it plus
+    // small constants cannot overflow, even on 32-bit targets.
+    let range = usize::try_from(entry.offset)
+        .ok()
+        .zip(usize::try_from(entry.size).ok())
+        .and_then(|(start, size)| Some(start..start.checked_add(size)?));
+    range
+        .and_then(|range| data.get(range))
+        .ok_or(UsdcError::SectionOutOfBounds {
             name: String::from("section"),
             offset: entry.offset,
             size: entry.size,
-        });
-    }
-    Ok(&data[start..end])
+        })
 }
 
-/// Reads a `u64` little-endian from `data` at `offset`.
+/// Reads a `u64` little-endian from `data` at `offset`. Callers check that
+/// the eight bytes are present.
 fn read_u64(data: &[u8], offset: usize) -> u64 {
-    u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap())
+    let mut bytes = [0_u8; 8];
+    bytes.copy_from_slice(&data[offset..offset + 8]);
+    u64::from_le_bytes(bytes)
 }
 
 #[cfg(test)]
@@ -755,6 +760,25 @@ mod tests {
                 "/root{foo=eggs}Child.attr",
             ]
         );
+    }
+
+    #[test]
+    fn build_paths_rejects_corrupt_encodings() {
+        let tokens = vec!["a".to_string(), "b".to_string()];
+        let build = |indices: &[i64], elements: &[i64], jumps: &[i64]| {
+            let mut paths = vec![String::new(); 3];
+            build_paths(indices, elements, jumps, &tokens, &mut paths)
+        };
+        // Path index out of range, and repeated.
+        assert!(build(&[0, 3], &[0, 0], &[-1, -2]).is_err());
+        assert!(build(&[0, 0], &[0, 0], &[-1, -2]).is_err());
+        // Token index out of range.
+        assert!(build(&[0, 1], &[0, 2], &[-1, -2]).is_err());
+        // A sibling jump past the end, or overflowing.
+        assert!(build(&[0, 1], &[0, 0], &[-1, 5]).is_err());
+        assert!(build(&[0, 1], &[0, 0], &[-1, i64::MAX]).is_err());
+        // Jumps that revisit entries.
+        assert!(build(&[0, 1, 2], &[0, 0, 1], &[-1, 1, 1]).is_err());
     }
 
     #[test]

@@ -37,6 +37,7 @@ use crate::{
     prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue, PrimIndex},
     prim_index_graph::{NodeArc, NodeId, PrimIndexGraph, PrimNode},
     property::PropertyType,
+    relocates::RelocationTable,
     spec_path::{SpecPath, VariantSelectionSite},
     stage::{Stage, StageOptions},
 };
@@ -164,6 +165,13 @@ pub(crate) fn compose_stage(
 ) -> Stage {
     let mut cycles = CycleDetector::new(root);
     let layer_stack = cycles.gather_layer_stack(store, root);
+    // Spec: AOUSD Core §10.3.2.6 (invalid relocates are composition errors
+    // of the layer stack authoring them).
+    let mut relocation_errors = Vec::new();
+    RelocationTable::compute(store, &layer_stack, &mut relocation_errors);
+    for error in relocation_errors {
+        cycles.report(error);
+    }
     let (paths, mut children) = populate(store, &layer_stack, options.mask.as_ref());
 
     // Every prim's graph starts at its own site in the root layer stack

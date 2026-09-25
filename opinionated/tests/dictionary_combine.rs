@@ -9,7 +9,8 @@
 use core::cell::Cell;
 
 use opinionated::{
-    DictionaryAdapter, ShallowOverlay, combine_dictionaries, combine_dictionary_chain,
+    DictionaryAdapter, DictionaryEvent, ShallowOverlay, combine_dictionaries,
+    combine_dictionary_chain, combine_dictionary_chain_report,
 };
 
 /// A host value: an opaque integer or a nested dictionary.
@@ -228,4 +229,112 @@ fn shallow_overlay_is_a_distinct_policy() {
         vec![("other", int(1)), ("sub", dict(&[("x", int(10))]))],
         "shallow overlay keeps the stronger nested dictionary wholesale"
     );
+}
+
+fn supplied(
+    provenance: &'static str,
+    key_path: &[&'static str],
+) -> DictionaryEvent<&'static str, &'static str> {
+    DictionaryEvent::Supplied {
+        provenance,
+        key_path: key_path.to_vec(),
+    }
+}
+
+fn merged(
+    provenance: &'static str,
+    key_path: &[&'static str],
+) -> DictionaryEvent<&'static str, &'static str> {
+    DictionaryEvent::Merged {
+        provenance,
+        key_path: key_path.to_vec(),
+    }
+}
+
+fn overridden(
+    provenance: &'static str,
+    key_path: &[&'static str],
+) -> DictionaryEvent<&'static str, &'static str> {
+    DictionaryEvent::Overridden {
+        provenance,
+        key_path: key_path.to_vec(),
+    }
+}
+
+/// The report attributes every entry of the three-layer conflict: the
+/// middle scalar is overridden, and the weakest dictionary still merges into
+/// the strongest one, because the chain folds strongest-first.
+#[test]
+fn report_attributes_entries_across_a_strongest_first_fold() {
+    let strong = vec![("settings", dict(&[("a", int(1))])), ("name", int(7))];
+    let middle = vec![("settings", int(0)), ("extra", int(3))];
+    let weak = vec![("settings", dict(&[("a", int(9)), ("b", int(2))]))];
+    let chain = [(&strong, "strong"), (&middle, "middle"), (&weak, "weak")];
+
+    let report = combine_dictionary_chain_report(&HostDictionaries, chain);
+    assert_eq!(
+        report.value,
+        combine_dictionary_chain(&HostDictionaries, [&strong, &middle, &weak])
+    );
+    assert_eq!(
+        report.events,
+        vec![
+            supplied("strong", &["settings"]),
+            supplied("strong", &["name"]),
+            overridden("middle", &["settings"]),
+            supplied("middle", &["extra"]),
+            merged("weak", &["settings"]),
+            overridden("weak", &["settings", "a"]),
+            supplied("weak", &["settings", "b"]),
+        ]
+    );
+}
+
+#[test]
+fn report_names_nested_key_paths_and_ignores_repeated_keys() {
+    let strong = vec![("a", dict(&[("b", dict(&[("c", int(1))]))]))];
+    let weak = vec![
+        ("a", dict(&[("b", dict(&[("d", int(2))])), ("e", int(3))])),
+        ("a", int(4)),
+    ];
+
+    let report = combine_dictionary_chain_report(&HostDictionaries, [(&strong, 0), (&weak, 1)]);
+    assert_eq!(
+        report.value,
+        vec![(
+            "a",
+            dict(&[("b", dict(&[("c", int(1)), ("d", int(2))])), ("e", int(3))])
+        )]
+    );
+    let expected: Vec<DictionaryEvent<&str, i32>> = vec![
+        DictionaryEvent::Supplied {
+            provenance: 0,
+            key_path: vec!["a"],
+        },
+        DictionaryEvent::Merged {
+            provenance: 1,
+            key_path: vec!["a"],
+        },
+        DictionaryEvent::Merged {
+            provenance: 1,
+            key_path: vec!["a", "b"],
+        },
+        DictionaryEvent::Supplied {
+            provenance: 1,
+            key_path: vec!["a", "b", "d"],
+        },
+        DictionaryEvent::Supplied {
+            provenance: 1,
+            key_path: vec!["a", "e"],
+        },
+    ];
+    assert_eq!(report.events, expected);
+}
+
+#[test]
+fn empty_report_chain_has_no_events() {
+    let report =
+        combine_dictionary_chain_report(&HostDictionaries, core::iter::empty::<(Entries, ())>());
+    assert!(report.value.is_empty());
+    assert!(report.events.is_empty());
 }

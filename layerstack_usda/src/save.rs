@@ -207,6 +207,8 @@ pub enum Unsupported {
     ListOpMetadata(&'static str),
     /// A value of this kind.
     Value(&'static str),
+    /// The layer's `layerRelocates` metadata.
+    Relocates,
 }
 
 impl fmt::Display for Unsupported {
@@ -218,6 +220,7 @@ impl fmt::Display for Unsupported {
             Self::VaryingRelationship => f.write_str("varying relationships"),
             Self::ListOpMetadata(kind) => write!(f, "{kind} metadata"),
             Self::Value(kind) => write!(f, "a {kind} value"),
+            Self::Relocates => f.write_str("layer relocates"),
         }
     }
 }
@@ -312,6 +315,12 @@ impl Lowering<'_> {
 
     /// Spec: AOUSD Core §7.6.1 (layer spec fields).
     fn layer(&self, layer: &Layer) -> Result<Document, SaveError> {
+        // Spec: AOUSD Core §7.6.1.2.4. The writers have no relocates
+        // syntax yet, and dropping them would change the composed namespace.
+        if !layer.relocates.is_empty() {
+            return unsupported("/", Unsupported::Relocates);
+        }
+
         let mut doc = Document::new();
         doc.default_prim = layer.default_prim.map(|t| self.name(t));
         doc.metadata = self.metadata(&layer.metadata, "/")?;

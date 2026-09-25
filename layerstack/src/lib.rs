@@ -104,7 +104,7 @@ pub use composition_error::{
 pub use dependency_map::ArcDependency;
 pub use doc::{
     FieldEntry, FieldValue, InMemoryStore, InterpolationType, Layer, LayerId, LayerOffset,
-    LayerStore, PrimSpec, Reference, ReferenceTarget, Specifier, SublayerEntry, Value,
+    LayerStore, PrimSpec, Reference, ReferenceTarget, Relocate, Specifier, SublayerEntry, Value,
     VariantSetSpec, VariantSpec, combine_dictionaries, combine_dictionary_chain, get_field,
     get_field_mut, insert_field_if_absent, remove_field, set_field_vec,
 };

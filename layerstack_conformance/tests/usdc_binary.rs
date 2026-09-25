@@ -392,13 +392,20 @@ fn gen_pathexpression_is_typed() {
 }
 
 #[test]
-fn gen_relocates_reports_unsupported() {
-    // Relocates are not modelled; assembly says so instead of dropping them.
-    let parsed = read_gen("relocates");
-    assert_eq!(parsed.diagnostics.len(), 1, "{:?}", parsed.diagnostics);
-    let diagnostic = &parsed.diagnostics[0];
-    assert_eq!(diagnostic.spec_path, "/");
-    assert_eq!(diagnostic.field.as_deref(), Some("layerRelocates"));
+fn gen_relocates_reads_layer_relocates() {
+    // Spec: AOUSD Core §7.6.1.2.4, §16.3.10.15. The layer authors
+    // `relocates = { </Egg/Foo>: </Egg/Bar> }`.
+    let mut parsed = read_gen("relocates");
+    assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+    let source = parsed.path_id("/Egg/Foo");
+    let target = parsed.path_id("/Egg/Bar");
+    assert_eq!(
+        parsed.store.layers[&parsed.layer_id].relocates,
+        [layerstack::Relocate {
+            source,
+            target: Some(target),
+        }]
+    );
 }
 
 #[test]

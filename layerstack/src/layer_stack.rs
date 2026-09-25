@@ -159,6 +159,7 @@ mod tests {
             sublayers: subs(&[2, 3]),
             default_prim: None,
             metadata: Vec::new(),
+            relocates: Vec::new(),
             prims: HashMap::new(),
             variant_prims: HashMap::new(),
         });
@@ -167,6 +168,7 @@ mod tests {
             sublayers: subs(&[3]),
             default_prim: None,
             metadata: Vec::new(),
+            relocates: Vec::new(),
             prims: HashMap::new(),
             variant_prims: HashMap::new(),
         });
@@ -175,6 +177,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
+            relocates: Vec::new(),
             prims: HashMap::new(),
             variant_prims: HashMap::new(),
         });
@@ -196,6 +199,7 @@ mod tests {
             sublayers: subs(&[2]),
             default_prim: None,
             metadata: Vec::new(),
+            relocates: Vec::new(),
             prims: HashMap::new(),
             variant_prims: HashMap::new(),
         });
@@ -204,6 +208,7 @@ mod tests {
             sublayers: subs(&[3]),
             default_prim: None,
             metadata: Vec::new(),
+            relocates: Vec::new(),
             prims: HashMap::new(),
             variant_prims: HashMap::new(),
         });
@@ -212,6 +217,7 @@ mod tests {
             sublayers: subs(&[2]),
             default_prim: None,
             metadata: Vec::new(),
+            relocates: Vec::new(),
             prims: HashMap::new(),
             variant_prims: HashMap::new(),
         });
@@ -267,6 +273,7 @@ mod tests {
             sublayers: subs(&[2, 2]),
             default_prim: None,
             metadata: Vec::new(),
+            relocates: Vec::new(),
             prims: HashMap::new(),
             variant_prims: HashMap::new(),
         });
@@ -275,6 +282,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
+            relocates: Vec::new(),
             prims: HashMap::new(),
             variant_prims: HashMap::new(),
         });
@@ -302,6 +310,7 @@ mod tests {
             }],
             default_prim: None,
             metadata: Vec::new(),
+            relocates: Vec::new(),
             prims: HashMap::new(),
             variant_prims: HashMap::new(),
         });
@@ -317,6 +326,7 @@ mod tests {
             }],
             default_prim: None,
             metadata: Vec::new(),
+            relocates: Vec::new(),
             prims: HashMap::new(),
             variant_prims: HashMap::new(),
         });
@@ -325,6 +335,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
+            relocates: Vec::new(),
             prims: HashMap::new(),
             variant_prims: HashMap::new(),
         });
@@ -366,6 +377,7 @@ mod tests {
             }],
             default_prim: None,
             metadata: Vec::new(),
+            relocates: Vec::new(),
             prims: HashMap::new(),
             variant_prims: HashMap::new(),
         });
@@ -381,6 +393,7 @@ mod tests {
             }],
             default_prim: None,
             metadata: Vec::new(),
+            relocates: Vec::new(),
             prims: HashMap::new(),
             variant_prims: HashMap::new(),
         });
@@ -389,6 +402,7 @@ mod tests {
             sublayers: vec![],
             default_prim: None,
             metadata: Vec::new(),
+            relocates: Vec::new(),
             prims: HashMap::new(),
             variant_prims: HashMap::new(),
         });

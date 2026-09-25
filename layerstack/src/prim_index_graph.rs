@@ -28,8 +28,12 @@
 //! graph ([`PrimIndexGraph::strength_order`]), then by layer strength within
 //! each node's layer stack: a node is stronger than every node beneath it,
 //! and a node's children are ordered by arc kind (LIVERPS), then deeper
-//! namespace depth, then their position among the arcs authored beside them
-//! (`PcpCompareSiblingNodeStrength`). The one exception is specializes:
+//! namespace depth, then the strength of their origins, then their position
+//! among the arcs authored beside them (`PcpCompareSiblingNodeStrength`). A
+//! class arc authored inside a reference or payload target is also implied
+//! beneath the node of each stronger layer stack, with the class node it is
+//! implied from as its origin ([`PrimNode::origin`]; AOUSD Core §10.4.2.4),
+//! so it ranks with that layer stack. The one exception is specializes:
 //! each node records the specializes arcs above it, and nodes beneath a
 //! specializes arc rank after every other node (AOUSD Core §10.4.1).
 //!
@@ -240,13 +244,17 @@ impl PrimNode {
         self.parent
     }
 
-    /// The node this one was implied or propagated from, when it is a copy
-    /// of another node (OpenUSD's `PcpNodeRef::GetOriginNode`).
+    /// The node this one was implied from; `None` for a node whose arc is
+    /// authored at its parent's site.
     ///
-    /// Composition does not copy nodes that way yet, so this is `None` for
-    /// every node.
-    // TODO(graph): ImpliedClasses, SpecializesPlacement. Set the origin of
-    // implied class nodes and of specializes nodes propagated to the root.
+    /// A class arc authored inside a reference or payload target is implied
+    /// into each stronger layer stack on the way to the root, as a node
+    /// beneath that layer stack's node whose origin is the class node it is
+    /// implied from (see [`Self::is_implied`]). OpenUSD:
+    /// `PcpNodeRef::GetOriginNode`, which names the parent for an authored
+    /// arc.
+    // TODO(graph): SpecializesPlacement. Set the origin of specializes nodes
+    // propagated to the root.
     #[must_use]
     pub fn origin(&self) -> Option<NodeId> {
         self.origin
@@ -300,9 +308,11 @@ impl PrimNode {
     /// `true` for an implied class arc: an inherits or specializes arc
     /// authored inside another arc's target, whose class path is mapped into
     /// the namespace (and, for references and payloads, the layer stack)
-    /// of the site that arc is authored at.
+    /// of the site that arc is authored at. Its [`Self::origin`] is the
+    /// class node it is implied from.
     ///
-    /// Spec: AOUSD Core §10.4.2.4 (implied class arcs).
+    /// Spec: AOUSD Core §10.4.2.4 (implied class arcs). OpenUSD:
+    /// `_EvalImpliedClasses` in `pxr/usd/pcp/primIndex.cpp`.
     #[must_use]
     pub fn is_implied(&self) -> bool {
         self.arc.implied
@@ -354,6 +364,16 @@ impl PrimIndexGraph {
         });
         self.nodes[parent.index()].children.push(id);
         id
+    }
+
+    /// Records `origin` as the node `node` is implied from, unless it has
+    /// one.
+    pub(crate) fn set_origin(&mut self, node: NodeId, origin: NodeId) {
+        let slot = &mut self.nodes[node.index()].origin;
+        if slot.is_none() {
+            *slot = Some(origin);
+            self.ranks.clear();
+        }
     }
 
     /// Removes every node `keep` rejects, returning the new id of each old
@@ -425,25 +445,64 @@ impl PrimIndexGraph {
     }
 
     /// Compares two children of one node with "strongest first" ordering:
-    /// by arc kind (LIVERPS), then deeper namespace depth, then their
-    /// position among the arcs authored beside them.
+    /// by arc kind (LIVERPS), then deeper namespace depth, then the strength
+    /// of their origins, then their position among the arcs authored beside
+    /// them.
     ///
-    /// Siblings that compare equal (the implied and authored copies of one
-    /// class arc, or the branches of different variant sets) rank as one
-    /// node, and their opinions interleave by layer strength.
+    /// An authored arc's origin is the parent itself, which is stronger than
+    /// every node beneath it, so an arc authored at a site outranks a class
+    /// implied there from deeper in the graph; implied classes rank by where
+    /// their origins sit.
+    ///
+    /// Siblings that compare equal (the branches of different variant sets)
+    /// rank as one node, and their opinions interleave by layer strength.
     ///
     /// Spec: AOUSD Core §10.4. OpenUSD: `PcpCompareSiblingNodeStrength` in
     /// `pxr/usd/pcp/strengthOrdering.cpp`.
-    // TODO(graph): ImpliedClasses. Implied class nodes belong under the node
-    // of the layer stack they are implied into, and variant nodes carry
-    // their variant set's position; then no two siblings compare equal.
+    // TODO(graph): VariantSetOrder. Variant nodes carry their variant set's
+    // position; then no two siblings compare equal.
     fn cmp_siblings(&self, a: NodeId, b: NodeId) -> Ordering {
-        let (a, b) = (&self.nodes[a.index()].arc, &self.nodes[b.index()].arc);
-        a.arc_kind
+        let (node_a, node_b) = (&self.nodes[a.index()], &self.nodes[b.index()]);
+        let (arc_a, arc_b) = (&node_a.arc, &node_b.arc);
+        arc_a
+            .arc_kind
             .strength_rank()
-            .cmp(&b.arc_kind.strength_rank())
-            .then_with(|| b.namespace_depth.cmp(&a.namespace_depth))
-            .then_with(|| a.sibling_index.cmp(&b.sibling_index))
+            .cmp(&arc_b.arc_kind.strength_rank())
+            .then_with(|| arc_b.namespace_depth.cmp(&arc_a.namespace_depth))
+            .then_with(|| {
+                let origin_a = node_a.origin.or(node_a.parent);
+                let origin_b = node_b.origin.or(node_b.parent);
+                match (origin_a, origin_b) {
+                    (Some(origin_a), Some(origin_b)) if origin_a != origin_b => {
+                        self.cmp_positions(origin_a, origin_b)
+                    }
+                    _ => Ordering::Equal,
+                }
+            })
+            .then_with(|| arc_a.sibling_index.cmp(&arc_b.sibling_index))
+    }
+
+    /// Compares where two nodes sit in the strong-to-weak depth-first walk of
+    /// the graph: a node before the nodes beneath it, and the nodes beneath
+    /// two siblings in [`Self::cmp_siblings`] order.
+    ///
+    /// OpenUSD: `_OriginIsStronger` in `pxr/usd/pcp/strengthOrdering.cpp`.
+    fn cmp_positions(&self, a: NodeId, b: NodeId) -> Ordering {
+        let ancestry = |node: NodeId| {
+            let mut path = alloc::vec![node];
+            let mut cursor = node;
+            while let Some(parent) = self.nodes[cursor.index()].parent {
+                path.push(parent);
+                cursor = parent;
+            }
+            path.reverse();
+            path
+        };
+        let (path_a, path_b) = (ancestry(a), ancestry(b));
+        match path_a.iter().zip(&path_b).find(|(a, b)| a != b) {
+            Some((a, b)) => self.cmp_siblings(*a, *b),
+            None => path_a.len().cmp(&path_b.len()),
+        }
     }
 
     /// Ranks every node by a strong-to-weak depth-first walk of the graph.
@@ -714,19 +773,62 @@ mod tests {
 
     #[test]
     fn equal_siblings_share_a_rank_and_their_children() {
-        let implied = NodeArc {
-            implied: true,
-            ..arc(ArcKind::Inherits, 1, 0)
+        // The branches of two variant sets hosted at one site.
+        let other_set = NodeArc {
+            layer_stack: LayerId(2),
+            ..arc(ArcKind::Variants, 1, 0)
         };
         let graph = graph(vec![
-            (0, arc(ArcKind::Inherits, 1, 0)),
-            (0, implied),
+            (0, arc(ArcKind::Variants, 1, 0)),
+            (0, other_set),
             (2, arc(ArcKind::References, 1, 0)),
             (1, arc(ArcKind::Inherits, 1, 0)),
         ]);
         assert_eq!(graph.cmp_nodes(NodeId(1), NodeId(2)), Ordering::Equal);
         assert_order(&graph, &[0, 1, 4, 3]);
         assert_order(&graph, &[2, 4]);
+    }
+
+    #[test]
+    fn implied_classes_rank_after_authored_ones_and_by_their_origins() {
+        // Spec: AOUSD Core §10.4.2.4. `/A` references two targets that each
+        // inherit a class, implied beneath the root with the class nodes as
+        // origins; an inherit authored at `/A` has the root as its origin and
+        // outranks both (`PcpCompareSiblingNodeStrength`).
+        let implied = NodeArc {
+            implied: true,
+            ..arc(ArcKind::Inherits, 1, 0)
+        };
+        let mut graph = graph(vec![
+            (0, arc(ArcKind::References, 1, 0)),
+            (0, arc(ArcKind::References, 1, 1)),
+            (1, arc(ArcKind::Inherits, 1, 0)),
+            (2, arc(ArcKind::Inherits, 1, 0)),
+            (0, implied.clone()),
+            (
+                0,
+                NodeArc {
+                    layer_stack: LayerId(2),
+                    ..implied
+                },
+            ),
+            (
+                0,
+                NodeArc {
+                    layer_stack: LayerId(3),
+                    ..arc(ArcKind::Inherits, 1, 0)
+                },
+            ),
+        ]);
+        // The class of the second reference is implied first.
+        graph.set_origin(NodeId(5), NodeId(4));
+        graph.set_origin(NodeId(6), NodeId(3));
+        graph.rank();
+        assert_eq!(
+            graph.node(NodeId(5)).and_then(PrimNode::origin),
+            Some(NodeId(4))
+        );
+        assert_order(&graph, &[0, 7, 6, 5, 1, 3, 2, 4]);
     }
 
     #[test]

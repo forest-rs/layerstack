@@ -47,7 +47,8 @@
 //! Exact prim stacks, property stacks and values for sublayer stacks
 //! (including duplicate sublayers, cycles and time offsets), local opinions,
 //! references, payloads and inherits nested to any depth, ranked by walking
-//! each prim's composition graph ([`Stage::explain_prim_graph`]), internal
+//! each prim's composition graph ([`Stage::explain_prim_graph`]), inherits
+//! implied into every stronger layer stack on the way to the root, internal
 //! references and payloads authored anywhere in a layer stack, list-edited
 //! arcs and target paths, specializes ranked after every other arc wherever
 //! they are authored, and variant selections that do not depend on the
@@ -56,11 +57,13 @@
 //! # Not supported
 //!
 //! - Relocates ([`Cause::Relocates`]): diagnosed and ignored.
-//! - Nodes placed where OpenUSD's graph does not place them: implied class
-//!   arcs ([`Cause::ImpliedClasses`]) and implied specializes as nodes of
-//!   their own ([`Cause::SpecializesPlacement`]). These change resolved
-//!   values in several fixtures. Variant branches of different sets at one
-//!   site are not ordered by their sets ([`Cause::VariantSetOrder`]).
+//! - Nodes placed where OpenUSD's graph does not place them: implied
+//!   specializes as nodes of their own ([`Cause::SpecializesPlacement`]),
+//!   which changes resolved values in several fixtures. Variant branches of
+//!   different sets at one site are not ordered by their sets
+//!   ([`Cause::VariantSetOrder`]).
+//! - Implied classes in population and variant selection
+//!   ([`Cause::ImpliedClasses`]).
 //! - One site per arc path ([`Cause::CollapsedNodes`]).
 //! - Ancestral arcs of subroot arc targets ([`Cause::AncestralArcs`]),
 //!   some nested variant specs ([`Cause::VariantSpecs`]), conflicting
@@ -492,9 +495,10 @@ enum Cause {
     /// are implied onto each stronger layer stack and ranked with that
     /// stack's node (AOUSD Core §10.4.2.4; `pxr/usd/pcp/primIndex.cpp`,
     /// `_EvalImpliedClasses`).
-    /// Layerstack implies a class one reference or payload up only, beside
-    /// the arc whose target authors it, so an implied class sorts after the
-    /// sites between that arc and the layer stack it belongs to.
+    /// Layerstack implies inherits that way, but population does not follow
+    /// implied classes to their namespace children, and the variant
+    /// selections of an arc's target are resolved before the classes
+    /// implied across that arc are known.
     ImpliedClasses,
     /// Variant branches of different variant sets hosted at one site rank
     /// as one node, their opinions interleaving by layer and spec path,
@@ -579,24 +583,6 @@ const SKIPPED: &[(&str, &str)] = &[
 /// Every fixture that does not match the oracle exactly.
 const KNOWN: &[Known] = &[
     Known {
-        fixture: "BasicInstancing_root",
-        causes: &[C::ImpliedClasses],
-        prims: 3,
-        props: 3,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "implied `root.usd /_class_Prop` ranks after `set.usd /Set/InstancedProp`, and `prop.usd /_class_Prop` before `prop.usd /Prop`",
-    },
-    Known {
-        fixture: "BasicLocalAndGlobalClassCombination_root",
-        causes: &[C::ImpliedClasses],
-        prims: 4,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "implied `root.usd /Model_1/_class_Nested` ranks after the reference target `model.usd /Model/Instance`",
-    },
-    Known {
         fixture: "BasicNestedPayload_root",
         causes: &[C::CollapsedNodes],
         prims: 2,
@@ -662,11 +648,11 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "BasicSpecializesAndInherits_root",
         causes: &[C::SpecializesPlacement],
-        prims: 3,
+        prims: 2,
         props: 0,
         values: 0,
         diffs: &[D::Order],
-        reason: "`/Instance_2` ranks the implied `root.usd /Inherits_2` before `root.usd /Specializes_2`, the implied specializes it is implied under",
+        reason: "the implied specializes `root.usd /Specializes_2` and the class it inherits rank with the specializes node they are implied from, so `/Instance_2` and `/Model/Looks/Brass` interleave the root's class hierarchy with the referenced one",
     },
     Known {
         fixture: "ElidedAncestralRelocates_root",
@@ -823,12 +809,12 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "SpecializesAndAncestralArcs4_root",
-        causes: &[C::ImpliedClasses],
-        prims: 2,
+        causes: &[C::AncestralArcs],
+        prims: 1,
         props: 0,
         values: 0,
-        diffs: &[D::MissingSite, D::Order],
-        reason: "the inherit of `ref.usd /PR/Child` is not implied onto `/Parent/Sibling` with the root's inherits, so `/Parent/Child` ranks `/PI/Child` before `/Parent/Sibling`, and `/Parent2/Child` misses `/PS/Sibling` and `/PSI/Sibling`",
+        diffs: &[D::MissingSite],
+        reason: "`/Parent2/Child` misses `/PS/Sibling` and `/PSI/Sibling`, the ancestral specializes of the implied class `/Parent2/Sibling`",
     },
     Known {
         fixture: "SpecializesAndAncestralArcs_root",
@@ -959,7 +945,7 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "TrickyLocalClassHierarchyWithRelocates_root",
         causes: &[C::Relocates],
-        prims: 8,
+        prims: 6,
         props: 0,
         values: 0,
         diffs: &[D::MissingPrim, D::MissingSite],
@@ -1029,40 +1015,13 @@ const KNOWN: &[Known] = &[
         reason: "ignores `</CharRig/Rig/SubRig/Anim/AnimScope>` -> `</CharRig/Anim/AnimScope>` authored in `rig.usd`",
     },
     Known {
-        fixture: "TrickyNestedClasses2_root",
-        causes: &[C::ImpliedClasses],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "`.../SimPatchWeights/Patch0` ranks the implied `root.usd .../PatchWeightsClass/PatchClass` before `root.usd .../SimPatchWeights/PatchClass`",
-    },
-    Known {
-        fixture: "TrickyNestedClasses3_root",
-        causes: &[C::ImpliedClasses],
-        prims: 4,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "implied `root.usd /Rig/_class_SubRig` ranks before `root.usd /Rig/SymRig/SubRig1`, the site it is implied for",
-    },
-    Known {
         fixture: "TrickyNestedClasses4_root",
         causes: &[C::AncestralArcs, C::ImpliedClasses],
         prims: 3,
         props: 0,
         values: 0,
         diffs: &[D::MissingPrim, D::MissingSite],
-        reason: "local classes nested inside inherited classes miss their ancestral class sites",
-    },
-    Known {
-        fixture: "TrickyNestedClasses_root",
-        causes: &[C::ImpliedClasses],
-        prims: 3,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "implied `root.usd .../_Class_FingerRig` ranks after `HandsRig.usd .../IndexRig`",
+        reason: "`/Rig/_Class_ToesRig/ThumbToeLOCALRig` misses the ancestral sites of its subroot class, and population misses the namespace children of the classes implied onto `/Rig/SymToesRig` and `/Rig/LToesRig`",
     },
     Known {
         fixture: "TrickyRelocatedTargetInVariant_root",

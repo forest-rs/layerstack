@@ -1362,9 +1362,24 @@ impl<'a> LowerCtx<'a> {
 
     // ── Primitive helpers ──────────────────────────────────────────
 
-    fn lower_asset_ref(&self, node: SyntaxNode<'_>) -> &'a str {
+    /// The path of an asset reference, without its `@` or `@@@` delimiters.
+    ///
+    /// Spec: AOUSD Core §16.2.9; OpenUSD's `Sdf_EvalAssetPath`
+    /// (`pxr/usd/sdf/parserHelpers.cpp`), which strips three `@` from each
+    /// end of a triple-delimited path (so one or two further `@` before the
+    /// closing three stay in the path) and replaces `\@@@` with `@@@`.
+    fn lower_asset_ref(&mut self, node: SyntaxNode<'_>) -> &'a str {
         let full = node.span().text(self.source);
-        if full.starts_with('@') && full.ends_with('@') && full.len() >= 2 {
+        if full.len() >= 6 && full.starts_with("@@@") && full.ends_with("@@@") {
+            let path = &full[3..full.len() - 3];
+            if path.contains("\\@@@") {
+                self.error(
+                    node.span(),
+                    "unsupported: the `\\@@@` escape in an asset path is not evaluated",
+                );
+            }
+            path
+        } else if full.len() >= 2 && full.starts_with('@') && full.ends_with('@') {
             &full[1..full.len() - 1]
         } else {
             full
@@ -1380,7 +1395,7 @@ impl<'a> LowerCtx<'a> {
         }
     }
 
-    fn find_asset_ref(&self, node: SyntaxNode<'_>) -> &'a str {
+    fn find_asset_ref(&mut self, node: SyntaxNode<'_>) -> &'a str {
         for child in node.children_no_trivia() {
             if child.kind() == SyntaxKind::AssetRef {
                 return self.lower_asset_ref(child);
@@ -2432,6 +2447,29 @@ def Scope \"root\" {
     fn a_minus_without_a_number_is_reported() {
         let cst = parse_cst("#usda 1.0\ndef \"P\" {\n    double x = -nan\n}\n");
         assert_eq!(cst.diagnostics.len(), 1, "{:?}", cst.diagnostics);
+    }
+
+    #[test]
+    fn triple_delimited_asset_paths() {
+        let src = "#usda 1.0\ndef \"P\" {\n    asset a = @@@x@y.png@@@\n    asset b = \
+                   @@@a@@@@@\n    asset c = @@\n}\n";
+        let r = parse(src);
+        assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+        let assets: vec::Vec<_> = r.layer.prims[0]
+            .children
+            .iter()
+            .map(|child| match child {
+                PrimChild::Attribute(a) => match a.default {
+                    Some(Value::Asset(path)) => path,
+                    _ => panic!("expected an asset"),
+                },
+                _ => panic!("expected attributes"),
+            })
+            .collect();
+        assert_eq!(assets, ["x@y.png", "a@@", ""]);
+
+        let r = parse("#usda 1.0\ndef \"P\" {\n    asset a = @@@x\\@@@y@@@\n}\n");
+        assert_eq!(r.diagnostics.len(), 1, "{:?}", r.diagnostics);
     }
 
     #[test]

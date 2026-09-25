@@ -640,7 +640,7 @@ impl<'a> Parser<'a> {
 
         // Optional asset ref.
         self.eat_trivia();
-        if self.peek() == Some(TokenKind::At) {
+        if self.peek() == Some(TokenKind::AssetPath) {
             self.parse_asset_ref();
         }
 
@@ -1313,7 +1313,7 @@ impl<'a> Parser<'a> {
             ) => {
                 self.bump();
             }
-            Some(TokenKind::At) => {
+            Some(TokenKind::AssetPath) => {
                 self.parse_asset_ref();
             }
             Some(TokenKind::LeftAngle) => {
@@ -1655,23 +1655,18 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Parses an asset reference (`@...@`) into an `AssetRef` node.
+    /// Parses an asset reference (`@...@` or `@@@...@@@`) into an `AssetRef`
+    /// node.
     fn parse_asset_ref(&mut self) {
         self.eat_trivia();
         let start = self.current_span().start;
         self.builder.start_node(SyntaxKind::AssetRef, start);
 
-        if self.peek() == Some(TokenKind::At) {
-            self.bump(); // opening @
-        }
-
-        // Consume everything until closing @.
-        while let Some(tok) = self.current() {
-            if tok.kind == TokenKind::At {
-                self.bump(); // closing @
-                break;
-            }
+        if self.peek() == Some(TokenKind::AssetPath) {
             self.bump();
+        } else {
+            let span = self.current_span();
+            self.error(span, "expected an asset path");
         }
 
         let end = self.current_span().start;

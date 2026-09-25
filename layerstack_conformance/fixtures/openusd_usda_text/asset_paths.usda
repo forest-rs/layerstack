@@ -1,0 +1,19 @@
+#usda 1.0
+(
+    subLayers = [
+        @@@./sub@1.usda@@@
+    ]
+)
+
+def "Assets" (
+    prepend references = @@@./ref@2.usda@@@</Target>
+)
+{
+    asset[] array = [@@@x@y.png@@@, @plain.png@]
+    asset at = @@@tex@1001.png@@@
+    asset fragment = @a.usdz[b#c.png]@
+    asset quotes = @it's "q".png@
+    asset trailingAt = @@@a@@@@
+    asset url = @http://host/dir/a b.png@
+}
+

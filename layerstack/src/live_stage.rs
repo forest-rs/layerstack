@@ -1357,6 +1357,100 @@ mod tests {
         assert!(live.recompose(&mut store).is_empty());
     }
 
+    /// A prim authored in both branches of a variant set has one spec per
+    /// branch (`/Model{lod=high}Geom` and `/Model{lod=low}Geom`). Editing the
+    /// selected branch's spec, reported by its namespace path, recomposes
+    /// `/Model/Geom` alone and matches a fresh composition; editing the
+    /// unselected branch's spec changes nothing.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs contain prim specs),
+    /// §10.3.2.5 (only the selected variant contributes).
+    #[test]
+    fn source_edit_inside_variant_branch_recomposes_branch_child() {
+        use crate::{VariantSetSpec, VariantSpec, spec_path::VariantSelectionSite};
+
+        let mut store = InMemoryStore::default();
+        let field_x = store.tokens.intern("x");
+        let lod = store.tokens.intern("lod");
+        let high = store.tokens.intern("high");
+        let low = store.tokens.intern("low");
+        let geom_tok = store.tokens.intern("Geom");
+        let model = p(&mut store, "/Model");
+        let geom = p(&mut store, "/Model/Geom");
+        let other = p(&mut store, "/Other");
+        let site = |variant| VariantSelectionSite {
+            host_path: model,
+            set: lod,
+            variant,
+        };
+
+        let mut layer = Layer::new(LayerId(1));
+        let mut model_spec = PrimSpec::def();
+        let mut set = VariantSetSpec::default();
+        for variant in [high, low] {
+            set.variants.insert(
+                variant,
+                VariantSpec {
+                    authored_children: vec![geom_tok],
+                    ..VariantSpec::default()
+                },
+            );
+        }
+        model_spec.variant_sets.insert(lod, set);
+        model_spec.variant_set_order.push(lod);
+        model_spec.variant_selections.insert(lod, high);
+        layer.insert_prim(model, model_spec);
+        for (variant, value) in [(high, 1_i64), (low, 2_i64)] {
+            layer.insert_prim(
+                geom,
+                PrimSpec {
+                    outer_variant_sites: vec![site(variant)],
+                    ..PrimSpec::def().with_property(field_x, attr(value))
+                },
+            );
+        }
+        layer.insert_prim(other, PrimSpec::def().with_property(field_x, attr(5)));
+        store.insert_layer(layer);
+
+        let options = StageOptions {
+            with_provenance: true,
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+        let x_of = |live: &LiveStage| {
+            live.stage()
+                .resolve_field_path(PropertyPath::new(geom, field_x))
+                .unwrap()
+                .value
+        };
+        assert_eq!(x_of(&live), Value::Int64(1));
+        assert_eq!(live.composed_prims_for_source(LayerId(1), geom), [geom]);
+
+        let edit = |store: &mut InMemoryStore, variant, value: i64| {
+            let layer = store.layers.get_mut(&LayerId(1)).unwrap();
+            let spec = layer
+                .prims
+                .get_mut(&geom)
+                .into_iter()
+                .chain(layer.variant_prims.get_mut(&geom).into_iter().flatten())
+                .find(|spec| spec.outer_variant_sites == [site(variant)])
+                .unwrap();
+            spec.set_property(field_x, attr(value));
+        };
+
+        edit(&mut store, high, 10);
+        live.notify_layer_prim_edits(LayerId(1), &[geom]);
+        assert_eq!(live.recompose(&mut store), [geom]);
+        assert_eq!(x_of(&live), Value::Int64(10));
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+
+        edit(&mut store, low, 20);
+        live.notify_layer_prim_edits(LayerId(1), &[geom]);
+        assert_eq!(live.recompose(&mut store), [geom]);
+        assert_eq!(x_of(&live), Value::Int64(10), "`low` is not selected");
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+    }
+
     /// Regression: recomposing one sibling used to replace the root's child
     /// list with the masked composition's partial list, dropping `/B` from
     /// traversal while `has_prim(/B)` stayed true.

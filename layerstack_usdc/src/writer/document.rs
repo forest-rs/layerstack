@@ -276,6 +276,7 @@ fn natural(value: &UsdaValue) -> Value {
         U::Int2Array(v) => Value::Vec2iArray(v.clone()),
         U::Int3Array(v) => Value::Vec3iArray(v.clone()),
         U::Int4Array(v) => Value::Vec4iArray(v.clone()),
+        U::QuathArray(v) => Value::QuathArray(v.clone()),
         U::TokenListOp(op) => Value::TokenListOp(list_op(op)),
         U::Block => Value::Block,
         U::Dictionary(entries) => Value::Dictionary(
@@ -1202,6 +1203,49 @@ def Xform "A" (
         assert!(read.diagnostics.is_empty(), "{:?}", read.diagnostics);
         let again = layerstack_usda::save::save_usda(&read.layer, &tokens, &paths).unwrap();
         assert_eq!(again, usda, "USDC and USDA carry the same layer");
+    }
+
+    /// A `quath[]` default reads back as the same quaternions from the USDA
+    /// text and from the USDC: real part first in text, `[i, j, k, r]` in
+    /// both layers.
+    #[test]
+    fn quath_arrays_agree_between_usda_and_usdc() {
+        let quats = vec![[0, 0, 0x39a8, 0x39a8], [0x3c00, 0, 0, 0], [0, 0, 0, 0x3c00]];
+        let mut root = Prim::def("PointInstancer", "Root");
+        root.push_property(Attribute::new(
+            "orientations",
+            "quath[]",
+            UsdaValue::QuathArray(quats.clone()),
+        ));
+        let doc = Document {
+            prims: vec![root],
+            ..Document::new()
+        };
+        let (layer, mut tokens, mut paths) = import_usda(&doc.to_usda().unwrap());
+        let mut usdc_tokens = TokenInterner::default();
+        let mut usdc_paths = PathInterner::default();
+        let read = crate::read_usdc(
+            &write_document(&doc).unwrap(),
+            layerstack::LayerId(1),
+            &mut usdc_tokens,
+            &mut usdc_paths,
+            &mut NoAssets,
+        )
+        .unwrap();
+        assert!(read.diagnostics.is_empty(), "{:?}", read.diagnostics);
+        let expected = Some(layerstack::Value::Array(
+            quats.iter().map(|&q| layerstack::Value::Quath(q)).collect(),
+        ));
+        let path =
+            layerstack::PropertyPath::parse("/Root.orientations", &mut tokens, &mut paths).unwrap();
+        assert_eq!(layer.property(path).unwrap().default, expected, "USDA");
+        let path = layerstack::PropertyPath::parse(
+            "/Root.orientations",
+            &mut usdc_tokens,
+            &mut usdc_paths,
+        )
+        .unwrap();
+        assert_eq!(read.layer.property(path).unwrap().default, expected, "USDC");
     }
 
     #[test]

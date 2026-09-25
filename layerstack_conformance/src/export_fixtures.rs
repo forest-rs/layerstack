@@ -232,6 +232,13 @@ fn types() -> Document {
         Value::Double3Array(vec![[1.0, 2.0, 3.0]]),
     );
     add("i2a", "int2[]", Value::Int2Array(vec![[1, 2]]));
+    // `[i, j, k, r]` bits: a 90° turn about Z, and a component (the half
+    // nearest 1/3) with no short decimal spelling.
+    add(
+        "qa",
+        "quath[]",
+        Value::QuathArray(vec![[0, 0, 0x39a8, 0x39a8], [0x3555, 0, 0, 0x3c00]]),
+    );
     for (name, ty) in [
         ("h", "half"),
         ("q", "quatf"),

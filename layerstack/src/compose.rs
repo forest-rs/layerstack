@@ -2243,6 +2243,8 @@ fn enclosing_variant_selections(
 ///
 /// Each arc comes with the variant branches of the prim that author it,
 /// outermost first (see [`ArcAuthoring::sites`]); its node goes beneath theirs.
+/// A reference or payload carries the offset of the layer that authors it
+/// (see [`ArcAuthoring::authored_reference`]).
 #[derive(Debug, Default)]
 struct AdmittedArcs {
     inherits: Vec<(PathId, Vec<VariantSelectionSite>)>,
@@ -2380,25 +2382,18 @@ fn arcs_admitted_by(
         references: references
             .into_iter()
             .map(|item| {
-                let sites = authoring.reference_sites(
-                    &item,
+                authoring.authored_reference(
+                    item,
                     |spec| &spec.references,
                     |b| &b.references,
                     anchor,
-                );
-                (item, sites)
+                )
             })
             .collect(),
         payloads: payloads
             .into_iter()
             .map(|item| {
-                let sites = authoring.reference_sites(
-                    &item,
-                    |spec| &spec.payloads,
-                    |b| &b.payloads,
-                    anchor,
-                );
-                (item, sites)
+                authoring.authored_reference(item, |spec| &spec.payloads, |b| &b.payloads, anchor)
             })
             .collect(),
     }
@@ -2813,15 +2808,15 @@ fn add_reference_opinions(
                     layer: reference.layer,
                 });
             }
-            let sites = ArcAuthoring {
+            let (reference, sites) = ArcAuthoring {
                 store,
                 stack: local_stack,
                 prim: dest_root,
                 selections: &selections,
                 scope: SelectionScope::Stack,
             }
-            .reference_sites(
-                &reference,
+            .authored_reference(
+                reference,
                 |spec| &spec.references,
                 |branch| &branch.references,
                 anchor,
@@ -3143,7 +3138,9 @@ impl<'a> ArcParent<'a> {
     /// The reference or payload `arc`, authored at the site the arcs
     /// `steps` reach, with its layer offset composed beneath the offset that
     /// site's layers are read with: the offsets and scales of every arc
-    /// above it apply to its opinions, each once.
+    /// above it apply to its opinions, each once. `arc` already carries the
+    /// offset of the layer that authors it within that site's layer stack
+    /// (see [`ArcAuthoring::authored_reference`]).
     ///
     /// Spec: AOUSD Core §12.3.2.1 (layer offsets compose across arcs);
     /// OpenUSD composes them through the nodes' map expressions
@@ -5300,15 +5297,15 @@ fn add_payload_opinions(
                     layer: payload.layer,
                 });
             }
-            let sites = ArcAuthoring {
+            let (payload, sites) = ArcAuthoring {
                 store,
                 stack: local_stack,
                 prim: dest_root,
                 selections: &selections,
                 scope: SelectionScope::Stack,
             }
-            .reference_sites(
-                &payload,
+            .authored_reference(
+                payload,
                 |spec| &spec.payloads,
                 |branch| &branch.payloads,
                 anchor,

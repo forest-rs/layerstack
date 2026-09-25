@@ -11,7 +11,8 @@
 //!   written expected layer (both saved again give the same text);
 //! - its USDC reads back as the same layer as its USDA;
 //! - saving is stable: the saved USDA, imported and saved again, is
-//!   unchanged.
+//!   unchanged;
+//! - both saved files read back as the saved layer, spec by spec.
 //!
 //! A case about composition, saved in either format and composed with its
 //! assets, composes as its expected layer does.
@@ -19,7 +20,11 @@
 //! Every `save_corpus::unsupported_cases` encoding is rejected by both
 //! formats with the same error, naming the source path.
 
-use layerstack::doc::{Layer, LayerId, SublayerEntry};
+use std::collections::BTreeMap;
+use std::fmt::Write as _;
+
+use layerstack::doc::{Layer, LayerId, PrimSpec, Reference, SublayerEntry, VariantSpec};
+use layerstack::listop::ListOp;
 use layerstack::{InMemoryStore, Stage, StageOptions};
 use layerstack_conformance::save_corpus::{
     AnyAsset, Imported, MISSING, Root, cases, composed, unsupported_cases,
@@ -208,6 +213,182 @@ fn corpus_edits_change_what_they_edit() {
         let unedited = Imported::usda(case.source).save_usda().unwrap();
         let expected = Imported::usda(case.expected).save_usda().unwrap();
         assert_ne!(unedited, expected, "{}: the edit is visible", case.name);
+    }
+}
+
+/// Imports USDA text into `layer`'s interners, so token and path ids
+/// compare with its own.
+fn reimport_usda(layer: &mut Imported, text: &str) -> Layer {
+    let parsed = layerstack_usda::parser::parse(text);
+    assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+    let result = layerstack_usda::emit::emit(
+        &parsed.layer,
+        LayerId(1),
+        &mut layer.tokens,
+        &mut layer.paths,
+        &mut AnyAsset::default(),
+    );
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    result.layer
+}
+
+/// Imports a USDC file into `layer`'s interners.
+fn reimport_usdc(layer: &mut Imported, bytes: &[u8]) -> Layer {
+    let result = layerstack_usdc::read_usdc(
+        bytes,
+        LayerId(1),
+        &mut layer.tokens,
+        &mut layer.paths,
+        &mut AnyAsset::default(),
+    )
+    .expect("USDC reads");
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    result.layer
+}
+
+/// An arc list op by what was authored: the asset path, target and
+/// offset of each arc, not the layer id its resolution assigned.
+fn arc_list(op: &ListOp<Reference>) -> String {
+    let show = |items: &[Reference]| -> Vec<String> {
+        items
+            .iter()
+            .map(|r| {
+                format!(
+                    "{:?} {:?} {:?} unresolved={}",
+                    r.asset,
+                    r.target,
+                    r.layer_offset,
+                    r.is_unresolved()
+                )
+            })
+            .collect()
+    };
+    format!(
+        "explicit {:?} delete {:?} prepend {:?} append {:?}",
+        op.explicit.as_deref().map(show),
+        show(&op.delete),
+        show(&op.prepend),
+        show(&op.append)
+    )
+}
+
+/// A variant spec's content, with its selections sorted.
+fn variant_structure(variant: &VariantSpec) -> String {
+    let VariantSpec {
+        fields,
+        properties,
+        authored_children,
+        references,
+        inherits,
+        specializes,
+        payloads,
+        variant_selections,
+        outer_variant_sites,
+        property_order,
+    } = variant;
+    let selections: BTreeMap<_, _> = variant_selections.iter().collect();
+    format!(
+        "fields {fields:?}\n      properties {properties:?}\n      children \
+         {authored_children:?}\n      references {}\n      payloads {}\n      inherits \
+         {inherits:?}\n      specializes {specializes:?}\n      selections {selections:?}\n      \
+         outer {outer_variant_sites:?}\n      property order {property_order:?}",
+        arc_list(references),
+        arc_list(payloads),
+    )
+}
+
+/// A layer's authored content as canonical text, for layers whose ids come
+/// from the same interners: every prim spec by path and branch context,
+/// each field in its authored order, maps sorted, and arcs by what was
+/// authored.
+fn structure(layer: &Layer) -> String {
+    let Layer {
+        id: _,
+        sublayers,
+        default_prim,
+        metadata,
+        prims,
+        variant_prims,
+    } = layer;
+    let sublayers: Vec<_> = sublayers
+        .iter()
+        .map(|s| (s.asset.clone(), s.offset, s.is_unresolved()))
+        .collect();
+    let mut out =
+        format!("sublayers {sublayers:?}\ndefault prim {default_prim:?}\nmetadata {metadata:?}\n");
+    let specs = prims.iter().chain(
+        variant_prims
+            .iter()
+            .flat_map(|(path, specs)| specs.iter().map(move |spec| (path, spec))),
+    );
+    let mut sorted = BTreeMap::new();
+    for (path, spec) in specs {
+        let PrimSpec {
+            specifier,
+            type_name,
+            fields,
+            properties,
+            property_order,
+            outer_variant_sites,
+            authored_children,
+            variant_selections,
+            variant_sets,
+            variant_set_order,
+            references,
+            inherits,
+            specializes,
+            payloads,
+            prim_order,
+            instanceable,
+            active,
+        } = spec;
+        let selections: BTreeMap<_, _> = variant_selections.iter().collect();
+        let mut text = format!(
+            "  {specifier:?} {type_name:?}\n  fields {fields:?}\n  properties {properties:?}\n  \
+             property order {property_order:?}\n  children {authored_children:?}\n  prim order \
+             {prim_order:?}\n  selections {selections:?}\n  variant sets {variant_set_order:?}\n  \
+             references {}\n  payloads {}\n  inherits {inherits:?}\n  specializes \
+             {specializes:?}\n  instanceable {instanceable:?} active {active:?}\n",
+            arc_list(references),
+            arc_list(payloads),
+        );
+        let variants: BTreeMap<_, _> = variant_sets
+            .iter()
+            .flat_map(|(set, spec)| spec.variants.iter().map(move |(name, v)| ((set, name), v)))
+            .collect();
+        for ((set, name), variant) in variants {
+            let _ = writeln!(
+                text,
+                "  variant {set:?}={name:?}\n      {}",
+                variant_structure(variant)
+            );
+        }
+        sorted.insert((*path, outer_variant_sites.clone()), text);
+    }
+    for ((path, sites), text) in sorted {
+        let _ = write!(out, "prim {path:?} in {sites:?}\n{text}");
+    }
+    out
+}
+
+/// Every corpus layer, edited, saves as USDA and as USDC that read back as
+/// the same layer, compared spec by spec: variant sets, branch prim specs
+/// and nested sets included.
+///
+/// Spec: AOUSD Core §7 (scene description), §16.2 (USDA), §16.3 (crate).
+#[test]
+fn saved_layers_read_back_as_the_layer() {
+    for case in cases() {
+        let name = case.name;
+        let mut layer = Imported::usda(case.source);
+        (case.edit)(&mut layer);
+        let want = structure(&layer.layer);
+        let usda = layer.save_usda().unwrap();
+        let usdc = layer.save_usdc().unwrap();
+        let from_usda = reimport_usda(&mut layer, &usda);
+        assert_eq!(structure(&from_usda), want, "{name}: layer → USDA → layer");
+        let from_usdc = reimport_usdc(&mut layer, &usdc);
+        assert_eq!(structure(&from_usdc), want, "{name}: layer → USDC → layer");
     }
 }
 

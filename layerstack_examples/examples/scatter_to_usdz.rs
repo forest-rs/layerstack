@@ -13,7 +13,10 @@
 //! their geometry.
 //!
 //! The package uses the `ARKit` / AR Quick Look profile (a single USDC root
-//! layer) unless `generic` is given, which writes a USDA root layer.
+//! layer) unless `generic` is given, which writes a USDA root layer. Apple's
+//! viewers do not draw `PointInstancer` instances, so the `ARKit` package
+//! writes each instance as a reference to its prototype instead; the
+//! generic one keeps the `PointInstancer`.
 //!
 //! ```sh
 //! cargo run -p layerstack_examples --example scatter_to_usdz -- field.usdz [arkit|generic]

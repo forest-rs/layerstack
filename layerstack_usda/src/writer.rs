@@ -1900,9 +1900,7 @@ def Xform "Root"
                     false,
                     Some(vec!["/Root/Mat", "/Root/Body.points"])
                 ),
-                // The AST records `= None` like a bare declaration; the
-                // golden text pins the written form.
-                ("exedra:blocked", false, None),
+                ("exedra:blocked", false, Some(vec![])),
             ],
             "relationships"
         );

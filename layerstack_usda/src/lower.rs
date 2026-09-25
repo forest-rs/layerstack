@@ -640,6 +640,12 @@ impl<'a> LowerCtx<'a> {
                 SyntaxKind::PathRef => {
                     targets = Some(vec![self.lower_path_ref(self.node_from(tree, id))]);
                 }
+                // `rel r = None` authors an explicitly empty target list,
+                // which blocks weaker targets; it is not a bare declaration
+                // (AOUSD Core §7.6.5.1.1, §16.2.16.9).
+                SyntaxKind::Ident if self.text(self.node_from(tree, id)) == "None" => {
+                    targets = Some(Vec::new());
+                }
                 SyntaxKind::PrimMetadata => {
                     metadata = self.lower_attribute_metadata(self.node_from(tree, id));
                 }
@@ -1820,6 +1826,32 @@ def \"A\" {
         };
         let targets = rel.targets.as_ref().unwrap();
         assert_eq!(targets, &["/B", "/C"]);
+    }
+
+    /// A bare declaration authors no targets; `= None` and `= []` author an
+    /// explicitly empty list, which blocks weaker targets.
+    #[test]
+    fn lower_relationship_explicit_empty_targets() {
+        let src = "#usda 1.0\ndef \"A\" {\n    rel a\n    rel b = None\n    rel c = []\n    rel d = None (\n        doc = \"d\"\n    )\n}\n";
+        let r = parse(src);
+        assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+        let targets: vec::Vec<_> = r.layer.prims[0]
+            .children
+            .iter()
+            .map(|c| match c {
+                PrimChild::Relationship(r) => (r.name, r.targets.clone()),
+                other => panic!("expected Relationship, got {other:?}"),
+            })
+            .collect();
+        assert_eq!(
+            targets,
+            [
+                ("a", None),
+                ("b", Some(vec![])),
+                ("c", Some(vec![])),
+                ("d", Some(vec![])),
+            ]
+        );
     }
 
     #[test]

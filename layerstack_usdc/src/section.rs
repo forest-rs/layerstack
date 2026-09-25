@@ -15,6 +15,7 @@ use alloc::vec::Vec;
 use crate::compression::{lz4_decompress, read_compressed_ints};
 use crate::error::UsdcError;
 use crate::toc::{SectionEntry, Toc};
+use crate::value_rep::DecodeBudget;
 use crate::value_type::SpecForm;
 use crate::version::CrateVersion;
 
@@ -76,43 +77,48 @@ pub struct CrateSections {
 ///
 /// Sections that are absent from the TOC produce empty vectors. `version` is
 /// the header's format version and is recorded in the result.
+///
+/// Every table entry, every 16 bytes of decompressed data and of each path
+/// built from the tokens is charged to `budget` before it is allocated (see
+/// [`DecodeBudget`]).
 pub fn parse_sections(
     data: &[u8],
     toc: &Toc,
     version: CrateVersion,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateSections, UsdcError> {
     let tokens = if let Some(entry) = toc.tokens {
-        parse_tokens(data, &entry)?
+        parse_tokens(data, &entry, budget)?
     } else {
         vec![]
     };
 
     let strings = if let Some(entry) = toc.strings {
-        parse_strings(data, &entry)?
+        parse_strings(data, &entry, budget)?
     } else {
         vec![]
     };
 
     let fields = if let Some(entry) = toc.fields {
-        parse_fields(data, &entry)?
+        parse_fields(data, &entry, budget)?
     } else {
         vec![]
     };
 
     let fieldsets = if let Some(entry) = toc.fieldsets {
-        parse_fieldsets(data, &entry)?
+        parse_fieldsets(data, &entry, budget)?
     } else {
         vec![]
     };
 
     let paths = if let Some(entry) = toc.paths {
-        parse_paths(data, &entry, &tokens)?
+        parse_paths(data, &entry, &tokens, budget)?
     } else {
         vec![]
     };
 
     let specs = if let Some(entry) = toc.specs {
-        parse_specs(data, &entry)?
+        parse_specs(data, &entry, budget)?
     } else {
         vec![]
     };
@@ -140,7 +146,11 @@ pub fn parse_sections(
 /// strings.
 ///
 /// Spec: AOUSD Core §16.3.5.
-fn parse_tokens(data: &[u8], entry: &SectionEntry) -> Result<Vec<String>, UsdcError> {
+fn parse_tokens(
+    data: &[u8],
+    entry: &SectionEntry,
+    budget: &mut DecodeBudget,
+) -> Result<Vec<String>, UsdcError> {
     let section = section_slice(data, entry)?;
     if section.len() < 24 {
         return Err(UsdcError::UnexpectedEof {
@@ -168,6 +178,10 @@ fn parse_tokens(data: &[u8], entry: &SectionEntry) -> Result<Vec<String>, UsdcEr
     let usz = usize::try_from(uncompressed_size).map_err(|_| UsdcError::DecompressionFailed {
         context: "TOKENS size exceeds the address space",
     })?;
+    // The text is decompressed, then copied into one string per token.
+    budget.charge_text(usz)?;
+    budget.charge_text(usz)?;
+    budget.charge(num_tokens)?;
     let decompressed = lz4_decompress(compressed, usz)?;
 
     // Split on null bytes; the final null produces a trailing empty string.
@@ -204,7 +218,11 @@ fn parse_tokens(data: &[u8], entry: &SectionEntry) -> Result<Vec<String>, UsdcEr
 /// Format: `num_strings: u64`, then `num_strings × u32` token indices.
 ///
 /// Spec: AOUSD Core §16.3.5.
-fn parse_strings(data: &[u8], entry: &SectionEntry) -> Result<Vec<u32>, UsdcError> {
+fn parse_strings(
+    data: &[u8],
+    entry: &SectionEntry,
+    budget: &mut DecodeBudget,
+) -> Result<Vec<u32>, UsdcError> {
     let section = section_slice(data, entry)?;
     if section.len() < 8 {
         return Err(UsdcError::UnexpectedEof {
@@ -224,6 +242,7 @@ fn parse_strings(data: &[u8], entry: &SectionEntry) -> Result<Vec<u32>, UsdcErro
         });
     }
 
+    budget.charge(num_strings)?;
     Ok(indices
         .as_chunks::<4>()
         .0
@@ -244,7 +263,11 @@ fn parse_strings(data: &[u8], entry: &SectionEntry) -> Result<Vec<u32>, UsdcErro
 /// value reps (8 bytes each).
 ///
 /// Spec: AOUSD Core §16.3.6.
-fn parse_fields(data: &[u8], entry: &SectionEntry) -> Result<Vec<FieldDef>, UsdcError> {
+fn parse_fields(
+    data: &[u8],
+    entry: &SectionEntry,
+    budget: &mut DecodeBudget,
+) -> Result<Vec<FieldDef>, UsdcError> {
     let section = section_slice(data, entry)?;
     if section.len() < 8 {
         return Err(UsdcError::UnexpectedEof {
@@ -261,7 +284,9 @@ fn parse_fields(data: &[u8], entry: &SectionEntry) -> Result<Vec<FieldDef>, Usdc
     )]
     let count = num_fields as usize;
 
-    // Read compressed token indices.
+    // Read compressed token indices. A unit per field covers its index, its
+    // 8-byte value rep and its `FieldDef`.
+    budget.charge(num_fields)?;
     let (indices_i64, indices_consumed) = read_compressed_ints(&section[8..], count, 4)?;
 
     // Read reps_size and LZ4-compressed value reps.
@@ -326,7 +351,11 @@ fn parse_fields(data: &[u8], entry: &SectionEntry) -> Result<Vec<FieldDef>, Usdc
 /// Negative values act as group delimiters.
 ///
 /// Spec: AOUSD Core §16.3.7.
-fn parse_fieldsets(data: &[u8], entry: &SectionEntry) -> Result<Vec<i32>, UsdcError> {
+fn parse_fieldsets(
+    data: &[u8],
+    entry: &SectionEntry,
+    budget: &mut DecodeBudget,
+) -> Result<Vec<i32>, UsdcError> {
     let section = section_slice(data, entry)?;
     if section.len() < 8 {
         return Err(UsdcError::UnexpectedEof {
@@ -343,6 +372,7 @@ fn parse_fieldsets(data: &[u8], entry: &SectionEntry) -> Result<Vec<i32>, UsdcEr
     )]
     let count = num as usize;
 
+    budget.charge(num)?;
     let (values, _consumed) = read_compressed_ints(&section[8..], count, 4)?;
 
     #[allow(
@@ -370,6 +400,7 @@ fn parse_paths(
     data: &[u8],
     entry: &SectionEntry,
     tokens: &[String],
+    budget: &mut DecodeBudget,
 ) -> Result<Vec<String>, UsdcError> {
     let section = section_slice(data, entry)?;
     if section.len() < 16 {
@@ -394,6 +425,8 @@ fn parse_paths(
     )]
     let n_encoded = num_encoded as usize;
 
+    // Three index arrays of `n_encoded` entries.
+    budget.charge(num_encoded.saturating_mul(3))?;
     let mut cursor = &section[16..];
     let (path_indices, c1) = read_compressed_ints(cursor, n_encoded, 4)?;
     cursor = &cursor[c1..];
@@ -409,6 +442,7 @@ fn parse_paths(
             message: "PATHS count exceeds the encoded paths",
         });
     }
+    budget.charge(num_paths)?;
     let mut paths = vec![String::new(); n_paths];
     build_paths(
         &path_indices,
@@ -416,6 +450,7 @@ fn parse_paths(
         &jumps,
         tokens,
         &mut paths,
+        budget,
     )?;
 
     Ok(paths)
@@ -431,12 +466,17 @@ fn parse_paths(
 /// (`jump >= 0` and `jump != -1`, specifically `jump == 0`), the loop
 /// still advances `start_index += 1` to process the next entry as a
 /// sibling under the same parent.
+///
+/// Each path is a full string, and paths share their prefixes and tokens,
+/// so a small table can describe paths far longer than the file: each path's
+/// length is charged to `budget` before it is built.
 fn build_paths(
     path_indices: &[i64],
     element_token_indices: &[i64],
     jumps: &[i64],
     tokens: &[String],
     paths: &mut [String],
+    budget: &mut DecodeBudget,
 ) -> Result<(), UsdcError> {
     if path_indices.is_empty() {
         return Ok(());
@@ -505,6 +545,7 @@ fn build_paths(
                 } else {
                     "/"
                 };
+                budget.charge_text(parent.len() + sep.len() + element.len())?;
                 let path = if parent == "/" {
                     alloc::format!("{sep}{element}")
                 } else {
@@ -560,7 +601,11 @@ fn build_paths(
 /// `path_indices`, `fieldset_indices`, `forms`.
 ///
 /// Spec: AOUSD Core §16.3.8.
-fn parse_specs(data: &[u8], entry: &SectionEntry) -> Result<Vec<SpecDef>, UsdcError> {
+fn parse_specs(
+    data: &[u8],
+    entry: &SectionEntry,
+    budget: &mut DecodeBudget,
+) -> Result<Vec<SpecDef>, UsdcError> {
     let section = section_slice(data, entry)?;
     if section.len() < 8 {
         return Err(UsdcError::UnexpectedEof {
@@ -577,6 +622,8 @@ fn parse_specs(data: &[u8], entry: &SectionEntry) -> Result<Vec<SpecDef>, UsdcEr
     )]
     let count = num_specs as usize;
 
+    // Three index arrays, and the specs.
+    budget.charge(num_specs.saturating_mul(4))?;
     let mut cursor = &section[8..];
     let (path_indices, c1) = read_compressed_ints(cursor, count, 4)?;
     cursor = &cursor[c1..];
@@ -662,6 +709,7 @@ mod tests {
             &jumps,
             &tokens,
             &mut paths,
+            &mut DecodeBudget::with_limit(u64::MAX),
         )
         .unwrap();
 
@@ -686,6 +734,7 @@ mod tests {
             &jumps,
             &tokens,
             &mut paths,
+            &mut DecodeBudget::with_limit(u64::MAX),
         )
         .unwrap();
 
@@ -714,6 +763,7 @@ mod tests {
             &jumps,
             &tokens,
             &mut paths,
+            &mut DecodeBudget::with_limit(u64::MAX),
         )
         .unwrap();
 
@@ -746,6 +796,7 @@ mod tests {
             &jumps,
             &tokens,
             &mut paths,
+            &mut DecodeBudget::with_limit(u64::MAX),
         )
         .unwrap();
 
@@ -762,12 +813,60 @@ mod tests {
         );
     }
 
+    /// A chain of prims named by one long token describes paths whose
+    /// total length grows with the square of the depth; each path's length
+    /// is charged before it is built.
+    #[test]
+    fn build_paths_charges_each_path_by_length() {
+        let depth = 64_usize;
+        let tokens = vec!["n".repeat(1024)];
+        let path_indices: Vec<i64> = (0..=depth as i64).collect();
+        let element_token_indices = vec![0_i64; depth + 1];
+        let mut jumps = vec![-1_i64; depth + 1];
+        jumps[depth] = -2; // the last prim is a leaf
+        let build = |budget: &mut DecodeBudget| {
+            let mut paths = vec![String::new(); depth + 1];
+            build_paths(
+                &path_indices,
+                &element_token_indices,
+                &jumps,
+                &tokens,
+                &mut paths,
+                budget,
+            )
+            .map(|()| paths)
+        };
+
+        let mut budget = DecodeBudget::with_limit(u64::MAX);
+        let paths = build(&mut budget).unwrap();
+        let total: usize = paths.iter().map(String::len).sum();
+        assert!(total > depth * depth * 1024 / 2, "{total}");
+        assert!(
+            budget.used() >= (total / 16 - depth) as u64,
+            "{}",
+            budget.used()
+        );
+
+        let limit = (total / 32) as u64;
+        assert_eq!(
+            build(&mut DecodeBudget::with_limit(limit)).err(),
+            Some(UsdcError::DecodeBudgetExceeded { limit })
+        );
+    }
+
     #[test]
     fn build_paths_rejects_corrupt_encodings() {
         let tokens = vec!["a".to_string(), "b".to_string()];
         let build = |indices: &[i64], elements: &[i64], jumps: &[i64]| {
             let mut paths = vec![String::new(); 3];
-            build_paths(indices, elements, jumps, &tokens, &mut paths)
+            build_paths(
+                indices,
+                elements,
+                jumps,
+                &tokens,
+                &mut paths,
+                &mut DecodeBudget::with_limit(u64::MAX),
+            )
         };
         // Path index out of range, and repeated.
         assert!(build(&[0, 3], &[0, 0], &[-1, -2]).is_err());
@@ -817,6 +916,7 @@ mod tests {
             &jumps,
             &tokens,
             &mut paths,
+            &mut DecodeBudget::with_limit(u64::MAX),
         )
         .unwrap();
 

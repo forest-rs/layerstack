@@ -61,6 +61,7 @@ use layerstack::path::PathInterner;
 
 pub use assemble::AssembleResult;
 pub use error::UsdcError;
+pub use value_rep::DecodeBudget;
 pub use version::CrateVersion;
 
 /// Reads a USDC binary file from a byte slice and produces a [`Layer`].
@@ -68,7 +69,8 @@ pub use version::CrateVersion;
 /// This is the main entry point for the crate. It runs the full pipeline:
 /// header → TOC → sections → value reps → assemble.
 ///
-/// `data` must contain the complete USDC file contents.
+/// `data` must contain the complete USDC file contents. Decoding is bounded
+/// by [`DecodeBudget::for_input`]; see [`read_usdc_within`].
 ///
 /// Spec: AOUSD Core §16.3.
 ///
@@ -107,8 +109,27 @@ pub fn read_usdc(
     paths: &mut PathInterner,
     resolver: &mut dyn AssetResolver,
 ) -> Result<AssembleResult, UsdcError> {
+    let mut budget = DecodeBudget::for_input(data.len());
+    read_usdc_within(data, layer_id, tokens, paths, resolver, &mut budget)
+}
+
+/// Reads a USDC binary file like [`read_usdc`], charging everything it
+/// materializes to `budget` instead of the default
+/// [`DecodeBudget::for_input`] budget.
+///
+/// A file can reference one value, name or path any number of times, and
+/// each reference would otherwise cost its own copy; the budget bounds the
+/// total. Exceeding it fails with [`UsdcError::DecodeBudgetExceeded`].
+pub fn read_usdc_within(
+    data: &[u8],
+    layer_id: LayerId,
+    tokens: &mut TokenInterner,
+    paths: &mut PathInterner,
+    resolver: &mut dyn AssetResolver,
+    budget: &mut DecodeBudget,
+) -> Result<AssembleResult, UsdcError> {
     let hdr = header::parse_header(data)?;
     let toc_sections = toc::parse_toc(data, hdr.toc_offset)?;
-    let sections = section::parse_sections(data, &toc_sections, hdr.crate_version())?;
-    assemble::assemble(data, &sections, layer_id, tokens, paths, resolver)
+    let sections = section::parse_sections(data, &toc_sections, hdr.crate_version(), budget)?;
+    assemble::assemble(data, &sections, layer_id, tokens, paths, resolver, budget)
 }

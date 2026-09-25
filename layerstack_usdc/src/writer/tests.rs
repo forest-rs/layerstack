@@ -30,7 +30,13 @@ impl Decoded {
     fn new(data: Vec<u8>) -> Self {
         let header = parse_header(&data).unwrap();
         let toc = parse_toc(&data, header.toc_offset).unwrap();
-        let sections = parse_sections(&data, &toc, header.crate_version()).unwrap();
+        let sections = parse_sections(
+            &data,
+            &toc,
+            header.crate_version(),
+            &mut crate::DecodeBudget::with_limit(u64::MAX),
+        )
+        .unwrap();
         Self { data, sections }
     }
 

@@ -226,7 +226,9 @@ pub fn crate_structure(data: &[u8]) -> Result<CrateStructure, layerstack_usdc::U
     use layerstack_usdc::value_rep::{RawValueRep, decode_value};
     let header = layerstack_usdc::header::parse_header(data)?;
     let toc = layerstack_usdc::toc::parse_toc(data, header.toc_offset)?;
-    let s = layerstack_usdc::section::parse_sections(data, &toc, header.crate_version())?;
+    let mut budget = layerstack_usdc::DecodeBudget::for_input(data.len());
+    let s =
+        layerstack_usdc::section::parse_sections(data, &toc, header.crate_version(), &mut budget)?;
     let mut specs = BTreeMap::new();
     for spec in &s.specs {
         let mut fields = Vec::new();

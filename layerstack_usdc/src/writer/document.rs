@@ -570,8 +570,13 @@ mod tests {
         assert_eq!(bytes, write_document(&mesh_doc()).unwrap(), "deterministic");
         let header = crate::header::parse_header(&bytes).unwrap();
         let toc = crate::toc::parse_toc(&bytes, header.toc_offset).unwrap();
-        let sections =
-            crate::section::parse_sections(&bytes, &toc, header.crate_version()).unwrap();
+        let sections = crate::section::parse_sections(
+            &bytes,
+            &toc,
+            header.crate_version(),
+            &mut crate::DecodeBudget::with_limit(u64::MAX),
+        )
+        .unwrap();
         assert_eq!(sections.specs.len(), 9, "spec count");
     }
 
@@ -600,8 +605,13 @@ mod tests {
         let bytes = write_document(&doc).unwrap();
         let header = crate::header::parse_header(&bytes).unwrap();
         let toc = crate::toc::parse_toc(&bytes, header.toc_offset).unwrap();
-        let sections =
-            crate::section::parse_sections(&bytes, &toc, header.crate_version()).unwrap();
+        let sections = crate::section::parse_sections(
+            &bytes,
+            &toc,
+            header.crate_version(),
+            &mut crate::DecodeBudget::with_limit(u64::MAX),
+        )
+        .unwrap();
         let root = sections
             .specs
             .iter()

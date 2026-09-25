@@ -18,6 +18,15 @@ to read each `.usda` as the USDC reader reads its `.usdc`.
   literal and `[index]` operands, the `fill` forms of `minsize` and
   `resize`, tuple and string literals, and an empty edit.
 
+A source fixture is the other way round: its `.usda` is text given here,
+which OpenUSD reads but would not write in that form, and its `.usdc` is
+OpenUSD's reading of it.
+
+- `half_literals`: `half` literals that are not exact halves, rounded to
+  nearest even through `float` (`GfHalf`), subnormal, overflowing,
+  infinite and NaN, in scalars, vectors, a quaternion, an array and
+  time samples.
+
 Pinned oracle: `usd-core` 26.8 from PyPI (OpenUSD v26.08), as for the
 `usdc_versions` fixtures:
 
@@ -111,6 +120,41 @@ FIXTURES = {
     "array_edits": author_array_edits,
 }
 
+# Text that OpenUSD reads but would not write in this form: the `.usda` is
+# this source, and the `.usdc` is OpenUSD's reading of it.
+SOURCES = {
+    "half_literals": """#usda 1.0
+
+def "Halves"
+{
+    half nearest = 0.1
+    half third = 0.333
+    half tieToEven = 1.00048828125
+    half aboveTie = 1.0004883
+    half tieToOdd = 1.00146484375
+    half subnormal = 5.960464477539063e-8
+    half subnormalRounded = 1e-7
+    half aboveHalfSmallest = 3e-8
+    half halfSmallest = 2.9802322387695312e-8
+    half subnormalToNormal = 6.1033e-5
+    half largest = 65519
+    half overflow = 65520
+    half negativeOverflow = -1e9
+    half infinity = inf
+    half notANumber = nan
+    half2 pair = (0.1, -0.333)
+    half3 triple = (1e-7, 65519, 0.2)
+    half4 quad = (0.3, 0.7, -0.9, 1.1)
+    quath rotation = (0.1, 0.2, 0.3, 0.9)
+    half[] array = [0.1, 1e-7, 70000]
+    half sampled.timeSamples = {
+        0: 0.1,
+        1: 1e-7,
+    }
+}
+""",
+}
+
 
 def main():
     if Usd.GetVersion() != PINNED_USD_VERSION:
@@ -122,6 +166,13 @@ def main():
             path = os.path.join(HERE, "%s.%s" % (name, ext))
             if not layer.Export(path):
                 sys.exit("failed to write " + path)
+    for name, text in SOURCES.items():
+        source = os.path.join(HERE, name + ".usda")
+        with open(source, "w") as f:
+            f.write(text)
+        layer = Sdf.Layer.FindOrOpen(source)
+        if not layer or not layer.Export(os.path.join(HERE, name + ".usdc")):
+            sys.exit("failed to convert " + source)
 
 
 if __name__ == "__main__":

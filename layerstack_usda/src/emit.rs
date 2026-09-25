@@ -1551,30 +1551,11 @@ fn convert_float(n: f64, type_hint: &str) -> Value {
     }
 }
 
-/// Minimal IEEE 754 half-precision conversion (truncating).
+/// A `half` literal's bits: the parsed `double`, narrowed through `float`
+/// and rounded to nearest even, as OpenUSD's text parser does
+/// (`GfHalf(float)`; see [`layerstack::half`]).
 fn half_from_f64(v: f64) -> u16 {
-    let f = v as f32;
-    let bits = f.to_bits();
-    let sign = (bits >> 16) & 0x8000;
-    let exp = ((bits >> 23) & 0xFF) as i32;
-    let mantissa = bits & 0x007F_FFFF;
-
-    if exp == 0 {
-        // Zero / denorm → half zero.
-        sign as u16
-    } else if exp == 0xFF {
-        // Inf/NaN.
-        (sign | 0x7C00 | if mantissa != 0 { 0x0200 } else { 0 }) as u16
-    } else {
-        let new_exp = exp - 127 + 15;
-        if new_exp >= 31 {
-            (sign | 0x7C00) as u16 // overflow → inf
-        } else if new_exp <= 0 {
-            sign as u16 // underflow → zero
-        } else {
-            (sign | ((new_exp as u32) << 10) | (mantissa >> 13)) as u16
-        }
-    }
+    layerstack::half::from_f64(v)
 }
 
 // ── Dimensioned type helpers (§6.3) ─────────────────────────────────────

@@ -71,6 +71,7 @@ pub(crate) mod compose;
 pub mod composition_error;
 pub mod dependency_map;
 pub mod doc;
+pub mod half;
 pub mod interner;
 pub mod layer_stack;
 pub mod listop;

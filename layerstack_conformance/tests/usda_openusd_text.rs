@@ -77,6 +77,37 @@ fn string_escapes_read_as_openusd_wrote_them() {
     );
 }
 
+/// `half` literals round to nearest even through `float` and keep
+/// subnormals, as OpenUSD's reading of the same text does.
+///
+/// Spec: AOUSD Core §6.3 (`half`); `GfHalf(float)`
+/// (`pxr/base/gf/ilmbase_half.cpp`), `Sdf_ParserHelpers` (`parserHelpers.cpp`).
+#[test]
+fn half_literals_round_as_openusd_rounds_them() {
+    let mut layer = read_alike("half_literals");
+    for (name, bits) in [
+        ("nearest", 0x2e66),
+        ("third", 0x3554),
+        ("tieToEven", 0x3c00),
+        ("tieToOdd", 0x3c02),
+        ("subnormal", 0x0001),
+        ("subnormalRounded", 0x0002),
+        ("aboveHalfSmallest", 0x0001),
+        ("halfSmallest", 0x0000),
+        ("subnormalToNormal", 0x0400),
+        ("largest", 0x7bff),
+        ("overflow", 0x7c00),
+        ("negativeOverflow", 0xfc00),
+        ("notANumber", 0x7e00),
+    ] {
+        assert_eq!(
+            default_value(&mut layer, &format!("/Halves.{name}")),
+            Value::Half(bits),
+            "{name}"
+        );
+    }
+}
+
 /// OpenUSD writes sparse array edits as `edit [op; op]`, including the
 /// `fill` forms of `minsize` and `resize`.
 ///

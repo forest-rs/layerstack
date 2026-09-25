@@ -532,7 +532,8 @@ fn read_integer_array(
     let num_elements = read_u64_at(data, off)? as usize;
     let arr_start = off + 8;
 
-    if rep.is_compressed() {
+    // Like float arrays, short arrays are stored uncompressed.
+    if rep.is_compressed() && num_elements >= MIN_COMPRESSED_ARRAY_SIZE {
         let (values, _) = read_compressed_ints(&data[arr_start..], num_elements, element_size)?;
         Ok(values)
     } else {
@@ -549,6 +550,10 @@ fn read_integer_array(
 // ---------------------------------------------------------------------------
 // Float decoders
 // ---------------------------------------------------------------------------
+
+/// Arrays with fewer elements are never compressed
+/// (`MinCompressedArraySize`, `pxr/usd/sdf/crateFile.cpp:1912`).
+const MIN_COMPRESSED_ARRAY_SIZE: usize = 16;
 
 fn decode_float(rep: &RawValueRep, data: &[u8], vtype: ValueType) -> Result<CrateValue, UsdcError> {
     let (element_size, to_value): (usize, fn(f64) -> CrateValue) = match vtype {
@@ -593,7 +598,10 @@ fn decode_float(rep: &RawValueRep, data: &[u8], vtype: ValueType) -> Result<Crat
     let num_elements = read_u64_at(data, off)? as usize;
     let arr_start = off + 8;
 
-    if !rep.is_compressed() {
+    // Arrays shorter than `MinCompressedArraySize` are stored uncompressed
+    // even when flagged compressed (`_ReadPossiblyCompressedArray`,
+    // `pxr/usd/sdf/crateFile.cpp:2259`).
+    if !rep.is_compressed() || num_elements < MIN_COMPRESSED_ARRAY_SIZE {
         let mut arr = Vec::with_capacity(num_elements);
         for i in 0..num_elements {
             let elem_off = arr_start + i * element_size;
@@ -2710,6 +2718,70 @@ mod tests {
                 other => panic!("expected Int(5), got {other:?}"),
             }
         }
+    }
+
+    /// Appends a compressed-ints block encoding `count` values with a
+    /// constant delta: the size, the chunk byte, and the LZ4 block.
+    fn compressed_ints(data: &mut Vec<u8>, delta: i32, count: usize) {
+        let mut encoded = delta.to_le_bytes().to_vec();
+        encoded.resize(4 + (count * 2).div_ceil(8), 0);
+        let mut block = vec![0_u8];
+        block.extend_from_slice(&lz4_flex::compress(&encoded));
+        data.extend_from_slice(&(block.len() as u64).to_le_bytes());
+        data.extend_from_slice(&block);
+    }
+
+    /// Integral float arrays are compressed as `int32_t` values, converted
+    /// by value (`_WritePossiblyCompressedArray`,
+    /// `pxr/usd/sdf/crateFile.cpp:1990`).
+    #[test]
+    fn integer_coded_float_arrays_convert_by_value() {
+        let sections = sections_with(CrateVersion::NEWEST_READABLE);
+        for (vtype, expect) in [
+            (ValueType::Double, CrateValue::Double(-32.0)),
+            (ValueType::Float, CrateValue::Float(-32.0)),
+            (ValueType::Half, CrateValue::Half(f64_to_half_bits(-32.0))),
+        ] {
+            let mut data = vec![0_u8; 8];
+            data.extend_from_slice(&32_u64.to_le_bytes());
+            data.push(b'i');
+            compressed_ints(&mut data, -1, 32);
+            let mut bytes = [0_u8; 8];
+            bytes[0] = 8;
+            bytes[6] = vtype as u8;
+            bytes[7] = 0x80 | 0x20; // array, compressed
+            let Ok(CrateValue::Array(values)) =
+                decode_value(&RawValueRep::new(bytes), &data, &sections)
+            else {
+                panic!("expected an array");
+            };
+            assert_eq!(values.len(), 32);
+            assert_eq!(
+                alloc::format!("{:?}", values[31]),
+                alloc::format!("{expect:?}")
+            );
+        }
+    }
+
+    /// Arrays shorter than 16 elements are stored uncompressed even when
+    /// flagged compressed.
+    #[test]
+    fn short_compressed_arrays_are_stored_plainly() {
+        let sections = sections_with(CrateVersion::NEWEST_READABLE);
+        let mut data = vec![0_u8; 8];
+        data.extend_from_slice(&2_u64.to_le_bytes());
+        data.extend_from_slice(&1.5_f64.to_le_bytes());
+        data.extend_from_slice(&(-2.5_f64).to_le_bytes());
+        let mut bytes = [0_u8; 8];
+        bytes[0] = 8;
+        bytes[6] = ValueType::Double as u8;
+        bytes[7] = 0x80 | 0x20;
+        let Ok(CrateValue::Array(values)) =
+            decode_value(&RawValueRep::new(bytes), &data, &sections)
+        else {
+            panic!("expected an array");
+        };
+        assert_eq!(alloc::format!("{values:?}"), "[Double(1.5), Double(-2.5)]");
     }
 
     #[test]

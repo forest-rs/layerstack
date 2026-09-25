@@ -6,6 +6,7 @@ Usage (with a Python that imports OpenUSD's `pxr`):
 
     layer_snapshot.py version
     layer_snapshot.py snapshot LAYER [WEAKER]   # JSON on stdout
+    layer_snapshot.py compose LAYER TIME...     # JSON on stdout
     layer_snapshot.py convert IN OUT     # OpenUSD writes IN as OUT
 
 A snapshot holds what OpenUSD reads from the layer: its text as
@@ -19,6 +20,11 @@ With WEAKER, the snapshot also holds what a stage composing LAYER over
 WEAKER (as its two sublayers) resolves: every prim's applied schemas,
 relationship targets and attribute connections, so explicit-empty lists
 and list edits are checked against the opinions they block or edit.
+
+`compose` opens LAYER as a stage, with the assets its arcs name, and
+prints what it composes: every prim's specifier and type, every
+attribute's value by default and at each TIME, every relationship's
+targets, and the number of composition errors.
 """
 
 import json
@@ -42,6 +48,32 @@ def composed(path, weaker):
                 entry[attr.GetName()] = [str(c) for c in attr.GetConnections()]
         out[str(prim.GetPath())] = entry
     return out
+
+
+def compose(path, times):
+    stage = Usd.Stage.Open(path)
+    if stage is None:
+        raise SystemExit(f"OpenUSD cannot open {path}")
+    prims = []
+    for prim in stage.TraverseAll():
+        properties = {}
+        for prop in prim.GetProperties():
+            if isinstance(prop, Usd.Attribute):
+                values = [repr(prop.Get())]
+                values += [repr(prop.Get(Usd.TimeCode(t))) for t in times]
+                properties[prop.GetName()] = values
+            else:
+                properties[prop.GetName()] = [str(t) for t in prop.GetTargets()]
+        prims.append(
+            {
+                "path": str(prim.GetPath()),
+                "specifier": str(prim.GetSpecifier()),
+                "type": str(prim.GetTypeName()),
+                "properties": properties,
+            }
+        )
+    errors = stage.GetCompositionErrors() if hasattr(stage, "GetCompositionErrors") else []
+    return {"prims": prims, "errors": len(errors)}
 
 
 def snapshot(path, weaker=None):
@@ -90,6 +122,9 @@ def main(argv):
     elif argv[1:2] == ["snapshot"] and len(argv) in (3, 4):
         weaker = argv[3] if len(argv) == 4 else None
         print(json.dumps(snapshot(argv[2], weaker), indent=1, sort_keys=True))
+    elif argv[1:2] == ["compose"] and len(argv) >= 3:
+        times = [float(t) for t in argv[3:]]
+        print(json.dumps(compose(argv[2], times), indent=1, sort_keys=True))
     elif argv[1:2] == ["convert"] and len(argv) == 4:
         layer = Sdf.Layer.FindOrOpen(argv[2])
         if layer is None or not layer.Export(argv[3]):

@@ -23,8 +23,11 @@
 //! (including blocked samples) and connection lists; relationships with
 //! target lists; explicit and list-edited (`delete`, `prepend`, `append`)
 //! connections and targets; and metadata, including token list operations
-//! such as `prepend apiSchemas = [...]` ([`Value::TokenListOp`]). Splines,
-//! composition arcs and variant sets are not representable.
+//! such as `prepend apiSchemas = [...]` ([`Value::TokenListOp`]); and
+//! composition arcs by their authored asset paths: sublayers with layer
+//! offsets ([`Document::sublayers`]), and references, payloads, inherits
+//! and specializes in any list-op form ([`Prim::references`] and its
+//! siblings). Splines and variant sets are not representable.
 //!
 //! # Example
 //!
@@ -86,6 +89,11 @@ pub struct Document {
     ///
     /// Spec: AOUSD Core §7.6.1 (layer spec fields), §16.2.18.
     pub prim_order: Option<Vec<String>>,
+    /// Sublayers (the `subLayers` and `subLayerOffsets` fields), strongest
+    /// first, written after the layer metadata; empty when not authored.
+    ///
+    /// Spec: AOUSD Core §10.3.1 (sublayers), §7.6.1 (layer spec fields).
+    pub sublayers: Vec<SubLayer>,
     /// Root prims, in order.
     pub prims: Vec<Prim>,
 }
@@ -165,6 +173,10 @@ impl Document {
             keys.push("defaultPrim");
         }
         validate_metadata(&self.metadata, &mut keys, "/", false)?;
+        for sublayer in &self.sublayers {
+            validate_asset_path(&sublayer.asset, "/")?;
+            validate_layer_offset(sublayer.offset, "/")?;
+        }
         validate_order(self.prim_order.as_deref(), "/", is_identifier)?;
         if let Some(name) = &self.default_prim
             && !self.names_prim(name)
@@ -206,6 +218,22 @@ pub struct Prim {
     ///
     /// Spec: AOUSD Core §7.6.2 (prim spec fields).
     pub prim_order: Option<Vec<String>>,
+    /// Inherit arcs (the `inheritPaths` field): absolute prim paths.
+    ///
+    /// Spec: AOUSD Core §10.3.2.3 (inherits).
+    pub inherits: Option<ListOp<String>>,
+    /// Payload arcs (the `payload` field).
+    ///
+    /// Spec: AOUSD Core §10.3.2.2 (payloads).
+    pub payloads: Option<ListOp<Reference>>,
+    /// Reference arcs (the `references` field).
+    ///
+    /// Spec: AOUSD Core §10.3.2.1 (references).
+    pub references: Option<ListOp<Reference>>,
+    /// Specialize arcs (the `specializes` field): absolute prim paths.
+    ///
+    /// Spec: AOUSD Core §10.3.2.4 (specializes).
+    pub specializes: Option<ListOp<String>>,
     /// Child prims, in order.
     pub children: Vec<Self>,
 }
@@ -226,6 +254,10 @@ impl Prim {
             properties: Vec::new(),
             property_order: None,
             prim_order: None,
+            inherits: None,
+            payloads: None,
+            references: None,
+            specializes: None,
             children: Vec::new(),
         }
     }
@@ -233,6 +265,14 @@ impl Prim {
     /// Appends an attribute or relationship to [`Self::properties`].
     pub fn push_property(&mut self, property: impl Into<Property>) {
         self.properties.push(property.into());
+    }
+
+    /// Whether the prim authors any composition arc.
+    fn has_arcs(&self) -> bool {
+        self.inherits.is_some()
+            || self.payloads.is_some()
+            || self.references.is_some()
+            || self.specializes.is_some()
     }
 
     fn validate<'a>(&'a self, parent: &str, siblings: &mut Vec<&'a str>) -> Result<(), WriteError> {
@@ -260,6 +300,32 @@ impl Prim {
             });
         }
         validate_metadata(&self.metadata, &mut Vec::new(), &path, true)?;
+        for (key, arcs) in [
+            ("inherits", &self.inherits),
+            ("specializes", &self.specializes),
+        ] {
+            let Some(op) = arcs else { continue };
+            validate_arc_list(op, &path, key)?;
+            for target in op.items() {
+                validate_prim_path(target, &path)?;
+            }
+        }
+        for (key, arcs) in [
+            ("payload", &self.payloads),
+            ("references", &self.references),
+        ] {
+            let Some(op) = arcs else { continue };
+            validate_arc_list(op, &path, key)?;
+            for arc in op.items() {
+                if let Some(asset) = &arc.asset {
+                    validate_asset_path(asset, &path)?;
+                }
+                if let Some(target) = &arc.prim_path {
+                    validate_prim_path(target, &path)?;
+                }
+                validate_layer_offset(arc.offset, &path)?;
+            }
+        }
         validate_order(self.property_order.as_deref(), &path, is_property_name)?;
         validate_order(self.prim_order.as_deref(), &path, is_identifier)?;
         let mut property_names: Vec<&str> = Vec::new();
@@ -547,6 +613,71 @@ impl Relationship {
     }
 }
 
+/// A time offset and scale (`SdfLayerOffset`) on a sublayer, reference or
+/// payload: time `t` in the included layer is time `t * scale + offset` in
+/// the including one. Both must be finite.
+///
+/// Written as `(offset = 10; scale = 2)` after the asset, leaving out an
+/// identity part, as OpenUSD writes it
+/// (`Sdf_FileIOUtility::WriteLayerOffset`).
+///
+/// Spec: AOUSD Core §12.3.2.1 (layer offsets).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct LayerOffset {
+    /// Time offset, in time codes.
+    pub offset: f64,
+    /// Time scale.
+    pub scale: f64,
+}
+
+impl LayerOffset {
+    /// The identity: no offset, unit scale.
+    pub const IDENTITY: Self = Self {
+        offset: 0.0,
+        scale: 1.0,
+    };
+}
+
+impl Default for LayerOffset {
+    fn default() -> Self {
+        Self::IDENTITY
+    }
+}
+
+/// A sublayer: the asset path as authored, not a resolved location, and
+/// its layer offset.
+///
+/// Spec: AOUSD Core §10.3.1 (sublayers).
+#[derive(Clone, Debug, PartialEq)]
+pub struct SubLayer {
+    /// The asset path, as authored; not empty, and without `@` or line
+    /// breaks.
+    pub asset: String,
+    /// The sublayer's layer offset.
+    pub offset: LayerOffset,
+}
+
+/// A reference or payload arc, as authored (`SdfReference` without
+/// `customData`, `SdfPayload`).
+///
+/// Written `@asset@<prim path> (offset = ...; scale = ...)`: an internal
+/// arc (no asset) is `<prim path>`, and one that targets the `defaultPrim`
+/// has no prim path, `<>` for an internal arc.
+///
+/// Spec: AOUSD Core §10.3.2.1 (references), §10.3.2.2 (payloads).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Reference {
+    /// The asset path, as authored (never a resolved location); `None` for
+    /// an internal arc into this layer. When set it is not empty, and has
+    /// no `@` or line breaks.
+    pub asset: Option<String>,
+    /// The absolute prim path the arc targets; `None` targets the
+    /// `defaultPrim` of the asset (of this layer, for an internal arc).
+    pub prim_path: Option<String>,
+    /// The arc's layer offset.
+    pub offset: LayerOffset,
+}
+
 /// A `key = value` metadata entry on a layer, prim or attribute.
 ///
 /// Spec: AOUSD Core §7.4 (metadata fields), §16.2.15 (common metadata).
@@ -695,7 +826,7 @@ pub enum Value {
 /// `reorder` operations are not representable.
 ///
 /// Spec: AOUSD Core §6.6.3 (list operations), §16.2.14 (list-op syntax).
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ListOp<T> {
     /// The explicit list, replacing weaker opinions; `None` when the list
     /// op is made of edits.
@@ -706,6 +837,19 @@ pub struct ListOp<T> {
     pub prepended: Vec<T>,
     /// Items added to the back.
     pub appended: Vec<T>,
+}
+
+/// An empty list op: no explicit list and no edits, which says nothing and
+/// is only a starting point for building one.
+impl<T> Default for ListOp<T> {
+    fn default() -> Self {
+        Self {
+            explicit: None,
+            deleted: Vec::new(),
+            prepended: Vec::new(),
+            appended: Vec::new(),
+        }
+    }
 }
 
 impl<T> ListOp<T> {
@@ -815,7 +959,8 @@ pub enum WriteError {
     },
     /// A list-op metadata value, connection list or target list is empty,
     /// mixes an explicit list with edits, or appears where USDA has no
-    /// list-op syntax (layer metadata, dictionary entries).
+    /// list-op syntax (layer metadata, dictionary entries); or an arc list
+    /// repeats an item within one operation.
     InvalidListOp {
         /// Path of the owning object, with the metadata key after `#`.
         path: String,
@@ -825,11 +970,12 @@ pub enum WriteError {
         /// Path of the owning object, with the metadata key after `#`.
         path: String,
     },
-    /// A metadata key USDA spells with dedicated syntax this writer does
-    /// not produce: composition arcs and variant fields (`references`,
-    /// `inherits`, `subLayers`, ...), identifier-valued fields
-    /// (`permission`, `symmetryFunction`) and the substitution maps. A
-    /// quoted `key = value` statement would not parse.
+    /// A metadata key USDA spells with dedicated syntax: composition arcs
+    /// and sublayers, which are written from their own members
+    /// ([`Prim::references`], [`Document::sublayers`], ...), and what this
+    /// writer does not produce: variant fields, relocates, identifier-valued
+    /// fields (`permission`, `symmetryFunction`) and the substitution maps.
+    /// A quoted `key = value` statement would not parse.
     ReservedMetadata {
         /// Path of the owning object.
         path: String,
@@ -844,6 +990,18 @@ pub enum WriteError {
     /// An attribute's sample times are not finite and strictly increasing.
     InvalidTimeSamples {
         /// Attribute path.
+        path: String,
+    },
+    /// An arc's prim path is not an absolute prim path of identifiers.
+    InvalidArcPath {
+        /// Path of the prim that authors the arc.
+        path: String,
+        /// The rejected prim path.
+        target: String,
+    },
+    /// A layer offset is not finite.
+    InvalidLayerOffset {
+        /// Path of the owning object (`/` for a sublayer).
         path: String,
     },
 }
@@ -886,6 +1044,13 @@ impl fmt::Display for WriteError {
             Self::InvalidTimeSamples { path } => {
                 write!(f, "{path}: sample times are not finite and increasing")
             }
+            Self::InvalidArcPath { path, target } => {
+                write!(
+                    f,
+                    "{path}: arc path {target:?} is not an absolute prim path"
+                )
+            }
+            Self::InvalidLayerOffset { path } => write!(f, "{path}: layer offset is not finite"),
         }
     }
 }
@@ -930,6 +1095,76 @@ fn validate_target(target: &str, path: &str, property: bool) -> Result<(), Write
         Err(WriteError::InvalidTargetPath {
             path: path.into(),
             target: target.into(),
+        })
+    }
+}
+
+/// An asset path the writers can quote: not empty, without `@` or line
+/// breaks (`@@@`-quoting is not produced).
+fn validate_asset_path(asset: &str, path: &str) -> Result<(), WriteError> {
+    if asset.is_empty() || asset.contains(['@', '\n', '\r', '\0']) {
+        return Err(WriteError::InvalidAssetPath {
+            path: path.into(),
+            asset: asset.into(),
+        });
+    }
+    Ok(())
+}
+
+/// An arc's prim path: `/A/B`, absolute prim names only (no property,
+/// variant selection or relative path).
+fn validate_prim_path(target: &str, path: &str) -> Result<(), WriteError> {
+    let ok = target
+        .strip_prefix('/')
+        .is_some_and(|rest| rest.split('/').all(is_identifier));
+    if ok {
+        Ok(())
+    } else {
+        Err(WriteError::InvalidArcPath {
+            path: path.into(),
+            target: target.into(),
+        })
+    }
+}
+
+fn validate_layer_offset(offset: LayerOffset, path: &str) -> Result<(), WriteError> {
+    if offset.offset.is_finite() && offset.scale.is_finite() {
+        Ok(())
+    } else {
+        Err(WriteError::InvalidLayerOffset { path: path.into() })
+    }
+}
+
+/// An arc list op is well formed (see [`ListOp`]) and no list repeats an
+/// item: OpenUSD refuses to open a layer whose arc field lists one item
+/// twice in the same operation ("Duplicate items exist for field"). The
+/// same item may appear in different operations, such as a `delete` and a
+/// `prepend`. Arcs compare as a whole: asset path, prim path and layer
+/// offset.
+///
+/// Spec: AOUSD Core §6.6.3 (list operations).
+fn validate_arc_list<T: PartialEq>(
+    op: &ListOp<T>,
+    path: &str,
+    key: &str,
+) -> Result<(), WriteError> {
+    let repeats = |items: &[T]| {
+        items
+            .iter()
+            .enumerate()
+            .any(|(i, item)| items[..i].contains(item))
+    };
+    let lists = [
+        op.explicit.as_deref().unwrap_or(&[]),
+        &op.deleted,
+        &op.prepended,
+        &op.appended,
+    ];
+    if op.is_valid() && !lists.into_iter().any(repeats) {
+        Ok(())
+    } else {
+        Err(WriteError::InvalidListOp {
+            path: alloc::format!("{path}#{key}"),
         })
     }
 }
@@ -980,9 +1215,9 @@ fn validate_order(
 
 /// Metadata keys with dedicated USDA syntax that a quoted `key = value`
 /// statement cannot express (OpenUSD `pxr/usd/sdf/textFileFormat.peg`):
-/// composition arcs, variant fields, sublayers and relocates, the
-/// identifier-valued `permission` and `symmetryFunction`, and the
-/// string-to-string substitution maps.
+/// composition arcs and sublayers (written from their own members),
+/// variant fields and relocates, the identifier-valued `permission` and
+/// `symmetryFunction`, and the string-to-string substitution maps.
 const RESERVED_METADATA: &[&str] = &[
     "references",
     "payload",
@@ -1311,7 +1546,7 @@ impl Writer<'_> {
     fn document(&mut self, doc: &Document) {
         // §16.2.18.1: the layer header.
         self.out.push_str("#usda 1.0\n");
-        if doc.default_prim.is_some() || !doc.metadata.is_empty() {
+        if doc.default_prim.is_some() || !doc.metadata.is_empty() || !doc.sublayers.is_empty() {
             self.out.push_str("(\n");
             if let Some(name) = &doc.default_prim {
                 self.out.push_str(INDENT);
@@ -1320,6 +1555,22 @@ impl Writer<'_> {
                 self.out.push('\n');
             }
             self.metadata_entries(&doc.metadata, 1);
+            if !doc.sublayers.is_empty() {
+                // §16.2.18.3: `subLayers = [ @asset@ (offset = ...), ... ]`.
+                self.out.push_str(INDENT);
+                self.out.push_str("subLayers = [\n");
+                for (i, sublayer) in doc.sublayers.iter().enumerate() {
+                    self.indent(2);
+                    self.asset(&sublayer.asset);
+                    self.layer_offset(sublayer.offset);
+                    if i + 1 < doc.sublayers.len() {
+                        self.out.push(',');
+                    }
+                    self.out.push('\n');
+                }
+                self.out.push_str(INDENT);
+                self.out.push_str("]\n");
+            }
             self.out.push_str(")\n");
         }
         if let Some(order) = &doc.prim_order {
@@ -1385,9 +1636,10 @@ impl Writer<'_> {
             self.out.push(' ');
         }
         self.string(&prim.name);
-        if !prim.metadata.is_empty() {
+        if !prim.metadata.is_empty() || prim.has_arcs() {
             self.out.push_str(" (\n");
             self.metadata_entries(&prim.metadata, depth + 1);
+            self.arcs(prim, depth + 1);
             self.indent(depth);
             self.out.push(')');
         }
@@ -1417,6 +1669,88 @@ impl Writer<'_> {
         }
         self.indent(depth);
         self.out.push_str("}\n");
+    }
+
+    /// The prim's composition arcs, in key order as OpenUSD writes them:
+    /// `inherits`, `payload`, `references`, `specializes` (§16.2.17.4,
+    /// §16.2.17.5), each
+    /// as list-op statements.
+    fn arcs(&mut self, prim: &Prim, depth: usize) {
+        if let Some(op) = &prim.inherits {
+            self.arc_statements("inherits", op, depth, |w, path| w.path(path));
+        }
+        if let Some(op) = &prim.payloads {
+            self.arc_statements("payload", op, depth, Self::reference);
+        }
+        if let Some(op) = &prim.references {
+            self.arc_statements("references", op, depth, Self::reference);
+        }
+        if let Some(op) = &prim.specializes {
+            self.arc_statements("specializes", op, depth, |w, path| w.path(path));
+        }
+    }
+
+    /// `[op] key = item`, `[a, b]` or `None` per list-op statement.
+    fn arc_statements<T>(
+        &mut self,
+        key: &str,
+        op: &ListOp<T>,
+        depth: usize,
+        mut item: impl FnMut(&mut Self, &T),
+    ) {
+        self.list_op_statements(op, depth, |w, keyword, items| {
+            w.out.push_str(keyword);
+            w.out.push_str(key);
+            w.out.push_str(" = ");
+            match items {
+                [] => w.out.push_str("None"),
+                [one] => item(w, one),
+                _ => w.array(items, &mut item),
+            }
+        });
+    }
+
+    /// `@asset@<path> (offset = ...; scale = ...)`.
+    fn reference(&mut self, arc: &Reference) {
+        if let Some(asset) = &arc.asset {
+            self.asset(asset);
+        }
+        match (&arc.asset, &arc.prim_path) {
+            (_, Some(path)) => self.path(path),
+            (None, None) => self.out.push_str("<>"),
+            (Some(_), None) => {}
+        }
+        self.layer_offset(arc.offset);
+    }
+
+    /// ` (offset = 10; scale = 2)`, leaving out identity parts; nothing for
+    /// the identity.
+    fn layer_offset(&mut self, offset: LayerOffset) {
+        let has_offset = offset.offset != 0.0;
+        let has_scale = offset.scale != 1.0;
+        if !(has_offset || has_scale) {
+            return;
+        }
+        self.out.push_str(" (");
+        if has_offset {
+            self.out.push_str("offset = ");
+            self.f64(offset.offset);
+        }
+        if has_scale {
+            if has_offset {
+                self.out.push_str("; ");
+            }
+            self.out.push_str("scale = ");
+            self.f64(offset.scale);
+        }
+        self.out.push(')');
+    }
+
+    /// `<path>`; validation guarantees plain identifiers.
+    fn path(&mut self, path: &str) {
+        self.out.push('<');
+        self.out.push_str(path);
+        self.out.push('>');
     }
 
     /// `reorder key = ["a", "b"]` (§16.2.17 for `nameChildren` and
@@ -1486,11 +1820,11 @@ impl Writer<'_> {
     /// explicit list, otherwise `delete`, `prepend` and `append` for each
     /// non-empty edit. `statement` writes the line after the indentation,
     /// given the operation keyword (empty for the explicit list).
-    fn list_op_statements(
+    fn list_op_statements<T>(
         &mut self,
-        op: &ListOp<String>,
+        op: &ListOp<T>,
         depth: usize,
-        mut statement: impl FnMut(&mut Self, &str, &[String]),
+        mut statement: impl FnMut(&mut Self, &str, &[T]),
     ) {
         if let Some(items) = &op.explicit {
             self.indent(depth);
@@ -2728,5 +3062,181 @@ over "P" (
                 "{key} has dedicated syntax"
             );
         }
+    }
+
+    /// Arcs are written in OpenUSD's syntax and re-parse; a malformed arc
+    /// is rejected with its owner's path.
+    ///
+    /// Spec: AOUSD Core §16.2.17.5 (arc syntax), §16.2.18.3 (sublayers).
+    #[test]
+    fn writes_composition_arcs() {
+        fn arc(asset: Option<&str>, prim_path: Option<&str>, offset: f64, scale: f64) -> Reference {
+            Reference {
+                asset: asset.map(Into::into),
+                prim_path: prim_path.map(Into::into),
+                offset: LayerOffset { offset, scale },
+            }
+        }
+        let mut prim = Prim::def("Xform", "P");
+        prim.metadata
+            .push(Metadatum::new("kind", Value::Token("group".into())));
+        prim.inherits = Some(ListOp::explicit(vec!["/C".into()]));
+        prim.payloads = Some(ListOp::prepend(vec![arc(
+            Some("./p.usda"),
+            None,
+            24.0,
+            0.5,
+        )]));
+        prim.references = Some(ListOp {
+            deleted: vec![arc(Some("./gone.usda"), Some("/G"), 0.0, 1.0)],
+            appended: vec![arc(None, Some("/C"), 1.0, 1.0), arc(None, None, 0.0, 2.0)],
+            ..ListOp::default()
+        });
+        prim.specializes = Some(ListOp::explicit(vec![]));
+        let doc = Document {
+            sublayers: vec![
+                SubLayer {
+                    asset: "./a.usda".into(),
+                    offset: LayerOffset::IDENTITY,
+                },
+                SubLayer {
+                    asset: "./b.usdc".into(),
+                    offset: LayerOffset {
+                        offset: -1.5,
+                        scale: 1.0,
+                    },
+                },
+            ],
+            prims: vec![prim, Prim::new(Specifier::Class, None, "C")],
+            ..Document::new()
+        };
+        let text = doc.to_usda().unwrap();
+        let expected = r#"#usda 1.0
+(
+    subLayers = [
+        @./a.usda@,
+        @./b.usdc@ (offset = -1.5)
+    ]
+)
+
+def Xform "P" (
+    kind = "group"
+    inherits = </C>
+    prepend payload = @./p.usda@ (offset = 24; scale = 0.5)
+    delete references = @./gone.usda@</G>
+    append references = [</C> (offset = 1), <> (scale = 2)]
+    specializes = None
+)
+{
+}
+
+class "C"
+{
+}
+"#;
+        assert_eq!(text, expected, "arcs");
+        assert!(parse(&text).diagnostics.is_empty(), "re-parses");
+
+        let bad_arc = |edit: fn(&mut Document)| {
+            let mut bad = doc.clone();
+            edit(&mut bad);
+            bad.to_usda().unwrap_err()
+        };
+        assert_eq!(
+            bad_arc(|d| d.prims[0].inherits = Some(ListOp::explicit(vec!["/C.x".into()]))),
+            WriteError::InvalidArcPath {
+                path: "/P".into(),
+                target: "/C.x".into()
+            },
+            "an arc names a prim"
+        );
+        assert_eq!(
+            bad_arc(|d| d.prims[0].specializes = Some(ListOp::default())),
+            WriteError::InvalidListOp {
+                path: "/P#specializes".into()
+            },
+            "an arc list op says something"
+        );
+        let twice = arc(Some("./r.usda"), Some("/R"), 1.0, 1.0);
+        let other = arc(Some("./r.usda"), Some("/R"), 2.0, 1.0);
+        for (key, edit) in [
+            (
+                "inherits",
+                (|d: &mut Document| {
+                    d.prims[0].inherits = Some(ListOp::explicit(vec!["/C".into(), "/C".into()]));
+                }) as fn(&mut Document),
+            ),
+            ("specializes", |d| {
+                d.prims[0].specializes = Some(ListOp::prepend(vec!["/C".into(), "/C".into()]));
+            }),
+            ("references", |d| {
+                let r = arc(None, Some("/C"), 0.0, 1.0);
+                d.prims[0].references = Some(ListOp {
+                    appended: vec![r.clone(), r],
+                    ..ListOp::default()
+                });
+            }),
+            ("payload", |d| {
+                let p = arc(Some("./p.usda"), None, 0.0, 1.0);
+                d.prims[0].payloads = Some(ListOp {
+                    deleted: vec![p.clone(), p],
+                    ..ListOp::default()
+                });
+            }),
+        ] {
+            assert_eq!(
+                bad_arc(edit),
+                WriteError::InvalidListOp {
+                    path: alloc::format!("/P#{key}")
+                },
+                "{key} repeats an item within one operation"
+            );
+        }
+        // The same item in different operations, and arcs that differ only
+        // in their layer offset, are distinct and valid.
+        let mut ok = doc.clone();
+        ok.prims[0].references = Some(ListOp {
+            deleted: vec![twice.clone()],
+            prepended: vec![twice, other],
+            ..ListOp::default()
+        });
+        ok.prims[0].inherits = Some(ListOp {
+            deleted: vec!["/C".into()],
+            prepended: vec!["/C".into()],
+            ..ListOp::default()
+        });
+        let text = ok.to_usda().unwrap();
+        assert!(
+            text.contains("    delete inherits = </C>\n    prepend inherits = </C>\n"),
+            "{text}"
+        );
+        assert!(parse(&text).diagnostics.is_empty(), "re-parses");
+        assert_eq!(
+            bad_arc(|d| d.sublayers[0].asset = "a@b".into()),
+            WriteError::InvalidAssetPath {
+                path: "/".into(),
+                asset: "a@b".into()
+            },
+            "a sublayer asset path is quotable"
+        );
+        assert_eq!(
+            bad_arc(|d| {
+                d.prims[0].payloads = Some(ListOp::explicit(vec![Reference {
+                    asset: Some(String::new()),
+                    prim_path: None,
+                    offset: LayerOffset::IDENTITY,
+                }]));
+            }),
+            WriteError::InvalidAssetPath {
+                path: "/P".into(),
+                asset: String::new()
+            },
+            "an internal arc has no asset path, not an empty one"
+        );
+        assert_eq!(
+            bad_arc(|d| d.sublayers[1].offset.scale = f64::INFINITY),
+            WriteError::InvalidLayerOffset { path: "/".into() },
+            "a layer offset is finite"
+        );
     }
 }

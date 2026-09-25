@@ -18,7 +18,7 @@ use alloc::vec::Vec;
 use super::compress::{IntWidth, LZ4_MAX_TOTAL_INPUT, compressed_ints, lz4_compress};
 use super::error::UsdcWriteError;
 use super::path::{CratePath, path_tree};
-use super::{ListOp, Permission, Spec, Specifier, Value, Variability};
+use super::{ListOp, Permission, Reference, Spec, Specifier, Value, Variability};
 use crate::toc;
 use crate::value_type::{SpecForm, ValueType};
 use crate::version::CrateVersion;
@@ -99,8 +99,11 @@ struct Packer {
     /// Token index of each string (`_strings`).
     strings: Vec<u32>,
     string_index: BTreeMap<String, u32>,
-    paths: Vec<CratePath>,
+    /// Each path, `None` for the empty path (`SdfPath()`), which has an
+    /// index but no place in the path tree.
+    paths: Vec<Option<CratePath>>,
     path_index: BTreeMap<CratePath, u32>,
+    empty_path_index: Option<u32>,
     /// `(token index, value representation)` of each field.
     fields: Vec<(u32, u64)>,
     field_index: BTreeMap<(u32, u64), u32>,
@@ -125,6 +128,7 @@ impl Packer {
             string_index: BTreeMap::new(),
             paths: Vec::new(),
             path_index: BTreeMap::new(),
+            empty_path_index: None,
             fields: Vec::new(),
             field_index: BTreeMap::new(),
             fieldsets: Vec::new(),
@@ -172,8 +176,22 @@ impl Packer {
         }
         self.token(path.element_token())?;
         let i = index(self.paths.len())?;
-        self.paths.push(path.clone());
+        self.paths.push(Some(path.clone()));
         self.path_index.insert(path.clone(), i);
+        Ok(i)
+    }
+
+    /// `_AddPath(SdfPath())`: the empty path, a reference or payload's
+    /// prim path when it targets the `defaultPrim`. It is counted among the
+    /// paths but left out of the path tree (`_WritePaths`), so a reader
+    /// finds it as the default, empty path.
+    fn empty_path(&mut self) -> Result<u32, UsdcWriteError> {
+        if let Some(i) = self.empty_path_index {
+            return Ok(i);
+        }
+        let i = index(self.paths.len())?;
+        self.paths.push(None);
+        self.empty_path_index = Some(i);
         Ok(i)
     }
 
@@ -410,19 +428,78 @@ impl Packer {
                 self.blob(T::TokenVector, 0, bytes, false)?
             }
             Value::TokenListOp(op) => {
-                let bytes = self.list_op(op, site, Self::token)?;
+                let bytes = self.list_op(op, site, text_item(site, Self::token))?;
                 self.blob(T::TokenListOp, 0, bytes, false)?
             }
             Value::StringListOp(op) => {
-                let bytes = self.list_op(op, site, Self::string)?;
+                let bytes = self.list_op(op, site, text_item(site, Self::string))?;
                 self.blob(T::StringListOp, 0, bytes, false)?
             }
             Value::PathListOp(op) => {
-                let bytes = self.list_op(op, site, |packer: &mut Self, text: &str| {
-                    let path = CratePath::parse(text)?;
-                    packer.path(&path)
-                })?;
+                let bytes = self.list_op(op, site, text_item(site, Self::path_text))?;
                 self.blob(T::PathListOp, 0, bytes, false)?
+            }
+            Value::ReferenceListOp(op) => {
+                let bytes = self.list_op(op, site, |packer, item, out| {
+                    packer.reference(item, false, site, out)
+                })?;
+                self.blob(T::ReferenceListOp, 0, bytes, false)?
+            }
+            // `Sdf_CrateData` stores an explicit payload list op of no
+            // payload, or of one payload with an asset path, as a single
+            // `SdfPayload` (an internal payload needs the list op form).
+            Value::PayloadListOp(ListOp {
+                explicit: Some(items),
+                prepended,
+                appended,
+                deleted,
+            }) if prepended.is_empty()
+                && appended.is_empty()
+                && deleted.is_empty()
+                && match items.as_slice() {
+                    [] => true,
+                    [one] => !one.asset.is_empty(),
+                    _ => false,
+                } =>
+            {
+                let none = Reference {
+                    asset: String::new(),
+                    prim_path: String::new(),
+                    offset: 0.0,
+                    scale: 1.0,
+                };
+                self.pack(
+                    &Value::Payload(items.first().unwrap_or(&none).clone()),
+                    site,
+                )?
+            }
+            Value::PayloadListOp(op) => {
+                let bytes = self.list_op(op, site, |packer, item, out| {
+                    packer.reference(item, true, site, out)
+                })?;
+                self.blob(T::PayloadListOp, 0, bytes, false)?
+            }
+            Value::Payload(payload) => {
+                let mut bytes = Vec::new();
+                self.reference(payload, true, site, &mut bytes)?;
+                self.blob(T::Payload, 0, bytes, false)?
+            }
+            // `Write(std::vector<std::string>)`: count, then string indexes.
+            Value::StringVector(v) => {
+                let indexes = self.text_indexes(v, site, Self::string)?;
+                let mut bytes = (v.len() as u64).to_le_bytes().to_vec();
+                bytes.extend_from_slice(&indexes);
+                self.blob(T::StringVector, 0, bytes, false)?
+            }
+            // `Write(std::vector<SdfLayerOffset>)`: count, then each offset
+            // and scale.
+            Value::LayerOffsetVector(v) => {
+                let mut bytes = (v.len() as u64).to_le_bytes().to_vec();
+                for (offset, scale) in v {
+                    bytes.extend_from_slice(&offset.to_le_bytes());
+                    bytes.extend_from_slice(&scale.to_le_bytes());
+                }
+                self.blob(T::LayerOffsetVector, 0, bytes, false)?
             }
             Value::UnregisteredValue(inner) => self.unregistered(inner, site)?,
             Value::TimeSamples(samples) => self.time_samples(samples, site)?,
@@ -695,13 +772,46 @@ impl Packer {
         Ok(rep(ValueType::UnregisteredValue, 0, offset))
     }
 
-    /// `Write(SdfListOp)`: a header byte of `_ListOpHeader` bits, then each
-    /// present list as a `u64` count and `u32` indexes.
-    fn list_op(
+    /// A path list op item: the index of an absolute path.
+    fn path_text(&mut self, text: &str) -> Result<u32, UsdcWriteError> {
+        let path = CratePath::parse(text)?;
+        self.path(&path)
+    }
+
+    /// `Write(SdfReference)` / `Write(SdfPayload)` into `out`: the asset
+    /// path's string index, the prim path's index (the empty path for the
+    /// `defaultPrim`), the layer offset and scale, and for a reference its
+    /// `customData`, written empty (a zero entry count).
+    fn reference(
         &mut self,
-        op: &ListOp<String>,
+        arc: &Reference,
+        payload: bool,
         site: Site<'_>,
-        add: impl Fn(&mut Self, &str) -> Result<u32, UsdcWriteError>,
+        out: &mut Vec<u8>,
+    ) -> Result<(), UsdcWriteError> {
+        site.check_text(&arc.asset)?;
+        out.extend_from_slice(&self.string(&arc.asset)?.to_le_bytes());
+        let path = if arc.prim_path.is_empty() {
+            self.empty_path()?
+        } else {
+            self.path_text(&arc.prim_path)?
+        };
+        out.extend_from_slice(&path.to_le_bytes());
+        out.extend_from_slice(&arc.offset.to_le_bytes());
+        out.extend_from_slice(&arc.scale.to_le_bytes());
+        if !payload {
+            out.extend_from_slice(&0_u64.to_le_bytes());
+        }
+        Ok(())
+    }
+
+    /// `Write(SdfListOp)`: a header byte of `_ListOpHeader` bits, then each
+    /// present list as a `u64` count and its items, each written by `item`.
+    fn list_op<T>(
+        &mut self,
+        op: &ListOp<T>,
+        site: Site<'_>,
+        mut item: impl FnMut(&mut Self, &T, &mut Vec<u8>) -> Result<(), UsdcWriteError>,
     ) -> Result<Vec<u8>, UsdcWriteError> {
         const IS_EXPLICIT: u8 = 1 << 0;
         const HAS_EXPLICIT: u8 = 1 << 1;
@@ -715,12 +825,6 @@ impl Packer {
             return Err(site.list_op("an explicit list op cannot also edit"));
         }
         let explicit = op.explicit.as_deref().unwrap_or(&[]);
-        for list in [explicit, &op.prepended, &op.appended, &op.deleted] {
-            let mut seen = BTreeSet::new();
-            if !list.iter().all(|item| seen.insert(item)) {
-                return Err(site.list_op("an item repeats within a list"));
-            }
-        }
         let mut header = 0;
         if op.explicit.is_some() {
             header |= IS_EXPLICIT;
@@ -737,15 +841,21 @@ impl Packer {
         }
         let mut bytes = alloc::vec![header];
         // Written in `_ListOpHeader` order: explicit, prepended, appended,
-        // deleted.
+        // deleted. Equal items encode to equal bytes, so a repeat within a
+        // list is found by its encoding.
         for list in [explicit, &op.prepended, &op.appended, &op.deleted] {
             if list.is_empty() {
                 continue;
             }
             bytes.extend_from_slice(&(list.len() as u64).to_le_bytes());
-            for item in list {
-                site.check_text(item)?;
-                bytes.extend_from_slice(&add(self, item)?.to_le_bytes());
+            let mut seen = BTreeSet::new();
+            for x in list {
+                let mut encoded = Vec::new();
+                item(self, x, &mut encoded)?;
+                bytes.extend_from_slice(&encoded);
+                if !seen.insert(encoded) {
+                    return Err(site.list_op("an item repeats within a list"));
+                }
             }
         }
         Ok(bytes)
@@ -815,6 +925,9 @@ impl Packer {
         let start = self.out.len();
         let mut sorted: Vec<(&CratePath, u32, u32)> = Vec::with_capacity(self.paths.len());
         for (i, path) in self.paths.iter().enumerate() {
+            let Some(path) = path else {
+                continue;
+            };
             let token = self.token_index[path.element_token()];
             #[allow(clippy::cast_possible_truncation, reason = "path table is u32-indexed")]
             sorted.push((path, i as u32, token));
@@ -867,6 +980,18 @@ impl Packer {
 
     fn put_u64(&mut self, v: usize) {
         self.out.extend_from_slice(&(v as u64).to_le_bytes());
+    }
+}
+
+/// A list op item stored as the `u32` index `add` gives its text.
+fn text_item<'a>(
+    site: Site<'a>,
+    add: fn(&mut Packer, &str) -> Result<u32, UsdcWriteError>,
+) -> impl Fn(&mut Packer, &String, &mut Vec<u8>) -> Result<(), UsdcWriteError> + 'a {
+    move |packer, text, out| {
+        site.check_text(text)?;
+        out.extend_from_slice(&add(packer, text)?.to_le_bytes());
+        Ok(())
     }
 }
 

@@ -13,12 +13,17 @@
 //! - saving is stable: the saved USDA, imported and saved again, is
 //!   unchanged.
 //!
+//! A case about composition, saved in either format and composed with its
+//! assets, composes as its expected layer does.
+//!
 //! Every `save_corpus::unsupported_cases` encoding is rejected by both
 //! formats with the same error, naming the source path.
 
 use layerstack::doc::{Layer, LayerId, SublayerEntry};
 use layerstack::{InMemoryStore, Stage, StageOptions};
-use layerstack_conformance::save_corpus::{AnyAsset, Imported, cases, unsupported_cases};
+use layerstack_conformance::save_corpus::{
+    AnyAsset, Imported, MISSING, Root, cases, composed, unsupported_cases,
+};
 use layerstack_usdc::writer::UsdcWriteError;
 
 /// Emits USDA text into `store` as layer `id`, sharing its interners.
@@ -120,6 +125,80 @@ fn corpus_saves_as_expected_in_both_formats() {
 
         let again = Imported::usda(&usda).save_usda().unwrap();
         assert_eq!(again, usda, "{name}: stable");
+    }
+}
+
+/// Spec: AOUSD Core §10.3 (composition arcs), §12.3.2.1 (layer offsets).
+#[test]
+fn saved_arcs_compose_as_expected() {
+    for case in cases() {
+        let Some(assets) = case.composition else {
+            continue;
+        };
+        let name = case.name;
+        let want = composed(Root::Usda(case.expected), assets);
+        let mut layer = Imported::usda(case.source);
+        (case.edit)(&mut layer);
+        let usda = layer.save_usda().unwrap();
+        assert_eq!(
+            composed(Root::Usda(&usda), assets),
+            want,
+            "{name}: saved USDA"
+        );
+        let usdc = layer.save_usdc().unwrap();
+        assert_eq!(
+            composed(Root::Usdc(&usdc), assets),
+            want,
+            "{name}: saved USDC"
+        );
+        let unedited = composed(Root::Usda(case.source), assets);
+        assert_ne!(unedited, want, "{name}: the edit changes what composes");
+    }
+}
+
+/// An arc whose asset does not resolve is imported as an unresolved arc
+/// from either format, and saved with its authored asset path, prim path
+/// and offset.
+#[test]
+fn unresolved_arcs_are_kept_as_authored() {
+    let case = cases()
+        .into_iter()
+        .find(|c| c.name == "unresolved_arcs")
+        .expect("case");
+    let from_usda = Imported::usda(case.source);
+    let from_usdc = Imported::usdc(&from_usda.save_usdc().unwrap());
+    for (format, layer) in [("USDA", from_usda), ("USDC", from_usdc)] {
+        let sublayers: Vec<_> = layer
+            .layer
+            .sublayers
+            .iter()
+            .filter(|s| s.is_unresolved())
+            .map(|s| (s.asset.clone(), s.offset.offset))
+            .collect();
+        assert_eq!(
+            sublayers,
+            [(Some(format!("{MISSING}notes.usda")), 5.0)],
+            "{format}: unresolved sublayer"
+        );
+        let references: Vec<_> = layer
+            .layer
+            .prims
+            .values()
+            .flat_map(|p| &p.references.prepend)
+            .filter(|r| r.is_unresolved())
+            .map(|r| (r.asset.clone(), r.layer_offset.offset))
+            .collect();
+        assert_eq!(
+            references,
+            [(Some(format!("{MISSING}anchor.usda")), 2.0)],
+            "{format}: unresolved reference"
+        );
+        let saved = layer.save_usda().unwrap();
+        assert!(
+            saved.contains("@./missing/notes.usda@ (offset = 5)")
+                && saved.contains("@./missing/anchor.usda@</Anchor> (offset = 2)"),
+            "{format}: saved as authored\n{saved}"
+        );
     }
 }
 

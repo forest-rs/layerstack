@@ -27,7 +27,7 @@ use std::process::Command;
 use layerstack_conformance::export_fixtures::{
     Expect, OpenUsdRelease, documents, minimum_openusd, parse_openusd_release, write_all,
 };
-use layerstack_conformance::save_corpus::{Imported, cases};
+use layerstack_conformance::save_corpus::{Imported, PROBE_TIMES, cases};
 use layerstack_conformance::usdc::crate_structure;
 use layerstack_usdc::writer::{
     Spec as UsdcSpec, SpecForm, Specifier, Value as UsdcValue, Variability, write_crate,
@@ -617,7 +617,9 @@ fn layer_snapshot(python: &str, args: &[&Path]) -> Result<String, String> {
 /// file exactly as it reads the hand-written expected layer — the same text
 /// (every spec, field and type), the same authored child and property
 /// order, and the same `ClaimsAPI` records — and our USDC must decode like
-/// OpenUSD's own USDC of our USDA, which pins every field's value type.
+/// OpenUSD's own USDC of our USDA, which pins every field's value type. A
+/// case about composition is also composed by OpenUSD with its assets, and
+/// every saved file must compose as the expected layer does.
 #[test]
 fn saved_layers_round_trip_through_openusd() {
     let Some((python, version)) = usd_python() else {
@@ -645,6 +647,27 @@ fn saved_layers_round_trip_through_openusd() {
             let path = dir.join(format!("{name}.weaker.usda"));
             std::fs::write(&path, text).unwrap();
             path
+        });
+        // The assets of a case about composition sit where its arcs name
+        // them, relative to the saved layers.
+        for (asset, text) in case.composition.unwrap_or_default() {
+            let path = dir.join(asset);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, text).unwrap();
+        }
+        let times: Vec<std::path::PathBuf> = PROBE_TIMES
+            .iter()
+            .map(|t| std::path::PathBuf::from(t.to_string()))
+            .collect();
+        let compose = |layer: &Path| {
+            let mut args = vec![Path::new("compose"), layer];
+            args.extend(times.iter().map(|t| t.as_path()));
+            layer_snapshot(&python, &args)
+        };
+        let want_composed = case.composition.map(|_| {
+            compose(&expected).unwrap_or_else(|e| {
+                panic!("{name}: OpenUSD cannot compose the expected layer: {e}")
+            })
         });
         let snapshot_args = |layer: &Path| -> Vec<std::path::PathBuf> {
             let mut args = vec![Path::new("snapshot").to_path_buf(), layer.to_path_buf()];
@@ -706,6 +729,17 @@ fn saved_layers_round_trip_through_openusd() {
                     Ok(got) if got == want => {}
                     Ok(got) => failures.push(format!(
                         "{}: OpenUSD reads it differently\n--- saved\n{got}\n--- expected\n{want}",
+                        saved.display()
+                    )),
+                    Err(e) => failures.push(format!("{}: {e}", saved.display())),
+                }
+                let Some(want_composed) = &want_composed else {
+                    continue;
+                };
+                match compose(saved) {
+                    Ok(got) if got == *want_composed => {}
+                    Ok(got) => failures.push(format!(
+                        "{}: OpenUSD composes it differently\n--- saved\n{got}\n--- expected\n{want_composed}",
                         saved.display()
                     )),
                     Err(e) => failures.push(format!("{}: {e}", saved.display())),

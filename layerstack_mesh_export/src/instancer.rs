@@ -9,7 +9,14 @@ use alloc::vec::Vec;
 
 use layerstack_usda::writer::Value;
 
-use crate::{CustomAttribute, InstancerProblem, Mesh, Node, NotRigid, Transform, Xform};
+use alloc::string::ToString;
+
+use layerstack_usda::writer::is_identifier;
+
+use crate::{
+    CustomAttribute, CustomPrimvar, InstancerProblem, Interpolation, Mesh, Node, NotRigid, Primvar,
+    PrimvarData, Transform, Xform,
+};
 
 /// The unit quaternion of no rotation, `[x, y, z, w]`.
 const IDENTITY_ROTATION: [f32; 4] = [0.0, 0.0, 0.0, 1.0];
@@ -111,6 +118,17 @@ pub struct PointInstancer<'a> {
     /// Stable identifier of each instance (`ids`), unique within the
     /// instancer.
     pub ids: Option<Cow<'a, [i64]>>,
+    /// Name of each instance: USD identifiers, unique within the
+    /// instancer, and not [`PROTOTYPES_SCOPE`]. A `PointInstancer` has no
+    /// per-instance names, so they are authored as the custom
+    /// `token[] instancer:names` ([`INSTANCE_NAMES`]).
+    pub names: Option<Vec<Cow<'a, str>>>,
+    /// Primvars of the instances, written as `primvars:<name>` on the
+    /// instancer: [`Interpolation::Vertex`] (or `Varying`) gives one value
+    /// per instance, [`Interpolation::Constant`] one for all
+    /// (`pxr/usd/usdGeom/pointInstancer.h`, "Primvars on
+    /// `PointInstancer`"). Either may be indexed.
+    pub primvars: Vec<CustomPrimvar<'a>>,
     /// Custom attributes. Names of `PointInstancer` schema properties are
     /// rejected.
     pub attributes: Vec<CustomAttribute<'a>>,
@@ -134,6 +152,8 @@ impl<'a> PointInstancer<'a> {
             orientation_precision: OrientationPrecision::default(),
             scales: None,
             ids: None,
+            names: None,
+            primvars: Vec::new(),
             attributes: Vec::new(),
         }
     }
@@ -261,6 +281,29 @@ impl<'a> PointInstancer<'a> {
         Ok(instance)
     }
 
+    /// Sets the per-instance names.
+    #[must_use]
+    pub fn with_names<N: Into<Cow<'a, str>>>(mut self, names: impl IntoIterator<Item = N>) -> Self {
+        self.names = Some(names.into_iter().map(Into::into).collect());
+        self
+    }
+
+    /// Adds a primvar of the instances, written as `primvars:<name>`:
+    /// [`Primvar::per_instance`] for one value per instance (e.g. a tint
+    /// as `displayColor`), [`Primvar::constant`] for one shared value.
+    #[must_use]
+    pub fn with_primvar(
+        mut self,
+        name: impl Into<Cow<'a, str>>,
+        primvar: Primvar<'a, PrimvarData<'a>>,
+    ) -> Self {
+        self.primvars.push(CustomPrimvar {
+            name: name.into(),
+            primvar,
+        });
+        self
+    }
+
     /// Sets the instancer's local transform.
     #[must_use]
     pub fn with_transform(mut self, transform: Transform) -> Self {
@@ -324,10 +367,15 @@ const UNSUPPORTED: [&str; 4] = [
     "invisibleIds",
 ];
 
+/// The custom attribute that holds a [`PointInstancer`]'s per-instance
+/// names ([`PointInstancer::names`]).
+pub const INSTANCE_NAMES: &str = "instancer:names";
+
 /// Schema properties the exporter authors itself, or that would override
 /// what it authors (`orientationsf` takes precedence over `orientations`
-/// when authored).
-const RESERVED: [&str; 9] = [
+/// when authored), and the exporter's own per-instance attributes.
+const RESERVED: [&str; 10] = [
+    INSTANCE_NAMES,
     "prototypes",
     "protoIndices",
     "ids",
@@ -377,6 +425,7 @@ pub(crate) fn check(instancer: &PointInstancer<'_>) -> Result<Checked, Instancer
         ),
         ("scales", instancer.scales.as_deref().map(<[_]>::len)),
         ("ids", instancer.ids.as_deref().map(<[_]>::len)),
+        ("names", instancer.names.as_ref().map(Vec::len)),
     ];
     for (name, len) in lengths {
         if let Some(actual) = len.filter(|&len| len != instances) {
@@ -440,11 +489,83 @@ pub(crate) fn check(instancer: &PointInstancer<'_>) -> Result<Checked, Instancer
             });
         }
     }
+    if let Some(names) = &instancer.names {
+        check_names(names)?;
+    }
+    for primvar in &instancer.primvars {
+        check_primvar(primvar, instances)?;
+    }
     Ok(Checked {
         proto_indices,
         half_orientations,
         rotations,
     })
+}
+
+/// Instance names must be prim names that can be siblings of each other
+/// and of the prototypes scope.
+fn check_names(names: &[Cow<'_, str>]) -> Result<(), InstancerProblem> {
+    if let Some((instance, name)) = names
+        .iter()
+        .enumerate()
+        .find(|(_, n)| !is_identifier(n) || *n == PROTOTYPES_SCOPE)
+    {
+        return Err(InstancerProblem::InvalidName {
+            instance,
+            name: name.to_string(),
+        });
+    }
+    let mut sorted: Vec<(&str, usize)> = names.iter().map(|n| &**n).zip(0..).collect();
+    sorted.sort_unstable();
+    if let Some(pair) = sorted.windows(2).find(|w| w[0].0 == w[1].0) {
+        return Err(InstancerProblem::DuplicateName {
+            name: pair[0].0.into(),
+            first: pair[0].1,
+            second: pair[1].1,
+        });
+    }
+    Ok(())
+}
+
+/// A primvar of the instances has one value (or index) per instance, or
+/// one for all (`pxr/usd/usdGeom/pointInstancer.h`, "Primvars on
+/// `PointInstancer`"), and its indices are in range.
+fn check_primvar(custom: &CustomPrimvar<'_>, instances: usize) -> Result<(), InstancerProblem> {
+    let primvar = &custom.primvar;
+    let name = || alloc::format!("primvars:{}", custom.name);
+    let expected = match primvar.interpolation {
+        Interpolation::Constant => 1,
+        Interpolation::Vertex | Interpolation::Varying => instances,
+        interpolation => {
+            return Err(InstancerProblem::PrimvarInterpolation {
+                name: name(),
+                interpolation,
+            });
+        }
+    };
+    let values = primvar.values.len();
+    let sites = primvar.indices.as_ref().map_or(values, |i| i.len());
+    if sites != expected {
+        return Err(InstancerProblem::PrimvarLength {
+            name: name(),
+            expected,
+            actual: sites,
+        });
+    }
+    if let Some(&index) = primvar
+        .indices
+        .as_deref()
+        .unwrap_or_default()
+        .iter()
+        .find(|&&i| i as usize >= values || i32::try_from(i).is_err())
+    {
+        return Err(InstancerProblem::PrimvarIndexOutOfRange {
+            name: name(),
+            index,
+            values,
+        });
+    }
+    Ok(())
 }
 
 fn finite(name: &'static str, values: &[[f32; 3]]) -> Result<(), InstancerProblem> {

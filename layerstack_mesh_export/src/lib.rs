@@ -237,7 +237,7 @@ mod shading;
 mod transform;
 
 pub use error::{ExportError, InstancerProblem, MaterialProblem, MeshProblem};
-pub use instancer::{OrientationPrecision, PROTOTYPES_SCOPE, PointInstancer};
+pub use instancer::{INSTANCE_NAMES, OrientationPrecision, PROTOTYPES_SCOPE, PointInstancer};
 pub use layerstack_usda::writer::Value;
 pub use layerstack_usdz::PackageFile;
 pub use material::{Channel, ColorInput, FloatInput, MATERIALS_SCOPE, Material, Texture, Wrap};

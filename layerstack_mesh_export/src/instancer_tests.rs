@@ -7,7 +7,7 @@ use alloc::vec;
 
 use crate::{
     ExportError, Faces, InstancerProblem, Material, Mesh, OrientationPrecision, PointInstancer,
-    Scene, StageSettings, Transform, UpAxis, UsdzProfile, Value, Xform,
+    Primvar, PrimvarData, Scene, StageSettings, Transform, UpAxis, UsdzProfile, Value, Xform,
 };
 
 const TRI_POINTS: [[f32; 3]; 3] = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
@@ -511,4 +511,104 @@ fn push_affine_rejects_shear_and_copies_borrowed_arrays() {
     );
     assert_eq!(field.positions.as_ref(), [[0.0; 3], [4.0, 0.0, 0.0]]);
     assert_eq!(positions, [[0.0; 3]], "the borrowed input is untouched");
+}
+
+#[test]
+fn names_and_instance_primvars_are_authored() {
+    let indices = [0, 0, 0];
+    let positions = [[0.0; 3], [2.0, 0.0, 0.0], [4.0, 0.0, 0.0]];
+    let tints = vec![[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+    let instancer = PointInstancer::new("Field", &indices, &positions)
+        .with_prototype(tri())
+        .with_names(["oak", "elm", "ash"])
+        .with_primvar(
+            "displayColor",
+            Primvar::per_instance(PrimvarData::color3(tints)).with_indices(vec![0, 1, 0]),
+        )
+        .with_primvar(
+            "site:age",
+            Primvar::per_instance(PrimvarData::float(vec![10.0, 20.0, 30.0])),
+        )
+        .with_primvar("site:zone", Primvar::constant(PrimvarData::int(vec![4])));
+    let text = scene(instancer).to_usda().unwrap();
+    for line in [
+        "color3f[] primvars:displayColor = [(1, 0, 0), (0, 1, 0)] (\n            interpolation = \"vertex\"",
+        "int[] primvars:displayColor:indices = [0, 1, 0]",
+        "float[] primvars:site:age = [10, 20, 30] (\n            interpolation = \"vertex\"",
+        "int[] primvars:site:zone = [4] (\n            interpolation = \"constant\"",
+        "custom token[] instancer:names = [\"oak\", \"elm\", \"ash\"]",
+    ] {
+        assert!(text.contains(line), "{line}\n{text}");
+    }
+}
+
+#[test]
+fn rejects_unusable_names_and_primvars() {
+    let two = [0, 0];
+    let positions = [[0.0; 3]; 2];
+    let base = || PointInstancer::new("Field", &two, &positions).with_prototype(tri());
+    assert_eq!(
+        problem(base().with_names(["a"])),
+        InstancerProblem::LengthMismatch {
+            name: "names",
+            expected: 2,
+            actual: 1
+        }
+    );
+    for bad in ["1st", "a b", "", "Prototypes"] {
+        assert_eq!(
+            problem(base().with_names(["ok", bad])),
+            InstancerProblem::InvalidName {
+                instance: 1,
+                name: bad.into()
+            },
+            "{bad:?}"
+        );
+    }
+    assert_eq!(
+        problem(base().with_names(["same", "same"])),
+        InstancerProblem::DuplicateName {
+            name: "same".into(),
+            first: 0,
+            second: 1
+        }
+    );
+    assert_eq!(
+        problem(base().with_primvar(
+            "displayColor",
+            Primvar::uniform(PrimvarData::color3(vec![[1.0; 3]; 2]))
+        )),
+        InstancerProblem::PrimvarInterpolation {
+            name: "primvars:displayColor".into(),
+            interpolation: crate::Interpolation::Uniform
+        }
+    );
+    assert_eq!(
+        problem(base().with_primvar(
+            "displayColor",
+            Primvar::per_instance(PrimvarData::color3(vec![[1.0; 3]; 3]))
+        )),
+        InstancerProblem::PrimvarLength {
+            name: "primvars:displayColor".into(),
+            expected: 2,
+            actual: 3
+        }
+    );
+    assert_eq!(
+        problem(base().with_primvar(
+            "displayColor",
+            Primvar::per_instance(PrimvarData::color3(vec![[1.0; 3]])).with_indices(vec![0, 1])
+        )),
+        InstancerProblem::PrimvarIndexOutOfRange {
+            name: "primvars:displayColor".into(),
+            index: 1,
+            values: 1
+        }
+    );
+    assert_eq!(
+        problem(base().with_attribute("instancer:names", Value::TokenArray(vec![]))),
+        InstancerProblem::ReservedProperty {
+            name: "instancer:names".into()
+        }
+    );
 }

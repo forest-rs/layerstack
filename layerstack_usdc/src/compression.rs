@@ -173,6 +173,13 @@ pub fn decode_integer_array(
         };
 
         prev = prev.wrapping_add(delta);
+        if int_size == 4 {
+            // 32-bit arrays are summed in `int32` arithmetic, so a delta may
+            // wrap (`integerCoding.cpp`, `_DecodeNHelper`).
+            #[allow(clippy::cast_possible_truncation, reason = "int32 wrap")]
+            let wrapped = prev as i32;
+            prev = i64::from(wrapped);
+        }
         elements.push(prev);
     }
 
@@ -306,6 +313,17 @@ mod tests {
 
         let result = decode_integer_array(&data, 2, 4).unwrap();
         assert_eq!(result, vec![10, 13]);
+    }
+
+    #[test]
+    fn decode_wraps_32_bit_deltas() {
+        // i32::MIN then i32::MAX: the writer stores the wrapped delta -1.
+        let mut data = Vec::new();
+        data.extend_from_slice(&(-1_i32).to_le_bytes()); // common delta
+        data.push(0x03); // element 0: full; element 1: common
+        data.extend_from_slice(&i32::MIN.to_le_bytes());
+        let result = decode_integer_array(&data, 2, 4).unwrap();
+        assert_eq!(result, vec![i64::from(i32::MIN), i64::from(i32::MAX)]);
     }
 
     #[test]

@@ -488,6 +488,100 @@ fn toy_biplane_idle_usdc_parses() {
 }
 
 // ---------------------------------------------------------------------------
+// Encodings chosen by OpenUSD's writer
+// ---------------------------------------------------------------------------
+
+/// Reads `fixtures/openusd_value_encodings/values.usdc`, written by OpenUSD's
+/// `usdcat` from the `.usda` beside it, whose values select the writer's
+/// own encodings: `half2` values inlined bitwise, inlined `int8` vectors and
+/// diagonal matrices, inlined `int32` int64 and `float` double scalars, and
+/// `'i'` (integer-coded) and `'t'` (lookup table) compressed floating-point
+/// arrays.
+///
+/// Spec: AOUSD Core §16.3.9–§16.3.10; `pxr/usd/sdf/crateValueInliners.h`,
+/// `crateFile.cpp` (`_WritePossiblyCompressedArray`).
+#[test]
+fn openusd_optional_encodings_decode() {
+    let path = workspace_root()
+        .join("layerstack_conformance/fixtures/openusd_value_encodings/values.usdc");
+    let mut parsed = read_usdc_file(&path);
+    let root = "/root";
+    let value = |parsed: &mut ParsedUsdc, name: &str| parsed.expect_value(root, name);
+
+    // A `half2` is always inlined as its own bits, never as `int8`s
+    // (`_IsAlwaysInlined`); a `half3` is inlined as `int8`s when integral.
+    assert_eq!(value(&mut parsed, "half2"), Value::Vec2h([0x0000, 0x3c00]));
+    assert_eq!(
+        value(&mut parsed, "half2Frac"),
+        Value::Vec2h([0x3800, 0xc000])
+    );
+    assert_eq!(
+        value(&mut parsed, "half3"),
+        Value::Vec3h([0x0000, 0xbc00, 0x4000])
+    );
+    assert_eq!(value(&mut parsed, "vec3f"), Value::Vec3f([0.0, -1.0, 2.0]));
+    assert_eq!(
+        value(&mut parsed, "vec3d"),
+        Value::Vec3d([-128.0, 127.0, 0.0])
+    );
+    assert_eq!(value(&mut parsed, "vec2i"), Value::Vec2i([-3, 4]));
+    assert_eq!(
+        value(&mut parsed, "vec4f"),
+        Value::Vec4f([1.0, 2.0, 3.0, 4.0])
+    );
+    let diagonal = |d: [f64; 4]| {
+        let mut m = [0.0; 16];
+        for (i, v) in d.into_iter().enumerate() {
+            m[i * 5] = v;
+        }
+        Value::Matrix4d(Box::new(m))
+    };
+    assert_eq!(
+        value(&mut parsed, "identity"),
+        diagonal([1.0, 1.0, 1.0, 1.0])
+    );
+    assert_eq!(
+        value(&mut parsed, "diagonal"),
+        diagonal([2.0, -3.0, 4.0, 1.0])
+    );
+    assert_eq!(value(&mut parsed, "int64"), Value::Int64(-5));
+    assert_eq!(value(&mut parsed, "double"), Value::Double(-0.5));
+
+    let integral: Vec<f64> = (0..16)
+        .map(|i| {
+            if i % 2 == 0 {
+                f64::from(i)
+            } else {
+                -f64::from(i)
+            }
+        })
+        .chain([1_000_000.0])
+        .collect();
+    let lut: Vec<f64> = (0..16)
+        .map(|i| if i % 2 == 0 { 0.5 } else { 1.5 })
+        .chain([0.25])
+        .collect();
+    #[allow(clippy::cast_possible_truncation, reason = "exact test values")]
+    let floats = |v: &[f64]| Value::Array(v.iter().map(|&x| Value::Float(x as f32)).collect());
+    let doubles = |v: &[f64]| Value::Array(v.iter().map(|&x| Value::Double(x)).collect());
+    assert_eq!(value(&mut parsed, "floatInts"), floats(&integral));
+    assert_eq!(value(&mut parsed, "doubleInts"), doubles(&integral));
+    assert_eq!(value(&mut parsed, "floatLut"), floats(&lut));
+    assert_eq!(value(&mut parsed, "doubleLut"), doubles(&lut));
+
+    let ints: Vec<Value> = (0..16)
+        .map(Value::Int)
+        .chain([Value::Int(-100_000)])
+        .collect();
+    assert_eq!(value(&mut parsed, "ints"), Value::Array(ints));
+    let int64s: Vec<Value> = (0..16)
+        .map(Value::Int64)
+        .chain([Value::Int64(-10_000_000_000)])
+        .collect();
+    assert_eq!(value(&mut parsed, "int64s"), Value::Array(int64s));
+}
+
+// ---------------------------------------------------------------------------
 // Dictionary tests
 // ---------------------------------------------------------------------------
 

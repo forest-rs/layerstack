@@ -478,10 +478,13 @@ fn decode_integer_u32(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, Usdc
 
 fn decode_integer_i64(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> {
     if rep.is_inlined() && !rep.is_array() {
+        // Inlined int64 values are stored as an `int32` in the low four
+        // payload bytes (`crateValueInliners.h`, `_EncodeInline` for integral
+        // types); the upper payload bytes are zero, so sign-extend from 32
+        // bits.
         let p = rep.payload();
-        // Only 6 bytes available; sign-extend.
-        let v = read_signed_le_6(&p);
-        return Ok(CrateValue::Int64(v));
+        let v = i32::from_le_bytes([p[0], p[1], p[2], p[3]]);
+        return Ok(CrateValue::Int64(i64::from(v)));
     }
     if rep.is_array() {
         let values = read_integer_array(rep, data, 8, true)?;
@@ -555,18 +558,28 @@ fn decode_float(rep: &RawValueRep, data: &[u8], vtype: ValueType) -> Result<Crat
         _ => unreachable!(),
     };
 
+    // Stored elements are read by bit pattern, so every half (subnormals
+    // and NaN payloads included) and every float NaN payload survives.
+    let element = |bytes: &[u8]| -> Result<CrateValue, UsdcError> {
+        Ok(match (vtype, bytes.len()) {
+            (ValueType::Half, 2) => CrateValue::Half(u16::from_le_bytes([bytes[0], bytes[1]])),
+            (ValueType::Float, 4) => {
+                CrateValue::Float(f32::from_le_bytes(bytes.try_into().unwrap()))
+            }
+            _ => to_value(read_float_bytes(bytes)?),
+        })
+    };
+
     if rep.is_inlined() && !rep.is_array() {
         // Inlined doubles are read as floats (4 bytes).
         let read_size = if element_size > 4 { 4 } else { element_size };
         let p = rep.payload();
-        let val = read_float_bytes(&p[..read_size])?;
-        return Ok(to_value(val));
+        return element(&p[..read_size]);
     }
 
     if !rep.is_array() {
         let off = payload_offset_usize(rep)?;
-        let val = read_float_bytes(&data[off..off + element_size])?;
-        return Ok(to_value(val));
+        return element(&data[off..off + element_size]);
     }
 
     // Array
@@ -581,8 +594,7 @@ fn decode_float(rep: &RawValueRep, data: &[u8], vtype: ValueType) -> Result<Crat
         let mut arr = Vec::with_capacity(num_elements);
         for i in 0..num_elements {
             let elem_off = arr_start + i * element_size;
-            let val = read_float_bytes(&data[elem_off..elem_off + element_size])?;
-            arr.push(to_value(val));
+            arr.push(element(&data[elem_off..elem_off + element_size])?);
         }
         return Ok(CrateValue::Array(arr));
     }
@@ -592,14 +604,16 @@ fn decode_float(rep: &RawValueRep, data: &[u8], vtype: ValueType) -> Result<Crat
     let rest = &data[arr_start + 1..];
 
     if compression_type == b'i' {
-        // Integer-coded.
-        let (int_values, _) = read_compressed_ints(rest, num_elements, element_size)?;
-        let mut arr = Vec::with_capacity(num_elements);
-        for v in int_values {
-            let bytes = v.to_le_bytes();
-            let fval = read_float_bytes(&bytes[..element_size])?;
-            arr.push(to_value(fval));
-        }
+        // Integer-coded: every element is an integral value, stored as
+        // compressed `int32`s whatever the element width, and converted
+        // numerically (`crateFile.cpp`, `_WritePossiblyCompressedArray` and
+        // `_ReadPossiblyCompressedArray` for floating-point arrays).
+        let (int_values, _) = read_compressed_ints(rest, num_elements, 4)?;
+        #[allow(
+            clippy::cast_precision_loss,
+            reason = "values were written as exact int32 conversions"
+        )]
+        let arr = int_values.into_iter().map(|v| to_value(v as f64)).collect();
         Ok(CrateValue::Array(arr))
     } else if compression_type == b't' {
         // LUT compression.
@@ -608,8 +622,7 @@ fn decode_float(rep: &RawValueRep, data: &[u8], vtype: ValueType) -> Result<Crat
         let mut luts = Vec::with_capacity(lut_count);
         for i in 0..lut_count {
             let loff = lut_start + i * element_size;
-            let val = read_float_bytes(&rest[loff..loff + element_size])?;
-            luts.push(val);
+            luts.push(element(&rest[loff..loff + element_size])?);
         }
         let indices_start = lut_start + lut_count * element_size;
         let (indices, _) = read_compressed_ints(&rest[indices_start..], num_elements, 4)?;
@@ -621,7 +634,7 @@ fn decode_float(rep: &RawValueRep, data: &[u8], vtype: ValueType) -> Result<Crat
                     message: "float LUT index out of range",
                 });
             }
-            arr.push(to_value(luts[lut_idx]));
+            arr.push(luts[lut_idx].clone());
         }
         Ok(CrateValue::Array(arr))
     } else {
@@ -698,8 +711,12 @@ fn f64_to_half_bits(val: f64) -> u16 {
     let mant = bits & 0x007F_FFFF;
 
     if exp == 255 {
-        // Inf/NaN
-        let h_mant = if mant != 0 { 0x200 } else { 0 };
+        // Inf/NaN, keeping a NaN's payload (and making it nonzero).
+        let h_mant = match (mant, mant >> 13) {
+            (0, _) => 0,
+            (_, 0) => 0x200,
+            (_, payload) => payload,
+        };
         ((sign << 15) | (0x1F << 10) | h_mant) as u16
     } else if exp > 127 + 15 {
         // Overflow → Inf
@@ -708,8 +725,10 @@ fn f64_to_half_bits(val: f64) -> u16 {
         if exp < 127 - 24 {
             (sign << 15) as u16
         } else {
-            let m = (mant | 0x0080_0000) >> (1 + (127 - 14 - exp));
-            ((sign << 15) | (m >> 13)) as u16
+            // Subnormal half: the significand scaled by 2^24, so 2^-24
+            // (exponent 103) is 1 and 2^-15 (exponent 112) is 0x200.
+            let m = (mant | 0x0080_0000) >> (126 - exp);
+            ((sign << 15) | m) as u16
         }
     } else {
         let h_exp = (exp - 127 + 15) as u32;
@@ -849,7 +868,8 @@ fn math_type_info(vtype: ValueType) -> (usize, usize) {
 
 /// Expands an inlined vector or matrix into its little-endian element bytes.
 ///
-/// OpenUSD inlines a vector whose components are all exactly representable
+/// A `half2` is always inlined as its own four bytes. Otherwise, OpenUSD
+/// inlines a vector whose components are all exactly representable
 /// as `int8_t`, storing one `int8_t` per component, and a matrix that is
 /// zero off the diagonal with `int8_t`-representable diagonal entries,
 /// storing the diagonal (`pxr/usd/sdf/crateValueInliners.h:90`). Quaternions
@@ -861,6 +881,11 @@ fn decode_inlined_math(
     elem_size: usize,
 ) -> Result<Vec<u8>, UsdcError> {
     let p = rep.payload();
+    // A `GfVec2h` fits the payload, so OpenUSD always inlines it bitwise
+    // (`_IsAlwaysInlined`, `pxr/usd/sdf/crateFile.cpp:281`).
+    if vtype == ValueType::Vec2h {
+        return Ok(p[..4].to_vec());
+    }
     let component = |i: usize| f64::from(p[i].cast_signed());
     let components: Vec<f64> = match vtype {
         ValueType::Matrix2d | ValueType::Matrix3d | ValueType::Matrix4d => {
@@ -1761,13 +1786,6 @@ fn read_u64_at(data: &[u8], offset: usize) -> Result<u64, UsdcError> {
     ))
 }
 
-fn read_signed_le_6(bytes: &[u8; 6]) -> i64 {
-    let sign_ext = if bytes[5] & 0x80 != 0 { 0xFF } else { 0x00 };
-    let mut buf = [sign_ext; 8];
-    buf[..6].copy_from_slice(bytes);
-    i64::from_le_bytes(buf)
-}
-
 fn read_signed_le_n(data: &[u8], offset: usize, size: usize) -> i64 {
     let bytes = &data[offset..offset + size];
     let sign_ext = if bytes[size - 1] & 0x80 != 0 {
@@ -2246,6 +2264,24 @@ mod tests {
     }
 
     #[test]
+    fn every_half_decodes_to_its_bits() {
+        // Subnormals, infinities and NaN payloads included.
+        for bits in 0..=u16::MAX {
+            let [lo, hi] = bits.to_le_bytes();
+            let rep = inlined(ValueType::Half, [lo, hi, 0, 0]);
+            match decode_float(&rep, &[], ValueType::Half) {
+                Ok(CrateValue::Half(read)) => assert_eq!(read, bits, "{bits:#06x}"),
+                other => panic!("expected Half, got {other:?}"),
+            }
+            // Numeric conversion is exact for every value but a NaN.
+            let widened = half_to_f64(bits);
+            if !widened.is_nan() {
+                assert_eq!(f64_to_half_bits(widened), bits, "{bits:#06x}");
+            }
+        }
+    }
+
+    #[test]
     fn half_to_f32_roundtrip() {
         // 1.0 in half = 0x3C00
         let f = half_to_f32(0x3C00);
@@ -2284,6 +2320,15 @@ mod tests {
         let bytes = decode_inlined_math(&rep, ValueType::Vec2i, count, size).unwrap();
         let expected: Vec<u8> = [-1_i32, 7].iter().flat_map(|v| v.to_le_bytes()).collect();
         assert_eq!(bytes, expected);
+    }
+
+    #[test]
+    fn inlined_half2_holds_its_bits() {
+        // (0, 1) as two halves.
+        let rep = inlined(ValueType::Vec2h, [0x00, 0x00, 0x00, 0x3C]);
+        let (count, size) = math_type_info(ValueType::Vec2h);
+        let bytes = decode_inlined_math(&rep, ValueType::Vec2h, count, size).unwrap();
+        assert_eq!(bytes, [0x00, 0x00, 0x00, 0x3C]);
     }
 
     #[test]

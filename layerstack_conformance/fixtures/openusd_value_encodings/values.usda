@@ -1,0 +1,31 @@
+#usda 1.0
+(
+    doc = """Source of values.usdc, written by OpenUSD with
+`usdcat values.usda -o values.usdc` (Apple USD Tools 0.25.11).
+Each value selects a crate encoding that OpenUSD's writer chooses on its own:
+half2 values always inlined as their own bits, inlined small vectors and
+diagonal matrices, inlined 32-bit-representable int64 and double scalars,
+and integer-coded ('i') and lookup-table ('t') compressed floating-point
+arrays (pxr/usd/sdf/crateFile.cpp, crateValueInliners.h)."""
+)
+
+def "root"
+{
+    custom half2 half2 = (0, 1)
+    custom half2 half2Frac = (0.5, -2)
+    custom half3 half3 = (0, -1, 2)
+    custom float3 vec3f = (0, -1, 2)
+    custom double3 vec3d = (-128, 127, 0)
+    custom int2 vec2i = (-3, 4)
+    custom float4 vec4f = (1, 2, 3, 4)
+    custom matrix4d identity = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )
+    custom matrix4d diagonal = ( (2, 0, 0, 0), (0, -3, 0, 0), (0, 0, 4, 0), (0, 0, 0, 1) )
+    custom int64 int64 = -5
+    custom double double = -0.5
+    custom float[] floatInts = [0, -1, 2, -3, 4, -5, 6, -7, 8, -9, 10, -11, 12, -13, 14, -15, 1000000]
+    custom double[] doubleInts = [0, -1, 2, -3, 4, -5, 6, -7, 8, -9, 10, -11, 12, -13, 14, -15, 1000000]
+    custom float[] floatLut = [0.5, 1.5, 0.5, 1.5, 0.5, 1.5, 0.5, 1.5, 0.5, 1.5, 0.5, 1.5, 0.5, 1.5, 0.5, 1.5, 0.25]
+    custom double[] doubleLut = [0.5, 1.5, 0.5, 1.5, 0.5, 1.5, 0.5, 1.5, 0.5, 1.5, 0.5, 1.5, 0.5, 1.5, 0.5, 1.5, 0.25]
+    custom int[] ints = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, -100000]
+    custom int64[] int64s = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, -10000000000]
+}

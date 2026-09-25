@@ -520,8 +520,10 @@ enum Cause {
     /// arc target misses its ancestors' arcs and variant selections, or an
     /// ancestral site is added where OpenUSD has none.
     AncestralArcs,
-    /// Variant branch specs are missing: directly nested variant sets, and
-    /// variant sets nested inside a branch's child prim.
+    /// Variant branch sites are missing: a variant set nested in a branch of
+    /// the same prim that reuses an enclosing set's name shares that set's
+    /// [`layerstack::VariantSpec`]s, and a branch selected only through
+    /// another arc is not composed at every site hosting it.
     VariantSpecs,
     /// An internal arc authored in a sublayer sees only that sublayer, not the
     /// containing layer stack (AOUSD Core §10.3.2.1: "the layer stack
@@ -1313,12 +1315,12 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "TrickyNestedVariants_root",
-        causes: &[C::VariantSpecs],
+        causes: &[C::AncestralArcs],
         prims: 2,
         props: 0,
         values: 0,
-        diffs: &[D::MissingSite, D::Order],
-        reason: "variant sets nested in `/A{v1=x}B` miss `{v2=y}` and the arcs authored inside it",
+        diffs: &[D::Order],
+        reason: "`/A/B` ranks its own `ref.usd /RB` before the ancestral `ref.usd /RAx/B` of `/A{v1=x}`",
     },
     Known {
         fixture: "TrickyNonLocalVariantSelection_root",

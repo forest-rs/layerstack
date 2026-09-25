@@ -89,14 +89,9 @@ pub(crate) fn spec_arcs_apply(
     spec: &PrimSpec,
     scope: SelectionScope<'_>,
 ) -> bool {
-    if spec.outer_variant_sites.is_empty() {
+    if spec.outer_variant_sites.is_empty() || matches!(scope, SelectionScope::Discover) {
         return true;
     }
-    let enclosing = match scope {
-        SelectionScope::Discover => return true,
-        SelectionScope::Stack => None,
-        SelectionScope::Composed(enclosing) => Some(enclosing),
-    };
     let parent = store
         .paths()
         .resolve(prim)
@@ -109,6 +104,25 @@ pub(crate) fn spec_arcs_apply(
     {
         return false;
     }
+    spec_branches_selected(store, stack, spec, scope)
+}
+
+/// Returns `true` unless a branch enclosing `spec` (its
+/// [`PrimSpec::outer_variant_sites`]) is not selected, as decided by `scope`.
+/// A branch whose set has no known selection counts as selected.
+///
+/// Spec: AOUSD Core §10.3.2.5 (only the selected variant contributes).
+fn spec_branches_selected(
+    store: &dyn LayerStore,
+    stack: &LayerStack,
+    spec: &PrimSpec,
+    scope: SelectionScope<'_>,
+) -> bool {
+    let enclosing = match scope {
+        SelectionScope::Discover => return true,
+        SelectionScope::Stack => None,
+        SelectionScope::Composed(enclosing) => Some(enclosing),
+    };
     spec.outer_variant_sites.iter().all(|site| {
         let selected = match enclosing.and_then(|hosts| hosts.get(&site.host_path)) {
             Some(composed) => composed.get(&site.set).copied(),
@@ -118,6 +132,41 @@ pub(crate) fn spec_arcs_apply(
         };
         selected.is_none_or(|selected| selected == site.variant)
     })
+}
+
+/// Returns the specs of `prim` in `layer` whose own arcs and variant
+/// selections apply (see [`spec_arcs_apply`]).
+fn arc_specs<'a>(
+    store: &dyn LayerStore,
+    stack: &LayerStack,
+    layer: &'a Layer,
+    prim: PathId,
+    scope: SelectionScope<'_>,
+) -> Vec<&'a PrimSpec> {
+    layer
+        .prim_specs(prim)
+        .filter(|spec| spec_arcs_apply(store, stack, prim, spec, scope))
+        .collect()
+}
+
+/// Returns the specs of `prim` in `layer` whose variant sets compose: every
+/// spec whose enclosing branches are selected, including a child's spec in
+/// its parent's selected branch (`/P{v=x}C`), which may host variant sets of
+/// its own (`/P{v=x}C{w=y}`).
+///
+/// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set specs),
+/// §10.3.2.5 (variants).
+fn variant_host_specs<'a>(
+    store: &dyn LayerStore,
+    stack: &LayerStack,
+    layer: &'a Layer,
+    prim: PathId,
+    scope: SelectionScope<'_>,
+) -> Vec<&'a PrimSpec> {
+    layer
+        .prim_specs(prim)
+        .filter(|spec| spec_branches_selected(store, stack, spec, scope))
+        .collect()
 }
 
 /// Returns the parent of `prim`, if it has been interned.
@@ -196,7 +245,7 @@ fn finish_arc_list<T: Clone + Eq>(
     }
     let parent = parent_of(store, prim);
     for layer in stack.layers.iter().filter_map(|id| store.layer(*id)) {
-        if let Some(spec) = layer.prims.get(&prim) {
+        for spec in layer.prim_specs(prim) {
             for set_spec in spec.variant_sets.values() {
                 ops.extend(set_spec.variants.values().map(|v| own(v).clone()));
             }
@@ -279,29 +328,24 @@ pub(crate) fn resolve_inherits_for_prim_in(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        let Some(spec) = layer.prims.get(&prim) else {
-            continue;
-        };
-        if !spec_arcs_apply(store, local_stack, prim, spec, scope) {
-            continue;
+        for spec in arc_specs(store, local_stack, layer, prim, scope) {
+            ops.push(spec.inherits.clone());
         }
-        ops.push(spec.inherits.clone());
     }
 
     for layer_id in &local_stack.layers {
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        let Some(spec) = layer.prims.get(&prim) else {
-            continue;
-        };
-        for (set_tok, selected_variant) in selections {
-            if let Some(set_spec) = spec.variant_sets.get(set_tok)
-                && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-            {
-                let vi = &variant_spec.inherits;
-                if vi.explicit.is_some() || !vi.prepend.is_empty() || !vi.append.is_empty() {
-                    ops.push(vi.clone());
+        for spec in variant_host_specs(store, local_stack, layer, prim, scope) {
+            for (set_tok, selected_variant) in selections {
+                if let Some(set_spec) = spec.variant_sets.get(set_tok)
+                    && let Some(variant_spec) = set_spec.variants.get(selected_variant)
+                {
+                    let vi = &variant_spec.inherits;
+                    if vi.explicit.is_some() || !vi.prepend.is_empty() || !vi.append.is_empty() {
+                        ops.push(vi.clone());
+                    }
                 }
             }
         }
@@ -331,24 +375,22 @@ pub(crate) fn resolve_inherits_for_prim_in(
     )
 }
 
+/// Resolves the variant selections authored for `prim` in `local_stack`:
+/// on its specs outside any variant branch and on its specs inside selected
+/// branches (`/P{v=x}C (variants = ...)`), stronger layers first.
+///
+/// Spec: AOUSD Core §10.3.2.5.1 (computing variant selection).
 pub(crate) fn resolve_variant_selections_for_prim(
     store: &dyn LayerStore,
     local_stack: &LayerStack,
     prim: PathId,
 ) -> HashMap<TokenId, TokenId> {
     let mut selected = HashMap::new();
-    for layer_id in &local_stack.layers {
-        let Some(layer) = store.layer(*layer_id) else {
-            continue;
-        };
-        let Some(spec) = layer.prims.get(&prim) else {
-            continue;
-        };
-        if !spec_arcs_apply(store, local_stack, prim, spec, SelectionScope::Stack) {
-            continue;
-        }
-        for (set, variant) in &spec.variant_selections {
-            selected.entry(*set).or_insert(*variant);
+    for layer in local_stack.layers.iter().filter_map(|id| store.layer(*id)) {
+        for spec in variant_host_specs(store, local_stack, layer, prim, SelectionScope::Stack) {
+            for (set, variant) in &spec.variant_selections {
+                selected.entry(*set).or_insert(*variant);
+            }
         }
     }
     selected
@@ -368,13 +410,9 @@ pub(crate) fn resolve_direct_references_for_prim(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        let Some(spec) = layer.prims.get(&prim) else {
-            continue;
-        };
-        if !spec_arcs_apply(store, local_stack, prim, spec, scope) {
-            continue;
+        for spec in arc_specs(store, local_stack, layer, prim, scope) {
+            ops.push(spec.references.clone());
         }
-        ops.push(spec.references.clone());
     }
     resolve_list_chain::<Reference>(&[], ops)
 }
@@ -390,13 +428,9 @@ pub(crate) fn resolve_references_for_prim(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        let Some(spec) = layer.prims.get(&prim) else {
-            continue;
-        };
-        if !spec_arcs_apply(store, local_stack, prim, spec, scope) {
-            continue;
+        for spec in arc_specs(store, local_stack, layer, prim, scope) {
+            ops.push(spec.references.clone());
         }
-        ops.push(spec.references.clone());
     }
 
     // Also check this prim's own variant branch-level references.
@@ -407,16 +441,15 @@ pub(crate) fn resolve_references_for_prim(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        let Some(spec) = layer.prims.get(&prim) else {
-            continue;
-        };
-        for (set_tok, selected_variant) in &selections {
-            if let Some(set_spec) = spec.variant_sets.get(set_tok)
-                && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-            {
-                let vr = &variant_spec.references;
-                if vr.explicit.is_some() || !vr.prepend.is_empty() || !vr.append.is_empty() {
-                    ops.push(vr.clone());
+        for spec in variant_host_specs(store, local_stack, layer, prim, scope) {
+            for (set_tok, selected_variant) in &selections {
+                if let Some(set_spec) = spec.variant_sets.get(set_tok)
+                    && let Some(variant_spec) = set_spec.variants.get(selected_variant)
+                {
+                    let vr = &variant_spec.references;
+                    if vr.explicit.is_some() || !vr.prepend.is_empty() || !vr.append.is_empty() {
+                        ops.push(vr.clone());
+                    }
                 }
             }
         }
@@ -465,6 +498,7 @@ pub(crate) fn resolve_variant_references_in(
     prim: PathId,
     selections: &HashMap<TokenId, TokenId>,
     parent_selections: &HashMap<TokenId, TokenId>,
+    scope: SelectionScope<'_>,
 ) -> Vec<Reference> {
     let mut ops = Vec::new();
     if let Some(parent_id) = parent_of(store, prim) {
@@ -487,19 +521,18 @@ pub(crate) fn resolve_variant_references_in(
         }
     }
     for layer_id in &data_stack.layers {
-        let Some(spec) = store
-            .layer(*layer_id)
-            .and_then(|layer| layer.prims.get(&prim))
-        else {
+        let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        for (set_tok, selected_variant) in selections {
-            if let Some(set_spec) = spec.variant_sets.get(set_tok)
-                && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-            {
-                let vr = &variant_spec.references;
-                if vr.explicit.is_some() || !vr.prepend.is_empty() || !vr.append.is_empty() {
-                    ops.push(vr.clone());
+        for spec in variant_host_specs(store, data_stack, layer, prim, scope) {
+            for (set_tok, selected_variant) in selections {
+                if let Some(set_spec) = spec.variant_sets.get(set_tok)
+                    && let Some(variant_spec) = set_spec.variants.get(selected_variant)
+                {
+                    let vr = &variant_spec.references;
+                    if vr.explicit.is_some() || !vr.prepend.is_empty() || !vr.append.is_empty() {
+                        ops.push(vr.clone());
+                    }
                 }
             }
         }
@@ -514,22 +547,22 @@ pub(crate) fn resolve_branch_payloads_in(
     data_stack: &LayerStack,
     prim: PathId,
     selections: &HashMap<TokenId, TokenId>,
+    scope: SelectionScope<'_>,
 ) -> Vec<Reference> {
     let mut ops = Vec::new();
     for layer_id in &data_stack.layers {
-        let Some(spec) = store
-            .layer(*layer_id)
-            .and_then(|layer| layer.prims.get(&prim))
-        else {
+        let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        for (set_tok, selected_variant) in selections {
-            if let Some(set_spec) = spec.variant_sets.get(set_tok)
-                && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-            {
-                let vp = &variant_spec.payloads;
-                if vp.explicit.is_some() || !vp.prepend.is_empty() || !vp.append.is_empty() {
-                    ops.push(vp.clone());
+        for spec in variant_host_specs(store, data_stack, layer, prim, scope) {
+            for (set_tok, selected_variant) in selections {
+                if let Some(set_spec) = spec.variant_sets.get(set_tok)
+                    && let Some(variant_spec) = set_spec.variants.get(selected_variant)
+                {
+                    let vp = &variant_spec.payloads;
+                    if vp.explicit.is_some() || !vp.prepend.is_empty() || !vp.append.is_empty() {
+                        ops.push(vp.clone());
+                    }
                 }
             }
         }
@@ -676,15 +709,14 @@ pub(crate) fn collect_all_variant_branch_references(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        let Some(spec) = layer.prims.get(&prim) else {
-            continue;
-        };
-        for (_set_tok, set_spec) in &spec.variant_sets {
-            for (_variant_tok, variant_spec) in &set_spec.variants {
-                let vr = &variant_spec.references;
-                if vr.explicit.is_some() || !vr.prepend.is_empty() || !vr.append.is_empty() {
-                    let refs = resolve_list_chain::<Reference>(&[], [vr.clone()]);
-                    all_refs.extend(refs);
+        for spec in variant_host_specs(store, local_stack, layer, prim, SelectionScope::Discover) {
+            for (_set_tok, set_spec) in &spec.variant_sets {
+                for (_variant_tok, variant_spec) in &set_spec.variants {
+                    let vr = &variant_spec.references;
+                    if vr.explicit.is_some() || !vr.prepend.is_empty() || !vr.append.is_empty() {
+                        let refs = resolve_list_chain::<Reference>(&[], [vr.clone()]);
+                        all_refs.extend(refs);
+                    }
                 }
             }
         }
@@ -792,15 +824,14 @@ pub(crate) fn collect_all_variant_branch_payloads(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        let Some(spec) = layer.prims.get(&prim) else {
-            continue;
-        };
-        for (_set_tok, set_spec) in &spec.variant_sets {
-            for (_variant_tok, variant_spec) in &set_spec.variants {
-                let vp = &variant_spec.payloads;
-                if vp.explicit.is_some() || !vp.prepend.is_empty() || !vp.append.is_empty() {
-                    let payloads = resolve_list_chain::<Reference>(&[], [vp.clone()]);
-                    all_payloads.extend(payloads);
+        for spec in variant_host_specs(store, local_stack, layer, prim, SelectionScope::Discover) {
+            for (_set_tok, set_spec) in &spec.variant_sets {
+                for (_variant_tok, variant_spec) in &set_spec.variants {
+                    let vp = &variant_spec.payloads;
+                    if vp.explicit.is_some() || !vp.prepend.is_empty() || !vp.append.is_empty() {
+                        let payloads = resolve_list_chain::<Reference>(&[], [vp.clone()]);
+                        all_payloads.extend(payloads);
+                    }
                 }
             }
         }
@@ -843,29 +874,24 @@ pub(crate) fn resolve_specializes_for_prim_in(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        let Some(spec) = layer.prims.get(&prim) else {
-            continue;
-        };
-        if !spec_arcs_apply(store, local_stack, prim, spec, scope) {
-            continue;
+        for spec in arc_specs(store, local_stack, layer, prim, scope) {
+            ops.push(spec.specializes.clone());
         }
-        ops.push(spec.specializes.clone());
     }
 
     for layer_id in &local_stack.layers {
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        let Some(spec) = layer.prims.get(&prim) else {
-            continue;
-        };
-        for (set_tok, selected_variant) in selections {
-            if let Some(set_spec) = spec.variant_sets.get(set_tok)
-                && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-            {
-                let vs = &variant_spec.specializes;
-                if vs.explicit.is_some() || !vs.prepend.is_empty() || !vs.append.is_empty() {
-                    ops.push(vs.clone());
+        for spec in variant_host_specs(store, local_stack, layer, prim, scope) {
+            for (set_tok, selected_variant) in selections {
+                if let Some(set_spec) = spec.variant_sets.get(set_tok)
+                    && let Some(variant_spec) = set_spec.variants.get(selected_variant)
+                {
+                    let vs = &variant_spec.specializes;
+                    if vs.explicit.is_some() || !vs.prepend.is_empty() || !vs.append.is_empty() {
+                        ops.push(vs.clone());
+                    }
                 }
             }
         }
@@ -922,13 +948,9 @@ pub(crate) fn resolve_payloads_for_prim_in(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
-        let Some(spec) = layer.prims.get(&prim) else {
-            continue;
-        };
-        if !spec_arcs_apply(store, local_stack, prim, spec, scope) {
-            continue;
+        for spec in arc_specs(store, local_stack, layer, prim, scope) {
+            ops.push(spec.payloads.clone());
         }
-        ops.push(spec.payloads.clone());
     }
 
     if let Some(parent_id) = parent_of(store, prim) {

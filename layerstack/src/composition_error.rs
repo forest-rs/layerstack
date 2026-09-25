@@ -54,7 +54,8 @@ impl CompositionError {
 /// `defaultPrim` is not a prim path ([`Layer::default_prim_path`]), or when
 /// no layer of the target layer stack has a prim spec at the path it names.
 /// The arc contributes no opinions and the rest of the prim is composed as
-/// normal.
+/// normal; authoring a usable `defaultPrim` later is a change that
+/// [`LiveStage::notify_default_prim_edit`] recomposes.
 ///
 /// Spec: AOUSD Core §10.3.2.1 ("If there are no specs in any of the layers
 /// of the referenced layer stack for the reference prim path, it is a
@@ -65,6 +66,7 @@ impl CompositionError {
 ///
 /// [`ReferenceTarget::DefaultPrim`]: crate::ReferenceTarget::DefaultPrim
 /// [`Layer::default_prim_path`]: crate::Layer::default_prim_path
+/// [`LiveStage::notify_default_prim_edit`]: crate::LiveStage::notify_default_prim_edit
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct UnresolvedDefaultPrim {
     /// The composed prim whose composition reached the arc.

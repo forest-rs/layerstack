@@ -1,0 +1,25 @@
+#usda 1.0
+
+def "Sapling" (
+    inherits = [</Twig>, </Knot>]
+)
+{
+}
+
+class "Twig" (
+    specializes = </Sap>
+)
+{
+}
+
+class "Sap" (
+    specializes = </Knot>
+)
+{
+    int x = 6
+}
+
+class "Knot"
+{
+    int x = 7
+}

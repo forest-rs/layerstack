@@ -1,0 +1,16 @@
+#usda 1.0
+
+def "Tree" (
+    variants = {
+        string season = "summer"
+    }
+    prepend variantSets = "season"
+)
+{
+    int height = 1
+    variantSet "season" = {
+        "summer" {
+            int leaves = 2
+        }
+    }
+}

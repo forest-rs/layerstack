@@ -1,0 +1,78 @@
+#usda 1.0
+
+# A referenced prim with a selected variant: the branch is one site.
+def "Trunk" (
+    references = @./asset.usda@</Tree>
+)
+{
+}
+
+# The same asset reached through references nested in another asset.
+def "Grove" (
+    references = @./outer.usda@</Grove>
+)
+{
+}
+
+# A class inherited directly, and again by the referenced prim, which
+# implies it back into this layer stack: the class is one site.
+class "Class"
+{
+    int size = 1
+}
+
+def "Bush" (
+    inherits = </Class>
+    references = @./shrub.usda@</Shrub>
+)
+{
+}
+
+# A class inherited directly and reached again, more weakly, through the
+# specializes of another inherited class: the direct inherit is the
+# registration that stays, whichever of the two is listed first.
+def "Pine" (
+    inherits = [</Needle>, </Bark>]
+)
+{
+}
+
+def "Fir" (
+    inherits = [</Bark>, </Needle>]
+)
+{
+}
+
+class "Needle" (
+    specializes = </Resin>
+)
+{
+}
+
+class "Resin" (
+    specializes = </Bark>
+)
+{
+    int x = 3
+}
+
+class "Bark"
+{
+    int x = 4
+}
+
+# The same class specialized directly, and reached through the
+# specializes of an inherited class.
+def "Larch" (
+    inherits = </Needle>
+    specializes = </Bark>
+)
+{
+}
+
+# The first shape again, inside a referenced layer stack.
+def "Spruce" (
+    references = @./classes.usda@</Sapling>
+)
+{
+}

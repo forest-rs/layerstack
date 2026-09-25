@@ -1,0 +1,15 @@
+#usda 1.0
+
+def "Grove"
+{
+    def "Oak" (
+        references = @./asset.usda@</Tree>
+    )
+    {
+    }
+    def "Elm" (
+        references = @./asset.usda@</Tree>
+    )
+    {
+    }
+}

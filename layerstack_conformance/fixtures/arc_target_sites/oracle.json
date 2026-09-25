@@ -1,0 +1,245 @@
+{
+ "generator": "layerstack_conformance/scripts/arc_target_sites_oracle.py",
+ "openusd_version": "0.26.8",
+ "root": "root.usda",
+ "prims": [
+  {
+   "path": "/Trunk",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Trunk"
+    ],
+    [
+     "asset.usda",
+     "/Tree"
+    ],
+    [
+     "asset.usda",
+     "/Tree{season=summer}"
+    ]
+   ]
+  },
+  {
+   "path": "/Grove",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Grove"
+    ],
+    [
+     "outer.usda",
+     "/Grove"
+    ]
+   ]
+  },
+  {
+   "path": "/Grove/Oak",
+   "prim_stack": [
+    [
+     "outer.usda",
+     "/Grove/Oak"
+    ],
+    [
+     "asset.usda",
+     "/Tree"
+    ],
+    [
+     "asset.usda",
+     "/Tree{season=summer}"
+    ]
+   ]
+  },
+  {
+   "path": "/Grove/Elm",
+   "prim_stack": [
+    [
+     "outer.usda",
+     "/Grove/Elm"
+    ],
+    [
+     "asset.usda",
+     "/Tree"
+    ],
+    [
+     "asset.usda",
+     "/Tree{season=summer}"
+    ]
+   ]
+  },
+  {
+   "path": "/Class",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Class"
+    ]
+   ]
+  },
+  {
+   "path": "/Bush",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Bush"
+    ],
+    [
+     "root.usda",
+     "/Class"
+    ],
+    [
+     "shrub.usda",
+     "/Shrub"
+    ],
+    [
+     "shrub.usda",
+     "/Class"
+    ]
+   ]
+  },
+  {
+   "path": "/Pine",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Pine"
+    ],
+    [
+     "root.usda",
+     "/Needle"
+    ],
+    [
+     "root.usda",
+     "/Bark"
+    ],
+    [
+     "root.usda",
+     "/Resin"
+    ]
+   ]
+  },
+  {
+   "path": "/Fir",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Fir"
+    ],
+    [
+     "root.usda",
+     "/Bark"
+    ],
+    [
+     "root.usda",
+     "/Needle"
+    ],
+    [
+     "root.usda",
+     "/Resin"
+    ]
+   ]
+  },
+  {
+   "path": "/Needle",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Needle"
+    ],
+    [
+     "root.usda",
+     "/Resin"
+    ],
+    [
+     "root.usda",
+     "/Bark"
+    ]
+   ]
+  },
+  {
+   "path": "/Resin",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Resin"
+    ],
+    [
+     "root.usda",
+     "/Bark"
+    ]
+   ]
+  },
+  {
+   "path": "/Bark",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Bark"
+    ]
+   ]
+  },
+  {
+   "path": "/Larch",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Larch"
+    ],
+    [
+     "root.usda",
+     "/Needle"
+    ],
+    [
+     "root.usda",
+     "/Resin"
+    ],
+    [
+     "root.usda",
+     "/Bark"
+    ]
+   ]
+  },
+  {
+   "path": "/Spruce",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Spruce"
+    ],
+    [
+     "classes.usda",
+     "/Sapling"
+    ],
+    [
+     "classes.usda",
+     "/Twig"
+    ],
+    [
+     "classes.usda",
+     "/Knot"
+    ],
+    [
+     "classes.usda",
+     "/Sap"
+    ]
+   ]
+  }
+ ],
+ "values": {
+  "/Trunk.height": 1,
+  "/Trunk.leaves": 2,
+  "/Grove/Oak.height": 1,
+  "/Grove/Oak.leaves": 2,
+  "/Grove/Elm.height": 1,
+  "/Grove/Elm.leaves": 2,
+  "/Class.size": 1,
+  "/Bush.size": 1,
+  "/Pine.x": 4,
+  "/Fir.x": 4,
+  "/Needle.x": 3,
+  "/Resin.x": 3,
+  "/Bark.x": 4,
+  "/Larch.x": 3,
+  "/Spruce.x": 7
+ }
+}

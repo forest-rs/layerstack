@@ -512,14 +512,18 @@ impl From<f64> for FieldValue {
 
 /// Interpolation method for time-varying attribute resolution.
 ///
+/// The default is [`InterpolationType::Linear`], as for an OpenUSD stage
+/// (`UsdStage::GetInterpolationType` returns `UsdInterpolationTypeLinear`
+/// until `SetInterpolationType` changes it; `pxr/usd/usd/stage.cpp`).
+///
 /// Spec: AOUSD Core §12.5 (interpolation).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub enum InterpolationType {
     /// Step function — value holds until the next time sample.
-    #[default]
     Held,
     /// Linearly interpolate between bracketing samples.
     /// Non-numeric types fall back to held.
+    #[default]
     Linear,
 }
 
@@ -1714,6 +1718,15 @@ mod tests {
 
     fn entry(key: &str, val: Value) -> (Arc<str>, Value) {
         (Arc::from(key), val)
+    }
+
+    #[test]
+    fn interpolation_defaults_to_linear() {
+        assert_eq!(
+            InterpolationType::default(),
+            InterpolationType::Linear,
+            "an OpenUSD stage interpolates linearly unless told otherwise"
+        );
     }
 
     #[test]

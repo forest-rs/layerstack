@@ -63,7 +63,7 @@ use alloc::{borrow::Cow, vec::Vec};
 use core::cmp::Ordering;
 
 use crate::{
-    doc::LayerId,
+    doc::{LayerId, LayerOffset},
     prim_index::{ArcKind, OpinionKey},
     spec_path::SpecPath,
 };
@@ -135,6 +135,9 @@ pub struct PrimNode {
     origin: Option<NodeId>,
     children: Vec<NodeId>,
     pub(crate) arc: NodeArc,
+    /// The offset from the layers of the node's layer stack to the stage,
+    /// before their sublayer offsets; `None` until composition records it.
+    layer_offset: Option<LayerOffset>,
 }
 
 impl PrimNode {
@@ -225,6 +228,22 @@ impl PrimNode {
     pub fn is_implied(&self) -> bool {
         self.arc.implied
     }
+
+    /// The offset that maps times in the root layer of this node's layer
+    /// stack to stage times: the offsets of every arc from the root down to
+    /// this node, composed, each after the offset of the sublayer that
+    /// authors it (an arc is read on its authoring layer's timeline). A layer of the stack is read with this offset
+    /// composed with its own sublayer offset
+    /// ([`crate::LayerStack::offset_at`]), which is the
+    /// [`crate::Opinion::layer_offset`] of the node's opinions from it.
+    ///
+    /// OpenUSD: the time offset of `PcpNodeRef::GetMapToRoot`.
+    ///
+    /// Spec: AOUSD Core §10.3.1.1 (offsets concatenate along an arc
+    /// chain), §12.3.2.1 (layer offset and scale).
+    pub(crate) fn layer_offset(&self) -> LayerOffset {
+        self.layer_offset.unwrap_or(LayerOffset::IDENTITY)
+    }
 }
 
 /// The composition graph of one composed prim.
@@ -248,6 +267,7 @@ impl PrimIndexGraph {
                 origin: None,
                 children: Vec::new(),
                 arc,
+                layer_offset: Some(LayerOffset::IDENTITY),
             }],
             ranks: Vec::new(),
         }
@@ -269,6 +289,7 @@ impl PrimIndexGraph {
             origin: None,
             children: Vec::new(),
             arc,
+            layer_offset: None,
         });
         self.nodes[parent.index()].children.push(id);
         id
@@ -282,6 +303,13 @@ impl PrimIndexGraph {
             *slot = Some(origin);
             self.ranks.clear();
         }
+    }
+
+    /// Records `offset` as the layer offset of `node` (see
+    /// [`PrimNode::layer_offset`]), unless it has one: every expansion that
+    /// shares a node reaches it through the same arcs.
+    pub(crate) fn set_layer_offset(&mut self, node: NodeId, offset: LayerOffset) {
+        self.nodes[node.index()].layer_offset.get_or_insert(offset);
     }
 
     /// Removes every node `keep` rejects, returning the new id of each old
@@ -795,6 +823,7 @@ impl PrimIndexGraph {
                 origin: None,
                 children: Vec::new(),
                 arc: arc(arc_kind, namespace_depth),
+                layer_offset: None,
             });
             graph.nodes[parent.index()].children.push(id);
         }
@@ -1120,5 +1149,157 @@ mod tests {
         graph.set_origin(NodeId(4), NodeId(2));
         graph.rank();
         assert_order(&graph, &[0, 1, 4, 3]);
+    }
+
+    /// Every opinion of every prim is read with its node's layer offset
+    /// composed with the sublayer offset of the opinion's layer, through
+    /// sublayers, nested references, inherits and variants, and through a
+    /// reference authored in an offset sublayer, which is read on that
+    /// sublayer's timeline, and through a relocation of a referenced child,
+    /// whose relocate node is read in the relocating layer stack.
+    #[test]
+    fn node_offsets_compose_to_opinion_offsets() {
+        use crate::{
+            InMemoryStore, Layer, LayerOffset, LayerStack, PrimSpec, PropertySpec, Reference,
+            Stage, StageOptions, SublayerEntry, Value, VariantSetSpec, VariantSpec,
+        };
+
+        let mut store = InMemoryStore::default();
+        let spin = store.tokens.intern("spin");
+        let shape = store.tokens.intern("shape");
+        let jagged = store.tokens.intern("jagged");
+        let (chip, moved) = (store.path("/Rock/Chip"), store.path("/World/Moved"));
+        let world_chip = store.path("/World/Chip");
+        let (world, grove, rock, pebble, class) = (
+            store.path("/World"),
+            store.path("/Grove"),
+            store.path("/Rock"),
+            store.path("/Pebble"),
+            store.path("/_class_Rock"),
+        );
+        let offset = |offset, scale| LayerOffset { offset, scale };
+        let sampled =
+            |t: f64| PropertySpec::attribute().with_time_samples(vec![(t, Value::Double(t))]);
+
+        let mut scene = Layer::new(LayerId(1));
+        scene
+            .sublayers
+            .push(SublayerEntry::with_offset(LayerId(2), offset(5.0, 1.0)));
+        let reference = Reference {
+            layer_offset: offset(10.0, 2.0),
+            ..Reference::new(LayerId(3), rock)
+        };
+        scene.insert_prim(
+            world,
+            PrimSpec::def()
+                .with_reference(reference)
+                .with_property(spin, sampled(1.0)),
+        );
+        scene.relocates.push(crate::doc::Relocate {
+            source: world_chip,
+            target: Some(moved),
+        });
+        store.insert_layer(scene);
+        let mut weaker = Layer::new(LayerId(2));
+        weaker.insert_prim(world, PrimSpec::over().with_property(spin, sampled(2.0)));
+        let in_sublayer = Reference {
+            layer_offset: offset(10.0, 2.0),
+            ..Reference::new(LayerId(3), rock)
+        };
+        weaker.insert_prim(grove, PrimSpec::def().with_reference(in_sublayer));
+        store.insert_layer(weaker);
+
+        let mut asset = Layer::new(LayerId(3));
+        asset
+            .sublayers
+            .push(SublayerEntry::with_offset(LayerId(4), offset(1.0, 1.0)));
+        asset.insert_prim(class, PrimSpec::class().with_property(spin, sampled(3.0)));
+        asset.insert_prim(chip, PrimSpec::def().with_property(spin, sampled(7.0)));
+        store.insert_layer(asset);
+        let mut asset_sub = Layer::new(LayerId(4));
+        let nested = Reference {
+            layer_offset: offset(3.0, 0.5),
+            ..Reference::new(LayerId(5), pebble)
+        };
+        asset_sub.insert_prim(
+            rock,
+            PrimSpec::def()
+                .with_reference(nested)
+                .with_inherit(class)
+                .with_property(spin, sampled(4.0)),
+        );
+        store.insert_layer(asset_sub);
+
+        let mut library = Layer::new(LayerId(5));
+        let mut pebble_spec = PrimSpec::def().with_property(spin, sampled(5.0));
+        let mut variants = crate::HashMap::new();
+        variants.insert(
+            jagged,
+            VariantSpec {
+                properties: vec![crate::PropertyEntry {
+                    name: spin,
+                    spec: sampled(6.0),
+                }],
+                ..VariantSpec::default()
+            },
+        );
+        pebble_spec
+            .variant_sets
+            .insert(shape, VariantSetSpec { variants });
+        pebble_spec.variant_selections.insert(shape, jagged);
+        library.insert_prim(pebble, pebble_spec);
+        store.insert_layer(library);
+
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        let opinions = stage
+            .explain_property_path(crate::PropertyPath::new(world, spin))
+            .expect("spin composes");
+        assert_eq!(opinions.len(), 6, "every layer contributes one opinion");
+        let grove_graph = stage.explain_prim_graph(grove).expect("graph");
+        let (_, grove_reference) = grove_graph
+            .nodes()
+            .find(|(_, node)| node.arc_kind() == ArcKind::References)
+            .expect("reference node");
+        assert_eq!(
+            grove_reference.layer_offset(),
+            offset(5.0, 1.0).compose(offset(10.0, 2.0)),
+            "the authoring sublayer's offset applies to its arcs"
+        );
+        let grove_opinions = stage
+            .explain_property_path(crate::PropertyPath::new(grove, spin))
+            .expect("spin composes");
+        assert_eq!(grove_opinions.len(), 4, "the asset's opinions");
+        let moved_graph = stage.explain_prim_graph(moved).expect("relocated prim");
+        assert!(
+            moved_graph
+                .nodes()
+                .any(|(_, node)| node.arc_kind() == ArcKind::Relocates),
+            "a relocate node"
+        );
+        let moved_opinions = stage
+            .explain_property_path(crate::PropertyPath::new(moved, spin))
+            .expect("spin composes at the target");
+        assert!(!moved_opinions.is_empty());
+        let world_graph = stage.explain_prim_graph(world).expect("graph");
+        let checked = opinions
+            .iter()
+            .map(|opinion| (world_graph, opinion))
+            .chain(grove_opinions.iter().map(|opinion| (grove_graph, opinion)))
+            .chain(moved_opinions.iter().map(|opinion| (moved_graph, opinion)));
+        for (graph, opinion) in checked {
+            let node = graph.node(opinion.key.node).expect("opinion node");
+            let stack = LayerStack::gather(&store, node.layer_stack());
+            let index = usize::from(opinion.key.layer_strength);
+            assert_eq!(
+                stack.layers[index], opinion.key.layer_id,
+                "layer strength indexes the stack"
+            );
+            assert_eq!(
+                node.layer_offset().compose(stack.offset_at(index)),
+                opinion.layer_offset,
+                "opinion from layer {:?}",
+                opinion.key.layer_id
+            );
+        }
     }
 }

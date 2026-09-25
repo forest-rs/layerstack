@@ -1,0 +1,13 @@
+#usda 1.0
+
+def "Inner" (
+    references = </Core>
+)
+{
+}
+
+def "Core"
+{
+    int radius = 2
+    int density = 9
+}

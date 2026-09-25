@@ -1,0 +1,56 @@
+#usda 1.0
+(
+    defaultPrim = "Rock"
+    subLayers = [
+        @./sub.usda@ (offset = 10)
+    ]
+)
+
+# An internal reference authored in a sublayer of a referenced asset reads
+# the asset's whole layer stack.
+def "InAsset" (
+    references = @./asset.usda@</Tree>
+)
+{
+}
+
+# Internal references two asset layer stacks deep, and an internal payload
+# beside them, each authored in its stack's sublayer.
+def "Nested" (
+    references = @./outer.usda@</Outer>
+)
+{
+}
+
+def "Rock"
+{
+    int mass = 7
+}
+
+over "Stone"
+{
+    int mass = 4
+    int heat.timeSamples = {
+        0: 0,
+        10: 1,
+        20: 2,
+        30: 3,
+    }
+}
+
+# The internal arc in `sub.usda` is the one deleted here.
+over "Edited" (
+    delete references = </Pebble>
+)
+{
+}
+
+over "Link"
+{
+    int links = 2
+}
+
+over "Anchor"
+{
+    int weight = 5
+}

@@ -1,0 +1,11 @@
+#usda 1.0
+(
+    subLayers = [
+        @./outer_sub.usda@
+    ]
+)
+
+over "Shell"
+{
+    int depth = 1
+}

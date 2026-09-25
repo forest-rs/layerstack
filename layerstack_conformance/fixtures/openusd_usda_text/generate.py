@@ -154,6 +154,8 @@ def author_value_types(layer):
     T = Sdf.ValueTypeNames
     for name, type_name, value in [
         ("bool", T.Bool, True),
+        ("uchar", T.UChar, 200),
+        ("ucharArray", T.UCharArray, [0, 255]),
         ("int", T.Int, -7),
         ("uint", T.UInt, 4000000000),
         ("int64", T.Int64, -9000000000),
@@ -245,6 +247,7 @@ def "Numbers"
         2: 1.5,
         3: 0,
     }
+    uchar byte = 255.9
     int truncated = 1.5
     int negativeTruncated = -1.5
     uint unsignedTruncated = 1.5
@@ -285,6 +288,8 @@ def "Weak"
 # fail to read. `numeric_rejected.txt` lists those checked here, one
 # attribute statement per line.
 REJECTED = [
+    "uchar a = 256",
+    "uchar a = -1",
     "uint a = -1",
     "int a = inf",
     "int a = nan",

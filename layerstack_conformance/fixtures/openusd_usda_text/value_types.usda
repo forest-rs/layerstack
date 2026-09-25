@@ -28,6 +28,8 @@ def "Values"
     timecode timecode = 3.5
     timecode[] timecodeArray = [1, 2.5]
     token[] tokenArray = ["x", "y"]
+    uchar uchar = 200
+    uchar[] ucharArray = [0, 255]
     uint uint = 4000000000
     uint64 uint64 = 9000000000000000000
     uint[] uintArray = [1, 4000000000]

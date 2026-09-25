@@ -15,6 +15,7 @@ def "Numbers"
         2: 1.5,
         3: 0,
     }
+    uchar byte = 255.9
     int truncated = 1.5
     int negativeTruncated = -1.5
     uint unsignedTruncated = 1.5

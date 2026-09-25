@@ -1596,7 +1596,16 @@ enum Number {
 fn convert_scalar(value: &ast::Value<'_>, ty: &str) -> Option<Result<Value, String>> {
     if !matches!(
         ty,
-        "bool" | "int" | "uint" | "int64" | "uint64" | "half" | "float" | "double" | "timecode"
+        "bool"
+            | "uchar"
+            | "int"
+            | "uint"
+            | "int64"
+            | "uint64"
+            | "half"
+            | "float"
+            | "double"
+            | "timecode"
     ) || matches!(
         value,
         ast::Value::Blocked | ast::Value::Array(_) | ast::Value::ArrayEdit(_)
@@ -1653,6 +1662,7 @@ fn convert_number(number: Number, ty: &str) -> Result<Value, String> {
             Number::Int(n) => n != 0,
             Number::Float(f) => f != 0.0,
         }),
+        "uchar" => Value::UChar(integral(0, u8::MAX.into())? as u8),
         "int" => Value::Int(integral(i32::MIN.into(), i32::MAX.into())? as i32),
         "uint" => Value::UInt(integral(0, u32::MAX.into())? as u32),
         "int64" => Value::Int64(integral(i64::MIN.into(), i64::MAX.into())? as i64),

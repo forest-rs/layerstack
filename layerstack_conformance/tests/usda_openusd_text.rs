@@ -125,6 +125,10 @@ fn value_types_read_as_openusd_wrote_them() {
         default_value(&mut layer, "/Values.frame4d"),
         Value::Matrix4d(Box::new(frame))
     );
+    assert_eq!(
+        default_value(&mut layer, "/Values.uchar"),
+        Value::UChar(200)
+    );
 }
 
 /// `half` literals round to nearest even through `float` and keep
@@ -180,6 +184,7 @@ fn numbers_take_the_declared_type_as_openusd_reads_them() {
             "array",
             Value::Array([false, true, false, true, false].map(Value::Bool).to_vec()),
         ),
+        ("byte", Value::UChar(255)),
         ("truncated", Value::Int(1)),
         ("negativeTruncated", Value::Int(-1)),
         ("unsignedTruncated", Value::UInt(1)),

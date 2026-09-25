@@ -8,7 +8,9 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
 
-use layerstack_usda::writer::{Attribute, Document, ListOp, Metadatum, Prim, Relationship, Value};
+use layerstack_usda::writer::{
+    Attribute, Document, ListOp, Metadatum, Prim, Property, Relationship, Value,
+};
 
 use crate::{
     CustomAttribute, ExportError, Faces, FamilyType, Interpolation, MATERIALS_SCOPE, Material,
@@ -74,8 +76,11 @@ fn xform_prim(
         prim.metadata
             .push(Metadatum::new("kind", Value::Token(kind.into())));
     }
-    push_transform(&mut prim.attributes, xform.transform);
-    push_custom(&mut prim.attributes, &xform.attributes);
+    let mut attrs = Vec::new();
+    push_transform(&mut attrs, xform.transform);
+    push_custom(&mut attrs, &xform.attributes);
+    prim.properties
+        .extend(attrs.into_iter().map(Property::Attribute));
     for child in &xform.children {
         prim.children.push(match child {
             Node::Xform(x) => xform_prim(x, &path, materials)?,
@@ -229,16 +234,17 @@ fn mesh_prim(
     push_custom(&mut attrs, &mesh.attributes);
 
     let mut prim = Prim::def("Mesh", mesh.name);
-    prim.attributes = attrs;
-    if let Some(name) = mesh.material {
-        let binding = material_binding(mesh, &path, &path, name, materials)?;
-        apply_binding(&mut prim, binding);
-    }
+    prim.properties
+        .extend(attrs.into_iter().map(Property::Attribute));
+    let binding = mesh
+        .material
+        .map(|name| material_binding(mesh, &path, &path, name, materials))
+        .transpose()?;
     if !mesh.material_subsets.is_empty() {
         check_family(&mesh.material_subsets, mesh.subset_family, sites.faces).map_err(fail)?;
         // `UsdShadeMaterialBindingAPI::SetMaterialBindSubsetsFamilyType`
         // (materialBindingAPI.h:934) authors this attribute on the mesh.
-        prim.attributes.push(
+        prim.push_property(
             Attribute::new(
                 "subsetFamily:materialBind:familyType",
                 "token",
@@ -252,6 +258,10 @@ fn mesh_prim(
             prim.children
                 .push(subset_prim(subset, binding).map_err(fail)?);
         }
+    }
+    // Relationships follow the attributes.
+    if let Some(binding) = binding {
+        apply_binding(&mut prim, binding);
     }
     Ok(prim)
 }
@@ -301,12 +311,13 @@ fn subset_prim(subset: &MaterialSubset<'_>, material: String) -> Result<Prim, Me
         .map(|&face| to_int(face))
         .collect::<Result<Vec<_>, _>>()?;
     let mut prim = Prim::def("GeomSubset", subset.name);
-    prim.attributes
-        .push(Attribute::new("elementType", "token", Value::Token("face".into())).uniform());
-    prim.attributes
-        .push(Attribute::new("familyName", "token", Value::Token("materialBind".into())).uniform());
-    prim.attributes
-        .push(Attribute::new("indices", "int[]", Value::IntArray(indices)));
+    prim.push_property(
+        Attribute::new("elementType", "token", Value::Token("face".into())).uniform(),
+    );
+    prim.push_property(
+        Attribute::new("familyName", "token", Value::Token("materialBind".into())).uniform(),
+    );
+    prim.push_property(Attribute::new("indices", "int[]", Value::IntArray(indices)));
     apply_binding(&mut prim, material);
     Ok(prim)
 }
@@ -362,8 +373,7 @@ fn apply_binding(prim: &mut Prim, material: String) {
         "apiSchemas",
         Value::TokenListOp(ListOp::prepend(vec![String::from("MaterialBindingAPI")])),
     ));
-    prim.relationships
-        .push(Relationship::new("material:binding", material));
+    prim.push_property(Relationship::new("material:binding", material));
 }
 
 /// Converts topology to USD's `int[]` counts and indices, checking counts,

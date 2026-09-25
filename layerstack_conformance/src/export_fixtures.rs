@@ -135,12 +135,9 @@ fn stage_metadata(doc: &mut Document, root: &str) {
 fn identifiers() -> Document {
     let mut root = Prim::def("Xform", "Root");
     let mut accented = Prim::def("Scope", "cafe\u{301}");
-    accented
-        .attributes
-        .push(Attribute::new("ns:nai\u{308}ve", "int", Value::Int(1)).custom());
+    accented.push_property(Attribute::new("ns:nai\u{308}ve", "int", Value::Int(1)).custom());
     let mut cjk = Prim::def("Scope", "\u{9802}\u{70b9}");
-    cjk.attributes
-        .push(Attribute::new("_x1:\u{3b1}\u{3b2}", "float", Value::Float(0.5)).custom());
+    cjk.push_property(Attribute::new("_x1:\u{3b1}\u{3b2}", "float", Value::Float(0.5)).custom());
     root.children.push(accented);
     root.children.push(cjk);
     let mut doc = Document::new();
@@ -154,7 +151,7 @@ fn identifiers() -> Document {
 fn types() -> Document {
     let mut p = Prim::def("Scope", "Root");
     let mut add = |name: &str, ty: &str, v: Value| {
-        p.attributes.push(Attribute::new(name, ty, v).custom());
+        p.push_property(Attribute::new(name, ty, v).custom());
     };
     add("b", "bool", Value::Bool(true));
     add("i", "int", Value::Int(-7));
@@ -241,7 +238,7 @@ fn types() -> Document {
         ("m2", "matrix2d"),
         ("hc", "color3h[]"),
     ] {
-        p.attributes.push(Attribute {
+        p.push_property(Attribute {
             value: None,
             ..Attribute::new(name, ty, Value::Int(0)).custom()
         });
@@ -273,7 +270,7 @@ fn metadata() -> Document {
         .push(Metadatum::new("kind", Value::Token("component".into())));
     root.metadata
         .push(Metadatum::new("customData", data.clone()));
-    root.attributes.push(
+    root.push_property(
         Attribute::new("exedra:note", "string", Value::String("n".into()))
             .custom()
             .with_metadata("doc", Value::String("An annotated attribute.".into()))
@@ -336,7 +333,7 @@ fn metadata_dictionaries() -> Document {
         "symmetryArguments",
         dict(vec![("axis", Value::Token("x".into()))]),
     ));
-    root.attributes.push(
+    root.push_property(
         Attribute::new("exedra:size", "float", Value::Float(1.0))
             .custom()
             .with_metadata(
@@ -353,7 +350,7 @@ fn metadata_dictionaries() -> Document {
     );
     let mut rel = layerstack_usda::writer::Relationship::new("exedra:target", "/Root").custom();
     rel.metadata.push(Metadatum::new("uiHints", hints));
-    root.relationships.push(rel);
+    root.push_property(rel);
     let mut doc = Document::new();
     stage_metadata(&mut doc, "Root");
     doc.metadata.push(Metadatum::new(

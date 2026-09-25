@@ -23,7 +23,7 @@ use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use layerstack_usda::writer::{Attribute, Prim, Value};
+use layerstack_usda::writer::{Attribute, Prim, Property, Value};
 
 use crate::{ColorInput, ExportError, FloatInput, Material, MaterialProblem, Texture};
 
@@ -162,7 +162,8 @@ pub(crate) fn material_prim(material: &Material<'_>, scope: &str) -> Result<Prim
     };
 
     let mut surface = Prim::def("Shader", SURFACE);
-    let attrs = &mut surface.attributes;
+    let mut shader_attrs = Vec::new();
+    let attrs = &mut shader_attrs;
     attrs.push(info_id("UsdPreviewSurface"));
     color(
         attrs,
@@ -234,11 +235,14 @@ pub(crate) fn material_prim(material: &Material<'_>, scope: &str) -> Result<Prim
         Value::Int(0),
     ));
     attrs.push(Attribute::declared("outputs:surface", "token"));
+    surface
+        .properties
+        .extend(shader_attrs.into_iter().map(Property::Attribute));
 
     let mut prim = Prim::def("Material", material.name);
     // `UsdShadeMaterial` `outputs:surface` (material.h:206), connected to
     // the shader's output as in the specification's sample.
-    prim.attributes.push(
+    prim.push_property(
         Attribute::declared("outputs:surface", "token")
             .with_connection(format!("{path}/{SURFACE}.outputs:surface")),
     );
@@ -248,15 +252,13 @@ pub(crate) fn material_prim(material: &Material<'_>, scope: &str) -> Result<Prim
     }
     for uv_set in &network.uv_sets {
         let mut reader = Prim::def("Shader", network.reader_name(uv_set));
-        reader.attributes.push(info_id("UsdPrimvarReader_float2"));
-        reader.attributes.push(Attribute::new(
+        reader.push_property(info_id("UsdPrimvarReader_float2"));
+        reader.push_property(Attribute::new(
             "inputs:varname",
             "string",
             Value::String((*uv_set).into()),
         ));
-        reader
-            .attributes
-            .push(Attribute::declared("outputs:result", "float2"));
+        reader.push_property(Attribute::declared("outputs:result", "float2"));
         prim.children.push(reader);
     }
     Ok(prim)
@@ -328,7 +330,7 @@ fn float<'a>(
 
 fn texture_prim(node: &TextureNode<'_>, network: &Network<'_>) -> Prim {
     let mut prim = Prim::def("Shader", node.name);
-    let attrs = &mut prim.attributes;
+    let mut attrs = Vec::new();
     attrs.push(info_id("UsdUVTexture"));
     attrs.push(Attribute::new(
         "inputs:file",
@@ -378,6 +380,8 @@ fn texture_prim(node: &TextureNode<'_>, network: &Network<'_>) -> Prim {
             attrs.push(Attribute::declared(name, type_name));
         }
     }
+    prim.properties
+        .extend(attrs.into_iter().map(Property::Attribute));
     prim
 }
 

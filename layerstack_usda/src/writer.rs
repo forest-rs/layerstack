@@ -31,13 +31,13 @@
 //! use layerstack_usda::writer::{Attribute, Document, Metadatum, Prim, Value};
 //!
 //! let mut root = Prim::def("Xform", "Root");
-//! root.attributes.push(
+//! root.push_property(
 //!     Attribute::new("xformOpOrder", "token[]", Value::TokenArray(vec![
 //!         "xformOp:translate".into(),
 //!     ]))
 //!     .uniform(),
 //! );
-//! root.attributes.push(Attribute::new(
+//! root.push_property(Attribute::new(
 //!     "xformOp:translate",
 //!     "double3",
 //!     Value::Double3([0.0, 0.0, 1.5]),
@@ -145,7 +145,7 @@ impl Document {
     }
 }
 
-/// A prim spec with its metadata, attributes and child prims.
+/// A prim spec with its metadata, properties and child prims.
 ///
 /// Spec: AOUSD Core §7.3.5 (prim specs), §16.2.17 (prim spec grammar).
 #[derive(Clone, Debug, PartialEq)]
@@ -158,11 +158,10 @@ pub struct Prim {
     pub name: String,
     /// Prim metadata (e.g. `kind`), in order.
     pub metadata: Vec<Metadatum>,
-    /// Attributes, in order.
-    pub attributes: Vec<Attribute>,
-    /// Relationships, in order. They are written after
-    /// [`Self::attributes`]; property names must be unique across both.
-    pub relationships: Vec<Relationship>,
+    /// Attributes and relationships, in one authored order (the
+    /// `properties` children field). Names must be unique across both
+    /// kinds (§7.3.3).
+    pub properties: Vec<Property>,
     /// Child prims, in order.
     pub children: Vec<Self>,
 }
@@ -180,10 +179,14 @@ impl Prim {
             type_name,
             name: name.into(),
             metadata: Vec::new(),
-            attributes: Vec::new(),
-            relationships: Vec::new(),
+            properties: Vec::new(),
             children: Vec::new(),
         }
+    }
+
+    /// Appends an attribute or relationship to [`Self::properties`].
+    pub fn push_property(&mut self, property: impl Into<Property>) {
+        self.properties.push(property.into());
     }
 
     fn validate<'a>(&'a self, parent: &str, siblings: &mut Vec<&'a str>) -> Result<(), WriteError> {
@@ -212,35 +215,63 @@ impl Prim {
         }
         validate_metadata(&self.metadata, &mut Vec::new(), &path, true)?;
         let mut property_names: Vec<&str> = Vec::new();
-        let names = self
-            .attributes
-            .iter()
-            .map(|a| &a.name)
-            .chain(self.relationships.iter().map(|r| &r.name));
-        for name in names {
+        for property in &self.properties {
+            let name = property.name();
             let prop_path = alloc::format!("{path}.{name}");
             if !is_property_name(name) {
                 return Err(WriteError::InvalidName {
                     path: prop_path,
-                    name: name.clone(),
+                    name: name.into(),
                 });
             }
-            if property_names.contains(&name.as_str()) {
+            if property_names.contains(&name) {
                 return Err(WriteError::Duplicate { path: prop_path });
             }
             property_names.push(name);
-        }
-        for attribute in &self.attributes {
-            attribute.validate(&alloc::format!("{path}.{}", attribute.name))?;
-        }
-        for relationship in &self.relationships {
-            relationship.validate(&alloc::format!("{path}.{}", relationship.name))?;
+            match property {
+                Property::Attribute(attribute) => attribute.validate(&prop_path)?,
+                Property::Relationship(relationship) => relationship.validate(&prop_path)?,
+            }
         }
         let mut child_names: Vec<&str> = Vec::new();
         for child in &self.children {
             child.validate(&path, &mut child_names)?;
         }
         Ok(())
+    }
+}
+
+/// A property spec of a [`Prim`]: an attribute or a relationship.
+///
+/// Spec: AOUSD Core §7.3.7 (attribute specs and relationship specs are
+/// collectively property specs).
+#[derive(Clone, Debug, PartialEq)]
+pub enum Property {
+    /// An attribute spec.
+    Attribute(Attribute),
+    /// A relationship spec.
+    Relationship(Relationship),
+}
+
+impl Property {
+    /// The property name.
+    pub fn name(&self) -> &str {
+        match self {
+            Self::Attribute(attribute) => &attribute.name,
+            Self::Relationship(relationship) => &relationship.name,
+        }
+    }
+}
+
+impl From<Attribute> for Property {
+    fn from(attribute: Attribute) -> Self {
+        Self::Attribute(attribute)
+    }
+}
+
+impl From<Relationship> for Property {
+    fn from(relationship: Relationship) -> Self {
+        Self::Relationship(relationship)
     }
 }
 
@@ -1103,15 +1134,14 @@ impl Writer<'_> {
         self.out.push('\n');
         self.indent(depth);
         self.out.push_str("{\n");
-        for attribute in &prim.attributes {
-            self.attribute(attribute, depth + 1);
+        for property in &prim.properties {
+            match property {
+                Property::Attribute(attribute) => self.attribute(attribute, depth + 1),
+                Property::Relationship(relationship) => self.relationship(relationship, depth + 1),
+            }
         }
-        for relationship in &prim.relationships {
-            self.relationship(relationship, depth + 1);
-        }
-        let has_properties = !prim.attributes.is_empty() || !prim.relationships.is_empty();
         for (i, child) in prim.children.iter().enumerate() {
-            if i > 0 || has_properties {
+            if i > 0 || !prim.properties.is_empty() {
                 self.out.push('\n');
             }
             self.prim(child, depth + 1);
@@ -1370,19 +1400,26 @@ mod tests {
     use crate::ast;
     use crate::parser::parse;
 
+    fn first_attribute(prim: &mut Prim) -> &mut Attribute {
+        match &mut prim.properties[0] {
+            Property::Attribute(attribute) => attribute,
+            Property::Relationship(_) => unreachable!("the first property is an attribute"),
+        }
+    }
+
     fn mesh_doc() -> Document {
         let mut mesh = Prim::def("Mesh", "Tri");
-        mesh.attributes.push(Attribute::new(
+        mesh.push_property(Attribute::new(
             "points",
             "point3f[]",
             Value::Float3Array(vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.1, -2.5e-3]]),
         ));
-        mesh.attributes.push(Attribute::new(
+        mesh.push_property(Attribute::new(
             "faceVertexCounts",
             "int[]",
             Value::IntArray(vec![3]),
         ));
-        mesh.attributes.push(
+        mesh.push_property(
             Attribute::new(
                 "primvars:st",
                 "texCoord2f[]",
@@ -1390,16 +1427,16 @@ mod tests {
             )
             .with_metadata("interpolation", Value::Token("vertex".into())),
         );
-        mesh.attributes.push(
+        mesh.push_property(
             Attribute::new("subdivisionScheme", "token", Value::Token("none".into())).uniform(),
         );
-        mesh.attributes.push(
+        mesh.push_property(
             Attribute::new("exedra:label", "string", Value::String("say \"hi\"".into())).custom(),
         );
         let mut root = Prim::def("Xform", "Root");
         root.metadata
             .push(Metadatum::new("kind", Value::Token("component".into())));
-        root.attributes.push(Attribute::new(
+        root.push_property(Attribute::new(
             "xformOp:transform",
             "matrix4d",
             Value::Matrix4d([
@@ -1518,7 +1555,7 @@ def Xform "Root" (
         );
 
         let mut doc = mesh_doc();
-        doc.prims[0].children[0].attributes[0].type_name = "normal3f".into();
+        first_attribute(&mut doc.prims[0].children[0]).type_name = "normal3f".into();
         assert_eq!(
             doc.to_usda(),
             Err(WriteError::TypeMismatch {
@@ -1529,7 +1566,7 @@ def Xform "Root" (
         );
 
         let mut doc = mesh_doc();
-        doc.prims[0].children[0].attributes[0].type_name = "vec3f[]".into();
+        first_attribute(&mut doc.prims[0].children[0]).type_name = "vec3f[]".into();
         assert!(
             matches!(doc.to_usda(), Err(WriteError::UnknownType { .. })),
             "unknown type"
@@ -1543,8 +1580,8 @@ def Xform "Root" (
         );
 
         let mut doc = mesh_doc();
-        let dup = doc.prims[0].children[0].attributes[0].clone();
-        doc.prims[0].children[0].attributes.push(dup);
+        let dup = doc.prims[0].children[0].properties[0].clone();
+        doc.prims[0].children[0].push_property(dup);
         assert_eq!(
             doc.to_usda(),
             Err(WriteError::Duplicate {
@@ -1562,7 +1599,7 @@ def Xform "Root" (
         );
 
         let mut doc = mesh_doc();
-        doc.prims[0].children[0].attributes.push(Attribute::new(
+        doc.prims[0].children[0].push_property(Attribute::new(
             "tex",
             "asset",
             Value::Asset("a@b.png".into()),
@@ -1586,12 +1623,12 @@ def Xform "Root" (
                 ),
             ]),
         ));
-        prim.attributes.push(Attribute::new(
+        prim.push_property(Attribute::new(
             "f",
             "float[]",
             Value::FloatArray(vec![f32::INFINITY, f32::NEG_INFINITY, f32::NAN, 0.1, -0.0]),
         ));
-        prim.attributes.push(Attribute::new(
+        prim.push_property(Attribute::new(
             "tex",
             "asset",
             Value::Asset("textures/a.png".into()),
@@ -1623,7 +1660,7 @@ over "P" (
 
     fn doc_with(attribute: Attribute) -> Document {
         let mut prim = Prim::def("Xform", "Root");
-        prim.attributes.push(attribute);
+        prim.push_property(attribute);
         Document {
             prims: vec![prim],
             ..Document::new()
@@ -1759,10 +1796,10 @@ over "P" (
     /// connections with and without a default value.
     fn shading_doc() -> Document {
         let mut shader = Prim::def("Shader", "Surface");
-        shader.attributes.push(
+        shader.push_property(
             Attribute::new("info:id", "token", Value::Token("UsdPreviewSurface".into())).uniform(),
         );
-        shader.attributes.push(
+        shader.push_property(
             Attribute::new(
                 "inputs:diffuseColor",
                 "color3f",
@@ -1770,15 +1807,13 @@ over "P" (
             )
             .with_connection("/Root/Mat/Tex.outputs:rgb"),
         );
-        shader.attributes.push(
+        shader.push_property(
             Attribute::declared("inputs:roughness", "float")
                 .with_connection("/Root/Mat/Tex.outputs:g"),
         );
-        shader
-            .attributes
-            .push(Attribute::declared("outputs:surface", "token"));
+        shader.push_property(Attribute::declared("outputs:surface", "token"));
         let mut material = Prim::def("Material", "Mat");
-        material.attributes.push(
+        material.push_property(
             Attribute::declared("outputs:surface", "token")
                 .with_connection("/Root/Mat/Surface.outputs:surface"),
         );
@@ -1788,7 +1823,7 @@ over "P" (
             "apiSchemas",
             Value::TokenListOp(ListOp::prepend(vec!["MaterialBindingAPI".into()])),
         ));
-        mesh.attributes.push(
+        mesh.push_property(
             Attribute::new(
                 "subsetFamily:materialBind:familyType",
                 "token",
@@ -1796,17 +1831,16 @@ over "P" (
             )
             .uniform(),
         );
-        mesh.relationships
-            .push(Relationship::new("material:binding", "/Root/Mat"));
-        mesh.relationships.push(Relationship {
+        mesh.push_property(Relationship::new("material:binding", "/Root/Mat"));
+        mesh.push_property(Relationship {
             targets: None,
             ..Relationship::new("exedra:declared", "/Root").custom()
         });
-        mesh.relationships.push(Relationship {
+        mesh.push_property(Relationship {
             targets: Some(vec!["/Root/Mat".into(), "/Root/Body.points".into()]),
             ..Relationship::new("exedra:many", "/Root")
         });
-        mesh.relationships.push(Relationship {
+        mesh.push_property(Relationship {
             targets: Some(Vec::new()),
             ..Relationship::new("exedra:blocked", "/Root")
         });
@@ -1954,7 +1988,11 @@ def Xform "Root"
             "/Root{v=a}/Mat",
         ] {
             let mut doc = shading_doc();
-            doc.prims[0].children[1].relationships[0].targets = Some(vec![target.into()]);
+            let Property::Relationship(binding) = &mut doc.prims[0].children[1].properties[1]
+            else {
+                unreachable!("material:binding is a relationship");
+            };
+            binding.targets = Some(vec![target.into()]);
             assert_eq!(
                 doc.to_usda(),
                 Err(WriteError::InvalidTargetPath {
@@ -1966,19 +2004,18 @@ def Xform "Root"
         }
         // Connections name properties, not prims.
         let mut doc = shading_doc();
-        doc.prims[0].children[0].attributes[0].connections = vec!["/Root/Mat/Surface".into()];
+        first_attribute(&mut doc.prims[0].children[0]).connections =
+            vec!["/Root/Mat/Surface".into()];
         assert!(
             matches!(doc.to_usda(), Err(WriteError::InvalidTargetPath { .. })),
             "connection to a prim path"
         );
         // A relationship and an attribute cannot share a name.
         let mut doc = shading_doc();
-        doc.prims[0].children[1]
-            .relationships
-            .push(Relationship::new(
-                "subsetFamily:materialBind:familyType",
-                "/Root",
-            ));
+        doc.prims[0].children[1].push_property(Relationship::new(
+            "subsetFamily:materialBind:familyType",
+            "/Root",
+        ));
         assert!(
             matches!(doc.to_usda(), Err(WriteError::Duplicate { .. })),
             "property names are shared by attributes and relationships"
@@ -2020,9 +2057,7 @@ def Xform "Root"
             "no list ops in dictionaries"
         );
         let mut doc = shading_doc();
-        doc.prims[0]
-            .attributes
-            .push(Attribute::new("x", "token[]", op).custom());
+        doc.prims[0].push_property(Attribute::new("x", "token[]", op).custom());
         assert!(
             matches!(doc.to_usda(), Err(WriteError::TypeMismatch { .. })),
             "a list op is not an attribute value"

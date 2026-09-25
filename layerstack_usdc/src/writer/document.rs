@@ -11,8 +11,7 @@
 //!   then `primChildren`;
 //! - a prim holds `specifier`, `typeName` (for typed prims), its metadata
 //!   in order (a token list op such as `prepend apiSchemas` included), then
-//!   `primChildren` and `properties` (attributes, then relationships, as
-//!   the USDA writer orders them);
+//!   `primChildren` and `properties` (in the document's property order);
 //! - an attribute holds `custom`, `typeName` (the declared name, role and
 //!   `[]` included), `variability`, `default` when a value is authored, its
 //!   metadata in order, then `connectionPaths` (an explicit path list op)
@@ -43,7 +42,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 use layerstack_usda::writer::{
-    Attribute, Document, ListOp as UsdaListOp, Metadatum, Prim, Relationship,
+    Attribute, Document, ListOp as UsdaListOp, Metadatum, Prim, Property, Relationship,
     Specifier as UsdaSpecifier, Value as UsdaValue, Variability as UsdaVariability,
 };
 
@@ -115,17 +114,16 @@ fn lower_prim(prim: &Prim, parent: &str, specs: &mut Vec<Spec>) -> Result<(), Us
             Value::TokenVector(prim.children.iter().map(|c| c.name.clone()).collect()),
         );
     }
-    if !prim.attributes.is_empty() || !prim.relationships.is_empty() {
-        let names = prim.attributes.iter().map(|a| a.name.clone());
-        let names = names.chain(prim.relationships.iter().map(|r| r.name.clone()));
+    if !prim.properties.is_empty() {
+        let names = prim.properties.iter().map(|p| String::from(p.name()));
         spec = spec.with_field("properties", Value::TokenVector(names.collect()));
     }
     specs.push(spec);
-    for attribute in &prim.attributes {
-        specs.push(lower_attribute(attribute, &path)?);
-    }
-    for relationship in &prim.relationships {
-        specs.push(lower_relationship(relationship, &path)?);
+    for property in &prim.properties {
+        specs.push(match property {
+            Property::Attribute(attribute) => lower_attribute(attribute, &path)?,
+            Property::Relationship(relationship) => lower_relationship(relationship, &path)?,
+        });
     }
     for child in &prim.children {
         lower_prim(child, &path, specs)?;
@@ -443,12 +441,12 @@ mod tests {
 
     fn mesh_doc() -> Document {
         let mut mesh = Prim::def("Mesh", "Tri");
-        mesh.attributes.push(Attribute::new(
+        mesh.push_property(Attribute::new(
             "points",
             "point3f[]",
             UsdaValue::Float3Array(vec![[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]]),
         ));
-        mesh.attributes.push(
+        mesh.push_property(
             Attribute::new(
                 "primvars:st",
                 "texCoord2f[]",
@@ -457,7 +455,7 @@ mod tests {
             .with_metadata("interpolation", UsdaValue::String("vertex".into()))
             .with_metadata("elementSize", UsdaValue::Int(1)),
         );
-        mesh.attributes.push(
+        mesh.push_property(
             Attribute::new(
                 "subdivisionScheme",
                 "token",
@@ -465,12 +463,11 @@ mod tests {
             )
             .uniform(),
         );
-        mesh.attributes.push(Attribute {
+        mesh.push_property(Attribute {
             value: None,
             ..Attribute::new("h", "half", UsdaValue::Int(0)).custom()
         });
-        mesh.attributes
-            .push(Attribute::new("t", "timecode", UsdaValue::Double(24.0)).custom());
+        mesh.push_property(Attribute::new("t", "timecode", UsdaValue::Double(24.0)).custom());
         let mut root = Prim::def("Xform", "Root");
         root.metadata
             .push(Metadatum::new("kind", UsdaValue::Token("component".into())));
@@ -682,7 +679,7 @@ mod tests {
     #[test]
     fn lowers_relationships_connections_and_api_schemas() {
         let mut shader = Prim::def("Shader", "S");
-        shader.attributes.push(Attribute {
+        shader.push_property(Attribute {
             value: None,
             ..Attribute::new("outputs:surface", "token", UsdaValue::Int(0))
         });
@@ -693,27 +690,26 @@ mod tests {
             .with_metadata("connectability", UsdaValue::Token("interfaceOnly".into()));
         input.connections.push("/Root/M/S.outputs:surface".into());
         let mut material = Prim::def("Material", "M");
-        material.attributes.push(surface);
-        material.attributes.push(input);
+        material.push_property(surface);
+        material.push_property(input);
         material.children.push(shader);
         let mut root = Prim::def("Mesh", "Root");
         root.metadata.push(Metadatum::new(
             "apiSchemas",
             UsdaValue::TokenListOp(UsdaListOp::prepend(vec!["MaterialBindingAPI".into()])),
         ));
-        root.attributes
-            .push(Attribute::new("a", "int", UsdaValue::Int(1)));
+        root.push_property(Attribute::new("a", "int", UsdaValue::Int(1)));
         let mut binding = Relationship::new("material:binding", "/Root/M");
         binding.metadata.push(Metadatum::new(
             "bindMaterialAs",
             UsdaValue::Token("strongerThanDescendants".into()),
         ));
-        root.relationships.push(binding);
-        root.relationships.push(Relationship {
+        root.push_property(binding);
+        root.push_property(Relationship {
             targets: Some(vec![]),
             ..Relationship::new("blocked", "/Root").custom()
         });
-        root.relationships.push(Relationship {
+        root.push_property(Relationship {
             targets: None,
             ..Relationship::new("bare", "/Root")
         });
@@ -843,14 +839,14 @@ mod tests {
             "symmetryArguments",
             dict(vec![("axis", UsdaValue::Token("x".into()))]),
         ));
-        prim.attributes.push(
+        prim.push_property(
             Attribute::new("size", "float", UsdaValue::Float(1.0))
                 .with_metadata("limits", limits.clone())
                 .with_metadata("uiHints", hints.clone()),
         );
         let mut rel = Relationship::new("target", "/Root");
         rel.metadata.push(Metadatum::new("uiHints", hints.clone()));
-        prim.relationships.push(rel);
+        prim.push_property(rel);
         let doc = Document {
             metadata: vec![Metadatum::new(
                 "fallbackPrimTypes",
@@ -998,7 +994,10 @@ mod tests {
             );
         }
         let mut doc = mesh_doc();
-        doc.prims[0].children[0].attributes[0]
+        let Property::Attribute(points) = &mut doc.prims[0].children[0].properties[0] else {
+            unreachable!("points is an attribute");
+        };
+        points
             .metadata
             .push(Metadatum::new("elementSize", UsdaValue::UInt(2)));
         assert!(

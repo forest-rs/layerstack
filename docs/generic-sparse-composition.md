@@ -9,8 +9,14 @@ open.
 
 `layerstack` supports sparse array edits as authored values:
 
-- `Value::ArrayEdit` / `ArrayEdit` (`layerstack/src/array_edit.rs`)
-- typed property metadata in `PropertyType`, used for `minsize`/`resize` fill
+- `Value::ArrayEdit` / `ArrayEdit`, which is `opinionated::ArrayEdit<Value>`
+  (`layerstack/src/array_edit.rs`)
+- typed property metadata in `PropertyType`, which supplies the
+  `minsize`/`resize` fill through `PropertyTypeFill`
+
+The edit interpreter itself is `opinionated`'s (`opinionated/src/array_edit.rs`),
+generic over the element type; `layerstack` only chooses the element type and
+the fill.
 
 Sparse resolution lives in `layerstack/src/value_resolution.rs`, not in
 `Stage`. `Stage` only linearizes opinions, fetches the schema fallback and
@@ -266,4 +272,5 @@ value differs from the expected one. Any other difference from OpenUSD fails
   `layerstack/src/value_resolution.rs`
 - OpenUSD differential vectors: `layerstack_conformance/tests/temporal_sparse.rs`
 - Family kernel: `opinionated/src/family.rs`
-- Sparse edit kernel: `layerstack/src/array_edit.rs`
+- Sparse edit kernel: `opinionated/src/array_edit.rs`; USD value adapters:
+  `layerstack/src/array_edit.rs`

@@ -23,6 +23,10 @@
 //!   `/_class_Boulder`, which `rock.usda /Boulder` inherits: the class is
 //!   implied across that ancestral inherit as `/Boulder/_class_Face`, then
 //!   across the reference as `/Cliff/_class_Face`, whose local opinion wins.
+//! - `/Shade` references `/Bank/Sprout`, where `/_class_Moss/Sprout` is
+//!   implied beneath `/Bank`'s reference from `bed.usda`; the implied class
+//!   keeps its origin, so `/Bank`'s authored inherit outranks it. `/Shore`
+//!   is the same case with the classes declared in the other order.
 //!
 //! Spec: AOUSD Core §10.4.2.4 (implied class arcs); OpenUSD
 //! `_EvalImpliedClasses` in `pxr/usd/pcp/primIndex.cpp`.
@@ -149,4 +153,33 @@ fn values_match_openusd() {
         "values differ from OpenUSD:\n{}",
         mismatches.join("\n")
     );
+}
+
+#[test]
+fn implied_classes_reached_through_an_arc_keep_their_origins() {
+    // `/Shade` and `/Shore` reach the implied class of `/Bank/Sprout` and
+    // `/Marsh/Sprout` through a reference: it is implied from the class
+    // `bed.usda` authors, and ranks by where that origin sits.
+    let oracle = oracle();
+    let (mut loaded, stage) = compose(&oracle);
+    for prim in ["/Shade", "/Shore"] {
+        let id = loaded.store.path(prim);
+        let graph = stage.explain_prim_graph(id).expect("composed prim");
+        let implied: Vec<_> = graph
+            .nodes()
+            .filter(|(_, node)| node.is_implied())
+            .collect();
+        assert!(!implied.is_empty(), "{prim} has an implied class");
+        for (id, node) in implied {
+            let origin = node
+                .origin()
+                .and_then(|origin| graph.node(origin))
+                .unwrap_or_else(|| panic!("{prim}: implied node {id:?} has no origin"));
+            assert_eq!(
+                layer_name(&loaded, origin.layer_stack()),
+                "bed.usda",
+                "{prim}: implied node {id:?} is implied from `bed.usda`"
+            );
+        }
+    }
 }

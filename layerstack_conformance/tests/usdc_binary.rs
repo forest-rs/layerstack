@@ -55,15 +55,28 @@ fn read_usdc_file(path: &Path) -> ParsedUsdc {
 
     store.insert_layer(result.layer);
 
-    ParsedUsdc { store, layer_id }
+    ParsedUsdc {
+        store,
+        layer_id,
+        diagnostics: result.diagnostics,
+    }
 }
 
 struct ParsedUsdc {
     store: InMemoryStore,
     layer_id: LayerId,
+    diagnostics: Vec<layerstack_usdc::assemble::AssembleDiagnostic>,
 }
 
 impl ParsedUsdc {
+    /// Returns the prim spec at a given path, panicking when absent.
+    fn prim(&mut self, prim_path: &str) -> layerstack::PrimSpec {
+        let path = layerstack::path::Path::parse_absolute(prim_path, &mut self.store.tokens)
+            .expect("invalid path");
+        let path_id = self.store.paths.lookup(&path).expect("path interned");
+        self.store.layers[&self.layer_id].prims[&path_id].clone()
+    }
+
     /// Returns the authored property spec at a given prim path and name.
     fn property(&mut self, prim_path: &str, name: &str) -> Option<PropertySpec> {
         let path = layerstack::path::Path::parse_absolute(prim_path, &mut self.store.tokens)
@@ -321,8 +334,18 @@ fn gen_assetpath_parses() {
 
 #[test]
 fn gen_variants_parses() {
+    // `usdcat`: `def "root" (variants = { string foo = "eggs" } prepend
+    // variantSets = "foo") { variantSet "foo" = { "eggs" {} "spam" {} } }`.
+    // Crate paths spell the variant specs `/root{foo=eggs}`.
     let mut parsed = read_gen("variants");
-    assert!(parsed.has_prim("/root"));
+    let root = parsed.prim("/root");
+    let foo = parsed.store.tokens.intern("foo");
+    let eggs = parsed.store.tokens.intern("eggs");
+    let spam = parsed.store.tokens.intern("spam");
+    assert_eq!(root.variant_selections.get(&foo), Some(&eggs));
+    let set = root.variant_sets.get(&foo).expect("variant set `foo`");
+    assert!(set.variants.contains_key(&eggs));
+    assert!(set.variants.contains_key(&spam));
 }
 
 // ---------------------------------------------------------------------------
@@ -334,26 +357,15 @@ fn gen_timesamples_parses() {
     let mut parsed = read_gen("timesamples");
     assert!(parsed.has_prim("/root"));
 
-    // The animated attribute should have time samples.
+    // `usdcat` shows `float animated.timeSamples = { 0: 0, 1: 1, …, 9: 9,
+    // 11: None }`: each frame's value equals its time, and frame 11 blocks.
+    // Crate files store the times as a `DoubleVector`.
     let property = parsed.expect_property("/root", "animated");
-    match property.time_samples {
-        Some(ts) => {
-            assert!(!ts.is_empty(), "expected non-empty time samples");
-            // Times are stored as a `DoubleVector` and must be decoded, not
-            // defaulted.
-            assert!(
-                ts.windows(2).all(|pair| pair[0].0 < pair[1].0),
-                "sample times must be strictly increasing: {ts:?}"
-            );
-            // Each frame's time roughly equals its value.
-            for (time, value) in &ts[..ts.len().saturating_sub(1)] {
-                if let Value::Double(v) = value {
-                    assert!((time - v).abs() < 0.01, "time={time} but value={v}");
-                }
-            }
-        }
-        None => panic!("expected TimeSamples, got {property:?}"),
-    }
+    let mut expected: Vec<(f64, Value)> = (0_u8..10)
+        .map(|frame| (f64::from(frame), Value::Float(f32::from(frame))))
+        .collect();
+    expected.push((11.0, Value::Blocked));
+    assert_eq!(property.time_samples, Some(expected));
 }
 
 // ---------------------------------------------------------------------------
@@ -361,9 +373,57 @@ fn gen_timesamples_parses() {
 // ---------------------------------------------------------------------------
 
 #[test]
+fn gen_relocates_reports_unsupported() {
+    // Relocates are not modelled; assembly says so instead of dropping them.
+    let parsed = read_gen("relocates");
+    assert_eq!(parsed.diagnostics.len(), 1, "{:?}", parsed.diagnostics);
+    let diagnostic = &parsed.diagnostics[0];
+    assert_eq!(diagnostic.spec_path, "/");
+    assert_eq!(diagnostic.field.as_deref(), Some("layerRelocates"));
+}
+
+#[test]
+fn gen_permissions_reads_permission_as_token() {
+    // `permission` is a deprecated Sdf enum field (Core §7.6.2.7); it is kept
+    // as the token USDA spells it with.
+    let mut parsed = read_gen("permissions");
+    assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+    let specialize = parsed.prim("/Specialize");
+    let permission = parsed.store.tokens.intern("permission");
+    let private = parsed.store.tokens.intern("private");
+    assert_eq!(
+        specialize.field(permission),
+        Some(&layerstack::FieldValue::Value(Value::Token(private)))
+    );
+}
+
+#[test]
 fn gen_listops_parses() {
+    // `usdcat`: `apiSchemas = ["MaterialBindingAPI"]`, `append payload =
+    // @eggs.usda@`, `prepend references = @./ref.usda@</Model> (offset =
+    // 10)` and `rel foo = [</eggs>, </spam>]`. Crate files name the fields
+    // `payload` and `inheritPaths` (`pxr/usd/sdf/schema.h`).
     let mut parsed = read_gen("listops");
-    assert!(parsed.has_prim("/root"));
+    let root = parsed.prim("/root");
+    let api = parsed.store.tokens.intern("apiSchemas");
+    let binding = parsed.store.tokens.intern("MaterialBindingAPI");
+    assert_eq!(
+        root.field(api),
+        Some(&layerstack::FieldValue::TokenListOp(layerstack::ListOp {
+            explicit: Some(vec![binding]),
+            ..layerstack::ListOp::default()
+        }))
+    );
+    assert_eq!(root.payloads.append.len(), 1, "{:?}", root.payloads);
+    assert_eq!(root.payloads.append[0].asset.as_deref(), Some("eggs.usda"));
+    assert_eq!(root.references.prepend.len(), 1);
+    assert_eq!(root.references.prepend[0].layer_offset.offset, 10.0);
+    let foo = parsed.expect_property("/root", "foo");
+    assert!(foo.is_relationship());
+    assert_eq!(
+        foo.targets.and_then(|t| t.explicit).map(|t| t.len()),
+        Some(2)
+    );
 }
 
 // ---------------------------------------------------------------------------

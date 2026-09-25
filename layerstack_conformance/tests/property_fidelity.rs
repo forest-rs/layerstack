@@ -95,9 +95,50 @@ fn dump(store: &InMemoryStore) -> Vec<String> {
     )
 }
 
+/// Loads one USDC layer as `LayerId(1)`, asserting a diagnostic-free read.
+fn load_usdc(path: &Path) -> InMemoryStore {
+    let data =
+        std::fs::read(path).unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));
+    let mut store = InMemoryStore::default();
+    let result = layerstack_usdc::read_usdc(
+        &data,
+        LayerId(1),
+        &mut store.tokens,
+        &mut store.paths,
+        &mut NoAssets,
+    )
+    .unwrap_or_else(|e| panic!("failed to read {}: {e}", path.display()));
+    assert!(
+        result.diagnostics.is_empty(),
+        "diagnostics for {}: {:?}",
+        path.display(),
+        result.diagnostics
+    );
+    store.insert_layer(result.layer);
+    store
+}
+
 /// Asserts that the fixture and OpenUSD's rewrite of it author the same
 /// content, and returns the fixture's store.
+///
+/// Both of OpenUSD's rewrites are checked: USDA text (`*.usdcat.usda`) and
+/// the crate binary (`*.usdc`, written by `usdcat -o`).
 fn assert_matches_usdcat(name: &str) -> InMemoryStore {
+    let original = load_usda(&assets_dir().join(format!("{name}.usda")));
+    let binary = load_usdc(&assets_dir().join(format!("{name}.usdc")));
+    let (original_dump, binary_dump) = (dump(&original), dump(&binary));
+    assert_eq!(
+        original_dump,
+        binary_dump,
+        "{name}: USDC content differs from the USDA it was written from\n{}",
+        binary_dump.join("\n")
+    );
+    assert_matches_usdcat_text(name)
+}
+
+/// Asserts that the fixture and OpenUSD's text rewrite of it author the same
+/// content, and returns the fixture's store.
+fn assert_matches_usdcat_text(name: &str) -> InMemoryStore {
     let original = load_usda(&assets_dir().join(format!("{name}.usda")));
     let rewritten = load_usda(&assets_dir().join(format!("{name}.usdcat.usda")));
     let (original_dump, rewritten_dump) = (dump(&original), dump(&rewritten));

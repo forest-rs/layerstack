@@ -200,6 +200,57 @@
    ]
   },
   {
+   "path": "/Cedar",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Cedar"
+    ],
+    [
+     "root.usda",
+     "/Cone"
+    ],
+    [
+     "root.usda",
+     "/Seed"
+    ],
+    [
+     "root.usda",
+     "/Bark"
+    ]
+   ]
+  },
+  {
+   "path": "/Cone",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Cone"
+    ],
+    [
+     "root.usda",
+     "/Seed"
+    ],
+    [
+     "root.usda",
+     "/Bark"
+    ]
+   ]
+  },
+  {
+   "path": "/Seed",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Seed"
+    ],
+    [
+     "root.usda",
+     "/Bark"
+    ]
+   ]
+  },
+  {
    "path": "/Spruce",
    "prim_stack": [
     [
@@ -316,6 +367,9 @@
   "/Resin.x": 3,
   "/Bark.x": 4,
   "/Larch.x": 3,
+  "/Cedar.x": 5,
+  "/Cone.x": 5,
+  "/Seed.x": 5,
   "/Spruce.x": 7,
   "/Maple.x": 4,
   "/Maple.y": 8,

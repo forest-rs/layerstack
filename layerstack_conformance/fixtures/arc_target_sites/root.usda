@@ -70,6 +70,27 @@ def "Larch" (
 {
 }
 
+# The same class reached more strongly through a chain of inherits than
+# through the direct inherit listed after it.
+def "Cedar" (
+    inherits = [</Cone>, </Bark>]
+)
+{
+}
+
+class "Cone" (
+    inherits = </Seed>
+)
+{
+}
+
+class "Seed" (
+    inherits = </Bark>
+)
+{
+    int x = 5
+}
+
 # The first shape again, inside a referenced layer stack.
 def "Spruce" (
     references = @./classes.usda@</Sapling>

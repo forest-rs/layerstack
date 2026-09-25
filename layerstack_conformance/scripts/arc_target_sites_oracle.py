@@ -18,7 +18,8 @@ references nested in another asset, and a class a prim inherits directly
 that a referenced prim implies again (`_IsRedundantSite`). A class reached
 twice is one site at its strongest registration (`skipDuplicateNodes`):
 inherited directly and through another class's specializes, in either list
-order, specialized directly, the same shape through a reference, and with a
+order, specialized directly, reached more strongly through a chain of
+inherits than directly, the same shape through a reference, and with a
 selected variant on the class, whose branch stays with the registration that
 stays.
 
@@ -106,6 +107,27 @@ def "Larch" (
     specializes = </Bark>
 )
 {
+}
+
+# The same class reached more strongly through a chain of inherits than
+# through the direct inherit listed after it.
+def "Cedar" (
+    inherits = [</Cone>, </Bark>]
+)
+{
+}
+
+class "Cone" (
+    inherits = </Seed>
+)
+{
+}
+
+class "Seed" (
+    inherits = </Bark>
+)
+{
+    int x = 5
 }
 
 # The first shape again, inside a referenced layer stack.

@@ -1,0 +1,63 @@
+{
+ "generator": "layerstack_conformance/scripts/nested_arc_depth_oracle.py",
+ "openusd_version": "0.26.8",
+ "root": "root.usda",
+ "prims": [
+  {
+   "path": "/Boulder",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Boulder"
+    ],
+    [
+     "quarry.usda",
+     "/Quarry"
+    ],
+    [
+     "seam.usda",
+     "/Seam"
+    ],
+    [
+     "vein.usda",
+     "/Vein"
+    ],
+    [
+     "pebble.usda",
+     "/Pebble"
+    ]
+   ]
+  },
+  {
+   "path": "/Crag",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Crag"
+    ],
+    [
+     "pebble.usda",
+     "/Pebble"
+    ],
+    [
+     "quarry.usda",
+     "/Quarry"
+    ],
+    [
+     "seam.usda",
+     "/Seam"
+    ],
+    [
+     "vein.usda",
+     "/Vein"
+    ]
+   ]
+  }
+ ],
+ "values": {
+  "/Boulder.depth": 2,
+  "/Boulder.grain": 3,
+  "/Crag.depth": 1,
+  "/Crag.grain": 1
+ }
+}

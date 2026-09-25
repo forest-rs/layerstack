@@ -1,0 +1,27 @@
+#usda 1.0
+
+def "Row"
+{
+    def "a"
+    {
+    }
+    def "b"
+    {
+    }
+    def "c"
+    {
+    }
+    reorder nameChildren = ["c", "b", "a"]
+}
+
+def "Sets"
+{
+    uniform pathExpression heroes = "/Stray/Leaf //Bud"
+    uniform pathExpression both = "/Stray// %_"
+    uniform pathExpression blocked = None
+    uniform pathExpression sampled.timeSamples = {
+        0: "/Stray/Leaf",
+        10: "/Stray/Leaf/Bud",
+    }
+    uniform pathExpression timed = "/Stray"
+}

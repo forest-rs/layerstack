@@ -1,0 +1,140 @@
+#usda 1.0
+(
+    subLayers = [
+        @./rows.usda@
+    ]
+)
+
+def "Seedling"
+{
+    def "Leaf" (
+        inherits = </_class_Leaf>
+    )
+    {
+        double size = 1
+    }
+}
+
+class "_class_Leaf"
+{
+    double tint = 1
+}
+
+def "Stray"
+{
+    def "Leaf"
+    {
+        double size = 9
+        double vein = 9
+
+        def "Bud"
+        {
+        }
+    }
+}
+
+# Nothing authored beneath the instance contributes: not the value, not
+# the reference, inherit or variant set of `Leaf`.
+def "Grove" (
+    instanceable = true
+    references = </Seedling>
+)
+{
+    over "Leaf" (
+        references = </Stray/Leaf>
+        inherits = </Stray/Leaf>
+        variants = {
+            string season = "dry"
+        }
+        prepend variantSets = "season"
+    )
+    {
+        double size = 7
+        variantSet "season" = {
+            "dry" {
+                double moisture = 0
+            }
+        }
+    }
+}
+
+# `rows.usda` lists `a b c` and reorders them `c b a`; this layer adds `d`
+# and reorders `a d`, which leaves `c b` in front.
+over "Row"
+{
+    def "d"
+    {
+    }
+    reorder nameChildren = ["a", "d"]
+}
+
+# `d b` moves `d` before `b`, and `b` carries `c` along; `a` stays in front.
+def "Column"
+{
+    def "a"
+    {
+    }
+    def "b"
+    {
+    }
+    def "c"
+    {
+    }
+    def "d"
+    {
+    }
+    reorder nameChildren = ["d", "b"]
+}
+
+# `%_` splices in the weaker expression from `rows.usda`.
+over "Sets"
+{
+    uniform pathExpression heroes = "/Stray/L* %_"
+    uniform pathExpression lone = "/Stray %_"
+    uniform pathExpression both = "%_ - /Stray/Leaf/Bud"
+
+    # `%_` reaching a block: no value at the default time, and nothing
+    # spliced in at a numeric time.
+    uniform pathExpression blocked = "/Stray %_"
+
+    # `%_` over weaker time samples, and time samples over a weaker default.
+    uniform pathExpression sampled = "/Stray %_"
+    uniform pathExpression timed.timeSamples = {
+        0: "/Stray/Leaf %_",
+        10: "/Stray/Leaf/Bud %_",
+    }
+}
+
+# Expressions authored in `part.usda` are anchored at their prim and mapped
+# into `/Part`; paths outside the referenced prim drop out.
+def "Part" (
+    references = @./part.usda@</Gear>
+)
+{
+    uniform pathExpression chain = "%_ Axle"
+    uniform pathExpression plus = "%_ + Local"
+}
+
+# An internal reference and an inherit also map the root namespace to itself.
+def "Copy" (
+    references = </Local>
+)
+{
+}
+
+def "Local"
+{
+    uniform pathExpression mixed = "/Local/Pin /Stray Pin ../Stray"
+    uniform pathExpression globs = "/Local/P[a-z]n /S* //S* %../Local:parts %:parts"
+}
+
+def "Heir" (
+    inherits = </_class_Heir>
+)
+{
+}
+
+class "_class_Heir"
+{
+    uniform pathExpression mixed = "/_class_Heir/Pin /Stray Pin"
+}

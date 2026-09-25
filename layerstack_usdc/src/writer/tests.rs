@@ -276,6 +276,7 @@ fn from_crate(ty: ValueType, is_array: bool, v: &CrateValue) -> Value {
         (T::TokenListOp, CrateValue::ListOp(op)) => Value::TokenListOp(list_op(op)),
         (T::StringListOp, CrateValue::ListOp(op)) => Value::StringListOp(list_op(op)),
         (T::PathListOp, CrateValue::ListOp(op)) => Value::PathListOp(list_op(op)),
+        (_, CrateValue::VariantSelectionMap(pairs)) => Value::VariantSelectionMap(pairs.clone()),
         other => panic!("unexpected value {other:?}"),
     }
 }
@@ -998,17 +999,57 @@ fn rejects_invalid_input() {
     );
     assert!(
         matches!(
-            err(vec![root(), Spec::new("/A", SpecForm::Variant)]),
+            err(vec![root(), Spec::new("/A.x", SpecForm::Connection)]),
             UsdcWriteError::UnsupportedSpecForm { .. }
         ),
-        "variants unsupported"
+        "connection specs unsupported"
+    );
+    for (path, form) in [
+        ("/A", SpecForm::Variant),
+        ("/A{v=}", SpecForm::Variant),
+        ("/A{v=x}", SpecForm::VariantSet),
+        ("/A{v=x}", SpecForm::Prim),
+    ] {
+        assert!(
+            matches!(
+                err(vec![root(), Spec::new(path, form)]),
+                UsdcWriteError::SpecPathMismatch { .. }
+            ),
+            "{path} is no {form:?} path"
+        );
+    }
+    let prim = || Spec::new("/A", SpecForm::Prim);
+    assert!(
+        matches!(
+            err(vec![
+                root(),
+                prim(),
+                Spec::new("/A{v=x}", SpecForm::Variant)
+            ]),
+            UsdcWriteError::MissingParent { .. }
+        ),
+        "a variant needs its variant set"
     );
     assert!(
         matches!(
-            err(vec![root(), Spec::new("/A{v=x}", SpecForm::Prim)]),
+            err(vec![root(), Spec::new("/A{v=}", SpecForm::VariantSet)]),
+            UsdcWriteError::MissingParent { .. }
+        ),
+        "a variant set needs its prim"
+    );
+    assert!(
+        matches!(
+            err(vec![root(), prim(), Spec::new("/A{v=x}B", SpecForm::Prim)]),
+            UsdcWriteError::MissingParent { .. }
+        ),
+        "a prim in a variant needs the variant"
+    );
+    assert!(
+        matches!(
+            err(vec![root(), prim(), Spec::new("/A{v=}B", SpecForm::Prim)]),
             UsdcWriteError::InvalidPath { .. }
         ),
-        "variant paths unsupported"
+        "a variant set has no children"
     );
     let bad_value = |value: Value| err(layer_with(&[("x", value)]));
     assert!(
@@ -1061,5 +1102,136 @@ fn rejects_invalid_input() {
     assert!(
         matches!(err(specs), UsdcWriteError::DuplicateField { .. }),
         "duplicate field"
+    );
+}
+
+/// Variant set and variant specs are laid out and stored as
+/// `Sdf_CrateData` stores them: variant paths in `SdfPath` order after the
+/// prim's children, their element tokens `{set=variant}`, and the
+/// `variantSelection` map in set name order; the reader assembles them into
+/// the layer's variant sets, branch prim specs and nested sets.
+///
+/// Spec: AOUSD Core §7.3.6, §7.6.6–§7.6.7, §16.3.
+#[test]
+fn variant_specs_round_trip() {
+    use layerstack::doc::{LayerId, Value as DocValue};
+    use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset};
+
+    struct NoAssets;
+    impl AssetResolver for NoAssets {
+        fn resolve(
+            &mut self,
+            _: &str,
+            _: Option<LayerId>,
+            _: &mut layerstack::TokenInterner,
+            _: &mut layerstack::PathInterner,
+        ) -> Result<ResolvedAsset, AssetResolveError> {
+            Err(AssetResolveError::NotFound)
+        }
+        fn resolved_path(&self, _: LayerId) -> Option<&str> {
+            None
+        }
+    }
+
+    let tokens = |names: &[&str]| Value::TokenVector(names.iter().map(|n| n.to_string()).collect());
+    let over = |path: &str| {
+        Spec::new(path, SpecForm::Prim).with_field("specifier", Value::Specifier(Specifier::Over))
+    };
+    let selections = vec![
+        ("season".to_string(), "winter".to_string()),
+        ("age".to_string(), "old".to_string()),
+    ];
+    let specs = vec![
+        Spec::new("/Root{season=winter}{age=}", SpecForm::VariantSet)
+            .with_field("variantChildren", tokens(&["old"])),
+        Spec::new("/Root{season=winter}{age=old}", SpecForm::Variant),
+        over("/Root{season=winter}Snow"),
+        attribute("/Root{season=winter}", "depth", Value::Double(2.0)),
+        Spec::new("/Root{season=winter}", SpecForm::Variant)
+            .with_field("variantSetChildren", tokens(&["age"]))
+            .with_field("primChildren", tokens(&["Snow"]))
+            .with_field("properties", tokens(&["depth"])),
+        Spec::new("/Root{season=}", SpecForm::VariantSet)
+            .with_field("variantChildren", tokens(&["winter"])),
+        over("/Root/Trunk"),
+        over("/Root")
+            .with_field("variantSelection", Value::VariantSelectionMap(selections))
+            .with_field(
+                "variantSetNames",
+                Value::StringListOp(ListOp::prepend(vec!["season".into()])),
+            )
+            .with_field("variantSetChildren", tokens(&["season"]))
+            .with_field("primChildren", tokens(&["Trunk"])),
+        root(),
+    ];
+    let bytes = write_crate(&specs).unwrap();
+    let file = Decoded::new(bytes.clone());
+    let order: Vec<String> = file.specs().into_iter().map(|s| s.0).collect();
+    assert_eq!(
+        order,
+        [
+            "/",
+            "/Root",
+            "/Root/Trunk",
+            "/Root{season=}",
+            "/Root{season=winter}",
+            "/Root{season=winter}Snow",
+            "/Root{season=winter}{age=}",
+            "/Root{season=winter}{age=old}",
+            "/Root{season=winter}.depth",
+        ],
+        "prims before variant selections, then properties"
+    );
+    assert!(
+        file.sections.tokens.iter().any(|t| t == "{season=winter}"),
+        "variant element token"
+    );
+    assert_eq!(
+        file.value("/Root", "variantSelection"),
+        Value::VariantSelectionMap(vec![
+            ("age".into(), "old".into()),
+            ("season".into(), "winter".into()),
+        ]),
+        "selections in set name order"
+    );
+
+    let mut store = InMemoryStore::default();
+    let result = crate::read_usdc(
+        &bytes,
+        LayerId(1),
+        &mut store.tokens,
+        &mut store.paths,
+        &mut NoAssets,
+    )
+    .unwrap();
+    assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+    let layer = result.layer;
+    let [season, winter, age, old, snow_name] =
+        ["season", "winter", "age", "old", "Snow"].map(|name| store.tokens.intern(name));
+    let root_path = layerstack::path::Path::parse_absolute("/Root", &mut store.tokens).unwrap();
+    let root_id = store.paths.lookup(&root_path).unwrap();
+    let prim = &layer.prims[&root_id];
+    assert_eq!(prim.variant_set_order, [season, age], "set order");
+    assert_eq!(prim.variant_selections.get(&season), Some(&winter));
+    assert_eq!(prim.variant_selections.get(&age), Some(&old));
+    let branch = &prim.variant_sets[&season].variants[&winter];
+    assert_eq!(branch.authored_children, [snow_name], "branch children");
+    assert_eq!(
+        branch.properties[0].spec.default,
+        Some(DocValue::Double(2.0)),
+        "branch property"
+    );
+    let nested = &prim.variant_sets[&age].variants[&old];
+    let site = layerstack::spec_path::VariantSelectionSite {
+        host_path: root_id,
+        set: season,
+        variant: winter,
+    };
+    assert_eq!(nested.outer_variant_sites, [site], "nested in its branch");
+    let snow = layerstack::path::Path::parse_absolute("/Root/Snow", &mut store.tokens).unwrap();
+    let snow = store.paths.lookup(&snow).unwrap();
+    assert!(
+        layer.prim_spec_in(snow, &[site]).is_some(),
+        "the branch's child prim spec"
     );
 }

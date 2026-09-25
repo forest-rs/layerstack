@@ -16,7 +16,13 @@
 //!   its arcs, `inheritPaths`, `payload`, `references` and `specializes`
 //!   (as the USDA writes them), then `propertyOrder` and `primOrder` (the
 //!   `reorder` statements), then `primChildren` and `properties` (in the
-//!   document's property order);
+//!   document's property order); `variantSelection` and `variantSetNames`
+//!   follow the arcs, and `variantSetChildren` precedes `primChildren`;
+//! - a variant set is a variant set spec (`/P{v=}`) holding
+//!   `variantChildren`, and each variant a variant spec (`/P{v=x}`) holding
+//!   the fields of a prim spec but `specifier` and `typeName`, with its
+//!   properties (`/P{v=x}.a`), child prims (`/P{v=x}C`) and nested variant
+//!   sets (`/P{v=x}{w=}`) below it;
 //! - an attribute holds `custom`, `typeName` (the declared name, role and
 //!   `[]` included), `variability`, `default` when a value is authored (a
 //!   value block included), its metadata in order, then `connectionPaths`
@@ -144,7 +150,12 @@ pub fn document_specs(doc: &Document) -> Result<Vec<Spec>, UsdcWriteError> {
 }
 
 fn lower_prim(prim: &Prim, parent: &str, specs: &mut Vec<Spec>) -> Result<(), UsdcWriteError> {
-    let path = alloc::format!("{parent}/{}", prim.name);
+    // A prim in a variant (`/P{v=x}C`) follows its variant's selection.
+    let path = if parent.ends_with('}') {
+        alloc::format!("{parent}{}", prim.name)
+    } else {
+        alloc::format!("{parent}/{}", prim.name)
+    };
     let mut spec = Spec::new(path.clone(), SpecForm::Prim).with_field(
         "specifier",
         Value::Specifier(match prim.specifier {
@@ -156,6 +167,25 @@ fn lower_prim(prim: &Prim, parent: &str, specs: &mut Vec<Spec>) -> Result<(), Us
     if let Some(type_name) = &prim.type_name {
         spec = spec.with_field("typeName", Value::Token(type_name.clone()));
     }
+    lower_body(prim, spec, specs)
+}
+
+/// Completes `spec`, a prim spec or a variant's (`/P{v=x}`, which has no
+/// `specifier` or `typeName`), with the fields and child specs `prim`
+/// holds, in the order the text parser stores them: the metadata, the
+/// arcs, `variantSelection` and `variantSetNames` (the header), then
+/// `propertyOrder` and `primOrder` (the `reorder` statements, first in the
+/// body), `variantSetChildren` (set as each `variantSet` statement ends),
+/// and `primChildren` and `properties` (set as the body ends).
+///
+/// Each variant set is a `SdfSpecTypeVariantSet` spec (`/P{v=}`) holding
+/// `variantChildren`, and each of its variants a `SdfSpecTypeVariant` spec
+/// (`/P{v=x}`), as `Sdf_TextFileFormatParser` creates them.
+///
+/// Spec: AOUSD Core §7.6.2 (prim spec fields), §7.6.6 (variant set spec
+/// fields), §7.6.7 (variant spec fields).
+fn lower_body(prim: &Prim, mut spec: Spec, specs: &mut Vec<Spec>) -> Result<(), UsdcWriteError> {
+    let path = spec.path.clone();
     for entry in &prim.metadata {
         spec.fields.push(metadatum(Owner::Prim, &path, entry)?);
     }
@@ -171,11 +201,26 @@ fn lower_prim(prim: &Prim, parent: &str, specs: &mut Vec<Spec>) -> Result<(), Us
     if let Some(op) = &prim.specializes {
         spec = spec.with_field("specializes", Value::PathListOp(list_op(op)));
     }
+    if !prim.variant_selections.is_empty() {
+        spec = spec.with_field(
+            "variantSelection",
+            Value::VariantSelectionMap(prim.variant_selections.clone()),
+        );
+    }
+    if let Some(op) = &prim.variant_set_names {
+        spec = spec.with_field("variantSetNames", Value::StringListOp(list_op(op)));
+    }
     if let Some(order) = &prim.property_order {
         spec = spec.with_field("propertyOrder", Value::TokenVector(order.clone()));
     }
     if let Some(order) = &prim.prim_order {
         spec = spec.with_field("primOrder", Value::TokenVector(order.clone()));
+    }
+    if !prim.variant_sets.is_empty() {
+        spec = spec.with_field(
+            "variantSetChildren",
+            Value::TokenVector(prim.variant_sets.iter().map(|s| s.name.clone()).collect()),
+        );
     }
     if !prim.children.is_empty() {
         spec = spec.with_field(
@@ -196,6 +241,20 @@ fn lower_prim(prim: &Prim, parent: &str, specs: &mut Vec<Spec>) -> Result<(), Us
     }
     for child in &prim.children {
         lower_prim(child, &path, specs)?;
+    }
+    for set in &prim.variant_sets {
+        let names = set.variants.iter().map(|v| v.name.clone()).collect();
+        specs.push(
+            Spec::new(
+                alloc::format!("{path}{{{}=}}", set.name),
+                SpecForm::VariantSet,
+            )
+            .with_field("variantChildren", Value::TokenVector(names)),
+        );
+        for variant in &set.variants {
+            let variant_path = alloc::format!("{path}{{{}={}}}", set.name, variant.name);
+            lower_body(variant, Spec::new(variant_path, SpecForm::Variant), specs)?;
+        }
     }
     Ok(())
 }

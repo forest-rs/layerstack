@@ -78,8 +78,11 @@ use crate::version::CrateVersion;
 /// A spec: path, form and fields.
 ///
 /// `path` is `/` for the pseudo-root ([`SpecForm::PseudoRoot`]), a prim path
-/// such as `/Root/Mesh` for [`SpecForm::Prim`], or a prim property path such
-/// as `/Root/Mesh.points` for [`SpecForm::Attribute`] and
+/// such as `/Root/Mesh` or `/Root{lod=high}Mesh` (a prim inside a variant)
+/// for [`SpecForm::Prim`], a variant set path such as `/Root{lod=}` for
+/// [`SpecForm::VariantSet`], a variant path such as `/Root{lod=high}` for
+/// [`SpecForm::Variant`], or a property path such as `/Root/Mesh.points` or
+/// `/Root{lod=high}.points` for [`SpecForm::Attribute`] and
 /// [`SpecForm::Relationship`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct Spec {
@@ -321,6 +324,10 @@ pub enum Value {
     /// `std::vector<SdfLayerOffset>` (e.g. `subLayerOffsets`): `(offset,
     /// scale)` pairs.
     LayerOffsetVector(Vec<(f64, f64)>),
+    /// `SdfVariantSelectionMap` (the `variantSelection` field): variant set
+    /// names, each once, with the selected variant; written in set name
+    /// order.
+    VariantSelectionMap(Vec<(String, String)>),
     /// `SdfTimeSampleMap` (the `timeSamples` field): times, strictly
     /// increasing, with their values ([`Value::Block`] for a blocked
     /// sample).
@@ -334,9 +341,11 @@ pub enum Value {
 /// Serializes `specs` as a USDC file.
 ///
 /// Exactly one spec must be the pseudo-root at `/`, and every other spec's
-/// parent prim (or the pseudo-root) must have a spec. Children lists
-/// (`primChildren`, `properties`) are fields like any other: the writer
-/// stores what it is given.
+/// owner must have a spec: a prim or variant for a prim, variant set or
+/// property (the pseudo-root for a root prim), and its variant set for a
+/// variant. Children lists (`primChildren`, `properties`,
+/// `variantSetChildren`, `variantChildren`) are fields like any other: the
+/// writer stores what it is given.
 ///
 /// # Errors
 ///

@@ -48,9 +48,11 @@ pub(crate) struct CompositionDeps {
     pub graph: InvalidationGraph<PathId>,
     /// Arc metadata for diagnostic queries.
     pub arcs: HashSet<ArcDependency>,
-    /// Layer → prims that receive opinions from that layer.
+    /// Layer → prims that receive opinions from that layer, or that a
+    /// reference or payload authored in it reaches.
     pub layer_to_prims: HashMap<LayerId, HashSet<PathId>>,
-    /// Prim → layers that contribute opinions to it.
+    /// Prim → layers that contribute opinions to it, or author a reference
+    /// or payload that reaches it.
     pub prim_to_layers: HashMap<PathId, HashSet<LayerId>>,
     /// Layer → prims whose composition follows (or fails to resolve) a
     /// reference or payload targeting that layer's `defaultPrim`.
@@ -96,7 +98,8 @@ impl DependencyBuilder {
         }
     }
 
-    /// Records a layer-opinion dependency edge.
+    /// Records a layer-opinion dependency edge: `prim` receives opinions
+    /// from `layer`, or is reached by a reference or payload it authors.
     pub(crate) fn add_layer_opinion(&mut self, layer: LayerId, prim: PathId) {
         self.layer_to_prims.entry(layer).or_default().insert(prim);
         self.prim_to_layers.entry(prim).or_default().insert(layer);

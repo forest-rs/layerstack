@@ -385,20 +385,35 @@ impl ArcAuthoring<'_> {
         spec_arcs: fn(&PrimSpec) -> &ListOp<Reference>,
         branch_arcs: fn(&VariantSpec) -> &ListOp<Reference>,
         anchor: LayerId,
-    ) -> (Reference, Vec<VariantSelectionSite>) {
-        let (sites, layer) = self.sites_by(&item, spec_arcs, branch_arcs, |op, layer| {
+    ) -> (AuthoredReference, Vec<VariantSelectionSite>) {
+        let (sites, index) = self.sites_by(&item, spec_arcs, branch_arcs, |op, layer| {
             anchor_internal_arcs(op, layer, anchor)
         });
         let internal = item.asset.is_none() && item.layer == anchor;
-        let reference = match layer {
+        let reference = match index {
             Some(index) if !internal => Reference {
                 layer_offset: self.stack.offset_at(index).compose(item.layer_offset),
                 ..item
             },
             _ => item,
         };
-        (reference, sites)
+        let layer = index.and_then(|index| self.stack.layers.get(index).copied());
+        (AuthoredReference { reference, layer }, sites)
     }
+}
+
+/// A reference or payload resolved for a site, with the layer that
+/// authors it (see [`ArcAuthoring::authored_reference`]).
+///
+/// Every prim the arc composes depends on that layer: its offset in the
+/// layer stack retimes the arc's opinions.
+#[derive(Clone, Debug)]
+pub(crate) struct AuthoredReference {
+    /// The arc, its offset composed beneath the authoring layer's.
+    pub(crate) reference: Reference,
+    /// The strongest layer of the site's layer stack that adds the arc;
+    /// `None` when no spec of the site adds it.
+    pub(crate) layer: Option<LayerId>,
 }
 
 /// Returns the parent of `prim`, if it has been interned.

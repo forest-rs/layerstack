@@ -434,7 +434,9 @@ impl Stage {
             .unwrap_or_default()
     }
 
-    /// Returns prims affected by opinions from the given layer.
+    /// Returns prims affected by the given layer: those that receive
+    /// opinions from it, and those that a reference or payload it authors
+    /// reaches, which its layer offset retimes.
     #[must_use]
     pub fn prims_affected_by_layer(&self, layer: LayerId) -> Vec<PathId> {
         self.deps
@@ -444,7 +446,9 @@ impl Stage {
             .unwrap_or_default()
     }
 
-    /// Returns layers that contribute opinions to the given prim.
+    /// Returns layers that affect the given prim: those that contribute
+    /// opinions to it, and those that author a reference or payload that
+    /// reaches it (see [`Stage::prims_affected_by_layer`]).
     #[must_use]
     pub fn layers_affecting_prim(&self, prim: PathId) -> Vec<LayerId> {
         self.deps

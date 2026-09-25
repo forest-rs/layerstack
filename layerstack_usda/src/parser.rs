@@ -1554,8 +1554,21 @@ impl<'a> Parser<'a> {
         let start = self.current_span().start;
         self.builder.start_node(SyntaxKind::DictionaryEntry, start);
 
-        // Optional type or `dictionary` keyword.
+        // A string dictionary item, `"key": "value"`, as in
+        // `prefixSubstitutions` and `suffixSubstitutions` (OpenUSD's
+        // `StringDictionaryItem`, `pxr/usd/sdf/textFileFormatParser.h`).
         self.eat_trivia();
+        if self.at_string() && self.peek_next_non_trivia() == Some(TokenKind::Colon) {
+            self.bump(); // key
+            self.expect(TokenKind::Colon);
+            self.parse_value_expr();
+            self.eat(TokenKind::Comma);
+            let end = self.current_span().start;
+            self.builder.finish_node(end);
+            return;
+        }
+
+        // Optional type or `dictionary` keyword.
         if self.peek() == Some(TokenKind::Ident) && self.current_text() == "dictionary" {
             self.bump();
         } else if self.peek() == Some(TokenKind::Ident) {

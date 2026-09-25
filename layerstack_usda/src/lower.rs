@@ -1246,8 +1246,12 @@ impl<'a> LowerCtx<'a> {
             }
         }
 
-        // Skip `=`.
+        // Skip `=`, or the `:` of a string dictionary item (`"key":
+        // "value"`), whose value is a string.
         if idx < sig.len() && sig[idx].0 == SyntaxKind::Equals {
+            idx += 1;
+        } else if idx < sig.len() && sig[idx].0 == SyntaxKind::Colon {
+            type_name = Some("string");
             idx += 1;
         }
 
@@ -2503,6 +2507,31 @@ def Scope \"root\" {
 
         let r = parse("#usda 1.0\ndef \"P\" {\n    asset a = @@@x\\@@@y@@@\n}\n");
         assert_eq!(r.diagnostics.len(), 1, "{:?}", r.diagnostics);
+    }
+
+    #[test]
+    fn string_dictionaries() {
+        let src = "#usda 1.0\ndef \"P\" (\n    prefixSubstitutions = {\n        \"/a\": \"/b\", \n        \
+                   'k': \"v\"\n    }\n) {\n}\n";
+        let r = parse(src);
+        assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+        let PrimMeta::Custom(entry) = &r.layer.prims[0].metadata[0] else {
+            panic!("expected prefixSubstitutions");
+        };
+        let MetadataValue::Dictionary(dict) = &entry.value else {
+            panic!("expected a dictionary");
+        };
+        let items: vec::Vec<_> = dict
+            .iter()
+            .map(|e| match &e.value {
+                Value::String(v) => (e.type_name, &*e.key, &**v),
+                _ => panic!("expected string values"),
+            })
+            .collect();
+        assert_eq!(
+            items,
+            [(Some("string"), "/a", "/b"), (Some("string"), "k", "v")]
+        );
     }
 
     #[test]

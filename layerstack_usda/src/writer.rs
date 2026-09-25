@@ -623,6 +623,13 @@ pub enum Value {
     Int3Array(Vec<[i32; 3]>),
     /// `int4[]`.
     Int4Array(Vec<[i32; 4]>),
+    /// `quath[]`: half-precision quaternions as IEEE 754 binary16 bits, each
+    /// stored `[i, j, k, r]` (imaginary part first, real part last), the
+    /// memory order of OpenUSD's `GfQuath`. USDA writes each one real part
+    /// first, `(r, i, j, k)`, as OpenUSD does.
+    ///
+    /// Spec: AOUSD Core §6.3 (`quath`, dimensioned types).
+    QuathArray(Vec<[u16; 4]>),
     /// A dictionary: string keys to values, written in order with each
     /// entry's canonical type name (§6.6.2).
     ///
@@ -1060,6 +1067,8 @@ enum Elem {
     Asset,
     Dictionary,
     ListOp,
+    /// A half-precision quaternion (`quath`).
+    Quath,
     /// A known type this writer has no [`Value`] variant for (e.g. `half`,
     /// quaternions). It can be declared but not given a value.
     Unsupported,
@@ -1114,9 +1123,10 @@ fn parse_type_name(type_name: &str) -> Option<Shape> {
         }
         "double4" | "color4d" => (Elem::Double, 4),
         "matrix4d" | "frame4d" => (Elem::Double, 16),
+        "quath" => (Elem::Quath, 1),
         "uchar" | "uint64" | "half" | "half2" | "half3" | "half4" | "texCoord2h" | "texCoord3h"
         | "point3h" | "normal3h" | "vector3h" | "color3h" | "color4h" | "matrix2d" | "matrix3d"
-        | "quath" | "quatf" | "quatd" => (Elem::Unsupported, 0),
+        | "quatf" | "quatd" => (Elem::Unsupported, 0),
         _ => return None,
     };
     Some(Shape { elem, arity, array })
@@ -1190,6 +1200,7 @@ impl Value {
             Self::Int2Array(_) => (Elem::Int, 2, true),
             Self::Int3Array(_) => (Elem::Int, 3, true),
             Self::Int4Array(_) => (Elem::Int, 4, true),
+            Self::QuathArray(_) => (Elem::Quath, 1, true),
             Self::Dictionary(_) => (Elem::Dictionary, 1, false),
             Self::TokenListOp(_) => (Elem::ListOp, 1, false),
             Self::Block => return None,
@@ -1240,6 +1251,7 @@ impl Value {
             Self::Int2Array(_) => "int2[]",
             Self::Int3Array(_) => "int3[]",
             Self::Int4Array(_) => "int4[]",
+            Self::QuathArray(_) => "quath[]",
             Self::Dictionary(_) => "dictionary",
             Self::TokenListOp(_) => "tokenListOp",
             Self::Block => "SdfValueBlock",
@@ -1559,6 +1571,9 @@ impl Writer<'_> {
             Value::Int2Array(v) => self.array(v, |w, t| w.tuple(t, Self::i32)),
             Value::Int3Array(v) => self.array(v, |w, t| w.tuple(t, Self::i32)),
             Value::Int4Array(v) => self.array(v, |w, t| w.tuple(t, Self::i32)),
+            Value::QuathArray(v) => self.array(v, |w, &[i, j, k, r]| {
+                w.tuple(&[r, i, j, k], Self::half);
+            }),
             // Written as statements by `metadata_entries`; validation keeps
             // list ops out of attribute values and dictionaries.
             Value::TokenListOp(_) => unreachable!("list ops are written as statements"),
@@ -1597,6 +1612,11 @@ impl Writer<'_> {
         } else {
             self.non_finite(v.is_nan(), v.is_sign_negative());
         }
+    }
+
+    /// A `half`, widened exactly to `f32` and written as that.
+    fn half(&mut self, bits: u16) {
+        self.f32(layerstack::half::to_f32(bits));
     }
 
     fn f64(&mut self, v: f64) {
@@ -1951,6 +1971,30 @@ over "P" (
         assert_eq!(text, expected, "scalar spellings");
         let parsed = parse(&text);
         assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+    }
+
+    #[test]
+    fn quath_arrays_are_written_real_part_first() {
+        // Bits stored `[i, j, k, r]`: a 90° turn about Z and the identity.
+        let value = Value::QuathArray(vec![[0, 0, 0x39a8, 0x39a8], [0, 0, 0, 0x3c00]]);
+        let text = doc_with(Attribute::new("orientations", "quath[]", value.clone()))
+            .to_usda()
+            .unwrap();
+        assert!(
+            text.contains("quath[] orientations = [(0.70703125, 0, 0, 0.70703125), (1, 0, 0, 0)]"),
+            "{text}"
+        );
+        assert!(parse(&text).diagnostics.is_empty(), "reparses");
+        assert_eq!(value.canonical_type_name(), "quath[]", "canonical type");
+        for wrong in ["half4[]", "float4[]", "quatf[]", "quath"] {
+            let err = doc_with(Attribute::new("q", wrong, value.clone()))
+                .to_usda()
+                .unwrap_err();
+            assert!(
+                matches!(err, WriteError::TypeMismatch { .. }),
+                "{wrong}: {err:?}"
+            );
+        }
     }
 
     fn doc_with(attribute: Attribute) -> Document {

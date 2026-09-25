@@ -985,7 +985,7 @@ fn nested_transforms() -> Document {
 /// Every authored document of the fixture set, by file stem: identifiers,
 /// value types, metadata, and the mesh scenes (the cube, the two-material
 /// and textured material cubes, a quad and a triangle, a UV seam, nested
-/// transforms, and every primvar interpolation).
+/// transforms, every primvar interpolation, and a point instancer).
 /// An OpenUSD release as `(year, month)`: `(25, 11)` is v25.11. Apple's
 /// tools report the same numbering as `0.25.11`.
 pub type OpenUsdRelease = (u32, u32);
@@ -1012,13 +1012,15 @@ pub fn parse_openusd_release(text: &str) -> Option<OpenUsdRelease> {
         })
 }
 
-/// The earliest OpenUSD release whose metadata registry a document's
-/// expected encoding assumes, with the reason, or `None` when it assumes
-/// nothing newer than the releases the tools are known to have.
+/// The earliest OpenUSD release a check of fixture `name` needs, with the
+/// reason, or `None` when it needs nothing newer than the releases the
+/// tools are known to have.
 ///
-/// An older OpenUSD stores such metadata as `SdfUnregisteredValue`, so its
-/// USDC of the same USDA differs from ours by design. Tests comparing
-/// against an installed tool skip the document then, saying why.
+/// For most documents this is the metadata registry their expected
+/// encoding assumes: an older OpenUSD stores such metadata as
+/// `SdfUnregisteredValue`, so its USDC of the same USDA differs from ours
+/// by design. Tests comparing against an installed tool skip the check
+/// then, saying why.
 pub fn minimum_openusd(name: &str) -> Option<(OpenUsdRelease, &'static str)> {
     match name {
         // UI hints proposal, implemented in 25.11
@@ -1030,6 +1032,14 @@ pub fn minimum_openusd(name: &str) -> Option<(OpenUsdRelease, &'static str)> {
         "metadata_scalars" => Some((
             (25, 11),
             "`arraySizeConstraint` is registered from OpenUSD 25.11",
+        )),
+        // `usdchecker` runs the validation framework by default from 25.11;
+        // before, `--arkit` ran `UsdUtils.ComplianceChecker`, whose
+        // `ARKitPrimTypeChecker` allows a fixed list of prim types without
+        // `PointInstancer`.
+        "point_instancer_arkit" => Some((
+            (25, 11),
+            "`usdchecker --arkit` accepts `PointInstancer` prims from OpenUSD 25.11",
         )),
         _ => None,
     }
@@ -1053,6 +1063,13 @@ pub fn documents() -> Vec<(&'static str, Document)> {
         ("quad_triangle", quad_triangle()),
         ("uv_seam", uv_seam()),
         ("nested_transforms", nested_transforms()),
+        (
+            "point_instancer",
+            crate::instancer_fixtures::Field::new(4, 4)
+                .scene()
+                .to_document()
+                .unwrap(),
+        ),
     ]
 }
 

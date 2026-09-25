@@ -541,8 +541,11 @@ impl<'a> Walk<'a> {
     }
 
     /// Maps the path `rel` beneath the stage path `dest_root` through every
-    /// relocation, as a namespace mapping: each source moves to its target,
-    /// and nothing is dropped but what a relocation removes.
+    /// relocation, as a namespace mapping: each source moves to its target.
+    /// A relocation that removes its source maps nothing, so paths beneath
+    /// it still map through the arc, as OpenUSD leaves such relocations out
+    /// of its mapping functions (`_FilterRelocationsForPath` in
+    /// `pxr/usd/pcp/layerStack.cpp`).
     ///
     /// This is how an arc maps target paths and class paths authored in its
     /// target (AOUSD Core §10.3.2.6.1).
@@ -551,27 +554,28 @@ impl<'a> Walk<'a> {
         store: &mut dyn LayerStore,
         dest_root: PathId,
         rel: &[crate::interner::TokenId],
-    ) -> Option<PathId> {
+    ) -> PathId {
         let mut current = store.paths().resolve(dest_root).clone();
         if self.is_empty() {
             let joined = current.join(rel);
-            return Some(store.paths_mut().intern(joined));
+            return store.paths_mut().intern(joined);
         }
         for &name in rel {
             let next = current.join(&[name]);
             let paths = store.paths();
-            let relocate = paths.lookup(&next).and_then(|id| {
+            let target = paths.lookup(&next).and_then(|id| {
                 self.own
                     .into_iter()
                     .chain(self.outer.iter().rev().copied())
                     .find_map(|set| set.source(id))
+                    .and_then(|relocate| relocate.stage_target)
             });
-            current = match relocate {
-                Some(relocate) => paths.resolve(relocate.stage_target?).clone(),
+            current = match target {
+                Some(target) => paths.resolve(target).clone(),
                 None => next,
             };
         }
-        Some(store.paths_mut().intern(current))
+        store.paths_mut().intern(current)
     }
 
     /// The `outer` relocations a walk from `host` took to reach the stage

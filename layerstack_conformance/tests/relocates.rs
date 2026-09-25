@@ -26,6 +26,9 @@
 //! - `kit.usda` relocates `/Kit/Parts/Gear`, which its own reference to
 //!   `parts.usda` brings, to `/Kit/Gear`; `/Crate` sees it through its
 //!   reference to `kit.usda`.
+//! - Relationship targets authored in `arm.usda` and `parts.usda` map
+//!   through those relocates; the one to the removed `/Robot/Rig/Debug`
+//!   keeps its path.
 //! - `quarry.usda` relocates `/Stone/Chip` to `/Stone/Flake`: `/Cobble`,
 //!   whose selected variant branch references it, has the chip at
 //!   `/Cobble/Flake`, and `/Pebble`, whose unselected branch does, keeps
@@ -64,6 +67,7 @@ struct Oracle {
     root: String,
     prims: Vec<Prim>,
     values: BTreeMap<String, i32>,
+    targets: BTreeMap<String, Vec<String>>,
     errors: Vec<ErrorRecord>,
 }
 
@@ -212,6 +216,34 @@ fn values_match_openusd() {
     assert!(
         mismatches.is_empty(),
         "values differ from OpenUSD:\n{}",
+        mismatches.join("\n")
+    );
+}
+
+#[test]
+fn relationship_targets_map_through_relocates() {
+    // Spec: AOUSD Core §10.3.2.6.1. A target path authored beneath a
+    // relocation source maps to the target, through the relocates of every
+    // layer stack above it; a relocate to nothing leaves it as it is.
+    let oracle = oracle();
+    let (mut loaded, stage) = compose(&oracle);
+    let mut mismatches = Vec::new();
+    for (rel, expected) in &oracle.targets {
+        let property = loaded.store.property_path(rel);
+        let targets: Vec<String> = stage
+            .resolve_target_list_path(property)
+            .map(|resolved| resolved.value)
+            .unwrap_or_default()
+            .iter()
+            .map(|target| target.display(&loaded.store.paths, &loaded.store.tokens))
+            .collect();
+        if &targets != expected {
+            mismatches.push(format!("{rel}: expected {expected:?}, got {targets:?}"));
+        }
+    }
+    assert!(
+        mismatches.is_empty(),
+        "targets differ from OpenUSD:\n{}",
         mismatches.join("\n")
     );
 }

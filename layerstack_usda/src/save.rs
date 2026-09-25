@@ -20,13 +20,15 @@
 //!
 //! # Supported subset
 //!
-//! An arc-free, non-variant layer:
+//! A layer without variants:
 //!
-//! - layer metadata, including `defaultPrim` and bare-string comments;
+//! - layer metadata, including `defaultPrim` and bare-string comments, and
+//!   sublayers with their layer offsets;
 //! - prim specs with their specifier, `typeName`, metadata (`apiSchemas`
 //!   and other token list ops included, `active` and `instanceable`),
-//!   children in authored order, `reorder nameChildren`, `reorder
-//!   properties` and `reorder rootPrims`;
+//!   composition arcs (references, payloads, inherits and specializes, in
+//!   any list-op form), children in authored order, `reorder
+//!   nameChildren`, `reorder properties` and `reorder rootPrims`;
 //! - attribute specs with `custom`, `uniform`, the declared type, a default
 //!   value (a value block included), time samples (blocked samples and an
 //!   empty sample map included), explicit or list-edited connections and
@@ -36,17 +38,23 @@
 //! - properties in one authored order, attributes and relationships
 //!   interleaved.
 //!
+//! Arcs are written from what was authored, never from what they resolved
+//! to: a sublayer, reference or payload by its authored asset path (an arc
+//! whose asset did not resolve on import, `Reference::unresolved` or
+//! `SublayerEntry::unresolved`, keeps its own), a reference or payload
+//! with its prim path or none for the `defaultPrim`, and its layer offset.
+//! A reference or payload without an asset path into the layer itself is
+//! internal.
+//!
 //! # Rejected before any output
 //!
 //! [`layer_document`] checks the whole layer before a writer runs and
 //! returns the first problem it finds, naming its source path:
 //!
-//! - [`SaveError::Unsupported`]: sublayers, references and payloads (an
-//!   arc whose asset did not resolve on import is kept as
-//!   `Reference::unresolved` and rejected the same way), inherits,
-//!   specializes, variant sets, variant selections and specs authored inside
-//!   variant branches; splines; sparse array edits (as a default or a time
-//!   sample); list ops mixing an explicit list with edits;
+//! - [`SaveError::Unsupported`]: variant sets, variant selections and
+//!   specs authored inside variant branches; splines; sparse array edits
+//!   (as a default or a time sample); list ops mixing an explicit list with
+//!   edits;
 //!   `varying` relationships; list-op metadata other than token list ops;
 //!   and values the writers have no representation for (`half`, `uchar`,
 //!   `uint64`, quaternions, `matrix2d`/`matrix3d`, `pathExpression`,
@@ -54,11 +62,15 @@
 //!   element type is not recorded, such as an empty array in a dictionary);
 //! - [`SaveError::Invalid`]: a layer the file formats cannot hold as it
 //!   stands, such as a prim spec that no parent lists among its children,
-//!   an attribute without a type or a relationship with time samples;
+//!   an attribute without a type, a relationship with time samples, or a
+//!   sublayer or arc into another layer built from a layer id alone, with
+//!   no authored asset path to write;
 //! - [`SaveError::Document`]: what the writers' shared validation rejects
 //!   (invalid identifiers, a `defaultPrim` that names no prim of the layer, keys
 //!   whose USDA syntax the writer does not produce, sample times that are not
-//!   finite and increasing, ...).
+//!   finite and increasing, asset paths the formats cannot quote, arc
+//!   paths that are not prim paths, an arc list that repeats an item within
+//!   one operation, ...).
 //!
 //! The crate writer additionally rejects metadata keys that OpenUSD does not
 //! register, since it cannot store them as the text parser would.
@@ -72,15 +84,18 @@ use alloc::vec::Vec;
 use core::fmt;
 
 use layerstack::HashSet;
-use layerstack::doc::{FieldEntry, FieldValue, Layer, PrimSpec, Specifier, Value as LayerValue};
+use layerstack::doc::{
+    FieldEntry, FieldValue, Layer, LayerOffset as LayerLayerOffset, PrimSpec,
+    Reference as LayerReference, ReferenceTarget, Specifier, Value as LayerValue,
+};
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp as LayerListOp;
 use layerstack::path::{Path, PathId, PathInterner, TargetPath};
 use layerstack::property::{PropertyEntry, PropertyKind, Variability};
 
 use crate::writer::{
-    Attribute, Document, ListOp, Metadatum, Prim, Property, Relationship,
-    Specifier as WriterSpecifier, Value, Variability as WriterVariability, WriteError,
+    Attribute, Document, LayerOffset, ListOp, Metadatum, Prim, Property, Reference, Relationship,
+    Specifier as WriterSpecifier, SubLayer, Value, Variability as WriterVariability, WriteError,
 };
 
 /// Lowers an authored layer to the [`Document`] both writers serialize.
@@ -165,16 +180,6 @@ impl core::error::Error for SaveError {
 /// Authored content outside the supported subset.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Unsupported {
-    /// Layer `subLayers`.
-    Sublayers,
-    /// A prim's `references`.
-    References,
-    /// A prim's `payload`.
-    Payloads,
-    /// A prim's `inheritPaths`.
-    Inherits,
-    /// A prim's `specializes`.
-    Specializes,
     /// A prim's variant sets (`variantSetNames` or variant set specs).
     VariantSets,
     /// A prim's variant selections.
@@ -199,11 +204,6 @@ pub enum Unsupported {
 impl fmt::Display for Unsupported {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Sublayers => f.write_str("sublayers"),
-            Self::References => f.write_str("references"),
-            Self::Payloads => f.write_str("payloads"),
-            Self::Inherits => f.write_str("inherits"),
-            Self::Specializes => f.write_str("specializes"),
             Self::VariantSets => f.write_str("variant sets"),
             Self::VariantSelections => f.write_str("variant selections"),
             Self::VariantSpec => f.write_str("specs inside variant branches"),
@@ -233,6 +233,9 @@ pub enum Invalid {
     RelationshipValue,
     /// The pseudo-root spec holds more than children and their order.
     PseudoRootOpinions,
+    /// A sublayer, or a reference or payload into another layer, records no
+    /// authored asset path to write (it was built from a layer id alone).
+    ArcWithoutAsset,
 }
 
 impl fmt::Display for Invalid {
@@ -244,6 +247,7 @@ impl fmt::Display for Invalid {
             Self::MissingChildSpec => "listed child has no prim spec",
             Self::RelationshipValue => "relationship holds a type or values",
             Self::PseudoRootOpinions => "pseudo-root spec holds prim opinions",
+            Self::ArcWithoutAsset => "arc to another layer has no authored asset path",
         })
     }
 }
@@ -297,9 +301,6 @@ impl Lowering<'_> {
 
     /// Spec: AOUSD Core §7.6.1 (layer spec fields).
     fn layer(&self, layer: &Layer) -> Result<Document, SaveError> {
-        if !layer.sublayers.is_empty() {
-            return unsupported("/", Unsupported::Sublayers);
-        }
         let mut in_branches: Vec<String> = layer
             .variant_prims
             .iter()
@@ -321,6 +322,17 @@ impl Lowering<'_> {
         let mut doc = Document::new();
         doc.default_prim = layer.default_prim.map(|t| self.name(t));
         doc.metadata = self.metadata(&layer.metadata, "/")?;
+        // Spec: AOUSD Core §10.3.1 (sublayers), written by their authored
+        // asset paths; an unresolved sublayer keeps its own.
+        for sublayer in &layer.sublayers {
+            let Some(asset) = &sublayer.asset else {
+                return invalid("/", Invalid::ArcWithoutAsset);
+            };
+            doc.sublayers.push(SubLayer {
+                asset: asset.clone(),
+                offset: layer_offset(sublayer.offset),
+            });
+        }
 
         let root = self.paths.lookup(&Path::root());
         let mut visited: HashSet<PathId> = HashSet::new();
@@ -375,10 +387,6 @@ impl Lowering<'_> {
         visited.insert(id);
 
         for (op_authored, feature) in [
-            (is_authored(&spec.references), Unsupported::References),
-            (is_authored(&spec.payloads), Unsupported::Payloads),
-            (is_authored(&spec.inherits), Unsupported::Inherits),
-            (is_authored(&spec.specializes), Unsupported::Specializes),
             (
                 !spec.variant_sets.is_empty() || !spec.variant_set_order.is_empty(),
                 Unsupported::VariantSets,
@@ -412,6 +420,27 @@ impl Lowering<'_> {
                 prim.metadata.push(Metadatum::new(key, Value::Bool(value)));
             }
         }
+        // Spec: AOUSD Core §7.6.2.3 (prim composition fields), §10.3.2.1–
+        // §10.3.2.4 (references, payloads, inherits, specializes).
+        let arcs = |op: &LayerListOp<LayerReference>, key: &str| {
+            if !is_authored(op) {
+                return Ok(None);
+            }
+            let path = format!("{shown}#{key}");
+            self.list_op(op, &path, |r| self.arc(layer, r, &shown))
+                .map(Some)
+        };
+        prim.payloads = arcs(&spec.payloads, "payload")?;
+        prim.references = arcs(&spec.references, "references")?;
+        let paths = |op: &LayerListOp<PathId>, key: &str| {
+            if !is_authored(op) {
+                return Ok(None);
+            }
+            let path = format!("{shown}#{key}");
+            self.list_op(op, &path, |p| Ok(self.display(*p))).map(Some)
+        };
+        prim.inherits = paths(&spec.inherits, "inheritPaths")?;
+        prim.specializes = paths(&spec.specializes, "specializes")?;
         prim.property_order = spec.property_order.as_ref().map(|o| self.names(o));
         prim.prim_order = spec.prim_order.as_ref().map(|o| self.names(o));
         for entry in &spec.properties {
@@ -506,27 +535,48 @@ impl Lowering<'_> {
         op: &LayerListOp<TargetPath>,
         path: &str,
     ) -> Result<ListOp<String>, SaveError> {
-        self.list_op(op, path, |t| t.display(self.paths, self.tokens))
+        self.list_op(op, path, |t| Ok(t.display(self.paths, self.tokens)))
+    }
+
+    /// A reference or payload as authored: its asset path, never the layer
+    /// it resolved to (an unresolved arc keeps its asset path too), its
+    /// prim path or none for the `defaultPrim`, and its layer offset. An
+    /// arc into `layer` itself without an asset path is internal.
+    fn arc(&self, layer: &Layer, arc: &LayerReference, prim: &str) -> Result<Reference, SaveError> {
+        let asset = match &arc.asset {
+            Some(asset) => Some(asset.clone()),
+            None if arc.layer == layer.id => None,
+            None => return invalid(prim, Invalid::ArcWithoutAsset),
+        };
+        let prim_path = match arc.target {
+            ReferenceTarget::Prim(path) => Some(self.display(path)),
+            ReferenceTarget::DefaultPrim => None,
+        };
+        Ok(Reference {
+            asset,
+            prim_path,
+            offset: layer_offset(arc.layer_offset),
+        })
     }
 
     /// Converts a list op, keeping each list. OpenUSD's list ops hold an
     /// explicit list or edits, never both (AOUSD Core §6.6.3).
-    fn list_op<T>(
+    fn list_op<T, U>(
         &self,
         op: &LayerListOp<T>,
         path: &str,
-        item: impl Fn(&T) -> String,
-    ) -> Result<ListOp<String>, SaveError> {
+        item: impl Fn(&T) -> Result<U, SaveError>,
+    ) -> Result<ListOp<U>, SaveError> {
         let edits = !(op.prepend.is_empty() && op.append.is_empty() && op.delete.is_empty());
         if op.explicit.is_some() && edits {
             return unsupported(path, Unsupported::MixedListOp);
         }
-        let list = |items: &[T]| items.iter().map(&item).collect::<Vec<_>>();
+        let list = |items: &[T]| items.iter().map(&item).collect::<Result<Vec<_>, _>>();
         Ok(ListOp {
-            explicit: op.explicit.as_deref().map(list),
-            deleted: list(&op.delete),
-            prepended: list(&op.prepend),
-            appended: list(&op.append),
+            explicit: op.explicit.as_deref().map(list).transpose()?,
+            deleted: list(&op.delete)?,
+            prepended: list(&op.prepend)?,
+            appended: list(&op.append)?,
         })
     }
 
@@ -542,7 +592,7 @@ impl Lowering<'_> {
             let value = match &field.value {
                 FieldValue::Value(value) => self.metadata_value(value, key, &path)?,
                 FieldValue::TokenListOp(op) => {
-                    Value::TokenListOp(self.list_op(op, &path, |t| self.name(*t))?)
+                    Value::TokenListOp(self.list_op(op, &path, |t| Ok(self.name(*t)))?)
                 }
                 FieldValue::PathListOp(_) => {
                     return unsupported(path, Unsupported::ListOpMetadata("path list op"));
@@ -696,6 +746,13 @@ fn is_children_only(spec: &PrimSpec) -> bool {
         && spec.active.is_none()
         && spec.instanceable.is_none()
         && spec.outer_variant_sites.is_empty()
+}
+
+fn layer_offset(offset: LayerLayerOffset) -> LayerOffset {
+    LayerOffset {
+        offset: offset.offset,
+        scale: offset.scale,
+    }
 }
 
 /// The empty array of `element`'s type, if the writers have one.

@@ -188,6 +188,25 @@ impl<T> ListOp<T> {
     }
 }
 
+/// An `SdfReference` or `SdfPayload`: an authored asset path (empty for an
+/// internal arc), a prim path (empty for the `defaultPrim`) and a layer
+/// offset. A reference's `customData` is written empty.
+///
+/// Spec: AOUSD Core §10.3.2.1 (references), §10.3.2.2 (payloads),
+/// §16.3.10 (reference and payload encoding).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Reference {
+    /// The asset path as authored; empty for an internal arc.
+    pub asset: String,
+    /// An absolute prim path, or empty for the target layer's
+    /// `defaultPrim`.
+    pub prim_path: String,
+    /// The layer offset's time offset.
+    pub offset: f64,
+    /// The layer offset's time scale.
+    pub scale: f64,
+}
+
 /// A crate value.
 ///
 /// Scalar and array variants are named after OpenUSD's value types; math
@@ -277,8 +296,23 @@ pub enum Value {
     TokenListOp(ListOp<String>),
     /// `SdfStringListOp` (e.g. `variantSetNames`).
     StringListOp(ListOp<String>),
-    /// `SdfPathListOp` (e.g. `targetPaths`, `connectionPaths`).
+    /// `SdfPathListOp` (e.g. `targetPaths`, `connectionPaths`,
+    /// `inheritPaths`, `specializes`).
     PathListOp(ListOp<String>),
+    /// `SdfReferenceListOp` (the `references` field).
+    ReferenceListOp(ListOp<Reference>),
+    /// `SdfPayloadListOp` (the `payload` field). An explicit list op of no
+    /// payload or of one external payload is written as an [`Self::Payload`],
+    /// as OpenUSD writes it.
+    PayloadListOp(ListOp<Reference>),
+    /// `SdfPayload`: one payload, or none when its asset and prim paths are
+    /// both empty.
+    Payload(Reference),
+    /// `std::vector<std::string>` (e.g. `subLayers`).
+    StringVector(Vec<String>),
+    /// `std::vector<SdfLayerOffset>` (e.g. `subLayerOffsets`): `(offset,
+    /// scale)` pairs.
+    LayerOffsetVector(Vec<(f64, f64)>),
     /// `SdfTimeSampleMap` (the `timeSamples` field): times, strictly
     /// increasing, with their values ([`Value::Block`] for a blocked
     /// sample).

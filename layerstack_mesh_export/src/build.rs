@@ -62,6 +62,7 @@ pub(crate) fn document(scene: &Scene<'_>) -> Result<Document, ExportError> {
             Metadatum::new("upAxis", Value::Token(up_axis.into())),
         ],
         prim_order: None,
+        sublayers: Vec::new(),
         prims: vec![root],
     })
 }

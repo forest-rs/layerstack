@@ -212,31 +212,6 @@ over "Other"
 fn rejects_unsupported_features_with_their_source_paths() {
     let cases: &[(&str, &str, Unsupported)] = &[
         (
-            "#usda 1.0\n(\n    subLayers = [@a.usda@]\n)\n",
-            "/",
-            Unsupported::Sublayers,
-        ),
-        (
-            "#usda 1.0\ndef \"A\" (\n    references = @a.usda@</B>\n)\n{\n}\n",
-            "/A",
-            Unsupported::References,
-        ),
-        (
-            "#usda 1.0\ndef \"A\" (\n    prepend payload = @a.usda@\n)\n{\n}\n",
-            "/A",
-            Unsupported::Payloads,
-        ),
-        (
-            "#usda 1.0\ndef \"A\" {\n    def \"B\" (\n        inherits = </C>\n    )\n    {\n    }\n}\nclass \"C\"\n{\n}\n",
-            "/A/B",
-            Unsupported::Inherits,
-        ),
-        (
-            "#usda 1.0\ndef \"A\" (\n    specializes = </C>\n)\n{\n}\nclass \"C\"\n{\n}\n",
-            "/A",
-            Unsupported::Specializes,
-        ),
-        (
             "#usda 1.0\ndef \"A\" (\n    variants = {\n        string v = \"x\"\n    }\n)\n{\n}\n",
             "/A",
             Unsupported::VariantSelections,
@@ -327,39 +302,199 @@ fn rejects_unsupported_slots_built_through_the_api() {
         }),
         "explicit list and edits"
     );
+}
 
+/// Arcs are written by their authored asset paths; an arc into another
+/// layer built from its layer id alone has none to write.
+#[test]
+fn arcs_need_authored_asset_paths() {
+    let source = "#usda 1.0\ndef \"A\"\n{\n}\n";
     let mut imported = Imported::new(source);
-    let a = imported.paths.lookup(&Path::root()).unwrap();
     imported
         .layer
         .sublayers
         .push(SublayerEntry::new(LayerId(9)));
     assert_eq!(
         imported.save(),
-        Err(SaveError::Unsupported {
+        Err(SaveError::Invalid {
             path: "/".into(),
-            feature: Unsupported::Sublayers
+            problem: Invalid::ArcWithoutAsset
         }),
-        "sublayers added through the API"
+        "a sublayer by layer id"
     );
-    imported.layer.sublayers.clear();
+    imported.layer.sublayers = vec![SublayerEntry::with_asset(
+        LayerId(9),
+        "./base.usda",
+        layerstack::LayerOffset {
+            offset: 1.5,
+            scale: 1.0,
+        },
+    )];
     let prim = Path::parse_absolute("/A", &mut imported.tokens).unwrap();
     let prim = imported.paths.intern(prim);
-    assert_ne!(a, prim);
-    imported
-        .layer
-        .prims
-        .get_mut(&prim)
-        .unwrap()
-        .add_reference(Reference::with_asset(LayerId(9), prim, "./x.usda"));
+    let spec = imported.layer.prims.get_mut(&prim).unwrap();
+    spec.add_reference(Reference::with_asset(LayerId(9), prim, "./x.usda"));
+    // An internal reference: into the layer itself, without an asset path.
+    spec.add_reference(Reference::to_default_prim(LayerId(1)));
+    let text = imported.save().unwrap();
+    assert!(
+        text.contains("    subLayers = [\n        @./base.usda@ (offset = 1.5)\n    ]\n"),
+        "{text}"
+    );
+    assert!(
+        text.contains("    append references = [@./x.usda@</A>, <>]\n"),
+        "{text}"
+    );
+
+    let spec = imported.layer.prims.get_mut(&prim).unwrap();
+    spec.add_reference(Reference::new(LayerId(9), prim));
     assert_eq!(
         imported.save(),
-        Err(SaveError::Unsupported {
+        Err(SaveError::Invalid {
             path: "/A".into(),
-            feature: Unsupported::References
+            problem: Invalid::ArcWithoutAsset
         }),
-        "reference added through the API"
+        "a reference by layer id"
     );
+}
+
+/// An arc list that repeats an item within one operation is rejected before
+/// any output, for every arc family: OpenUSD refuses to open such a layer.
+/// The same item in a `delete` and a `prepend` is kept, as OpenUSD keeps
+/// it.
+///
+/// Spec: AOUSD Core §6.6.3 (list operations).
+#[test]
+fn rejects_repeated_arcs_within_one_operation() {
+    let source = "#usda 1.0\ndef \"A\"\n{\n}\n\nclass \"C\"\n{\n}\n";
+    let mut imported = Imported::new(source);
+    let a = Path::parse_absolute("/A", &mut imported.tokens).unwrap();
+    let a = imported.paths.intern(a);
+    let c = Path::parse_absolute("/C", &mut imported.tokens).unwrap();
+    let c = imported.paths.intern(c);
+    let arc = Reference::with_asset(LayerId(9), c, "./r.usda");
+    /// Repeats an item in one of the prim's arc lists.
+    type Repeat = fn(&mut PrimSpec, PathId, &Reference);
+    let cases: [(&str, Repeat); 4] = [
+        ("inherits", |spec, c, _| {
+            spec.inherits.explicit = Some(vec![c, c]);
+        }),
+        ("specializes", |spec, c, _| {
+            spec.specializes.prepend = vec![c, c];
+        }),
+        ("references", |spec, _, arc| {
+            spec.references.append = vec![arc.clone(), arc.clone()];
+        }),
+        ("payload", |spec, _, arc| {
+            spec.payloads.delete = vec![arc.clone(), arc.clone()];
+        }),
+    ];
+    for (key, edit) in cases {
+        let mut layer = imported.layer.clone();
+        edit(layer.prims.get_mut(&a).unwrap(), c, &arc);
+        assert_eq!(
+            save_usda(&layer, &imported.tokens, &imported.paths),
+            Err(SaveError::Document(WriteError::InvalidListOp {
+                path: format!("/A#{key}")
+            })),
+            "{key}"
+        );
+    }
+
+    let spec = imported.layer.prims.get_mut(&a).unwrap();
+    spec.inherits.delete = vec![c];
+    spec.inherits.prepend = vec![c];
+    let text = imported.save().unwrap();
+    assert!(
+        text.contains("    delete inherits = </C>\n    prepend inherits = </C>\n"),
+        "{text}"
+    );
+}
+
+/// Every arc form is written as authored: list-op forms and explicit empty
+/// lists, external and internal references and payloads, prim paths or
+/// the `defaultPrim`, layer offsets and scales, and inherit and specialize
+/// paths (relative ones as the absolute paths they name).
+///
+/// Spec: AOUSD Core §10.3.1 (sublayers), §10.3.2.1–§10.3.2.4 (references,
+/// payloads, inherits, specializes), §16.2.17.5 (arc syntax).
+#[test]
+fn saves_composition_arcs_as_authored() {
+    let source = r#"#usda 1.0
+(
+    defaultPrim = "A"
+    subLayers = [
+        @./strong.usda@ (offset = -2.5; scale = 0.5),
+        @./weak.usdc@
+    ]
+)
+
+def "A" (
+    kind = "group"
+    delete inherits = </C>
+    append inherits = <../D>
+    payload = [@./p.usda@</P> (scale = 2), </A/B>]
+    prepend references = [@./r.usda@ (offset = 3), <>]
+    append references = @./r.usda@</R>
+    specializes = None
+)
+{
+    def "B" (
+        references = None
+        payload = @./q.usda@
+        inherits = </C>
+    )
+    {
+    }
+}
+
+class "C"
+{
+}
+
+class "D"
+{
+}
+"#;
+    let text = Imported::new(source).save().unwrap();
+    let expected = r#"#usda 1.0
+(
+    defaultPrim = "A"
+    subLayers = [
+        @./strong.usda@ (offset = -2.5; scale = 0.5),
+        @./weak.usdc@
+    ]
+)
+
+def "A" (
+    kind = "group"
+    delete inherits = </C>
+    append inherits = </D>
+    payload = [@./p.usda@</P> (scale = 2), </A/B>]
+    prepend references = [@./r.usda@ (offset = 3), <>]
+    append references = @./r.usda@</R>
+    specializes = None
+)
+{
+    def "B" (
+        inherits = </C>
+        payload = @./q.usda@
+        references = None
+    )
+    {
+    }
+}
+
+class "C"
+{
+}
+
+class "D"
+{
+}
+"#;
+    assert_eq!(text, expected, "saved text");
+    assert_eq!(Imported::new(&text).save().unwrap(), text, "stable");
 }
 
 /// Resolves no asset, as when an imported layer's dependencies are absent.
@@ -381,22 +516,16 @@ impl AssetResolver for NoAsset {
     }
 }
 
-/// A reference or payload whose asset did not resolve on import is kept as
-/// an unresolved arc (`Reference::unresolved`), and the save rejects it
-/// with its source path like any other arc; it is not taken as absent.
+/// A reference, payload or sublayer whose asset did not resolve on import
+/// is kept as an unresolved arc (`Reference::unresolved`,
+/// `SublayerEntry::unresolved`), and saved as authored like any other; it
+/// is not taken as absent.
 #[test]
-fn rejects_unresolved_arcs_with_their_source_paths() {
-    for (source, path, feature) in [
-        (
-            "#usda 1.0\ndef \"A\"\n{\n    def \"B\" (\n        references = @./absent.usda@</Model>\n    )\n    {\n    }\n}\n",
-            "/A/B",
-            Unsupported::References,
-        ),
-        (
-            "#usda 1.0\ndef \"A\" (\n    prepend payload = @./absent.usdc@\n)\n{\n}\n",
-            "/A",
-            Unsupported::Payloads,
-        ),
+fn saves_unresolved_arcs_as_authored() {
+    for source in [
+        "#usda 1.0\ndef \"A\"\n{\n    def \"B\" (\n        references = @./absent.usda@</Model> (offset = 4)\n    )\n    {\n    }\n}\n",
+        "#usda 1.0\ndef \"A\" (\n    prepend payload = @./absent.usdc@\n)\n{\n}\n",
+        "#usda 1.0\n(\n    subLayers = [\n        @./absent.usda@ (scale = 3)\n    ]\n)\n\ndef \"A\"\n{\n}\n",
     ] {
         let parsed = crate::parser::parse(source);
         assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
@@ -421,16 +550,17 @@ fn rejects_unresolved_arcs_with_their_source_paths() {
                     .chain(&p.payloads.prepend)
             })
             .filter(|arc| arc.is_unresolved())
-            .count();
+            .count()
+            + result
+                .layer
+                .sublayers
+                .iter()
+                .filter(|s| s.is_unresolved())
+                .count();
         assert_eq!(arcs, 1, "the importer keeps the unresolved arc");
-        assert_eq!(
-            save_usda(&result.layer, &tokens, &paths),
-            Err(SaveError::Unsupported {
-                path: path.into(),
-                feature
-            }),
-            "{source}"
-        );
+        let saved = save_usda(&result.layer, &tokens, &paths).unwrap();
+        assert_eq!(saved, Imported::new(source).save().unwrap(), "{source}");
+        assert!(saved.contains("@./absent."), "{saved}");
     }
 }
 

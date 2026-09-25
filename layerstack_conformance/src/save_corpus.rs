@@ -14,18 +14,31 @@
 //!
 //! The cases cover authored data a saved layer must keep without
 //! interpreting it: UI hints, authorship-style unknown schemas, profile
-//! claims, other schemas carried as data, explicitly empty lists and a
-//! subroot `defaultPrim`, within the supported subset of
-//! [`layerstack_usda::save`]. [`unsupported_cases`] are encodings outside
-//! that subset, each with the error naming its source path.
+//! claims, other schemas carried as data, explicitly empty lists, a
+//! subroot `defaultPrim`, animation, and composition arcs written by their
+//! authored asset paths (placements of a shared asset, a retimed payload,
+//! inherits and specializes, and arcs whose assets are missing), within the
+//! supported subset of [`layerstack_usda::save`]. [`unsupported_cases`] are
+//! encodings outside that subset, each with the error naming its source
+//! path.
+//!
+//! A case with [`SaveCase::composition`] is also composed with its assets:
+//! the saved layer must compose as the expected layer does, in this
+//! workspace ([`composed`]) and in OpenUSD.
 
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::fmt::Write as _;
 use std::sync::Arc;
 
 use layerstack::doc::{FieldValue, Layer, LayerId, Value};
 use layerstack::interner::TokenInterner;
 use layerstack::listop::ListOp;
 use layerstack::path::{Path, PathInterner, PropertyPath};
-use layerstack::{AssetResolveError, AssetResolver, ResolvedAsset};
+use layerstack::{
+    AssetResolveError, AssetResolver, InMemoryStore, InterpolationType, ResolvedAsset,
+    ResolvedValue, Stage, StageOptions,
+};
 use layerstack_usda::save::{SaveError, Unsupported};
 
 use crate::export_fixtures::OpenUsdRelease;
@@ -42,9 +55,13 @@ pub struct Imported {
 }
 
 /// Resolves every asset to a fresh, empty layer, so that arcs survive
-/// import and reach the save, which must reject them.
+/// import and reach the save, except assets under `./missing/`, which do
+/// not resolve and stay unresolved arcs.
 #[derive(Debug, Default)]
 pub struct AnyAsset(u64);
+
+/// The prefix of the asset paths no resolver of the corpus finds.
+pub const MISSING: &str = "./missing/";
 
 impl AssetResolver for AnyAsset {
     fn resolve(
@@ -54,6 +71,9 @@ impl AssetResolver for AnyAsset {
         _: &mut TokenInterner,
         _: &mut PathInterner,
     ) -> Result<ResolvedAsset, AssetResolveError> {
+        if asset_path.starts_with(MISSING) {
+            return Err(AssetResolveError::NotFound);
+        }
         self.0 += 1;
         Ok(ResolvedAsset {
             layer_id: LayerId(1000 + self.0),
@@ -179,6 +199,11 @@ pub struct SaveCase {
     /// [`crate::export_fixtures::minimum_openusd`]); an older oracle skips
     /// the case.
     pub minimum_openusd: Option<(OpenUsdRelease, &'static str)>,
+    /// For a case about what the layer composes: the assets its arcs name,
+    /// as `(asset path, USDA text)` (asset paths under [`MISSING`] are left
+    /// out). The saved layer, composed with them, must compose as the
+    /// expected layer does.
+    pub composition: Option<&'static [(&'static str, &'static str)]>,
 }
 
 /// The preservation corpus.
@@ -206,6 +231,7 @@ pub fn cases() -> Vec<SaveCase> {
             },
             expected: UI_HINTS_EDITED,
             weaker: None,
+            composition: None,
             minimum_openusd: Some((
                 (25, 11),
                 "`uiHints` (usdUI) and `limits` are registered from OpenUSD 25.11",
@@ -231,6 +257,7 @@ pub fn cases() -> Vec<SaveCase> {
             },
             expected: AUTHORSHIP_EDITED,
             weaker: None,
+            composition: None,
             minimum_openusd: None,
         },
         SaveCase {
@@ -249,6 +276,7 @@ pub fn cases() -> Vec<SaveCase> {
             },
             expected: PROFILES_EDITED,
             weaker: None,
+            composition: None,
             minimum_openusd: None,
         },
         SaveCase {
@@ -265,6 +293,7 @@ pub fn cases() -> Vec<SaveCase> {
             },
             expected: SCHEMAS_AS_DATA_EDITED,
             weaker: None,
+            composition: None,
             minimum_openusd: None,
         },
         SaveCase {
@@ -279,6 +308,7 @@ pub fn cases() -> Vec<SaveCase> {
             },
             expected: EXPLICIT_EMPTY_EDITED,
             weaker: Some(EXPLICIT_EMPTY_WEAKER),
+            composition: None,
             minimum_openusd: None,
         },
         SaveCase {
@@ -291,7 +321,77 @@ pub fn cases() -> Vec<SaveCase> {
             },
             expected: SUBROOT_DEFAULT_PRIM_EDITED,
             weaker: None,
+            composition: None,
             minimum_openusd: None,
+        },
+        SaveCase {
+            name: "shared_asset_placements",
+            covers: "two placements referencing one shared asset, by its `defaultPrim` and \
+                     by an explicit prim path, with a local override on one; the edit \
+                     changes the override",
+            source: PLACEMENTS,
+            edit: |layer| {
+                layer.property("/Scene/MarkerB/Beacon.radius").default = Some(Value::Double(1.0));
+            },
+            expected: PLACEMENTS_EDITED,
+            weaker: None,
+            minimum_openusd: None,
+            composition: Some(&[("./assets/marker.usda", MARKER_ASSET)]),
+        },
+        SaveCase {
+            name: "retimed_payload",
+            covers: "a prepended payload with a layer offset and scale, and an explicit \
+                     payload with a prim path; the edit moves the offset",
+            source: RETIMED_PAYLOAD,
+            edit: |layer| {
+                layer.prim("/Shot").payloads.prepend[0].layer_offset.offset = 48.0;
+            },
+            expected: RETIMED_PAYLOAD_EDITED,
+            weaker: None,
+            minimum_openusd: None,
+            composition: Some(&[
+                ("./assets/pulse.usda", PULSE_ASSET),
+                ("./assets/proxy.usda", PROXY_ASSET),
+            ]),
+        },
+        SaveCase {
+            name: "inherit_specialize",
+            covers: "an inherit and a specialize of local classes; the edit adds an inherit \
+                     ahead of the first, which changes what the prim composes",
+            source: INHERIT_SPECIALIZE,
+            edit: |layer| {
+                let accent = Path::parse_absolute("/_Accent", &mut layer.tokens).unwrap();
+                let accent = layer.paths.intern(accent);
+                layer
+                    .prim("/Item")
+                    .inherits
+                    .explicit
+                    .as_mut()
+                    .expect("explicit inherits")
+                    .insert(0, accent);
+            },
+            expected: INHERIT_SPECIALIZE_EDITED,
+            weaker: None,
+            minimum_openusd: None,
+            composition: Some(&[]),
+        },
+        SaveCase {
+            name: "unresolved_arcs",
+            covers: "a reference and a sublayer whose assets are missing, kept as authored \
+                     with their prim path and offsets next to resolved ones; the edit moves \
+                     the prim that authors the reference",
+            source: UNRESOLVED_ARCS,
+            edit: |layer| {
+                layer.property("/Site/Anchor.xformOp:translate").default =
+                    Some(Value::Vec3d([0.0, 2.0, 0.0]));
+            },
+            expected: UNRESOLVED_ARCS_EDITED,
+            weaker: None,
+            minimum_openusd: None,
+            composition: Some(&[
+                ("./assets/marker.usda", MARKER_ASSET),
+                ("./assets/lighting.usda", LIGHTING_ASSET),
+            ]),
         },
         SaveCase {
             name: "animated_attribute",
@@ -310,6 +410,7 @@ pub fn cases() -> Vec<SaveCase> {
             },
             expected: ANIMATED_EDITED,
             weaker: None,
+            composition: Some(&[]),
             minimum_openusd: None,
         },
     ]
@@ -324,29 +425,9 @@ pub fn unsupported_cases() -> Vec<(&'static str, &'static str, SaveError)> {
     };
     vec![
         (
-            "sublayers",
-            "#usda 1.0\n(\n    subLayers = [\n        @./base.usda@\n    ]\n)\n",
-            unsupported("/", Unsupported::Sublayers),
-        ),
-        (
-            "references",
-            "#usda 1.0\ndef \"A\"\n{\n    def \"B\" (\n        prepend references = @./model.usda@</Model>\n    )\n    {\n    }\n}\n",
-            unsupported("/A/B", Unsupported::References),
-        ),
-        (
-            "payloads",
-            "#usda 1.0\ndef \"A\" (\n    payload = @./heavy.usdc@\n)\n{\n}\n",
-            unsupported("/A", Unsupported::Payloads),
-        ),
-        (
-            "inherits",
-            "#usda 1.0\nclass \"C\"\n{\n}\n\ndef \"A\" (\n    inherits = </C>\n)\n{\n}\n",
-            unsupported("/A", Unsupported::Inherits),
-        ),
-        (
-            "specializes",
-            "#usda 1.0\nclass \"C\"\n{\n}\n\ndef \"A\" (\n    specializes = </C>\n)\n{\n}\n",
-            unsupported("/A", Unsupported::Specializes),
+            "variant_set",
+            "#usda 1.0\ndef \"A\" (\n    variantSets = \"lod\"\n)\n{\n    variantSet \"lod\" = {\n        \"high\" {\n            float detail = 1\n        }\n    }\n}\n",
+            unsupported("/A", Unsupported::VariantSets),
         ),
         (
             "variant_sets",
@@ -377,6 +458,185 @@ pub fn unsupported_cases() -> Vec<(&'static str, &'static str, SaveError)> {
             unsupported("/A.h", Unsupported::Value("half vector")),
         ),
     ]
+}
+
+/// A layer to compose: USDA text or a USDC file.
+#[derive(Clone, Copy, Debug)]
+pub enum Root<'a> {
+    /// USDA text.
+    Usda(&'a str),
+    /// A USDC file.
+    Usdc(&'a [u8]),
+}
+
+/// Resolves the asset paths of `assets` to their USDA, emitted on demand
+/// (arcs inside an asset resolve through the same table); any other asset
+/// path does not resolve.
+struct Assets<'a> {
+    assets: &'a [(&'a str, &'a str)],
+    ids: BTreeMap<String, LayerId>,
+    loaded: Vec<Layer>,
+}
+
+impl AssetResolver for Assets<'_> {
+    fn resolve(
+        &mut self,
+        asset_path: &str,
+        _: Option<LayerId>,
+        tokens: &mut TokenInterner,
+        paths: &mut PathInterner,
+    ) -> Result<ResolvedAsset, AssetResolveError> {
+        let resolved_path = Arc::from(asset_path);
+        if let Some(&layer_id) = self.ids.get(asset_path) {
+            return Ok(ResolvedAsset {
+                layer_id,
+                resolved_path,
+                layer: None,
+            });
+        }
+        let &(_, text) = self
+            .assets
+            .iter()
+            .find(|(path, _)| *path == asset_path)
+            .ok_or(AssetResolveError::NotFound)?;
+        let layer_id = LayerId(100 + self.ids.len() as u64);
+        self.ids.insert(asset_path.into(), layer_id);
+        let parsed = layerstack_usda::parser::parse(text);
+        assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+        let result = layerstack_usda::emit::emit(&parsed.layer, layer_id, tokens, paths, self);
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        self.loaded.extend(result.resolved_layers);
+        Ok(ResolvedAsset {
+            layer_id,
+            resolved_path,
+            layer: Some(result.layer),
+        })
+    }
+
+    fn resolved_path(&self, _: LayerId) -> Option<&str> {
+        None
+    }
+}
+
+/// Stage times [`composed`] resolves every attribute at, besides its
+/// default.
+pub const PROBE_TIMES: [f64; 9] = [-5.0, 0.0, 5.0, 12.0, 24.0, 30.0, 48.0, 53.0, 100.0];
+
+/// What this workspace composes from `root` over `assets` (see
+/// [`SaveCase::composition`]): per prim in traversal order, its path,
+/// specifier and type, then per property (by name) its resolved value,
+/// its value at each of [`PROBE_TIMES`] and its targets; and the number of
+/// composition errors. Tokens are spelled out, so the text compares across
+/// stores.
+///
+/// # Panics
+///
+/// Panics if the layer or an asset does not read cleanly.
+pub fn composed(root: Root<'_>, assets: &[(&str, &str)]) -> String {
+    let mut store = InMemoryStore::default();
+    let mut resolver = Assets {
+        assets,
+        ids: BTreeMap::new(),
+        loaded: Vec::new(),
+    };
+    let (layer, resolved) = match root {
+        Root::Usda(text) => {
+            let parsed = layerstack_usda::parser::parse(text);
+            assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+            let result = layerstack_usda::emit::emit(
+                &parsed.layer,
+                LayerId(1),
+                &mut store.tokens,
+                &mut store.paths,
+                &mut resolver,
+            );
+            assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+            (result.layer, result.resolved_layers)
+        }
+        Root::Usdc(bytes) => {
+            let result = layerstack_usdc::read_usdc(
+                bytes,
+                LayerId(1),
+                &mut store.tokens,
+                &mut store.paths,
+                &mut resolver,
+            )
+            .expect("USDC reads");
+            assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+            (result.layer, result.resolved_layers)
+        }
+    };
+    for layer in resolver.loaded.into_iter().chain(resolved) {
+        store.insert_layer(layer);
+    }
+    store.insert_layer(layer);
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+    let mut out = String::new();
+    let root_path = store.paths.intern(Path::root());
+    let prims: Vec<_> = stage.traverse(root_path).collect();
+    for prim in prims {
+        let shown = store.paths.display(prim, &store.tokens);
+        let type_name = stage
+            .resolve_type_name(prim, &store)
+            .map(|t| store.tokens.resolve(t).to_string());
+        let specifier = stage.resolve_specifier(prim, &store);
+        let _ = writeln!(out, "{shown} {specifier:?} {type_name:?}");
+        let mut names = BTreeSet::new();
+        for (layer_id, spec_path) in stage.prim_stack(prim).unwrap_or_default() {
+            let spec_path = spec_path.display(&store.tokens);
+            let Ok(path) = Path::parse_absolute(&spec_path, &mut store.tokens) else {
+                continue;
+            };
+            let Some(id) = store.paths.lookup(&path) else {
+                continue;
+            };
+            let Some(spec) = store.layers[&layer_id].prims.get(&id) else {
+                continue;
+            };
+            names.extend(
+                spec.properties
+                    .iter()
+                    .map(|p| store.tokens.resolve(p.name).to_string()),
+            );
+        }
+        for name in names {
+            let path = store.property_path(&format!("{shown}.{name}"));
+            let value = match stage.resolve_property_path(path).map(|r| r.value) {
+                Some(ResolvedValue::Scalar(v)) => spell(&v, &store.tokens),
+                other => format!("{other:?}"),
+            };
+            let _ = write!(out, "  .{name} = {value}");
+            for time in PROBE_TIMES {
+                let at = stage
+                    .resolve_property_path_at_time(path, time, InterpolationType::Held)
+                    .map(|r| spell(&r.value, &store.tokens));
+                let _ = write!(out, " @{time}: {at:?}");
+            }
+            let targets: Vec<String> = stage
+                .resolve_target_list_path(path)
+                .map(|r| r.value)
+                .unwrap_or_default()
+                .iter()
+                .map(|t| t.display(&store.paths, &store.tokens))
+                .collect();
+            let _ = writeln!(out, " targets {targets:?}");
+        }
+    }
+    let _ = writeln!(out, "errors: {}", stage.composition_errors().len());
+    out
+}
+
+/// A value with its tokens spelled out.
+fn spell(value: &Value, tokens: &TokenInterner) -> String {
+    match value {
+        Value::Token(t) => format!("token {:?}", tokens.resolve(*t)),
+        Value::Array(items) => {
+            let items: Vec<String> = items.iter().map(|v| spell(v, tokens)).collect();
+            format!("[{}]", items.join(", "))
+        }
+        other => format!("{other:?}"),
+    }
 }
 
 const UI_HINTS: &str = r#"#usda 1.0
@@ -765,6 +1025,248 @@ def Xform "Model"
 {
     def Mesh "Geo"
     {
+    }
+}
+"#;
+
+const MARKER_ASSET: &str = r#"#usda 1.0
+(
+    defaultPrim = "Marker"
+)
+
+def Xform "Marker"
+{
+    def Sphere "Beacon"
+    {
+        double radius = 0.5
+        color3f[] primvars:displayColor = [(0.2, 0.2, 0.2)]
+    }
+}
+"#;
+
+const PLACEMENTS: &str = r#"#usda 1.0
+(
+    defaultPrim = "Scene"
+)
+
+def Xform "Scene"
+{
+    def Xform "MarkerA" (
+        prepend references = @./assets/marker.usda@
+    )
+    {
+        double3 xformOp:translate = (1, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Xform "MarkerB" (
+        prepend references = @./assets/marker.usda@</Marker>
+    )
+    {
+        double3 xformOp:translate = (-1, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+
+        over "Beacon"
+        {
+            double radius = 0.75
+        }
+    }
+}
+"#;
+
+const PLACEMENTS_EDITED: &str = r#"#usda 1.0
+(
+    defaultPrim = "Scene"
+)
+
+def Xform "Scene"
+{
+    def Xform "MarkerA" (
+        prepend references = @./assets/marker.usda@
+    )
+    {
+        double3 xformOp:translate = (1, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+
+    def Xform "MarkerB" (
+        prepend references = @./assets/marker.usda@</Marker>
+    )
+    {
+        double3 xformOp:translate = (-1, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+
+        over "Beacon"
+        {
+            double radius = 1
+        }
+    }
+}
+"#;
+
+const PULSE_ASSET: &str = r#"#usda 1.0
+(
+    defaultPrim = "Pulse"
+)
+
+def Xform "Pulse"
+{
+    float intensity.timeSamples = {
+        0: 0,
+        10: 1,
+    }
+}
+"#;
+
+const PROXY_ASSET: &str = r#"#usda 1.0
+
+def Scope "Proxy"
+{
+    custom token role = "stand-in"
+}
+"#;
+
+const RETIMED_PAYLOAD: &str = r#"#usda 1.0
+(
+    defaultPrim = "Shot"
+)
+
+def Xform "Shot" (
+    prepend payload = @./assets/pulse.usda@ (offset = 24; scale = 0.5)
+)
+{
+    def Scope "Stand" (
+        payload = @./assets/proxy.usda@</Proxy>
+    )
+    {
+    }
+}
+"#;
+
+const RETIMED_PAYLOAD_EDITED: &str = r#"#usda 1.0
+(
+    defaultPrim = "Shot"
+)
+
+def Xform "Shot" (
+    prepend payload = @./assets/pulse.usda@ (offset = 48; scale = 0.5)
+)
+{
+    def Scope "Stand" (
+        payload = @./assets/proxy.usda@</Proxy>
+    )
+    {
+    }
+}
+"#;
+
+const INHERIT_SPECIALIZE: &str = r#"#usda 1.0
+(
+    defaultPrim = "Item"
+)
+
+class "_Base"
+{
+    float size = 1
+    token finish = "matte"
+}
+
+class "_Accent"
+{
+    token finish = "gloss"
+}
+
+class "_Tint"
+{
+    color3f tint = (0.5, 0.5, 0.5)
+}
+
+def Xform "Item" (
+    inherits = </_Base>
+    prepend specializes = </_Tint>
+)
+{
+    float size = 2
+}
+"#;
+
+const INHERIT_SPECIALIZE_EDITED: &str = r#"#usda 1.0
+(
+    defaultPrim = "Item"
+)
+
+class "_Base"
+{
+    float size = 1
+    token finish = "matte"
+}
+
+class "_Accent"
+{
+    token finish = "gloss"
+}
+
+class "_Tint"
+{
+    color3f tint = (0.5, 0.5, 0.5)
+}
+
+def Xform "Item" (
+    inherits = [</_Accent>, </_Base>]
+    prepend specializes = </_Tint>
+)
+{
+    float size = 2
+}
+"#;
+
+const LIGHTING_ASSET: &str = r#"#usda 1.0
+
+over "Site"
+{
+    float exposure.timeSamples = {
+        0: 1,
+        10: 2,
+    }
+}
+"#;
+
+const UNRESOLVED_ARCS: &str = r#"#usda 1.0
+(
+    defaultPrim = "Site"
+    subLayers = [
+        @./missing/notes.usda@ (offset = 5),
+        @./assets/lighting.usda@ (offset = 10; scale = 2)
+    ]
+)
+
+def Xform "Site"
+{
+    def Xform "Anchor" (
+        prepend references = [@./missing/anchor.usda@</Anchor> (offset = 2), @./assets/marker.usda@]
+    )
+    {
+        double3 xformOp:translate = (0, 1, 0)
+    }
+}
+"#;
+
+const UNRESOLVED_ARCS_EDITED: &str = r#"#usda 1.0
+(
+    defaultPrim = "Site"
+    subLayers = [
+        @./missing/notes.usda@ (offset = 5),
+        @./assets/lighting.usda@ (offset = 10; scale = 2)
+    ]
+)
+
+def Xform "Site"
+{
+    def Xform "Anchor" (
+        prepend references = [@./missing/anchor.usda@</Anchor> (offset = 2), @./assets/marker.usda@]
+    )
+    {
+        double3 xformOp:translate = (0, 2, 0)
     }
 }
 "#;

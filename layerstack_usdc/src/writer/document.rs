@@ -8,11 +8,15 @@
 //! the same specs, fields, field types and children order. In particular:
 //!
 //! - the pseudo-root holds `defaultPrim`, then the layer metadata in order,
-//!   then `primOrder` (`reorder rootPrims`) and `primChildren`;
+//!   then `subLayers` (a string vector of the authored asset paths) and
+//!   `subLayerOffsets` when there are sublayers, then `primOrder` (`reorder
+//!   rootPrims`) and `primChildren`;
 //! - a prim holds `specifier`, `typeName` (for typed prims), its metadata
 //!   in order (a token list op such as `prepend apiSchemas` included), then
-//!   `propertyOrder` and `primOrder` (the `reorder` statements), then
-//!   `primChildren` and `properties` (in the document's property order);
+//!   its arcs, `inheritPaths`, `payload`, `references` and `specializes`
+//!   (as the USDA writes them), then `propertyOrder` and `primOrder` (the
+//!   `reorder` statements), then `primChildren` and `properties` (in the
+//!   document's property order);
 //! - an attribute holds `custom`, `typeName` (the declared name, role and
 //!   `[]` included), `variability`, `default` when a value is authored (a
 //!   value block included), its metadata in order, then `connectionPaths`
@@ -51,12 +55,13 @@ use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack_usda::save::layer_document;
 use layerstack_usda::writer::{
-    Attribute, Document, ListOp as UsdaListOp, Metadatum, Prim, Property, Relationship,
-    Specifier as UsdaSpecifier, Value as UsdaValue, Variability as UsdaVariability,
+    Attribute, Document, ListOp as UsdaListOp, Metadatum, Prim, Property,
+    Reference as UsdaReference, Relationship, Specifier as UsdaSpecifier, Value as UsdaValue,
+    Variability as UsdaVariability,
 };
 
 use super::error::UsdcWriteError;
-use super::{ListOp, Spec, SpecForm, Specifier, Value, Variability, write_crate};
+use super::{ListOp, Reference, Spec, SpecForm, Specifier, Value, Variability, write_crate};
 
 /// Serializes `doc` as a USDC file.
 ///
@@ -111,6 +116,17 @@ pub fn document_specs(doc: &Document) -> Result<Vec<Spec>, UsdcWriteError> {
     for entry in &doc.metadata {
         root.fields.push(metadatum(Owner::Layer, "/", entry)?);
     }
+    if !doc.sublayers.is_empty() {
+        let assets = doc.sublayers.iter().map(|s| s.asset.clone()).collect();
+        let offsets = doc
+            .sublayers
+            .iter()
+            .map(|s| (s.offset.offset, s.offset.scale))
+            .collect();
+        root = root
+            .with_field("subLayers", Value::StringVector(assets))
+            .with_field("subLayerOffsets", Value::LayerOffsetVector(offsets));
+    }
     if let Some(order) = &doc.prim_order {
         root = root.with_field("primOrder", Value::TokenVector(order.clone()));
     }
@@ -142,6 +158,18 @@ fn lower_prim(prim: &Prim, parent: &str, specs: &mut Vec<Spec>) -> Result<(), Us
     }
     for entry in &prim.metadata {
         spec.fields.push(metadatum(Owner::Prim, &path, entry)?);
+    }
+    if let Some(op) = &prim.inherits {
+        spec = spec.with_field("inheritPaths", Value::PathListOp(list_op(op)));
+    }
+    if let Some(op) = &prim.payloads {
+        spec = spec.with_field("payload", Value::PayloadListOp(map_list_op(op, arc)));
+    }
+    if let Some(op) = &prim.references {
+        spec = spec.with_field("references", Value::ReferenceListOp(map_list_op(op, arc)));
+    }
+    if let Some(op) = &prim.specializes {
+        spec = spec.with_field("specializes", Value::PathListOp(list_op(op)));
     }
     if let Some(order) = &prim.property_order {
         spec = spec.with_field("propertyOrder", Value::TokenVector(order.clone()));
@@ -236,11 +264,28 @@ fn lower_relationship(relationship: &Relationship, prim: &str) -> Result<Spec, U
 }
 
 fn list_op(op: &UsdaListOp<String>) -> ListOp<String> {
+    map_list_op(op, String::clone)
+}
+
+fn map_list_op<T, U>(op: &UsdaListOp<T>, item: impl Fn(&T) -> U) -> ListOp<U> {
+    let list = |items: &[T]| items.iter().map(&item).collect::<Vec<_>>();
     ListOp {
-        explicit: op.explicit.clone(),
-        prepended: op.prepended.clone(),
-        appended: op.appended.clone(),
-        deleted: op.deleted.clone(),
+        explicit: op.explicit.as_deref().map(list),
+        prepended: list(&op.prepended),
+        appended: list(&op.appended),
+        deleted: list(&op.deleted),
+    }
+}
+
+/// A reference or payload as `SdfReference` / `SdfPayload` hold it: an
+/// empty asset path for an internal arc, an empty prim path for the
+/// `defaultPrim`.
+fn arc(arc: &UsdaReference) -> Reference {
+    Reference {
+        asset: arc.asset.clone().unwrap_or_default(),
+        prim_path: arc.prim_path.clone().unwrap_or_default(),
+        offset: arc.offset.offset,
+        scale: arc.offset.scale,
     }
 }
 
@@ -1256,6 +1301,119 @@ def Xform "A" (
         )
         .unwrap();
         assert_eq!(read.layer.property(path).unwrap().default, expected, "USDC");
+    }
+
+    /// Arcs land where the text parser stores them: sublayers as the
+    /// `subLayers` string vector and `subLayerOffsets` after the layer
+    /// metadata, prim arcs after the prim metadata. An explicit payload
+    /// list of one external payload is stored as a single `SdfPayload`, as
+    /// OpenUSD stores it.
+    #[test]
+    fn lowers_composition_arcs() {
+        use layerstack_usda::writer::{LayerOffset, SubLayer};
+
+        let arc = |asset: Option<&str>, prim_path: Option<&str>| UsdaReference {
+            asset: asset.map(Into::into),
+            prim_path: prim_path.map(Into::into),
+            offset: LayerOffset {
+                offset: 2.0,
+                scale: 1.0,
+            },
+        };
+        let mut prim = Prim::def("Xform", "P");
+        prim.metadata
+            .push(Metadatum::new("kind", UsdaValue::Token("group".into())));
+        prim.inherits = Some(UsdaListOp::explicit(vec!["/C".into()]));
+        prim.payloads = Some(UsdaListOp::explicit(vec![arc(Some("./p.usda"), None)]));
+        prim.references = Some(UsdaListOp::prepend(vec![
+            arc(Some("./r.usda"), Some("/R")),
+            arc(None, Some("/C")),
+        ]));
+        prim.specializes = Some(UsdaListOp::explicit(vec![]));
+        let doc = Document {
+            metadata: vec![Metadatum::new("upAxis", UsdaValue::Token("Z".into()))],
+            sublayers: vec![SubLayer {
+                asset: "./base.usda".into(),
+                offset: LayerOffset {
+                    offset: 10.0,
+                    scale: 2.0,
+                },
+            }],
+            prims: vec![prim, Prim::new(UsdaSpecifier::Class, None, "C")],
+            ..Document::new()
+        };
+        let specs = document_specs(&doc).unwrap();
+        assert_eq!(
+            fields(&specs, "/")[1..3],
+            [
+                Field::new("subLayers", Value::StringVector(vec!["./base.usda".into()])),
+                Field::new(
+                    "subLayerOffsets",
+                    Value::LayerOffsetVector(vec![(10.0, 2.0)])
+                ),
+            ],
+            "sublayers"
+        );
+        let reference = |asset: &str, prim_path: &str| Reference {
+            asset: asset.into(),
+            prim_path: prim_path.into(),
+            offset: 2.0,
+            scale: 1.0,
+        };
+        assert_eq!(
+            fields(&specs, "/P")[2..7],
+            [
+                Field::new("kind", Value::Token("group".into())),
+                Field::new(
+                    "inheritPaths",
+                    Value::PathListOp(ListOp::explicit(vec!["/C".into()]))
+                ),
+                Field::new(
+                    "payload",
+                    Value::PayloadListOp(ListOp::explicit(vec![reference("./p.usda", "")]))
+                ),
+                Field::new(
+                    "references",
+                    Value::ReferenceListOp(ListOp::prepend(vec![
+                        reference("./r.usda", "/R"),
+                        reference("", "/C"),
+                    ]))
+                ),
+                Field::new("specializes", Value::PathListOp(ListOp::explicit(vec![]))),
+            ],
+            "prim arcs"
+        );
+
+        let bytes = write_document(&doc).unwrap();
+        let header = crate::header::parse_header(&bytes).unwrap();
+        let toc = crate::toc::parse_toc(&bytes, header.toc_offset).unwrap();
+        let sections = crate::section::parse_sections(
+            &bytes,
+            &toc,
+            header.crate_version(),
+            &mut crate::DecodeBudget::with_limit(u64::MAX),
+        )
+        .unwrap();
+        let payload = sections
+            .fields
+            .iter()
+            .find(|f| sections.tokens[f.token_index as usize] == "payload")
+            .unwrap();
+        let rep = crate::value_rep::RawValueRep::new(payload.value_rep);
+        assert_eq!(
+            rep.value_type().unwrap(),
+            crate::value_type::ValueType::Payload,
+            "one external payload is an SdfPayload"
+        );
+        let crate::value_rep::CrateValue::Dictionary(entries) =
+            crate::value_rep::decode_value(&rep, &bytes, &sections).unwrap()
+        else {
+            panic!("the payload decodes");
+        };
+        assert!(
+            matches!(&entries[1], (key, crate::value_rep::CrateValue::String(path)) if key == "primPath" && path.is_empty()),
+            "the empty prim path reads back empty: {entries:?}"
+        );
     }
 
     #[test]

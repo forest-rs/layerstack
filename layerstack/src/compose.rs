@@ -25,6 +25,7 @@ use crate::{
         resolve_variant_branch_payloads, resolve_variant_child_references,
         resolve_variant_references_in, resolve_variant_selections_for_prim, spec_arcs_apply,
     },
+    composition_checks::TargetSpecsCheck,
     composition_error::{
         ArcToProhibitedChild, CompositionError, UnresolvedAsset, UnresolvedDefaultPrim,
     },
@@ -5498,6 +5499,15 @@ fn add_reference_edge_opinions(
     if !visited.insert((dest_root, reference.layer, reference_path)) {
         return;
     }
+    let target_specs = TargetSpecsCheck::begin(
+        store,
+        out,
+        &reference,
+        dest_root,
+        ArcKind::References,
+        reference_path,
+        namespace_depth,
+    );
     cycles.enter(
         reference.layer,
         reference_path,
@@ -5980,6 +5990,9 @@ fn add_reference_edge_opinions(
             }
         }
     }
+    if let Some(check) = target_specs {
+        check.finish(out, cycles);
+    }
     cycles.exit();
 }
 
@@ -6130,6 +6143,15 @@ fn add_payload_edge_opinions(
     if !visited.insert((dest_root, reference.layer, reference_path)) {
         return;
     }
+    let target_specs = TargetSpecsCheck::begin(
+        store,
+        out,
+        &reference,
+        dest_root,
+        ArcKind::Payloads,
+        reference_path,
+        namespace_depth,
+    );
     cycles.enter(
         reference.layer,
         reference_path,
@@ -6567,6 +6589,9 @@ fn add_payload_edge_opinions(
         deps,
     );
 
+    if let Some(check) = target_specs {
+        check.finish(out, cycles);
+    }
     cycles.exit();
 }
 

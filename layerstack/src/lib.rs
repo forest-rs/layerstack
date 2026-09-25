@@ -77,6 +77,7 @@ pub(crate) mod arcs;
 pub mod array_edit;
 pub mod asset;
 pub(crate) mod compose;
+pub(crate) mod composition_checks;
 pub mod composition_error;
 pub mod dependency_map;
 pub mod doc;
@@ -106,7 +107,7 @@ pub use composition_error::{
     ArcCycle, ArcCycleSite, ArcToProhibitedChild, CompositionError, InvalidAuthoredRelocation,
     InvalidConflictingRelocation, InvalidRelocationReason, InvalidSameTargetRelocations,
     OpinionAtRelocationSource, RelocationConflict, SublayerCycle, UnresolvedAsset,
-    UnresolvedDefaultPrim, UnresolvedSublayer,
+    UnresolvedDefaultPrim, UnresolvedPrimPath, UnresolvedSublayer,
 };
 pub use dependency_map::ArcDependency;
 pub use doc::{

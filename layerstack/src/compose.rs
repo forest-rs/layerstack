@@ -25,7 +25,7 @@ use crate::{
         resolve_variant_branch_payloads, resolve_variant_child_references,
         resolve_variant_references_in, resolve_variant_selections_for_prim, spec_arcs_apply,
     },
-    composition_checks::TargetSpecsCheck,
+    composition_checks::{TargetSpecsCheck, drop_inconsistent_property_kinds},
     composition_error::{
         ArcToProhibitedChild, CompositionError, UnresolvedAsset, UnresolvedDefaultPrim,
     },
@@ -312,6 +312,10 @@ pub(crate) fn compose_stage(
     remove_relocation_sources(store, cycles.relocations(), &mut prims, &mut children);
     instances.retain(|instance| prims.contains_key(instance));
     crate::path_expression::anchor_opinions(store, &mut prims);
+
+    for (path, prim) in &mut prims {
+        drop_inconsistent_property_kinds(*path, prim, &mut cycles);
+    }
 
     if let Some(builder) = dep_builder.as_mut() {
         builder.retain_prims(&prims);

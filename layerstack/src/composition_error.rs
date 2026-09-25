@@ -14,7 +14,10 @@
 
 use alloc::{string::String, vec::Vec};
 
-use crate::{doc::LayerId, path::PathId, prim_index::ArcKind};
+use crate::{
+    doc::LayerId, interner::TokenId, path::PathId, prim_index::ArcKind, property::PropertyKind,
+    spec_path::SpecPath,
+};
 
 /// An error found while composing a stage.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -53,6 +56,9 @@ pub enum CompositionError {
     /// An arc whose target is a prim that relocates remove from its layer
     /// stack's namespace. The arc contributed nothing.
     ArcToProhibitedChild(ArcToProhibitedChild),
+    /// A property spec of a different kind (attribute or relationship) than
+    /// the property's strongest spec. The spec was ignored.
+    InconsistentPropertyType(InconsistentPropertyType),
 }
 
 impl CompositionError {
@@ -72,6 +78,7 @@ impl CompositionError {
             Self::UnresolvedAsset(error) => Some(error.prim),
             Self::OpinionAtRelocationSource(error) => Some(error.prim),
             Self::ArcToProhibitedChild(error) => Some(error.prim),
+            Self::InconsistentPropertyType(error) => Some(error.prim),
         }
     }
 }
@@ -395,4 +402,36 @@ pub struct ArcToProhibitedChild {
     pub target: PathId,
     /// The relocation source at or above the target.
     pub relocation_source: PathId,
+}
+
+/// A property spec whose kind differs from the kind of the property's
+/// strongest spec, found while composing the property `property` of `prim`.
+///
+/// A property is an attribute or a relationship. Its strongest spec (the
+/// defining spec) decides which; every weaker spec of the other kind is
+/// ignored, so it contributes nothing to the property's stack, value or
+/// targets, and each is reported. The property's other specs compose as
+/// normal.
+///
+/// Spec: AOUSD Core §7.6.3 (a property spec is an attribute spec or a
+/// relationship spec), §10.6. OpenUSD reports it as
+/// `PcpErrorInconsistentPropertyType` and ignores the conflicting spec
+/// (`PcpPropertyIndex`'s `_GetPrimProperty` in
+/// `pxr/usd/pcp/propertyIndex.cpp`).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct InconsistentPropertyType {
+    /// The composed prim that owns the property.
+    pub prim: PathId,
+    /// The property's name.
+    pub property: TokenId,
+    /// The layer of the defining spec.
+    pub defining_layer: LayerId,
+    /// The defining spec's path in that layer.
+    pub defining_spec: SpecPath,
+    /// The defining spec's kind, which the property takes.
+    pub defining_kind: PropertyKind,
+    /// The layer of the ignored spec.
+    pub conflicting_layer: LayerId,
+    /// The ignored spec's path in that layer.
+    pub conflicting_spec: SpecPath,
 }

@@ -3340,6 +3340,63 @@ impl Graft<'_> {
     }
 }
 
+/// Keeps one registration of each class arc site: drops from `pending` the
+/// sources of a class arc whose site its destination already registers at
+/// least as strongly, returning them as `(destination, layer, site)`, and
+/// drops from the destination the weaker class arc registrations of a site
+/// that `pending` registers more strongly, with their opinions.
+///
+/// A class arc adds no node for a site the prim index already uses: an
+/// implied class that an arc also reaches directly is one site (AOUSD Core
+/// §10.4.2.4; OpenUSD's `skipDuplicateNodes` for class-based arcs in
+/// `pxr/usd/pcp/primIndex.cpp`). OpenUSD adds arcs in strength order, so
+/// the registration it keeps is the strongest one; expansion order here is
+/// not strength order, so strength decides which registration stays.
+fn retain_new_class_sites(
+    out: &mut HashMap<PathId, PrimIndex>,
+    pending: &mut Vec<(PathId, OpinionKey)>,
+) -> HashSet<(PathId, LayerId, SpecPath)> {
+    let mut redundant = HashSet::new();
+    let mut weaker: HashSet<(PathId, NodeId, LayerId, SpecPath)> = HashSet::new();
+    pending.retain(|(dest, key)| {
+        let index = &out[dest];
+        let graph = &index.graph;
+        let mut registered = false;
+        for known in &index.sources {
+            if known.layer_id != key.layer_id || known.spec_path != key.spec_path {
+                continue;
+            }
+            let class_based = graph.node(known.node).is_some_and(|node| {
+                matches!(node.arc_kind(), ArcKind::Inherits | ArcKind::Specializes)
+            });
+            let stronger = graph
+                .strength(key.node)
+                .cmp_strongest_first(graph.strength(known.node))
+                .is_lt();
+            if stronger && class_based {
+                weaker.insert((*dest, known.node, known.layer_id, known.spec_path.clone()));
+            } else if !stronger {
+                registered = true;
+            }
+        }
+        if registered {
+            redundant.insert((*dest, key.layer_id, key.spec_path.clone()));
+        }
+        !registered
+    });
+    // A weaker registration is dropped only for a site `pending` keeps.
+    weaker.retain(|(dest, _, layer, site)| !redundant.contains(&(*dest, *layer, site.clone())));
+    let dests: HashSet<PathId> = weaker.iter().map(|(dest, ..)| *dest).collect();
+    for dest in dests {
+        out.get_mut(&dest)
+            .expect("path exists")
+            .retain_keys(|_, key| {
+                !weaker.contains(&(dest, key.node, key.layer_id, key.spec_path.prim_spec()))
+            });
+    }
+    redundant
+}
+
 fn add_inherit_edge_opinions(
     store: &mut dyn LayerStore,
     local_stack: &LayerStack,
@@ -3630,6 +3687,7 @@ fn add_inherit_edge_opinions(
             }
         }
 
+        let redundant = retain_new_class_sites(out, &mut pending_sources);
         for (dest_path_id, key) in pending_sources {
             out.get_mut(&dest_path_id)
                 .expect("path exists")
@@ -3638,6 +3696,9 @@ fn add_inherit_edge_opinions(
 
         for (dest_path_id, remote_path_id, spec_path, field, value, property_type, node) in pending
         {
+            if redundant.contains(&(dest_path_id, layer_id, spec_path.prim_spec())) {
+                continue;
+            }
             let mut value = value;
             remap_opinion_target_paths(store, &base_path, &inherited_path, &mut value);
             // Also apply reference namespace remapping if within a reference context.
@@ -5731,6 +5792,7 @@ fn add_specializes_edge_opinions(
             }
         }
 
+        let redundant = retain_new_class_sites(out, &mut pending_sources);
         for (dest_path_id, key) in pending_sources {
             out.get_mut(&dest_path_id)
                 .expect("path exists")
@@ -5739,6 +5801,9 @@ fn add_specializes_edge_opinions(
 
         for (dest_path_id, remote_path_id, spec_path, field, value, property_type, node) in pending
         {
+            if redundant.contains(&(dest_path_id, layer_id, spec_path.prim_spec())) {
+                continue;
+            }
             let mut value = value;
             remap_opinion_target_paths(store, &base_path, &specialized_path, &mut value);
             let key = OpinionKey {

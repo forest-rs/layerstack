@@ -486,13 +486,13 @@ fn observe(name: &str) -> Observed {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Cause {
     // Presentation: the same sites, counted differently.
-    /// Layerstack registers a site more than once for one arc path: a
-    /// specialized class expanded along two paths that reach the same
-    /// site, or a late copy of a target's composed sources that ranks a
-    /// site above the arc's own registration of it (`Forwarding` in
-    /// `compose`), kept because the flat strength key needs it. The
-    /// duplicate opinions carry the same value, so resolution is
-    /// unaffected.
+    /// Layerstack registers a site more than once for one arc path: a late
+    /// copy of a target's composed sources ranks a site above the arc's own
+    /// registration of it and is kept because the flat strength key needs
+    /// it (`Forwarding` in `compose`), or two expansions reach one site
+    /// through different namespace mappings of the same class or
+    /// reference. The duplicate opinions carry the same value, so
+    /// resolution is unaffected.
     DuplicateSources,
     /// OpenUSD keeps one node per arc path, so a site reached twice (a
     /// reference or payload diamond, a reference listed repeatedly with
@@ -700,33 +700,6 @@ const KNOWN: &[Known] = &[
         reason: "`/Instance_2` ranks `ref.usd /Specializes_2` before `root.usd /Inherits_2`, the class implied under the implied specializes `root.usd /Specializes_2`",
     },
     Known {
-        fixture: "BasicSpecializesAndReferences_root",
-        causes: &[C::DuplicateSources],
-        prims: 2,
-        props: 0,
-        values: 0,
-        diffs: &[D::ExtraRepeat],
-        reason: "`/ShaderBindings/ShinyPlastic_BlueShinyPlastic` repeats its specializes target `root.usd /ShaderBindings_defaultShadingVariant/ShinyPlastic`",
-    },
-    Known {
-        fixture: "BasicSpecializesAndVariants_root",
-        causes: &[C::DuplicateSources],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::ExtraRepeat],
-        reason: "`/Model/Looks/Brass` repeats `looks.usd /Looks/Metal`, the specialized class of its reference target",
-    },
-    Known {
-        fixture: "BasicSpecializes_root",
-        causes: &[C::DuplicateSources],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::ExtraRepeat],
-        reason: "`/Model/Looks/Metal` repeats the `Material` and `_class_Material` sites it specializes through its reference target",
-    },
-    Known {
         fixture: "BasicVariantWithConnections_root",
         causes: &[C::NestedArcDepth],
         prims: 2,
@@ -837,7 +810,7 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "ImpliedAndAncestralInherits_ComplexEvaluation_root",
         causes: &[C::NestedArcDepth, C::DuplicateSources],
-        prims: 14,
+        prims: 12,
         props: 5,
         values: 3,
         diffs: &[D::ExtraRepeat, D::Order],
@@ -925,31 +898,22 @@ const KNOWN: &[Known] = &[
         reason: "the inherit of `ref.usd /PR/Child` is not implied onto `/Parent/Sibling` with the root's inherits, so `/Parent/Child` ranks `/PI/Child` before `/Parent/Sibling`, and `/Parent2/Child` misses `/PS/Sibling` and `/PSI/Sibling`",
     },
     Known {
-        fixture: "SpecializesAndAncestralArcs5_root",
-        causes: &[C::DuplicateSources],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::ExtraRepeat],
-        reason: "`/Overalls/Looks/Cloth_C_Weave_09_Satin` repeats the specializes target `root.usd /Overalls_defaultShadingVariant/Looks/Cloth_C_Weave_09`",
-    },
-    Known {
         fixture: "SpecializesAndAncestralArcs_root",
-        causes: &[C::SpecializesPlacement, C::DuplicateSources],
+        causes: &[C::SpecializesPlacement],
         prims: 1,
         props: 0,
         values: 0,
-        diffs: &[D::ExtraRepeat, D::Order],
+        diffs: &[D::Order],
         reason: "`/AncestralReference/Child` ranks `ref.usd /Specializes/Child` before `root.usd /Class`, the class implied under the implied specializes `root.usd /Specializes/Child`",
     },
     Known {
         fixture: "SpecializesAndVariants2_root",
         causes: &[C::DuplicateSources],
-        prims: 3,
-        props: 3,
+        prims: 0,
+        props: 2,
         values: 0,
         diffs: &[D::ExtraRepeat],
-        reason: "`/element` repeats `root.usd /referencedMiddleman` and `root.usd /implementation`",
+        reason: "`/element.variantAttr` lists `root.usd /implementation{testVariantSet=testVariant}` twice",
     },
     Known {
         fixture: "SpecializesAndVariants3_root",
@@ -1259,11 +1223,11 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "TrickySpecializesAndInherits3_root",
-        causes: &[C::ImpliedClasses, C::DuplicateSources],
+        causes: &[C::ImpliedClasses],
         prims: 3,
         props: 0,
         values: 0,
-        diffs: &[D::ExtraRepeat, D::Order],
+        diffs: &[D::Order],
         reason: "implied `root.usd /SetClass` ranks after `package.usd /SetPackage`",
     },
     Known {
@@ -1398,16 +1362,16 @@ const KNOWN: &[Known] = &[
         prims: 3,
         props: 2,
         values: 2,
-        diffs: &[D::MissingSite, D::ExtraRepeat, D::Order],
+        diffs: &[D::MissingSite, D::Order],
         reason: "`/Model` ranks `/Model_defaultShadingVariant` before `/New_Shading_Variant`, so `Material.myInt` is 0, not 1",
     },
     Known {
         fixture: "VariantSpecializesAndReference_root",
-        causes: &[C::SpecializesPlacement, C::DuplicateSources],
+        causes: &[C::SpecializesPlacement],
         prims: 1,
         props: 1,
         values: 0,
-        diffs: &[D::MissingSite, D::ExtraRepeat],
+        diffs: &[D::MissingSite],
         reason: "`/Model/Material_Child` misses `/Model_defaultShadingVariant/Material`, so `myInt` is 1, not 0",
     },
     Known {

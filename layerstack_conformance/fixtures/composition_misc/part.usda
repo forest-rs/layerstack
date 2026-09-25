@@ -1,0 +1,24 @@
+#usda 1.0
+
+def "Gear"
+{
+    uniform pathExpression all = ".//"
+    uniform pathExpression inside = "/Gear/Tooth //Tooth"
+    uniform pathExpression outside = "/Elsewhere"
+    uniform pathExpression mixed = "/Gear/Tooth /Elsewhere ../Elsewhere"
+    uniform pathExpression ops = "~/Gear/Tooth & (Tooth - /Gear/Hub)"
+    uniform pathExpression chain = "/Gear/Tooth %_"
+    uniform pathExpression self = "."
+    uniform pathExpression plus = "Child"
+
+    # Character classes keep their ranges; a root glob lies outside the
+    # reference and drops out, a leading stretch stays; a relative
+    # reference maps like a path, a named one stays.
+    uniform pathExpression globs = "/Gear/T[a-z]* Tooth[!x] - /Gear/Hub[0-9] /S* //S*"
+    uniform pathExpression refs = "%../Gear:parts %:parts %..:parts"
+
+    def "Tooth"
+    {
+        uniform pathExpression near = "Tip .. ../Hub"
+    }
+}

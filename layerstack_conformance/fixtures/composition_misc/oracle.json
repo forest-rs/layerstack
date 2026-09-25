@@ -1,0 +1,439 @@
+{
+ "generator": "layerstack_conformance/scripts/composition_misc_oracle.py",
+ "openusd_version": "0.26.8",
+ "root": "root.usda",
+ "prims": [
+  {
+   "path": "/Row",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Row"
+    ],
+    [
+     "rows.usda",
+     "/Row"
+    ]
+   ],
+   "children": [
+    "c",
+    "b",
+    "a",
+    "d"
+   ]
+  },
+  {
+   "path": "/Row/c",
+   "prim_stack": [
+    [
+     "rows.usda",
+     "/Row/c"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Row/b",
+   "prim_stack": [
+    [
+     "rows.usda",
+     "/Row/b"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Row/a",
+   "prim_stack": [
+    [
+     "rows.usda",
+     "/Row/a"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Row/d",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Row/d"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Sets",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Sets"
+    ],
+    [
+     "rows.usda",
+     "/Sets"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Seedling",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Seedling"
+    ]
+   ],
+   "children": [
+    "Leaf"
+   ]
+  },
+  {
+   "path": "/Seedling/Leaf",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Seedling/Leaf"
+    ],
+    [
+     "root.usda",
+     "/_class_Leaf"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/_class_Leaf",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Leaf"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Stray",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Stray"
+    ]
+   ],
+   "children": [
+    "Leaf"
+   ]
+  },
+  {
+   "path": "/Stray/Leaf",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Stray/Leaf"
+    ]
+   ],
+   "children": [
+    "Bud"
+   ]
+  },
+  {
+   "path": "/Stray/Leaf/Bud",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Stray/Leaf/Bud"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Grove",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Grove"
+    ],
+    [
+     "root.usda",
+     "/Seedling"
+    ]
+   ],
+   "children": [
+    "Leaf"
+   ]
+  },
+  {
+   "path": "/Grove/Leaf",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Seedling/Leaf"
+    ],
+    [
+     "root.usda",
+     "/_class_Leaf"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Column",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Column"
+    ]
+   ],
+   "children": [
+    "a",
+    "d",
+    "b",
+    "c"
+   ]
+  },
+  {
+   "path": "/Column/a",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Column/a"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Column/d",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Column/d"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Column/b",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Column/b"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Column/c",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Column/c"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Part",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Part"
+    ],
+    [
+     "part.usda",
+     "/Gear"
+    ]
+   ],
+   "children": [
+    "Tooth"
+   ]
+  },
+  {
+   "path": "/Part/Tooth",
+   "prim_stack": [
+    [
+     "part.usda",
+     "/Gear/Tooth"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Copy",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Copy"
+    ],
+    [
+     "root.usda",
+     "/Local"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Local",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Local"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Heir",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Heir"
+    ],
+    [
+     "root.usda",
+     "/_class_Heir"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/_class_Heir",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Heir"
+    ]
+   ],
+   "children": []
+  }
+ ],
+ "values": {
+  "/Sets.blocked": null,
+  "/Sets.both": "/Stray// - /Stray/Leaf/Bud",
+  "/Sets.heroes": "/Stray/L* (/Stray/Leaf //Bud)",
+  "/Sets.lone": "/Stray",
+  "/Sets.sampled": "/Stray",
+  "/Sets.timed": "/Stray",
+  "/Seedling/Leaf.size": 1.0,
+  "/Seedling/Leaf.tint": 1.0,
+  "/_class_Leaf.tint": 1.0,
+  "/Stray/Leaf.size": 9.0,
+  "/Stray/Leaf.vein": 9.0,
+  "/Grove/Leaf.size": 1.0,
+  "/Grove/Leaf.tint": 1.0,
+  "/Part.all": "/Part//",
+  "/Part.chain": "/Part/Tooth /Part/Axle",
+  "/Part.globs": "/Part/T[a-z]* /Part/Tooth[!x] - /Part/Hub[0-9] //S*",
+  "/Part.inside": "/Part/Tooth //Tooth",
+  "/Part.mixed": "/Part/Tooth",
+  "/Part.ops": "~/Part/Tooth & (/Part/Tooth - /Part/Hub)",
+  "/Part.outside": "",
+  "/Part.plus": "/Part/Child + /Part/Local",
+  "/Part.refs": "%/Part:parts %:parts",
+  "/Part.self": "/Part",
+  "/Part/Tooth.near": "/Part/Tooth/Tip /Part /Part/Hub",
+  "/Copy.globs": "/Copy/P[a-z]n /S* //S* %/Copy:parts %:parts",
+  "/Copy.mixed": "/Copy/Pin /Stray /Copy/Pin /Stray",
+  "/Local.globs": "/Local/P[a-z]n /S* //S* %/Local:parts %:parts",
+  "/Local.mixed": "/Local/Pin /Stray /Local/Pin /Stray",
+  "/Heir.mixed": "/Heir/Pin /Stray /Heir/Pin",
+  "/_class_Heir.mixed": "/_class_Heir/Pin /Stray /_class_Heir/Pin"
+ },
+ "values_at_time": {
+  "0.0": {
+   "/Sets.blocked": "/Stray",
+   "/Sets.both": "/Stray// - /Stray/Leaf/Bud",
+   "/Sets.heroes": "/Stray/L* (/Stray/Leaf //Bud)",
+   "/Sets.lone": "/Stray",
+   "/Sets.sampled": "/Stray /Stray/Leaf",
+   "/Sets.timed": "/Stray/Leaf /Stray",
+   "/Seedling/Leaf.size": 1.0,
+   "/Seedling/Leaf.tint": 1.0,
+   "/_class_Leaf.tint": 1.0,
+   "/Stray/Leaf.size": 9.0,
+   "/Stray/Leaf.vein": 9.0,
+   "/Grove/Leaf.size": 1.0,
+   "/Grove/Leaf.tint": 1.0,
+   "/Part.all": "/Part//",
+   "/Part.chain": "/Part/Tooth /Part/Axle",
+   "/Part.globs": "/Part/T[a-z]* /Part/Tooth[!x] - /Part/Hub[0-9] //S*",
+   "/Part.inside": "/Part/Tooth //Tooth",
+   "/Part.mixed": "/Part/Tooth",
+   "/Part.ops": "~/Part/Tooth & (/Part/Tooth - /Part/Hub)",
+   "/Part.outside": "",
+   "/Part.plus": "/Part/Child + /Part/Local",
+   "/Part.refs": "%/Part:parts %:parts",
+   "/Part.self": "/Part",
+   "/Part/Tooth.near": "/Part/Tooth/Tip /Part /Part/Hub",
+   "/Copy.globs": "/Copy/P[a-z]n /S* //S* %/Copy:parts %:parts",
+   "/Copy.mixed": "/Copy/Pin /Stray /Copy/Pin /Stray",
+   "/Local.globs": "/Local/P[a-z]n /S* //S* %/Local:parts %:parts",
+   "/Local.mixed": "/Local/Pin /Stray /Local/Pin /Stray",
+   "/Heir.mixed": "/Heir/Pin /Stray /Heir/Pin",
+   "/_class_Heir.mixed": "/_class_Heir/Pin /Stray /_class_Heir/Pin"
+  },
+  "5.0": {
+   "/Sets.blocked": "/Stray",
+   "/Sets.both": "/Stray// - /Stray/Leaf/Bud",
+   "/Sets.heroes": "/Stray/L* (/Stray/Leaf //Bud)",
+   "/Sets.lone": "/Stray",
+   "/Sets.sampled": "/Stray /Stray/Leaf",
+   "/Sets.timed": "/Stray/Leaf /Stray",
+   "/Seedling/Leaf.size": 1.0,
+   "/Seedling/Leaf.tint": 1.0,
+   "/_class_Leaf.tint": 1.0,
+   "/Stray/Leaf.size": 9.0,
+   "/Stray/Leaf.vein": 9.0,
+   "/Grove/Leaf.size": 1.0,
+   "/Grove/Leaf.tint": 1.0,
+   "/Part.all": "/Part//",
+   "/Part.chain": "/Part/Tooth /Part/Axle",
+   "/Part.globs": "/Part/T[a-z]* /Part/Tooth[!x] - /Part/Hub[0-9] //S*",
+   "/Part.inside": "/Part/Tooth //Tooth",
+   "/Part.mixed": "/Part/Tooth",
+   "/Part.ops": "~/Part/Tooth & (/Part/Tooth - /Part/Hub)",
+   "/Part.outside": "",
+   "/Part.plus": "/Part/Child + /Part/Local",
+   "/Part.refs": "%/Part:parts %:parts",
+   "/Part.self": "/Part",
+   "/Part/Tooth.near": "/Part/Tooth/Tip /Part /Part/Hub",
+   "/Copy.globs": "/Copy/P[a-z]n /S* //S* %/Copy:parts %:parts",
+   "/Copy.mixed": "/Copy/Pin /Stray /Copy/Pin /Stray",
+   "/Local.globs": "/Local/P[a-z]n /S* //S* %/Local:parts %:parts",
+   "/Local.mixed": "/Local/Pin /Stray /Local/Pin /Stray",
+   "/Heir.mixed": "/Heir/Pin /Stray /Heir/Pin",
+   "/_class_Heir.mixed": "/_class_Heir/Pin /Stray /_class_Heir/Pin"
+  },
+  "10.0": {
+   "/Sets.blocked": "/Stray",
+   "/Sets.both": "/Stray// - /Stray/Leaf/Bud",
+   "/Sets.heroes": "/Stray/L* (/Stray/Leaf //Bud)",
+   "/Sets.lone": "/Stray",
+   "/Sets.sampled": "/Stray /Stray/Leaf/Bud",
+   "/Sets.timed": "/Stray/Leaf/Bud /Stray",
+   "/Seedling/Leaf.size": 1.0,
+   "/Seedling/Leaf.tint": 1.0,
+   "/_class_Leaf.tint": 1.0,
+   "/Stray/Leaf.size": 9.0,
+   "/Stray/Leaf.vein": 9.0,
+   "/Grove/Leaf.size": 1.0,
+   "/Grove/Leaf.tint": 1.0,
+   "/Part.all": "/Part//",
+   "/Part.chain": "/Part/Tooth /Part/Axle",
+   "/Part.globs": "/Part/T[a-z]* /Part/Tooth[!x] - /Part/Hub[0-9] //S*",
+   "/Part.inside": "/Part/Tooth //Tooth",
+   "/Part.mixed": "/Part/Tooth",
+   "/Part.ops": "~/Part/Tooth & (/Part/Tooth - /Part/Hub)",
+   "/Part.outside": "",
+   "/Part.plus": "/Part/Child + /Part/Local",
+   "/Part.refs": "%/Part:parts %:parts",
+   "/Part.self": "/Part",
+   "/Part/Tooth.near": "/Part/Tooth/Tip /Part /Part/Hub",
+   "/Copy.globs": "/Copy/P[a-z]n /S* //S* %/Copy:parts %:parts",
+   "/Copy.mixed": "/Copy/Pin /Stray /Copy/Pin /Stray",
+   "/Local.globs": "/Local/P[a-z]n /S* //S* %/Local:parts %:parts",
+   "/Local.mixed": "/Local/Pin /Stray /Local/Pin /Stray",
+   "/Heir.mixed": "/Heir/Pin /Stray /Heir/Pin",
+   "/_class_Heir.mixed": "/_class_Heir/Pin /Stray /_class_Heir/Pin"
+  }
+ }
+}

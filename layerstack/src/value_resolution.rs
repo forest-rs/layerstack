@@ -21,8 +21,8 @@ use opinionated::{
 
 use crate::{
     array_edit::ArrayEdit,
-    doc::{FieldValue, InterpolationType, Value},
-    prim_index::Opinion,
+    doc::{InterpolationType, Value},
+    prim_index::{Opinion, OpinionValue},
     property::PropertyType,
 };
 
@@ -112,9 +112,12 @@ impl OpinionFamily<Opinion> for ArrayFamily<'_> {
     type Edit = ArrayEdit;
 
     fn classify(&self, opinion: &Opinion) -> FamilyMember<Self::Value, Self::Edit> {
-        match &opinion.value {
-            FieldValue::Value(value) => Self::classify_value(value),
-            _ => Self::foreign(),
+        // A default-time query reads only the default slot.
+        //
+        // Spec: AOUSD Core §12.3.1 (default values).
+        match opinion.value.default_value() {
+            Some(value) => Self::classify_value(value),
+            None => Self::foreign(),
         }
     }
 
@@ -167,30 +170,22 @@ impl SparseValueFamily {
     fn for_query(opinions: &[Opinion], query: SparseQuery<'_>) -> Option<Self> {
         match query {
             SparseQuery::Default { fallback } => {
-                if let Some(opinion) = opinions.first() {
-                    Self::for_default_field_value(&opinion.value)
-                } else {
-                    fallback.and_then(Self::for_value)
+                match opinions
+                    .iter()
+                    .find_map(|opinion| opinion.value.default_value())
+                {
+                    Some(value) => Self::for_value(value),
+                    None => fallback.and_then(Self::for_value),
                 }
             }
             SparseQuery::AtTime { .. } => opinions.iter().find_map(Self::for_time_opinion),
         }
     }
 
-    fn for_default_field_value(value: &FieldValue) -> Option<Self> {
-        match value {
-            FieldValue::Value(value) => Self::for_value(value),
-            _ => None,
-        }
-    }
-
     fn for_time_opinion(opinion: &Opinion) -> Option<Self> {
-        match &opinion.value {
-            FieldValue::Value(value) => Self::for_value(value),
-            FieldValue::TimeSamples(samples) => {
-                samples.iter().find_map(|(_, value)| Self::for_value(value))
-            }
-            _ => None,
+        match opinion.value.time_samples() {
+            Some(samples) => samples.iter().find_map(|(_, value)| Self::for_value(value)),
+            None => opinion.value.default_value().and_then(Self::for_value),
         }
     }
 
@@ -243,12 +238,13 @@ impl SparseValueFamily {
 }
 
 /// Returns `true` for a dense default value outside the array family.
-fn is_foreign_default(value: &FieldValue) -> bool {
-    matches!(
-        value,
-        FieldValue::Value(value)
-            if !matches!(value, Value::Array(_) | Value::ArrayEdit(_) | Value::Blocked)
-    )
+fn is_foreign_default(value: &OpinionValue) -> bool {
+    value.default_value().is_some_and(|value| {
+        !matches!(
+            value,
+            Value::Array(_) | Value::ArrayEdit(_) | Value::Blocked
+        )
+    })
 }
 
 /// Folds a strongest-to-weakest opinion chain through [`opinionated`]'s
@@ -363,9 +359,10 @@ impl<'o> Bracket<'o> {
                 upper: (time, value),
             })
         };
-        match &opinion.value {
-            FieldValue::Value(value) => single(f64::NEG_INFINITY, Some(value)),
-            FieldValue::TimeSamples(samples) => {
+        // Per spec: time samples, then a spline, then the default (Core
+        // §12.3.2; OpenUSD `ProcessLayerAtTime`).
+        if let Some(samples) = opinion.value.time_samples() {
+            {
                 let offset = opinion.layer_offset;
                 let to_stage = |index: usize| {
                     let (local, ref value) = samples[index];
@@ -397,8 +394,13 @@ impl<'o> Bracket<'o> {
                     upper: to_stage(upper),
                 })
             }
-            FieldValue::Spline(_) => single(f64::NEG_INFINITY, None),
-            FieldValue::TokenListOp(_) | FieldValue::PathListOp(_) => None,
+        } else if opinion.value.spline().is_some() {
+            single(f64::NEG_INFINITY, None)
+        } else {
+            opinion
+                .value
+                .default_value()
+                .and_then(|value| single(f64::NEG_INFINITY, Some(value)))
         }
     }
 
@@ -875,7 +877,7 @@ fn lerp_round(v: f64) -> f64 {
 mod tests {
     use super::*;
     use crate::{
-        LayerId, LayerOffset, OpinionKey, TokenId,
+        FieldValue, LayerId, LayerOffset, OpinionKey, TokenId,
         array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex},
         interner::TokenInterner,
         path::{Path, PathId, PathInterner},
@@ -922,7 +924,7 @@ mod tests {
     fn array_opinion(
         spec_path: PathId,
         field: TokenId,
-        value: FieldValue,
+        value: impl Into<OpinionValue>,
         layer_strength: u16,
     ) -> Opinion {
         Opinion {
@@ -931,9 +933,17 @@ mod tests {
                 ..test_key(LayerId(1), spec_path)
             },
             field,
-            value,
+            value: value.into(),
             layer_offset: LayerOffset::IDENTITY,
         }
+    }
+
+    /// Test-only opinion payload: a property authoring only time samples.
+    fn samples(samples: Vec<(f64, Value)>) -> OpinionValue {
+        OpinionValue::from(crate::property::PropertySpec {
+            time_samples: Some(samples),
+            ..crate::property::PropertySpec::default()
+        })
     }
 
     #[test]
@@ -1013,7 +1023,7 @@ mod tests {
             array_opinion(
                 spec_path,
                 field,
-                FieldValue::TimeSamples(vec![
+                samples(vec![
                     (
                         0.0,
                         Value::ArrayEdit(ArrayEdit {
@@ -1196,17 +1206,12 @@ mod tests {
     fn opinions_hidden_by_a_dense_value_are_not_sampled() {
         let (spec_path, field) = test_ids();
         let opinions = vec![
-            array_opinion(
-                spec_path,
-                field,
-                FieldValue::TimeSamples(vec![(0.0, write_edit(9, 0))]),
-                0,
-            ),
+            array_opinion(spec_path, field, samples(vec![(0.0, write_edit(9, 0))]), 0),
             array_opinion(spec_path, field, FieldValue::Value(array_value(&[1, 2])), 1),
             array_opinion(
                 spec_path,
                 field,
-                FieldValue::TimeSamples(vec![(0.0, array_value(&[5, 5, 5]))]),
+                samples(vec![(0.0, array_value(&[5, 5, 5]))]),
                 2,
             ),
             array_opinion(spec_path, field, FieldValue::Value(array_value(&[3])), 3),
@@ -1231,13 +1236,13 @@ mod tests {
             array_opinion(
                 spec_path,
                 field,
-                FieldValue::TimeSamples(vec![(0.0, array_value(&[0, 0])), (2.0, write_edit(9, 0))]),
+                samples(vec![(0.0, array_value(&[0, 0])), (2.0, write_edit(9, 0))]),
                 0,
             ),
             array_opinion(
                 spec_path,
                 field,
-                FieldValue::TimeSamples(vec![
+                samples(vec![
                     (1.0, array_value(&[1, 1])),
                     (3.0, array_value(&[3, 3])),
                 ]),
@@ -1308,12 +1313,7 @@ mod tests {
     fn sampled_block_blocks_weaker_dense_array() {
         let (spec_path, field) = test_ids();
         let opinions = vec![
-            array_opinion(
-                spec_path,
-                field,
-                FieldValue::TimeSamples(vec![(0.0, Value::Blocked)]),
-                0,
-            ),
+            array_opinion(spec_path, field, samples(vec![(0.0, Value::Blocked)]), 0),
             array_opinion(spec_path, field, FieldValue::Value(array_value(&[42])), 1),
         ];
 
@@ -1335,7 +1335,7 @@ mod tests {
             array_opinion(
                 spec_path,
                 field,
-                FieldValue::TimeSamples(vec![
+                samples(vec![
                     (0.0, write_edit(9, 0)),
                     (2.0, Value::Blocked),
                     (4.0, array_value(&[7])),
@@ -1379,7 +1379,7 @@ mod tests {
         let mut strong = array_opinion(
             spec_path,
             field,
-            FieldValue::TimeSamples(vec![(0.0, array_value(&[1])), (1.0, Value::Blocked)]),
+            samples(vec![(0.0, array_value(&[1])), (1.0, Value::Blocked)]),
             0,
         );
         // Stage time 11 maps to layer time 1, the block sample.
@@ -1441,16 +1441,11 @@ mod tests {
             }],
         });
         let opinions = vec![
+            array_opinion(spec_path, field, samples(vec![(0.0, append_seven)]), 0),
             array_opinion(
                 spec_path,
                 field,
-                FieldValue::TimeSamples(vec![(0.0, append_seven)]),
-                0,
-            ),
-            array_opinion(
-                spec_path,
-                field,
-                FieldValue::TimeSamples(vec![(0.0, Value::Blocked), (2.0, array_value(&[3]))]),
+                samples(vec![(0.0, Value::Blocked), (2.0, array_value(&[3]))]),
                 1,
             ),
             array_opinion(spec_path, field, FieldValue::Value(array_value(&[1, 2])), 2),
@@ -1534,13 +1529,13 @@ mod tests {
             array_opinion(
                 spec_path,
                 field,
-                FieldValue::TimeSamples(vec![(2.0, edit(write(Value::Float(8.0), 1)))]),
+                samples(vec![(2.0, edit(write(Value::Float(8.0), 1)))]),
                 0,
             ),
             array_opinion(
                 spec_path,
                 field,
-                FieldValue::TimeSamples(vec![
+                samples(vec![
                     (1.0, resize_four),
                     (3.0, float_array(&[2.0, 4.0, 6.0, 8.0])),
                 ]),
@@ -1634,7 +1629,7 @@ mod tests {
         let edits = vec![array_opinion(
             spec_path,
             field,
-            FieldValue::TimeSamples(vec![
+            samples(vec![
                 (1.0, edit(write(Value::Vec3f([0.0; 3]), 0))),
                 (3.0, edit(append(Value::Vec3f([5.0; 3])))),
             ]),
@@ -1664,7 +1659,7 @@ mod tests {
             array_opinion(
                 spec_path,
                 field,
-                FieldValue::TimeSamples(vec![(1.0, edit(append(Value::Vec3f([5.0; 3]))))]),
+                samples(vec![(1.0, edit(append(Value::Vec3f([5.0; 3]))))]),
                 0,
             ),
             array_opinion(spec_path, field, FieldValue::Value(Value::Blocked), 1),
@@ -1722,10 +1717,10 @@ mod tests {
             interp: InterpolationType,
         ) -> Option<Series> {
             let offset = opinion.layer_offset;
-            let samples = match &opinion.value {
-                FieldValue::Value(value) => return Some(vec![(f64::NEG_INFINITY, sample(value))]),
-                FieldValue::TimeSamples(samples) if !samples.is_empty() => samples,
-                _ => return None,
+            let samples = match (opinion.value.time_samples(), opinion.value.default_value()) {
+                (Some(samples), _) => samples,
+                (None, Some(value)) => return Some(vec![(f64::NEG_INFINITY, sample(value))]),
+                (None, None) => return None,
             };
             let local = (query - offset.offset) / offset.scale;
             let lower = samples.iter().rposition(|(t, _)| *t <= local).unwrap_or(0);
@@ -1943,14 +1938,17 @@ mod tests {
         (0..count)
             .map(|strength| {
                 let value = if rng.below(4) == 0 {
-                    FieldValue::Value(random_value(rng, true))
+                    OpinionValue::from(
+                        crate::property::PropertySpec::attribute()
+                            .with_default(random_value(rng, true)),
+                    )
                 } else {
                     let mut times: Vec<f64> = (0..1 + rng.below(3))
                         .map(|_| random_time(rng, spacing))
                         .collect();
                     times.sort_by(f64::total_cmp);
                     times.dedup();
-                    FieldValue::TimeSamples(
+                    samples(
                         times
                             .into_iter()
                             .map(|t| (t, random_value(rng, true)))
@@ -2039,7 +2037,7 @@ mod tests {
             array_opinion(
                 spec_path,
                 field,
-                FieldValue::TimeSamples(vec![
+                samples(vec![
                     (0.0, write_edit(9, 0)),
                     (1.0, write_edit(8, 0)),
                     (2.0, write_edit(7, 0)),
@@ -2049,7 +2047,7 @@ mod tests {
             array_opinion(
                 spec_path,
                 field,
-                FieldValue::TimeSamples(vec![(0.0, array_value(&[1])), (2.0, array_value(&[2]))]),
+                samples(vec![(0.0, array_value(&[1])), (2.0, array_value(&[2]))]),
                 1,
             ),
         ];

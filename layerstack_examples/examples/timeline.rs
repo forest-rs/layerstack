@@ -21,28 +21,29 @@
 //!
 //! A character walks across screen while fading in:
 //!
-//! - **Base layer** (weakest): position keyframes at frames 0–24 and an opacity
-//!   spline that eases from 0→1 over frames 0–12. Included with a +10 frame
-//!   offset, so it plays starting at global frame 10.
-//! - **Override layer** (stronger): scalar defaults for position (-10) and
-//!   opacity (0.8). These never win because the base's timeSamples and spline
-//!   outrank scalars — but they'd be the fallback if those were removed.
+//! - **Defaults layer** (weakest): scalar defaults for position (-10) and
+//!   opacity (0.8), the values an untimed query sees.
+//! - **Base layer** (stronger): position keyframes at frames 0–24 and an
+//!   opacity spline that eases from 0→1 over frames 0–12. Included with a +10
+//!   frame offset, so it plays starting at global frame 10.
 //! - **Root layer** (strongest): empty — just wires the stack together.
 //!
 //! ### Resolution rules demonstrated
 //!
-//! For **`position_x`**: the override has a scalar default (-10.0) and the base
-//! has timeSamples. `TimeSamples` always beat scalars regardless of layer strength
-//! (§12.3), so the base's keyframes win at every frame. The offset shifts them
-//! so local frame 0 starts at global frame 10.
+//! A query at a numeric time visits the opinions strongest first and, within
+//! each spec, prefers time samples, then a spline, then the default (§12.3.2).
+//! A default-time query reads only defaults (§12.3.1).
 //!
-//! For **opacity**: the override has a scalar default (0.8) and the base has a
-//! spline. Splines beat scalar defaults (§12.3), so the base layer's Bézier
-//! fade-in wins at every frame. The override's 0.8 would only appear if the
-//! spline were removed.
+//! For **`position_x`**: the base has timeSamples and is stronger than the
+//! defaults layer, so its keyframes answer every timed query. The offset
+//! shifts them so local frame 0 starts at global frame 10. An untimed query
+//! ignores the samples and finds the defaults layer's -10.
+//!
+//! For **opacity**: the base's Bézier spline answers every timed query; an
+//! untimed query finds the defaults layer's 0.8.
 
 use layerstack::{
-    FieldValue, InMemoryStore, InterpolationType, Layer, LayerId, LayerOffset, PrimSpec,
+    InMemoryStore, InterpolationType, Layer, LayerId, LayerOffset, PrimSpec, PropertySpec,
     SplineData, Stage, StageOptions, SublayerEntry, Value,
     spline::{CurveType, Extrapolation, Knot, KnotInterp, SplineDataType},
 };
@@ -63,7 +64,7 @@ fn main() {
     let char_path = store.path("/Character");
 
     // -----------------------------------------------------------------------
-    // Layer 1 — Base animation (weakest track)
+    // Layer 1 — Base animation (middle track)
     //
     // The "source clip": raw animation data before editorial decisions.
     //
@@ -131,37 +132,46 @@ fn main() {
     base.insert_prim(
         char_path,
         PrimSpec::def()
-            // TimeSamples are a FieldValue variant — they store per-frame data.
-            .with_field(position_x, FieldValue::TimeSamples(walk_samples))
-            // Splines are another FieldValue variant — smooth curves.
-            .with_field(opacity, FieldValue::Spline(fade_in.clone())),
+            // Time samples are one authored slot of an attribute spec — they
+            // store per-frame data.
+            .with_property(
+                position_x,
+                PropertySpec::attribute().with_time_samples(walk_samples),
+            )
+            // A spline is another slot — a smooth curve.
+            .with_property(
+                opacity,
+                PropertySpec::attribute().with_spline(fade_in.clone()),
+            ),
     );
     store.insert_layer(base);
 
     // -----------------------------------------------------------------------
-    // Layer 2 — Override layer (middle track)
+    // Layer 2 — Defaults layer (weakest track)
     //
-    // The "adjustments" track. Provides scalar defaults:
+    // Provides scalar defaults:
     //   - position_x = -10.0 (character starts offscreen)
     //   - opacity = 0.8
     //
-    // Key insight about resolution priority (§12.3):
-    //   TimeSamples > Spline > Default (scalar)
-    //
-    // This ordering applies *across* layers. Even though this override layer
-    // is stronger than the base, the base layer's TimeSamples (for position)
-    // and Spline (for opacity) both outrank this layer's scalar defaults.
-    //
-    // The override's scalars act as fallback values that would appear if
-    // the base layer's timeSamples/spline were removed entirely.
+    // Resolution at a numeric time visits specs strongest first and, within
+    // one spec, prefers TimeSamples > Spline > Default (§12.3.2). The base
+    // layer is stronger and authors samples and a spline, so these defaults
+    // never answer a timed query. An untimed (default-time) query reads only
+    // defaults (§12.3.1), and finds these.
     // -----------------------------------------------------------------------
 
     let mut overrides = Layer::new(LayerId(2));
     overrides.insert_prim(
         char_path,
         PrimSpec::over() // "over" = provides opinions without defining the prim
-            .with_field(position_x, Value::Float(-10.0)) // scalar default
-            .with_field(opacity, Value::Float(0.8)), // scalar default
+            .with_property(
+                position_x,
+                PropertySpec::attribute().with_default(Value::Float(-10.0)),
+            )
+            .with_property(
+                opacity,
+                PropertySpec::attribute().with_default(Value::Float(0.8)),
+            ),
     );
     store.insert_layer(overrides);
 
@@ -183,8 +193,6 @@ fn main() {
 
     let mut root = Layer::new(LayerId(3));
     root.sublayers = vec![
-        // Override layer — no time offset (plays at global time).
-        SublayerEntry::new(LayerId(2)),
         // Base layer — shifted 10 frames later on the global timeline.
         // offset=10 means: local_time = global_time - 10.
         // So global frame 10 reads base-local frame 0.
@@ -195,6 +203,8 @@ fn main() {
                 scale: 1.0,
             },
         },
+        // Defaults layer — no time offset (plays at global time).
+        SublayerEntry::new(LayerId(2)),
     ];
     store.insert_layer(root);
 
@@ -220,10 +230,9 @@ fn main() {
     //
     // resolve_value_at_time() does the full resolution dance:
     //   1. Walk opinions strongest → weakest
-    //   2. For each opinion with TimeSamples, remap time through layer offset
-    //   3. First TimeSamples opinion wins (interpolating between samples)
-    //   4. If no TimeSamples, first Spline opinion wins (evaluating the curve)
-    //   5. If no Spline, first scalar Default wins
+    //   2. Remap the query time through each opinion's layer offset
+    //   3. The first opinion that authors TimeSamples, a Spline or a Default
+    //      wins, preferring them in that order within the opinion
     //
     // Expected behavior:
     //   - Position: base layer's timeSamples win (offset by +10). At frame 22
@@ -236,12 +245,18 @@ fn main() {
     println!();
     println!("  Layer stack (strongest → weakest):");
     println!("    Root (3)     — empty shell, wires sublayers together");
-    println!("    Override (2) — scalar defaults: position=-10, opacity=0.8");
     println!("    Base (1)     — timeSamples for position, spline for opacity");
     println!("                   (shifted +10 frames on the global timeline)");
+    println!("    Defaults (2) — scalar defaults: position=-10, opacity=0.8");
     println!();
-    println!("  Resolution priority: TimeSamples > Spline > Default");
-    println!("  So the base's timeSamples/spline beat the override's scalars.");
+    println!("  Per spec, strongest first: TimeSamples > Spline > Default");
+    println!("  So the base's timeSamples/spline answer every timed query.");
+    println!();
+    let untimed = stage
+        .resolve_field(char_path, position_x)
+        .map(|r| fmt_val(&r.value))
+        .unwrap_or_else(|| "none".into());
+    println!("  Untimed position = {untimed} (defaults only, from the defaults layer)");
     println!();
 
     for frame in [0.0, 5.0, 10.0, 15.0, 22.0, 30.0, 34.0] {
@@ -364,7 +379,7 @@ fn fmt_val(v: &Value) -> String {
 fn source_name(prov: Option<&layerstack::stage::Provenance>) -> &'static str {
     match prov.map(|p| p.layer) {
         Some(LayerId(1)) => "base",
-        Some(LayerId(2)) => "override",
+        Some(LayerId(2)) => "defaults",
         Some(LayerId(3)) => "root",
         _ => "?",
     }

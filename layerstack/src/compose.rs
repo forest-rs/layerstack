@@ -26,12 +26,12 @@ use crate::{
     },
     composition_error::CompositionError,
     dependency_map::{ArcDependency, DependencyBuilder},
-    doc::{FieldValue, LayerId, LayerOffset, LayerStore, Reference},
+    doc::{FieldValue, LayerId, LayerOffset, LayerStore, Reference, composed_entries},
     interner::TokenId,
     layer_stack::LayerStack,
     path::{PathId, PropertyPath, TargetPath},
     population::populate,
-    prim_index::{ArcKind, Opinion, OpinionKey, PrimIndex},
+    prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue, PrimIndex},
     property::PropertyType,
     spec_path::{SpecPath, VariantSelectionSite},
     stage::{Stage, StageOptions},
@@ -2035,7 +2035,7 @@ fn add_local_and_variant_opinions(
                     spec_path: prim_spec_path(store, path, &spec.outer_variant_sites),
                 });
 
-            for entry in &spec.fields {
+            for entry in composed_entries(&spec.fields, &spec.properties) {
                 let key = OpinionKey {
                     is_local,
                     arc_kind,
@@ -2050,17 +2050,17 @@ fn add_local_and_variant_opinions(
                         store,
                         path,
                         &spec.outer_variant_sites,
-                        entry.name,
+                        entry.name(),
                     ),
                 };
                 let index = out.get_mut(&path).expect("path exists");
-                if let Some(property_type) = &entry.property_type {
-                    index.add_property_type(entry.name, key.clone(), property_type.clone());
+                if let Some(property_type) = entry.property_type() {
+                    index.add_property_type(entry.name(), key.clone(), property_type.clone());
                 }
                 index.add_opinion(Opinion {
                     key,
-                    field: entry.name,
-                    value: entry.value.clone(),
+                    field: entry.name(),
+                    value: entry.value(),
                     layer_offset: accumulated_offset,
                 });
             }
@@ -2132,7 +2132,7 @@ fn add_local_and_variant_opinions(
                         spec_path: variant_spec_path(store, path, &branch_selections),
                     });
 
-                for entry in &variant_spec.fields {
+                for entry in composed_entries(&variant_spec.fields, &variant_spec.properties) {
                     let key = OpinionKey {
                         is_local: false,
                         arc_kind: ArcKind::Variants,
@@ -2147,17 +2147,17 @@ fn add_local_and_variant_opinions(
                             store,
                             path,
                             &branch_selections,
-                            entry.name,
+                            entry.name(),
                         ),
                     };
                     let index = out.get_mut(&path).expect("path exists");
-                    if let Some(property_type) = &entry.property_type {
-                        index.add_property_type(entry.name, key.clone(), property_type.clone());
+                    if let Some(property_type) = entry.property_type() {
+                        index.add_property_type(entry.name(), key.clone(), property_type.clone());
                     }
                     index.add_opinion(Opinion {
                         key,
-                        field: entry.name,
-                        value: entry.value.clone(),
+                        field: entry.name(),
+                        value: entry.value(),
                         layer_offset: accumulated_offset,
                     });
                 }
@@ -2205,7 +2205,7 @@ fn add_local_and_variant_opinions(
                             });
                     }
                 }
-                for (child_tok, child_fields) in &variant_spec.child_fields {
+                for (child_tok, child_fields) in &variant_spec.child_entries() {
                     let child_path = path_obj.join(&[*child_tok]);
                     if let Some(child_path_id) = store.paths().lookup(&child_path)
                         && out.contains_key(&child_path_id)
@@ -2241,21 +2241,21 @@ fn add_local_and_variant_opinions(
                                     store,
                                     child_path_id,
                                     &child_selections,
-                                    entry.name,
+                                    entry.name(),
                                 ),
                             };
                             let index = out.get_mut(&child_path_id).expect("path exists");
-                            if let Some(property_type) = &entry.property_type {
+                            if let Some(property_type) = entry.property_type() {
                                 index.add_property_type(
-                                    entry.name,
+                                    entry.name(),
                                     key.clone(),
                                     property_type.clone(),
                                 );
                             }
                             index.add_opinion(Opinion {
                                 key,
-                                field: entry.name,
-                                value: entry.value.clone(),
+                                field: entry.name(),
+                                value: entry.value(),
                                 layer_offset: accumulated_offset,
                             });
                         }
@@ -2551,7 +2551,7 @@ fn add_inherit_edge_opinions(
             PathId,
             SpecPath,
             TokenId,
-            FieldValue,
+            OpinionValue,
             Option<PropertyType>,
         )> = Vec::new();
         let mut pending_sources = Vec::new();
@@ -2636,7 +2636,7 @@ fn add_inherit_edge_opinions(
                         ),
                     },
                 ));
-                for entry in &spec.fields {
+                for entry in composed_entries(&spec.fields, &spec.properties) {
                     pending.push((
                         *dest_path_id,
                         *remote_path_id,
@@ -2644,12 +2644,12 @@ fn add_inherit_edge_opinions(
                             store,
                             *remote_path_id,
                             &spec.outer_variant_sites,
-                            entry.name,
+                            entry.name(),
                             provenance_remap,
                         ),
-                        entry.name,
-                        entry.value.clone(),
-                        entry.property_type.clone(),
+                        entry.name(),
+                        entry.value(),
+                        entry.property_type().cloned(),
                     ));
                 }
 
@@ -2693,7 +2693,9 @@ fn add_inherit_edge_opinions(
                                 ),
                             },
                         ));
-                        for entry in &variant_spec.fields {
+                        for entry in
+                            composed_entries(&variant_spec.fields, &variant_spec.properties)
+                        {
                             pending.push((
                                 *dest_path_id,
                                 *remote_path_id,
@@ -2701,12 +2703,12 @@ fn add_inherit_edge_opinions(
                                     store,
                                     *remote_path_id,
                                     &branch_selections,
-                                    entry.name,
+                                    entry.name(),
                                     provenance_remap,
                                 ),
-                                entry.name,
-                                entry.value.clone(),
-                                entry.property_type.clone(),
+                                entry.name(),
+                                entry.value(),
+                                entry.property_type().cloned(),
                             ));
                         }
                     }
@@ -2727,7 +2729,7 @@ fn add_inherit_edge_opinions(
                     for (set, selected) in &parent_selections {
                         if let Some(set_spec) = parent_spec.variant_sets.get(set)
                             && let Some(variant_spec) = set_spec.variants.get(selected)
-                            && let Some(child_fields) = variant_spec.child_fields.get(&remote_leaf)
+                            && let Some(child_fields) = variant_spec.child_entries_for(remote_leaf)
                         {
                             let child_outer = variant_spec
                                 .required_outer_variant_sites
@@ -2750,12 +2752,12 @@ fn add_inherit_edge_opinions(
                                         store,
                                         *remote_path_id,
                                         &child_selections,
-                                        entry.name,
+                                        entry.name(),
                                         provenance_remap,
                                     ),
-                                    entry.name,
-                                    entry.value.clone(),
-                                    entry.property_type.clone(),
+                                    entry.name(),
+                                    entry.value(),
+                                    entry.property_type().cloned(),
                                 ));
                             }
                         }
@@ -2771,10 +2773,11 @@ fn add_inherit_edge_opinions(
         }
 
         for (dest_path_id, remote_path_id, spec_path, field, value, property_type) in pending {
-            let mut value = remap_field_value_paths(store, &base_path, &inherited_path, value);
+            let mut value = value;
+            remap_opinion_target_paths(store, &base_path, &inherited_path, &mut value);
             // Also apply reference namespace remapping if within a reference context.
             if let Some((ref_dest, ref_src)) = ref_remap {
-                value = remap_field_value_paths(store, ref_dest, ref_src, value);
+                remap_opinion_target_paths(store, ref_dest, ref_src, &mut value);
             }
             let key = OpinionKey {
                 is_local: false,
@@ -2838,7 +2841,7 @@ fn add_inherit_edge_opinions(
                         spec_path,
                     });
             }
-            for (field, opinions) in &src_index.opinions_by_field {
+            for opinions in src_index.opinions_by_field.values() {
                 for opinion in opinions {
                     if cycles.copies_cycle(
                         store.paths(),
@@ -2871,7 +2874,7 @@ fn add_inherit_edge_opinions(
                                 lookup_path: opinion.key.lookup_path,
                                 spec_path,
                             },
-                            field: *field,
+                            field: opinion.field,
                             value: opinion.value.clone(),
                             layer_offset: opinion.layer_offset,
                         });
@@ -3197,7 +3200,7 @@ fn add_inherit_edge_opinions(
                         spec_path,
                     });
             }
-            for (field, opinions) in &src_index.opinions_by_field {
+            for opinions in src_index.opinions_by_field.values() {
                 for opinion in opinions {
                     if cycles.copies_cycle(
                         store.paths(),
@@ -3224,7 +3227,7 @@ fn add_inherit_edge_opinions(
                                 lookup_path: opinion.key.lookup_path,
                                 spec_path,
                             },
-                            field: *field,
+                            field: opinion.field,
                             value: opinion.value.clone(),
                             layer_offset: opinion.layer_offset,
                         });
@@ -3235,39 +3238,37 @@ fn add_inherit_edge_opinions(
     cycles.exit();
 }
 
-fn remap_field_value_paths(
+/// Maps the target paths an opinion authors (a metadata path list op, or a
+/// property's connection or relationship target paths) from `src_root` into
+/// `dest_root`, in place.
+///
+/// Spec: AOUSD Core §10 (arcs map paths authored inside the arc's target
+/// namespace into the destination namespace).
+fn remap_opinion_target_paths(
     store: &mut dyn LayerStore,
     dest_root: &crate::path::Path,
     src_root: &crate::path::Path,
-    value: FieldValue,
-) -> FieldValue {
-    match value {
-        FieldValue::PathListOp(list) => {
-            let mut out = list;
-            out.explicit = out.explicit.map(|v| {
-                v.into_iter()
-                    .map(|p| remap_target_path(store, dest_root, src_root, p))
-                    .collect()
-            });
-            out.prepend = out
-                .prepend
-                .into_iter()
-                .map(|p| remap_target_path(store, dest_root, src_root, p))
-                .collect();
-            out.append = out
-                .append
-                .into_iter()
-                .map(|p| remap_target_path(store, dest_root, src_root, p))
-                .collect();
-            out.delete = out
-                .delete
-                .into_iter()
-                .map(|p| remap_target_path(store, dest_root, src_root, p))
-                .collect();
-            FieldValue::PathListOp(out)
+    value: &mut OpinionValue,
+) {
+    let list = match value {
+        OpinionValue::Field(FieldValue::PathListOp(list)) => list,
+        OpinionValue::Property(spec) => match spec.targets.as_mut() {
+            Some(list) => list,
+            None => return,
+        },
+        OpinionValue::Field(_) => return,
+    };
+    let remap = |store: &mut dyn LayerStore, items: &mut Vec<TargetPath>| {
+        for item in items.iter_mut() {
+            *item = remap_target_path(store, dest_root, src_root, *item);
         }
-        other => other,
+    };
+    if let Some(explicit) = list.explicit.as_mut() {
+        remap(store, explicit);
     }
+    remap(store, &mut list.prepend);
+    remap(store, &mut list.append);
+    remap(store, &mut list.delete);
 }
 
 fn remap_target_path(
@@ -3493,7 +3494,7 @@ fn add_reference_edge_opinions(
             PathId,
             TokenId,
             OpinionKey,
-            FieldValue,
+            OpinionValue,
             Option<PropertyType>,
             LayerOffset,
         )> = Vec::new();
@@ -3523,21 +3524,21 @@ fn add_reference_edge_opinions(
             };
             pending_sources.push((*dest_path_id, base_key.clone()));
 
-            for entry in &remote_spec.fields {
+            for entry in composed_entries(&remote_spec.fields, &remote_spec.properties) {
                 pending_fields.push((
                     *dest_path_id,
-                    entry.name,
+                    entry.name(),
                     base_key
                         .clone()
                         .with_spec_path(normalized_property_spec_path(
                             store,
                             *remote_path_id,
                             &remote_spec.outer_variant_sites,
-                            entry.name,
+                            entry.name(),
                             provenance_remap,
                         )),
-                    entry.value.clone(),
-                    entry.property_type.clone(),
+                    entry.value(),
+                    entry.property_type().cloned(),
                     ref_offset,
                 ));
             }
@@ -3585,10 +3586,12 @@ fn add_reference_edge_opinions(
                                 ),
                             },
                         ));
-                        for entry in &variant_spec.fields {
+                        for entry in
+                            composed_entries(&variant_spec.fields, &variant_spec.properties)
+                        {
                             pending_fields.push((
                                 *dest_path_id,
-                                entry.name,
+                                entry.name(),
                                 OpinionKey {
                                     is_local: false,
                                     arc_kind: edge_arc_kind,
@@ -3603,12 +3606,12 @@ fn add_reference_edge_opinions(
                                         store,
                                         *remote_path_id,
                                         &branch_selections,
-                                        entry.name,
+                                        entry.name(),
                                         provenance_remap,
                                     ),
                                 },
-                                entry.value.clone(),
-                                entry.property_type.clone(),
+                                entry.value(),
+                                entry.property_type().cloned(),
                                 ref_offset,
                             ));
                         }
@@ -3657,7 +3660,7 @@ fn add_reference_edge_opinions(
                         }
 
                         // Forward child_fields to child paths.
-                        for (child_tok, child_fields) in &variant_spec.child_fields {
+                        for (child_tok, child_fields) in &variant_spec.child_entries() {
                             let child_path = ref_path_obj.join(&[*child_tok]);
                             if let Some(child_path_id) = store.paths().lookup(&child_path)
                                 && out.contains_key(&child_path_id)
@@ -3687,7 +3690,7 @@ fn add_reference_edge_opinions(
                                 for entry in child_fields {
                                     pending_fields.push((
                                         child_path_id,
-                                        entry.name,
+                                        entry.name(),
                                         OpinionKey {
                                             is_local: false,
                                             arc_kind: edge_arc_kind,
@@ -3702,12 +3705,12 @@ fn add_reference_edge_opinions(
                                                 store,
                                                 remote_child_source,
                                                 &child_selections,
-                                                entry.name,
+                                                entry.name(),
                                                 provenance_remap,
                                             ),
                                         },
-                                        entry.value.clone(),
-                                        entry.property_type.clone(),
+                                        entry.value(),
+                                        entry.property_type().cloned(),
                                         ref_offset,
                                     ));
                                 }
@@ -3823,7 +3826,7 @@ fn add_reference_edge_opinions(
                         },
                     ));
 
-                    for entry in &variant_spec.fields {
+                    for entry in composed_entries(&variant_spec.fields, &variant_spec.properties) {
                         let key = OpinionKey {
                             is_local: false,
                             arc_kind: edge_arc_kind,
@@ -3838,18 +3841,22 @@ fn add_reference_edge_opinions(
                                 store,
                                 *remote_path_id,
                                 &branch_selections,
-                                entry.name,
+                                entry.name(),
                                 provenance_remap,
                             ),
                         };
                         let index = out.get_mut(dest_path_id).expect("path exists");
-                        if let Some(property_type) = &entry.property_type {
-                            index.add_property_type(entry.name, key.clone(), property_type.clone());
+                        if let Some(property_type) = entry.property_type() {
+                            index.add_property_type(
+                                entry.name(),
+                                key.clone(),
+                                property_type.clone(),
+                            );
                         }
                         index.add_opinion(Opinion {
                             key,
-                            field: entry.name,
-                            value: entry.value.clone(),
+                            field: entry.name(),
+                            value: entry.value(),
                             layer_offset: ref_offset,
                         });
                     }
@@ -3893,7 +3900,7 @@ fn add_reference_edge_opinions(
                         }
                     }
 
-                    for (child_tok, child_fields) in &variant_spec.child_fields {
+                    for (child_tok, child_fields) in &variant_spec.child_entries() {
                         let child_path = payload_path_obj.join(&[*child_tok]);
                         if let Some(child_path_id) = store.paths().lookup(&child_path)
                             && out.contains_key(&child_path_id)
@@ -3952,22 +3959,22 @@ fn add_reference_edge_opinions(
                                         store,
                                         remote_child_source,
                                         &child_selections,
-                                        entry.name,
+                                        entry.name(),
                                         provenance_remap,
                                     ),
                                 };
                                 let index = out.get_mut(&child_path_id).expect("path exists");
-                                if let Some(property_type) = &entry.property_type {
+                                if let Some(property_type) = entry.property_type() {
                                     index.add_property_type(
-                                        entry.name,
+                                        entry.name(),
                                         key.clone(),
                                         property_type.clone(),
                                     );
                                 }
                                 index.add_opinion(Opinion {
                                     key,
-                                    field: entry.name,
-                                    value: entry.value.clone(),
+                                    field: entry.name(),
+                                    value: entry.value(),
                                     layer_offset: ref_offset,
                                 });
                             }
@@ -3983,7 +3990,8 @@ fn add_reference_edge_opinions(
                 .add_source(key);
         }
         for (dest_path_id, field, key, value, property_type, offset) in pending_fields {
-            let value = remap_field_value_paths(store, &dest_root_path, &target_root, value);
+            let mut value = value;
+            remap_opinion_target_paths(store, &dest_root_path, &target_root, &mut value);
             let index = out.get_mut(&dest_path_id).expect("path exists");
             if let Some(property_type) = property_type {
                 index.add_property_type(field, key.clone(), property_type);
@@ -4214,7 +4222,7 @@ fn add_reference_edge_opinions(
                         spec_path,
                     });
             }
-            for (field, opinions) in &src_index.opinions_by_field {
+            for opinions in src_index.opinions_by_field.values() {
                 for opinion in opinions {
                     if cycles.copies_cycle(
                         store.paths(),
@@ -4247,7 +4255,7 @@ fn add_reference_edge_opinions(
                                 lookup_path: opinion.key.lookup_path,
                                 spec_path,
                             },
-                            field: *field,
+                            field: opinion.field,
                             value: opinion.value.clone(),
                             layer_offset: opinion.layer_offset,
                         });
@@ -4266,14 +4274,12 @@ fn add_reference_edge_opinions(
         };
         for opinions in index.opinions_by_field.values_mut() {
             for opinion in opinions.iter_mut() {
-                if matches!(opinion.value, FieldValue::PathListOp(_)) {
-                    let old = core::mem::replace(
-                        &mut opinion.value,
-                        FieldValue::Value(crate::doc::Value::Null),
-                    );
-                    opinion.value =
-                        remap_field_value_paths(store, &dest_root_path, &target_root, old);
-                }
+                remap_opinion_target_paths(
+                    store,
+                    &dest_root_path,
+                    &target_root,
+                    &mut opinion.value,
+                );
             }
         }
     }
@@ -4491,7 +4497,7 @@ fn add_payload_edge_opinions(
                 },
             ));
 
-            for entry in &remote_spec.fields {
+            for entry in composed_entries(&remote_spec.fields, &remote_spec.properties) {
                 let key = OpinionKey {
                     is_local: false,
                     arc_kind: edge_arc_kind,
@@ -4506,18 +4512,18 @@ fn add_payload_edge_opinions(
                         store,
                         *remote_path_id,
                         &remote_spec.outer_variant_sites,
-                        entry.name,
+                        entry.name(),
                         provenance_remap,
                     ),
                 };
                 let index = out.get_mut(dest_path_id).expect("path exists");
-                if let Some(property_type) = &entry.property_type {
-                    index.add_property_type(entry.name, key.clone(), property_type.clone());
+                if let Some(property_type) = entry.property_type() {
+                    index.add_property_type(entry.name(), key.clone(), property_type.clone());
                 }
                 index.add_opinion(Opinion {
                     key,
-                    field: entry.name,
-                    value: entry.value.clone(),
+                    field: entry.name(),
+                    value: entry.value(),
                     layer_offset: payload_offset,
                 });
             }
@@ -4611,7 +4617,7 @@ fn add_payload_edge_opinions(
                         },
                     ));
 
-                    for entry in &variant_spec.fields {
+                    for entry in composed_entries(&variant_spec.fields, &variant_spec.properties) {
                         let key = OpinionKey {
                             is_local: false,
                             arc_kind: edge_arc_kind,
@@ -4626,18 +4632,22 @@ fn add_payload_edge_opinions(
                                 store,
                                 *remote_path_id,
                                 &branch_selections,
-                                entry.name,
+                                entry.name(),
                                 provenance_remap,
                             ),
                         };
                         let index = out.get_mut(dest_path_id).expect("path exists");
-                        if let Some(property_type) = &entry.property_type {
-                            index.add_property_type(entry.name, key.clone(), property_type.clone());
+                        if let Some(property_type) = entry.property_type() {
+                            index.add_property_type(
+                                entry.name(),
+                                key.clone(),
+                                property_type.clone(),
+                            );
                         }
                         index.add_opinion(Opinion {
                             key,
-                            field: entry.name,
-                            value: entry.value.clone(),
+                            field: entry.name(),
+                            value: entry.value(),
                             layer_offset: payload_offset,
                         });
                     }
@@ -4994,7 +5004,7 @@ fn add_specializes_edge_opinions(
             PathId,
             SpecPath,
             TokenId,
-            FieldValue,
+            OpinionValue,
             Option<PropertyType>,
         )> = Vec::new();
         let mut pending_sources = Vec::new();
@@ -5091,7 +5101,7 @@ fn add_specializes_edge_opinions(
                         ),
                     },
                 ));
-                for entry in &spec.fields {
+                for entry in composed_entries(&spec.fields, &spec.properties) {
                     pending.push((
                         *dest_path_id,
                         *remote_path_id,
@@ -5099,12 +5109,12 @@ fn add_specializes_edge_opinions(
                             store,
                             *remote_path_id,
                             &spec.outer_variant_sites,
-                            entry.name,
+                            entry.name(),
                             provenance_remap,
                         ),
-                        entry.name,
-                        entry.value.clone(),
-                        entry.property_type.clone(),
+                        entry.name(),
+                        entry.value(),
+                        entry.property_type().cloned(),
                     ));
                 }
 
@@ -5148,7 +5158,9 @@ fn add_specializes_edge_opinions(
                                 ),
                             },
                         ));
-                        for entry in &variant_spec.fields {
+                        for entry in
+                            composed_entries(&variant_spec.fields, &variant_spec.properties)
+                        {
                             pending.push((
                                 *dest_path_id,
                                 *remote_path_id,
@@ -5156,12 +5168,12 @@ fn add_specializes_edge_opinions(
                                     store,
                                     *remote_path_id,
                                     &branch_selections,
-                                    entry.name,
+                                    entry.name(),
                                     provenance_remap,
                                 ),
-                                entry.name,
-                                entry.value.clone(),
-                                entry.property_type.clone(),
+                                entry.name(),
+                                entry.value(),
+                                entry.property_type().cloned(),
                             ));
                         }
                     }
@@ -5176,7 +5188,8 @@ fn add_specializes_edge_opinions(
         }
 
         for (dest_path_id, remote_path_id, spec_path, field, value, property_type) in pending {
-            let value = remap_field_value_paths(store, &base_path, &specialized_path, value);
+            let mut value = value;
+            remap_opinion_target_paths(store, &base_path, &specialized_path, &mut value);
             let key = OpinionKey {
                 is_local: false,
                 arc_kind,
@@ -5236,7 +5249,7 @@ fn add_specializes_edge_opinions(
                         spec_path,
                     });
             }
-            for (field, opinions) in &src_index.opinions_by_field {
+            for opinions in src_index.opinions_by_field.values() {
                 for opinion in opinions {
                     if cycles.copies_cycle(
                         store.paths(),
@@ -5269,7 +5282,7 @@ fn add_specializes_edge_opinions(
                                 lookup_path: opinion.key.lookup_path,
                                 spec_path,
                             },
-                            field: *field,
+                            field: opinion.field,
                             value: opinion.value.clone(),
                             layer_offset: opinion.layer_offset,
                         });
@@ -5616,7 +5629,7 @@ fn add_specializes_edge_opinions(
                         spec_path,
                     });
             }
-            for (field, opinions) in &src_index.opinions_by_field {
+            for opinions in src_index.opinions_by_field.values() {
                 for opinion in opinions {
                     if cycles.copies_cycle(
                         store.paths(),
@@ -5649,7 +5662,7 @@ fn add_specializes_edge_opinions(
                                 lookup_path: opinion.key.lookup_path,
                                 spec_path,
                             },
-                            field: *field,
+                            field: opinion.field,
                             value: opinion.value.clone(),
                             layer_offset: opinion.layer_offset,
                         });
@@ -6166,9 +6179,10 @@ mod instancing_tests {
     use super::*;
     use crate::{
         array_edit::{ArrayEdit, ArrayEditOp},
-        doc::{InMemoryStore, Layer, PrimSpec, Value, set_property_field_vec},
+        doc::{InMemoryStore, Layer, PrimSpec, Value},
         listop::ListOp,
-        property::PropertyType,
+        path::PropertyPath,
+        property::{PropertySpec, PropertyType},
         stage::ResolvedValue,
     };
     use alloc::vec;
@@ -6224,12 +6238,10 @@ mod instancing_tests {
                 ..PrimSpec::def()
             },
         );
-        let mut over_c = PrimSpec::over();
-        set_property_field_vec(
-            &mut over_c.fields,
+        let over_c = PrimSpec::over().with_property(
             x,
-            FieldValue::Value(Value::Array(vec![Value::Int(99)])),
-            PropertyType::new("int", true, Value::Int(0)),
+            PropertySpec::typed_attribute(PropertyType::new("int", true, Value::Int(0)))
+                .with_default(Value::Array(vec![Value::Int(99)])),
         );
         group_layer.insert_prim(group_c, over_c);
         store.insert_layer(group_layer);
@@ -6244,14 +6256,12 @@ mod instancing_tests {
                 ..PrimSpec::def()
             },
         );
-        let mut def_c = PrimSpec::def();
-        set_property_field_vec(
-            &mut def_c.fields,
+        let def_c = PrimSpec::def().with_property(
             x,
-            FieldValue::Value(Value::ArrayEdit(ArrayEdit {
-                ops: vec![ArrayEditOp::Resize { len: 2 }],
-            })),
-            PropertyType::new("double", true, Value::Double(0.0)),
+            PropertySpec::typed_attribute(PropertyType::new("double", true, Value::Double(0.0)))
+                .with_default(Value::ArrayEdit(ArrayEdit {
+                    ops: vec![ArrayEditOp::Resize { len: 2 }],
+                })),
         );
         asset_layer.insert_prim(asset_c, def_c);
         store.insert_layer(asset_layer);
@@ -6259,7 +6269,7 @@ mod instancing_tests {
         let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
         let c = store.path("/P/I/C");
         let stack: Vec<_> = stage
-            .explain_field(c, x)
+            .explain_property_path(PropertyPath::new(c, x))
             .expect("x has opinions")
             .iter()
             .map(|opinion| (opinion.key.layer_id, opinion.key.lookup_path))
@@ -6273,7 +6283,9 @@ mod instancing_tests {
             .collect();
         assert_eq!(sources, [(LayerId(3), asset_c)]);
         assert_eq!(
-            stage.resolve_value(c, x).map(|resolved| resolved.value),
+            stage
+                .resolve_property_path(PropertyPath::new(c, x))
+                .map(|resolved| resolved.value),
             Some(ResolvedValue::Scalar(Value::Array(vec![
                 Value::Double(0.0),
                 Value::Double(0.0)

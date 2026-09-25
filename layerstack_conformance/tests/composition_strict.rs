@@ -27,7 +27,7 @@
 //!   other;
 //! - each composed prim's full prim stack, [`Stage::explain_prim`], against
 //!   `PcpPrimIndex::GetPrimStack()`, repeats included;
-//! - each property stack, [`Stage::explain_field`], against
+//! - each property stack, [`Stage::explain_property_path`], against
 //!   `PcpPropertyIndex::GetPropertyStack()`;
 //! - each resolved scalar and its winning spec, via
 //!   [`check_scalar_values`]: the expected winner is the strongest oracle
@@ -65,8 +65,7 @@
 //!   remove both.
 //! - Ancestral arcs of subroot arc targets ([`Cause::AncestralArcs`]),
 //!   some nested variant specs ([`Cause::VariantSpecs`]), internal arcs
-//!   authored in sublayers ([`Cause::InternalArcAnchoring`]),
-//!   declaration-only defaults ([`Cause::DeclarationDefault`]), conflicting
+//!   authored in sublayers ([`Cause::InternalArcAnchoring`]), conflicting
 //!   property spec types ([`Cause::PropertyTypeConflict`]), asset-path
 //!   expressions ([`Cause::ExpressionVariables`]) and variant fallbacks
 //!   ([`Cause::FallbackVariants`]).
@@ -77,8 +76,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::path::PathBuf;
 
+use layerstack::property::get_property;
 use layerstack::{
-    FieldEntry, FieldValue, LayerId, LayerStack, LayerStore, SpecComponent, SpecPath, Stage,
+    LayerId, LayerStack, LayerStore, PropertyEntry, PropertyPath, SpecComponent, SpecPath, Stage,
     StageOptions, TokenId, Value,
 };
 use layerstack_conformance::{
@@ -238,17 +238,11 @@ enum Authored {
     Default(Value),
 }
 
-fn field_default(fields: &[FieldEntry], name: TokenId) -> Authored {
-    match fields
-        .iter()
-        .find(|entry| entry.name == name)
-        .map(|entry| &entry.value)
-    {
-        // A declaration without a default (`custom double x`) is ingested
-        // as `Value::Null`; it authors no value.
-        Some(FieldValue::Value(Value::Null)) | None => Authored::NoDefault,
-        Some(FieldValue::Value(value)) => Authored::Default(value.clone()),
-        _ => Authored::NoDefault,
+fn property_default(properties: &[PropertyEntry], name: TokenId) -> Authored {
+    // A declaration without a default (`custom double x`) authors no value.
+    match get_property(properties, name).and_then(|spec| spec.default.as_ref()) {
+        Some(value) => Authored::Default(value.clone()),
+        None => Authored::NoDefault,
     }
 }
 
@@ -272,7 +266,9 @@ fn authored_default(loaded: &LoadedStage, layer: LayerId, spec: &SpecPath) -> Au
         return layer
             .prims
             .get(&spec.prim_path())
-            .map_or(Authored::Unknown, |prim| field_default(&prim.fields, name));
+            .map_or(Authored::Unknown, |prim| {
+                property_default(&prim.properties, name)
+            });
     };
     let SpecComponent::VariantSelection { set, variant } = components[at] else {
         return Authored::Unknown;
@@ -300,11 +296,12 @@ fn authored_default(loaded: &LoadedStage, layer: LayerId, spec: &SpecPath) -> Au
         return Authored::Unknown;
     };
     match &components[at + 1..] {
-        [] => field_default(&branch.fields, name),
-        [SpecComponent::Prim(child)] => branch
-            .child_fields
-            .get(child)
-            .map_or(Authored::Unknown, |fields| field_default(fields, name)),
+        [] => property_default(&branch.properties, name),
+        [SpecComponent::Prim(child)] => match branch.child_properties.get(child) {
+            Some(properties) => property_default(properties, name),
+            None if branch.child_fields.contains_key(child) => Authored::NoDefault,
+            None => Authored::Unknown,
+        },
         _ => Authored::Unknown,
     }
 }
@@ -422,7 +419,7 @@ fn observe(name: &str) -> Observed {
             let name = prop.property.rsplit_once('.').expect("property path").1;
             let field = loaded.store.tokens.intern(name);
             let actual: Vec<String> = stage
-                .explain_field(prim_id, field)
+                .explain_property_path(PropertyPath::new(prim_id, field))
                 .unwrap_or_default()
                 .iter()
                 .map(|opinion| render_site(&loaded, opinion.key.layer_id, &opinion.key.spec_path))
@@ -517,9 +514,6 @@ enum Cause {
     /// containing layer stack (AOUSD Core §10.3.2.1: "the layer stack
     /// containing the reference is assumed").
     InternalArcAnchoring,
-    /// A declaration without a default is ingested as `Value::Null`, which
-    /// resolution treats as the strongest value.
-    DeclarationDefault,
     /// A property spec whose type conflicts with the defining spec is kept;
     /// OpenUSD ignores it.
     PropertyTypeConflict,
@@ -635,12 +629,12 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "BasicNestedVariantsWithSameName_root",
-        causes: &[C::DeclarationDefault, C::DuplicateSources],
+        causes: &[C::DuplicateSources],
         prims: 1,
         props: 0,
-        values: 1,
+        values: 0,
         diffs: &[D::ExtraRepeat],
-        reason: "`/foo/bar.value` resolves to the declaration-only `Null` on `/foo/bar` instead of 2 from `/foo{commonName=c}bar`",
+        reason: "`/foo/bar` repeats `root.usd /foo{commonName=c}bar`",
     },
     Known {
         fixture: "BasicNestedVariants_root",
@@ -1269,7 +1263,7 @@ const KNOWN: &[Known] = &[
         causes: &[C::Relocates],
         prims: 15,
         props: 0,
-        values: 1,
+        values: 2,
         diffs: &[D::MissingPrim, D::ExtraPrim, D::MissingSite],
         reason: "ignores `</CharRig/Rig/SubRig/Anim/AnimScope>` -> `</CharRig/Anim/AnimScope>` authored in `rig.usd`",
     },

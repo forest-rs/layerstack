@@ -8,7 +8,7 @@
 //!
 //! Spec: AOUSD Core §16.4.
 
-use layerstack::doc::{FieldValue, LayerId, Value, get_field};
+use layerstack::doc::{LayerId, Value};
 use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset};
@@ -230,12 +230,9 @@ fn expect_value(
         .get(&path_id)
         .unwrap_or_else(|| panic!("prim not found: {prim_path}"));
     let field_tok = store.tokens.intern(field_name);
-    let field = get_field(&prim.fields, &field_tok)
-        .unwrap_or_else(|| panic!("field not found: {field_name} on {prim_path}"));
-    match field {
-        FieldValue::Value(v) => v.clone(),
-        other => panic!("expected Value at {prim_path}.{field_name}, got {other:?}"),
-    }
+    prim.property(field_tok)
+        .and_then(|property| property.default.clone())
+        .unwrap_or_else(|| panic!("attribute default not found: {field_name} on {prim_path}"))
 }
 
 fn has_prim(store: &mut InMemoryStore, layer_id: LayerId, prim_path: &str) -> bool {

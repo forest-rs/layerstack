@@ -22,12 +22,12 @@ use layerstack::HashMap;
 
 use layerstack::doc::{
     FieldValue, Layer, LayerId, LayerOffset, PrimSpec, Reference, Specifier, SublayerEntry, Value,
-    VariantSetSpec, VariantSpec, insert_property_field_if_absent, set_field_vec,
-    set_property_field_vec,
+    VariantSetSpec, VariantSpec, set_field_vec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp;
 use layerstack::path::{Path, PathId, PathInterner, PropertyPath, TargetPath};
+use layerstack::property::{PropertyKind, PropertySpec, property_entry, set_property_vec};
 use layerstack::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
 use layerstack::{AssetResolver, PropertyType, ReferenceTarget, ResolvedAsset};
 
@@ -399,7 +399,7 @@ impl AssembleCtx<'_> {
         Ok(spec)
     }
 
-    /// Applies attribute fields to the parent prim.
+    /// Adds an attribute spec to its parent prim.
     fn apply_attribute_fields(
         &mut self,
         fields: &[(String, CrateValue)],
@@ -407,89 +407,12 @@ impl AssembleCtx<'_> {
         prim: &mut PrimSpec,
     ) -> Result<(), UsdcError> {
         let name_tok = self.tokens.intern(attr_name);
-        let property_type = self.attribute_property_type(fields);
-
-        // Look for time samples, spline, default value, or connection paths.
-        // Priority: timeSamples > spline > default (§12.3).
-        let mut has_time_samples = false;
-        let mut has_spline = false;
-        let mut has_default = false;
-
-        for (field_name, value) in fields {
-            match field_name.as_str() {
-                "timeSamples" => {
-                    if let CrateValue::TimeSamples(samples) = value {
-                        let ts: Vec<(f64, Value)> = samples
-                            .iter()
-                            .map(|(tc, v)| (*tc, self.convert_crate_value(v)))
-                            .collect();
-                        set_property_field_vec(
-                            &mut prim.fields,
-                            name_tok,
-                            FieldValue::TimeSamples(ts),
-                            property_type.clone(),
-                        );
-                        has_time_samples = true;
-                    }
-                }
-                "spline" => {
-                    if !has_time_samples && let CrateValue::Spline(spline) = value {
-                        set_property_field_vec(
-                            &mut prim.fields,
-                            name_tok,
-                            FieldValue::Spline(spline.clone()),
-                            property_type.clone(),
-                        );
-                        has_spline = true;
-                    }
-                }
-                "default" if !has_time_samples && !has_spline => {
-                    let converted = self.convert_crate_value(value);
-                    set_property_field_vec(
-                        &mut prim.fields,
-                        name_tok,
-                        FieldValue::Value(converted),
-                        property_type.clone(),
-                    );
-                    has_default = true;
-                }
-                "default" => {}
-                "connectionPaths" => {
-                    let listop = self.convert_connection_value(value)?;
-                    set_property_field_vec(
-                        &mut prim.fields,
-                        name_tok,
-                        FieldValue::PathListOp(listop),
-                        property_type.clone(),
-                    );
-                }
-                // Skip metadata fields (variability, custom, etc.).
-                "variability" | "custom" | "typeName" => {}
-                _ => {
-                    // Other attribute metadata gets stored as a sub-field.
-                    // For now we skip these; they're rarely needed.
-                }
-            }
-        }
-
-        // If the attribute was declared with no default, spline, or time samples,
-        // register as Null (attribute declaration).
-        if !has_time_samples && !has_spline && !has_default {
-            let has_connection = fields.iter().any(|(n, _)| n == "connectionPaths");
-            if !has_connection {
-                insert_property_field_if_absent(
-                    &mut prim.fields,
-                    name_tok,
-                    FieldValue::Value(Value::Null),
-                    property_type,
-                );
-            }
-        }
-
+        let spec = self.build_attribute_spec(fields)?;
+        prim.set_property(name_tok, spec);
         Ok(())
     }
 
-    /// Applies relationship fields to the parent prim.
+    /// Adds a relationship spec to its parent prim.
     fn apply_relationship_fields(
         &mut self,
         fields: &[(String, CrateValue)],
@@ -497,26 +420,13 @@ impl AssembleCtx<'_> {
         prim: &mut PrimSpec,
     ) -> Result<(), UsdcError> {
         let name_tok = self.tokens.intern(rel_name);
-
-        for (field_name, value) in fields {
-            if field_name == "targetPaths" {
-                let listop = self.convert_connection_value(value)?;
-                set_field_vec(&mut prim.fields, name_tok, FieldValue::PathListOp(listop));
-                return Ok(());
-            }
-        }
-
-        // Relationship with no targets — register as empty PathListOp.
-        layerstack::insert_field_if_absent(
-            &mut prim.fields,
-            name_tok,
-            FieldValue::PathListOp(ListOp::default()),
-        );
-
+        let spec = self.build_relationship_spec(fields)?;
+        prim.set_property(name_tok, spec);
         Ok(())
     }
 
-    /// Applies connection fields to an attribute on the parent prim.
+    /// Applies a connection child spec's paths to its attribute, when the
+    /// attribute itself authors no `connectionPaths`.
     fn apply_connection_fields(
         &mut self,
         fields: &[(String, CrateValue)],
@@ -528,7 +438,10 @@ impl AssembleCtx<'_> {
         for (field_name, value) in fields {
             if field_name == "connectionPaths" || field_name == "targetPaths" {
                 let listop = self.convert_connection_value(value)?;
-                set_field_vec(&mut prim.fields, name_tok, FieldValue::PathListOp(listop));
+                let spec = property_entry(&mut prim.properties, name_tok, PropertyKind::Attribute);
+                if spec.targets.is_none() {
+                    spec.targets = Some(listop);
+                }
                 return Ok(());
             }
         }
@@ -653,22 +566,12 @@ impl AssembleCtx<'_> {
                         && let Some(variant) = vset.variants.get_mut(&branch_tok)
                     {
                         let prop_tok = self.tokens.intern(&prop_name);
-                        let fv = if spec.form == SpecForm::Attribute {
-                            self.build_attribute_field_value(&spec_fields[i])
+                        let property = if spec.form == SpecForm::Attribute {
+                            self.build_attribute_spec(&spec_fields[i])?
                         } else {
-                            self.build_relationship_field_value(&spec_fields[i])?
+                            self.build_relationship_spec(&spec_fields[i])?
                         };
-                        if spec.form == SpecForm::Attribute {
-                            let property_type = self.attribute_property_type(&spec_fields[i]);
-                            set_property_field_vec(
-                                &mut variant.fields,
-                                prop_tok,
-                                fv,
-                                property_type,
-                            );
-                        } else {
-                            set_field_vec(&mut variant.fields, prop_tok, fv);
-                        }
+                        set_property_vec(&mut variant.properties, prop_tok, property);
                     }
                 }
             }
@@ -876,65 +779,54 @@ impl AssembleCtx<'_> {
                     }
                 }
             }
-            CrateValue::TimeSamples(samples) => {
-                let ts: Vec<(f64, Value)> = samples
-                    .iter()
-                    .map(|(tc, v)| (*tc, self.convert_crate_value(v)))
-                    .collect();
-                FieldValue::TimeSamples(ts)
-            }
-            CrateValue::Spline(spline) => FieldValue::Spline(spline.clone()),
             _ => FieldValue::Value(self.convert_crate_value(cv)),
         }
     }
 
-    /// Builds a [`FieldValue`] from attribute spec fields.
-    fn build_attribute_field_value(&mut self, fields: &[(String, CrateValue)]) -> FieldValue {
-        // Check for time samples first.
-        for (name, value) in fields {
-            if name == "timeSamples"
-                && let CrateValue::TimeSamples(samples) = value
-            {
-                let ts: Vec<(f64, Value)> = samples
-                    .iter()
-                    .map(|(tc, v)| (*tc, self.convert_crate_value(v)))
-                    .collect();
-                return FieldValue::TimeSamples(ts);
-            }
-        }
-
-        // Check for connection paths.
-        for (name, value) in fields {
-            if name == "connectionPaths"
-                && let Ok(listop) = self.convert_connection_value(value)
-            {
-                return FieldValue::PathListOp(listop);
-            }
-        }
-
-        // Default value.
-        for (name, value) in fields {
-            if name == "default" {
-                return FieldValue::Value(self.convert_crate_value(value));
-            }
-        }
-
-        // No value — declaration only.
-        FieldValue::Value(Value::Null)
-    }
-
-    /// Builds a [`FieldValue`] from relationship spec fields.
-    fn build_relationship_field_value(
+    /// Builds an attribute [`PropertySpec`] from its crate fields, keeping
+    /// every authored value slot.
+    ///
+    /// Spec: AOUSD Core §7.6.4 (attribute spec fields; §7.6.4.2.3: an
+    /// attribute may have a value, a connection, or both).
+    fn build_attribute_spec(
         &mut self,
         fields: &[(String, CrateValue)],
-    ) -> Result<FieldValue, UsdcError> {
+    ) -> Result<PropertySpec, UsdcError> {
+        let mut spec = PropertySpec::typed_attribute(self.attribute_property_type(fields));
         for (name, value) in fields {
-            if name == "targetPaths" {
-                let listop = self.convert_connection_value(value)?;
-                return Ok(FieldValue::PathListOp(listop));
+            match (name.as_str(), value) {
+                ("default", value) => spec.default = Some(self.convert_crate_value(value)),
+                ("timeSamples", CrateValue::TimeSamples(samples)) => {
+                    let samples = samples
+                        .iter()
+                        .map(|(tc, v)| (*tc, self.convert_crate_value(v)))
+                        .collect();
+                    spec.time_samples = Some(samples);
+                }
+                ("spline", CrateValue::Spline(spline)) => spec.spline = Some(spline.clone()),
+                ("connectionPaths", value) => {
+                    spec.targets = Some(self.convert_connection_value(value)?);
+                }
+                _ => {}
             }
         }
-        Ok(FieldValue::PathListOp(ListOp::default()))
+        Ok(spec)
+    }
+
+    /// Builds a relationship [`PropertySpec`] from its crate fields.
+    ///
+    /// Spec: AOUSD Core §7.6.5 (relationship spec fields).
+    fn build_relationship_spec(
+        &mut self,
+        fields: &[(String, CrateValue)],
+    ) -> Result<PropertySpec, UsdcError> {
+        let mut spec = PropertySpec::relationship();
+        for (name, value) in fields {
+            if name == "targetPaths" {
+                spec.targets = Some(self.convert_connection_value(value)?);
+            }
+        }
+        Ok(spec)
     }
 
     fn attribute_property_type(&mut self, fields: &[(String, CrateValue)]) -> PropertyType {

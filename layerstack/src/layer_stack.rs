@@ -142,18 +142,21 @@ mod tests {
             id: LayerId(1),
             sublayers: subs(&[2, 3]),
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(2),
             sublayers: subs(&[3]),
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(3),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         });
 
@@ -173,18 +176,21 @@ mod tests {
             id: LayerId(1),
             sublayers: subs(&[2]),
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(2),
             sublayers: subs(&[3]),
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(3),
             sublayers: subs(&[2]),
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         });
 
@@ -208,12 +214,14 @@ mod tests {
             id: LayerId(1),
             sublayers: subs(&[2, 2]),
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(2),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         });
 
@@ -238,6 +246,7 @@ mod tests {
                 },
             }],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         });
         store.insert_layer(Layer {
@@ -250,12 +259,14 @@ mod tests {
                 },
             }],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(3),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         });
 
@@ -294,6 +305,7 @@ mod tests {
                 },
             }],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         });
         store.insert_layer(Layer {
@@ -306,12 +318,14 @@ mod tests {
                 },
             }],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(3),
             sublayers: vec![],
             default_prim: None,
+            metadata: Vec::new(),
             prims: HashMap::new(),
         });
 

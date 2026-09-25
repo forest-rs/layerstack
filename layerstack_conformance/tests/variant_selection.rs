@@ -110,7 +110,7 @@ fn resolve(store: &mut InMemoryStore, stage: &Stage, prop: &str) -> (Value, Vec<
         .value;
     let mut stack = Vec::new();
     for op in stage.explain_property_path(path).expect("opinions") {
-        if let layerstack::FieldValue::Value(v) = &op.value
+        if let Some(v) = op.value.default_value()
             && !stack.contains(v)
         {
             stack.push(v.clone());
@@ -365,9 +365,9 @@ class "ClassB"
                 .explain_property_path(prop)
                 .unwrap_or(&[])
                 .iter()
-                .map(|op| op.value.clone())
+                .filter_map(|op| op.value.default_value().cloned())
                 .collect();
-            let expected = vec![layerstack::FieldValue::Value(Value::Double(2.0))];
+            let expected = vec![Value::Double(2.0)];
             if stack != expected {
                 failures.push(format!("{prim} ({arc}): x stack {stack:?}"));
             }
@@ -922,13 +922,15 @@ fn matrix_cell(outer: MatrixArc, inner: MatrixArc, selection: MatrixSelection) -
         // and nothing from the other branch. (Repeated identical opinions
         // from an outer inherit/specialize of a prim that is also composed
         // on the stage are a separate, pre-existing issue.)
-        let mut stack: Vec<layerstack::FieldValue> = Vec::new();
+        let mut stack: Vec<Value> = Vec::new();
         for op in stage.explain_property_path(prop).unwrap_or(&[]) {
-            if !stack.contains(&op.value) {
-                stack.push(op.value.clone());
+            if let Some(value) = op.value.default_value()
+                && !stack.contains(value)
+            {
+                stack.push(value.clone());
             }
         }
-        let expected = vec![layerstack::FieldValue::Value(Value::Double(x))];
+        let expected = vec![Value::Double(x)];
         if stack != expected {
             failures.push(format!("{owner}.x stack {stack:?}"));
         }

@@ -2,6 +2,12 @@
 
 def "Arm"
 {
+    # Target paths map through the relocates of the layer stacks above
+    # them; a relocate to nothing does not change them.
+    rel wrist = </Arm/Rig/Controls/Wrist>
+    rel wristAngle = </Arm/Rig/Controls/Wrist.angle>
+    rel debug = </Arm/Rig/Debug>
+
     def "Rig"
     {
         def "Controls"

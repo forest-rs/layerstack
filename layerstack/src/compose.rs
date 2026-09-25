@@ -3811,12 +3811,8 @@ fn map_across(
     else {
         return path;
     };
-    let stage_path = Walk::new(relocates.across.iter().map(|set| &**set), None)
-        .map(store, arc_dest, &rel)
-        .unwrap_or_else(|| {
-            let joined = store.paths().resolve(arc_dest).join(&rel);
-            store.paths_mut().intern(joined)
-        });
+    let stage_path =
+        Walk::new(relocates.across.iter().map(|set| &**set), None).map(store, arc_dest, &rel);
     // Arc steps map from the composed prim's namespace; the outer mapping
     // maps into the namespace of the authoring site.
     match outer {
@@ -4788,7 +4784,6 @@ fn add_inherit_edge_opinions(
     };
     let stage_relocates = cycles.relocations().stage();
 
-    let base_path = store.paths().resolve(dest_root).clone();
     let inherited_path = store.paths().resolve(inherited_root).clone();
 
     let mut remote_paths: Vec<PathId> = local_stack
@@ -5016,7 +5011,8 @@ fn add_inherit_edge_opinions(
                 continue;
             }
             let mut value = value;
-            remap_opinion_target_paths(store, &base_path, &inherited_path, &mut value);
+            let walk = arc_walk(&nodes.stage_relocates, &nodes.path);
+            relocate_opinion_target_paths(store, &walk, dest_root, inherited_root, &mut value);
             // Also apply reference namespace remapping if within a reference context.
             if let Some((ref_dest, ref_src)) = ref_remap {
                 remap_opinion_target_paths(store, ref_dest, ref_src, &mut value);
@@ -5244,6 +5240,66 @@ fn remap_opinion_target_paths(
     remap(store, &mut list.prepend);
     remap(store, &mut list.append);
     remap(store, &mut list.delete);
+}
+
+/// Maps the target paths an opinion authors (see
+/// [`remap_opinion_target_paths`]) from beneath the arc target `src_root`
+/// into the stage namespace beneath the arc's `dest_root`, through the
+/// relocations `walk` passes: a path beneath a relocation source maps to
+/// its target, as the arc's namespace mapping maps it.
+///
+/// Spec: AOUSD Core §10.3.2.6.1 (relocates add to the namespace mapping of
+/// arcs), §12.4 (target paths map through the arcs of their opinions).
+fn relocate_opinion_target_paths(
+    store: &mut dyn LayerStore,
+    walk: &Walk<'_>,
+    dest_root: PathId,
+    src_root: PathId,
+    value: &mut OpinionValue,
+) {
+    if walk.is_empty() {
+        let dest_root = store.paths().resolve(dest_root).clone();
+        let src_root = store.paths().resolve(src_root).clone();
+        remap_opinion_target_paths(store, &dest_root, &src_root, value);
+        return;
+    }
+    let list = match value {
+        OpinionValue::Field(FieldValue::PathListOp(list)) => list,
+        OpinionValue::Property(spec) => match spec.targets.as_mut() {
+            Some(list) => list,
+            None => return,
+        },
+        OpinionValue::Field(_) => return,
+    };
+    let map_path = |store: &mut dyn LayerStore, path: PathId| {
+        let rel = {
+            let paths = store.paths();
+            paths
+                .resolve(path)
+                .strip_prefix(paths.resolve(src_root))
+                .map(<[_]>::to_vec)
+        };
+        match rel {
+            Some(rel) => walk.map(store, dest_root, &rel),
+            None => path,
+        }
+    };
+    let items = list
+        .explicit
+        .iter_mut()
+        .flatten()
+        .chain(list.prepend.iter_mut())
+        .chain(list.append.iter_mut())
+        .chain(list.delete.iter_mut());
+    for item in items {
+        *item = match *item {
+            TargetPath::Prim(path) => TargetPath::Prim(map_path(store, path)),
+            TargetPath::Property(path) => TargetPath::Property(PropertyPath::new(
+                map_path(store, path.prim_path()),
+                path.property(),
+            )),
+        };
+    }
 }
 
 fn remap_target_path(
@@ -5717,9 +5773,10 @@ fn add_reference_edge_opinions(
                 .expect("path exists")
                 .add_source(key);
         }
+        let walk = arc_walk(&nodes.stage_relocates, &nodes.path);
         for (dest_path_id, field, key, value, property_type, offset) in pending_fields {
             let mut value = value;
-            remap_opinion_target_paths(store, &dest_root_path, &target_root, &mut value);
+            relocate_opinion_target_paths(store, &walk, dest_root, reference_path, &mut value);
             let index = out.get_mut(&dest_path_id).expect("path exists");
             if let Some(property_type) = property_type {
                 index.add_property_type(field, key.clone(), property_type);
@@ -5900,16 +5957,18 @@ fn add_reference_edge_opinions(
     // dest prims that still reference the source namespace. This covers
     // field values brought in by nested arcs (inherits, nested references)
     // within this reference context.
+    let walk = arc_walk(&nodes.stage_relocates, &nodes.path);
     for (_, dest_path_id) in &mapping {
         let Some(index) = out.get_mut(dest_path_id) else {
             continue;
         };
         for opinions in index.opinions_by_field.values_mut() {
             for opinion in opinions.iter_mut() {
-                remap_opinion_target_paths(
+                relocate_opinion_target_paths(
                     store,
-                    &dest_root_path,
-                    &target_root,
+                    &walk,
+                    dest_root,
+                    reference_path,
                     &mut opinion.value,
                 );
             }
@@ -6712,7 +6771,6 @@ fn add_specializes_edge_opinions(
     );
     let stage_relocates = cycles.relocations().stage();
 
-    let base_path = store.paths().resolve(dest_root).clone();
     let selection_base_path = store.paths().resolve(selection_root).clone();
     let specialized_path = store.paths().resolve(specialized_root).clone();
 
@@ -6970,7 +7028,8 @@ fn add_specializes_edge_opinions(
                 continue;
             }
             let mut value = value;
-            remap_opinion_target_paths(store, &base_path, &specialized_path, &mut value);
+            let walk = arc_walk(&nodes.stage_relocates, &nodes.path);
+            relocate_opinion_target_paths(store, &walk, dest_root, specialized_root, &mut value);
             let key = OpinionKey {
                 node,
                 layer_strength,

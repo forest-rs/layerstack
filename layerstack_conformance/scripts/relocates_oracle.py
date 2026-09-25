@@ -20,8 +20,9 @@ source contributes nothing; both are composition errors (AOUSD Core
 §10.3.2.6; `_EvalNodeRelocations` in `pxr/usd/pcp/primIndex.cpp`).
 
 For every composed prim the vectors record its prim stack, repeats
-included; for every attribute its resolved default; and for every
-composition error its kind and the prim it was found on.
+included; for every attribute its resolved default; for every
+relationship its targets; and for every composition error its kind and
+the prim it was found on.
 """
 import json
 import os
@@ -212,6 +213,12 @@ def "Crate" (
 
 def "Arm"
 {
+    # Target paths map through the relocates of the layer stacks above
+    # them; a relocate to nothing does not change them.
+    rel wrist = </Arm/Rig/Controls/Wrist>
+    rel wristAngle = </Arm/Rig/Controls/Wrist.angle>
+    rel debug = </Arm/Rig/Debug>
+
     def "Rig"
     {
         def "Controls"
@@ -269,6 +276,8 @@ def "Kit"
 
 def "Parts"
 {
+    rel gear = </Parts/Gear>
+
     def "Gear"
     {
         int teeth = 2
@@ -341,6 +350,7 @@ def compose(directory):
     stage = Usd.Stage.Open(os.path.join(directory, "root.usda"))
     prims = []
     values = {}
+    targets = {}
     for prim in stage.TraverseAll():
         prims.append({
             "path": str(prim.GetPath()),
@@ -351,10 +361,12 @@ def compose(directory):
             value = attr.Get()
             if value is not None:
                 values[str(attr.GetPath())] = value
+        for rel in prim.GetRelationships():
+            targets[str(rel.GetPath())] = [str(t) for t in rel.GetTargets()]
     # OpenUSD may report one error once per prim index that reaches it.
     errors = [{"kind": kind, "prim": prim} for kind, prim in
               sorted({error_record(error) for error in stage.GetCompositionErrors()})]
-    return {"prims": prims, "values": values, "errors": errors}
+    return {"prims": prims, "values": values, "targets": targets, "errors": errors}
 
 
 def main():

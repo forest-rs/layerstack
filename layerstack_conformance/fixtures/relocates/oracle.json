@@ -394,6 +394,20 @@
   "/Crate/Gear.teeth": 0,
   "/Crate/Parts/Spring.coils": 2
  },
+ "targets": {
+  "/Robot.debug": [
+   "/Robot/Rig/Debug"
+  ],
+  "/Robot.wrist": [
+   "/Robot/Anim/Wrist"
+  ],
+  "/Robot.wristAngle": [
+   "/Robot/Anim/Wrist.angle"
+  ],
+  "/Crate/Parts.gear": [
+   "/Crate/Gear"
+  ]
+ },
  "errors": [
   {
    "kind": "ArcToProhibitedChild",

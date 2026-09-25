@@ -20,7 +20,7 @@ use crate::{
         resolve_references_for_prim, resolve_specializes_for_prim,
     },
     doc::LayerStore,
-    doc::{LayerId, Reference},
+    doc::{LayerId, Reference, ReferenceTarget},
     layer_stack::LayerStack,
     path::{Path, PathId, PathInterner},
     stage::PopulationMask,
@@ -312,7 +312,50 @@ fn expand_inherit_paths(
                 mapped_from,
             );
         }
+
+        // The class's references and payloads, and through them the
+        // ancestral arcs of their subroot targets, populate the class's
+        // namespace in the destination as well.
+        let mut nested_refs = resolve_references_for_prim(
+            store,
+            stack,
+            remote_path_id,
+            SelectionScope::Discover,
+            layer_stack,
+        );
+        nested_refs.extend(resolve_payloads_for_prim(
+            store,
+            stack,
+            remote_path_id,
+            SelectionScope::Discover,
+            layer_stack,
+        ));
+        for nested in nested_refs {
+            expand_reference_paths(
+                store,
+                dest_path_id,
+                nested,
+                paths,
+                queue,
+                &mut HashSet::new(),
+                visited,
+                chain,
+                mapped_from,
+            );
+        }
     }
+    expand_ancestral_paths(
+        store,
+        stack,
+        dest_root,
+        inherited_root,
+        paths,
+        queue,
+        &mut HashSet::new(),
+        visited,
+        chain,
+        mapped_from,
+    );
     chain.pop();
 }
 
@@ -523,6 +566,19 @@ fn expand_reference_paths(
         }
     }
 
+    expand_ancestral_paths(
+        store,
+        &remote_stack,
+        dest_root,
+        reference_path,
+        paths,
+        queue,
+        visited,
+        visited_inherits,
+        chain,
+        mapped_from,
+    );
+
     // Propagate inherits discovered by nested references through this
     // reference's layer stack. When a nested reference (e.g. prop.usd) discovers
     // an inherit (e.g. /_class_Prop), the inherit target may also have children
@@ -562,6 +618,98 @@ fn expand_reference_paths(
 
     // Note: `paths_mut()` borrows the store mutably, so we materialize any
     // `strip_prefix` results before interning to avoid borrow conflicts.
+}
+
+/// Expands the arcs authored on the namespace ancestors of `target`, a
+/// subroot arc target in `stack`, into `dest_root`: an arc from the
+/// ancestor `/T` to `/C` reaches the target `/T/B` as an arc to `/C/B`.
+///
+/// Spec: AOUSD Core §10.2 and §11; OpenUSD builds a subroot target's index
+/// from its parent's (`_BuildInitialPrimIndexFromAncestor` in
+/// `pxr/usd/pcp/primIndex.cpp`). Composition follows the same arcs (see
+/// `AncestralArcs` in `compose.rs`).
+fn expand_ancestral_paths(
+    store: &mut dyn LayerStore,
+    stack: &LayerStack,
+    dest_root: PathId,
+    target: PathId,
+    paths: &mut BTreeSet<PathId>,
+    queue: &mut Vec<PathId>,
+    visited_refs: &mut HashSet<(PathId, LayerId, PathId)>,
+    visited_inherits: &mut HashSet<(PathId, PathId)>,
+    chain: &mut ArcChain,
+    mapped_from: &mut MappedFrom,
+) {
+    let anchor = layer_stack_root(stack);
+    let target_path = store.paths().resolve(target).clone();
+    let mut cursor = target_path.parent();
+    while let Some(ancestor_path) = cursor {
+        if ancestor_path.depth() == 0 {
+            break;
+        }
+        cursor = ancestor_path.parent();
+        let Some(ancestor) = store.paths().lookup(&ancestor_path) else {
+            continue;
+        };
+        let rel = target_path
+            .strip_prefix(&ancestor_path)
+            .expect("an ancestor prefixes its descendant")
+            .to_vec();
+        let mapped = |store: &mut dyn LayerStore, path: PathId| {
+            let joined = store.paths().resolve(path).join(&rel);
+            store.paths_mut().intern(joined)
+        };
+        let scope = SelectionScope::Discover;
+        let mut references = resolve_references_for_prim(store, stack, ancestor, scope, anchor);
+        references.extend(collect_all_variant_child_references(
+            store, stack, ancestor, anchor,
+        ));
+        references.extend(collect_all_variant_branch_references(
+            store, stack, ancestor, anchor,
+        ));
+        references.extend(resolve_payloads_for_prim(
+            store, stack, ancestor, scope, anchor,
+        ));
+        references.extend(collect_all_variant_branch_payloads(
+            store, stack, ancestor, anchor,
+        ));
+        for reference in references {
+            let Some(path) = reference.target_path(store) else {
+                continue;
+            };
+            let reference = Reference {
+                target: ReferenceTarget::Prim(mapped(store, path)),
+                ..reference
+            };
+            expand_reference_paths(
+                store,
+                dest_root,
+                reference,
+                paths,
+                queue,
+                visited_refs,
+                visited_inherits,
+                chain,
+                mapped_from,
+            );
+        }
+        let mut classes = resolve_inherits_for_prim(store, stack, ancestor, scope);
+        classes.extend(resolve_specializes_for_prim(store, stack, ancestor, scope));
+        for class in classes {
+            let class = mapped(store, class);
+            expand_inherit_paths(
+                store,
+                stack,
+                dest_root,
+                class,
+                paths,
+                queue,
+                visited_inherits,
+                chain,
+                mapped_from,
+            );
+        }
+    }
 }
 
 /// After the main queue loop, some paths introduced by references may exist

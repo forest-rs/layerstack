@@ -116,9 +116,13 @@ pub(crate) struct NodeArc {
     pub(crate) sibling_index: u16,
     /// `true` for an implied class arc (see [`PrimNode::is_implied`]).
     pub(crate) implied: bool,
-    /// `true` for a node copied from another prim's graph by the late copy
-    /// of an arc target's composed sources.
-    pub(crate) copied: bool,
+    /// `true` for a node added where OpenUSD skips a node duplicating a
+    /// site the prim index uses: beneath an ancestral arc of a class arc's
+    /// target, within the recursive index OpenUSD builds for the class site
+    /// (`skipDuplicateNodes` in `_AddArc`, `pxr/usd/pcp/primIndex.cpp`).
+    /// Composition adds such nodes whatever order it reaches the sites in,
+    /// and drops their registrations of sites another node registers.
+    pub(crate) skips_duplicates: bool,
 }
 
 /// One node of a [`PrimIndexGraph`]: a site that contributes opinions to a
@@ -781,7 +785,7 @@ impl PrimIndexGraph {
             namespace_depth,
             sibling_index: 0,
             implied: false,
-            copied: false,
+            skips_duplicates: false,
         };
         let mut graph = Self::new(arc(ArcKind::Local, namespace_depth));
         for (parent, arc_kind, namespace_depth) in arcs {
@@ -823,7 +827,7 @@ mod tests {
             namespace_depth,
             sibling_index,
             implied: false,
-            copied: false,
+            skips_duplicates: false,
         }
     }
 

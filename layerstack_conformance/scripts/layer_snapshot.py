@@ -22,9 +22,9 @@ relationship targets and attribute connections, so explicit-empty lists
 and list edits are checked against the opinions they block or edit.
 
 `compose` opens LAYER as a stage, with the assets its arcs name, and
-prints what it composes: every prim's specifier and type, every
-attribute's value by default and at each TIME, every relationship's
-targets, and the number of composition errors.
+prints what it composes: every prim's specifier, type and variant
+selections, every attribute's value by default and at each TIME, every
+relationship's targets, and the number of composition errors.
 """
 
 import json
@@ -69,6 +69,7 @@ def compose(path, times):
                 "path": str(prim.GetPath()),
                 "specifier": str(prim.GetSpecifier()),
                 "type": str(prim.GetTypeName()),
+                "variants": dict(prim.GetVariantSets().GetAllVariantSelections()),
                 "properties": properties,
             }
         )

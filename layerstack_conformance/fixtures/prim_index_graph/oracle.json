@@ -1,0 +1,706 @@
+{
+ "generator": "layerstack_conformance/scripts/prim_index_graph_oracle.py",
+ "openusd_version": "0.26.8",
+ "root": "root.usda",
+ "prims": [
+  {
+   "path": "/Nested",
+   "sources": [
+    {
+     "layer": "root.usda",
+     "site": "/Nested",
+     "arc_path": [
+      [
+       "Local",
+       "/Nested"
+      ]
+     ]
+    },
+    {
+     "layer": "root.usda",
+     "site": "/Nested{v=x}",
+     "arc_path": [
+      [
+       "Local",
+       "/Nested"
+      ],
+      [
+       "Variants",
+       "/Nested{v=x}"
+      ]
+     ]
+    },
+    {
+     "layer": "root.usda",
+     "site": "/Nested{v=x}{b=y}",
+     "arc_path": [
+      [
+       "Local",
+       "/Nested"
+      ],
+      [
+       "Variants",
+       "/Nested{v=x}"
+      ],
+      [
+       "Variants",
+       "/Nested{v=x}{b=y}"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "path": "/InVariant",
+   "sources": [
+    {
+     "layer": "root.usda",
+     "site": "/InVariant",
+     "arc_path": [
+      [
+       "Local",
+       "/InVariant"
+      ]
+     ]
+    },
+    {
+     "layer": "root.usda",
+     "site": "/InVariant{v=x}",
+     "arc_path": [
+      [
+       "Local",
+       "/InVariant"
+      ],
+      [
+       "Variants",
+       "/InVariant{v=x}"
+      ]
+     ]
+    },
+    {
+     "layer": "root.usda",
+     "site": "/Target",
+     "arc_path": [
+      [
+       "Local",
+       "/InVariant"
+      ],
+      [
+       "Variants",
+       "/InVariant{v=x}"
+      ],
+      [
+       "References",
+       "/Target"
+      ]
+     ]
+    },
+    {
+     "layer": "asset.usda",
+     "site": "/Leaf",
+     "arc_path": [
+      [
+       "Local",
+       "/InVariant"
+      ],
+      [
+       "Variants",
+       "/InVariant{v=x}"
+      ],
+      [
+       "Payloads",
+       "/Leaf"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "path": "/Outer",
+   "sources": [
+    {
+     "layer": "root.usda",
+     "site": "/Outer",
+     "arc_path": [
+      [
+       "Local",
+       "/Outer"
+      ]
+     ]
+    },
+    {
+     "layer": "root.usda",
+     "site": "/Outer{v=x}",
+     "arc_path": [
+      [
+       "Local",
+       "/Outer"
+      ],
+      [
+       "Variants",
+       "/Outer{v=x}"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "path": "/Outer/Child",
+   "sources": [
+    {
+     "layer": "root.usda",
+     "site": "/Outer{v=x}Child",
+     "arc_path": [
+      [
+       "Local",
+       "/Outer/Child"
+      ],
+      [
+       "Variants",
+       "/Outer{v=x}Child"
+      ]
+     ]
+    },
+    {
+     "layer": "asset.usda",
+     "site": "/Leaf",
+     "arc_path": [
+      [
+       "Local",
+       "/Outer/Child"
+      ],
+      [
+       "Variants",
+       "/Outer{v=x}Child"
+      ],
+      [
+       "References",
+       "/Leaf"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "path": "/Target",
+   "sources": [
+    {
+     "layer": "root.usda",
+     "site": "/Target",
+     "arc_path": [
+      [
+       "Local",
+       "/Target"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "path": "/Class",
+   "sources": [
+    {
+     "layer": "root.usda",
+     "site": "/Class",
+     "arc_path": [
+      [
+       "Local",
+       "/Class"
+      ]
+     ]
+    },
+    {
+     "layer": "root.usda",
+     "site": "/Class{v=x}",
+     "arc_path": [
+      [
+       "Local",
+       "/Class"
+      ],
+      [
+       "Variants",
+       "/Class{v=x}"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "path": "/Class/Child",
+   "sources": [
+    {
+     "layer": "root.usda",
+     "site": "/Class{v=x}Child",
+     "arc_path": [
+      [
+       "Local",
+       "/Class/Child"
+      ],
+      [
+       "Variants",
+       "/Class{v=x}Child"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "path": "/ByInherits",
+   "sources": [
+    {
+     "layer": "root.usda",
+     "site": "/ByInherits",
+     "arc_path": [
+      [
+       "Local",
+       "/ByInherits"
+      ]
+     ]
+    },
+    {
+     "layer": "root.usda",
+     "site": "/Class",
+     "arc_path": [
+      [
+       "Local",
+       "/ByInherits"
+      ],
+      [
+       "Inherits",
+       "/Class"
+      ]
+     ]
+    },
+    {
+     "layer": "root.usda",
+     "site": "/Class{v=x}",
+     "arc_path": [
+      [
+       "Local",
+       "/ByInherits"
+      ],
+      [
+       "Inherits",
+       "/Class"
+      ],
+      [
+       "Variants",
+       "/Class{v=x}"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "path": "/ByInherits/Child",
+   "sources": [
+    {
+     "layer": "root.usda",
+     "site": "/Class{v=x}Child",
+     "arc_path": [
+      [
+       "Local",
+       "/ByInherits/Child"
+      ],
+      [
+       "Inherits",
+       "/Class/Child"
+      ],
+      [
+       "Variants",
+       "/Class{v=x}Child"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "path": "/BySpecializes",
+   "sources": [
+    {
+     "layer": "root.usda",
+     "site": "/BySpecializes",
+     "arc_path": [
+      [
+       "Local",
+       "/BySpecializes"
+      ]
+     ]
+    },
+    {
+     "layer": "root.usda",
+     "site": "/Class",
+     "arc_path": [
+      [
+       "Local",
+       "/BySpecializes"
+      ],
+      [
+       "Specializes",
+       "/Class"
+      ]
+     ]
+    },
+    {
+     "layer": "root.usda",
+     "site": "/Class{v=x}",
+     "arc_path": [
+      [
+       "Local",
+       "/BySpecializes"
+      ],
+      [
+       "Specializes",
+       "/Class"
+      ],
+      [
+       "Variants",
+       "/Class{v=x}"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "path": "/BySpecializes/Child",
+   "sources": [
+    {
+     "layer": "root.usda",
+     "site": "/Class{v=x}Child",
+     "arc_path": [
+      [
+       "Local",
+       "/BySpecializes/Child"
+      ],
+      [
+       "Specializes",
+       "/Class/Child"
+      ],
+      [
+       "Variants",
+       "/Class{v=x}Child"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "path": "/ByReference",
+   "sources": [
+    {
+     "layer": "root.usda",
+     "site": "/ByReference",
+     "arc_path": [
+      [
+       "Local",
+       "/ByReference"
+      ]
+     ]
+    },
+    {
+     "layer": "asset.usda",
+     "site": "/Model",
+     "arc_path": [
+      [
+       "Local",
+       "/ByReference"
+      ],
+      [
+       "References",
+       "/Model"
+      ]
+     ]
+    },
+    {
+     "layer": "asset.usda",
+     "site": "/Model{v=x}",
+     "arc_path": [
+      [
+       "Local",
+       "/ByReference"
+      ],
+      [
+       "References",
+       "/Model"
+      ],
+      [
+       "Variants",
+       "/Model{v=x}"
+      ]
+     ]
+    },
+    {
+     "layer": "asset.usda",
+     "site": "/Model{v=x}{b=y}",
+     "arc_path": [
+      [
+       "Local",
+       "/ByReference"
+      ],
+      [
+       "References",
+       "/Model"
+      ],
+      [
+       "Variants",
+       "/Model{v=x}"
+      ],
+      [
+       "Variants",
+       "/Model{v=x}{b=y}"
+      ]
+     ]
+    },
+    {
+     "layer": "asset.usda",
+     "site": "/Part",
+     "arc_path": [
+      [
+       "Local",
+       "/ByReference"
+      ],
+      [
+       "References",
+       "/Model"
+      ],
+      [
+       "Variants",
+       "/Model{v=x}"
+      ],
+      [
+       "References",
+       "/Part"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "path": "/ByReference/Child",
+   "sources": [
+    {
+     "layer": "asset.usda",
+     "site": "/Model{v=x}Child",
+     "arc_path": [
+      [
+       "Local",
+       "/ByReference/Child"
+      ],
+      [
+       "References",
+       "/Model/Child"
+      ],
+      [
+       "Variants",
+       "/Model{v=x}Child"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "path": "/ByReference/Linked",
+   "sources": [
+    {
+     "layer": "asset.usda",
+     "site": "/Model{v=x}Linked",
+     "arc_path": [
+      [
+       "Local",
+       "/ByReference/Linked"
+      ],
+      [
+       "References",
+       "/Model/Linked"
+      ],
+      [
+       "Variants",
+       "/Model{v=x}Linked"
+      ]
+     ]
+    },
+    {
+     "layer": "asset.usda",
+     "site": "/Part",
+     "arc_path": [
+      [
+       "Local",
+       "/ByReference/Linked"
+      ],
+      [
+       "References",
+       "/Model/Linked"
+      ],
+      [
+       "Variants",
+       "/Model{v=x}Linked"
+      ],
+      [
+       "References",
+       "/Part"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "path": "/ByPayload",
+   "sources": [
+    {
+     "layer": "root.usda",
+     "site": "/ByPayload",
+     "arc_path": [
+      [
+       "Local",
+       "/ByPayload"
+      ]
+     ]
+    },
+    {
+     "layer": "asset.usda",
+     "site": "/Model",
+     "arc_path": [
+      [
+       "Local",
+       "/ByPayload"
+      ],
+      [
+       "Payloads",
+       "/Model"
+      ]
+     ]
+    },
+    {
+     "layer": "asset.usda",
+     "site": "/Model{v=x}",
+     "arc_path": [
+      [
+       "Local",
+       "/ByPayload"
+      ],
+      [
+       "Payloads",
+       "/Model"
+      ],
+      [
+       "Variants",
+       "/Model{v=x}"
+      ]
+     ]
+    },
+    {
+     "layer": "asset.usda",
+     "site": "/Model{v=x}{b=y}",
+     "arc_path": [
+      [
+       "Local",
+       "/ByPayload"
+      ],
+      [
+       "Payloads",
+       "/Model"
+      ],
+      [
+       "Variants",
+       "/Model{v=x}"
+      ],
+      [
+       "Variants",
+       "/Model{v=x}{b=y}"
+      ]
+     ]
+    },
+    {
+     "layer": "asset.usda",
+     "site": "/Part",
+     "arc_path": [
+      [
+       "Local",
+       "/ByPayload"
+      ],
+      [
+       "Payloads",
+       "/Model"
+      ],
+      [
+       "Variants",
+       "/Model{v=x}"
+      ],
+      [
+       "References",
+       "/Part"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "path": "/ByPayload/Child",
+   "sources": [
+    {
+     "layer": "asset.usda",
+     "site": "/Model{v=x}Child",
+     "arc_path": [
+      [
+       "Local",
+       "/ByPayload/Child"
+      ],
+      [
+       "Payloads",
+       "/Model/Child"
+      ],
+      [
+       "Variants",
+       "/Model{v=x}Child"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "path": "/ByPayload/Linked",
+   "sources": [
+    {
+     "layer": "asset.usda",
+     "site": "/Model{v=x}Linked",
+     "arc_path": [
+      [
+       "Local",
+       "/ByPayload/Linked"
+      ],
+      [
+       "Payloads",
+       "/Model/Linked"
+      ],
+      [
+       "Variants",
+       "/Model{v=x}Linked"
+      ]
+     ]
+    },
+    {
+     "layer": "asset.usda",
+     "site": "/Part",
+     "arc_path": [
+      [
+       "Local",
+       "/ByPayload/Linked"
+      ],
+      [
+       "Payloads",
+       "/Model/Linked"
+      ],
+      [
+       "Variants",
+       "/Model{v=x}Linked"
+      ],
+      [
+       "References",
+       "/Part"
+      ]
+     ]
+    }
+   ]
+  }
+ ]
+}

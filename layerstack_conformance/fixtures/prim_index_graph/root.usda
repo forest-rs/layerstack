@@ -1,0 +1,114 @@
+#usda 1.0
+
+# A variant set nested inside a branch of another: `/Nested{v=x}{b=y}` is a
+# node beneath `/Nested{v=x}`.
+def "Nested" (
+    variants = {
+        string v = "x"
+        string b = "y"
+    }
+    prepend variantSets = "v"
+)
+{
+    variantSet "v" = {
+        "x" (
+            prepend variantSets = "b"
+        ) {
+            int outer = 1
+            variantSet "b" = {
+                "y" {
+                    int inner = 2
+                }
+            }
+        }
+    }
+}
+
+# A reference and a payload authored on a selected branch sit beneath the
+# branch's node.
+def "InVariant" (
+    variants = {
+        string v = "x"
+    }
+    prepend variantSets = "v"
+)
+{
+    variantSet "v" = {
+        "x" (
+            prepend references = </Target>
+            prepend payload = @./asset.usda@</Leaf>
+        ) {
+        }
+    }
+}
+
+# A reference authored on a child spec inside an ancestor's branch sits
+# beneath the ancestral variant node `/Outer{v=x}Child`.
+def "Outer" (
+    variants = {
+        string v = "x"
+    }
+    prepend variantSets = "v"
+)
+{
+    variantSet "v" = {
+        "x" {
+            def "Child" (
+                prepend references = @./asset.usda@</Leaf>
+            )
+            {
+            }
+        }
+    }
+}
+
+def "Target"
+{
+    int target = 1
+}
+
+# A class whose selected branch authors a child: `/ByInherits/Child` and
+# `/BySpecializes/Child` read `/Class{v=x}Child` through the class's variant
+# node.
+class "Class" (
+    variants = {
+        string v = "x"
+    }
+    prepend variantSets = "v"
+)
+{
+    variantSet "v" = {
+        "x" {
+            def "Child"
+            {
+                int x = 1
+            }
+        }
+    }
+}
+
+def "ByInherits" (
+    inherits = </Class>
+)
+{
+}
+
+def "BySpecializes" (
+    specializes = </Class>
+)
+{
+}
+
+# The same branch child, and arcs authored inside branches, reached through a
+# reference and a payload to another layer stack.
+def "ByReference" (
+    references = @./asset.usda@</Model>
+)
+{
+}
+
+def "ByPayload" (
+    payload = @./asset.usda@</Model>
+)
+{
+}

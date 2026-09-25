@@ -993,7 +993,7 @@ mod tests {
         array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex},
         interner::TokenInterner,
         path::{Path, PathId, PathInterner},
-        prim_index::{ArcKind, Opinion},
+        prim_index::Opinion,
     };
     use alloc::sync::Arc;
     use alloc::vec;
@@ -1012,13 +1012,7 @@ mod tests {
         let spec_path =
             crate::spec_path::SpecPath::parse("/A", &mut tokens, &mut paths).expect("spec path");
         OpinionKey {
-            is_local: true,
-            specializes: Vec::new(),
-            arc_kind: ArcKind::Local,
-            nested_arc_kind: None,
-            namespace_depth: 1,
-            authored: true,
-            arc_list_index: 0,
+            node: crate::prim_index_graph::NodeId::ROOT,
             layer_strength: 0,
             layer_id: layer,
             lookup_path,

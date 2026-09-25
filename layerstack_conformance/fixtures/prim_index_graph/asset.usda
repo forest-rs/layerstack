@@ -1,0 +1,43 @@
+#usda 1.0
+
+def "Model" (
+    variants = {
+        string v = "x"
+        string b = "y"
+    }
+    prepend variantSets = "v"
+)
+{
+    variantSet "v" = {
+        "x" (
+            prepend references = </Part>
+            prepend variantSets = "b"
+        ) {
+            int outer = 1
+            variantSet "b" = {
+                "y" {
+                    int inner = 2
+                }
+            }
+            def "Child"
+            {
+                int x = 1
+            }
+            def "Linked" (
+                prepend references = </Part>
+            )
+            {
+            }
+        }
+    }
+}
+
+def "Part"
+{
+    int part = 1
+}
+
+def "Leaf"
+{
+    int leaf = 1
+}

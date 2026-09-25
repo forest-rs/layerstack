@@ -46,6 +46,7 @@ pub(crate) fn populate(
     let placed = split_moved_paths(store, &mut paths, &moved);
     add_ancestor_paths(store, &mut paths);
     add_moved_paths(store, &mut paths, placed);
+    add_relocation_targets(store, relocations, &mut paths);
     paths.retain(|path| !relocations.is_prohibited(store.paths(), *path));
     apply_population_mask(store, &mut paths, mask);
     let children = build_children_index(store, paths.iter().copied());
@@ -107,6 +108,51 @@ fn add_moved_paths(store: &dyn LayerStore, paths: &mut BTreeSet<PathId>, mut pla
         if parent.is_some_and(|parent| paths.contains(&parent)) {
             paths.insert(path);
         }
+    }
+}
+
+/// Adds each relocation target whose parent is populated: a relocation
+/// that moves a prim to a new parent adds a child to that parent whatever
+/// the source's opinions, and one that renames a child within its parent
+/// replaces a child that exists.
+///
+/// Spec: AOUSD Core §11.3.1 (relocates that "extend" add children; those
+/// that "rename" replace them). OpenUSD: `_ComposePrimChildNamesAtNode` in
+/// `pxr/usd/pcp/primIndex.cpp`.
+fn add_relocation_targets(
+    store: &mut dyn LayerStore,
+    relocations: &Relocations,
+    paths: &mut BTreeSet<PathId>,
+) {
+    // A target may lie beneath another target: repeat until none is added.
+    loop {
+        let mut added = Vec::new();
+        for (target, source) in relocations.proposed_targets() {
+            if paths.contains(&target) {
+                continue;
+            }
+            let (target_parent, source_parent) = {
+                let paths = store.paths();
+                (
+                    paths.resolve(target).parent(),
+                    paths.resolve(source).parent(),
+                )
+            };
+            let Some(parent) = target_parent
+                .as_ref()
+                .and_then(|parent| store.paths().lookup(parent))
+            else {
+                continue;
+            };
+            let renames = target_parent == source_parent;
+            if paths.contains(&parent) && (!renames || paths.contains(&source)) {
+                added.push(target);
+            }
+        }
+        if added.is_empty() {
+            return;
+        }
+        paths.extend(added);
     }
 }
 
@@ -842,6 +888,9 @@ impl<'r> Chain<'r> {
             let lifted = LiftedSet::lift(store, &table, layer_stack, target, dest, &outer);
             (!lifted.is_empty()).then(|| Rc::new(lifted))
         };
+        if let Some(lifted) = &lifted {
+            self.relocations.propose(lifted);
+        }
         self.lifted.push(lifted);
     }
 

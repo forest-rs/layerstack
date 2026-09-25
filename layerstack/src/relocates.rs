@@ -604,7 +604,8 @@ impl<'a> Walk<'a> {
 /// Only the relocations of the stage's layer stack and those composition
 /// lifts through the arcs it follows are [prohibited](Self::prohibit).
 /// Population follows the arcs of every variant branch, selected or not,
-/// so the relocations it lifts never remove a path.
+/// so the relocations it lifts are only [proposed](Self::propose): they
+/// may add the paths of targets, but never remove the paths of sources.
 #[derive(Debug, Default)]
 pub(crate) struct Relocations {
     tables: HashMap<LayerId, Rc<RelocationTable>>,
@@ -613,6 +614,10 @@ pub(crate) struct Relocations {
     prohibited: HashSet<PathId>,
     /// Stage paths that population placed only through a relocation.
     moved: HashSet<PathId>,
+    /// Stage paths of lifted relocation targets, each with its source's.
+    targets: HashMap<PathId, PathId>,
+    /// The targets population proposes, as `targets`.
+    proposed: HashMap<PathId, PathId>,
     /// Errors found computing tables, not yet reported.
     errors: Vec<CompositionError>,
 }
@@ -658,13 +663,43 @@ impl Relocations {
         Rc::clone(&self.stage)
     }
 
-    /// Records the lifted sources of `set` as prohibited stage paths.
+    /// Records the lifted sources of `set` as prohibited stage paths, and
+    /// its lifted targets.
     pub(crate) fn prohibit(&mut self, set: &LiftedSet) {
-        self.prohibited.extend(
-            set.entries
-                .iter()
-                .filter_map(|relocate| relocate.stage_source),
-        );
+        for relocate in &set.entries {
+            if let Some(source) = relocate.stage_source {
+                self.prohibited.insert(source);
+                if let Some(target) = relocate.stage_target {
+                    self.targets.entry(target).or_insert(source);
+                }
+            }
+        }
+    }
+
+    /// Records the lifted targets of `set`, a set population reaches
+    /// through an arc composition may not follow, as possible stage paths.
+    pub(crate) fn propose(&mut self, set: &LiftedSet) {
+        for relocate in &set.entries {
+            if let (Some(source), Some(target)) = (relocate.stage_source, relocate.stage_target) {
+                self.proposed.entry(target).or_insert(source);
+            }
+        }
+    }
+
+    /// Each lifted relocation target in the stage namespace that
+    /// population proposed or composition prohibited the source of, with
+    /// the stage path of its source.
+    pub(crate) fn proposed_targets(&self) -> impl Iterator<Item = (PathId, PathId)> + '_ {
+        self.proposed
+            .iter()
+            .filter(|(target, _)| !self.targets.contains_key(*target))
+            .chain(&self.targets)
+            .map(|(&target, &source)| (target, source))
+    }
+
+    /// Returns `true` when `path` is a lifted relocation target.
+    pub(crate) fn is_target(&self, path: PathId) -> bool {
+        self.targets.contains_key(&path)
     }
 
     /// Records that population placed the stage path `path`, through a

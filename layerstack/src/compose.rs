@@ -297,7 +297,9 @@ pub(crate) fn compose_stage(
 
     // Runs last so the ordering passes above see the populated child lists;
     // removal only drops entries.
-    remove_prims_without_specs(store, &mut prims, &mut children);
+    remove_prims_without_specs(store, &mut prims, &mut children, |path| {
+        cycles.relocations().is_target(path)
+    });
     remove_relocation_sources(store, cycles.relocations(), &mut prims, &mut children);
     instances.retain(|instance| prims.contains_key(instance));
     crate::path_expression::anchor_opinions(store, &mut prims);
@@ -466,6 +468,9 @@ fn prune_skipped_nodes(prim: &mut PrimIndex, extra: [Option<&mut ChildOrderOpini
 /// still has children with specs is kept, so this never changes hierarchy
 /// above a real prim.
 ///
+/// A relocation target is kept (`keep`) whatever its specs: a relocation
+/// makes it a child of its parent (AOUSD Core §11.3.1).
+///
 /// Spec: AOUSD Core §11 (stage population from composed prim indexes);
 /// OpenUSD only populates prims whose index has specs
 /// (`PcpPrimIndex::HasSpecs`).
@@ -473,6 +478,7 @@ fn remove_prims_without_specs(
     store: &dyn LayerStore,
     prims: &mut HashMap<PathId, PrimIndex>,
     children: &mut HashMap<PathId, Vec<PathId>>,
+    keep: impl Fn(PathId) -> bool,
 ) {
     let Some(root) = store.paths().lookup(&crate::path::Path::root()) else {
         return;
@@ -484,6 +490,7 @@ fn remove_prims_without_specs(
                 **path != root
                     && index.sources.is_empty()
                     && children.get(*path).is_none_or(Vec::is_empty)
+                    && !keep(**path)
             })
             .map(|(path, _)| *path)
             .collect();

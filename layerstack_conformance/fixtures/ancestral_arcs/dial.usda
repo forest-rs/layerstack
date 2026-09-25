@@ -1,0 +1,19 @@
+#usda 1.0
+
+def "Dial" (
+    prepend references = @./gears.usda@</Gears> (offset = 3; scale = 4)
+)
+{
+    def "Hand"
+    {
+    }
+}
+
+def "Timer" (
+    prepend payload = @./gears.usda@</Gears> (offset = -2; scale = 0.5)
+)
+{
+    def "Hand"
+    {
+    }
+}

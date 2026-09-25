@@ -1,0 +1,15 @@
+#usda 1.0
+
+def "Forest"
+{
+    def "Tree"
+    {
+        int width = 2
+        int height = 2
+
+        def "Branch"
+        {
+            int leaves = 2
+        }
+    }
+}

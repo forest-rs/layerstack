@@ -1,0 +1,32 @@
+#usda 1.0
+
+def "Field" (
+    variants = {
+        string season = "summer"
+    }
+    prepend variantSets = "season"
+)
+{
+    variantSet "season" = {
+        "summer" (
+            references = @./flowers.usda@</Flowers>
+        ) {
+            over "Patch"
+            {
+                int bloom = 1
+            }
+        }
+        "winter" {
+            over "Patch"
+            {
+                int bloom = 0
+                int frost = 0
+            }
+        }
+    }
+
+    def "Patch"
+    {
+        int grass = 1
+    }
+}

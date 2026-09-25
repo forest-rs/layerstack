@@ -1,0 +1,11 @@
+#usda 1.0
+
+def "Grove" (
+    references = @./forest.usda@</Forest>
+)
+{
+    def "Tree"
+    {
+        int width = 1
+    }
+}

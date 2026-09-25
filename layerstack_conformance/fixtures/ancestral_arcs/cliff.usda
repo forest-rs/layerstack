@@ -1,0 +1,20 @@
+#usda 1.0
+
+def "Cliff" (
+    inherits = </_class_Cliff>
+)
+{
+    def "Ledge"
+    {
+        int grain = 1
+    }
+}
+
+class "_class_Cliff"
+{
+    over "Ledge"
+    {
+        int grain = 3
+        int moss = 3
+    }
+}

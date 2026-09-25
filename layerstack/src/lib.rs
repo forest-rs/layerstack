@@ -82,6 +82,7 @@ pub mod interner;
 pub mod layer_stack;
 pub mod listop;
 pub mod path;
+pub(crate) mod path_expression;
 pub(crate) mod population;
 pub mod prim_index;
 pub mod prim_index_graph;

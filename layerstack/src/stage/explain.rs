@@ -478,6 +478,17 @@ impl Stage {
         let mut roles = Roles::new(index, opinions);
         let reads = |opinion: &Opinion| opinion.value.default_value().is_some();
 
+        if let Some(fold) = crate::path_expression::fold_default(opinions, fallback) {
+            let seeded = roles.apply_expression_fold(&fold, reads);
+            let source = match (&fold.value, fold.contributors.first()) {
+                (None, _) => ValueSource::None,
+                (Some(_), Some(None)) => ValueSource::Fallback,
+                (Some(_), _) => ValueSource::Default,
+            };
+            let value = fold.value.map(ResolvedValue::Scalar);
+            return roles.finish(value, source, seeded);
+        }
+
         let sparse =
             explain_sparse_value(opinions, SparseQuery::Default { fallback }, property_type);
         match sparse.result {
@@ -545,6 +556,35 @@ impl Stage {
                 || opinion.value.default_value().is_some()
         };
 
+        if let Some(fold) = crate::path_expression::fold_at_time(opinions, time, interp, fallback) {
+            let seeded = roles.apply_expression_fold(&fold, reads);
+            let mut source = None;
+            for &position in fold.contributors.iter().flatten() {
+                let used = roles.record_samples(position, time, interp);
+                source.get_or_insert_with(|| {
+                    let winner = &opinions[position];
+                    if let Some((lower, upper)) = used {
+                        ValueSource::TimeSamples {
+                            lower,
+                            upper,
+                            interpolation: interp,
+                            lower_seeded_by_fallback: false,
+                            upper_seeded_by_fallback: false,
+                        }
+                    } else if winner.value.spline().is_some() {
+                        ValueSource::Spline
+                    } else {
+                        ValueSource::Default
+                    }
+                });
+            }
+            let source = match fold.value {
+                Some(_) => source.unwrap_or(ValueSource::Fallback),
+                None => ValueSource::None,
+            };
+            return roles.finish(fold.value, source, seeded);
+        }
+
         let sparse = explain_sparse_value(
             opinions,
             SparseQuery::AtTime {
@@ -577,22 +617,11 @@ impl Stage {
         roles.apply_strongest_wins(reads, value.is_none());
         let source = if value.is_none() {
             ValueSource::None
-        } else if let Some(samples) = winner.value.time_samples() {
-            let offset = winner.layer_offset;
-            let to_stage = |index: usize| samples[index].0 * offset.scale + offset.offset;
-            let (lower, upper) =
-                sample_bracket(samples, offset.map_time(time), interp).unwrap_or_default();
-            let (lower, upper) = (to_stage(lower), to_stage(upper));
-            if let Some(position) = opinions.iter().position(|o| core::ptr::eq(o, winner)) {
-                let role = OpinionRole::Contributed(Contribution::Value);
-                roles.samples[position].push(SampleUse {
-                    time: lower,
-                    role: role.clone(),
-                });
-                if upper != lower {
-                    roles.samples[position].push(SampleUse { time: upper, role });
-                }
-            }
+        } else if let Some((lower, upper)) = opinions
+            .iter()
+            .position(|o| core::ptr::eq(o, winner))
+            .and_then(|position| roles.record_samples(position, time, interp))
+        {
             ValueSource::TimeSamples {
                 lower,
                 upper,
@@ -833,6 +862,74 @@ impl<'s> Roles<'s> {
             let (position, role) = chain_role(event);
             self.roles[position] = Some(role);
         }
+    }
+
+    /// Records the samples of the opinion at `position` that answer a query
+    /// at stage time `time` as contributing, and returns their stage times;
+    /// `None` when the opinion authors no time samples.
+    fn record_samples(
+        &mut self,
+        position: usize,
+        time: f64,
+        interp: InterpolationType,
+    ) -> Option<(f64, f64)> {
+        let opinion = &self.opinions[position];
+        let samples = opinion.value.time_samples()?;
+        let offset = opinion.layer_offset;
+        let to_stage = |index: usize| samples[index].0 * offset.scale + offset.offset;
+        let (lower, upper) =
+            sample_bracket(samples, offset.map_time(time), interp).unwrap_or_default();
+        let (lower, upper) = (to_stage(lower), to_stage(upper));
+        let role = OpinionRole::Contributed(Contribution::Value);
+        self.samples[position].push(SampleUse {
+            time: lower,
+            role: role.clone(),
+        });
+        if upper != lower {
+            self.samples[position].push(SampleUse { time: upper, role });
+        }
+        Some((lower, upper))
+    }
+
+    /// Records a path expression fold over the opinions `reads` selects:
+    /// the strongest expression and each weaker one a `%_` spliced in
+    /// contributed; a block that ended the fold blocked, cutting off every
+    /// weaker opinion; the other opinions were shadowed, or incompatible
+    /// where the fold met a value that is not a path expression. Returns
+    /// whether the schema fallback contributed along with authored opinions.
+    ///
+    /// Spec: AOUSD Core §12.3, §12.3.6. OpenUSD:
+    /// `SdfPathExpression::ComposeOver`.
+    fn apply_expression_fold(
+        &mut self,
+        fold: &crate::path_expression::Fold,
+        reads: impl Fn(&Opinion) -> bool,
+    ) -> bool {
+        use crate::path_expression::Stop;
+        let block = match fold.stopped_at {
+            Some((Some(position), Stop::Block)) => Some(position),
+            _ => None,
+        };
+        for position in 0..self.opinions.len() {
+            if !reads(&self.opinions[position]) {
+                continue;
+            }
+            let role = if fold.contributors.contains(&Some(position)) {
+                OpinionRole::Contributed(Contribution::Value)
+            } else if fold.stopped_at == Some((Some(position), Stop::Block)) {
+                OpinionRole::Block
+            } else if fold.stopped_at == Some((Some(position), Stop::Incompatible)) {
+                OpinionRole::Ignored(IgnoreCause::Incompatible)
+            } else if block.is_some_and(|block| position > block) {
+                OpinionRole::Ignored(IgnoreCause::CutOffByBlock)
+            } else {
+                OpinionRole::Ignored(IgnoreCause::Shadowed)
+            };
+            self.roles[position] = Some(role);
+        }
+        fold.value.is_some()
+            && fold.contributors.contains(&None)
+            && fold.contributors.iter().any(Option::is_some)
     }
 
     /// Records the sparse-array folds of `explain_sparse_value`.

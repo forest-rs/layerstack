@@ -696,6 +696,15 @@ impl Stage {
             .iter()
             .find(|opinion| opinion.value.default_value().is_some());
 
+        // Spec: AOUSD Core §12.3 (a path expression's `%_` composes over
+        // the next weaker one).
+        if let Some(fold) = crate::path_expression::fold_default(opinions, fallback) {
+            return Some(Resolved {
+                value: ResolvedValue::Scalar(fold.value?),
+                provenance: strongest_default.and_then(|op| self.provenance_for(field, op)),
+            });
+        }
+
         match resolve_sparse_value(opinions, SparseQuery::Default { fallback }, property_type) {
             SparseResolveResult::Resolved(value) => {
                 return Some(Resolved {
@@ -775,6 +784,16 @@ impl Stage {
         fallback: Option<&Value>,
     ) -> Option<Resolved<Value>> {
         let (index, opinions) = self.opinions(prim, field, lookup)?;
+
+        // Spec: AOUSD Core §12.3 (a path expression's `%_` composes over
+        // the next weaker one at every time).
+        if let Some(fold) = crate::path_expression::fold_at_time(opinions, time, interp, fallback) {
+            let strongest = fold.contributors.first().copied().flatten();
+            return Some(Resolved {
+                value: fold.value?,
+                provenance: strongest.and_then(|i| self.provenance_for(field, &opinions[i])),
+            });
+        }
 
         match resolve_sparse_value(
             opinions,
@@ -1706,6 +1725,22 @@ mod tests {
         PathId,
         TokenId,
     ) {
+        schema_fallback_fixture_of(opinions, array_value(&[5, 6]), int_array_type())
+    }
+
+    /// Like [`schema_fallback_fixture`], for a property of `property_type`
+    /// whose schema fallback is `fallback`.
+    fn schema_fallback_fixture_of(
+        opinions: Vec<FieldValue>,
+        fallback: Value,
+        property_type: PropertyType,
+    ) -> (
+        Stage,
+        crate::doc::InMemoryStore,
+        SchemaRegistry,
+        PathId,
+        TokenId,
+    ) {
         let mut store = crate::doc::InMemoryStore::default();
         let prim = store.path("/A");
         let field = store.tokens.intern("x");
@@ -1722,14 +1757,13 @@ mod tests {
         store.insert_layer(layer);
 
         let mut registry = SchemaRegistry::new();
-        registry.register(
-            crate::schema::SchemaDefinition::typed(mesh).with_property(field, array_value(&[5, 6])),
-        );
+        registry
+            .register(crate::schema::SchemaDefinition::typed(mesh).with_property(field, fallback));
 
         let mut index = PrimIndex::default();
         let key = test_key(LayerId(1), prim);
         index.add_source(key.clone());
-        index.add_property_type(field, key.clone(), int_array_type());
+        index.add_property_type(field, key.clone(), property_type);
         for (strength, value) in opinions.into_iter().enumerate() {
             index.add_opinion(Opinion {
                 key: OpinionKey {
@@ -1751,6 +1785,81 @@ mod tests {
 
         let stage = Stage::from_parts(HashMap::from([(prim, index)]), HashMap::new(), false, None);
         (stage, store, registry, prim, field)
+    }
+
+    /// A path expression's `%_` composes over the next weaker opinion, and
+    /// over the schema fallback once no authored opinion is left, through
+    /// every resolution and explanation entry point.
+    ///
+    /// Spec: AOUSD Core §12.3, §13.3.2.4. OpenUSD:
+    /// `SdfPathExpression::ComposeOver`.
+    #[test]
+    fn path_expressions_compose_over_the_schema_fallback() {
+        let expression = |text: &str| Value::PathExpression(text.into());
+        let (stage, store, registry, prim, field) = schema_fallback_fixture_of(
+            vec![
+                FieldValue::Value(expression("/Strong %_")),
+                FieldValue::Value(expression("%_ /Weak")),
+            ],
+            expression("/Fallback"),
+            PropertyType::new(Arc::<str>::from("pathExpression"), false, expression("")),
+        );
+        let property = PropertyPath::new(prim, field);
+        let authored = Some(expression("/Strong /Weak"));
+        let composed = expression("/Strong (/Fallback /Weak)");
+
+        assert_eq!(
+            stage.resolve_field_path(property).map(|r| r.value),
+            authored
+        );
+        assert_eq!(
+            stage
+                .resolve_property_path_at_time(property, 1.0, InterpolationType::Held)
+                .map(|r| r.value),
+            authored
+        );
+        assert_eq!(
+            stage
+                .resolve_value_with_schema(prim, field, &store, &registry, None)
+                .map(|r| r.value),
+            Some(ResolvedValue::Scalar(composed.clone()))
+        );
+        assert_eq!(
+            stage
+                .resolve_value_at_time_with_schema(
+                    prim,
+                    field,
+                    1.0,
+                    InterpolationType::Held,
+                    &store,
+                    &registry,
+                    None
+                )
+                .map(|r| r.value),
+            Some(composed.clone())
+        );
+        let explained = stage
+            .explain_value_with_schema(prim, field, &store, &registry, None)
+            .expect("authored");
+        assert_eq!(
+            explained.value,
+            Some(ResolvedValue::Scalar(composed.clone()))
+        );
+        assert!(explained.seeded_by_fallback);
+        assert_eq!(explained.contributors().count(), 2);
+        let explained = stage
+            .explain_value_at_time_with_schema(
+                prim,
+                field,
+                1.0,
+                InterpolationType::Held,
+                &store,
+                &registry,
+                None,
+            )
+            .expect("authored");
+        assert_eq!(explained.value, Some(composed));
+        assert_eq!(explained.contributors().count(), 2);
     }
 
     fn append_edit(value: i32) -> Value {

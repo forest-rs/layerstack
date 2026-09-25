@@ -28,6 +28,15 @@
 # The `export_interop` test then compares each USDC with OpenUSD's own USDC
 # for the same USDA (`usdcat -o`), decoded structurally.
 #
+# Authored-layer save: when a Python that imports OpenUSD's `pxr` is
+# available (`LAYERSTACK_USD_PYTHON`, default `python3`), every case of the
+# preservation corpus (`layerstack_conformance::save_corpus`) is imported
+# from USDA and from OpenUSD's USDC, edited through the `Layer` API and saved
+# in both formats; OpenUSD must read each saved file exactly as it reads the
+# expected layer (layer_snapshot.py), and each saved USDC must decode like
+# OpenUSD's USDC of the saved USDA. Without such a Python this is reported
+# as skipped.
+#
 # Negative controls (a package with a missing asset, a normal map read as
 # sRGB, a Python-written archive with unaligned data, and a USDA-root
 # package checked against the ARKit profile) must be rejected, proving the selected validators detect
@@ -65,6 +74,14 @@ else
     log "usdrecord:  not found (render check skipped)"
 fi
 log "python3:    $(python3 --version 2>&1)"
+usd_python="${LAYERSTACK_USD_PYTHON:-python3}"
+snapshot="$root/layerstack_conformance/scripts/layer_snapshot.py"
+if usd_version="$("$usd_python" "$snapshot" version 2>/dev/null)"; then
+    log "OpenUSD:    $usd_version via $usd_python"
+else
+    usd_version=""
+    log "OpenUSD:    no pxr module in $usd_python (layer save round trip skipped)"
+fi
 log "host:       $(uname -srm)"
 log "commit:     $(git -C "$root" rev-parse --short HEAD 2>/dev/null || echo unknown)"
 
@@ -158,6 +175,19 @@ if (cd "$root" && cargo test -q -p layerstack_conformance --test export_interop)
     log "   export_interop test: ok"
 else
     fail "export_interop test failed (see export_interop_test.log)"
+fi
+
+log "== authored-layer save round trip"
+if [ -n "$usd_version" ]; then
+    if (cd "$root" && LAYERSTACK_USD_PYTHON="$usd_python" cargo test -q -p layerstack_conformance \
+            --test layer_save --test export_interop -- --nocapture) > "$out/layer_save_test.log" 2>&1 \
+        && grep -q "OpenUSD $usd_version via" "$out/layer_save_test.log"; then
+        log "   save corpus through OpenUSD $usd_version: ok"
+    else
+        fail "authored-layer save round trip failed (see layer_save_test.log)"
+    fi
+else
+    log "   skipped: no Python with OpenUSD's pxr (set LAYERSTACK_USD_PYTHON)"
 fi
 
 log "== color spaces (material_textured.usdz, material_textured_arkit.usdz)"

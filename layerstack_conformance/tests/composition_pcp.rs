@@ -764,7 +764,20 @@ fn error_arc_cycle_root_layer_stack_matches() {
 /// relocates support).
 #[test]
 fn error_arc_cycle_root_composes() {
-    let (mut loaded, _) = load_fixture("ErrorArcCycle_root");
+    assert_error_arc_cycle_root_composes(load_fixture);
+}
+
+/// `ErrorArcCycle_root` from its crate files composes as from its `usda`
+/// copies.
+#[test]
+fn error_arc_cycle_root_composes_crate() {
+    assert_error_arc_cycle_root_composes(load_fixture_crate);
+}
+
+/// Checks `ErrorArcCycle_root`'s prim stacks, children and cycle errors
+/// against `pcp.txt`.
+fn assert_error_arc_cycle_root_composes(load: fn(&str) -> (LoadedStage, PathBuf)) {
+    let (mut loaded, _) = load("ErrorArcCycle_root");
     let stage = Stage::compose(
         &mut loaded.store,
         loaded.root_layer,
@@ -939,5 +952,114 @@ fn error_arc_cycle_root_composes() {
         .collect();
     expected_errors.sort_unstable();
     actual_errors.sort_unstable();
-    assert_eq!(actual_errors, expected_errors);
+    assert_eq!(actual_errors, expected_errors, "arc cycle errors");
+}
+
+/// Whether every `.usd` layer of a fixture (outside its `usda` copies) is a
+/// crate file, so the fixture can be composed from crate files alone.
+fn is_all_crate(dir: &Path) -> bool {
+    let mut any = false;
+    for entry in std::fs::read_dir(dir).expect("fixture dir") {
+        let path = entry.expect("dir entry").path();
+        if path.extension().is_some_and(|e| e == "usd" || e == "usdc") {
+            let bytes = std::fs::read(&path).expect("fixture layer");
+            if !bytes.starts_with(b"PXR-USDC") {
+                return false;
+            }
+            any = true;
+        }
+    }
+    any
+}
+
+/// Whether the fixture's `pcp.json` has the fields this harness reads. A few
+/// fixtures record no layer stack.
+fn pcp_parses(dir: &Path) -> bool {
+    std::fs::read_to_string(dir.join("pcp.json"))
+        .is_ok_and(|text| serde_json::from_str::<layerstack_conformance::pcp::Pcp>(&text).is_ok())
+}
+
+/// Composes a fixture against its `pcp.json`, reporting a failure instead of
+/// panicking.
+fn composes(load: fn(&str) -> (LoadedStage, PathBuf), name: &str) -> Result<(), String> {
+    std::panic::catch_unwind(|| {
+        let (mut loaded, pcp_path) = load(name);
+        assert_layer_stack_matches(&loaded, &pcp_path);
+        assert_pcp_composing(&mut loaded, &pcp_path);
+    })
+    .map_err(|panic| {
+        panic
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| panic.downcast_ref::<&str>().map(|s| (*s).to_string()))
+            .unwrap_or_default()
+    })
+}
+
+/// Fixtures that compose differently from their crate files, because the
+/// USDC assembler places prims authored inside variants
+/// (`/Prim{set=variant}Child`) as prim specs of their variant branch, but
+/// does not also fill the variant's `child_*` opinion maps (the references,
+/// inherits, children, fields and variant selections of those prims) that
+/// the USDA emitter fills and composition still reads.
+const VARIANT_CHILD_OPINIONS_NOT_ASSEMBLED: &[&str] = &[
+    "BasicNestedVariantsWithSameName_root",
+    "BasicNestedVariants_root",
+    "BasicVariantWithReference_root",
+    "TrickyInheritsInVariants_root",
+    "TrickyVariantWeakerSelection4_root",
+    "TypicalReferenceToChargroup_root",
+];
+
+/// Every fixture whose layers are all crate files composes from them as it
+/// does from its `usda` copies, except for those listed in
+/// [`VARIANT_CHILD_OPINIONS_NOT_ASSEMBLED`]. The list must stay exact, so a fix
+/// removes its fixtures from it.
+///
+/// Composition reports a mismatch by panicking, so the test catches panics
+/// and needs a target that unwinds.
+#[test]
+#[cfg_attr(
+    not(panic = "unwind"),
+    ignore = "catches composition failures, which needs panic unwinding"
+)]
+fn crate_fixtures_compose_like_their_usda_copies() {
+    let mut names: Vec<String> = std::fs::read_dir(assets_dir())
+        .expect("assets dir")
+        .map(|entry| entry.expect("dir entry").path())
+        .filter(|dir| dir.join("pcp.json").is_file() && dir.join("usda").is_dir())
+        .filter(|dir| is_all_crate(dir) && pcp_parses(dir))
+        .map(|dir| dir.file_name().unwrap().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    assert!(
+        names.len() > 100,
+        "found only {} crate fixtures",
+        names.len()
+    );
+
+    let hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(|_| {}));
+    let mut differences = Vec::new();
+    for name in &names {
+        let from_crate = composes(load_fixture_crate, name);
+        if let Err(message) = from_crate
+            && composes(load_fixture, name).is_ok()
+        {
+            differences.push((name.as_str(), message));
+        }
+    }
+    std::panic::set_hook(hook);
+
+    let differing: Vec<&str> = differences.iter().map(|(name, _)| *name).collect();
+    assert_eq!(
+        differing,
+        VARIANT_CHILD_OPINIONS_NOT_ASSEMBLED,
+        "fixtures composing differently from crate files:\n{}",
+        differences
+            .iter()
+            .map(|(name, message)| format!("{name}: {message}"))
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
 }

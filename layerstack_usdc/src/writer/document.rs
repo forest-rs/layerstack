@@ -17,7 +17,8 @@
 //!   `[]` included), `variability`, `default` when a value is authored (a
 //!   value block included), its metadata in order, then `connectionPaths`
 //!   (a path list op) when it has connections, which USDA writes as later
-//!   `.connect` statements;
+//!   `.connect` statements, and `timeSamples` (an `SdfTimeSampleMap`) when
+//!   it has time samples, which USDA writes as a `.timeSamples` statement;
 //! - a relationship holds `variability` (always uniform), `custom` only
 //!   when custom, then `targetPaths` (a path list op, an empty explicit one
 //!   for `rel r = None`) and its metadata: an explicit target list is part
@@ -29,8 +30,9 @@
 //!   text), so the USDA and the USDC carry the same value: a `float` for a
 //!   `double` field would print as `0.1` in USDA, parse as the double
 //!   `0.1`, but widen to `0.10000000149011612` here;
-//! - a `timecode` / `timecode[]` default is an `SdfTimeCode` value (crate
-//!   version 0.9.0); every other value keeps its own type.
+//! - a `timecode` / `timecode[]` default or time sample is an
+//!   `SdfTimeCode` value (crate version 0.9.0); every other value keeps its
+//!   own type.
 //!
 //! Metadata keys outside the table in [`metadata_field`] are rejected: the
 //! text parser would store them as unregistered values, which this writer
@@ -183,17 +185,7 @@ fn lower_attribute(attribute: &Attribute, prim: &str) -> Result<Spec, UsdcWriteE
             }),
         );
     if let Some(value) = &attribute.value {
-        let is_timecode = attribute
-            .type_name
-            .strip_suffix("[]")
-            .unwrap_or(&attribute.type_name)
-            == "timecode";
-        let value = match (is_timecode, value) {
-            (true, UsdaValue::Double(v)) => Value::TimeCode(*v),
-            (true, UsdaValue::DoubleArray(v)) => Value::TimeCodeArray(v.clone()),
-            (_, v) => natural(v),
-        };
-        spec = spec.with_field("default", value);
+        spec = spec.with_field("default", attribute_value(&attribute.type_name, value));
     }
     for entry in &attribute.metadata {
         spec.fields.push(metadatum(Owner::Attribute, &path, entry)?);
@@ -201,7 +193,25 @@ fn lower_attribute(attribute: &Attribute, prim: &str) -> Result<Spec, UsdcWriteE
     if let Some(connections) = &attribute.connections {
         spec = spec.with_field("connectionPaths", Value::PathListOp(list_op(connections)));
     }
+    if let Some(samples) = &attribute.time_samples {
+        let samples = samples
+            .iter()
+            .map(|(time, value)| (*time, attribute_value(&attribute.type_name, value)))
+            .collect();
+        spec = spec.with_field("timeSamples", Value::TimeSamples(samples));
+    }
     Ok(spec)
+}
+
+/// An attribute default or time sample: a `timecode` / `timecode[]` value is
+/// an `SdfTimeCode`; every other value keeps its own type.
+fn attribute_value(type_name: &str, value: &UsdaValue) -> Value {
+    let is_timecode = type_name.strip_suffix("[]").unwrap_or(type_name) == "timecode";
+    match (is_timecode, value) {
+        (true, UsdaValue::Double(v)) => Value::TimeCode(*v),
+        (true, UsdaValue::DoubleArray(v)) => Value::TimeCodeArray(v.clone()),
+        (_, v) => natural(v),
+    }
 }
 
 fn lower_relationship(relationship: &Relationship, prim: &str) -> Result<Spec, UsdcWriteError> {
@@ -1250,15 +1260,14 @@ def Xform "A" (
 
     #[test]
     fn save_layer_rejects_before_writing() {
-        let (layer, tokens, paths) = import_usda(
-            "#usda 1.0\ndef \"A\"\n{\n    float a.timeSamples = {\n        0: 1,\n    }\n}\n",
-        );
+        let (layer, tokens, paths) =
+            import_usda("#usda 1.0\ndef \"A\"\n{\n    int[] a = edit [append 4]\n}\n");
         assert_eq!(
             save_layer(&layer, &tokens, &paths),
             Err(UsdcWriteError::Save(
                 layerstack_usda::save::SaveError::Unsupported {
                     path: "/A.a".into(),
-                    feature: layerstack_usda::save::Unsupported::TimeSamples,
+                    feature: layerstack_usda::save::Unsupported::ArrayEdit,
                 }
             )),
             "the USDA save's error, before any output"

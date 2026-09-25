@@ -19,12 +19,12 @@
 //!
 //! Scope: prims with their children and property order (`reorder
 //! nameChildren`, `reorder properties`, `reorder rootPrims`); attributes with
-//! default values (including a value block, `= None`) and connection lists;
-//! relationships with target lists; explicit and list-edited (`delete`,
-//! `prepend`, `append`) connections and targets; and metadata, including
-//! token list operations such as `prepend apiSchemas = [...]`
-//! ([`Value::TokenListOp`]). Time samples, splines, composition arcs and
-//! variant sets are not yet representable.
+//! default values (including a value block, `= None`), time samples
+//! (including blocked samples) and connection lists; relationships with
+//! target lists; explicit and list-edited (`delete`, `prepend`, `append`)
+//! connections and targets; and metadata, including token list operations
+//! such as `prepend apiSchemas = [...]` ([`Value::TokenListOp`]). Splines,
+//! composition arcs and variant sets are not representable.
 //!
 //! # Example
 //!
@@ -335,15 +335,17 @@ pub enum Variability {
     Uniform,
 }
 
-/// An attribute spec: declaration, optional default value, optional
-/// connections and metadata.
+/// An attribute spec: declaration, optional default value, optional time
+/// samples, optional connections and metadata.
 ///
-/// Written as up to two statements, as OpenUSD writes them
-/// (`pxr/usd/sdf/fileIO_Common.h`, `Sdf_WriteAttribute`):
+/// Written as up to three kinds of statement, in the order OpenUSD writes
+/// them (`pxr/usd/sdf/fileIO_Common.h`, `Sdf_WriteAttribute`):
 ///
 /// - the declaration `[custom] [uniform] type name [= value] [( metadata )]`,
-///   written unless the attribute only carries connections (no default, no
-///   metadata, not `custom`);
+///   written unless the attribute only carries time samples or connections
+///   (no default, no metadata, not `custom`);
+/// - `[uniform] type name.timeSamples = { time: value, ... }` when
+///   [`Self::time_samples`] is authored, with `None` for a blocked sample;
 /// - `[uniform] type name.connect = <target>` (or `[<a>, <b>]`, or `None`
 ///   for an explicit empty list) when [`Self::connections`] is an explicit
 ///   list, otherwise one `delete`, `prepend` or `append` statement of that
@@ -353,7 +355,8 @@ pub enum Variability {
 /// attribute with no value and one connection, and an input that has both
 /// a default and a connection is written as two lines.
 ///
-/// Spec: AOUSD Core §16.2.16 (attribute specs), §16.2.16.4 (connections).
+/// Spec: AOUSD Core §16.2.16 (attribute specs), §16.2.16.3 (time samples),
+/// §16.2.16.4 (connections).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Attribute {
     /// Namespaced property name (e.g. `primvars:st`).
@@ -369,6 +372,14 @@ pub struct Attribute {
     /// Default value; `None` writes a bare declaration, and
     /// [`Value::Block`] a value block (`= None`).
     pub value: Option<Value>,
+    /// Time samples (the `timeSamples` field): `(time, value)` pairs with
+    /// finite, strictly increasing times, each value of the declared type
+    /// or [`Value::Block`] for a blocked sample. `None` authors no samples;
+    /// an empty list authors an empty sample map.
+    ///
+    /// Spec: AOUSD Core §16.2.16.3 (time samples), §12.3.6 (blocked
+    /// samples).
+    pub time_samples: Option<Vec<(f64, Value)>>,
     /// Connections (the `connectionPaths` field): a list op of absolute
     /// property paths such as `/Root/Materials/M/Tex.outputs:rgb`. `None`
     /// authors no connections; an explicit empty list blocks weaker ones
@@ -387,6 +398,7 @@ impl Attribute {
             custom: false,
             variability: Variability::Varying,
             value: Some(value),
+            time_samples: None,
             connections: None,
             metadata: Vec::new(),
         }
@@ -402,6 +414,7 @@ impl Attribute {
             custom: false,
             variability: Variability::Varying,
             value: None,
+            time_samples: None,
             connections: None,
             metadata: Vec::new(),
         }
@@ -457,6 +470,25 @@ impl Attribute {
                 });
             }
             validate_value(value, path)?;
+        }
+        if let Some(samples) = &self.time_samples {
+            let mut previous: Option<f64> = None;
+            for (time, value) in samples {
+                if !time.is_finite() || previous.is_some_and(|p| p >= *time) {
+                    return Err(WriteError::InvalidTimeSamples { path: path.into() });
+                }
+                previous = Some(*time);
+                if matches!(value, Value::Block) {
+                    continue;
+                }
+                if value.shape() != Some(declared) {
+                    return Err(WriteError::TypeMismatch {
+                        path: path.into(),
+                        type_name: self.type_name.clone(),
+                    });
+                }
+                validate_value(value, path)?;
+            }
         }
         validate_targets(self.connections.as_ref(), path, true)?;
         validate_metadata(&self.metadata, &mut Vec::new(), path, true)
@@ -809,6 +841,11 @@ pub enum WriteError {
         /// Path of the owning object.
         path: String,
     },
+    /// An attribute's sample times are not finite and strictly increasing.
+    InvalidTimeSamples {
+        /// Attribute path.
+        path: String,
+    },
 }
 
 impl fmt::Display for WriteError {
@@ -846,6 +883,9 @@ impl fmt::Display for WriteError {
                 )
             }
             Self::CommentNotText { path } => write!(f, "{path}: comment is not text"),
+            Self::InvalidTimeSamples { path } => {
+                write!(f, "{path}: sample times are not finite and increasing")
+            }
         }
     }
 }
@@ -1391,14 +1431,15 @@ impl Writer<'_> {
     }
 
     /// §16.2.16.1: `[custom] [uniform] type name [= value] [( metadata )]`,
-    /// then `[op] [uniform] type name.connect = targets`. The declaration is
-    /// skipped for a connection-only attribute, as `Sdf_WriteAttribute`
-    /// does.
+    /// then `[uniform] type name.timeSamples = { ... }` (§16.2.16.3), then
+    /// `[op] [uniform] type name.connect = targets`. The declaration is
+    /// skipped for an attribute that only has samples or connections, as
+    /// `Sdf_WriteAttribute` does.
     fn attribute(&mut self, attribute: &Attribute, depth: usize) {
         let declare = attribute.value.is_some()
             || !attribute.metadata.is_empty()
             || attribute.custom
-            || attribute.connections.is_none();
+            || (attribute.connections.is_none() && attribute.time_samples.is_none());
         if declare {
             self.indent(depth);
             if attribute.custom {
@@ -1416,6 +1457,20 @@ impl Writer<'_> {
                 self.out.push(')');
             }
             self.out.push('\n');
+        }
+        if let Some(samples) = &attribute.time_samples {
+            self.indent(depth);
+            self.attribute_head(attribute);
+            self.out.push_str(".timeSamples = {\n");
+            for (time, value) in samples {
+                self.indent(depth + 1);
+                self.f64(*time);
+                self.out.push_str(": ");
+                self.value(value, depth + 1);
+                self.out.push_str(",\n");
+            }
+            self.indent(depth);
+            self.out.push_str("}\n");
         }
         if let Some(connections) = &attribute.connections {
             self.list_op_statements(connections, depth, |w, keyword, targets| {

@@ -425,7 +425,58 @@ impl Packer {
                 self.blob(T::PathListOp, 0, bytes, false)?
             }
             Value::UnregisteredValue(inner) => self.unregistered(inner, site)?,
+            Value::TimeSamples(samples) => self.time_samples(samples, site)?,
         })
+    }
+
+    /// `Write(TimeSamples)`: the times, packed as a `std::vector<double>`,
+    /// and then the count and representations of the values, each part
+    /// reached through `_RecursiveWrite` — a relative offset, preceded by
+    /// any data the part itself needs.
+    fn time_samples(
+        &mut self,
+        samples: &[(f64, Value)],
+        site: Site<'_>,
+    ) -> Result<u64, UsdcWriteError> {
+        if samples
+            .windows(2)
+            .any(|w| w[0].0.partial_cmp(&w[1].0) != Some(core::cmp::Ordering::Less))
+            || samples.iter().any(|(time, _)| !time.is_finite())
+        {
+            return Err(UsdcWriteError::InvalidTimeSamples {
+                path: site.path.into(),
+                field: site.field.into(),
+            });
+        }
+        let offset = self.out.len() as u64;
+        if offset > MAX_PAYLOAD {
+            return Err(UsdcWriteError::TooLarge);
+        }
+        let at = self.out.len();
+        self.out.extend_from_slice(&[0; 8]);
+        let mut times = (samples.len() as u64).to_le_bytes().to_vec();
+        for (time, _) in samples {
+            times.extend_from_slice(&time.to_le_bytes());
+        }
+        let times_rep = self.blob(ValueType::DoubleVector, 0, times, false)?;
+        let jump = (self.out.len() - at) as u64;
+        self.out[at..at + 8].copy_from_slice(&jump.to_le_bytes());
+        self.out.extend_from_slice(&times_rep.to_le_bytes());
+
+        let at = self.out.len();
+        self.out.extend_from_slice(&[0; 8]);
+        let mut reps = Vec::with_capacity(samples.len());
+        for (_, value) in samples {
+            reps.push(self.pack(value, site)?);
+        }
+        let jump = (self.out.len() - at) as u64;
+        self.out[at..at + 8].copy_from_slice(&jump.to_le_bytes());
+        self.out
+            .extend_from_slice(&(samples.len() as u64).to_le_bytes());
+        for value_rep in reps {
+            self.out.extend_from_slice(&value_rep.to_le_bytes());
+        }
+        Ok(rep(ValueType::TimeSamples, 0, offset))
     }
 
     /// Adds each text to a table, returning the `u32` indexes as bytes.
@@ -933,6 +984,7 @@ fn has_timecode(value: &Value) -> bool {
         Value::TimeCode(_) | Value::TimeCodeArray(_) => true,
         Value::Dictionary(entries) => entries.iter().any(|(_, v)| has_timecode(v)),
         Value::UnregisteredValue(inner) => has_timecode(inner),
+        Value::TimeSamples(samples) => samples.iter().any(|(_, v)| has_timecode(v)),
         _ => false,
     }
 }

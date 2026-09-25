@@ -293,6 +293,25 @@ pub fn cases() -> Vec<SaveCase> {
             weaker: None,
             minimum_openusd: None,
         },
+        SaveCase {
+            name: "animated_attribute",
+            covers: "time samples next to a default, a blocked sample, sample-only \
+                     attributes of scalar, array (an empty one included) and `timecode` \
+                     types, samples with a connection, and the layer's time metadata; the \
+                     edit adds a sample",
+            source: ANIMATED,
+            edit: |layer| {
+                let samples = layer
+                    .property("/Rig.intensity")
+                    .time_samples
+                    .as_mut()
+                    .expect("intensity samples");
+                samples.push((24.0, Value::Float(0.25)));
+            },
+            expected: ANIMATED_EDITED,
+            weaker: None,
+            minimum_openusd: None,
+        },
     ]
 }
 
@@ -338,11 +357,6 @@ pub fn unsupported_cases() -> Vec<(&'static str, &'static str, SaveError)> {
             "variant_selections",
             "#usda 1.0\ndef \"A\" (\n    variants = {\n        string lod = \"high\"\n    }\n)\n{\n}\n",
             unsupported("/A", Unsupported::VariantSelections),
-        ),
-        (
-            "time_samples",
-            "#usda 1.0\ndef \"A\"\n{\n    double x = 1\n    double x.timeSamples = {\n        0: 1,\n        1: 2,\n    }\n}\n",
-            unsupported("/A.x", Unsupported::TimeSamples),
         ),
         (
             "array_edit",
@@ -752,6 +766,87 @@ def Xform "Model"
     def Mesh "Geo"
     {
     }
+}
+"#;
+
+const ANIMATED: &str = r#"#usda 1.0
+(
+    defaultPrim = "Rig"
+    endTimeCode = 48
+    startTimeCode = 0
+    timeCodesPerSecond = 24
+)
+
+def Xform "Rig"
+{
+    double3 xformOp:translate = (0, 0, 0)
+    double3 xformOp:translate.timeSamples = {
+        0: (0, 0, 0),
+        24: (1, 2, 0),
+        36: None,
+        48: (4, 0, -1.5),
+    }
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+    float intensity.timeSamples = {
+        0: 1,
+        12: 0.5,
+    }
+    float[] weights.timeSamples = {
+        1: [0.25, 0.75],
+        2: [],
+    }
+    token mode.timeSamples = {
+        0: "idle",
+        10: "run",
+    }
+    timecode cue.timeSamples = {
+        10: 12.5,
+    }
+    float driven.timeSamples = {
+        5: 2,
+    }
+    float driven.connect = </Rig.intensity>
+}
+"#;
+
+const ANIMATED_EDITED: &str = r#"#usda 1.0
+(
+    defaultPrim = "Rig"
+    endTimeCode = 48
+    startTimeCode = 0
+    timeCodesPerSecond = 24
+)
+
+def Xform "Rig"
+{
+    double3 xformOp:translate = (0, 0, 0)
+    double3 xformOp:translate.timeSamples = {
+        0: (0, 0, 0),
+        24: (1, 2, 0),
+        36: None,
+        48: (4, 0, -1.5),
+    }
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+    float intensity.timeSamples = {
+        0: 1,
+        12: 0.5,
+        24: 0.25,
+    }
+    float[] weights.timeSamples = {
+        1: [0.25, 0.75],
+        2: [],
+    }
+    token mode.timeSamples = {
+        0: "idle",
+        10: "run",
+    }
+    timecode cue.timeSamples = {
+        10: 12.5,
+    }
+    float driven.timeSamples = {
+        5: 2,
+    }
+    float driven.connect = </Rig.intensity>
 }
 "#;
 

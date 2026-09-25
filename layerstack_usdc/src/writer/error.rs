@@ -97,6 +97,13 @@ pub enum UsdcWriteError {
         /// What is wrong with it.
         reason: &'static str,
     },
+    /// Time samples whose times are not finite and strictly increasing.
+    InvalidTimeSamples {
+        /// The spec path.
+        path: String,
+        /// The field holding the samples.
+        field: String,
+    },
     /// The authored document is invalid; the USDA writer rejects it too.
     Document(WriteError),
     /// The authored layer cannot be saved; its USDA save fails the same way.
@@ -149,6 +156,9 @@ impl fmt::Display for UsdcWriteError {
                 field,
                 reason,
             } => write!(f, "{path}: {field}: {reason}"),
+            Self::InvalidTimeSamples { path, field } => {
+                write!(f, "{path}: {field}: times are not finite and increasing")
+            }
             Self::Document(e) => write!(f, "{e}"),
             Self::Save(e) => write!(f, "{e}"),
             Self::UnknownMetadata { path, key } => {

@@ -860,6 +860,60 @@ fn version_is_upgraded_only_for_timecodes() {
     );
 }
 
+/// `Write(TimeSamples)`: the times as a double vector, then one value per
+/// time, blocked samples and out-of-line values included; a `timecode`
+/// sample needs crate 0.9.0 like a `timecode` default.
+#[test]
+fn time_samples_round_trip() {
+    let samples = vec![
+        (0.0, Value::Double(1.0)),
+        (1.5, Value::Block),
+        (2.0, Value::Double(0.1)),
+        (3.0, Value::DoubleArray(vec![1.0, 2.5])),
+    ];
+    let mut specs = layer_with(&[("x", Value::Double(0.0))]);
+    specs[2]
+        .fields
+        .push(Field::new("timeSamples", Value::TimeSamples(samples)));
+    let file = Decoded::new(write_crate(&specs).unwrap());
+    assert_eq!(file.version(), CrateVersion::NEW_FILE_DEFAULT, "version");
+    let rep = file.rep("/Root.x", "timeSamples");
+    assert_eq!(rep.value_type().unwrap(), ValueType::TimeSamples, "type");
+    let CrateValue::TimeSamples(read) = decode_value(&rep, &file.data, &file.sections).unwrap()
+    else {
+        panic!("time samples");
+    };
+    let times: Vec<f64> = read.iter().map(|(t, _)| *t).collect();
+    assert_eq!(times, [0.0, 1.5, 2.0, 3.0], "times");
+    assert_eq!(
+        alloc::format!("{:?}", read[1].1),
+        alloc::format!("{:?}", CrateValue::None),
+        "blocked sample"
+    );
+    assert!(
+        matches!(read[2].1, CrateValue::Double(v) if v == 0.1),
+        "out-of-line double"
+    );
+
+    let timecodes = layer_with(&[("t", Value::TimeSamples(vec![(1.0, Value::TimeCode(24.0))]))]);
+    assert_eq!(
+        required_version(&timecodes),
+        CrateVersion::TIMECODES,
+        "a timecode sample needs 0.9.0"
+    );
+
+    for times in [[1.0, 1.0], [2.0, 1.0], [f64::NAN, 1.0]] {
+        let samples = times.iter().map(|&t| (t, Value::Int(0))).collect();
+        assert!(
+            matches!(
+                write_crate(&layer_with(&[("x", Value::TimeSamples(samples))])),
+                Err(UsdcWriteError::InvalidTimeSamples { .. })
+            ),
+            "{times:?}"
+        );
+    }
+}
+
 #[test]
 fn full_reader_assembles_the_layer() {
     use layerstack::doc::{LayerId, Value as DocValue};

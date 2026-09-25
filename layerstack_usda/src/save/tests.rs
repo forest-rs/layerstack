@@ -247,16 +247,6 @@ fn rejects_unsupported_features_with_their_source_paths() {
             Unsupported::VariantSets,
         ),
         (
-            "#usda 1.0\ndef \"A\"\n{\n    float a.timeSamples = {\n        0: 1,\n    }\n}\n",
-            "/A.a",
-            Unsupported::TimeSamples,
-        ),
-        (
-            "#usda 1.0\ndef \"A\"\n{\n    float a.timeSamples = {\n    }\n}\n",
-            "/A.a",
-            Unsupported::TimeSamples,
-        ),
-        (
             "#usda 1.0\ndef \"A\"\n{\n    half h = 1\n}\n",
             "/A.h",
             Unsupported::Value("half"),
@@ -488,6 +478,17 @@ fn rejects_invalid_layers() {
         "no specifier"
     );
 
+    let mut imported = Imported::new("#usda 1.0\ndef \"A\"\n{\n    rel r\n}\n");
+    imported.property("/A.r").time_samples = Some(vec![(0.0, LayerValue::Bool(true))]);
+    assert_eq!(
+        imported.save(),
+        Err(SaveError::Invalid {
+            path: "/A.r".into(),
+            problem: Invalid::RelationshipValue
+        }),
+        "a relationship with time samples"
+    );
+
     let mut imported = Imported::new(source);
     imported.property("/A.a").type_name = None;
     assert_eq!(
@@ -514,6 +515,88 @@ fn rejects_invalid_layers() {
             path: "/A#hidden".into()
         })),
         "a blocked metadata field"
+    );
+}
+
+/// Time samples are written as authored: next to a default or alone, with
+/// blocked samples, typed empty arrays and an empty sample map; a sample
+/// time the formats cannot order is rejected before any output.
+///
+/// Spec: AOUSD Core §16.2.16.3 (time samples), §12.3.6 (blocked samples).
+#[test]
+fn saves_time_samples() {
+    let source = r#"#usda 1.0
+def "A"
+{
+    double x = 1
+    double x.timeSamples = {
+        0: 1,
+        1.5: None,
+        2: -0.25,
+    }
+    int[] ids.timeSamples = {
+        0: [1, 2],
+        1: [],
+    }
+    uniform timecode cue.timeSamples = {
+        3: 4.5,
+    }
+    float quiet.timeSamples = {
+    }
+    custom token mode.timeSamples = {
+        0: "idle",
+    }
+}
+"#;
+    let mut imported = Imported::new(source);
+    let text = imported.save().unwrap();
+    let expected = r#"#usda 1.0
+
+def "A"
+{
+    double x = 1
+    double x.timeSamples = {
+        0: 1,
+        1.5: None,
+        2: -0.25,
+    }
+    int[] ids.timeSamples = {
+        0: [1, 2],
+        1: [],
+    }
+    uniform timecode cue.timeSamples = {
+        3: 4.5,
+    }
+    float quiet.timeSamples = {
+    }
+    custom token mode
+    token mode.timeSamples = {
+        0: "idle",
+    }
+}
+"#;
+    assert_eq!(text, expected, "saved text");
+    assert_eq!(Imported::new(&text).save().unwrap(), text, "stable");
+
+    imported.property("/A.x").time_samples = Some(vec![
+        (1.0, LayerValue::Double(1.0)),
+        (0.0, LayerValue::Double(2.0)),
+    ]);
+    assert_eq!(
+        imported.save(),
+        Err(SaveError::Document(WriteError::InvalidTimeSamples {
+            path: "/A.x".into()
+        })),
+        "unordered sample times"
+    );
+    imported.property("/A.x").time_samples = Some(vec![(0.0, LayerValue::Float(1.0))]);
+    assert_eq!(
+        imported.save(),
+        Err(SaveError::Document(WriteError::TypeMismatch {
+            path: "/A.x".into(),
+            type_name: "double".into()
+        })),
+        "a sample of another type"
     );
 }
 

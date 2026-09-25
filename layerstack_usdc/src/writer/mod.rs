@@ -279,6 +279,10 @@ pub enum Value {
     StringListOp(ListOp<String>),
     /// `SdfPathListOp` (e.g. `targetPaths`, `connectionPaths`).
     PathListOp(ListOp<String>),
+    /// `SdfTimeSampleMap` (the `timeSamples` field): times, strictly
+    /// increasing, with their values ([`Value::Block`] for a blocked
+    /// sample).
+    TimeSamples(Vec<(f64, Self)>),
     /// `SdfUnregisteredValue`: what OpenUSD's text parser stores for a
     /// metadata field no schema registers, wrapping the parsed value (a
     /// `VtDictionary` for a dictionary literal).

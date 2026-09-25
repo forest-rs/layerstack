@@ -1866,6 +1866,94 @@ mod tests {
         assert_eq!(live.stage().children_of(parent), Some(&[b, a][..]));
     }
 
+    /// Opinions and arcs authored beneath an instance never contribute:
+    /// editing them, or toggling `instanceable`, recomposes to the same stage
+    /// as a fresh composition. A prim that becomes or stops being an
+    /// instance recomposes its descendants.
+    ///
+    /// Spec: AOUSD Core §11.3.3 (scene graph instancing). OpenUSD:
+    /// `_ConvertNodeForChild` in `pxr/usd/pcp/primIndex.cpp`.
+    #[test]
+    fn instance_edits_match_fresh() {
+        let mut store = InMemoryStore::default();
+        let field_x = store.tokens.intern("x");
+        let leaf_tok = store.tokens.intern("Leaf");
+        let seedling = p(&mut store, "/Seedling");
+        let seedling_leaf = p(&mut store, "/Seedling/Leaf");
+        let stray = p(&mut store, "/Stray");
+        let stray_leaf = p(&mut store, "/Stray/Leaf");
+        let grove = p(&mut store, "/Grove");
+        let grove_leaf = p(&mut store, "/Grove/Leaf");
+
+        let mut layer = Layer::new(LayerId(1));
+        let mut parent = PrimSpec::def();
+        parent.authored_children = vec![leaf_tok];
+        layer.insert_prim(seedling, parent.clone());
+        layer.insert_prim(
+            seedling_leaf,
+            PrimSpec::def().with_property(field_x, attr(1)),
+        );
+        layer.insert_prim(stray, parent);
+        layer.insert_prim(stray_leaf, PrimSpec::def().with_property(field_x, attr(9)));
+        let mut instance = PrimSpec::def().with_reference(Reference::new(LayerId(1), seedling));
+        instance.instanceable = Some(true);
+        instance.authored_children = vec![leaf_tok];
+        layer.insert_prim(grove, instance);
+        // The instance descendant authors a reference and a value.
+        layer.insert_prim(
+            grove_leaf,
+            PrimSpec::over()
+                .with_reference(Reference::new(LayerId(1), stray_leaf))
+                .with_property(field_x, attr(5)),
+        );
+        store.insert_layer(layer);
+
+        let options = StageOptions {
+            with_provenance: true,
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+        let x_of = |live: &LiveStage| {
+            live.stage()
+                .resolve_field_path(PropertyPath::new(grove_leaf, field_x))
+                .map(|resolved| resolved.value)
+        };
+        assert_eq!(x_of(&live), Some(Value::Int64(1)), "from the prototype");
+
+        store
+            .layers
+            .get_mut(&LayerId(1))
+            .unwrap()
+            .prims
+            .get_mut(&grove_leaf)
+            .unwrap()
+            .set_property(field_x, attr(6));
+        live.notify_layer_prim_edits(LayerId(1), &[grove_leaf]);
+        live.recompose(&mut store);
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+        assert_eq!(
+            x_of(&live),
+            Some(Value::Int64(1)),
+            "the local value is inert"
+        );
+
+        let set_instanceable = |store: &mut InMemoryStore, value: bool| {
+            let layer = store.layers.get_mut(&LayerId(1)).unwrap();
+            layer.prims.get_mut(&grove).unwrap().instanceable = Some(value);
+        };
+        set_instanceable(&mut store, false);
+        live.notify_prim_edit(grove);
+        live.recompose(&mut store);
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+        assert_eq!(x_of(&live), Some(Value::Int64(6)), "the local value wins");
+
+        set_instanceable(&mut store, true);
+        live.notify_prim_edit(grove);
+        live.recompose(&mut store);
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+        assert_eq!(x_of(&live), Some(Value::Int64(1)));
+    }
+
     /// Asserts that `live` reports the same composition errors as a fresh
     /// composition, in any order.
     fn assert_errors_match_fresh(live: &LiveStage, store: &mut InMemoryStore) {

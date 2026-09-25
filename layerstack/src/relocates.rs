@@ -358,6 +358,11 @@ impl LiftedSet {
         self.entries.is_empty()
     }
 
+    /// The lifted relocations.
+    pub(crate) fn iter(&self) -> impl Iterator<Item = &LiftedRelocate> {
+        self.entries.iter()
+    }
+
     fn source(&self, stage_path: PathId) -> Option<&LiftedRelocate> {
         self.by_stage_source
             .get(&stage_path)
@@ -928,6 +933,67 @@ mod tests {
             ),
         ];
         assert_eq!(errors, expected);
+    }
+
+    #[test]
+    fn opinions_and_arcs_at_relocation_sources_are_errors() {
+        // Spec: AOUSD Core §10.3.2.6. `/A` references `/R` of layer 2;
+        // layer 1 relocates `/A/B` to `/A/C`, authors an opinion at the
+        // source and references the source from `/Stale`.
+        use crate::doc::{PrimSpec, Reference};
+        use crate::{ArcToProhibitedChild, OpinionAtRelocationSource, prim_index::ArcKind};
+
+        let mut store = InMemoryStore::default();
+        let (a, b, c, stale) = (
+            path(&mut store, "/A"),
+            path(&mut store, "/A/B"),
+            path(&mut store, "/A/C"),
+            path(&mut store, "/Stale"),
+        );
+        let (r, r_b) = (path(&mut store, "/R"), path(&mut store, "/R/B"));
+        let mut root = Layer::new(LayerId(1));
+        root.relocates = vec![Relocate {
+            source: b,
+            target: Some(c),
+        }];
+        let mut referencing = PrimSpec::def();
+        referencing.references.explicit = Some(vec![Reference::new(LayerId(2), r)]);
+        root.insert_prim(a, referencing);
+        root.insert_prim(b, PrimSpec::over());
+        let mut stale_spec = PrimSpec::def();
+        stale_spec.references.explicit = Some(vec![Reference::new(LayerId(1), b)]);
+        root.insert_prim(stale, stale_spec);
+        store.insert_layer(root);
+        let mut referenced = Layer::new(LayerId(2));
+        referenced.insert_prim(r, PrimSpec::def());
+        referenced.insert_prim(r_b, PrimSpec::def());
+        store.insert_layer(referenced);
+
+        let stage = crate::Stage::compose(&mut store, LayerId(1), crate::StageOptions::default());
+        assert!(stage.has_prim(c) && !stage.has_prim(b));
+        let errors = stage.composition_errors();
+        assert!(
+            errors.contains(&CompositionError::OpinionAtRelocationSource(
+                OpinionAtRelocationSource {
+                    prim: c,
+                    layer: LayerId(1),
+                    path: b,
+                }
+            )),
+            "{errors:?}"
+        );
+        assert!(
+            errors.contains(&CompositionError::ArcToProhibitedChild(
+                ArcToProhibitedChild {
+                    prim: stale,
+                    arc: ArcKind::References,
+                    layer_stack: LayerId(1),
+                    target: b,
+                    relocation_source: b,
+                }
+            )),
+            "{errors:?}"
+        );
     }
 
     #[test]

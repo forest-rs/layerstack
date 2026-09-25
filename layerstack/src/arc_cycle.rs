@@ -32,7 +32,7 @@ use alloc::{rc::Rc, vec::Vec};
 use hashbrown::{HashMap, HashSet};
 
 use crate::{
-    composition_error::{ArcCycle, ArcCycleSite, CompositionError},
+    composition_error::{ArcCycle, ArcCycleSite, CompositionError, OpinionAtRelocationSource},
     doc::{LayerId, LayerStore},
     layer_stack::LayerStack,
     path::{Path, PathId, PathInterner},
@@ -294,7 +294,41 @@ impl CycleDetector {
             return None;
         }
         self.relocations.prohibit(&lifted);
+        self.report_source_opinions(store, &lifted);
         Some(Rc::new(lifted))
+    }
+
+    /// Records an [`OpinionAtRelocationSource`] for each layer of the
+    /// relocating layer stack with a prim spec at the source of a
+    /// relocation of `lifted`, on the prim at its lifted target.
+    ///
+    /// Spec: AOUSD Core §10.3.2.6. OpenUSD reports these when it adds the
+    /// relocate node (`_EvalNodeRelocations` in
+    /// `pxr/usd/pcp/primIndex.cpp`), for the source itself only.
+    pub(crate) fn report_source_opinions(&mut self, store: &dyn LayerStore, lifted: &LiftedSet) {
+        for relocate in lifted.iter() {
+            let Some(prim) = relocate.stage_target else {
+                continue;
+            };
+            let stack = self.gather_layer_stack(store, relocate.layer_stack);
+            for &layer in &stack.layers {
+                // A spec at the source itself, not inside a variant branch.
+                let authored = store.layer(layer).is_some_and(|layer| {
+                    layer
+                        .prim_specs(relocate.source)
+                        .any(|spec| spec.outer_variant_sites.is_empty())
+                });
+                if authored {
+                    self.report(CompositionError::OpinionAtRelocationSource(
+                        OpinionAtRelocationSource {
+                            prim,
+                            layer,
+                            path: relocate.source,
+                        },
+                    ));
+                }
+            }
+        }
     }
 
     /// The relocation table of the layer stack rooted at `layer_stack`,

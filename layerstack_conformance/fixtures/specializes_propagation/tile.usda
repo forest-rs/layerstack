@@ -1,0 +1,22 @@
+#usda 1.0
+
+def "Tile" (
+    specializes = </_Tint>
+)
+{
+    int shade = 1
+}
+
+class "_Tint" (
+    inherits = </_Glaze>
+)
+{
+    int shade = 2
+    int gloss = 2
+}
+
+class "_Glaze"
+{
+    int gloss = 3
+    int grit = 3
+}

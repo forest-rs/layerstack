@@ -17,6 +17,8 @@ operations, and provenance.
 - storage-agnostic ordered-chain resolution
 - scalar set/block resolution
 - ordered unique-list edits
+- sparse array edit programs over any element type, with a host-supplied
+  fill policy
 - recursive dictionary combination over host values, with shallow overlay as
   a separate named policy
 - provenance, opinion-stack inspection, and key enumeration
@@ -91,3 +93,24 @@ stronger value wins a collision outright, even between nested dictionaries.
 The `OpinionOp::Dictionary` enum API uses it because its `V` exposes no
 structure; hosts with nested values call `combine_dictionary_chain` with their
 own adapter.
+
+## Sparse Array Edits
+
+`ArrayEdit<T>` is a program of instructions that rewrites a dense `Vec<T>` in
+order: write, insert and erase elements from literals or by copying from an
+index, and bound or set the length. Each instruction reads the array as edited
+so far, and an instruction whose index does not resolve is skipped. The
+instruction set and index rules follow OpenUSD's `VtArrayEdit`
+(`pxr/base/vt/arrayEditOps.h`): negative indices count from the end, and only
+an insertion can target `ArrayIndex::End`.
+
+The element type is the host's, and so is the element that fills growth when
+an instruction carries no fill of its own. The host supplies it through
+`ArrayFill`: an `Option<T>` is a fixed, possibly missing fill, and `FillWith`
+computes the element only when growth needs it. `T: Default` is never
+required, and a missing fill never invents an element: the growth is skipped.
+
+`ArrayEdit::compose_over` concatenates a weaker program before a stronger one,
+so applying the composed edit equals applying the weaker edit and then the
+stronger one. That lets a host fold edits through an `OpinionFamily`, keeping
+them sparse until a dense value or block ends the chain.

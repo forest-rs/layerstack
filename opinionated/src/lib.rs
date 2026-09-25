@@ -71,9 +71,11 @@ extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
 
+mod array_edit;
 mod dictionary;
 mod family;
 
+pub use array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayFill, ArrayIndex, FillWith};
 pub use dictionary::{
     DictionaryAdapter, ShallowOverlay, combine_dictionaries, combine_dictionary_chain,
 };

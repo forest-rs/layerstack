@@ -18,7 +18,7 @@ use alloc::string::String;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use layerstack::HashMap;
+use layerstack::{HashMap, HashSet};
 
 use layerstack::doc::{
     FieldValue, Layer, LayerId, LayerOffset, PrimSpec, Reference, Specifier, SublayerEntry, Value,
@@ -508,11 +508,7 @@ impl AssembleCtx<'_> {
                         CrateValue::ListOp(listop) => self.list_op_names(listop),
                         _ => self.extract_token_names(value),
                     };
-                    for name in names {
-                        if !spec.variant_set_order.contains(&name) {
-                            spec.variant_set_order.push(name);
-                        }
-                    }
+                    append_unique(&mut spec.variant_set_order, names);
                 }
                 "instanceable" if matches!(value, CrateValue::Bool(_)) => {
                     if let CrateValue::Bool(b) = value {
@@ -603,6 +599,7 @@ impl AssembleCtx<'_> {
         // Collect variant set info: path → variant set name → variant branches.
         // USDC stores variant set paths as `/Prim{varSet=}`
         // and variant paths as `/Prim{varSet=branchName}`.
+        let mut variant_sets: HashMap<String, Vec<TokenId>> = HashMap::new();
         for spec in &self.sections.specs {
             if spec.form == SpecForm::VariantSet {
                 let path_str = self.lookup_path(spec.path_index)?;
@@ -611,13 +608,16 @@ impl AssembleCtx<'_> {
                     && let Some(prim) = prim_specs.get_mut(&prim_path)
                 {
                     let vset_tok = self.tokens.intern(&vset_name);
-                    if !prim.variant_set_order.contains(&vset_tok) {
-                        prim.variant_set_order.push(vset_tok);
-                    }
                     prim.variant_sets
                         .entry(vset_tok)
                         .or_insert_with(VariantSetSpec::default);
+                    variant_sets.entry(prim_path).or_default().push(vset_tok);
                 }
+            }
+        }
+        for (prim_path, names) in variant_sets {
+            if let Some(prim) = prim_specs.get_mut(&prim_path) {
+                append_unique(&mut prim.variant_set_order, names);
             }
         }
 
@@ -763,9 +763,11 @@ impl AssembleCtx<'_> {
 
     /// Builds parent-child relationships by examining prim paths.
     fn build_child_relationships(&mut self, prim_specs: &mut HashMap<String, PrimSpec>) {
-        // Collect all prim paths.
-        let prim_paths: Vec<String> = prim_specs.keys().cloned().collect();
+        // Collect all prim paths, in a stable order.
+        let mut prim_paths: Vec<String> = prim_specs.keys().cloned().collect();
+        prim_paths.sort_unstable();
 
+        let mut children: HashMap<String, Vec<TokenId>> = HashMap::new();
         for path in &prim_paths {
             if path == "/" {
                 continue;
@@ -779,13 +781,15 @@ impl AssembleCtx<'_> {
                 }
                 let child_tok = self.tokens.intern(child_name);
 
-                // Only add to parent's authored_children if not already present
-                // (the prim's own primChildren field is authoritative).
-                if let Some(parent) = prim_specs.get_mut(&parent_path)
-                    && !parent.authored_children.contains(&child_tok)
-                {
-                    parent.authored_children.push(child_tok);
-                }
+                children.entry(parent_path).or_default().push(child_tok);
+            }
+        }
+
+        // Only add to parent's authored_children if not already present
+        // (the prim's own primChildren field is authoritative).
+        for (parent_path, names) in children {
+            if let Some(parent) = prim_specs.get_mut(&parent_path) {
+                append_unique(&mut parent.authored_children, names);
             }
         }
     }
@@ -1405,19 +1409,19 @@ impl AssembleCtx<'_> {
     /// Returns the names a token or string list op adds, in order: its
     /// explicit, prepended and appended items.
     fn list_op_names(&mut self, listop: &CrateListOp) -> Vec<TokenId> {
-        let mut names = Vec::new();
         let items = listop.explicit_items.iter().flatten();
-        for item in items
+        let listed: Vec<TokenId> = items
             .chain(&listop.prepended_items)
             .chain(&listop.appended_items)
-        {
-            if let CrateValue::Token(name) | CrateValue::String(name) = item {
-                let name = self.tokens.intern(name);
-                if !names.contains(&name) {
-                    names.push(name);
+            .filter_map(|item| match item {
+                CrateValue::Token(name) | CrateValue::String(name) => {
+                    Some(self.tokens.intern(name))
                 }
-            }
-        }
+                _ => None,
+            })
+            .collect();
+        let mut names = Vec::new();
+        append_unique(&mut names, listed);
         names
     }
 
@@ -1488,6 +1492,15 @@ impl AssembleCtx<'_> {
 // ---------------------------------------------------------------------------
 // Path parsing helpers
 // ---------------------------------------------------------------------------
+
+/// Appends the `names` that `list` does not hold yet, in order.
+///
+/// The names come from the file, so membership is tested in a set: testing
+/// the list would take time quadratic in its length.
+fn append_unique(list: &mut Vec<TokenId>, names: impl IntoIterator<Item = TokenId>) {
+    let mut present: HashSet<TokenId> = list.iter().copied().collect();
+    list.extend(names.into_iter().filter(|name| present.insert(*name)));
+}
 
 /// A variant selection in a crate path: host prim path, set and variant.
 type BranchSite = (String, String, String);
@@ -1599,8 +1612,6 @@ fn parse_variant_property_path(path: &str) -> Option<(String, String, String, St
     ))
 }
 
-/// Orders `properties` by their position in `children` (`propertyChildren`),
-/// keeping properties not listed there after the listed ones, in order.
 /// Converts a list op whose items are plain scalars, or returns `None` when
 /// an item has an unexpected type.
 ///
@@ -1621,13 +1632,17 @@ fn convert_scalar_listop<T>(
     })
 }
 
+/// Orders `properties` by their position in `children` (`propertyChildren`),
+/// keeping properties not listed there after the listed ones, in order.
+///
+/// Positions are looked up in a map: both lists come from the file, so
+/// searching `children` for each property would take quadratic time.
 fn sort_by_children(properties: &mut [PropertyEntry], children: &[TokenId]) {
-    properties.sort_by_key(|entry| {
-        children
-            .iter()
-            .position(|child| *child == entry.name)
-            .unwrap_or(usize::MAX)
-    });
+    let mut position: HashMap<TokenId, usize> = HashMap::new();
+    for (i, child) in children.iter().enumerate() {
+        position.entry(*child).or_insert(i);
+    }
+    properties.sort_by_key(|entry| position.get(&entry.name).copied().unwrap_or(usize::MAX));
 }
 
 fn crate_value_is_array(value: &CrateValue) -> bool {
@@ -1850,24 +1865,43 @@ fn read_f64_array<const N: usize>(d: &[u8]) -> [f64; N] {
     out
 }
 
+// In the readers below, `idx` is a component index of a vector, quaternion
+// or matrix (at most 15), so the offsets cannot overflow.
+
 fn f64_le(d: &[u8], idx: usize) -> f64 {
     let off = idx * 8;
-    f64::from_le_bytes(d[off..off + 8].try_into().unwrap_or([0; 8]))
+    f64::from_le_bytes(
+        d.get(off..off + 8)
+            .and_then(|b| b.try_into().ok())
+            .unwrap_or([0; 8]),
+    )
 }
 
 fn f32_le(d: &[u8], idx: usize) -> f32 {
     let off = idx * 4;
-    f32::from_le_bytes(d[off..off + 4].try_into().unwrap_or([0; 4]))
+    f32::from_le_bytes(
+        d.get(off..off + 4)
+            .and_then(|b| b.try_into().ok())
+            .unwrap_or([0; 4]),
+    )
 }
 
 fn u16_le(d: &[u8], idx: usize) -> u16 {
     let off = idx * 2;
-    u16::from_le_bytes(d[off..off + 2].try_into().unwrap_or([0; 2]))
+    u16::from_le_bytes(
+        d.get(off..off + 2)
+            .and_then(|b| b.try_into().ok())
+            .unwrap_or([0; 2]),
+    )
 }
 
 fn i32_le(d: &[u8], idx: usize) -> i32 {
     let off = idx * 4;
-    i32::from_le_bytes(d[off..off + 4].try_into().unwrap_or([0; 4]))
+    i32::from_le_bytes(
+        d.get(off..off + 4)
+            .and_then(|b| b.try_into().ok())
+            .unwrap_or([0; 4]),
+    )
 }
 
 // ---------------------------------------------------------------------------

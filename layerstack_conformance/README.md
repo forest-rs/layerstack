@@ -28,3 +28,22 @@ run by CI; `tests/export_interop.rs` runs the `usdcat`/`usdchecker` subset and
 the USDC differential (our USDC against OpenUSD's `usdcat -o` output for the
 same USDA, compared structurally) when those tools are on `PATH` and skips
 otherwise.
+
+## Instancing (optional)
+
+`tests/point_instancer.rs` checks `PointInstancer` export against OpenUSD's
+Python bindings (`scripts/point_instancer_oracle.py`: instance transforms,
+`orientationsf`, prototype order, ids, extent and bindings) and
+`usdchecker`. `tests/instanced_references.rs` checks the instanced-reference
+form that `ARKit` packages use, since Apple's USD stack does not draw
+`PointInstancer` instances (`scripts/instancing_oracle.py`: no
+`PointInstancer`, instance names, ids, tints and world transforms, and the
+same meshes and materials placed as the `PointInstancer` form), and
+`usdchecker --arkit`. Set `LAYERSTACK_USD_PYTHON` to a Python that imports
+`pxr`; without one, and without `usdchecker` on `PATH`, those checks skip.
+
+On macOS, `LAYERSTACK_SCENEKIT=1` also renders the `ARKit` package through
+SceneKit (`scripts/scenekit_check.swift`, run with `swift`) and requires it
+to draw one geometry per placed mesh. It is opt-in, and skips elsewhere,
+because it needs a Metal device, which CI runners may lack. The script can
+be run on any package: `swift scripts/scenekit_check.swift in.usdz out.png`.

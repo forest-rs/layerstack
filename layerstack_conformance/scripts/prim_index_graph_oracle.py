@@ -32,6 +32,11 @@ DEFAULT_OUT = os.path.normpath(
 
 LAYERS = {
     "root": '''#usda 1.0
+(
+    subLayers = [
+        @./sub.usda@
+    ]
+)
 
 # A variant set nested inside a branch of another: `/Nested{v=x}{b=y}` is a
 # node beneath `/Nested{v=x}`.
@@ -144,6 +149,25 @@ def "ByPayload" (
     payload = @./asset.usda@</Model>
 )
 {
+}
+''',
+    "sub": '''#usda 1.0
+
+# An internal reference authored on a branch in a sublayer targets the root
+# layer stack, and still sits beneath the branch's node.
+def "Anchored" (
+    variants = {
+        string v = "x"
+    }
+    prepend variantSets = "v"
+)
+{
+    variantSet "v" = {
+        "x" (
+            prepend references = </Target>
+        ) {
+        }
+    }
 }
 ''',
     "asset": '''#usda 1.0

@@ -87,7 +87,13 @@ fn gather_populated_paths(
             );
         }
 
-        let refs = resolve_references_for_prim(store, local_stack, path, SelectionScope::Discover);
+        let refs = resolve_references_for_prim(
+            store,
+            local_stack,
+            path,
+            SelectionScope::Discover,
+            stage_layer_stack,
+        );
         for reference in refs {
             expand_reference_paths(
                 store,
@@ -106,7 +112,8 @@ fn gather_populated_paths(
         // parent, regardless of which variant is currently selected. This
         // ensures that paths introduced by variant-scoped child references
         // are discovered during population.
-        let variant_refs = collect_all_variant_child_references(store, local_stack, path);
+        let variant_refs =
+            collect_all_variant_child_references(store, local_stack, path, stage_layer_stack);
         for reference in variant_refs {
             expand_reference_paths(
                 store,
@@ -123,7 +130,8 @@ fn gather_populated_paths(
 
         // Expand references from variant branch headers of this prim itself.
         // E.g. `"full" (add references = @...@) {}` on the prim's variant set.
-        let branch_refs = collect_all_variant_branch_references(store, local_stack, path);
+        let branch_refs =
+            collect_all_variant_branch_references(store, local_stack, path, stage_layer_stack);
         for reference in branch_refs {
             expand_reference_paths(
                 store,
@@ -140,8 +148,13 @@ fn gather_populated_paths(
 
         // Payloads behave like references for population purposes.
         // Spec: AOUSD Core §10 (payloads arc, §5.1.22).
-        let payloads =
-            resolve_payloads_for_prim(store, local_stack, path, SelectionScope::Discover);
+        let payloads = resolve_payloads_for_prim(
+            store,
+            local_stack,
+            path,
+            SelectionScope::Discover,
+            stage_layer_stack,
+        );
         for payload in payloads {
             expand_reference_paths(
                 store,
@@ -157,7 +170,8 @@ fn gather_populated_paths(
         }
 
         // Expand payloads from variant branch headers (all branches).
-        let branch_payloads = collect_all_variant_branch_payloads(store, local_stack, path);
+        let branch_payloads =
+            collect_all_variant_branch_payloads(store, local_stack, path, stage_layer_stack);
         for payload in branch_payloads {
             expand_reference_paths(
                 store,
@@ -407,6 +421,7 @@ fn expand_reference_paths(
             &remote_stack,
             remote_path_id,
             SelectionScope::Discover,
+            reference.layer,
         );
         for nested in nested_refs {
             expand_reference_paths(
@@ -423,8 +438,12 @@ fn expand_reference_paths(
         }
 
         // Expand variant-scoped child references from ALL variant branches.
-        let variant_refs =
-            collect_all_variant_child_references(store, &remote_stack, remote_path_id);
+        let variant_refs = collect_all_variant_child_references(
+            store,
+            &remote_stack,
+            remote_path_id,
+            reference.layer,
+        );
         for nested in variant_refs {
             expand_reference_paths(
                 store,
@@ -440,8 +459,12 @@ fn expand_reference_paths(
         }
 
         // Expand variant branch-level references from ALL variant branches.
-        let branch_refs =
-            collect_all_variant_branch_references(store, &remote_stack, remote_path_id);
+        let branch_refs = collect_all_variant_branch_references(
+            store,
+            &remote_stack,
+            remote_path_id,
+            reference.layer,
+        );
         for nested in branch_refs {
             expand_reference_paths(
                 store,
@@ -457,8 +480,12 @@ fn expand_reference_paths(
         }
 
         // Expand variant branch-level payloads from ALL variant branches.
-        let branch_payloads =
-            collect_all_variant_branch_payloads(store, &remote_stack, remote_path_id);
+        let branch_payloads = collect_all_variant_branch_payloads(
+            store,
+            &remote_stack,
+            remote_path_id,
+            reference.layer,
+        );
         for nested in branch_payloads {
             expand_reference_paths(
                 store,
@@ -479,6 +506,7 @@ fn expand_reference_paths(
             &remote_stack,
             remote_path_id,
             SelectionScope::Discover,
+            reference.layer,
         );
         for payload in payloads {
             expand_reference_paths(

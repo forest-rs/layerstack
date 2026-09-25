@@ -17,8 +17,8 @@ use hashbrown::{HashMap, HashSet};
 use crate::{
     arc_cycle::CycleDetector,
     arcs::{
-        ArcAuthoring, SelectionScope, lookup_reference_target_path, resolve_branch_payloads_in,
-        resolve_direct_references_for_prim, resolve_inherits_for_prim,
+        ArcAuthoring, SelectionScope, anchor_internal_arcs, lookup_reference_target_path,
+        resolve_branch_payloads_in, resolve_direct_references_for_prim, resolve_inherits_for_prim,
         resolve_inherits_for_prim_in, resolve_payloads_for_prim, resolve_payloads_for_prim_in,
         resolve_references_for_prim, resolve_specializes_for_prim, resolve_specializes_for_prim_in,
         resolve_variant_branch_payloads, resolve_variant_child_references,
@@ -1728,7 +1728,11 @@ fn resolve_full_variant_selections(
         selections.extend(new_selections);
     }
 
-    // Also gather selections from reference targets (weaker).
+    // Also gather selections from reference targets (weaker). Internal arcs
+    // target the whole stack (AOUSD Core §10.3.2.1).
+    let Some(&anchor) = local_stack.layers.first() else {
+        return selections;
+    };
     let refs = {
         let mut ops = Vec::new();
         for layer_id in &local_stack.layers {
@@ -1739,7 +1743,7 @@ fn resolve_full_variant_selections(
                 if !spec_arcs_apply(store, local_stack, path, spec, SelectionScope::Stack) {
                     continue;
                 }
-                ops.push(spec.references.clone());
+                ops.push(anchor_internal_arcs(&spec.references, *layer_id, anchor));
             }
         }
         crate::listop::resolve_list_chain::<Reference>(&[], ops)
@@ -1801,7 +1805,7 @@ fn resolve_full_variant_selections(
                 if !spec_arcs_apply(store, local_stack, path, spec, SelectionScope::Stack) {
                     continue;
                 }
-                ops.push(spec.payloads.clone());
+                ops.push(anchor_internal_arcs(&spec.payloads, *layer_id, anchor));
             }
         }
         crate::listop::resolve_list_chain::<Reference>(&[], ops)
@@ -2015,6 +2019,7 @@ fn admitted_arcs(
     remote_path: PathId,
     dest_path: PathId,
     cache: &mut HashMap<PathId, HashMap<TokenId, TokenId>>,
+    anchor: LayerId,
 ) -> AdmittedArcs {
     let enclosing = enclosing_variant_selections(
         store,
@@ -2036,7 +2041,8 @@ fn admitted_arcs(
         .unwrap_or_default();
     let scope = SelectionScope::Composed(&enclosing);
 
-    let mut references = resolve_direct_references_for_prim(store, data_stack, remote_path, scope);
+    let mut references =
+        resolve_direct_references_for_prim(store, data_stack, remote_path, scope, anchor);
     references.extend(resolve_variant_references_in(
         store,
         data_stack,
@@ -2044,15 +2050,23 @@ fn admitted_arcs(
         &selections,
         &parent_selections,
         scope,
+        anchor,
     ));
-    let mut payloads =
-        resolve_payloads_for_prim_in(store, data_stack, remote_path, &parent_selections, scope);
+    let mut payloads = resolve_payloads_for_prim_in(
+        store,
+        data_stack,
+        remote_path,
+        &parent_selections,
+        scope,
+        anchor,
+    );
     payloads.extend(resolve_branch_payloads_in(
         store,
         data_stack,
         remote_path,
         &selections,
         scope,
+        anchor,
     ));
     let inherits = resolve_inherits_for_prim_in(
         store,
@@ -2078,18 +2092,44 @@ fn admitted_arcs(
         scope,
     };
     AdmittedArcs {
-        inherits: authoring.with_sites(inherits, |spec| &spec.inherits, |branch| &branch.inherits),
-        specializes: authoring.with_sites(
-            specializes,
-            |spec| &spec.specializes,
-            |branch| &branch.specializes,
-        ),
-        references: authoring.with_sites(
-            references,
-            |spec| &spec.references,
-            |branch| &branch.references,
-        ),
-        payloads: authoring.with_sites(payloads, |spec| &spec.payloads, |branch| &branch.payloads),
+        inherits: inherits
+            .into_iter()
+            .map(|item| {
+                let sites = authoring.sites(&item, |spec| &spec.inherits, |b| &b.inherits);
+                (item, sites)
+            })
+            .collect(),
+        specializes: specializes
+            .into_iter()
+            .map(|item| {
+                let sites = authoring.sites(&item, |spec| &spec.specializes, |b| &b.specializes);
+                (item, sites)
+            })
+            .collect(),
+        references: references
+            .into_iter()
+            .map(|item| {
+                let sites = authoring.reference_sites(
+                    &item,
+                    |spec| &spec.references,
+                    |b| &b.references,
+                    anchor,
+                );
+                (item, sites)
+            })
+            .collect(),
+        payloads: payloads
+            .into_iter()
+            .map(|item| {
+                let sites = authoring.reference_sites(
+                    &item,
+                    |spec| &spec.payloads,
+                    |b| &b.payloads,
+                    anchor,
+                );
+                (item, sites)
+            })
+            .collect(),
     }
 }
 
@@ -2469,11 +2509,18 @@ fn add_reference_opinions(
     let mut visited_specializes: HashSet<(PathId, PathId)> = HashSet::new();
     for dest_root in paths.iter().copied() {
         cycles.begin(dest_root);
-        let refs =
-            resolve_references_for_prim(store, local_stack, dest_root, SelectionScope::Stack);
+        // Internal arcs authored in the stage's layer stack target it.
+        let anchor = cycles.stage_layer_stack();
+        let refs = resolve_references_for_prim(
+            store,
+            local_stack,
+            dest_root,
+            SelectionScope::Stack,
+            anchor,
+        );
         // Also resolve variant child references with full selection chaining.
         let variant_child_refs =
-            resolve_variant_child_references(store, local_stack, local_stack, dest_root);
+            resolve_variant_child_references(store, local_stack, local_stack, dest_root, anchor);
         let all_refs = refs.into_iter().chain(variant_child_refs);
         let selections = resolve_full_variant_selections(store, local_stack, dest_root);
         for (arc_list_index, reference) in all_refs.enumerate() {
@@ -2498,10 +2545,11 @@ fn add_reference_opinions(
                 selections: &selections,
                 scope: SelectionScope::Stack,
             }
-            .sites(
+            .reference_sites(
                 &reference,
                 |spec| &spec.references,
                 |branch| &branch.references,
+                anchor,
             );
             let branch = local_variant_steps(root_layer_stack(out, dest_root), &sites);
             add_reference_edge_opinions(
@@ -3566,6 +3614,7 @@ fn add_inherit_edge_opinions(
             remote_path_id,
             dest_path_id,
             &mut host_selection_cache,
+            arc_stack,
         );
         for (nested_index, (nested, sites)) in nested_inherits.into_iter().enumerate() {
             let branch = nodes.branch_path(&sites, nested_arc_kind.or(Some(ArcKind::Variants)));
@@ -4129,10 +4178,11 @@ fn add_reference_edge_opinions(
         ArcKind::References,
     );
 
-    // TODO(graph): InternalArcAnchoring. An internal arc (no asset path)
-    // targets the layer stack it is authored in (AOUSD Core §10.3.2.1), but
-    // `reference.layer` names the authoring layer, so the node's layer stack
-    // is that layer's own sublayer stack rather than the containing one.
+    // `reference.layer` is the root layer of the arc's target layer stack.
+    // Arc resolution anchors an internal arc (no asset path) to the root of
+    // the layer stack containing the node that authors it, so it reads that
+    // whole stack (AOUSD Core §10.3.2.1; OpenUSD `_EvalRefOrPayloadArcs` in
+    // `pxr/usd/pcp/primIndex.cpp`, see `anchor_internal_arcs`).
     let remote_stack = cycles.gather_layer_stack(store, reference.layer);
     let combined_stack = LayerStack {
         layers: stage_stack
@@ -4491,6 +4541,7 @@ fn add_reference_edge_opinions(
             remote_path_id,
             dest_path_id,
             &mut host_selection_cache,
+            reference.layer,
         );
         let inherits = arcs.inherits;
         for (inherit_index, (inherited_root, sites)) in inherits.into_iter().enumerate() {
@@ -4805,11 +4856,13 @@ fn add_payload_opinions(
     let mut visited_specializes: HashSet<(PathId, PathId)> = HashSet::new();
     for dest_root in paths.iter().copied() {
         cycles.begin(dest_root);
+        // Internal arcs authored in the stage's layer stack target it.
+        let anchor = cycles.stage_layer_stack();
         let payloads =
-            resolve_payloads_for_prim(store, local_stack, dest_root, SelectionScope::Stack);
+            resolve_payloads_for_prim(store, local_stack, dest_root, SelectionScope::Stack, anchor);
         // Also resolve variant branch-level payloads.
         let branch_payloads =
-            resolve_variant_branch_payloads(store, local_stack, local_stack, dest_root);
+            resolve_variant_branch_payloads(store, local_stack, local_stack, dest_root, anchor);
         let all_payloads = payloads.into_iter().chain(branch_payloads);
         let selections = resolve_full_variant_selections(store, local_stack, dest_root);
         for (arc_list_index, payload) in all_payloads.enumerate() {
@@ -4834,7 +4887,12 @@ fn add_payload_opinions(
                 selections: &selections,
                 scope: SelectionScope::Stack,
             }
-            .sites(&payload, |spec| &spec.payloads, |branch| &branch.payloads);
+            .reference_sites(
+                &payload,
+                |spec| &spec.payloads,
+                |branch| &branch.payloads,
+                anchor,
+            );
             let branch = local_variant_steps(root_layer_stack(out, dest_root), &sites);
             add_payload_edge_opinions(
                 store,
@@ -4938,10 +4996,11 @@ fn add_payload_edge_opinions(
         ArcKind::Payloads,
     );
 
-    // TODO(graph): InternalArcAnchoring. An internal arc (no asset path)
-    // targets the layer stack it is authored in (AOUSD Core §10.3.2.1), but
-    // `reference.layer` names the authoring layer, so the node's layer stack
-    // is that layer's own sublayer stack rather than the containing one.
+    // `reference.layer` is the root layer of the arc's target layer stack.
+    // Arc resolution anchors an internal arc (no asset path) to the root of
+    // the layer stack containing the node that authors it, so it reads that
+    // whole stack (AOUSD Core §10.3.2.1; OpenUSD `_EvalRefOrPayloadArcs` in
+    // `pxr/usd/pcp/primIndex.cpp`, see `anchor_internal_arcs`).
     let remote_stack = cycles.gather_layer_stack(store, reference.layer);
     let combined_stack = LayerStack {
         layers: stage_stack
@@ -5211,6 +5270,7 @@ fn add_payload_edge_opinions(
             remote_path_id,
             dest_path_id,
             &mut host_selection_cache,
+            reference.layer,
         );
         let inherits = arcs.inherits;
         for (inherit_index, (inherited_root, sites)) in inherits.into_iter().enumerate() {
@@ -5926,6 +5986,7 @@ fn add_specializes_edge_opinions(
             remote_path_id,
             selection_path_id,
             &mut host_selection_cache,
+            arc_stack,
         );
         let nested_specializes = arcs.specializes;
         for (nested_index, (nested, sites)) in nested_specializes.into_iter().enumerate() {
@@ -6060,6 +6121,7 @@ fn add_specializes_edge_opinions(
             remote_path_id,
             selection_path_id,
             &mut host_selection_cache,
+            arc_stack,
         );
         let nested_inherits = arcs.inherits;
         for (nested_index, (inherited, sites)) in nested_inherits.into_iter().enumerate() {
@@ -6157,6 +6219,7 @@ fn add_specializes_edge_opinions(
             remote_path_id,
             selection_path_id,
             &mut host_selection_cache,
+            arc_stack,
         );
         for (ref_index, (reference, sites)) in arcs.references.into_iter().enumerate() {
             let branch = nodes.branch_path(&sites, nested_arc_kind.or(Some(ArcKind::Variants)));
@@ -7086,7 +7149,7 @@ mod default_prim_tests {
     }
 
     #[test]
-    fn internal_arc_targets_the_authoring_layers_default_prim() {
+    fn internal_arc_targets_the_stack_roots_default_prim() {
         let mut store = InMemoryStore::default();
         let local_child = store.tokens.intern("LocalChild");
         let stage = compose(
@@ -7106,6 +7169,53 @@ mod default_prim_tests {
             children(&stage, &mut store, "/A"),
             Some(vec!["LocalChild".into()])
         );
+        assert_eq!(stage.composition_errors(), []);
+    }
+
+    /// An internal arc authored in a sublayer targets the whole layer stack:
+    /// its node is in the stack rooted at the root layer, it reads the root
+    /// layer's specs, and `<>` names the root layer's `defaultPrim`.
+    ///
+    /// Spec: AOUSD Core §10.3.2.1. OpenUSD: `_EvalRefOrPayloadArcs` in
+    /// `pxr/usd/pcp/primIndex.cpp`.
+    #[test]
+    fn internal_arc_in_a_sublayer_targets_the_containing_stack() {
+        let mut store = InMemoryStore::default();
+        let mut sub = asset(&mut store, INNER, Some("Other"));
+        let a = store.path("/A");
+        let b = store.path("/B");
+        let model = store.path("/Model");
+        sub.insert_prim(
+            a,
+            PrimSpec::def().with_reference(Reference::to_default_prim(INNER)),
+        );
+        sub.insert_prim(
+            b,
+            PrimSpec::def().with_payload(Reference::new(INNER, model)),
+        );
+        let stage = {
+            let mut root = Layer::new(ROOT);
+            root.default_prim = Some(store.tokens.intern("Model"));
+            root.sublayers.push(INNER.into());
+            root.insert_prim(model, PrimSpec::over());
+            store.insert_layer(root);
+            store.insert_layer(sub);
+            Stage::compose(&mut store, ROOT, StageOptions::default())
+        };
+
+        for (placement, root_site) in [("/A", a), ("/B", b)] {
+            assert_eq!(
+                sites(&stage, &mut store, placement),
+                [(INNER, root_site), (ROOT, model), (INNER, model)],
+                "{placement} reads the root layer stack at `/Model`"
+            );
+            let prim = store.path(placement);
+            let graph = stage.explain_prim_graph(prim).expect("graph");
+            assert!(
+                graph.nodes().all(|(_, node)| node.layer_stack() == ROOT),
+                "{placement}'s nodes are in the root layer stack"
+            );
+        }
         assert_eq!(stage.composition_errors(), []);
     }
 

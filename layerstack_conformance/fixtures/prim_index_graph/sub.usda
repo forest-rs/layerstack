@@ -1,0 +1,18 @@
+#usda 1.0
+
+# An internal reference authored on a branch in a sublayer targets the root
+# layer stack, and still sits beneath the branch's node.
+def "Anchored" (
+    variants = {
+        string v = "x"
+    }
+    prepend variantSets = "v"
+)
+{
+    variantSet "v" = {
+        "x" (
+            prepend references = </Target>
+        ) {
+        }
+    }
+}

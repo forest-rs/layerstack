@@ -1107,8 +1107,12 @@ fn time_samples_linear_interpolation() {
     );
 }
 
+/// Integers hold under linear interpolation, as in OpenUSD
+/// (`USD_LINEAR_INTERPOLATION_TYPES` in `pxr/usd/usd/interpolation.h`).
+///
+/// Spec: AOUSD Core §12.5 (interpolation).
 #[test]
-fn time_samples_linear_int_interpolation() {
+fn time_samples_linear_int_holds() {
     use layerstack::InterpolationType;
 
     let mut store = InMemoryStore::default();
@@ -1126,7 +1130,7 @@ fn time_samples_linear_int_interpolation() {
 
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
-    // Midpoint: linear interpolation, rounded to nearest int.
+    // Midpoint: the lower sample holds.
     assert_eq!(
         stage
             .resolve_property_path_at_time(
@@ -1136,7 +1140,7 @@ fn time_samples_linear_int_interpolation() {
             )
             .unwrap()
             .value,
-        Value::Int64(50)
+        Value::Int64(0)
     );
 }
 

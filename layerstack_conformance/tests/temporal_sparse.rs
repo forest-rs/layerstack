@@ -7,8 +7,8 @@
 //! each case (`scripts/temporal_sparse_oracle.py`, OpenUSD 26.08). Each case is
 //! a set of USDA layers; every query resolves one attribute at one time under
 //! held and under linear interpolation. Most cases compose sparse array edits;
-//! one pins scalar samples behind a layer offset. Layerstack must reproduce OpenUSD's
-//! value, except where the vectors pin a documented OpenUSD defect with an
+//! others pin how scalar samples hold or interpolate. Layerstack must
+//! reproduce OpenUSD's value, except where the vectors pin a documented OpenUSD defect with an
 //! `expected` override.
 //!
 //! Where OpenUSD defines it, resolving the composed stage must also equal
@@ -41,6 +41,9 @@ struct Case {
     layers: BTreeMap<String, String>,
     queries: Vec<Query>,
     flattened_layer: Option<String>,
+    /// Values must match OpenUSD bit for bit rather than within a tolerance.
+    #[serde(default)]
+    exact: bool,
 }
 
 #[derive(Deserialize)]
@@ -73,6 +76,9 @@ impl Query {
         raw.map(|value| match value {
             serde_json::Value::Array(items) => {
                 Resolved::Array(items.iter().map(Element::from_json).collect())
+            }
+            serde_json::Value::Object(tuple) => {
+                Resolved::Scalar(Element::from_json(&tuple["tuple"]))
             }
             scalar => Resolved::Scalar(Element::from_json(scalar)),
         })
@@ -113,35 +119,53 @@ impl Element {
         }
     }
 
+    /// Flattens a value to its components; quaternions list the real part
+    /// first, as the vectors do.
     fn from_value(value: &Value) -> Self {
+        let floats = |v: &[f32]| v.iter().copied().map(f64::from).collect();
         Self(match value {
             Value::Int(v) => vec![f64::from(*v)],
             #[allow(clippy::cast_precision_loss, reason = "test values are small")]
             Value::Int64(v) => vec![*v as f64],
             Value::Float(v) => vec![f64::from(*v)],
             Value::Double(v) => vec![*v],
-            Value::Vec3f(v) => v.iter().copied().map(f64::from).collect(),
+            Value::Vec2f(v) => floats(v),
+            Value::Vec3f(v) => floats(v),
+            Value::Vec4f(v) => floats(v),
+            Value::Vec2d(v) => v.to_vec(),
             Value::Vec3d(v) => v.to_vec(),
+            Value::Vec4d(v) => v.to_vec(),
+            Value::Matrix2d(v) => v.to_vec(),
+            Value::Matrix3d(v) => v.to_vec(),
+            Value::Matrix4d(v) => v.to_vec(),
             other => panic!("unexpected value {other:?}"),
         })
     }
 
-    fn close(&self, other: &Self) -> bool {
+    /// Within a relative `1e-5`, or bit for bit when `exact` (NaN matching
+    /// NaN).
+    fn close(&self, other: &Self, exact: bool) -> bool {
         self.0.len() == other.0.len()
-            && self
-                .0
-                .iter()
-                .zip(&other.0)
-                .all(|(a, b)| (a - b).abs() <= 1e-5 * a.abs().max(1.0))
+            && self.0.iter().zip(&other.0).all(|(a, b)| {
+                if exact {
+                    a.to_bits() == b.to_bits() || (a.is_nan() && b.is_nan())
+                } else {
+                    (a - b).abs() <= 1e-5 * a.abs().max(1.0)
+                }
+            })
     }
 }
 
 fn same(a: Option<&Resolved>, b: Option<&Resolved>) -> bool {
+    same_within(a, b, false)
+}
+
+fn same_within(a: Option<&Resolved>, b: Option<&Resolved>, exact: bool) -> bool {
     match (a, b) {
         (None, None) => true,
-        (Some(Resolved::Scalar(a)), Some(Resolved::Scalar(b))) => a.close(b),
+        (Some(Resolved::Scalar(a)), Some(Resolved::Scalar(b))) => a.close(b, exact),
         (Some(Resolved::Array(a)), Some(Resolved::Array(b))) => {
-            a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.close(y))
+            a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.close(y, exact))
         }
         _ => false,
     }
@@ -149,7 +173,7 @@ fn same(a: Option<&Resolved>, b: Option<&Resolved>) -> bool {
 
 fn show_element(element: &Element) -> String {
     match element.0.as_slice() {
-        [x] => format!("{x}"),
+        [x] => format!("{x:?}"),
         xs => format!("{xs:?}"),
     }
 }
@@ -291,7 +315,7 @@ fn composed_resolution_matches_openusd() {
             checked += 1;
             let expected = query.expected();
             let actual = composed.resolve(query);
-            if !same(actual.as_ref(), expected.as_ref()) {
+            if !same_within(actual.as_ref(), expected.as_ref(), case.exact) {
                 let _ = writeln!(
                     failures,
                     "{}: layerstack {} != expected {}{}",

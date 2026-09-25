@@ -83,7 +83,12 @@ The composed samples are then held, or interpolated element by element with
 OpenUSD's rules: floating-point scalars, vectors, matrices and time codes
 interpolate, integers hold, arrays of different sizes hold, and a blocked
 upper sample holds the lower one. Before the first composed time sample, a
-default or fallback is the lower sample at `-inf` and holds.
+default or fallback is the lower sample at `-inf` and holds. Scalar
+attributes, which do not compose, hold or interpolate the strongest series'
+samples with the same element rules and the same `1e-6` tolerance. Each type
+rounds as `GfLerp` does in its own arithmetic, bit for bit: scalars lerp in
+double precision and narrow once, while float vectors narrow each scaled
+component to `float` before adding (`vectors_interpolate_bit_exact`).
 
 ### Block semantics
 
@@ -129,7 +134,8 @@ capability, not for uniformity alone.
 from OpenUSD 26.08 (`scripts/temporal_sparse_oracle.py`, including ports of
 `testUsdAttributeArrayEdits.cpp`): mixed dense and sparse samples at differing
 times, held and linear interpolation, sublayer and reference offsets, sampled
-and default blocks, defaults under and over samples, and element types. It
+and default blocks, defaults under and over samples, and element types of
+arrays and scalars. It
 also checks that resolving the composed stage equals resolving OpenUSD's
 flattened layer.
 

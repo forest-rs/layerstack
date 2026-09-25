@@ -678,7 +678,10 @@ impl Stage {
     /// default. The first opinion that authors any of them wins, so a
     /// stronger default hides weaker samples, and a spec's own samples hide
     /// its default. Opinions that author none of them (for example only
-    /// connections) are skipped.
+    /// connections) are skipped. Its samples hold or interpolate with the
+    /// element rules of arrays: integers hold, floating-point scalars,
+    /// vectors and matrices interpolate, and samples closer than `1e-6` in
+    /// layer time hold the lower one.
     ///
     /// Array-valued attributes compose instead: every opinion's samples
     /// bracketing `time` compose strongest over weakest (sparse array edits

@@ -28,7 +28,9 @@ the override to be removed.
 import json
 import math
 import os
+import random
 import re
+import struct
 import sys
 import tempfile
 
@@ -559,6 +561,154 @@ case(
     {"/A.x": [0, 1, 1.5, 2, 2.5, 3]},
 )
 
+# -- Scalar time samples -------------------------------------------------------------
+
+case(
+    "scalars_interpolate_by_element_type",
+    "Scalar samples follow the element rules of arrays: integers hold, while "
+    "floating-point scalars, vectors and matrices interpolate "
+    "(`USD_LINEAR_INTERPOLATION_TYPES`).",
+    {
+        "root.usda": layer(prim(
+            "def", "A",
+            "int i.timeSamples = { 0: 0, 2: 4 }",
+            "int64 i64.timeSamples = { 0: 0, 2: 4 }",
+            "float f.timeSamples = { 0: 0, 2: 1 }",
+            "double d.timeSamples = { 0: 0, 2: 1 }",
+            "float3 v.timeSamples = { 0: (0, 0, 0), 2: (1, 2, 3) }",
+            "double3 dv.timeSamples = { 0: (0, 0, 0), 2: (1, 2, 3) }",
+            "matrix2d m.timeSamples = { 0: ((0, 0), (0, 0)), 2: ((2, 4), (6, 8)) }",
+        )),
+    },
+    {attr: [-1, 0, 0.5, 1, 1.5, 2, 3]
+     for attr in ("/A.i", "/A.i64", "/A.f", "/A.d", "/A.v", "/A.dv", "/A.m")},
+)
+
+case(
+    "scalar_samples_close_together",
+    "Two scalar samples closer than 1e-6 in layer time hold the lower one, "
+    "as array samples do.",
+    {
+        "root.usda": layer(prim("def", "A",
+                                "double x.timeSamples = { 0: 0, 0.0000005: 10, 1: 20 }")),
+    },
+    {"/A.x": [0, 0.00000025, 0.0000005, 0.5]},
+)
+
+
+# -- Bit-exact interpolation --------------------------------------------------------
+#
+# OpenUSD interpolates with `GfLerp`, `(1 - alpha) * a + alpha * b`, in the
+# arithmetic of the value type: a scalar lerps in double precision and narrows
+# once, while a vector scales and adds with its own `GfVec` operators, which
+# narrow each scaled component before adding. These cases record that
+# arithmetic bit for bit (`exact`): seeded random endpoints, often of opposite
+# sign or nearly equal so the two terms cancel, plus the review probes that
+# first showed the difference, each as a scalar and as array elements.
+
+EXACT_TIMES = [0.31410496844772895, 0.5, 0.500000001]
+
+
+def narrow(value, kind):
+    """Rounds `value` to the element type `kind` ('h', 'f' or 'd')."""
+    if kind == "d":
+        return value
+    value = struct.unpack("f", struct.pack("f", value))[0]
+    if kind == "h":
+        value = struct.unpack("e", struct.pack("e", value))[0]
+    return value
+
+
+def exact_component(rng, kind):
+    """A random component exactly representable in `kind`, avoiding the
+    subnormals and the range that layerstack's USDA reader cannot keep."""
+    top = 4 if kind == "h" else 10
+    magnitude = 10 ** rng.uniform(-3, top)
+    value = narrow(rng.choice((-1, 1)) * magnitude, kind)
+    return min(max(value, -60000.0), 60000.0) if kind == "h" else value
+
+
+def exact_pair(rng, kind, count):
+    """Two endpoints of `count` components: opposite, nearly equal or
+    unrelated."""
+    a = [exact_component(rng, kind) for _ in range(count)]
+    style = rng.randrange(3)
+    if style == 0:
+        b = [-x for x in a]
+    elif style == 1:
+        b = [narrow(x * (1 + rng.uniform(-1e-3, 1e-3)), kind) for x in a]
+    else:
+        b = [exact_component(rng, kind) for _ in range(count)]
+    return a, b
+
+
+def usda_value(components, shape):
+    """USDA text for one value: a number, a tuple, or rows of a matrix."""
+    text = [repr(float(c)) for c in components]
+    if shape == 1:
+        return text[0]
+    if isinstance(shape, tuple):
+        n = shape[1]
+        return "(" + ", ".join(
+            "(" + ", ".join(text[r * n:(r + 1) * n]) + ")" for r in range(n)) + ")"
+    return "(" + ", ".join(text) + ")"
+
+
+def exact_case(name, description, types, seed, probes=(), scalars=3, elements=6):
+    """Registers a bit-exact interpolation case.
+
+    `types` lists (USDA type, kind, shape), where shape is the component
+    count or ("matrix", n). Each type gets `scalars` scalar attributes and one
+    array of `elements`; each probe (type, a, b) adds a scalar and a
+    one-element array.
+    """
+    rng = random.Random(seed)
+    lines, attrs = [], []
+
+    def add(type_name, shape, samples, suffix, array=False):
+        attr = f"{type_name}_{suffix}"
+        text = [("[" + ", ".join(usda_value(v, shape) for v in s) + "]") if array
+                else usda_value(s, shape) for s in samples]
+        lines.append(f"{type_name}{'[]' if array else ''} {attr}.timeSamples = "
+                     f"{{ 0: {text[0]}, 1: {text[1]} }}")
+        attrs.append(attr)
+
+    for type_name, kind, shape in types:
+        count = shape if isinstance(shape, int) else shape[1] ** 2
+        for k in range(scalars):
+            add(type_name, shape, exact_pair(rng, kind, count), f"s{k}")
+        pairs = [exact_pair(rng, kind, count) for _ in range(elements)]
+        add(type_name, shape, ([a for a, _ in pairs], [b for _, b in pairs]), "array",
+            array=True)
+    for k, (type_name, shape, a, b) in enumerate(probes):
+        add(type_name, shape, (a, b), f"probe{k}")
+        add(type_name, shape, ([a], [b]), f"probe{k}_array", array=True)
+    times = EXACT_TIMES + sorted(rng.random() for _ in range(2))
+    case(
+        name,
+        description,
+        {"root.usda": layer(prim("def", "A", *lines))},
+        {f"/A.{attr}": times for attr in attrs},
+        flatten_equivalent=False,
+        flatten_note="The case checks interpolation arithmetic; flattening "
+                     "rewrites the sample text.",
+    )
+    CASES[-1]["exact"] = True
+
+
+exact_case(
+    "vectors_interpolate_bit_exact",
+    "Float, double, vector and matrix scalars and arrays interpolate bit for "
+    "bit as OpenUSD does: scalars in double precision, rounded once; float "
+    "vectors rounding each scaled component to float before adding.",
+    [("float", "f", 1), ("float2", "f", 2), ("float3", "f", 3), ("float4", "f", 4),
+     ("double", "d", 1), ("double2", "d", 2), ("double3", "d", 3), ("double4", "d", 4),
+     ("matrix2d", "d", ("matrix", 2)), ("matrix3d", "d", ("matrix", 3)),
+     ("matrix4d", "d", ("matrix", 4))],
+    seed=0x5eed_0001,
+    probes=[("float3", 3, [1e10] * 3, [-1e10] * 3)],
+)
+
 
 # -- Driver ------------------------------------------------------------------------
 
@@ -595,24 +745,49 @@ def to_openusd(text):
         pos = i
 
 
+VECTORS = (Gf.Vec2h, Gf.Vec3h, Gf.Vec4h, Gf.Vec2f, Gf.Vec3f, Gf.Vec4f,
+           Gf.Vec2d, Gf.Vec3d, Gf.Vec4d)
+MATRICES = (Gf.Matrix2d, Gf.Matrix3d, Gf.Matrix4d)
+QUATERNIONS = (Gf.Quath, Gf.Quatf, Gf.Quatd)
+
+
+def num(x):
+    x = float(x)
+    return "NaN" if math.isnan(x) else x
+
+
+def components(value):
+    """A tuple-valued element's components, or None for a plain number.
+
+    Quaternions list the real part first, as USDA writes them.
+    """
+    if isinstance(value, QUATERNIONS):
+        return [num(value.GetReal())] + [num(c) for c in value.GetImaginary()]
+    if isinstance(value, MATRICES):
+        return [num(c) for row in value for c in row]
+    if isinstance(value, VECTORS):
+        return [num(c) for c in value]
+    return None
+
+
 def encode(value):
-    """Encodes a resolved array or scalar as JSON (NaN as the string "NaN")."""
+    """Encodes a resolved value as JSON (NaN as the string "NaN").
+
+    An array is a list of elements, each a number or a list of components;
+    a scalar is a number, or `{"tuple": components}` for a vector, matrix or
+    quaternion.
+    """
     if value is None:
         return None
-
-    def num(x):
-        x = float(x)
-        return "NaN" if math.isnan(x) else x
-
     if isinstance(value, (int, float)):
         return num(value)
-
+    scalar = components(value)
+    if scalar is not None:
+        return {"tuple": scalar}
     out = []
     for item in value:
-        if isinstance(item, (Gf.Vec2f, Gf.Vec3f, Gf.Vec4f, Gf.Vec2d, Gf.Vec3d, Gf.Vec4d)):
-            out.append([num(c) for c in item])
-        else:
-            out.append(num(item))
+        comps = components(item)
+        out.append(num(item) if comps is None else comps)
     return out
 
 
@@ -635,6 +810,9 @@ def flattened_text(stage):
 def close(a, b):
     if a is None or b is None:
         return a is b
+    if isinstance(a, dict) or isinstance(b, dict):
+        return (isinstance(a, dict) and isinstance(b, dict)
+                and close(a["tuple"], b["tuple"]))
     if not isinstance(a, list) or not isinstance(b, list):
         return close([a], [b]) if type(a) is type(b) else False
     if len(a) != len(b):
@@ -691,6 +869,8 @@ def run_case(tmp, spec):
         "layers": spec["layers"],
         "queries": queries,
     }
+    if spec.get("exact"):
+        out["exact"] = True
     if spec["flatten_equivalent"]:
         out["flattened_layer"] = flattened_text(stage)
     else:

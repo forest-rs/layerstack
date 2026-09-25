@@ -59,8 +59,7 @@
 //!
 //! # Not supported
 //!
-//! - Relocates combined with implied classes, and relocation targets
-//!   without specs ([`Cause::Relocates`]).
+//! - Relocates combined with implied classes ([`Cause::Relocates`]).
 //! - Variant branches of different sets at one site are not ordered by
 //!   their sets ([`Cause::VariantSetOrder`]).
 //! - Implied classes in population and variant selection
@@ -526,8 +525,7 @@ enum Cause {
     // Unsupported features.
     /// Relocates (AOUSD Core §10.3.2.6) move a prim's ancestral opinions
     /// to its relocation target, but classes implied through a relocation
-    /// source (OpenUSD's "spooky" inherits) and relocation targets without
-    /// specs are not composed.
+    /// source (OpenUSD's "spooky" inherits) are not composed.
     Relocates,
     /// Asset-path variable expressions are not evaluated.
     ExpressionVariables,
@@ -615,15 +613,6 @@ const KNOWN: &[Known] = &[
         reason: "`C.usd /C` is reached through `A` and `B` but listed once",
     },
     Known {
-        fixture: "ErrorArcCycle_root",
-        causes: &[C::Relocates],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingPrim],
-        reason: "`/RelocatedInheritOfChild/Object`, relocated from `/RelocatedInheritOfChild/Child/Object`, has no specs and is not populated; every arc cycle is skipped as in OpenUSD",
-    },
-    Known {
         fixture: "ErrorInconsistentProperties_root",
         causes: &[C::PropertyTypeConflict],
         prims: 0,
@@ -683,7 +672,7 @@ const KNOWN: &[Known] = &[
         prims: 6,
         props: 0,
         values: 0,
-        diffs: &[D::MissingPrim, D::MissingRepeat],
+        diffs: &[D::MissingPrim, D::MissingSite, D::MissingRepeat],
         reason: "`base.usd /Base/Child`, reached through both `/Ref1` and `/Ref2`, is expanded once, so `Child_2` is missing, and under `/ChainedReferences` neither relocated child is composed",
     },
     Known {
@@ -755,8 +744,8 @@ const KNOWN: &[Known] = &[
         prims: 4,
         props: 0,
         values: 0,
-        diffs: &[D::MissingPrim],
-        reason: "local classes implied through relocation sources are not composed, so the symmetric and left arm rigs miss their relocated regions",
+        diffs: &[D::MissingPrim, D::MissingSite],
+        reason: "local classes implied through relocation sources are not composed, so the symmetric and left arm rigs miss their regions and the relocated `SimRegions/LArm` composes no opinions",
     },
     Known {
         fixture: "TrickyMultipleRelocationsAndClasses2_root",
@@ -784,15 +773,6 @@ const KNOWN: &[Known] = &[
         values: 0,
         diffs: &[D::MissingPrim],
         reason: "population misses the namespace children of the classes implied onto `/Rig/SymToesRig` and `/Rig/LToesRig`",
-    },
-    Known {
-        fixture: "TrickyRelocationOfPrimFromVariant_root",
-        causes: &[C::Relocates],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingPrim],
-        reason: "the relocation target `/Char2/Anim/Tail` has no specs and is not populated",
     },
     Known {
         fixture: "TrickySpookyInheritsInSymmetricBrowRig_root",
@@ -863,17 +843,8 @@ const KNOWN: &[Known] = &[
         prims: 2,
         props: 0,
         values: 0,
-        diffs: &[D::MissingPrim],
-        reason: "classes implied into the pigeon's toe rigs through relocation sources are not composed, so `/Pigeon/Rig/ToesRig/LToesRig/ThumbToeLOCALRig` and the relocated toe are missing",
-    },
-    Known {
-        fixture: "bug92827_root",
-        causes: &[C::Relocates],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingPrim],
-        reason: "the relocation target `/Rig/B` has no specs and is not populated",
+        diffs: &[D::MissingPrim, D::MissingSite],
+        reason: "classes implied into the pigeon's toe rigs through relocation sources are not composed, so `/Pigeon/Rig/ToesRig/LToesRig/ThumbToeLOCALRig` is missing and the relocated `/Pigeon/Anim/Legs/LToes/Thumb` composes no opinions",
     },
     Known {
         fixture: "case1_root",

@@ -356,6 +356,56 @@ impl PrimIndexGraph {
         id
     }
 
+    /// Removes every node `keep` rejects, returning the new id of each old
+    /// node, `None` for a removed one. A node is kept whenever one of its
+    /// descendants is, so the graph stays a tree; ranks are kept.
+    pub(crate) fn retain_nodes(
+        &mut self,
+        mut keep: impl FnMut(NodeId, &PrimNode) -> bool,
+    ) -> Vec<Option<NodeId>> {
+        let mut kept = alloc::vec![false; self.nodes.len()];
+        for (index, node) in self.nodes.iter().enumerate() {
+            if kept[index] || !keep(NodeId::from_index(index), node) {
+                continue;
+            }
+            let mut cursor = Some(NodeId::from_index(index));
+            while let Some(id) = cursor {
+                if core::mem::replace(&mut kept[id.index()], true) {
+                    break;
+                }
+                cursor = self.nodes[id.index()].parent;
+            }
+        }
+        let mut remap = alloc::vec![None; self.nodes.len()];
+        let mut next = 0;
+        for (index, kept) in kept.iter().enumerate() {
+            if *kept {
+                remap[index] = Some(NodeId::from_index(next));
+                next += 1;
+            }
+        }
+        let map = |id: NodeId| remap[id.index()];
+        let ranked = self.ranks.len() == self.nodes.len();
+        let nodes = core::mem::take(&mut self.nodes);
+        let ranks = core::mem::take(&mut self.ranks);
+        for (index, mut node) in nodes.into_iter().enumerate() {
+            if !kept[index] {
+                continue;
+            }
+            node.parent = node.parent.and_then(map);
+            node.children.retain(|child| kept[child.index()]);
+            for child in &mut node.children {
+                *child = map(*child).expect("kept child");
+            }
+            node.origin = node.origin.and_then(map);
+            self.nodes.push(node);
+            if ranked {
+                self.ranks.push(ranks[index]);
+            }
+        }
+        remap
+    }
+
     /// The specializes arcs above `node`, outermost first.
     pub(crate) fn specializes(&self, node: NodeId) -> &[SpecializesOrigin] {
         &self.nodes[node.index()].arc.specializes
@@ -677,6 +727,35 @@ mod tests {
         assert_eq!(graph.cmp_nodes(NodeId(1), NodeId(2)), Ordering::Equal);
         assert_order(&graph, &[0, 1, 4, 3]);
         assert_order(&graph, &[2, 4]);
+    }
+
+    #[test]
+    fn retained_nodes_keep_their_ancestors_and_ranks() {
+        let mut graph = graph(vec![
+            (0, arc(ArcKind::References, 1, 0)),
+            (0, arc(ArcKind::Inherits, 1, 0)),
+            (1, arc(ArcKind::Payloads, 1, 0)),
+            (2, arc(ArcKind::References, 1, 0)),
+        ]);
+        let remap = graph.retain_nodes(|id, _| id == NodeId(0) || id == NodeId(3));
+        assert_eq!(
+            remap,
+            [
+                Some(NodeId(0)),
+                Some(NodeId(1)),
+                None,
+                Some(NodeId(2)),
+                None
+            ]
+        );
+        assert_eq!(graph.len(), 3);
+        let payload = graph.node(NodeId(2)).expect("payload");
+        assert_eq!(payload.parent(), Some(NodeId(1)));
+        assert_eq!(
+            graph.node(NodeId(1)).expect("reference").children(),
+            [NodeId(2)]
+        );
+        assert_order(&graph, &[0, 1, 2]);
     }
 
     fn key(node: NodeId, layer_strength: u16, layer_id: u64, spec_path: SpecPath) -> OpinionKey {

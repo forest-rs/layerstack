@@ -247,8 +247,15 @@ pub(crate) fn compose_stage(
         dep_builder.as_mut(),
     );
 
-    for prim in prims.values_mut() {
+    for (path, prim) in &mut prims {
         drop_reached_copies(prim);
+        prune_unused_copies(
+            prim,
+            [
+                prim_order_opinions.get_mut(path),
+                authored_children_opinions.get_mut(path),
+            ],
+        );
         prim.finalize();
     }
 
@@ -363,6 +370,56 @@ fn drop_reached_copies(prim: &mut PrimIndex) {
     }
     prim.opinions_by_field
         .retain(|_, opinions| !opinions.is_empty());
+}
+
+/// The child-order opinions (`reorder nameChildren`, or authored children)
+/// of one composed prim, each with its key.
+type ChildOrderOpinions = Vec<(OpinionKey, Vec<TokenId>)>;
+
+/// Removes from the prim's graph the nodes the late copy grafted (see
+/// `Forwarding`) that no opinion, source or declaration names any more,
+/// with none beneath them that one does, and renumbers every key: the
+/// prim's own and `extra`, the child-order opinions composed beside it.
+fn prune_unused_copies(prim: &mut PrimIndex, extra: [Option<&mut ChildOrderOpinions>; 2]) {
+    let mut used = alloc::vec![false; prim.graph.len()];
+    let mut mark = |key: &OpinionKey| used[key.node.index()] = true;
+    prim.sources.iter().for_each(&mut mark);
+    prim.opinions_by_field
+        .values()
+        .flatten()
+        .for_each(|opinion| mark(&opinion.key));
+    prim.property_types_by_field
+        .values()
+        .flatten()
+        .for_each(|(key, _)| mark(key));
+    for opinions in extra.iter().flatten() {
+        opinions.iter().for_each(|(key, _)| mark(key));
+    }
+    if !prim
+        .graph
+        .nodes()
+        .any(|(id, node)| node.arc.copied && !used[id.index()])
+    {
+        return;
+    }
+    let remap = prim
+        .graph
+        .retain_nodes(|id, node| !node.arc.copied || used[id.index()]);
+    let renumber = |key: &mut OpinionKey| {
+        key.node = remap[key.node.index()].expect("a used node is kept");
+    };
+    prim.sources.iter_mut().for_each(renumber);
+    prim.opinions_by_field
+        .values_mut()
+        .flatten()
+        .for_each(|opinion| renumber(&mut opinion.key));
+    prim.property_types_by_field
+        .values_mut()
+        .flatten()
+        .for_each(|(key, _)| renumber(key));
+    for opinions in extra.into_iter().flatten() {
+        opinions.iter_mut().for_each(|(key, _)| renumber(key));
+    }
 }
 
 /// Removes populated prims whose prim index holds no spec, together with

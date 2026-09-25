@@ -57,7 +57,7 @@
 //!
 //! # Not supported
 //!
-//! - Relocates ([`Cause::Relocates`]): diagnosed and ignored.
+//! - Relocates ([`Cause::Relocates`]): read, but not composed.
 //! - Variant branches of different sets at one site are not ordered by
 //!   their sets ([`Cause::VariantSetOrder`]).
 //! - Implied classes in population and variant selection
@@ -521,8 +521,8 @@ enum Cause {
     PropertyTypeConflict,
 
     // Unsupported features.
-    /// Relocates (AOUSD Core §10.3.2.6) are not composed; USDA ingestion
-    /// diagnoses and drops them. Relocated prims are missing at their
+    /// Relocates (AOUSD Core §10.3.2.6) are read from layer metadata but
+    /// not composed. Relocated prims are missing at their
     /// targets, and relocation sources, which OpenUSD prohibits, are
     /// populated as extra prims.
     Relocates,

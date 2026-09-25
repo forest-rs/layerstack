@@ -601,6 +601,25 @@ impl LayerOffset {
     }
 }
 
+/// One entry of a layer's `layerRelocates` metadata: the prim at `source`
+/// moves to `target` in the namespace of every layer stack holding the
+/// layer, or is removed when `target` is `None`.
+///
+/// Entries are kept as authored. Composition validates them against each
+/// other when it computes a layer stack's relocation table, and reports and
+/// ignores the invalid ones (see [`crate::CompositionError`]).
+///
+/// Spec: AOUSD Core §7.6.1.2.4 (`layerRelocates`), §10.3.2.6 (relocates).
+/// OpenUSD: `SdfRelocate` (`pxr/usd/sdf/types.h`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Relocate {
+    /// The absolute prim path whose opinions move.
+    pub source: PathId,
+    /// The absolute prim path they move to, or `None` (authored `<>`) to
+    /// remove the source prim from namespace.
+    pub target: Option<PathId>,
+}
+
 /// A sublayer entry with an optional time offset.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SublayerEntry {
@@ -1331,6 +1350,11 @@ pub struct Layer {
     /// Spec: AOUSD Core §7.6.1 (layer spec fields), §12.2.7 (layer metadata
     /// is read from the root layer, not composed).
     pub metadata: Vec<FieldEntry>,
+    /// The authored `layerRelocates` entries, in authored order.
+    ///
+    /// Spec: AOUSD Core §7.6.1.2.4 (`layerRelocates`), §10.3.2.6
+    /// (relocates are computed per layer stack from every layer's entries).
+    pub relocates: Vec<Relocate>,
     /// Prim specs keyed by prim path.
     ///
     /// Each path holds one spec here: the spec authored outside any variant
@@ -1359,6 +1383,7 @@ impl Layer {
             sublayers: Vec::new(),
             default_prim: None,
             metadata: Vec::new(),
+            relocates: Vec::new(),
             prims: HashMap::new(),
             variant_prims: HashMap::new(),
         }

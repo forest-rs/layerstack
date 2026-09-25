@@ -137,20 +137,10 @@ impl EmitCtx<'_> {
                     }
                 }
                 ast::LayerMeta::Relocates(entries) => {
-                    // Relocates (AOUSD Core §10, relocates arcs) are not
-                    // modelled: the layer has nowhere to store them and
-                    // composition does not apply them. Report each entry
-                    // instead of dropping it silently, since the composed
-                    // namespace will differ from the authored intent.
                     for entry in entries {
-                        self.diagnostics.push(Diagnostic::error(
-                            entry.span,
-                            format!(
-                                "unsupported: relocates `<{}>: <{}>` is ignored; \
-                                 layerstack does not compose relocates",
-                                entry.source, entry.target
-                            ),
-                        ));
+                        if let Some(relocate) = self.emit_relocate(entry) {
+                            layer.relocates.push(relocate);
+                        }
                     }
                 }
                 ast::LayerMeta::Doc(doc) => {
@@ -1026,6 +1016,44 @@ impl EmitCtx<'_> {
         listop
     }
 
+    /// Converts one `relocates` entry of the layer metadata. Paths are
+    /// anchored at the pseudo-root; an empty target (`<>`) removes the
+    /// source. An entry whose paths are not prim paths (a variant selection,
+    /// a property) is reported and dropped, as OpenUSD rejects it when
+    /// reading the layer.
+    ///
+    /// The entries are not validated against each other here: composition
+    /// does that per layer stack.
+    ///
+    /// Spec: AOUSD Core §16.2.18.5 (layer relocates metadata), §7.6.1.2.4.
+    fn emit_relocate(&mut self, entry: &ast::RelocateEntry<'_>) -> Option<layerstack::Relocate> {
+        let mut prim_path = |text: &str| {
+            let absolute = absolute_path(text, "/");
+            let segments_are_names = absolute.split('/').skip(1).all(is_prim_name);
+            match Path::parse_absolute(&absolute, self.tokens) {
+                Ok(path) if segments_are_names && path.depth() > 0 => Some(self.paths.intern(path)),
+                _ => None,
+            }
+        };
+        let source = prim_path(entry.source);
+        let target = if entry.target.is_empty() {
+            Some(None)
+        } else {
+            prim_path(entry.target).map(Some)
+        };
+        let (Some(source), Some(target)) = (source, target) else {
+            self.diagnostics.push(Diagnostic::error(
+                entry.span,
+                format!(
+                    "relocates `<{}>: <{}>` is not a relocate between prim paths; ignored",
+                    entry.source, entry.target
+                ),
+            ));
+            return None;
+        };
+        Some(layerstack::Relocate { source, target })
+    }
+
     fn emit_connection_listop(
         &mut self,
         conn: &ast::Connection<'_>,
@@ -1361,6 +1389,19 @@ impl EmitCtx<'_> {
 }
 
 // ── Specifier conversion ────────────────────────────────────────────────
+
+/// Returns `true` when `name` is a prim name: an identifier, which may use
+/// characters outside ASCII (AOUSD Core §7.3.3), and so not a variant
+/// selection, property or relative path component.
+fn is_prim_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    let allowed =
+        |c: char| c == '_' || c.is_ascii_alphanumeric() || (!c.is_ascii() && !c.is_whitespace());
+    chars
+        .next()
+        .is_some_and(|first| !first.is_ascii_digit() && allowed(first))
+        && chars.all(allowed)
+}
 
 /// Makes a USDA path absolute against the prim path `anchor`: `../B`,
 /// `Child`, `.attr` and `../B.attr` are relative, `/A/B` is not.
@@ -2276,29 +2317,70 @@ def \"A\" {
     }
 
     #[test]
-    fn emit_relocates_reports_unsupported() {
+    fn emit_relocates_reads_layer_metadata() {
+        // Spec: AOUSD Core §16.2.18.5. Entries are kept in authored order,
+        // relative paths are anchored at the pseudo-root, and `<>` removes
+        // the source.
         let src = "\
 #usda 1.0
 (
     relocates = {
         </Rig/Anim>: </Anim>
-        </Rig/Other>: </Other>
+        <Rig/Other>: <>,
+        </Rig/Deep>: </Rig/Anim/Deep>
+    }
+)
+def \"Rig\" {
+}
+";
+        let (result, mut tokens, paths) = emit_source(src);
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        let mut path = |text: &str| {
+            paths
+                .lookup(&Path::parse_absolute(text, &mut tokens).unwrap())
+                .unwrap()
+        };
+        assert_eq!(
+            result.layer.relocates,
+            [
+                layerstack::Relocate {
+                    source: path("/Rig/Anim"),
+                    target: Some(path("/Anim")),
+                },
+                layerstack::Relocate {
+                    source: path("/Rig/Other"),
+                    target: None,
+                },
+                layerstack::Relocate {
+                    source: path("/Rig/Deep"),
+                    target: Some(path("/Rig/Anim/Deep")),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn emit_relocates_rejects_non_prim_paths() {
+        // OpenUSD rejects a layer whose relocates name a variant selection
+        // or a property; the entry is reported and dropped.
+        let src = "\
+#usda 1.0
+(
+    relocates = {
+        </Rig{v=a}Anim>: </Anim>,
+        </Rig/Anim>: </Anim.attr>,
+        </Rig/Keep>: </Keep>
     }
 )
 def \"Rig\" {
 }
 ";
         let (result, _tokens, _paths) = emit_source(src);
-        assert_eq!(result.diagnostics.len(), 2, "one diagnostic per entry");
+        assert_eq!(result.diagnostics.len(), 2, "one diagnostic per bad entry");
         let first = &result.diagnostics[0];
         assert_eq!(first.severity, crate::diagnostic::Severity::Error);
-        assert!(
-            first.message.contains("relocates") && first.message.contains("</Rig/Anim>: </Anim>"),
-            "message names the ignored entry: {}",
-            first.message
-        );
-        assert_eq!(first.span.text(src), "</Rig/Anim>: </Anim>");
-        // The rest of the layer is still emitted.
+        assert_eq!(first.span.text(src), "</Rig{v=a}Anim>: </Anim>");
+        assert_eq!(result.layer.relocates.len(), 1);
         assert_eq!(result.layer.prims.len(), 2, "pseudo-root and /Rig");
     }
 

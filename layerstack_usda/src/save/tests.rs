@@ -231,6 +231,11 @@ fn rejects_unsupported_features_with_their_source_paths() {
             "/A.a",
             Unsupported::ArrayEdit,
         ),
+        (
+            "#usda 1.0\n(\n    relocates = {\n        </A/B>: </A/C>\n    }\n)\ndef \"A\"\n{\n}\n",
+            "/",
+            Unsupported::Relocates,
+        ),
     ];
     for (source, path, feature) in cases {
         assert_eq!(

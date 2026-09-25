@@ -152,6 +152,56 @@ impl<'a> AssembleCtx<'a> {
         Ok(())
     }
 
+    /// Appends one `layerRelocates` entry to `layer`. An empty target path
+    /// removes the source; an entry whose paths are not prim paths (a
+    /// variant selection, a property, a relative path) is reported instead.
+    ///
+    /// Spec: AOUSD Core §7.6.1.2.4 (`layerRelocates`).
+    fn push_relocate(
+        &mut self,
+        layer: &mut Layer,
+        source: &str,
+        target: &str,
+    ) -> Result<(), UsdcError> {
+        let prim_path = |ctx: &mut Self, text: &str| {
+            let names = text.strip_prefix('/')?;
+            let is_name = |name: &str| {
+                let mut chars = name.chars();
+                let allowed = |c: char| {
+                    c == '_' || c.is_ascii_alphanumeric() || (!c.is_ascii() && !c.is_whitespace())
+                };
+                chars
+                    .next()
+                    .is_some_and(|first| !first.is_ascii_digit() && allowed(first))
+                    && chars.all(allowed)
+            };
+            if !names.split('/').all(is_name) {
+                return None;
+            }
+            let path = Path::parse_absolute(text, ctx.tokens).ok()?;
+            Some(ctx.paths.intern(path))
+        };
+        let source_path = prim_path(self, source);
+        let target_path = if target.is_empty() {
+            Some(None)
+        } else {
+            prim_path(self, target).map(Some)
+        };
+        match (source_path, target_path) {
+            (Some(source), Some(target)) => {
+                layer
+                    .relocates
+                    .push(layerstack::Relocate { source, target });
+                Ok(())
+            }
+            _ => self.report(
+                "/",
+                Some("layerRelocates"),
+                alloc::format!("relocate `<{source}>: <{target}>` is not between prim paths"),
+            ),
+        }
+    }
+
     /// Assembles all specs into a [`Layer`].
     fn assemble_layer(&mut self) -> Result<Layer, UsdcError> {
         let mut layer = Layer::new(self.layer_id);
@@ -426,9 +476,21 @@ impl<'a> AssembleCtx<'a> {
                         layer.default_prim = Some(self.tokens.intern(name));
                     }
                 }
-                "layerRelocates" | "relocates" => {
-                    // Relocates (AOUSD Core §10) are not modelled.
-                    self.report("/", Some(name), "unsupported: relocates are not read")?;
+                "layerRelocates" => {
+                    // Spec: AOUSD Core §7.6.1.2.4 (`layerRelocates`),
+                    // §16.3.10.15 (crate relocates values).
+                    if let CrateValue::RelocatesMap(pairs) = value {
+                        for (source, target) in pairs {
+                            self.push_relocate(layer, source, target)?;
+                        }
+                    }
+                }
+                "relocates" => {
+                    // Prim relocates are legacy scene description that
+                    // OpenUSD ignores when composing a USD stage
+                    // (`Pcp_ComputeRelocationsForLayerStack` in
+                    // `pxr/usd/pcp/layerStack.cpp`).
+                    self.report("/", Some(name), "unsupported: prim relocates are ignored")?;
                 }
                 _ => {
                     if let Some(field_value) = self.convert_metadata("/", name, value)? {
@@ -583,8 +645,14 @@ impl<'a> AssembleCtx<'a> {
                     }
                 }
                 "relocates" => {
-                    // Relocates (AOUSD Core §10) are not modelled.
-                    self.report(spec_path, Some(name), "unsupported: relocates are not read")?;
+                    // Prim relocates are legacy scene description that
+                    // OpenUSD ignores when composing a USD stage; only
+                    // `layerRelocates` is composed (AOUSD Core §10.3.2.6).
+                    self.report(
+                        spec_path,
+                        Some(name),
+                        "unsupported: prim relocates are ignored",
+                    )?;
                 }
                 _ => {
                     // Generic metadata field (`kind`, `documentation`,

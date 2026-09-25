@@ -309,13 +309,16 @@ fn structure(layer: &Layer) -> String {
         metadata,
         prims,
         variant_prims,
+        relocates,
     } = layer;
     let sublayers: Vec<_> = sublayers
         .iter()
         .map(|s| (s.asset.clone(), s.offset, s.is_unresolved()))
         .collect();
-    let mut out =
-        format!("sublayers {sublayers:?}\ndefault prim {default_prim:?}\nmetadata {metadata:?}\n");
+    let mut out = format!(
+        "sublayers {sublayers:?}\ndefault prim {default_prim:?}\nmetadata {metadata:?}\n\
+         relocates {relocates:?}\n"
+    );
     let specs = prims.iter().chain(
         variant_prims
             .iter()

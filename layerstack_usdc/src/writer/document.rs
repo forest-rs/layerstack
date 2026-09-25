@@ -32,11 +32,13 @@
 //!
 //! Metadata keys outside the table in [`metadata_field`] are rejected: the
 //! text parser would store them as unregistered values, which this writer
-//! does not produce.
+//! does not produce, with one deliberate exception: prim `profilesInfo`
+//! ([`FieldType::UnregisteredDictionary`]).
 //!
 //! Spec: AOUSD Core §7.4 (metadata), §7.6 (core fields), §16.3 (crate
 //! format).
 
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -283,6 +285,10 @@ pub enum FieldType {
     TokenArray,
     /// `SdfTokenListOp`; a USDA token list op.
     TokenListOp,
+    /// No registered field: a USDA dictionary, stored as the text parser
+    /// stores an unregistered dictionary literal, an `SdfUnregisteredValue`
+    /// holding the `VtDictionary`.
+    UnregisteredDictionary,
 }
 
 /// The crate field name and registered type of the USDA metadata `key` on
@@ -296,7 +302,17 @@ pub enum FieldType {
 /// `elementSize`, `unauthoredValuesIndex`, `constraintTargetIdentifier`),
 /// `usdPhysics` (`kilogramsPerUnit`) and `usdShade` (`bindMaterialAs`,
 /// `connectability`, `renderType`, `sdrMetadata`) in their `plugInfo.json`
-/// files. USDA's `doc` is the `documentation` field.
+/// files, plus `usdUI`'s `uiHints` and the core `limits`,
+/// `symmetryArguments`, `fallbackPrimTypes` and `clips` dictionaries. USDA's
+/// `doc` is the `documentation` field.
+///
+/// `profilesInfo` is the one unregistered key: `UsdProfilesClaimsAPI`
+/// (`pxr/usd/usdProfiles/schema.usda`) documents it as prim metadata, but
+/// OpenUSD v26.08 registers no such field, so its text parser keeps the
+/// dictionary as an `SdfUnregisteredValue` and the crate carries the same.
+/// `ClaimsAPI` itself reads and writes the dictionary under `customData`;
+/// both spellings are transported as authored data, and nothing here adds,
+/// checks or certifies a profile claim.
 pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldType)> {
     use FieldType as F;
     let shared = match key {
@@ -307,6 +323,7 @@ pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldTyp
         Owner::Layer => match key {
             "defaultPrim" => Some(("defaultPrim", F::Token)),
             "customLayerData" => Some(("customLayerData", F::Dictionary)),
+            "fallbackPrimTypes" => Some(("fallbackPrimTypes", F::Dictionary)),
             "expressionVariables" => Some(("expressionVariables", F::Dictionary)),
             "startTimeCode" => Some(("startTimeCode", F::Double)),
             "endTimeCode" => Some(("endTimeCode", F::Double)),
@@ -331,6 +348,10 @@ pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldTyp
             "assetInfo" => Some(("assetInfo", F::Dictionary)),
             "displayName" => Some(("displayName", F::String)),
             "sdrMetadata" => Some(("sdrMetadata", F::Dictionary)),
+            "uiHints" => Some(("uiHints", F::Dictionary)),
+            "symmetryArguments" => Some(("symmetryArguments", F::Dictionary)),
+            "clips" => Some(("clips", F::Dictionary)),
+            "profilesInfo" => Some(("profilesInfo", F::UnregisteredDictionary)),
             "apiSchemas" => Some(("apiSchemas", F::TokenListOp)),
             _ => None,
         },
@@ -343,6 +364,8 @@ pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldTyp
             "noLoadHint" => Some(("noLoadHint", F::Bool)),
             "bindMaterialAs" => Some(("bindMaterialAs", F::Token)),
             "renderType" => Some(("renderType", F::Token)),
+            "uiHints" => Some(("uiHints", F::Dictionary)),
+            "symmetryArguments" => Some(("symmetryArguments", F::Dictionary)),
             _ => None,
         },
         Owner::Attribute => match key {
@@ -360,6 +383,9 @@ pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldTyp
             "connectability" => Some(("connectability", F::Token)),
             "renderType" => Some(("renderType", F::Token)),
             "sdrMetadata" => Some(("sdrMetadata", F::Dictionary)),
+            "limits" => Some(("limits", F::Dictionary)),
+            "uiHints" => Some(("uiHints", F::Dictionary)),
+            "symmetryArguments" => Some(("symmetryArguments", F::Dictionary)),
             _ => None,
         },
     };
@@ -390,6 +416,9 @@ fn metadatum(owner: Owner, path: &str, entry: &Metadatum) -> Result<super::Field
             Some(Value::TokenArray(v.clone()))
         }
         (FieldType::TokenListOp, U::TokenListOp(op)) => Some(Value::TokenListOp(list_op(op))),
+        (FieldType::UnregisteredDictionary, v @ U::Dictionary(_)) => {
+            Some(Value::UnregisteredValue(Box::new(natural(v))))
+        }
         _ => None,
     };
     let value = value.ok_or_else(|| UsdcWriteError::MetadataType {
@@ -769,6 +798,150 @@ mod tests {
         );
         let file = write_document(&doc).unwrap();
         assert_eq!(&file[..8], b"PXR-USDC", "writes");
+    }
+
+    /// Dictionary metadata: the registered UI hint, limit and symmetry
+    /// dictionaries on every owner, and prim `profilesInfo`, which OpenUSD
+    /// registers nowhere and so stores as an `SdfUnregisteredValue`. The
+    /// profile data is carried exactly as authored; nothing is added.
+    #[test]
+    fn transports_dictionary_metadata_and_profiles_info() {
+        let dict = |entries: Vec<(&str, UsdaValue)>| {
+            UsdaValue::Dictionary(entries.into_iter().map(|(k, v)| (k.into(), v)).collect())
+        };
+        let profiles = dict(vec![
+            (
+                "capabilityUsages",
+                dict(vec![("usd.geom.mesh", UsdaValue::String("hard".into()))]),
+            ),
+            (
+                "profileCompatibility",
+                dict(vec![(
+                    "vnd.apple.visionos_v1",
+                    UsdaValue::StringArray(vec!["usd.geom.hairAndFur".into()]),
+                )]),
+            ),
+        ]);
+        let limits = dict(vec![
+            ("soft", dict(vec![("min", UsdaValue::Float(0.0))])),
+            ("hard", dict(vec![("max", UsdaValue::Float(10.0))])),
+        ]);
+        let hints = dict(vec![("displayGroup", UsdaValue::String("Shape".into()))]);
+        let mut prim = Prim::def("Xform", "Root");
+        prim.metadata.push(Metadatum::new(
+            "apiSchemas",
+            UsdaValue::TokenListOp(UsdaListOp::prepend(vec!["ClaimsAPI".into()])),
+        ));
+        prim.metadata
+            .push(Metadatum::new("profilesInfo", profiles.clone()));
+        prim.metadata.push(Metadatum::new(
+            "customData",
+            dict(vec![("profilesInfo", profiles.clone())]),
+        ));
+        prim.metadata.push(Metadatum::new("uiHints", hints.clone()));
+        prim.metadata.push(Metadatum::new(
+            "symmetryArguments",
+            dict(vec![("axis", UsdaValue::Token("x".into()))]),
+        ));
+        prim.attributes.push(
+            Attribute::new("size", "float", UsdaValue::Float(1.0))
+                .with_metadata("limits", limits.clone())
+                .with_metadata("uiHints", hints.clone()),
+        );
+        let mut rel = Relationship::new("target", "/Root");
+        rel.metadata.push(Metadatum::new("uiHints", hints.clone()));
+        prim.relationships.push(rel);
+        let doc = Document {
+            metadata: vec![Metadatum::new(
+                "fallbackPrimTypes",
+                dict(vec![(
+                    "MyType",
+                    UsdaValue::TokenArray(vec!["Xform".into()]),
+                )]),
+            )],
+            prims: vec![prim],
+            ..Document::new()
+        };
+        let specs = document_specs(&doc).unwrap();
+        assert_eq!(
+            fields(&specs, "/")[0],
+            Field::new("fallbackPrimTypes", natural(&doc.metadata[0].value)),
+            "layer fallbackPrimTypes"
+        );
+        let root = fields(&specs, "/Root");
+        assert_eq!(
+            root[3],
+            Field::new(
+                "profilesInfo",
+                Value::UnregisteredValue(Box::new(natural(&profiles)))
+            ),
+            "bare profilesInfo is an unregistered dictionary"
+        );
+        assert_eq!(
+            root[4].value,
+            Value::Dictionary(vec![("profilesInfo".into(), natural(&profiles))]),
+            "ClaimsAPI's customData.profilesInfo is ordinary customData"
+        );
+        assert_eq!(root[5], Field::new("uiHints", natural(&hints)), "uiHints");
+        assert_eq!(
+            fields(&specs, "/Root.size")[4],
+            Field::new("limits", natural(&limits)),
+            "limits"
+        );
+        assert_eq!(
+            fields(&specs, "/Root.target")[2],
+            Field::new("uiHints", natural(&hints)),
+            "relationship uiHints"
+        );
+        let unregistered = specs
+            .iter()
+            .flat_map(|s| &s.fields)
+            .filter(|f| matches!(f.value, Value::UnregisteredValue(_)))
+            .count();
+        assert_eq!(unregistered, 1, "only profilesInfo is unregistered");
+
+        // The crate reader sees the dictionary itself.
+        let bytes = write_document(&doc).unwrap();
+        let header = crate::header::parse_header(&bytes).unwrap();
+        let toc = crate::toc::parse_toc(&bytes, header.toc_offset).unwrap();
+        let sections = crate::section::parse_sections(
+            &bytes,
+            &toc,
+            header.crate_version(),
+            &mut crate::DecodeBudget::with_limit(u64::MAX),
+        )
+        .unwrap();
+        let profiles_field = sections
+            .fields
+            .iter()
+            .find(|f| sections.tokens[f.token_index as usize] == "profilesInfo")
+            .unwrap();
+        let rep = crate::value_rep::RawValueRep::new(profiles_field.value_rep);
+        assert_eq!(
+            rep.value_type().unwrap(),
+            crate::value_type::ValueType::UnregisteredValue,
+            "stored as an unregistered value"
+        );
+        let crate::value_rep::CrateValue::Dictionary(entries) =
+            crate::value_rep::decode_value(&rep, &bytes, &sections).unwrap()
+        else {
+            panic!("profilesInfo holds a dictionary");
+        };
+        let keys: Vec<&str> = entries.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, ["capabilityUsages", "profileCompatibility"], "keys");
+
+        // Other unregistered keys are still rejected, dictionary or not.
+        let mut doc = doc;
+        doc.prims[0]
+            .metadata
+            .push(Metadatum::new("exedraInfo", hints));
+        assert!(
+            matches!(
+                document_specs(&doc),
+                Err(UsdcWriteError::UnknownMetadata { .. })
+            ),
+            "only profilesInfo is transported unregistered"
+        );
     }
 
     #[test]

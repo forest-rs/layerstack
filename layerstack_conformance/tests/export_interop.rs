@@ -8,11 +8,21 @@
 //! skipped and pass, so CI needs no USD installation. The fuller gate (tool
 //! versions, `--arkit` validators, ZIP layout checks, a render) is
 //! `layerstack_conformance/scripts/export_interop.sh`.
+//!
+//! The writers target OpenUSD 26.08 (`export_fixtures::TARGET_OPENUSD`):
+//! metadata is stored with the types that release registers. A fixture
+//! whose metadata an older release does not register (see
+//! `export_fixtures::minimum_openusd`) is compared only with a tool at
+//! least that new; with an older one, such as the `usdcat` a system image
+//! provides, it is skipped with the reason printed. Every other comparison
+//! is exact whatever the tool's version.
 
 use std::path::Path;
 use std::process::Command;
 
-use layerstack_conformance::export_fixtures::{Expect, documents, write_all};
+use layerstack_conformance::export_fixtures::{
+    Expect, OpenUsdRelease, documents, minimum_openusd, parse_openusd_release, write_all,
+};
 use layerstack_conformance::usdc::crate_structure;
 use layerstack_usdc::writer::{
     Spec as UsdcSpec, SpecForm, Specifier, Value as UsdcValue, Variability, write_crate,
@@ -100,6 +110,35 @@ fn external_usd_tools_accept_exporter_output() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// Why a tool of `release` cannot check a fixture that needs `minimum`, or
+/// `None` when it can. An unreadable version counts as too old.
+fn too_old(
+    release: Option<OpenUsdRelease>,
+    minimum: Option<(OpenUsdRelease, &'static str)>,
+) -> Option<String> {
+    let (needed, reason) = minimum?;
+    match release {
+        Some(release) if release >= needed => None,
+        Some((year, month)) => Some(format!("{reason}; the tool is OpenUSD {year}.{month:02}")),
+        None => Some(format!("{reason}; the tool's version is unknown")),
+    }
+}
+
+#[test]
+fn reads_openusd_releases() {
+    assert_eq!(
+        parse_openusd_release("Apple USD Tools (0.25.11)"),
+        Some((25, 11))
+    );
+    assert_eq!(parse_openusd_release("0.26.8\n"), Some((26, 8)));
+    assert_eq!(parse_openusd_release("usdcat 24.08"), Some((24, 8)));
+    assert_eq!(parse_openusd_release("no version"), None);
+    assert!(too_old(Some((25, 8)), minimum_openusd("metadata_dictionaries")).is_some());
+    assert!(too_old(None, minimum_openusd("metadata_dictionaries")).is_some());
+    assert!(too_old(Some((25, 11)), minimum_openusd("metadata_dictionaries")).is_none());
+    assert!(too_old(Some((20, 2)), minimum_openusd("cube")).is_none());
+}
+
 fn usdcat(args: &[&Path]) -> Result<String, String> {
     let out = Command::new("usdcat")
         .args(args)
@@ -123,15 +162,20 @@ fn usdcat(args: &[&Path]) -> Result<String, String> {
 ///    comparison is structural.
 #[test]
 fn usdc_writer_matches_openusd() {
-    if tool("usdcat").is_none() {
+    let Some(version) = tool("usdcat") else {
         eprintln!("skipped: usdcat is not on PATH");
         return;
-    }
+    };
+    let release = parse_openusd_release(&version);
     let dir = scratch_dir("usdc-differential");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     let mut failures = Vec::new();
     for (name, doc) in documents() {
+        if let Some(reason) = too_old(release, minimum_openusd(name)) {
+            eprintln!("skipped {name} with usdcat {version:?}: {reason}");
+            continue;
+        }
         let usda = dir.join(format!("{name}.usda"));
         let usdc = dir.join(format!("{name}.usdc"));
         let reference = dir.join(format!("{name}.openusd.usdc"));

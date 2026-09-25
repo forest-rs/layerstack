@@ -364,6 +364,53 @@ fn metadata_dictionaries() -> Document {
     doc
 }
 
+/// Reorder statements, list-edited relationship targets and connections,
+/// explicit empty lists and a value block default, in one property order
+/// that interleaves attributes and relationships.
+fn list_edits() -> Document {
+    use layerstack_usda::writer::{ListOp, Relationship, Specifier};
+    let mut prim = Prim::def("Xform", "A");
+    prim.property_order = Some(vec!["y".into(), "x".into()]);
+    prim.prim_order = Some(vec!["D".into(), "C".into()]);
+    prim.push_property(Relationship {
+        targets: Some(ListOp {
+            deleted: vec!["/A/D".into()],
+            prepended: vec!["/A/C".into(), "/A.x".into()],
+            ..ListOp::default()
+        }),
+        ..Relationship::new("r", "/A")
+    });
+    prim.push_property(Attribute::new("x", "float", Value::Block));
+    let mut y = Attribute::declared("y", "float");
+    y.connections = Some(ListOp::explicit(Vec::new()));
+    prim.push_property(y);
+    let mut z = Attribute::new("z", "float", Value::Float(1.0)).uniform();
+    z.connections = Some(ListOp {
+        appended: vec!["/A.x".into()],
+        ..ListOp::default()
+    });
+    prim.push_property(z);
+    let mut s = Relationship {
+        targets: Some(ListOp::prepend(vec!["/A/C".into()])),
+        ..Relationship::new("s", "/A").custom()
+    };
+    s.metadata
+        .push(Metadatum::new("doc", Value::String("s".into())));
+    prim.push_property(s);
+    prim.push_property(Relationship {
+        targets: Some(ListOp::explicit(Vec::new())),
+        ..Relationship::new("t", "/A")
+    });
+    prim.children.push(Prim::def("Scope", "C"));
+    prim.children.push(Prim::def("Scope", "D"));
+    let mut doc = Document::new();
+    stage_metadata(&mut doc, "A");
+    doc.prim_order = Some(vec!["B".into(), "A".into()]);
+    doc.prims.push(prim);
+    doc.prims.push(Prim::new(Specifier::Over, None, "B"));
+    doc
+}
+
 const QUAD_TRI_POINTS: [[f32; 3]; 5] = [
     [0.0, 0.0, 0.0],
     [1.0, 0.0, 0.0],
@@ -933,6 +980,7 @@ pub fn documents() -> Vec<(&'static str, Document)> {
         ("types", types()),
         ("metadata", metadata()),
         ("metadata_dictionaries", metadata_dictionaries()),
+        ("list_edits", list_edits()),
         ("primvars", primvars()),
         ("cube", cube_document()),
         (

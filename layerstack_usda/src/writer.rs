@@ -17,13 +17,14 @@
 //! is sorted or deduplicated behind the caller's back); invalid input is
 //! rejected with a [`WriteError`] rather than silently repaired.
 //!
-//! Scope: prims; attributes with default values and explicit connection
-//! lists; relationships with explicit target lists; and metadata, including
+//! Scope: prims with their children and property order (`reorder
+//! nameChildren`, `reorder properties`, `reorder rootPrims`); attributes with
+//! default values (including a value block, `= None`) and connection lists;
+//! relationships with target lists; explicit and list-edited (`delete`,
+//! `prepend`, `append`) connections and targets; and metadata, including
 //! token list operations such as `prepend apiSchemas = [...]`
-//! ([`Value::TokenListOp`]). This is the property set a `UsdShade` material
-//! network and its bindings need. Time samples, splines, list-edited
-//! connections or targets, composition arcs and variant sets are not yet
-//! representable.
+//! ([`Value::TokenListOp`]). Time samples, splines, composition arcs and
+//! variant sets are not yet representable.
 //!
 //! # Example
 //!
@@ -78,6 +79,11 @@ pub struct Document {
     /// Further layer metadata (e.g. `upAxis`, `metersPerUnit`, `doc`),
     /// written after `defaultPrim` in this order.
     pub metadata: Vec<Metadatum>,
+    /// Root prim ordering (`reorder rootPrims = [...]`, the pseudo-root's
+    /// `primOrder` field), or `None` when not authored.
+    ///
+    /// Spec: AOUSD Core §7.6.1 (layer spec fields), §16.2.18.
+    pub prim_order: Option<Vec<String>>,
     /// Root prims, in order.
     pub prims: Vec<Prim>,
 }
@@ -132,6 +138,7 @@ impl Document {
             keys.push("defaultPrim");
         }
         validate_metadata(&self.metadata, &mut keys, "/", false)?;
+        validate_order(self.prim_order.as_deref(), "/", is_identifier)?;
         if let Some(name) = &self.default_prim
             && !self.prims.iter().any(|p| &p.name == name)
         {
@@ -162,6 +169,16 @@ pub struct Prim {
     /// `properties` children field). Names must be unique across both
     /// kinds (§7.3.3).
     pub properties: Vec<Property>,
+    /// Property ordering (`reorder properties = [...]`, the
+    /// `propertyOrder` field), or `None` when not authored.
+    ///
+    /// Spec: AOUSD Core §7.6.2 (prim spec fields).
+    pub property_order: Option<Vec<String>>,
+    /// Child ordering (`reorder nameChildren = [...]`, the `primOrder`
+    /// field), or `None` when not authored.
+    ///
+    /// Spec: AOUSD Core §7.6.2 (prim spec fields).
+    pub prim_order: Option<Vec<String>>,
     /// Child prims, in order.
     pub children: Vec<Self>,
 }
@@ -180,6 +197,8 @@ impl Prim {
             name: name.into(),
             metadata: Vec::new(),
             properties: Vec::new(),
+            property_order: None,
+            prim_order: None,
             children: Vec::new(),
         }
     }
@@ -214,6 +233,8 @@ impl Prim {
             });
         }
         validate_metadata(&self.metadata, &mut Vec::new(), &path, true)?;
+        validate_order(self.property_order.as_deref(), &path, is_property_name)?;
+        validate_order(self.prim_order.as_deref(), &path, is_identifier)?;
         let mut property_names: Vec<&str> = Vec::new();
         for property in &self.properties {
             let name = property.name();
@@ -296,8 +317,10 @@ pub enum Variability {
 /// - the declaration `[custom] [uniform] type name [= value] [( metadata )]`,
 ///   written unless the attribute only carries connections (no default, no
 ///   metadata, not `custom`);
-/// - `[uniform] type name.connect = <target>` (or `[<a>, <b>]`) when
-///   [`Self::connections`] is non-empty.
+/// - `[uniform] type name.connect = <target>` (or `[<a>, <b>]`, or `None`
+///   for an explicit empty list) when [`Self::connections`] is an explicit
+///   list, otherwise one `delete`, `prepend` or `append` statement of that
+///   form per non-empty edit.
 ///
 /// So `token outputs:surface.connect = </M/S.outputs:surface>` is an
 /// attribute with no value and one connection, and an input that has both
@@ -316,14 +339,14 @@ pub struct Attribute {
     pub custom: bool,
     /// Whether the declaration carries the `uniform` keyword.
     pub variability: Variability,
-    /// Default value; `None` writes a bare declaration.
+    /// Default value; `None` writes a bare declaration, and
+    /// [`Value::Block`] a value block (`= None`).
     pub value: Option<Value>,
-    /// Explicit connection list (the `connectionPaths` field): absolute
-    /// property paths such as `/Root/Materials/M/Tex.outputs:rgb`, written
-    /// in order. Empty means no connection statement. List-edited (`prepend`,
-    /// `append`, `delete`) and blocked (`= None`) connections are not
-    /// representable.
-    pub connections: Vec<String>,
+    /// Connections (the `connectionPaths` field): a list op of absolute
+    /// property paths such as `/Root/Materials/M/Tex.outputs:rgb`. `None`
+    /// authors no connections; an explicit empty list blocks weaker ones
+    /// (`.connect = None`).
+    pub connections: Option<ListOp<String>>,
     /// Attribute metadata (e.g. `interpolation`, `elementSize`), in order.
     pub metadata: Vec<Metadatum>,
 }
@@ -337,7 +360,7 @@ impl Attribute {
             custom: false,
             variability: Variability::Varying,
             value: Some(value),
-            connections: Vec::new(),
+            connections: None,
             metadata: Vec::new(),
         }
     }
@@ -352,15 +375,20 @@ impl Attribute {
             custom: false,
             variability: Variability::Varying,
             value: None,
-            connections: Vec::new(),
+            connections: None,
             metadata: Vec::new(),
         }
     }
 
-    /// Appends a connection target (an absolute property path).
+    /// Appends a connection target (an absolute property path) to the
+    /// explicit connection list, starting one when none is authored.
     #[must_use]
     pub fn with_connection(mut self, target: impl Into<String>) -> Self {
-        self.connections.push(target.into());
+        self.connections
+            .get_or_insert_with(|| ListOp::explicit(Vec::new()))
+            .explicit
+            .get_or_insert_with(Vec::new)
+            .push(target.into());
         self
     }
 
@@ -392,7 +420,9 @@ impl Attribute {
                 type_name: self.type_name.clone(),
             });
         };
-        if let Some(value) = &self.value {
+        if let Some(value) = &self.value
+            && !matches!(value, Value::Block)
+        {
             if value.shape() != Some(declared) {
                 return Err(WriteError::TypeMismatch {
                     path: path.into(),
@@ -401,18 +431,21 @@ impl Attribute {
             }
             validate_value(value, path)?;
         }
-        for target in &self.connections {
-            validate_target(target, path, true)?;
-        }
+        validate_targets(self.connections.as_ref(), path, true)?;
         validate_metadata(&self.metadata, &mut Vec::new(), path, true)
     }
 }
 
-/// A relationship spec: declaration, optional explicit targets and metadata.
+/// A relationship spec: declaration, optional targets and metadata.
 ///
 /// Written as `[custom] rel name [= targets] [( metadata )]`, where
-/// `targets` is `<path>`, `[<a>, <b>]` or `None`. Relationships are always
-/// uniform; the `varying` qualifier is not representable.
+/// `targets` is an explicit list: `<path>`, `[<a>, <b>]` or `None`. A
+/// list-edited target list is written as one `delete`, `prepend` or
+/// `append` `rel name = targets` statement per non-empty edit, after the
+/// declaration; the declaration itself is then written only when the
+/// relationship is `custom` or has metadata, as OpenUSD writes it.
+/// Relationships are always uniform; the `varying` qualifier is not
+/// representable.
 ///
 /// Spec: AOUSD Core §16.2.16.7–§16.2.16.9 (relationship specs); OpenUSD
 /// `pxr/usd/sdf/fileIO_Common.h`, `Sdf_WriteRelationship`.
@@ -422,12 +455,11 @@ pub struct Relationship {
     pub name: String,
     /// Whether the declaration carries the `custom` keyword.
     pub custom: bool,
-    /// Explicit target list (the `targetPaths` field): absolute prim or
-    /// property paths, in order. `None` writes a bare declaration (`rel
-    /// name`, no targets authored); `Some` of an empty list writes
-    /// `rel name = None`, an explicit empty list that blocks weaker
-    /// opinions. List-edited targets are not representable.
-    pub targets: Option<Vec<String>>,
+    /// Targets (the `targetPaths` field): a list op of absolute prim or
+    /// property paths. `None` writes a bare declaration (`rel name`, no
+    /// targets authored); an explicit empty list writes `rel name = None`,
+    /// which blocks weaker opinions.
+    pub targets: Option<ListOp<String>>,
     /// Relationship metadata (e.g. `bindMaterialAs`), in order.
     pub metadata: Vec<Metadatum>,
 }
@@ -438,7 +470,7 @@ impl Relationship {
         Self {
             name: name.into(),
             custom: false,
-            targets: Some(alloc::vec![target.into()]),
+            targets: Some(ListOp::explicit(alloc::vec![target.into()])),
             metadata: Vec::new(),
         }
     }
@@ -451,9 +483,7 @@ impl Relationship {
     }
 
     fn validate(&self, path: &str) -> Result<(), WriteError> {
-        for target in self.targets.iter().flatten() {
-            validate_target(target, path, false)?;
-        }
+        validate_targets(self.targets.as_ref(), path, false)?;
         validate_metadata(&self.metadata, &mut Vec::new(), path, true)
     }
 }
@@ -579,6 +609,12 @@ pub enum Value {
     /// Spec: AOUSD Core §6.6.3 (list operations), §16.2.14 (list-op
     /// syntax).
     TokenListOp(ListOp<String>),
+    /// A value block (`None`, `SdfValueBlock`): valid only as an
+    /// [`Attribute`] default, of any declared type, where it blocks weaker
+    /// opinions.
+    ///
+    /// Spec: AOUSD Core §12.3 (value blocking).
+    Block,
 }
 
 /// A list operation: either an explicit list, or edits (`delete`,
@@ -624,6 +660,17 @@ impl<T> ListOp<T> {
             prepended: items,
             appended: Vec::new(),
         }
+    }
+
+    /// Every item of every list, explicit first, then deleted, prepended
+    /// and appended.
+    pub fn items(&self) -> impl Iterator<Item = &T> {
+        self.explicit
+            .iter()
+            .flatten()
+            .chain(&self.deleted)
+            .chain(&self.prepended)
+            .chain(&self.appended)
     }
 
     fn is_valid(&self) -> bool {
@@ -699,10 +746,15 @@ pub enum WriteError {
         /// The rejected target.
         target: String,
     },
-    /// A list-op metadata value is empty, mixes an explicit list with
-    /// edits, or appears where USDA has no list-op syntax (layer metadata,
-    /// dictionary entries).
+    /// A list-op metadata value, connection list or target list is empty,
+    /// mixes an explicit list with edits, or appears where USDA has no
+    /// list-op syntax (layer metadata, dictionary entries).
     InvalidListOp {
+        /// Path of the owning object, with the metadata key after `#`.
+        path: String,
+    },
+    /// A value block (`None`) appears outside an attribute default.
+    MisplacedBlock {
         /// Path of the owning object, with the metadata key after `#`.
         path: String,
     },
@@ -733,6 +785,9 @@ impl fmt::Display for WriteError {
                 write!(f, "{path}: invalid target path {target:?}")
             }
             Self::InvalidListOp { path } => write!(f, "{path}: invalid list op"),
+            Self::MisplacedBlock { path } => {
+                write!(f, "{path}: a value block is only an attribute default")
+            }
         }
     }
 }
@@ -781,6 +836,50 @@ fn validate_target(target: &str, path: &str, property: bool) -> Result<(), Write
     }
 }
 
+/// Validates a connection or target list op: well formed (see
+/// [`ListOp`]), with every path a valid target.
+fn validate_targets(
+    targets: Option<&ListOp<String>>,
+    path: &str,
+    property: bool,
+) -> Result<(), WriteError> {
+    let Some(op) = targets else {
+        return Ok(());
+    };
+    if !op.is_valid() {
+        return Err(WriteError::InvalidListOp { path: path.into() });
+    }
+    for target in op.items() {
+        validate_target(target, path, property)?;
+    }
+    Ok(())
+}
+
+/// Validates the names of a `reorder` statement: each a valid name, none
+/// repeated.
+fn validate_order(
+    order: Option<&[String]>,
+    path: &str,
+    valid: fn(&str) -> bool,
+) -> Result<(), WriteError> {
+    let mut seen: Vec<&str> = Vec::new();
+    for name in order.into_iter().flatten() {
+        if !valid(name) {
+            return Err(WriteError::InvalidName {
+                path: path.into(),
+                name: name.clone(),
+            });
+        }
+        if seen.contains(&name.as_str()) {
+            return Err(WriteError::Duplicate {
+                path: alloc::format!("{path}#{name}"),
+            });
+        }
+        seen.push(name);
+    }
+    Ok(())
+}
+
 /// Validates metadata keys and values; `list_ops` admits
 /// [`Value::TokenListOp`] entries (prim and property metadata only).
 fn validate_metadata<'a>(
@@ -790,6 +889,11 @@ fn validate_metadata<'a>(
     list_ops: bool,
 ) -> Result<(), WriteError> {
     for entry in entries {
+        if matches!(entry.value, Value::Block) {
+            return Err(WriteError::MisplacedBlock {
+                path: alloc::format!("{path}#{}", entry.key),
+            });
+        }
         if let Value::TokenListOp(op) = &entry.value
             && !(list_ops && op.is_valid())
         {
@@ -846,19 +950,16 @@ fn validate_value(value: &Value, path: &str) -> Result<(), WriteError> {
                         path: alloc::format!("{path}#{key}"),
                     });
                 }
+                if matches!(v, Value::Block) {
+                    return Err(WriteError::MisplacedBlock {
+                        path: alloc::format!("{path}#{key}"),
+                    });
+                }
                 validate_value(v, path)?;
             }
             Ok(())
         }
-        Value::TokenListOp(op) => op
-            .explicit
-            .iter()
-            .flatten()
-            .chain(&op.deleted)
-            .chain(&op.prepended)
-            .chain(&op.appended)
-            .find_map(bad_text)
-            .map_or(Ok(()), Err),
+        Value::TokenListOp(op) => op.items().find_map(bad_text).map_or(Ok(()), Err),
         _ => Ok(()),
     }
 }
@@ -983,6 +1084,7 @@ impl Value {
             Self::Int4Array(_) => (Elem::Int, 4, true),
             Self::Dictionary(_) => (Elem::Dictionary, 1, false),
             Self::TokenListOp(_) => (Elem::ListOp, 1, false),
+            Self::Block => return None,
         };
         Some(Shape { elem, arity, array })
     }
@@ -990,7 +1092,7 @@ impl Value {
     /// The canonical (alias-free) USD type name of this value, as used for
     /// typed dictionary entries. For the metadata-only values this is the
     /// `Sdf` value type name (`dictionary`, `tokenListOp`), which is not an
-    /// attribute type.
+    /// attribute type; a [`Self::Block`] has the `SdfValueBlock` type.
     pub fn canonical_type_name(&self) -> &'static str {
         match self {
             Self::Bool(_) => "bool",
@@ -1032,6 +1134,7 @@ impl Value {
             Self::Int4Array(_) => "int4[]",
             Self::Dictionary(_) => "dictionary",
             Self::TokenListOp(_) => "tokenListOp",
+            Self::Block => "SdfValueBlock",
         }
     }
 }
@@ -1058,6 +1161,10 @@ impl Writer<'_> {
             }
             self.metadata_entries(&doc.metadata, 1);
             self.out.push_str(")\n");
+        }
+        if let Some(order) = &doc.prim_order {
+            self.out.push('\n');
+            self.reorder("rootPrims", order, 0);
         }
         for prim in &doc.prims {
             self.out.push('\n');
@@ -1089,27 +1196,12 @@ impl Writer<'_> {
     /// OpenUSD's order. Validation guarantees the op is non-empty and not
     /// mixed.
     fn list_op(&mut self, key: &str, op: &ListOp<String>, depth: usize) {
-        let statement = |w: &mut Self, keyword: &str, items: &[String]| {
-            w.indent(depth);
+        self.list_op_statements(op, depth, |w, keyword, items| {
             w.out.push_str(keyword);
             w.out.push_str(key);
             w.out.push_str(" = ");
             w.array(items, |w, s| w.string(s));
-            w.out.push('\n');
-        };
-        if let Some(items) = &op.explicit {
-            statement(self, "", items);
-            return;
-        }
-        for (keyword, items) in [
-            ("delete ", &op.deleted),
-            ("prepend ", &op.prepended),
-            ("append ", &op.appended),
-        ] {
-            if !items.is_empty() {
-                statement(self, keyword, items);
-            }
-        }
+        });
     }
 
     /// §16.2.17: `specifier [type] "name" [( metadata )] { body }`.
@@ -1134,14 +1226,23 @@ impl Writer<'_> {
         self.out.push('\n');
         self.indent(depth);
         self.out.push_str("{\n");
+        if let Some(order) = &prim.property_order {
+            self.reorder("properties", order, depth + 1);
+        }
+        if let Some(order) = &prim.prim_order {
+            self.reorder("nameChildren", order, depth + 1);
+        }
         for property in &prim.properties {
             match property {
                 Property::Attribute(attribute) => self.attribute(attribute, depth + 1),
                 Property::Relationship(relationship) => self.relationship(relationship, depth + 1),
             }
         }
+        let has_body = !prim.properties.is_empty()
+            || prim.property_order.is_some()
+            || prim.prim_order.is_some();
         for (i, child) in prim.children.iter().enumerate() {
-            if i > 0 || !prim.properties.is_empty() {
+            if i > 0 || has_body {
                 self.out.push('\n');
             }
             self.prim(child, depth + 1);
@@ -1150,15 +1251,26 @@ impl Writer<'_> {
         self.out.push_str("}\n");
     }
 
+    /// `reorder key = ["a", "b"]` (§16.2.17 for `nameChildren` and
+    /// `properties`, §16.2.18 for `rootPrims`).
+    fn reorder(&mut self, key: &str, names: &[String], depth: usize) {
+        self.indent(depth);
+        self.out.push_str("reorder ");
+        self.out.push_str(key);
+        self.out.push_str(" = ");
+        self.array(names, |w, s| w.string(s));
+        self.out.push('\n');
+    }
+
     /// §16.2.16.1: `[custom] [uniform] type name [= value] [( metadata )]`,
-    /// then `[uniform] type name.connect = targets`. The declaration is
+    /// then `[op] [uniform] type name.connect = targets`. The declaration is
     /// skipped for a connection-only attribute, as `Sdf_WriteAttribute`
     /// does.
     fn attribute(&mut self, attribute: &Attribute, depth: usize) {
         let declare = attribute.value.is_some()
             || !attribute.metadata.is_empty()
             || attribute.custom
-            || attribute.connections.is_empty();
+            || attribute.connections.is_none();
         if declare {
             self.indent(depth);
             if attribute.custom {
@@ -1177,12 +1289,42 @@ impl Writer<'_> {
             }
             self.out.push('\n');
         }
-        if !attribute.connections.is_empty() {
+        if let Some(connections) = &attribute.connections {
+            self.list_op_statements(connections, depth, |w, keyword, targets| {
+                w.out.push_str(keyword);
+                w.attribute_head(attribute);
+                w.out.push_str(".connect = ");
+                w.targets(targets);
+            });
+        }
+    }
+
+    /// One statement per list-op operation, in OpenUSD's order: the
+    /// explicit list, otherwise `delete`, `prepend` and `append` for each
+    /// non-empty edit. `statement` writes the line after the indentation,
+    /// given the operation keyword (empty for the explicit list).
+    fn list_op_statements(
+        &mut self,
+        op: &ListOp<String>,
+        depth: usize,
+        mut statement: impl FnMut(&mut Self, &str, &[String]),
+    ) {
+        if let Some(items) = &op.explicit {
             self.indent(depth);
-            self.attribute_head(attribute);
-            self.out.push_str(".connect = ");
-            self.targets(&attribute.connections);
+            statement(self, "", items);
             self.out.push('\n');
+            return;
+        }
+        for (keyword, items) in [
+            ("delete ", &op.deleted),
+            ("prepend ", &op.prepended),
+            ("append ", &op.appended),
+        ] {
+            if !items.is_empty() {
+                self.indent(depth);
+                statement(self, keyword, items);
+                self.out.push('\n');
+            }
         }
     }
 
@@ -1196,33 +1338,50 @@ impl Writer<'_> {
         self.out.push_str(&attribute.name);
     }
 
-    /// §16.2.16.7: `[custom] rel name [= targets] [( metadata )]`.
+    /// §16.2.16.7: `[custom] rel name [= targets] [( metadata )]`, then
+    /// `op rel name = targets` per edit of a list-edited target list.
     fn relationship(&mut self, relationship: &Relationship, depth: usize) {
-        self.indent(depth);
-        if relationship.custom {
-            self.out.push_str("custom ");
-        }
-        self.out.push_str("rel ");
-        self.out.push_str(&relationship.name);
-        match relationship.targets.as_deref() {
-            None => {}
-            Some([]) => self.out.push_str(" = None"),
-            Some(targets) => {
+        let explicit = relationship
+            .targets
+            .as_ref()
+            .and_then(|op| op.explicit.as_deref());
+        let edits = relationship
+            .targets
+            .as_ref()
+            .filter(|op| op.explicit.is_none());
+        if edits.is_none() || relationship.custom || !relationship.metadata.is_empty() {
+            self.indent(depth);
+            if relationship.custom {
+                self.out.push_str("custom ");
+            }
+            self.out.push_str("rel ");
+            self.out.push_str(&relationship.name);
+            if let Some(targets) = explicit {
                 self.out.push_str(" = ");
                 self.targets(targets);
             }
+            if !relationship.metadata.is_empty() {
+                self.out.push_str(" (\n");
+                self.metadata_entries(&relationship.metadata, depth + 1);
+                self.indent(depth);
+                self.out.push(')');
+            }
+            self.out.push('\n');
         }
-        if !relationship.metadata.is_empty() {
-            self.out.push_str(" (\n");
-            self.metadata_entries(&relationship.metadata, depth + 1);
-            self.indent(depth);
-            self.out.push(')');
+        if let Some(op) = edits {
+            self.list_op_statements(op, depth, |w, keyword, targets| {
+                w.out.push_str(keyword);
+                w.out.push_str("rel ");
+                w.out.push_str(&relationship.name);
+                w.out.push_str(" = ");
+                w.targets(targets);
+            });
         }
-        self.out.push('\n');
     }
 
-    /// `<path>` for one target, `[<a>, <b>]` for several. Validation
-    /// guarantees each path is plain identifiers, so it needs no escaping.
+    /// `<path>` for one target, `[<a>, <b>]` for several and `None` for
+    /// none. Validation guarantees each path is plain identifiers, so it
+    /// needs no escaping.
     fn targets(&mut self, targets: &[String]) {
         let path = |w: &mut Self, target: &String| {
             w.out.push('<');
@@ -1230,6 +1389,7 @@ impl Writer<'_> {
             w.out.push('>');
         };
         match targets {
+            [] => self.out.push_str("None"),
             [one] => path(self, one),
             _ => self.array(targets, path),
         }
@@ -1286,6 +1446,7 @@ impl Writer<'_> {
             // Written as statements by `metadata_entries`; validation keeps
             // list ops out of attribute values and dictionaries.
             Value::TokenListOp(_) => unreachable!("list ops are written as statements"),
+            Value::Block => self.out.push_str("None"),
             Value::Dictionary(entries) => {
                 // §6.6.2, §16.2.15: typed entries with quoted keys.
                 self.out.push_str("{\n");
@@ -1454,6 +1615,7 @@ mod tests {
                 Metadatum::new("upAxis", Value::Token("Z".into())),
             ],
             prims: vec![root],
+            ..Document::new()
         }
     }
 
@@ -1837,11 +1999,14 @@ over "P" (
             ..Relationship::new("exedra:declared", "/Root").custom()
         });
         mesh.push_property(Relationship {
-            targets: Some(vec!["/Root/Mat".into(), "/Root/Body.points".into()]),
+            targets: Some(ListOp::explicit(vec![
+                "/Root/Mat".into(),
+                "/Root/Body.points".into(),
+            ])),
             ..Relationship::new("exedra:many", "/Root")
         });
         mesh.push_property(Relationship {
-            targets: Some(Vec::new()),
+            targets: Some(ListOp::explicit(Vec::new())),
             ..Relationship::new("exedra:blocked", "/Root")
         });
         let mut root = Prim::def("Xform", "Root");
@@ -1992,7 +2157,7 @@ def Xform "Root"
             else {
                 unreachable!("material:binding is a relationship");
             };
-            binding.targets = Some(vec![target.into()]);
+            binding.targets = Some(ListOp::explicit(vec![target.into()]));
             assert_eq!(
                 doc.to_usda(),
                 Err(WriteError::InvalidTargetPath {
@@ -2005,7 +2170,7 @@ def Xform "Root"
         // Connections name properties, not prims.
         let mut doc = shading_doc();
         first_attribute(&mut doc.prims[0].children[0]).connections =
-            vec!["/Root/Mat/Surface".into()];
+            Some(ListOp::explicit(vec!["/Root/Mat/Surface".into()]));
         assert!(
             matches!(doc.to_usda(), Err(WriteError::InvalidTargetPath { .. })),
             "connection to a prim path"
@@ -2096,5 +2261,151 @@ def Xform "Root"
             "{text}"
         );
         assert!(parse(&text).diagnostics.is_empty(), "re-parses");
+    }
+
+    /// Reorder statements, list-edited targets and connections, explicit
+    /// empty lists and a value block.
+    fn edits_doc() -> Document {
+        let mut prim = Prim::def("Xform", "A");
+        prim.property_order = Some(vec!["y".into(), "x".into()]);
+        prim.prim_order = Some(vec!["D".into(), "C".into()]);
+        prim.push_property(Relationship {
+            targets: Some(ListOp {
+                deleted: vec!["/A/D".into()],
+                prepended: vec!["/A/C".into(), "/A.x".into()],
+                ..ListOp::default()
+            }),
+            ..Relationship::new("r", "/A")
+        });
+        prim.push_property(Attribute::new("x", "float", Value::Block));
+        let mut y = Attribute::declared("y", "float");
+        y.connections = Some(ListOp::explicit(Vec::new()));
+        prim.push_property(y);
+        let mut z = Attribute::new("z", "float", Value::Float(1.0)).uniform();
+        z.connections = Some(ListOp {
+            appended: vec!["/A.x".into()],
+            ..ListOp::default()
+        });
+        prim.push_property(z);
+        let mut s = Relationship {
+            targets: Some(ListOp::prepend(vec!["/A/C".into()])),
+            ..Relationship::new("s", "/A").custom()
+        };
+        s.metadata
+            .push(Metadatum::new("doc", Value::String("s".into())));
+        prim.push_property(s);
+        prim.children.push(Prim::def("Scope", "C"));
+        prim.children.push(Prim::def("Scope", "D"));
+        Document {
+            prim_order: Some(vec!["B".into(), "A".into()]),
+            prims: vec![prim, Prim::new(Specifier::Over, None, "B")],
+            ..Document::new()
+        }
+    }
+
+    #[test]
+    fn edits_golden_text() {
+        let text = edits_doc().to_usda().unwrap();
+        let expected = r#"#usda 1.0
+
+reorder rootPrims = ["B", "A"]
+
+def Xform "A"
+{
+    reorder properties = ["y", "x"]
+    reorder nameChildren = ["D", "C"]
+    delete rel r = </A/D>
+    prepend rel r = [</A/C>, </A.x>]
+    float x = None
+    float y.connect = None
+    uniform float z = 1
+    append uniform float z.connect = </A.x>
+    custom rel s (
+        doc = "s"
+    )
+    prepend rel s = </A/C>
+
+    def Scope "C"
+    {
+    }
+
+    def Scope "D"
+    {
+    }
+}
+
+over "B"
+{
+}
+"#;
+        assert_eq!(text, expected, "writer output");
+        let parsed = parse(&text);
+        assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+        assert_eq!(
+            parsed.layer.root_prim_order,
+            Some(vec!["B", "A"]),
+            "rootPrims"
+        );
+    }
+
+    #[test]
+    fn rejects_misplaced_blocks_and_invalid_edits() {
+        let mut doc = edits_doc();
+        doc.prims[0]
+            .metadata
+            .push(Metadatum::new("hidden", Value::Block));
+        assert_eq!(
+            doc.to_usda(),
+            Err(WriteError::MisplacedBlock {
+                path: "/A#hidden".into()
+            }),
+            "a block is not metadata"
+        );
+        let mut doc = edits_doc();
+        doc.prims[0].metadata.push(Metadatum::new(
+            "customData",
+            Value::Dictionary(vec![("k".into(), Value::Block)]),
+        ));
+        assert!(
+            matches!(doc.to_usda(), Err(WriteError::MisplacedBlock { .. })),
+            "a block is not a dictionary value"
+        );
+        let mut doc = edits_doc();
+        let Property::Relationship(r) = &mut doc.prims[0].properties[0] else {
+            unreachable!("r is a relationship");
+        };
+        r.targets = Some(ListOp::default());
+        assert_eq!(
+            doc.to_usda(),
+            Err(WriteError::InvalidListOp {
+                path: "/A.r".into()
+            }),
+            "an empty edit list says nothing"
+        );
+        let mut doc = edits_doc();
+        let Property::Attribute(z) = &mut doc.prims[0].properties[3] else {
+            unreachable!("z is an attribute");
+        };
+        z.connections = Some(ListOp {
+            explicit: Some(vec!["/A.x".into()]),
+            prepended: vec!["/A.y".into()],
+            ..ListOp::default()
+        });
+        assert!(
+            matches!(doc.to_usda(), Err(WriteError::InvalidListOp { .. })),
+            "explicit connections cannot also edit"
+        );
+        let mut doc = edits_doc();
+        doc.prims[0].prim_order = Some(vec!["C".into(), "C".into()]);
+        assert!(
+            matches!(doc.to_usda(), Err(WriteError::Duplicate { .. })),
+            "a reorder names each child once"
+        );
+        let mut doc = edits_doc();
+        doc.prims[0].property_order = Some(vec!["a.b".into()]);
+        assert!(
+            matches!(doc.to_usda(), Err(WriteError::InvalidName { .. })),
+            "reordered properties are property names"
+        );
     }
 }

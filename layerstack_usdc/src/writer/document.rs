@@ -8,18 +8,21 @@
 //! the same specs, fields, field types and children order. In particular:
 //!
 //! - the pseudo-root holds `defaultPrim`, then the layer metadata in order,
-//!   then `primChildren`;
+//!   then `primOrder` (`reorder rootPrims`) and `primChildren`;
 //! - a prim holds `specifier`, `typeName` (for typed prims), its metadata
 //!   in order (a token list op such as `prepend apiSchemas` included), then
+//!   `propertyOrder` and `primOrder` (the `reorder` statements), then
 //!   `primChildren` and `properties` (in the document's property order);
 //! - an attribute holds `custom`, `typeName` (the declared name, role and
-//!   `[]` included), `variability`, `default` when a value is authored, its
-//!   metadata in order, then `connectionPaths` (an explicit path list op)
-//!   when it has connections, which USDA writes as a later `.connect`
-//!   statement;
+//!   `[]` included), `variability`, `default` when a value is authored (a
+//!   value block included), its metadata in order, then `connectionPaths`
+//!   (a path list op) when it has connections, which USDA writes as later
+//!   `.connect` statements;
 //! - a relationship holds `variability` (always uniform), `custom` only
-//!   when custom, `targetPaths` (an explicit path list op, empty for
-//!   `rel r = None`) when targets are authored, then its metadata;
+//!   when custom, then `targetPaths` (a path list op, an empty explicit one
+//!   for `rel r = None`) and its metadata: an explicit target list is part
+//!   of the declaration, so it precedes the metadata, while list edits are
+//!   later statements and follow it;
 //! - metadata keys become field names (`doc` is stored as `documentation`)
 //!   and values must already have the field's registered type (strings
 //!   and tokens are interchangeable, since both are written as quoted
@@ -79,6 +82,9 @@ pub fn document_specs(doc: &Document) -> Result<Vec<Spec>, UsdcWriteError> {
     for entry in &doc.metadata {
         root.fields.push(metadatum(Owner::Layer, "/", entry)?);
     }
+    if let Some(order) = &doc.prim_order {
+        root = root.with_field("primOrder", Value::TokenVector(order.clone()));
+    }
     if !doc.prims.is_empty() {
         root = root.with_field(
             "primChildren",
@@ -107,6 +113,12 @@ fn lower_prim(prim: &Prim, parent: &str, specs: &mut Vec<Spec>) -> Result<(), Us
     }
     for entry in &prim.metadata {
         spec.fields.push(metadatum(Owner::Prim, &path, entry)?);
+    }
+    if let Some(order) = &prim.property_order {
+        spec = spec.with_field("propertyOrder", Value::TokenVector(order.clone()));
+    }
+    if let Some(order) = &prim.prim_order {
+        spec = spec.with_field("primOrder", Value::TokenVector(order.clone()));
     }
     if !prim.children.is_empty() {
         spec = spec.with_field(
@@ -159,11 +171,8 @@ fn lower_attribute(attribute: &Attribute, prim: &str) -> Result<Spec, UsdcWriteE
     for entry in &attribute.metadata {
         spec.fields.push(metadatum(Owner::Attribute, &path, entry)?);
     }
-    if !attribute.connections.is_empty() {
-        spec = spec.with_field(
-            "connectionPaths",
-            Value::PathListOp(ListOp::explicit(attribute.connections.clone())),
-        );
+    if let Some(connections) = &attribute.connections {
+        spec = spec.with_field("connectionPaths", Value::PathListOp(list_op(connections)));
     }
     Ok(spec)
 }
@@ -175,15 +184,16 @@ fn lower_relationship(relationship: &Relationship, prim: &str) -> Result<Spec, U
     if relationship.custom {
         spec = spec.with_field("custom", Value::Bool(true));
     }
-    if let Some(targets) = &relationship.targets {
-        spec = spec.with_field(
-            "targetPaths",
-            Value::PathListOp(ListOp::explicit(targets.clone())),
-        );
+    let targets = relationship.targets.as_ref();
+    if let Some(targets) = targets.filter(|op| op.explicit.is_some()) {
+        spec = spec.with_field("targetPaths", Value::PathListOp(list_op(targets)));
     }
     for entry in &relationship.metadata {
         spec.fields
             .push(metadatum(Owner::Relationship, &path, entry)?);
+    }
+    if let Some(targets) = targets.filter(|op| op.explicit.is_none()) {
+        spec = spec.with_field("targetPaths", Value::PathListOp(list_op(targets)));
     }
     Ok(spec)
 }
@@ -240,6 +250,7 @@ fn natural(value: &UsdaValue) -> Value {
         U::Int3Array(v) => Value::Vec3iArray(v.clone()),
         U::Int4Array(v) => Value::Vec4iArray(v.clone()),
         U::TokenListOp(op) => Value::TokenListOp(list_op(op)),
+        U::Block => Value::Block,
         U::Dictionary(entries) => Value::Dictionary(
             entries
                 .iter()
@@ -487,6 +498,7 @@ mod tests {
                 ),
             ],
             prims: vec![root],
+            ..Document::new()
         }
     }
 
@@ -685,10 +697,14 @@ mod tests {
         });
         let mut surface = Attribute::new("outputs:surface", "token", UsdaValue::Int(0));
         surface.value = None;
-        surface.connections.push("/Root/M/S.outputs:surface".into());
+        surface.connections = Some(UsdaListOp::explicit(vec![
+            "/Root/M/S.outputs:surface".into(),
+        ]));
         let mut input = Attribute::new("inputs:x", "float", UsdaValue::Float(0.5))
             .with_metadata("connectability", UsdaValue::Token("interfaceOnly".into()));
-        input.connections.push("/Root/M/S.outputs:surface".into());
+        input.connections = Some(UsdaListOp::explicit(vec![
+            "/Root/M/S.outputs:surface".into(),
+        ]));
         let mut material = Prim::def("Material", "M");
         material.push_property(surface);
         material.push_property(input);
@@ -706,7 +722,7 @@ mod tests {
         ));
         root.push_property(binding);
         root.push_property(Relationship {
-            targets: Some(vec![]),
+            targets: Some(UsdaListOp::explicit(vec![])),
             ..Relationship::new("blocked", "/Root").custom()
         });
         root.push_property(Relationship {
@@ -937,6 +953,102 @@ mod tests {
                 Err(UsdcWriteError::UnknownMetadata { .. })
             ),
             "only profilesInfo is transported unregistered"
+        );
+    }
+
+    /// Reorder statements, list-edited targets and connections and a value
+    /// block land where the text parser stores them.
+    #[test]
+    fn lowers_reorders_list_edits_and_blocks() {
+        let mut prim = Prim::def("Xform", "A");
+        prim.property_order = Some(vec!["x".into(), "r".into()]);
+        prim.prim_order = Some(vec!["C".into()]);
+        let mut edited = Relationship {
+            targets: Some(UsdaListOp::prepend(vec!["/A/C".into()])),
+            ..Relationship::new("r", "/A").custom()
+        };
+        edited
+            .metadata
+            .push(Metadatum::new("doc", UsdaValue::String("r".into())));
+        prim.push_property(edited);
+        let mut explicit = Relationship::new("s", "/A/C");
+        explicit
+            .metadata
+            .push(Metadatum::new("doc", UsdaValue::String("s".into())));
+        prim.push_property(explicit);
+        let mut x = Attribute::new("x", "float", UsdaValue::Block);
+        x.connections = Some(UsdaListOp {
+            deleted: vec!["/A.y".into()],
+            ..UsdaListOp::default()
+        });
+        prim.push_property(x);
+        prim.children.push(Prim::def("Scope", "C"));
+        let doc = Document {
+            prim_order: Some(vec!["A".into()]),
+            prims: vec![prim],
+            ..Document::new()
+        };
+        let specs = document_specs(&doc).unwrap();
+        let tokens =
+            |names: &[&str]| Value::TokenVector(names.iter().map(|n| String::from(*n)).collect());
+        assert_eq!(
+            fields(&specs, "/"),
+            [
+                Field::new("primOrder", tokens(&["A"])),
+                Field::new("primChildren", tokens(&["A"])),
+            ],
+            "pseudo-root"
+        );
+        assert_eq!(
+            fields(&specs, "/A"),
+            [
+                Field::new("specifier", Value::Specifier(Specifier::Def)),
+                Field::new("typeName", Value::Token("Xform".into())),
+                Field::new("propertyOrder", tokens(&["x", "r"])),
+                Field::new("primOrder", tokens(&["C"])),
+                Field::new("primChildren", tokens(&["C"])),
+                Field::new("properties", tokens(&["r", "s", "x"])),
+            ],
+            "prim"
+        );
+        let paths = |items: &[&str]| items.iter().map(|p| String::from(*p)).collect();
+        assert_eq!(
+            fields(&specs, "/A.r"),
+            [
+                Field::new("variability", Value::Variability(Variability::Uniform)),
+                Field::new("custom", Value::Bool(true)),
+                Field::new("documentation", Value::String("r".into())),
+                Field::new(
+                    "targetPaths",
+                    Value::PathListOp(ListOp::prepend(paths(&["/A/C"])))
+                ),
+            ],
+            "list edits follow the declaration's metadata"
+        );
+        assert_eq!(
+            fields(&specs, "/A.s")[1..],
+            [
+                Field::new(
+                    "targetPaths",
+                    Value::PathListOp(ListOp::explicit(paths(&["/A/C"])))
+                ),
+                Field::new("documentation", Value::String("s".into())),
+            ],
+            "an explicit list is part of the declaration"
+        );
+        assert_eq!(
+            fields(&specs, "/A.x")[3..],
+            [
+                Field::new("default", Value::Block),
+                Field::new(
+                    "connectionPaths",
+                    Value::PathListOp(ListOp {
+                        deleted: paths(&["/A.y"]),
+                        ..ListOp::default()
+                    })
+                ),
+            ],
+            "blocked default and deleted connection"
         );
     }
 

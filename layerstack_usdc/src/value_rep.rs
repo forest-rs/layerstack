@@ -134,6 +134,8 @@ pub enum CrateValue {
     Float(f32),
     /// Double-precision float.
     Double(f64),
+    /// A time code (`SdfTimeCode`, crate 0.9 and later).
+    TimeCode(f64),
     /// String value (resolved from STRINGS section).
     String(String),
     /// Token value (resolved from TOKENS section).
@@ -618,7 +620,8 @@ fn decode_float(rep: &RawValueRep, data: &[u8], vtype: ValueType) -> Result<Crat
             #[allow(clippy::cast_possible_truncation, reason = "float32")]
             CrateValue::Float(v as f32)
         }),
-        ValueType::Double | ValueType::TimeCode => (8, CrateValue::Double),
+        ValueType::Double => (8, CrateValue::Double),
+        ValueType::TimeCode => (8, CrateValue::TimeCode),
         _ => {
             return Err(UsdcError::Inconsistent {
                 message: "not a floating-point type",

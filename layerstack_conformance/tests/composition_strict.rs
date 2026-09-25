@@ -50,18 +50,15 @@
 //! each prim's composition graph ([`Stage::explain_prim_graph`]), inherits
 //! implied into every stronger layer stack on the way to the root, internal
 //! references and payloads authored anywhere in a layer stack, list-edited
-//! arcs and target paths, specializes ranked after every other arc wherever
-//! they are authored, and variant selections that do not depend on the
-//! features below.
+//! arcs and target paths, specializes propagated to the root of the graph
+//! and implied like inherits, and variant selections that do not depend on
+//! the features below.
 //!
 //! # Not supported
 //!
 //! - Relocates ([`Cause::Relocates`]): diagnosed and ignored.
-//! - Nodes placed where OpenUSD's graph does not place them: implied
-//!   specializes as nodes of their own ([`Cause::SpecializesPlacement`]),
-//!   which changes resolved values in several fixtures. Variant branches of
-//!   different sets at one site are not ordered by their sets
-//!   ([`Cause::VariantSetOrder`]).
+//! - Variant branches of different sets at one site are not ordered by
+//!   their sets ([`Cause::VariantSetOrder`]).
 //! - Implied classes in population and variant selection
 //!   ([`Cause::ImpliedClasses`]).
 //! - One site per arc path ([`Cause::CollapsedNodes`]).
@@ -505,14 +502,6 @@ enum Cause {
     /// while OpenUSD ranks them in the order of the site's variant sets
     /// (`PcpCompareSiblingNodeStrength` compares `GetSiblingNumAtOrigin`).
     VariantSetOrder,
-    /// A specializes implied into a stronger layer stack is a node of its own
-    /// in OpenUSD, ranked with the arcs beneath it before the specializes
-    /// node it is implied from (AOUSD Core §10.4.1;
-    /// `pxr/usd/pcp/strengthOrdering.cpp`, `PcpCompareSiblingNodeStrength`).
-    /// Layerstack walks both layer stacks as one combined stack, so the
-    /// classes beneath the implied node follow the propagated node's site.
-    SpecializesPlacement,
-
     // Missing sources or extra opinions.
     /// Arcs on namespace ancestors map wrongly into descendants: a subroot
     /// arc target misses its ancestors' arcs and variant selections, or an
@@ -644,15 +633,6 @@ const KNOWN: &[Known] = &[
         values: 0,
         diffs: &[D::ExtraPrim, D::MissingSite],
         reason: "ignores `</CharRig/Anim/Path/Anim>` -> `</CharRig/Anim/Path/AnimScope>` authored in `root.usd`",
-    },
-    Known {
-        fixture: "BasicSpecializesAndInherits_root",
-        causes: &[C::SpecializesPlacement],
-        prims: 2,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "the implied specializes `root.usd /Specializes_2` and the class it inherits rank with the specializes node they are implied from, so `/Instance_2` and `/Model/Looks/Brass` interleave the root's class hierarchy with the referenced one",
     },
     Known {
         fixture: "ElidedAncestralRelocates_root",
@@ -790,15 +770,6 @@ const KNOWN: &[Known] = &[
         reason: "ignores `</Char/ToBeDeleted>` -> `<>` authored in `root.usd`",
     },
     Known {
-        fixture: "SpecializesAndAncestralArcs2_root",
-        causes: &[C::SpecializesPlacement],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "`/HumanMaleStdHair/Hair_Chiang_Head_Chiang_Hair/Inner` ranks the `Class` sites implied through `Hair_Chiang` before those implied through `Hair_Chiang_Head_Chiang_Hair`",
-    },
-    Known {
         fixture: "SpecializesAndAncestralArcs3_root",
         causes: &[C::AncestralArcs],
         prims: 6,
@@ -815,15 +786,6 @@ const KNOWN: &[Known] = &[
         values: 0,
         diffs: &[D::MissingSite],
         reason: "`/Parent2/Child` misses `/PS/Sibling` and `/PSI/Sibling`, the ancestral specializes of the implied class `/Parent2/Sibling`",
-    },
-    Known {
-        fixture: "SpecializesAndAncestralArcs_root",
-        causes: &[C::SpecializesPlacement],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "`/AncestralReference/Child` ranks `ref.usd /Specializes/Child` before `root.usd /Class`, the class implied under the implied specializes `root.usd /Specializes/Child`",
     },
     Known {
         fixture: "SpecializesAndVariants3_root",
@@ -1060,24 +1022,6 @@ const KNOWN: &[Known] = &[
         reason: "ignores `</X/A>` -> `</X/A2>` authored in `root.usd`",
     },
     Known {
-        fixture: "TrickySpecializesAndInherits2_root",
-        causes: &[C::SpecializesPlacement],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "`/Root/Nested` ranks `ref.usd /Specializes/Nested` before `root.usd /NestedClass`, the class implied under the implied specializes `root.usd /Specializes/Nested`",
-    },
-    Known {
-        fixture: "TrickySpecializesAndInherits_root",
-        causes: &[C::SpecializesPlacement],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "`/Model/A` ranks `ref.usd /Ref/B` before `root.usd /Model/C`, the class implied under the implied specializes `root.usd /Model/B`",
-    },
-    Known {
         fixture: "TrickySpecializesAndRelocates_root",
         causes: &[C::Relocates],
         prims: 2,
@@ -1178,21 +1122,21 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "VariantSpecializesAndReferenceSurprisingBehavior_root",
-        causes: &[C::SpecializesPlacement],
+        causes: &[C::AncestralArcs],
         prims: 1,
         props: 1,
         values: 1,
         diffs: &[D::MissingSite],
-        reason: "`/Model/Material_Child` misses the specializes site `root.usd /Model_defaultShadingVariant/Material`, so `myInt` is 1, not 0",
+        reason: "`/Model/Material_Child` misses `root.usd /Model_defaultShadingVariant/Material`, which the specializes implied as `/Model/Material` reaches through the reference on `/Model`, so `myInt` is 1, not 0",
     },
     Known {
         fixture: "VariantSpecializesAndReference_root",
-        causes: &[C::SpecializesPlacement],
+        causes: &[C::AncestralArcs],
         prims: 1,
         props: 1,
         values: 0,
         diffs: &[D::MissingSite],
-        reason: "`/Model/Material_Child` misses `/Model_defaultShadingVariant/Material`, so `myInt` is 1, not 0",
+        reason: "`/Model/Material_Child` misses `/Model_defaultShadingVariant/Material`, which the specialized `/New_Shading_Variant/Material` reaches through the reference on `/New_Shading_Variant`",
     },
     Known {
         fixture: "bug69932_root",

@@ -514,7 +514,7 @@ fn tricky_specializes_and_inherits_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "still needs specializes to inherit weaker referenced provenance from the specialized prim stack"]
+#[ignore = "the specialized subroot prim misses the reference authored on its ancestor (`Cause::AncestralArcs` in `composition_strict.rs`)"]
 fn variant_specializes_and_reference_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("VariantSpecializesAndReference_root");
     assert_layer_stack_matches(&loaded, &pcp_path);

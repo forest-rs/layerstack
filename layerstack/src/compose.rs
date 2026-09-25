@@ -308,6 +308,7 @@ pub(crate) fn compose_stage(
 
     if let Some(builder) = dep_builder.as_mut() {
         builder.retain_prims(&prims);
+        builder.add_relocation_layers(cycles.relocations().layers());
     }
     let dependencies = dep_builder.map(DependencyBuilder::finish);
     // Only prims of the composed stage report arc errors: population
@@ -3257,6 +3258,35 @@ fn lift_arc_relocates(
     cycles.lift_relocations(store, layer_stack, target_root, dest_root, &outer)
 }
 
+/// Records that `dest`, which a relocation moved an arc's opinions to,
+/// depends on the stage paths of the sites authoring that arc (`arc`) and
+/// the arcs `above` it.
+///
+/// Those sites are not namespace ancestors of `dest`, so a population mask
+/// that keeps `dest` must keep them too for the arcs to be expanded again
+/// (see [`crate::LiveStage`]).
+fn add_relocation_dependencies(
+    deps: &mut DependencyBuilder,
+    above: &[ArcStep],
+    arc: (PathId, LayerId),
+    dest: PathId,
+) {
+    let hosts = above.iter().filter_map(|step| match step.target {
+        StepTarget::Namespace { dest_root, .. } => Some((dest_root, step.layer_stack)),
+        _ => None,
+    });
+    for (source, layer) in hosts.chain([arc]) {
+        if source != dest {
+            deps.add_arc(ArcDependency {
+                source,
+                target: dest,
+                arc_kind: ArcKind::Relocates,
+                layer,
+            });
+        }
+    }
+}
+
 /// Returns `true`, and records an [`ArcToProhibitedChild`], when an arc
 /// from the composed prim `prim` targets `target` at or beneath a
 /// relocation source of the layer stack rooted at `layer_stack`. The
@@ -4712,9 +4742,12 @@ fn add_inherit_edge_opinions(
             };
             rel.to_vec()
         };
-        let Some((dest_path_id, _)) = walk.place(store, dest_root, &rel) else {
+        let Some((dest_path_id, moved)) = walk.place(store, dest_root, &rel) else {
             continue;
         };
+        if moved && let Some(d) = deps.as_deref_mut() {
+            add_relocation_dependencies(d, parent.steps, (dest_root, arc_stack), dest_path_id);
+        }
         if out.contains_key(&dest_path_id) {
             mapping.push((remote_path_id, dest_path_id));
         }
@@ -5414,9 +5447,13 @@ fn add_reference_edge_opinions(
             };
             rel.to_vec()
         };
-        let Some((dest_path_id, _)) = walk.place(store, dest_root, &rel) else {
+        let Some((dest_path_id, moved)) = walk.place(store, dest_root, &rel) else {
             continue;
         };
+        if moved && let Some(d) = deps.as_deref_mut() {
+            let above = &nodes.path[..nodes.path.len() - 1];
+            add_relocation_dependencies(d, above, (dest_root, reference.layer), dest_path_id);
+        }
         if out.contains_key(&dest_path_id) {
             mapping.push((remote_path_id, dest_path_id));
         }
@@ -6038,9 +6075,13 @@ fn add_payload_edge_opinions(
             };
             rel.to_vec()
         };
-        let Some((dest_path_id, _)) = walk.place(store, dest_root, &rel) else {
+        let Some((dest_path_id, moved)) = walk.place(store, dest_root, &rel) else {
             continue;
         };
+        if moved && let Some(d) = deps.as_deref_mut() {
+            let above = &nodes.path[..nodes.path.len() - 1];
+            add_relocation_dependencies(d, above, (dest_root, reference.layer), dest_path_id);
+        }
         if out.contains_key(&dest_path_id) {
             mapping.push((remote_path_id, dest_path_id));
         }
@@ -6623,9 +6664,12 @@ fn add_specializes_edge_opinions(
             };
             rel.to_vec()
         };
-        let Some((dest_path_id, _)) = walk.place(store, dest_root, &rel) else {
+        let Some((dest_path_id, moved)) = walk.place(store, dest_root, &rel) else {
             continue;
         };
+        if moved && let Some(d) = deps.as_deref_mut() {
+            add_relocation_dependencies(d, parent.steps, (dest_root, arc_stack), dest_path_id);
+        }
         if out.contains_key(&dest_path_id) {
             mapping.push((remote_path_id, dest_path_id));
         }

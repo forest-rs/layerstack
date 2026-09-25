@@ -59,6 +59,8 @@ pub struct LiveStage {
     /// Layer → composed prims with a reference or payload that targets that
     /// layer's `defaultPrim`, resolved or not.
     default_prim_dependents: HashMap<LayerId, HashSet<PathId>>,
+    /// Layers whose `layerRelocates` the last full composition consulted.
+    relocation_layers: HashSet<LayerId>,
     root: LayerId,
     options: StageOptions,
     needs_full_rebuild: bool,
@@ -85,6 +87,7 @@ impl LiveStage {
             source_to_prims: HashMap::new(),
             prim_to_sources: HashMap::new(),
             default_prim_dependents: deps.default_prim_dependents,
+            relocation_layers: deps.relocation_layers,
             root,
             options,
             needs_full_rebuild: false,
@@ -221,6 +224,30 @@ impl LiveStage {
             .unwrap_or_default();
         prims.sort_unstable();
         prims
+    }
+
+    /// Notifies that the `layerRelocates` metadata of `layer` was authored,
+    /// changed or cleared.
+    ///
+    /// Relocates move prims within the namespace of every layer stack
+    /// holding the layer, and of every namespace those layer stacks are
+    /// mapped into, so when the stage composes any layer stack holding
+    /// `layer` the next [`recompose`](Self::recompose) rebuilds the whole
+    /// stage, as for
+    /// [`notify_structural_change`](Self::notify_structural_change).
+    /// Otherwise nothing depends on the change and nothing is recomposed.
+    ///
+    /// Opinion edits at relocation sources and targets need no such
+    /// notification: [`notify_layer_prim_edits`](Self::notify_layer_prim_edits)
+    /// recomposes the relocated prims that read them.
+    ///
+    /// Spec: AOUSD Core §10.3.2.6. OpenUSD treats a relocates change as a
+    /// significant change of the layer stack (`PcpChanges::DidChange` in
+    /// `pxr/usd/pcp/changes.cpp`).
+    pub fn notify_relocates_edit(&mut self, layer: LayerId) {
+        if self.relocation_layers.contains(&layer) {
+            self.needs_full_rebuild = true;
+        }
     }
 
     /// Notifies that a structural change occurred (prims added/removed, arcs changed).
@@ -404,6 +431,7 @@ impl LiveStage {
         self.layer_to_prims = deps.layer_to_prims;
         self.prim_to_layers = deps.prim_to_layers;
         self.default_prim_dependents = deps.default_prim_dependents;
+        self.relocation_layers = deps.relocation_layers;
         self.reindex_all_sources();
 
         // A before/after difference, not an edit log: removed paths are those
@@ -467,6 +495,76 @@ mod tests {
     /// An attribute spec authoring only the default `value`.
     fn attr(value: i64) -> PropertySpec {
         PropertySpec::attribute().with_default(value)
+    }
+
+    /// Layer 1 references `/R` of layer 2 from `/A` and relocates `/A/B`
+    /// to `/A/C`; layer 2's `/R/B` authors `x = 1`.
+    fn relocated_scene(store: &mut InMemoryStore) -> (PathId, PathId, TokenId) {
+        let field_x = store.tokens.intern("x");
+        let (a, b, c) = (p(store, "/A"), p(store, "/A/B"), p(store, "/A/C"));
+        let (r, r_b) = (p(store, "/R"), p(store, "/R/B"));
+        let mut root = Layer::new(LayerId(1));
+        root.relocates = vec![crate::Relocate {
+            source: b,
+            target: Some(c),
+        }];
+        let mut referencing = PrimSpec::def();
+        referencing.references.explicit = Some(vec![Reference::new(LayerId(2), r)]);
+        root.insert_prim(a, referencing);
+        store.insert_layer(root);
+        let mut referenced = Layer::new(LayerId(2));
+        referenced.insert_prim(r, PrimSpec::def());
+        let mut child = PrimSpec::def();
+        child.set_field(field_x, FieldValue::Value(Value::Int64(1)));
+        referenced.insert_prim(r_b, child);
+        store.insert_layer(referenced);
+        (b, c, field_x)
+    }
+
+    #[test]
+    fn relocated_opinion_edits_recompose_the_relocated_prim() {
+        // Spec: AOUSD Core §10.3.2.6. `/A/C` reads `/R/B` through the
+        // relocation; an edit there recomposes it in scope.
+        let mut store = InMemoryStore::default();
+        let (_, c, field_x) = relocated_scene(&mut store);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let r_b = p(&mut store, "/R/B");
+        assert_eq!(live.composed_prims_for_source(LayerId(2), r_b), [c]);
+
+        let spec = store
+            .layers
+            .get_mut(&LayerId(2))
+            .and_then(|layer| layer.prims.get_mut(&r_b))
+            .expect("spec");
+        spec.set_field(field_x, FieldValue::Value(Value::Int64(2)));
+        live.notify_layer_prim_edits(LayerId(2), &[r_b]);
+        assert_eq!(live.recompose(&mut store), [c]);
+        assert_eq!(
+            live.stage().resolve_field(c, field_x).map(|r| r.value),
+            Some(Value::Int64(2))
+        );
+    }
+
+    #[test]
+    fn relocates_edits_rebuild_stages_holding_the_layer() {
+        let mut store = InMemoryStore::default();
+        let (b, c, _) = relocated_scene(&mut store);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert!(live.stage().has_prim(c) && !live.stage().has_prim(b));
+
+        store
+            .layers
+            .get_mut(&LayerId(1))
+            .expect("root layer")
+            .relocates
+            .clear();
+        // No composed layer stack holds layer 3.
+        live.notify_relocates_edit(LayerId(3));
+        assert!(live.recompose(&mut store).is_empty());
+
+        live.notify_relocates_edit(LayerId(1));
+        live.recompose(&mut store);
+        assert!(live.stage().has_prim(b) && !live.stage().has_prim(c));
     }
 
     #[test]

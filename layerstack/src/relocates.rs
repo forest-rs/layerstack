@@ -657,6 +657,8 @@ pub(crate) struct Relocations {
     targets: HashMap<PathId, PathId>,
     /// The targets population proposes, as `targets`.
     proposed: HashMap<PathId, PathId>,
+    /// Every layer of the layer stacks whose tables were computed.
+    layers: HashSet<LayerId>,
     /// Errors found computing tables, not yet reported.
     errors: Vec<CompositionError>,
 }
@@ -689,7 +691,14 @@ impl Relocations {
         }
         let table = Rc::new(RelocationTable::compute(store, stack, &mut self.errors));
         self.tables.insert(root, Rc::clone(&table));
+        self.layers.extend(stack.layers.iter().copied());
         table
+    }
+
+    /// Every layer whose `layerRelocates` the composition consulted: the
+    /// layers of each layer stack it reached.
+    pub(crate) fn layers(&self) -> impl Iterator<Item = LayerId> + '_ {
+        self.layers.iter().copied()
     }
 
     /// The table of the layer stack rooted at `root`, if already computed.

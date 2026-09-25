@@ -3,6 +3,7 @@
 
 //! Repeated geometry: `UsdGeomPointInstancer`.
 
+use alloc::borrow::Cow;
 use alloc::vec::Vec;
 
 use layerstack_usda::writer::Value;
@@ -43,7 +44,7 @@ pub const PROTOTYPES_SCOPE: &str = "Prototypes";
 #[derive(Clone, Debug, PartialEq)]
 pub struct PointInstancer<'a> {
     /// Prim name; must be a USD identifier.
-    pub name: &'a str,
+    pub name: Cow<'a, str>,
     /// Local transform of the instancer relative to its parent prim,
     /// applied after (less locally than) every instance transform.
     pub transform: Option<Transform>,
@@ -51,20 +52,20 @@ pub struct PointInstancer<'a> {
     pub prototypes: Vec<Node<'a>>,
     /// Prototype of each instance (`protoIndices`), an index into
     /// [`Self::prototypes`].
-    pub proto_indices: &'a [u32],
+    pub proto_indices: Cow<'a, [u32]>,
     /// Position of each instance (`positions`), in the instancer's space.
-    pub positions: &'a [[f32; 3]],
+    pub positions: Cow<'a, [[f32; 3]]>,
     /// Rotation of each instance (`orientations`), as unit quaternions
     /// `[x, y, z, w]` (imaginary part first, real part last). They are
     /// stored at half precision (`quath[]`), as `UsdGeomPointInstancer`
     /// defines them, so each component is rounded to the nearest `half`.
-    pub orientations: Option<&'a [[f32; 4]]>,
+    pub orientations: Option<Cow<'a, [[f32; 4]]>>,
     /// Scale of each instance along the prototype's axes (`scales`),
     /// applied before the rotation.
-    pub scales: Option<&'a [[f32; 3]]>,
+    pub scales: Option<Cow<'a, [[f32; 3]]>>,
     /// Stable identifier of each instance (`ids`), unique within the
     /// instancer.
-    pub ids: Option<&'a [i64]>,
+    pub ids: Option<Cow<'a, [i64]>>,
     /// Custom attributes. Names of `PointInstancer` schema properties are
     /// rejected.
     pub attributes: Vec<CustomAttribute<'a>>,
@@ -73,13 +74,17 @@ pub struct PointInstancer<'a> {
 impl<'a> PointInstancer<'a> {
     /// An instancer without prototypes, drawing `proto_indices[i]` at
     /// `positions[i]` for each instance `i`.
-    pub fn new(name: &'a str, proto_indices: &'a [u32], positions: &'a [[f32; 3]]) -> Self {
+    pub fn new(
+        name: impl Into<Cow<'a, str>>,
+        proto_indices: impl Into<Cow<'a, [u32]>>,
+        positions: impl Into<Cow<'a, [[f32; 3]]>>,
+    ) -> Self {
         Self {
-            name,
+            name: name.into(),
             transform: None,
             prototypes: Vec::new(),
-            proto_indices,
-            positions,
+            proto_indices: proto_indices.into(),
+            positions: positions.into(),
             orientations: None,
             scales: None,
             ids: None,
@@ -98,22 +103,22 @@ impl<'a> PointInstancer<'a> {
     /// Sets the per-instance orientations, as unit quaternions
     /// `[x, y, z, w]`.
     #[must_use]
-    pub fn with_orientations(mut self, orientations: &'a [[f32; 4]]) -> Self {
-        self.orientations = Some(orientations);
+    pub fn with_orientations(mut self, orientations: impl Into<Cow<'a, [[f32; 4]]>>) -> Self {
+        self.orientations = Some(orientations.into());
         self
     }
 
     /// Sets the per-instance scales.
     #[must_use]
-    pub fn with_scales(mut self, scales: &'a [[f32; 3]]) -> Self {
-        self.scales = Some(scales);
+    pub fn with_scales(mut self, scales: impl Into<Cow<'a, [[f32; 3]]>>) -> Self {
+        self.scales = Some(scales.into());
         self
     }
 
     /// Sets the per-instance ids.
     #[must_use]
-    pub fn with_ids(mut self, ids: &'a [i64]) -> Self {
-        self.ids = Some(ids);
+    pub fn with_ids(mut self, ids: impl Into<Cow<'a, [i64]>>) -> Self {
+        self.ids = Some(ids.into());
         self
     }
 
@@ -126,7 +131,7 @@ impl<'a> PointInstancer<'a> {
 
     /// Adds a custom attribute.
     #[must_use]
-    pub fn with_attribute(mut self, name: &'a str, value: Value) -> Self {
+    pub fn with_attribute(mut self, name: impl Into<Cow<'a, str>>, value: Value) -> Self {
         self.attributes.push(CustomAttribute::new(name, value));
         self
     }
@@ -152,11 +157,11 @@ impl<'a> From<PointInstancer<'a>> for Node<'a> {
 
 impl<'a> Node<'a> {
     /// The node's prim name.
-    pub(crate) fn name(&self) -> &'a str {
+    pub(crate) fn name(&self) -> &str {
         match self {
-            Self::Xform(x) => x.name,
-            Self::Mesh(m) => m.name,
-            Self::PointInstancer(p) => p.name,
+            Self::Xform(x) => &x.name,
+            Self::Mesh(m) => &m.name,
+            Self::PointInstancer(p) => &p.name,
         }
     }
 
@@ -208,7 +213,7 @@ pub(crate) struct Checked {
 /// orientations and unique ids. Nothing is authored unless it passes.
 pub(crate) fn check(instancer: &PointInstancer<'_>) -> Result<Checked, InstancerProblem> {
     for attribute in &instancer.attributes {
-        let name = attribute.name;
+        let name = &*attribute.name;
         if UNSUPPORTED.contains(&name) {
             return Err(InstancerProblem::UnsupportedProperty { name: name.into() });
         }
@@ -223,9 +228,12 @@ pub(crate) fn check(instancer: &PointInstancer<'_>) -> Result<Checked, Instancer
     let instances = instancer.proto_indices.len();
     let lengths = [
         ("positions", Some(instancer.positions.len())),
-        ("orientations", instancer.orientations.map(<[_]>::len)),
-        ("scales", instancer.scales.map(<[_]>::len)),
-        ("ids", instancer.ids.map(<[_]>::len)),
+        (
+            "orientations",
+            instancer.orientations.as_deref().map(<[_]>::len),
+        ),
+        ("scales", instancer.scales.as_deref().map(<[_]>::len)),
+        ("ids", instancer.ids.as_deref().map(<[_]>::len)),
     ];
     for (name, len) in lengths {
         if let Some(actual) = len.filter(|&len| len != instances) {
@@ -251,13 +259,14 @@ pub(crate) fn check(instancer: &PointInstancer<'_>) -> Result<Checked, Instancer
                 })
         })
         .collect::<Result<Vec<_>, _>>()?;
-    finite("positions", instancer.positions)?;
-    finite("scales", instancer.scales.unwrap_or_default())?;
+    finite("positions", &instancer.positions)?;
+    finite("scales", instancer.scales.as_deref().unwrap_or_default())?;
     let orientations = instancer
         .orientations
+        .as_deref()
         .map(|quats| quats.iter().enumerate().map(orientation).collect())
         .transpose()?;
-    if let Some(ids) = instancer.ids {
+    if let Some(ids) = &instancer.ids {
         let mut sorted: Vec<(i64, usize)> = ids.iter().copied().zip(0..).collect();
         sorted.sort_unstable();
         if let Some(pair) = sorted.windows(2).find(|w| w[0].0 == w[1].0) {
@@ -331,7 +340,7 @@ fn leaves(node: &Node<'_>, to_root: Matrix, out: &mut Vec<Leaf>) {
             }
             return;
         }
-        Node::Mesh(mesh) => points_bounds(mesh.points),
+        Node::Mesh(mesh) => points_bounds(&mesh.points),
         Node::PointInstancer(instancer) => check(instancer)
             .ok()
             .and_then(|checked| extent(instancer, &checked)),
@@ -438,7 +447,7 @@ pub(crate) fn extent(instancer: &PointInstancer<'_>, checked: &Checked) -> Optio
             &instance_matrix(
                 instancer.positions[instance],
                 checked.orientations.as_ref().map(|q| q[instance]),
-                instancer.scales.map(|s| s[instance]),
+                instancer.scales.as_deref().map(|s| s[instance]),
             ),
         );
         for leaf in leaves {

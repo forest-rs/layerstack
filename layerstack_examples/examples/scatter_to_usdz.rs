@@ -104,28 +104,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let tree = Xform::new("Tree")
         .with_mesh(
-            Mesh::new(
-                "Trunk",
-                &TRUNK,
-                Faces::Polygons {
-                    counts: &[4; 6],
-                    indices: &BOX_INDICES,
-                },
-            )
-            .with_material("Bark"),
+            Mesh::new("Trunk", &TRUNK, Faces::polygons(&[4; 6], &BOX_INDICES))
+                .with_material("Bark"),
         )
         .with_mesh(
             Mesh::new(
                 "Crown",
                 &CROWN,
-                Faces::Polygons {
-                    counts: &CROWN_COUNTS,
-                    indices: &CROWN_INDICES,
-                },
+                Faces::polygons(&CROWN_COUNTS, &CROWN_INDICES),
             )
             .with_material("Needles"),
         );
-    let rock = Mesh::new("Rock", &ROCK, Faces::Triangles(&ROCK_INDICES)).with_material("Stone");
+    let rock = Mesh::new("Rock", &ROCK, Faces::triangles(&ROCK_INDICES)).with_material("Stone");
     // Prototype order is the `protoIndices` numbering: the tree is 0.
     let field = PointInstancer::new("Field", &proto_indices, &positions)
         .with_prototype(tree)

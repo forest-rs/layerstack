@@ -18,7 +18,7 @@ const POINTS: [[f32; 3]; 3] = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]
 const ST: [[f32; 2]; 3] = [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]];
 
 fn tri() -> Mesh<'static> {
-    Mesh::new("Tri", &POINTS, Faces::Triangles(&[0, 1, 2])).with_uvs(Primvar::vertex(&ST))
+    Mesh::new("Tri", &POINTS, Faces::triangles(&[0, 1, 2])).with_uvs(Primvar::vertex(&ST))
 }
 
 fn scene<'a>(mesh: Mesh<'a>, materials: Vec<Material<'a>>) -> Scene<'a> {
@@ -280,7 +280,7 @@ fn untextured_material_authors_constants_only() {
 fn second_uv_set_gets_its_own_reader() {
     let uv1 = [[0.5, 0.5]; 3];
     let mesh = tri()
-        .with_primvar("st1", Primvar::vertex(PrimvarData::TexCoord2(&uv1)))
+        .with_primvar("st1", Primvar::vertex(PrimvarData::tex_coord2(&uv1)))
         .with_material("M");
     let material = Material::new("M")
         .with_diffuse_color(ColorInput::texture(Texture::new("textures/a.png")))
@@ -308,7 +308,7 @@ fn rejects_unusable_materials_and_bindings() {
         }),
         "binding to an undefined material"
     );
-    let bare = Mesh::new("Tri", &POINTS, Faces::Triangles(&[0, 1, 2])).with_material("Painted");
+    let bare = Mesh::new("Tri", &POINTS, Faces::triangles(&[0, 1, 2])).with_material("Painted");
     assert_eq!(
         scene(bare, alloc::vec![painted()]).to_usda(),
         Err(ExportError::InvalidMesh {
@@ -445,10 +445,7 @@ fn panel() -> Mesh<'static> {
     Mesh::new(
         "Panel",
         &PANEL_POINTS,
-        Faces::Polygons {
-            counts: &PANEL_COUNTS,
-            indices: &PANEL_INDICES,
-        },
+        Faces::polygons(&PANEL_COUNTS, &PANEL_INDICES),
     )
 }
 

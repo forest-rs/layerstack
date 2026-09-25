@@ -97,24 +97,17 @@ fn placement() -> Transform {
 }
 
 fn scene() -> Scene<'static> {
-    let cube = Mesh::new(
-        "Cube",
-        &POINTS,
-        Faces::Polygons {
-            counts: &COUNTS,
-            indices: &INDICES,
-        },
-    )
-    .with_normals(Primvar::uniform(&NORMALS[..]))
-    .with_uvs(Primvar::face_varying(&UVS[..]))
-    .with_attribute(
-        "exedra:albedo",
-        AuthoredValue::Asset("textures/checker.png".into()),
-    );
-    let tri = Mesh::new("Tri", &TRI_POINTS, Faces::Triangles(&[0, 1, 2]))
+    let cube = Mesh::new("Cube", &POINTS, Faces::polygons(&COUNTS, &INDICES))
+        .with_normals(Primvar::uniform(&NORMALS[..]))
+        .with_uvs(Primvar::face_varying(&UVS[..]))
+        .with_attribute(
+            "exedra:albedo",
+            AuthoredValue::Asset("textures/checker.png".into()),
+        );
+    let tri = Mesh::new("Tri", &TRI_POINTS, Faces::triangles(&[0, 1, 2]))
         .with_normals(Primvar::vertex(&TRI_NORMALS[..]))
         .with_uvs(Primvar::vertex(&TRI_UVS[..]))
-        .with_primvar("weight", Primvar::vertex(PrimvarData::Float(&TRI_WEIGHTS)))
+        .with_primvar("weight", Primvar::vertex(PrimvarData::float(&TRI_WEIGHTS)))
         .with_transform(Transform::from_translation([0.0, 0.0, 1.0]));
     let root = Xform::new("Root")
         .with_kind("component")
@@ -466,14 +459,7 @@ fn quad_and_triangle_topology_round_trips() {
     ];
     let counts = [4, 3];
     let indices = [0, 1, 2, 3, 1, 4, 2];
-    let mesh = Mesh::new(
-        "Panel",
-        &points,
-        Faces::Polygons {
-            counts: &counts,
-            indices: &indices,
-        },
-    );
+    let mesh = Mesh::new("Panel", &points, Faces::polygons(&counts, &indices));
     let text = Scene::new(
         StageSettings::new(UpAxis::Z, 1.0),
         Xform::new("Root").with_mesh(mesh),
@@ -552,16 +538,9 @@ fn uv_seam_and_hard_edge_keep_face_varying_topology() {
         [2.0, 1.0],
     ];
     let uv_indices = [0, 1, 2, 3, 4, 6, 7, 5];
-    let mesh = Mesh::new(
-        "Fold",
-        &points,
-        Faces::Polygons {
-            counts: &[4, 4],
-            indices: &indices,
-        },
-    )
-    .with_normals(Primvar::face_varying(&normals[..]))
-    .with_uvs(Primvar::face_varying(&uvs[..]).with_indices(&uv_indices));
+    let mesh = Mesh::new("Fold", &points, Faces::polygons(&[4, 4], &indices))
+        .with_normals(Primvar::face_varying(&normals[..]))
+        .with_uvs(Primvar::face_varying(&uvs[..]).with_indices(&uv_indices));
     let text = Scene::new(
         StageSettings::new(UpAxis::Z, 1.0),
         Xform::new("Root").with_mesh(mesh),
@@ -623,10 +602,10 @@ fn asymmetric_one_metre_object_keeps_units_axis_and_transform_order() {
     let wedge = Mesh::new(
         "Wedge",
         &points,
-        Faces::Polygons {
-            counts: &[4, 4, 3, 3, 4],
-            indices: &[0, 3, 2, 1, 0, 1, 4, 3, 4, 5, 3, 0, 4, 1, 1, 2, 5, 4],
-        },
+        Faces::polygons(
+            &[4, 4, 3, 3, 4],
+            &[0, 3, 2, 1, 0, 1, 4, 3, 4, 5, 3, 0, 4, 1, 1, 2, 5, 4],
+        ),
     );
     // Nested, non-commuting transforms: the parent rotates 90 degrees about
     // Z, the child translates 1 m along X and mirrors in X.
@@ -766,7 +745,7 @@ fn moved_usdz_resolves_every_internal_asset() {
     let albedo = std::fs::read(sources.join("albedo.png")).unwrap();
     let roughness = std::fs::read(sources.join("roughness.png")).unwrap();
 
-    let mesh = Mesh::new("Tri", &TRI_POINTS, Faces::Triangles(&[0, 1, 2]))
+    let mesh = Mesh::new("Tri", &TRI_POINTS, Faces::triangles(&[0, 1, 2]))
         .with_attribute(
             "exedra:albedo",
             AuthoredValue::Asset("./textures/albedo.png".into()),

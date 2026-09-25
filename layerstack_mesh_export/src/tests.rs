@@ -26,12 +26,12 @@ fn golden_triangle() {
     let normals = [[0.0, 0.0, 1.0]];
     let st = [[0.0, 0.0], [1.0, 0.0], [0.0, 1.0]];
     let colors = [[1.0, 0.5, 0.25]];
-    let mesh = Mesh::new("Tri", &TRI_POINTS, Faces::Triangles(&[0, 1, 2]))
+    let mesh = Mesh::new("Tri", &TRI_POINTS, Faces::triangles(&[0, 1, 2]))
         .with_normals(Primvar::uniform(&normals))
         .with_uvs(Primvar::face_varying(&st))
         .with_primvar(
             "displayColor",
-            Primvar::constant(PrimvarData::Color3(&colors)),
+            Primvar::constant(PrimvarData::color3(&colors)),
         )
         .with_transform(Transform::from_translation([1.0, 2.0, 3.0]))
         .with_attribute("exedra:path", Value::String("part/tri".into()));
@@ -79,7 +79,7 @@ def Xform "Root" (
 
 #[test]
 fn custom_attributes_must_be_attribute_types() {
-    let mesh = Mesh::new("Tri", &TRI_POINTS, Faces::Triangles(&[0, 1, 2])).with_attribute(
+    let mesh = Mesh::new("Tri", &TRI_POINTS, Faces::triangles(&[0, 1, 2])).with_attribute(
         "exedra:data",
         Value::Dictionary(alloc::vec![("k".into(), Value::Int(1))]),
     );
@@ -98,7 +98,7 @@ fn custom_attributes_must_be_attribute_types() {
 #[test]
 fn indexed_normals_become_a_primvar() {
     let normals = [[0.0, 0.0, 1.0]];
-    let mesh = Mesh::new("Tri", &TRI_POINTS, Faces::Triangles(&[0, 1, 2]))
+    let mesh = Mesh::new("Tri", &TRI_POINTS, Faces::triangles(&[0, 1, 2]))
         .with_normals(Primvar::face_varying(&normals[..]).with_indices(&[0, 0, 0]));
     let text = tri_scene(mesh).to_usda().unwrap();
     let parsed = parse(&text);
@@ -136,14 +136,11 @@ fn polygon_topology_and_custom_primvars() {
     let mesh = Mesh::new(
         "Poly",
         &points,
-        Faces::Polygons {
-            counts: &[4, 3],
-            indices: &[0, 1, 2, 3, 1, 4, 2],
-        },
+        Faces::polygons(&[4, 3], &[0, 1, 2, 3, 1, 4, 2]),
     )
     .with_primvar(
         "exedra:region",
-        Primvar::uniform(PrimvarData::UInt(&region)),
+        Primvar::uniform(PrimvarData::uint(&region)),
     );
     let text = tri_scene(mesh).to_usda().unwrap();
     assert!(text.contains("int[] faceVertexCounts = [4, 3]"), "{text}");
@@ -169,12 +166,12 @@ fn problem(result: Result<String, ExportError>) -> MeshProblem {
 fn rejects_inconsistent_meshes() {
     let tri = |faces| Mesh::new("Tri", &TRI_POINTS, faces);
     assert_eq!(
-        problem(tri_scene(tri(Faces::Triangles(&[0, 1]))).to_usda()),
+        problem(tri_scene(tri(Faces::triangles(&[0, 1]))).to_usda()),
         MeshProblem::PartialTriangle { len: 2 },
         "partial triangle"
     );
     assert_eq!(
-        problem(tri_scene(tri(Faces::Triangles(&[0, 1, 3]))).to_usda()),
+        problem(tri_scene(tri(Faces::triangles(&[0, 1, 3]))).to_usda()),
         MeshProblem::PointIndexOutOfRange {
             corner: 2,
             index: 3,
@@ -183,24 +180,12 @@ fn rejects_inconsistent_meshes() {
         "index range"
     );
     assert_eq!(
-        problem(
-            tri_scene(tri(Faces::Polygons {
-                counts: &[2],
-                indices: &[0, 1]
-            }))
-            .to_usda()
-        ),
+        problem(tri_scene(tri(Faces::polygons(&[2], &[0, 1]))).to_usda()),
         MeshProblem::DegenerateFace { face: 0, count: 2 },
         "degenerate face"
     );
     assert_eq!(
-        problem(
-            tri_scene(tri(Faces::Polygons {
-                counts: &[3],
-                indices: &[0, 1, 2, 0]
-            }))
-            .to_usda()
-        ),
+        problem(tri_scene(tri(Faces::polygons(&[3], &[0, 1, 2, 0]))).to_usda()),
         MeshProblem::CornerCountMismatch {
             expected: 3,
             actual: 4
@@ -209,7 +194,7 @@ fn rejects_inconsistent_meshes() {
     );
 
     let st = [[0.0, 0.0]; 2];
-    let short = tri(Faces::Triangles(&[0, 1, 2])).with_uvs(Primvar::vertex(&st));
+    let short = tri(Faces::triangles(&[0, 1, 2])).with_uvs(Primvar::vertex(&st));
     assert_eq!(
         problem(tri_scene(short).to_usda()),
         MeshProblem::PrimvarLength {
@@ -219,7 +204,7 @@ fn rejects_inconsistent_meshes() {
         },
         "primvar length"
     );
-    let bad_index = tri(Faces::Triangles(&[0, 1, 2]))
+    let bad_index = tri(Faces::triangles(&[0, 1, 2]))
         .with_uvs(Primvar::new(&st[..], Interpolation::FaceVarying).with_indices(&[0, 1, 2]));
     assert_eq!(
         problem(tri_scene(bad_index).to_usda()),
@@ -232,14 +217,14 @@ fn rejects_inconsistent_meshes() {
     );
 
     let nan = [[0.0, f32::NAN, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
-    let mesh = Mesh::new("Tri", &nan, Faces::Triangles(&[0, 1, 2]));
+    let mesh = Mesh::new("Tri", &nan, Faces::triangles(&[0, 1, 2]));
     assert_eq!(
         problem(tri_scene(mesh).to_usda()),
         MeshProblem::NonFinitePoint { point: 0 },
         "non-finite point"
     );
 
-    let mut scene = tri_scene(tri(Faces::Triangles(&[0, 1, 2])));
+    let mut scene = tri_scene(tri(Faces::triangles(&[0, 1, 2])));
     scene.stage.meters_per_unit = 0.0;
     assert_eq!(
         scene.to_usda(),
@@ -250,7 +235,7 @@ fn rejects_inconsistent_meshes() {
     let bad_name = tri_scene(Mesh::new(
         "no-dash",
         &TRI_POINTS,
-        Faces::Triangles(&[0, 1, 2]),
+        Faces::triangles(&[0, 1, 2]),
     ));
     assert!(
         matches!(bad_name.to_usda(), Err(ExportError::Usda(_))),
@@ -261,7 +246,7 @@ fn rejects_inconsistent_meshes() {
 #[test]
 fn usdz_requires_authored_assets_to_be_packaged() {
     let png = b"png";
-    let mesh = Mesh::new("Tri", &TRI_POINTS, Faces::Triangles(&[0, 1, 2]))
+    let mesh = Mesh::new("Tri", &TRI_POINTS, Faces::triangles(&[0, 1, 2]))
         .with_attribute("exedra:albedo", Value::Asset("./textures/a.png".into()));
     let scene = tri_scene(mesh);
     for profile in [UsdzProfile::Generic, UsdzProfile::Arkit] {
@@ -303,7 +288,7 @@ fn usdz_requires_authored_assets_to_be_packaged() {
 
 #[test]
 fn profiles_choose_the_root_layer_format() {
-    let scene = tri_scene(Mesh::new("Tri", &TRI_POINTS, Faces::Triangles(&[0, 1, 2])));
+    let scene = tri_scene(Mesh::new("Tri", &TRI_POINTS, Faces::triangles(&[0, 1, 2])));
     let root_layer = |profile| {
         let bytes = scene.to_usdz(profile, &[]).unwrap();
         let archive = layerstack_usdz::zip::ZipArchive::parse(&bytes).unwrap();
@@ -351,4 +336,45 @@ fn profiles_choose_the_root_layer_format() {
             );
         }
     }
+}
+
+/// A scene assembled at runtime by a function can own every name and
+/// buffer it creates, so it outlives the data it was built from.
+fn owned_scene(parts: u16) -> Scene<'static> {
+    let mut root = Xform::new(alloc::format!("Site{parts}"));
+    let mut materials = Vec::new();
+    for part in 0..parts {
+        let lift = f32::from(part);
+        let points: Vec<[f32; 3]> = TRI_POINTS
+            .iter()
+            .map(|p| [p[0], p[1], p[2] + lift])
+            .collect();
+        let tint = alloc::vec![[lift / 4.0, 0.5, 0.25]];
+        let material = alloc::format!("Paint{part}");
+        root = root.with_mesh(
+            Mesh::new(
+                crate::sanitize_name(&alloc::format!("part.{part}")),
+                points,
+                Faces::triangles(alloc::vec![0, 1, 2]),
+            )
+            .with_primvar("displayColor", Primvar::constant(PrimvarData::color3(tint)))
+            .with_material(material.clone()),
+        );
+        materials.push(crate::Material::new(material));
+    }
+    let mut scene = Scene::new(StageSettings::new(UpAxis::Z, 1.0), root);
+    scene.materials = materials;
+    scene
+}
+
+#[test]
+fn scenes_can_own_their_names_and_buffers() {
+    let text = owned_scene(2).to_usda().unwrap();
+    assert!(text.contains("def Xform \"Site2\""), "{text}");
+    assert!(text.contains("def Mesh \"part_1\""), "{text}");
+    assert!(
+        text.contains("point3f[] points = [(0, 0, 1), (2, 0, 1), (0, 1, 0.5)]"),
+        "{text}"
+    );
+    assert!(text.contains("rel material:binding = </Site2/Materials/Paint1>"));
 }

@@ -16,6 +16,10 @@
 //! least that new; with an older one, such as the `usdcat` a system image
 //! provides, it is skipped with the reason printed. Every other comparison
 //! is exact whatever the tool's version.
+//!
+//! The authored-layer save round trip uses OpenUSD's Python bindings
+//! instead: the Python named by `LAYERSTACK_USD_PYTHON`, or `python3`, when
+//! it imports `pxr`, under the same version rule.
 
 use std::path::Path;
 use std::process::Command;
@@ -23,6 +27,7 @@ use std::process::Command;
 use layerstack_conformance::export_fixtures::{
     Expect, OpenUsdRelease, documents, minimum_openusd, parse_openusd_release, write_all,
 };
+use layerstack_conformance::save_corpus::{Imported, cases};
 use layerstack_conformance::usdc::crate_structure;
 use layerstack_usdc::writer::{
     Spec as UsdcSpec, SpecForm, Specifier, Value as UsdcValue, Variability, write_crate,
@@ -505,4 +510,153 @@ fn arkit_packages_have_a_single_usdc_root() {
         assert_eq!(layers, 1, "{} has one USD layer", fixture.path.display());
     }
     std::fs::remove_dir_all(&dir).unwrap();
+}
+
+/// A Python that imports OpenUSD's `pxr`, with the OpenUSD version it
+/// reports.
+fn usd_python() -> Option<(String, String)> {
+    let python = std::env::var("LAYERSTACK_USD_PYTHON").unwrap_or_else(|_| "python3".into());
+    let out = Command::new(&python)
+        .arg(snapshot_script())
+        .arg("version")
+        .output()
+        .ok()
+        .filter(|o| o.status.success())?;
+    Some((python, String::from_utf8_lossy(&out.stdout).trim().into()))
+}
+
+fn snapshot_script() -> &'static str {
+    concat!(env!("CARGO_MANIFEST_DIR"), "/scripts/layer_snapshot.py")
+}
+
+/// Runs `layer_snapshot.py` with `args`, returning its standard output.
+fn layer_snapshot(python: &str, args: &[&Path]) -> Result<String, String> {
+    let out = Command::new(python)
+        .arg(snapshot_script())
+        .args(args)
+        .output()
+        .map_err(|e| e.to_string())?;
+    if out.status.success() {
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    } else {
+        Err(String::from_utf8_lossy(&out.stderr).into_owned())
+    }
+}
+
+/// The preservation corpus through OpenUSD (`save_corpus`): each case is
+/// imported from its USDA and from OpenUSD's USDC of it, edited through the
+/// `Layer` API and saved as USDA and USDC. OpenUSD must read every saved
+/// file exactly as it reads the hand-written expected layer — the same text
+/// (every spec, field and type), the same authored child and property
+/// order, and the same `ClaimsAPI` records — and our USDC must decode like
+/// OpenUSD's own USDC of our USDA, which pins every field's value type.
+#[test]
+fn saved_layers_round_trip_through_openusd() {
+    let Some((python, version)) = usd_python() else {
+        eprintln!("skipped: no Python with OpenUSD's pxr (set LAYERSTACK_USD_PYTHON)");
+        return;
+    };
+    eprintln!("OpenUSD {version} via {python}");
+    let release = parse_openusd_release(&version);
+    let dir = scratch_dir("layer-save");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut failures = Vec::new();
+    for case in cases() {
+        let name = case.name;
+        if let Some(reason) = too_old(release, case.minimum_openusd) {
+            eprintln!("skipped {name} with OpenUSD {version}: {reason}");
+            continue;
+        }
+        let source = dir.join(format!("{name}.source.usda"));
+        let source_usdc = dir.join(format!("{name}.source.openusd.usdc"));
+        let expected = dir.join(format!("{name}.expected.usda"));
+        std::fs::write(&source, case.source).unwrap();
+        std::fs::write(&expected, case.expected).unwrap();
+        let weaker = case.weaker.map(|text| {
+            let path = dir.join(format!("{name}.weaker.usda"));
+            std::fs::write(&path, text).unwrap();
+            path
+        });
+        let snapshot_args = |layer: &Path| -> Vec<std::path::PathBuf> {
+            let mut args = vec![Path::new("snapshot").to_path_buf(), layer.to_path_buf()];
+            args.extend(weaker.clone());
+            args
+        };
+        let snapshot = |layer: &Path| {
+            let args = snapshot_args(layer);
+            let args: Vec<&Path> = args.iter().map(|a| a.as_path()).collect();
+            layer_snapshot(&python, &args)
+        };
+        layer_snapshot(&python, &[Path::new("convert"), &source, &source_usdc])
+            .unwrap_or_else(|e| panic!("{name}: OpenUSD cannot convert the source: {e}"));
+        let want = snapshot(&expected)
+            .unwrap_or_else(|e| panic!("{name}: OpenUSD cannot read the expected layer: {e}"));
+        if name == "explicit_empty_lists" {
+            // The oracle itself: explicit-empty lists block the weaker
+            // opinions, a bare declaration does not, a delete edits them.
+            let want: serde_json::Value = serde_json::from_str(&want).unwrap();
+            let a = &want["composed"]["/A"];
+            let none: Vec<String> = Vec::new();
+            for blocked in [
+                "blocked",
+                "emptied",
+                "blockedInput",
+                "emptiedInput",
+                "apiSchemas",
+            ] {
+                assert_eq!(
+                    a[blocked],
+                    serde_json::json!(none),
+                    "{blocked} is blocked by an explicit empty list"
+                );
+            }
+            assert_eq!(a["declared"], serde_json::json!(["/Elsewhere"]), "declared");
+            assert_eq!(
+                a["pruned"],
+                serde_json::json!(["/Elsewhere/Kept"]),
+                "pruned"
+            );
+        }
+
+        let imports = [
+            ("usda", Imported::usda(case.source)),
+            (
+                "usdc",
+                Imported::usdc(&std::fs::read(&source_usdc).unwrap()),
+            ),
+        ];
+        for (from, mut layer) in imports {
+            (case.edit)(&mut layer);
+            let usda = dir.join(format!("{name}.from-{from}.usda"));
+            let usdc = dir.join(format!("{name}.from-{from}.usdc"));
+            let ours = layer.save_usdc().unwrap();
+            std::fs::write(&usda, layer.save_usda().unwrap()).unwrap();
+            std::fs::write(&usdc, &ours).unwrap();
+            for saved in [&usda, &usdc] {
+                match snapshot(saved) {
+                    Ok(got) if got == want => {}
+                    Ok(got) => failures.push(format!(
+                        "{}: OpenUSD reads it differently\n--- saved\n{got}\n--- expected\n{want}",
+                        saved.display()
+                    )),
+                    Err(e) => failures.push(format!("{}: {e}", saved.display())),
+                }
+            }
+            let reference = dir.join(format!("{name}.from-{from}.openusd.usdc"));
+            if let Err(e) = layer_snapshot(&python, &[Path::new("convert"), &usda, &reference]) {
+                failures.push(format!("{name}: OpenUSD cannot convert our USDA: {e}"));
+                continue;
+            }
+            let theirs = crate_structure(&std::fs::read(&reference).unwrap()).unwrap();
+            let ours = crate_structure(&ours).unwrap();
+            if ours != theirs {
+                failures.push(format!(
+                    "{name} (from {from}): USDC differs from OpenUSD's USDC of our USDA\n--- ours\n{ours:#?}\n--- OpenUSD\n{theirs:#?}"
+                ));
+            }
+        }
+    }
+    std::fs::remove_dir_all(&dir).unwrap();
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

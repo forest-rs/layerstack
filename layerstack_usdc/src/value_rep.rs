@@ -413,8 +413,8 @@ fn decode_bool(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> 
             .collect();
         return Ok(CrateValue::Array(arr));
     }
-    let off = payload_offset_usize(rep)?;
-    Ok(CrateValue::Bool(data[off] != 0))
+    let mut off = payload_offset_usize(rep, data)?;
+    Ok(CrateValue::Bool(read_u8(data, &mut off)? != 0))
 }
 
 fn decode_integer_u8(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> {
@@ -432,8 +432,8 @@ fn decode_integer_u8(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcE
             .collect();
         return Ok(CrateValue::Array(arr));
     }
-    let off = payload_offset_usize(rep)?;
-    Ok(CrateValue::UChar(data[off]))
+    let mut off = payload_offset_usize(rep, data)?;
+    Ok(CrateValue::UChar(read_u8(data, &mut off)?))
 }
 
 fn decode_integer_i32(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> {
@@ -451,9 +451,8 @@ fn decode_integer_i32(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, Usdc
             .collect();
         return Ok(CrateValue::Array(arr));
     }
-    let off = payload_offset_usize(rep)?;
-    let v = i32::from_le_bytes(data[off..off + 4].try_into().unwrap());
-    Ok(CrateValue::Int(v))
+    let mut off = payload_offset_usize(rep, data)?;
+    Ok(CrateValue::Int(read_i32_le(data, &mut off)?))
 }
 
 fn decode_integer_u32(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> {
@@ -471,9 +470,8 @@ fn decode_integer_u32(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, Usdc
             .collect();
         return Ok(CrateValue::Array(arr));
     }
-    let off = payload_offset_usize(rep)?;
-    let v = u32::from_le_bytes(data[off..off + 4].try_into().unwrap());
-    Ok(CrateValue::UInt(v))
+    let mut off = payload_offset_usize(rep, data)?;
+    Ok(CrateValue::UInt(read_u32_le(data, &mut off)?))
 }
 
 fn decode_integer_i64(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> {
@@ -491,9 +489,8 @@ fn decode_integer_i64(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, Usdc
         let arr = values.into_iter().map(CrateValue::Int64).collect();
         return Ok(CrateValue::Array(arr));
     }
-    let off = payload_offset_usize(rep)?;
-    let v = i64::from_le_bytes(data[off..off + 8].try_into().unwrap());
-    Ok(CrateValue::Int64(v))
+    let off = payload_offset_usize(rep, data)?;
+    Ok(CrateValue::Int64(read_u64_at(data, off)?.cast_signed()))
 }
 
 fn decode_integer_u64(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> {
@@ -513,9 +510,8 @@ fn decode_integer_u64(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, Usdc
             .collect();
         return Ok(CrateValue::Array(arr));
     }
-    let off = payload_offset_usize(rep)?;
-    let v = u64::from_le_bytes(data[off..off + 8].try_into().unwrap());
-    Ok(CrateValue::UInt64(v))
+    let off = payload_offset_usize(rep, data)?;
+    Ok(CrateValue::UInt64(read_u64_at(data, off)?))
 }
 
 /// Reads an array of integers from the file data at the payload offset.
@@ -525,25 +521,27 @@ fn read_integer_array(
     element_size: usize,
     _signed: bool,
 ) -> Result<Vec<i64>, UsdcError> {
-    let off = payload_offset_usize(rep)?;
+    let off = payload_offset_usize(rep, data)?;
     if off == 0 {
         return Ok(vec![]);
     }
-    let num_elements = read_u64_at(data, off)? as usize;
+    let count = read_u64_at(data, off)?;
     let arr_start = off + 8;
 
     // Like float arrays, short arrays are stored uncompressed.
-    if rep.is_compressed() && num_elements >= MIN_COMPRESSED_ARRAY_SIZE {
-        let (values, _) = read_compressed_ints(&data[arr_start..], num_elements, element_size)?;
+    if rep.is_compressed() && count >= MIN_COMPRESSED_ARRAY_SIZE as u64 {
+        // `read_compressed_ints` checks the count against the compressed data
+        // before allocating.
+        let count = usize::try_from(count).map_err(|_| UsdcError::IntegerArrayDecode {
+            context: "element count exceeds the address space",
+        })?;
+        let (values, _) = read_compressed_ints(bytes_from(data, arr_start)?, count, element_size)?;
         Ok(values)
     } else {
-        let mut values = Vec::with_capacity(num_elements);
-        for i in 0..num_elements {
-            let elem_off = arr_start + i * element_size;
-            let v = read_signed_le_n(data, elem_off, element_size);
-            values.push(v);
-        }
-        Ok(values)
+        let count = element_count(data, arr_start, count, element_size)?;
+        (0..count)
+            .map(|i| read_signed_le_n(data, arr_start + i * element_size, element_size))
+            .collect()
     }
 }
 
@@ -563,7 +561,11 @@ fn decode_float(rep: &RawValueRep, data: &[u8], vtype: ValueType) -> Result<Crat
             CrateValue::Float(v as f32)
         }),
         ValueType::Double | ValueType::TimeCode => (8, CrateValue::Double),
-        _ => unreachable!(),
+        _ => {
+            return Err(UsdcError::Inconsistent {
+                message: "not a floating-point type",
+            });
+        }
     };
 
     // Stored elements are read by bit pattern, so every half (subnormals
@@ -586,40 +588,43 @@ fn decode_float(rep: &RawValueRep, data: &[u8], vtype: ValueType) -> Result<Crat
     }
 
     if !rep.is_array() {
-        let off = payload_offset_usize(rep)?;
-        return element(&data[off..off + element_size]);
+        let off = payload_offset_usize(rep, data)?;
+        return element(bytes_at(data, off, element_size)?);
     }
 
     // Array
-    let off = payload_offset_usize(rep)?;
+    let off = payload_offset_usize(rep, data)?;
     if off == 0 {
         return Ok(CrateValue::Array(vec![]));
     }
-    let num_elements = read_u64_at(data, off)? as usize;
+    let count = read_u64_at(data, off)?;
     let arr_start = off + 8;
 
     // Arrays shorter than `MinCompressedArraySize` are stored uncompressed
     // even when flagged compressed (`_ReadPossiblyCompressedArray`,
     // `pxr/usd/sdf/crateFile.cpp:2259`).
-    if !rep.is_compressed() || num_elements < MIN_COMPRESSED_ARRAY_SIZE {
-        let mut arr = Vec::with_capacity(num_elements);
-        for i in 0..num_elements {
-            let elem_off = arr_start + i * element_size;
-            arr.push(element(&data[elem_off..elem_off + element_size])?);
-        }
+    if !rep.is_compressed() || count < MIN_COMPRESSED_ARRAY_SIZE as u64 {
+        let count = element_count(data, arr_start, count, element_size)?;
+        let arr = (0..count)
+            .map(|i| element(bytes_at(data, arr_start + i * element_size, element_size)?))
+            .collect::<Result<_, UsdcError>>()?;
         return Ok(CrateValue::Array(arr));
     }
 
-    // Compressed float array.
-    let compression_type = data[arr_start];
-    let rest = &data[arr_start + 1..];
+    // Compressed float array. `read_compressed_ints` checks the count
+    // against the compressed data before allocating.
+    let count = usize::try_from(count).map_err(|_| UsdcError::IntegerArrayDecode {
+        context: "element count exceeds the address space",
+    })?;
+    let mut pos = arr_start;
+    let compression_type = read_u8(data, &mut pos)?;
 
     if compression_type == b'i' {
         // Integer-coded: every element is an integral value, stored as
         // compressed `int32`s whatever the element width, and converted
         // numerically (`crateFile.cpp`, `_WritePossiblyCompressedArray` and
         // `_ReadPossiblyCompressedArray` for floating-point arrays).
-        let (int_values, _) = read_compressed_ints(rest, num_elements, 4)?;
+        let (int_values, _) = read_compressed_ints(bytes_from(data, pos)?, count, 4)?;
         #[allow(
             clippy::cast_precision_loss,
             reason = "values were written as exact int32 conversions"
@@ -628,25 +633,25 @@ fn decode_float(rep: &RawValueRep, data: &[u8], vtype: ValueType) -> Result<Crat
         Ok(CrateValue::Array(arr))
     } else if compression_type == b't' {
         // LUT compression.
-        let lut_count = u32::from_le_bytes(rest[..4].try_into().unwrap()) as usize;
-        let lut_start = 4;
-        let mut luts = Vec::with_capacity(lut_count);
-        for i in 0..lut_count {
-            let loff = lut_start + i * element_size;
-            luts.push(element(&rest[loff..loff + element_size])?);
-        }
-        let indices_start = lut_start + lut_count * element_size;
-        let (indices, _) = read_compressed_ints(&rest[indices_start..], num_elements, 4)?;
-        let mut arr = Vec::with_capacity(num_elements);
-        for idx in indices {
-            let lut_idx = idx as usize;
-            if lut_idx >= luts.len() {
-                return Err(UsdcError::Inconsistent {
-                    message: "float LUT index out of range",
-                });
-            }
-            arr.push(luts[lut_idx].clone());
-        }
+        let lut_count = read_u32_le(data, &mut pos)?;
+        let lut_count = element_count(data, pos, u64::from(lut_count), element_size)?;
+        let luts = (0..lut_count)
+            .map(|i| element(bytes_at(data, pos + i * element_size, element_size)?))
+            .collect::<Result<Vec<_>, _>>()?;
+        let indices_start = pos + lut_count * element_size;
+        let (indices, _) = read_compressed_ints(bytes_from(data, indices_start)?, count, 4)?;
+        let arr = indices
+            .into_iter()
+            .map(|idx| {
+                usize::try_from(idx)
+                    .ok()
+                    .and_then(|idx| luts.get(idx))
+                    .cloned()
+                    .ok_or(UsdcError::Inconsistent {
+                        message: "float LUT index out of range",
+                    })
+            })
+            .collect::<Result<_, _>>()?;
         Ok(CrateValue::Array(arr))
     } else {
         Err(UsdcError::Inconsistent {
@@ -950,19 +955,12 @@ fn decode_math_type(
         });
     }
 
-    let off = payload_offset_usize(rep)?;
+    let off = payload_offset_usize(rep, data)?;
 
     if !rep.is_array() {
-        if off + total_bytes > data.len() {
-            return Err(UsdcError::UnexpectedEof {
-                section: "math value",
-                offset: off as u64,
-                expected: total_bytes as u64,
-            });
-        }
         return Ok(CrateValue::Opaque {
             value_type: vtype,
-            data: data[off..off + total_bytes].to_vec(),
+            data: bytes_at(data, off, total_bytes)?.to_vec(),
         });
     }
 
@@ -970,23 +968,16 @@ fn decode_math_type(
     if off == 0 {
         return Ok(CrateValue::Array(vec![]));
     }
-    let num_elements = read_u64_at(data, off)? as usize;
     let arr_start = off + 8;
-    let mut arr = Vec::with_capacity(num_elements);
-    for i in 0..num_elements {
-        let elem_off = arr_start + i * total_bytes;
-        if elem_off + total_bytes > data.len() {
-            return Err(UsdcError::UnexpectedEof {
-                section: "math array element",
-                offset: elem_off as u64,
-                expected: total_bytes as u64,
-            });
-        }
-        arr.push(CrateValue::Opaque {
-            value_type: vtype,
-            data: data[elem_off..elem_off + total_bytes].to_vec(),
-        });
-    }
+    let count = element_count(data, arr_start, read_u64_at(data, off)?, total_bytes)?;
+    let arr = (0..count)
+        .map(|i| {
+            Ok(CrateValue::Opaque {
+                value_type: vtype,
+                data: bytes_at(data, arr_start + i * total_bytes, total_bytes)?.to_vec(),
+            })
+        })
+        .collect::<Result<_, UsdcError>>()?;
     Ok(CrateValue::Array(arr))
 }
 
@@ -999,14 +990,12 @@ fn decode_dictionary(
     data: &[u8],
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
-    let off = payload_offset_usize(rep)?;
-    if off == 0 && rep.is_inlined() {
-        let num = rep.payload_offset() as usize;
-        if num == 0 {
-            return Ok(CrateValue::Dictionary(vec![]));
-        }
+    // Only the empty dictionary is inlined (`_EncodeInline`,
+    // `pxr/usd/sdf/crateValueInliners.h`).
+    if rep.is_inlined() {
+        return Ok(CrateValue::Dictionary(vec![]));
     }
-
+    let off = payload_offset_usize(rep, data)?;
     let (entries, _) = decode_dictionary_at(data, off, sections)?;
     Ok(CrateValue::Dictionary(entries))
 }
@@ -1020,7 +1009,9 @@ fn decode_dictionary_at(
     off: usize,
     sections: &CrateSections,
 ) -> Result<(Vec<(String, CrateValue)>, usize), UsdcError> {
-    let num_items = read_u64_at(data, off)? as usize;
+    // Each entry advances past at least 12 bytes, so the loop ends at the
+    // end of the data.
+    let num_items = read_u64_at(data, off)?;
     let mut pos = off + 8;
     let mut entries = Vec::new();
 
@@ -1047,7 +1038,7 @@ fn decode_list_op(
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
     let vtype = rep.value_type()?;
-    let off = payload_offset_usize(rep)?;
+    let off = payload_offset_usize(rep, data)?;
 
     if off == 0 {
         return Ok(CrateValue::ListOp(CrateListOp {
@@ -1214,19 +1205,26 @@ fn read_vt_value(
     pos: &mut usize,
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
-    let start = *pos;
-    let relative = read_u64_at(data, start)?;
-    let rep_offset = usize::try_from(relative)
-        .ok()
-        .and_then(|relative| start.checked_add(relative))
-        .ok_or(UsdcError::UnexpectedEof {
-            section: "VtValue value rep",
-            offset: start as u64,
-            expected: 8,
-        })?;
-    let child_rep = RawValueRep::new(read_u64_at(data, rep_offset)?.to_le_bytes());
-    *pos = rep_offset + 8;
+    let mut rep_offset = relative_offset(data, *pos)?;
+    let child_rep = RawValueRep::new(read_bytes(data, &mut rep_offset)?);
+    *pos = rep_offset;
     decode_value(&child_rep, data, sections)
+}
+
+/// Reads the offset field at `pos`, which OpenUSD's `_RecursiveRead`
+/// (`pxr/usd/sdf/crateFile.cpp:1119`) makes relative to the field itself,
+/// and returns the absolute position it leads to.
+fn relative_offset(data: &[u8], pos: usize) -> Result<usize, UsdcError> {
+    let relative = read_u64_at(data, pos)?;
+    usize::try_from(relative)
+        .ok()
+        .and_then(|relative| pos.checked_add(relative))
+        .filter(|target| *target <= data.len())
+        .ok_or(UsdcError::UnexpectedEof {
+            section: "relative offset",
+            offset: pos as u64,
+            expected: relative,
+        })
 }
 
 /// Looks up a path by index, or the empty string when out of range.
@@ -1312,7 +1310,7 @@ fn decode_time_samples(
     data: &[u8],
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
-    let off = payload_offset_usize(rep)?;
+    let off = payload_offset_usize(rep, data)?;
     if off == 0 {
         return Ok(CrateValue::TimeSamples(vec![]));
     }
@@ -1327,25 +1325,13 @@ fn decode_time_samples(
     //   num_values: u64, then num_values × 8-byte ValueReps
 
     // 1. Read timecodes relative offset.
-    let timecodes_rel = read_u64_at(data, off)? as usize;
-    let tc_off = off + timecodes_rel;
+    let tc_off = relative_offset(data, off)?;
 
     // 2. Read the 8-byte timecodes ValueRep.
-    if tc_off + 8 > data.len() {
-        return Err(UsdcError::UnexpectedEof {
-            section: "timeSamples timecodes rep",
-            offset: tc_off as u64,
-            expected: 8,
-        });
-    }
-    let mut tc_rep_bytes = [0_u8; 8];
-    tc_rep_bytes.copy_from_slice(&data[tc_off..tc_off + 8]);
-    let tc_rep = RawValueRep::new(tc_rep_bytes);
+    let tc_rep = RawValueRep::new(read_u64_at(data, tc_off)?.to_le_bytes());
 
     // 3. Right after the timecodes ValueRep, read values relative offset.
-    let current_offset = tc_off + 8;
-    let values_rel = read_u64_at(data, current_offset)? as usize;
-    let val_off = current_offset + values_rel;
+    let val_off = relative_offset(data, tc_off + 8)?;
 
     // 4. Decode timecodes. OpenUSD packs them as a `std::vector<double>`
     //    (`TimeSamples::times`, `pxr/usd/sdf/crateFile.cpp:1596`), which is
@@ -1366,27 +1352,17 @@ fn decode_time_samples(
     };
 
     // 5. Read value reps, one per time.
-    let num_values = read_u64_at(data, val_off)? as usize;
-    if num_values != timecodes.len() {
+    let num_values = read_u64_at(data, val_off)?;
+    if num_values != timecodes.len() as u64 {
         return Err(UsdcError::Inconsistent {
             message: "timeSamples has a different number of times and values",
         });
     }
-    let mut samples = Vec::with_capacity(num_values);
-    let reps_start = val_off + 8;
+    let mut samples = Vec::with_capacity(timecodes.len());
+    let mut rep_off = val_off + 8;
 
-    for (i, time) in timecodes.into_iter().enumerate() {
-        let rep_off = reps_start + i * 8;
-        if rep_off + 8 > data.len() {
-            return Err(UsdcError::UnexpectedEof {
-                section: "timeSamples value rep",
-                offset: rep_off as u64,
-                expected: 8,
-            });
-        }
-        let mut vr_bytes = [0_u8; 8];
-        vr_bytes.copy_from_slice(&data[rep_off..rep_off + 8]);
-        let vr = RawValueRep::new(vr_bytes);
+    for time in timecodes {
+        let vr = RawValueRep::new(read_bytes(data, &mut rep_off)?);
         let val = decode_value(&vr, data, sections)?;
         samples.push((time, val));
     }
@@ -1403,20 +1379,10 @@ fn decode_path_vector(
     data: &[u8],
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
-    let off = payload_offset_usize(rep)?;
-    let num = read_u64_at(data, off)? as usize;
-    let mut pos = off + 8;
-    let mut paths = Vec::with_capacity(num);
-    for _ in 0..num {
-        let idx = u32::from_le_bytes(data[pos..pos + 4].try_into().unwrap()) as usize;
-        let path = if idx < sections.paths.len() {
-            sections.paths[idx].clone()
-        } else {
-            String::new()
-        };
-        paths.push(path);
-        pos += 4;
-    }
+    let indices = read_index_vector(rep, data, 4)?;
+    let paths = indices
+        .map(|mut pos| Ok(lookup_path(sections, read_u32_le(data, &mut pos)? as usize)))
+        .collect::<Result<_, UsdcError>>()?;
     Ok(CrateValue::PathVector(paths))
 }
 
@@ -1425,28 +1391,22 @@ fn decode_token_vector(
     data: &[u8],
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
-    let off = payload_offset_usize(rep)?;
-    let num = read_u64_at(data, off)? as usize;
-    let mut pos = off + 8;
-    let mut tokens = Vec::with_capacity(num);
-    for _ in 0..num {
-        let idx = u32::from_le_bytes(data[pos..pos + 4].try_into().unwrap()) as usize;
-        tokens.push(lookup_token(sections, idx));
-        pos += 4;
-    }
+    let indices = read_index_vector(rep, data, 4)?;
+    let tokens = indices
+        .map(|mut pos| {
+            Ok(lookup_token(
+                sections,
+                read_u32_le(data, &mut pos)? as usize,
+            ))
+        })
+        .collect::<Result<_, UsdcError>>()?;
     Ok(CrateValue::TokenVector(tokens))
 }
 
 fn decode_double_vector(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> {
-    let off = payload_offset_usize(rep)?;
-    let num = read_u64_at(data, off)? as usize;
-    let mut pos = off + 8;
-    let mut doubles = Vec::with_capacity(num);
-    for _ in 0..num {
-        let v = f64::from_le_bytes(data[pos..pos + 8].try_into().unwrap());
-        doubles.push(v);
-        pos += 8;
-    }
+    let doubles = read_index_vector(rep, data, 8)?
+        .map(|mut pos| read_f64_le(data, &mut pos))
+        .collect::<Result<_, _>>()?;
     Ok(CrateValue::DoubleVector(doubles))
 }
 
@@ -1455,30 +1415,36 @@ fn decode_string_vector(
     data: &[u8],
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
-    let off = payload_offset_usize(rep)?;
-    let num = read_u64_at(data, off)? as usize;
-    let mut pos = off + 8;
-    let mut strings = Vec::with_capacity(num);
-    for _ in 0..num {
-        let idx = u32::from_le_bytes(data[pos..pos + 4].try_into().unwrap()) as usize;
-        strings.push(lookup_string(sections, idx));
-        pos += 4;
-    }
+    let strings = read_index_vector(rep, data, 4)?
+        .map(|mut pos| {
+            Ok(lookup_string(
+                sections,
+                read_u32_le(data, &mut pos)? as usize,
+            ))
+        })
+        .collect::<Result<_, UsdcError>>()?;
     Ok(CrateValue::StringVector(strings))
 }
 
 fn decode_layer_offset_vector(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> {
-    let off = payload_offset_usize(rep)?;
-    let num = read_u64_at(data, off)? as usize;
-    let mut pos = off + 8;
-    let mut offsets = Vec::with_capacity(num);
-    for _ in 0..num {
-        let offset = f64::from_le_bytes(data[pos..pos + 8].try_into().unwrap());
-        let scale = f64::from_le_bytes(data[pos + 8..pos + 16].try_into().unwrap());
-        offsets.push((offset, scale));
-        pos += 16;
-    }
+    let offsets = read_index_vector(rep, data, 16)?
+        .map(|mut pos| Ok((read_f64_le(data, &mut pos)?, read_f64_le(data, &mut pos)?)))
+        .collect::<Result<_, UsdcError>>()?;
     Ok(CrateValue::LayerOffsetVector(offsets))
+}
+
+/// Reads the `u64` element count of a `std::vector` at the payload offset
+/// and checks that its `size`-byte elements are all in `data`. Returns the
+/// offsets of the elements.
+fn read_index_vector(
+    rep: &RawValueRep,
+    data: &[u8],
+    size: usize,
+) -> Result<impl Iterator<Item = usize>, UsdcError> {
+    let off = payload_offset_usize(rep, data)?;
+    let start = off + 8;
+    let count = element_count(data, start, read_u64_at(data, off)?, size)?;
+    Ok((0..count).map(move |i| start + i * size))
 }
 
 // ---------------------------------------------------------------------------
@@ -1490,21 +1456,16 @@ fn decode_variant_selection_map(
     data: &[u8],
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
-    let off = payload_offset_usize(rep)?;
-    if off == 0 {
+    if payload_offset_usize(rep, data)? == 0 {
         return Ok(CrateValue::VariantSelectionMap(vec![]));
     }
-    let num = read_u64_at(data, off)? as usize;
-    let mut pos = off + 8;
-    let mut pairs = Vec::with_capacity(num);
-    for _ in 0..num {
-        let key_idx = u32::from_le_bytes(data[pos..pos + 4].try_into().unwrap()) as usize;
-        let val_idx = u32::from_le_bytes(data[pos + 4..pos + 8].try_into().unwrap()) as usize;
-        let key = lookup_string(sections, key_idx);
-        let val = lookup_string(sections, val_idx);
-        pairs.push((key, val));
-        pos += 8;
-    }
+    let pairs = read_index_vector(rep, data, 8)?
+        .map(|mut pos| {
+            let key = lookup_string(sections, read_u32_le(data, &mut pos)? as usize);
+            let val = lookup_string(sections, read_u32_le(data, &mut pos)? as usize);
+            Ok((key, val))
+        })
+        .collect::<Result<_, UsdcError>>()?;
     Ok(CrateValue::VariantSelectionMap(pairs))
 }
 
@@ -1517,29 +1478,16 @@ fn decode_relocates_map(
     data: &[u8],
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
-    let off = payload_offset_usize(rep)?;
-    if off == 0 {
+    if payload_offset_usize(rep, data)? == 0 {
         return Ok(CrateValue::RelocatesMap(vec![]));
     }
-    let num = read_u64_at(data, off)? as usize;
-    let mut pos = off + 8;
-    let mut pairs = Vec::with_capacity(num);
-    for _ in 0..num {
-        let k_idx = u32::from_le_bytes(data[pos..pos + 4].try_into().unwrap()) as usize;
-        let v_idx = u32::from_le_bytes(data[pos + 4..pos + 8].try_into().unwrap()) as usize;
-        let k = if k_idx < sections.paths.len() {
-            sections.paths[k_idx].clone()
-        } else {
-            String::new()
-        };
-        let v = if v_idx < sections.paths.len() {
-            sections.paths[v_idx].clone()
-        } else {
-            String::new()
-        };
-        pairs.push((k, v));
-        pos += 8;
-    }
+    let pairs = read_index_vector(rep, data, 8)?
+        .map(|mut pos| {
+            let source = lookup_path(sections, read_u32_le(data, &mut pos)? as usize);
+            let target = lookup_path(sections, read_u32_le(data, &mut pos)? as usize);
+            Ok((source, target))
+        })
+        .collect::<Result<_, UsdcError>>()?;
     Ok(CrateValue::RelocatesMap(pairs))
 }
 
@@ -1555,7 +1503,7 @@ fn decode_value_indirection(
     data: &[u8],
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
-    let mut pos = payload_offset_usize(rep)?;
+    let mut pos = payload_offset_usize(rep, data)?;
     read_vt_value(data, &mut pos, sections)
 }
 
@@ -1566,7 +1514,7 @@ fn decode_unregistered_value(
     data: &[u8],
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
-    let mut pos = payload_offset_usize(rep)?;
+    let mut pos = payload_offset_usize(rep, data)?;
     read_vt_value(data, &mut pos, sections)
 }
 
@@ -1575,7 +1523,7 @@ fn decode_payload(
     data: &[u8],
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
-    let off = payload_offset_usize(rep)?;
+    let off = payload_offset_usize(rep, data)?;
     if off == 0 {
         return Ok(CrateValue::None);
     }
@@ -1616,7 +1564,7 @@ fn decode_array_edit(
         });
     }
 
-    let off = payload_offset_usize(rep)?;
+    let off = payload_offset_usize(rep, data)?;
     if off == 0 {
         return Ok(CrateValue::ArrayEdit(CrateArrayEdit {
             element_type,
@@ -1625,10 +1573,11 @@ fn decode_array_edit(
         }));
     }
 
-    let literals_rep = RawValueRep::new(read_u64_at(data, off)?.to_le_bytes());
-    let indexes_rep = RawValueRep::new(read_u64_at(data, off + 8)?.to_le_bytes());
+    let mut pos = off;
+    let literals_rep = RawValueRep::new(read_bytes(data, &mut pos)?);
+    let indexes_rep = RawValueRep::new(read_bytes(data, &mut pos)?);
     // The former `isDense` flag; OpenUSD reads and discards it.
-    read_u8(data, &mut (off + 16))?;
+    read_u8(data, &mut pos)?;
 
     let is_plain_array = |rep: &RawValueRep, vtype: ValueType| {
         rep.is_array() && !rep.is_array_edit() && rep.value_type().ok() == Some(vtype)
@@ -1770,37 +1719,79 @@ fn require_version(
     }
 }
 
-fn payload_offset_usize(rep: &RawValueRep) -> Result<usize, UsdcError> {
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "file offsets < 4 GiB supported"
-    )]
-    Ok(rep.payload_offset() as usize)
+/// The payload offset, checked to lie within `data`.
+///
+/// Every position the decoders compute starts from an offset within `data`
+/// and advances by amounts they have checked against `data`. Since a slice
+/// is at most `isize::MAX` bytes long, adding a small constant to such a
+/// position cannot overflow `usize`, even on 32-bit targets.
+fn payload_offset_usize(rep: &RawValueRep, data: &[u8]) -> Result<usize, UsdcError> {
+    usize::try_from(rep.payload_offset())
+        .ok()
+        .filter(|off| *off <= data.len())
+        .ok_or(UsdcError::UnexpectedEof {
+            section: "value data",
+            offset: rep.payload_offset(),
+            expected: 0,
+        })
+}
+
+/// The `len` bytes at `offset`, or an EOF error when they are not all in
+/// `data`.
+fn bytes_at(data: &[u8], offset: usize, len: usize) -> Result<&[u8], UsdcError> {
+    offset
+        .checked_add(len)
+        .and_then(|end| data.get(offset..end))
+        .ok_or(UsdcError::UnexpectedEof {
+            section: "value data",
+            offset: offset as u64,
+            expected: len as u64,
+        })
+}
+
+/// The bytes of `data` from `offset` on, or an EOF error past the end.
+fn bytes_from(data: &[u8], offset: usize) -> Result<&[u8], UsdcError> {
+    bytes_at(data, offset, 0)?;
+    Ok(&data[offset..])
+}
+
+/// Reads `N` bytes at `*pos`, advancing it.
+fn read_bytes<const N: usize>(data: &[u8], pos: &mut usize) -> Result<[u8; N], UsdcError> {
+    let mut out = [0_u8; N];
+    out.copy_from_slice(bytes_at(data, *pos, N)?);
+    *pos += N;
+    Ok(out)
+}
+
+/// Checks that `count` elements of `size` bytes each fit in `data` from
+/// `start`, before anything is allocated for them.
+fn element_count(data: &[u8], start: usize, count: u64, size: usize) -> Result<usize, UsdcError> {
+    let available = data.len().saturating_sub(start) / size.max(1);
+    usize::try_from(count)
+        .ok()
+        .filter(|count| *count <= available)
+        .ok_or(UsdcError::UnexpectedEof {
+            section: "value array",
+            offset: start as u64,
+            expected: count.saturating_mul(size as u64),
+        })
 }
 
 fn read_u64_at(data: &[u8], offset: usize) -> Result<u64, UsdcError> {
-    if offset + 8 > data.len() {
-        return Err(UsdcError::UnexpectedEof {
-            section: "u64 read",
-            offset: offset as u64,
-            expected: 8,
-        });
-    }
-    Ok(u64::from_le_bytes(
-        data[offset..offset + 8].try_into().unwrap(),
-    ))
+    Ok(u64::from_le_bytes(read_bytes(data, &mut { offset })?))
 }
 
-fn read_signed_le_n(data: &[u8], offset: usize, size: usize) -> i64 {
-    let bytes = &data[offset..offset + size];
-    let sign_ext = if bytes[size - 1] & 0x80 != 0 {
+/// Reads a little-endian signed integer of `size` (1 to 8) bytes.
+fn read_signed_le_n(data: &[u8], offset: usize, size: usize) -> Result<i64, UsdcError> {
+    let bytes = bytes_at(data, offset, size)?;
+    let sign_ext = if bytes.last().is_some_and(|b| b & 0x80 != 0) {
         0xFF
     } else {
         0x00
     };
     let mut buf = [sign_ext; 8];
     buf[..size].copy_from_slice(bytes);
-    i64::from_le_bytes(buf)
+    Ok(i64::from_le_bytes(buf))
 }
 
 fn decode_inlined_or_offset_u32(rep: &RawValueRep, data: &[u8]) -> Result<u32, UsdcError> {
@@ -1808,8 +1799,8 @@ fn decode_inlined_or_offset_u32(rep: &RawValueRep, data: &[u8]) -> Result<u32, U
         let p = rep.payload();
         Ok(u32::from_le_bytes([p[0], p[1], p[2], p[3]]))
     } else {
-        let off = payload_offset_usize(rep)?;
-        Ok(u32::from_le_bytes(data[off..off + 4].try_into().unwrap()))
+        let mut off = payload_offset_usize(rep, data)?;
+        read_u32_le(data, &mut off)
     }
 }
 
@@ -1848,7 +1839,7 @@ fn decode_spline(
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
     require_version(sections, CrateVersion::SPLINES, "spline value")?;
-    let off = payload_offset_usize(rep)?;
+    let off = payload_offset_usize(rep, data)?;
     if off == 0 {
         return Ok(CrateValue::Spline(empty_spline()));
     }
@@ -2109,95 +2100,35 @@ fn read_extrapolation(data: &[u8], pos: &mut usize, mode: u8) -> Result<Extrapol
 
 /// Read a single byte, advancing `pos`.
 fn read_u8(data: &[u8], pos: &mut usize) -> Result<u8, UsdcError> {
-    if *pos >= data.len() {
-        return Err(UsdcError::UnexpectedEof {
-            section: "value data",
-            offset: *pos as u64,
-            expected: 1,
-        });
-    }
-    let v = data[*pos];
-    *pos += 1;
-    Ok(v)
+    Ok(read_bytes::<1>(data, pos)?[0])
 }
 
 /// Read a little-endian `f64`, advancing `pos`.
 fn read_f64_le(data: &[u8], pos: &mut usize) -> Result<f64, UsdcError> {
-    if *pos + 8 > data.len() {
-        return Err(UsdcError::UnexpectedEof {
-            section: "value data",
-            offset: *pos as u64,
-            expected: 8,
-        });
-    }
-    let v = f64::from_le_bytes(data[*pos..*pos + 8].try_into().unwrap());
-    *pos += 8;
-    Ok(v)
+    Ok(f64::from_le_bytes(read_bytes(data, pos)?))
 }
 
 /// Read a little-endian `f32`, advancing `pos`.
 fn read_f32_le(data: &[u8], pos: &mut usize) -> Result<f32, UsdcError> {
-    if *pos + 4 > data.len() {
-        return Err(UsdcError::UnexpectedEof {
-            section: "value data",
-            offset: *pos as u64,
-            expected: 4,
-        });
-    }
-    let v = f32::from_le_bytes(data[*pos..*pos + 4].try_into().unwrap());
-    *pos += 4;
-    Ok(v)
+    Ok(f32::from_le_bytes(read_bytes(data, pos)?))
 }
 
 /// Read a little-endian `i32`, advancing `pos`.
 fn read_i32_le(data: &[u8], pos: &mut usize) -> Result<i32, UsdcError> {
-    if *pos + 4 > data.len() {
-        return Err(UsdcError::UnexpectedEof {
-            section: "value data",
-            offset: *pos as u64,
-            expected: 4,
-        });
-    }
-    let v = i32::from_le_bytes(data[*pos..*pos + 4].try_into().unwrap());
-    *pos += 4;
-    Ok(v)
+    Ok(i32::from_le_bytes(read_bytes(data, pos)?))
 }
 
 /// Read a little-endian `u32`, advancing `pos`.
 fn read_u32_le(data: &[u8], pos: &mut usize) -> Result<u32, UsdcError> {
-    if *pos + 4 > data.len() {
-        return Err(UsdcError::UnexpectedEof {
-            section: "value data",
-            offset: *pos as u64,
-            expected: 4,
-        });
-    }
-    let v = u32::from_le_bytes(data[*pos..*pos + 4].try_into().unwrap());
-    *pos += 4;
-    Ok(v)
+    Ok(u32::from_le_bytes(read_bytes(data, pos)?))
 }
 
 /// Read a value in the spline's data type, converting to `f64`.
-#[allow(
-    clippy::cast_possible_truncation,
-    reason = "half-float conversion intentional"
-)]
 fn read_typed_value(data: &[u8], pos: &mut usize, dt: SplineDataType) -> Result<f64, UsdcError> {
     match dt {
         SplineDataType::Double | SplineDataType::Unspecified => read_f64_le(data, pos),
         SplineDataType::Float => Ok(f64::from(read_f32_le(data, pos)?)),
-        SplineDataType::Half => {
-            if *pos + 2 > data.len() {
-                return Err(UsdcError::UnexpectedEof {
-                    section: "value data",
-                    offset: *pos as u64,
-                    expected: 2,
-                });
-            }
-            let bits = u16::from_le_bytes(data[*pos..*pos + 2].try_into().unwrap());
-            *pos += 2;
-            Ok(half_to_f64(bits))
-        }
+        SplineDataType::Half => Ok(half_to_f64(u16::from_le_bytes(read_bytes(data, pos)?))),
     }
 }
 
@@ -2782,6 +2713,47 @@ mod tests {
             panic!("expected an array");
         };
         assert_eq!(alloc::format!("{values:?}"), "[Double(1.5), Double(-2.5)]");
+    }
+
+    /// Offsets and counts come from the file; out-of-range ones fail
+    /// instead of panicking or allocating what the data cannot hold.
+    #[test]
+    fn malformed_offsets_and_counts_fail_cleanly() {
+        let sections = sections_with(CrateVersion::NEWEST_READABLE);
+        // At 8: a huge count, then a few bytes.
+        let mut data = vec![0_u8; 8];
+        data.extend_from_slice(&u64::MAX.to_le_bytes());
+        data.extend_from_slice(&[1, 2, 3, 4, 5, 6, 7]);
+        let rep = |vtype: ValueType, flags: u8, offset: u64| {
+            let mut bytes = [0_u8; 8];
+            bytes[..6].copy_from_slice(&offset.to_le_bytes()[..6]);
+            bytes[6] = vtype as u8;
+            bytes[7] = flags;
+            RawValueRep::new(bytes)
+        };
+        // Every type, with any flags and offsets, decodes or fails cleanly.
+        for type_byte in 0..=u8::MAX {
+            let Ok(vtype) = ValueType::try_from(type_byte) else {
+                continue;
+            };
+            for flags in [0x00, 0x80, 0x80 | 0x20, 0x10] {
+                for offset in [8, 15, 20, 0xFFFF_FFFF_FFFF] {
+                    let _ = decode_value(&rep(vtype, flags, offset), &data, &sections);
+                }
+            }
+        }
+        for (vtype, flags) in [
+            (ValueType::Int, 0x80),
+            (ValueType::Int, 0x80 | 0x20),
+            (ValueType::Double, 0x80),
+            (ValueType::Double, 0x80 | 0x20),
+            (ValueType::Vec3f, 0x80),
+            (ValueType::TokenVector, 0),
+            (ValueType::LayerOffsetVector, 0),
+            (ValueType::Dictionary, 0),
+        ] {
+            assert!(decode_value(&rep(vtype, flags, 8), &data, &sections).is_err());
+        }
     }
 
     #[test]

@@ -18,59 +18,70 @@ use crate::error::UsdcError;
 // LZ4 block decompression
 // ---------------------------------------------------------------------------
 
-/// Decompresses an LZ4-framed block.
+/// Decompresses a block written by OpenUSD's `TfFastCompression`.
 ///
-/// The first byte is a chunk count:
-/// - `0` → single-block LZ4 decompress (rest of `data` is the block).
-/// - `n > 0` → `n` chunked sub-blocks, each prefixed by a 1-byte size.
+/// The first byte is a chunk count (`TfFastCompression::DecompressFromBuffer`,
+/// `pxr/base/tf/fastCompression.cpp`):
+/// - `0` → the rest of `data` is one LZ4 block.
+/// - `n > 0` → `n` chunks, each an `i32` compressed size and that many bytes
+///   of LZ4 block, for outputs larger than one LZ4 block can hold.
 ///
 /// `output_size` is the expected decompressed size (known from the caller).
 ///
 /// Spec: AOUSD Core §16.3.4.
 pub fn lz4_decompress(data: &[u8], output_size: usize) -> Result<Vec<u8>, UsdcError> {
-    if data.is_empty() {
+    let Some((&num_chunks, payload)) = data.split_first() else {
         return Err(UsdcError::DecompressionFailed {
             context: "empty LZ4 input",
         });
-    }
-
-    let num_chunks = data[0];
-    let payload = &data[1..];
-
+    };
     if num_chunks == 0 {
         // Single-block decompress.
-        lz4_flex::decompress(payload, output_size).map_err(|_| UsdcError::DecompressionFailed {
-            context: "LZ4 single-block decompress",
-        })
-    } else {
-        // Chunked decompress (rarely encountered).
-        let mut out = Vec::with_capacity(output_size);
-        let mut cursor = payload;
-        for _ in 0..num_chunks {
-            if cursor.is_empty() {
-                return Err(UsdcError::DecompressionFailed {
-                    context: "LZ4 chunked: missing chunk size byte",
-                });
+        return lz4_flex::decompress(payload, output_size).map_err(|_| {
+            UsdcError::DecompressionFailed {
+                context: "LZ4 single-block decompress",
             }
-            let chunk_size = cursor[0] as usize;
-            cursor = &cursor[1..];
-            if cursor.len() < chunk_size {
-                return Err(UsdcError::DecompressionFailed {
-                    context: "LZ4 chunked: chunk data truncated",
-                });
-            }
-            let chunk_data = &cursor[..chunk_size];
-            cursor = &cursor[chunk_size..];
-            let decompressed = lz4_flex::decompress(chunk_data, output_size).map_err(|_| {
-                UsdcError::DecompressionFailed {
-                    context: "LZ4 chunked: chunk decompress",
-                }
-            })?;
-            out.extend_from_slice(&decompressed);
-        }
-        Ok(out)
+        });
     }
+
+    let mut out = Vec::with_capacity(output_size);
+    let mut cursor = payload;
+    for _ in 0..num_chunks {
+        let Some((size, rest)) = cursor.split_first_chunk::<4>() else {
+            return Err(UsdcError::DecompressionFailed {
+                context: "LZ4 chunked: missing chunk size",
+            });
+        };
+        let chunk_size = usize::try_from(i32::from_le_bytes(*size)).map_err(|_| {
+            UsdcError::DecompressionFailed {
+                context: "LZ4 chunked: negative chunk size",
+            }
+        })?;
+        if rest.len() < chunk_size {
+            return Err(UsdcError::DecompressionFailed {
+                context: "LZ4 chunked: chunk data truncated",
+            });
+        }
+        let (chunk, rest) = rest.split_at(chunk_size);
+        cursor = rest;
+        let remaining = (output_size - out.len()).min(LZ4_MAX_INPUT_SIZE);
+        let decompressed =
+            lz4_flex::decompress(chunk, remaining).map_err(|_| UsdcError::DecompressionFailed {
+                context: "LZ4 chunked: chunk decompress",
+            })?;
+        if decompressed.len() > output_size - out.len() {
+            return Err(UsdcError::DecompressionFailed {
+                context: "LZ4 chunked: output exceeds the expected size",
+            });
+        }
+        out.extend_from_slice(&decompressed);
+    }
+    Ok(out)
 }
+
+/// The largest input one LZ4 block holds (`LZ4_MAX_INPUT_SIZE`), which is
+/// also the most one chunk decompresses to.
+const LZ4_MAX_INPUT_SIZE: usize = 0x7E00_0000;
 
 // ---------------------------------------------------------------------------
 // Integer array decoding (delta + 2-bit codes)
@@ -330,6 +341,24 @@ mod tests {
     fn decode_empty() {
         let result = decode_integer_array(&[], 0, 4).unwrap();
         assert!(result.is_empty());
+    }
+
+    #[test]
+    fn lz4_chunks_have_i32_sizes() {
+        let original = b"hello world hello world hello world";
+        let compressed = lz4_flex::compress(original);
+        let mut framed = vec![2_u8];
+        for _ in 0..2 {
+            framed.extend_from_slice(&i32::try_from(compressed.len()).unwrap().to_le_bytes());
+            framed.extend_from_slice(&compressed);
+        }
+        let decompressed = lz4_decompress(&framed, 2 * original.len()).unwrap();
+        assert_eq!(decompressed, [&original[..], &original[..]].concat());
+        // A negative or truncated chunk fails.
+        framed[1] = 0xFF;
+        framed[4] = 0xFF;
+        assert!(lz4_decompress(&framed, 2 * original.len()).is_err());
+        assert!(lz4_decompress(&framed[..10], 2 * original.len()).is_err());
     }
 
     #[test]

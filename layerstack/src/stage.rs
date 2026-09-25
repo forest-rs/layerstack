@@ -5,6 +5,13 @@
 //!
 //! Spec: AOUSD Core §11–§12 (stage population and value resolution).
 
+mod explain;
+
+pub use explain::{
+    Contribution, DictionaryMerge, ExplainedOpinion, IgnoreCause, KeyPath, OpinionRole, SampleUse,
+    ValueExplanation, ValueSource,
+};
+
 use alloc::{sync::Arc, vec, vec::Vec};
 
 use hashbrown::HashMap;
@@ -83,6 +90,34 @@ pub enum ResolvedValue {
     ValueList(Vec<Value>),
 }
 
+/// Chains the list ops a [`resolve_field_list`] query selects.
+///
+/// Resolution chains through [`LeanLists`]; explanation chains the same
+/// selection through a chainer that also reports each opinion's part.
+pub(crate) trait ListChainer {
+    /// Chains the list ops `pick` selects from `values`, strongest first.
+    /// Values `pick` rejects hold another kind of list op and are skipped.
+    fn chain<'a, T: Clone + Eq + 'a>(
+        &mut self,
+        values: impl Iterator<Item = &'a FieldValue>,
+        pick: impl Fn(&'a FieldValue) -> Option<&'a ListOp<T>>,
+    ) -> Vec<T>;
+}
+
+/// The resolution [`ListChainer`]: chains without reporting.
+struct LeanLists;
+
+impl ListChainer for LeanLists {
+    #[inline(always)]
+    fn chain<'a, T: Clone + Eq + 'a>(
+        &mut self,
+        values: impl Iterator<Item = &'a FieldValue>,
+        pick: impl Fn(&'a FieldValue) -> Option<&'a ListOp<T>>,
+    ) -> Vec<T> {
+        resolve_list_chain::<T>(&[], values.filter_map(pick).cloned())
+    }
+}
+
 /// Chains the list ops of `values` (strongest first) whose variant matches
 /// `strongest`, or returns `None` when `strongest` is not a list op.
 ///
@@ -91,55 +126,60 @@ fn resolve_field_list<'a>(
     strongest: &FieldValue,
     values: impl Iterator<Item = &'a FieldValue> + Clone,
 ) -> Option<ResolvedValue> {
-    fn chain<'a, T: Clone + Eq + 'a>(
-        values: impl Iterator<Item = &'a FieldValue>,
-        pick: impl Fn(&'a FieldValue) -> Option<&'a ListOp<T>>,
-    ) -> Vec<T> {
-        resolve_list_chain::<T>(&[], values.filter_map(pick).cloned())
-    }
+    chain_field_list(strongest, values, &mut LeanLists)
+}
+
+/// [`resolve_field_list`] through any [`ListChainer`].
+pub(crate) fn chain_field_list<'a>(
+    strongest: &FieldValue,
+    values: impl Iterator<Item = &'a FieldValue> + Clone,
+    chainer: &mut impl ListChainer,
+) -> Option<ResolvedValue> {
     fn wrap<T>(items: Vec<T>, value: impl Fn(T) -> Value) -> ResolvedValue {
         ResolvedValue::ValueList(items.into_iter().map(value).collect())
     }
     Some(match strongest {
         FieldValue::Value(_) => return None,
-        FieldValue::TokenListOp(_) => ResolvedValue::TokenList(chain(values, |v| match v {
-            FieldValue::TokenListOp(list) => Some(list),
-            _ => None,
-        })),
-        FieldValue::PathListOp(_) => ResolvedValue::PathList(chain(values, |v| match v {
+        FieldValue::TokenListOp(_) => {
+            ResolvedValue::TokenList(chainer.chain(values, |v| match v {
+                FieldValue::TokenListOp(list) => Some(list),
+                _ => None,
+            }))
+        }
+        FieldValue::PathListOp(_) => ResolvedValue::PathList(chainer.chain(values, |v| match v {
             FieldValue::PathListOp(list) => Some(list),
             _ => None,
         })),
         FieldValue::StringListOp(_) => wrap(
-            chain(values, |v| match v {
+            chainer.chain(values, |v| match v {
                 FieldValue::StringListOp(list) => Some(list),
                 _ => None,
             }),
             Value::String,
         ),
         FieldValue::IntListOp(_) => wrap(
-            chain(values, |v| match v {
+            chainer.chain(values, |v| match v {
                 FieldValue::IntListOp(list) => Some(list),
                 _ => None,
             }),
             Value::Int,
         ),
         FieldValue::UIntListOp(_) => wrap(
-            chain(values, |v| match v {
+            chainer.chain(values, |v| match v {
                 FieldValue::UIntListOp(list) => Some(list),
                 _ => None,
             }),
             Value::UInt,
         ),
         FieldValue::Int64ListOp(_) => wrap(
-            chain(values, |v| match v {
+            chainer.chain(values, |v| match v {
                 FieldValue::Int64ListOp(list) => Some(list),
                 _ => None,
             }),
             Value::Int64,
         ),
         FieldValue::UInt64ListOp(_) => wrap(
-            chain(values, |v| match v {
+            chainer.chain(values, |v| match v {
                 FieldValue::UInt64ListOp(list) => Some(list),
                 _ => None,
             }),
@@ -738,33 +778,13 @@ impl Stage {
             SparseResolveResult::NotApplicable => {}
         }
 
-        for opinion in opinions {
-            // Apply the opinion's accumulated layer offset to remap the query
-            // time before sampling.
-            let mapped_time = opinion.layer_offset.map_time(time);
-            let value = if let Some(samples) = opinion.value.time_samples() {
-                interpolate_samples(samples, mapped_time, interp)?
-            } else if let Some(spline) = opinion.value.spline() {
-                // A spline that evaluates to nothing (block extrapolation or
-                // a blocked segment) yields no value.
-                spline_to_value(spline, spline.evaluate(mapped_time)?)
-            } else if let Some(value) = opinion.value.default_value() {
-                value.clone()
-            } else {
-                continue;
-            };
-            // A block in effect at the query time, as a sample or a default,
-            // resolves to no value.
-            if value == Value::Blocked {
-                return None;
-            }
-            return Some(Resolved {
-                value,
-                provenance: self.provenance_for(field, opinion),
-            });
-        }
-
-        None
+        let (opinion, value) = opinions
+            .iter()
+            .find_map(|opinion| Some((opinion, value_at_time(opinion, time, interp)?)))?;
+        Some(Resolved {
+            value: value?,
+            provenance: self.provenance_for(field, opinion),
+        })
     }
 
     /// Resolves a metadata field of a composed property, such as
@@ -1391,6 +1411,40 @@ impl Iterator for Traverse<'_> {
     }
 }
 
+/// The value `opinion` offers a non-sparse query at stage time `time`: its
+/// time samples, else its spline, else its default.
+///
+/// Returns `None` when the opinion authors none of them, so weaker opinions
+/// answer, and `Some(None)` when it answers with no value: a block in effect
+/// at `time` (a blocked sample or default, or a spline that evaluates to
+/// nothing), which hides every weaker opinion.
+///
+/// Spec: AOUSD Core §12.3.2 (time samples, then splines, then the
+/// default), §12.3.2.1 (layer offsets), §12.3.6 (blocked attributes).
+pub(crate) fn value_at_time(
+    opinion: &Opinion,
+    time: f64,
+    interp: InterpolationType,
+) -> Option<Option<Value>> {
+    // Apply the opinion's accumulated layer offset to remap the query time
+    // before sampling.
+    let mapped_time = opinion.layer_offset.map_time(time);
+    let value = if let Some(samples) = opinion.value.time_samples() {
+        interpolate_samples(samples, mapped_time, interp)
+    } else if let Some(spline) = opinion.value.spline() {
+        // A spline that evaluates to nothing (block extrapolation or a
+        // blocked segment) yields no value.
+        spline
+            .evaluate(mapped_time)
+            .map(|value| spline_to_value(spline, value))
+    } else {
+        Some(opinion.value.default_value()?.clone())
+    };
+    // A block in effect at the query time, as a sample or a default,
+    // resolves to no value.
+    Some(value.filter(|value| *value != Value::Blocked))
+}
+
 /// Convert a spline evaluation result to the appropriate [`Value`] type
 /// based on the spline's data type.
 #[allow(
@@ -1419,15 +1473,25 @@ fn resolve_dictionary_chain(
     opinions: &[Opinion],
     fallback: Option<&[(Arc<str>, Value)]>,
 ) -> Vec<(Arc<str>, Value)> {
-    let authored = opinions
-        .iter()
-        .filter_map(|opinion| opinion.value.default_value())
-        .take_while(|value| !matches!(value, Value::Blocked))
-        .filter_map(|value| match value {
-            Value::Dictionary(entries) => Some(entries.as_slice()),
-            _ => None,
-        });
+    let authored = dictionary_chain(opinions).map(|(_, entries)| entries);
     combine_dictionary_chain(authored.chain(fallback))
+}
+
+/// The authored dictionaries [`resolve_dictionary_chain`] combines, strongest
+/// first, each with its position in `opinions`: every dictionary default
+/// stronger than the strongest blocking default.
+pub(crate) fn dictionary_chain(
+    opinions: &[Opinion],
+) -> impl Iterator<Item = (usize, &[(Arc<str>, Value)])> {
+    opinions
+        .iter()
+        .enumerate()
+        .filter_map(|(position, opinion)| Some((position, opinion.value.default_value()?)))
+        .take_while(|(_, value)| !matches!(value, Value::Blocked))
+        .filter_map(|(position, value)| match value {
+            Value::Dictionary(entries) => Some((position, entries.as_slice())),
+            _ => None,
+        })
 }
 
 #[cfg(test)]

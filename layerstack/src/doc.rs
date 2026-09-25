@@ -356,7 +356,7 @@ impl From<f64> for Value {
 ///
 /// `layerstack` keeps its own [`Value`] representation and USD opinion
 /// selection; the recursive combining algorithm itself is `opinionated`'s.
-struct ValueDictionaries;
+pub(crate) struct ValueDictionaries;
 
 impl opinionated::DictionaryAdapter<Arc<str>, Value> for ValueDictionaries {
     fn entries<'v>(&self, value: &'v Value) -> Option<&'v [(Arc<str>, Value)]> {

@@ -62,6 +62,7 @@ mod path;
 #[cfg(test)]
 mod tests;
 
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -276,6 +277,10 @@ pub enum Value {
     StringListOp(ListOp<String>),
     /// `SdfPathListOp` (e.g. `targetPaths`, `connectionPaths`).
     PathListOp(ListOp<String>),
+    /// `SdfUnregisteredValue`: what OpenUSD's text parser stores for a
+    /// metadata field no schema registers, wrapping the parsed value (a
+    /// `VtDictionary` for a dictionary literal).
+    UnregisteredValue(Box<Self>),
 }
 
 /// Serializes `specs` as a USDC file.

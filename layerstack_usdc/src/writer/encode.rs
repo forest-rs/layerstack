@@ -424,6 +424,7 @@ impl Packer {
                 })?;
                 self.blob(T::PathListOp, 0, bytes, false)?
             }
+            Value::UnregisteredValue(inner) => self.unregistered(inner, site)?,
         })
     }
 
@@ -623,6 +624,24 @@ impl Packer {
             self.out.extend_from_slice(&value_rep.to_le_bytes());
         }
         Ok(rep(ValueType::Dictionary, 0, offset))
+    }
+
+    /// `Write(SdfUnregisteredValue)`: the held value written through
+    /// `_RecursiveWrite`, as a dictionary entry's value is — a relative
+    /// offset to the value representation, preceded by any data the value
+    /// itself needs.
+    fn unregistered(&mut self, inner: &Value, site: Site<'_>) -> Result<u64, UsdcWriteError> {
+        let offset = self.out.len() as u64;
+        if offset > MAX_PAYLOAD {
+            return Err(UsdcWriteError::TooLarge);
+        }
+        let at = self.out.len();
+        self.out.extend_from_slice(&[0; 8]);
+        let value_rep = self.pack(inner, site)?;
+        let jump = (self.out.len() - at) as u64;
+        self.out[at..at + 8].copy_from_slice(&jump.to_le_bytes());
+        self.out.extend_from_slice(&value_rep.to_le_bytes());
+        Ok(rep(ValueType::UnregisteredValue, 0, offset))
     }
 
     /// `Write(SdfListOp)`: a header byte of `_ListOpHeader` bits, then each
@@ -913,6 +932,7 @@ fn has_timecode(value: &Value) -> bool {
     match value {
         Value::TimeCode(_) | Value::TimeCodeArray(_) => true,
         Value::Dictionary(entries) => entries.iter().any(|(_, v)| has_timecode(v)),
+        Value::UnregisteredValue(inner) => has_timecode(inner),
         _ => false,
     }
 }

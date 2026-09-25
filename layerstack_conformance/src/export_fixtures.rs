@@ -292,6 +292,81 @@ fn metadata() -> Document {
     doc
 }
 
+/// Dictionary-valued metadata on every owner: nested UI `limits`,
+/// `uiHints`, `symmetryArguments`, `fallbackPrimTypes`, and profile data in
+/// both spellings — the prim `profilesInfo` that `UsdProfilesClaimsAPI`
+/// documents (unregistered in OpenUSD v26.08) and the `customData` entry
+/// `ClaimsAPI` actually reads and writes. The claims are data only.
+fn metadata_dictionaries() -> Document {
+    let dict = |entries: Vec<(&str, Value)>| {
+        Value::Dictionary(entries.into_iter().map(|(k, v)| (k.into(), v)).collect())
+    };
+    let profiles = dict(vec![
+        (
+            "capabilityUsages",
+            dict(vec![
+                ("usd.geom.mesh", Value::String("hard".into())),
+                ("usd.shading.mtlx", Value::String("soft".into())),
+            ]),
+        ),
+        (
+            "profileCompatibility",
+            dict(vec![(
+                "vnd.apple.visionos_v1",
+                Value::StringArray(vec!["usd.geom.hairAndFur".into()]),
+            )]),
+        ),
+    ]);
+    let hints = dict(vec![("displayGroup", Value::String("Shape".into()))]);
+    let mut root = Prim::def("Xform", "Root");
+    root.metadata.push(Metadatum::new(
+        "apiSchemas",
+        Value::TokenListOp(layerstack_usda::writer::ListOp::prepend(vec![
+            "ClaimsAPI".into(),
+        ])),
+    ));
+    root.metadata
+        .push(Metadatum::new("profilesInfo", profiles.clone()));
+    root.metadata.push(Metadatum::new(
+        "customData",
+        dict(vec![("profilesInfo", profiles)]),
+    ));
+    root.metadata.push(Metadatum::new("uiHints", hints.clone()));
+    root.metadata.push(Metadatum::new(
+        "symmetryArguments",
+        dict(vec![("axis", Value::Token("x".into()))]),
+    ));
+    root.attributes.push(
+        Attribute::new("exedra:size", "float", Value::Float(1.0))
+            .custom()
+            .with_metadata(
+                "limits",
+                dict(vec![
+                    (
+                        "soft",
+                        dict(vec![("min", Value::Float(0.0)), ("max", Value::Float(5.0))]),
+                    ),
+                    ("hard", dict(vec![("max", Value::Float(10.0))])),
+                ]),
+            )
+            .with_metadata("uiHints", hints.clone()),
+    );
+    let mut rel = layerstack_usda::writer::Relationship::new("exedra:target", "/Root").custom();
+    rel.metadata.push(Metadatum::new("uiHints", hints));
+    root.relationships.push(rel);
+    let mut doc = Document::new();
+    stage_metadata(&mut doc, "Root");
+    doc.metadata.push(Metadatum::new(
+        "fallbackPrimTypes",
+        dict(vec![(
+            "ExedraShape",
+            Value::TokenArray(vec!["Xform".into()]),
+        )]),
+    ));
+    doc.prims.push(root);
+    doc
+}
+
 const QUAD_TRI_POINTS: [[f32; 3]; 5] = [
     [0.0, 0.0, 0.0],
     [1.0, 0.0, 0.0],
@@ -810,11 +885,57 @@ fn nested_transforms() -> Document {
 /// value types, metadata, and the mesh scenes (the cube, the two-material
 /// and textured material cubes, a quad and a triangle, a UV seam, nested
 /// transforms, and every primvar interpolation).
+/// An OpenUSD release as `(year, month)`: `(25, 11)` is v25.11. Apple's
+/// tools report the same numbering as `0.25.11`.
+pub type OpenUsdRelease = (u32, u32);
+
+/// The OpenUSD release the writers target: they store metadata with the
+/// types its registry (`SdfSchema` and the plugin metadata) declares.
+pub const TARGET_OPENUSD: OpenUsdRelease = (26, 8);
+
+/// Reads an OpenUSD release from a tool's version output, such as `Apple
+/// USD Tools (0.25.11)` or `0.26.8`: the last `0.YY.MM` or `YY.MM` number.
+pub fn parse_openusd_release(text: &str) -> Option<OpenUsdRelease> {
+    text.split(|c: char| !(c.is_ascii_digit() || c == '.'))
+        .rev()
+        .find_map(|word| {
+            let parts: Vec<u32> = word
+                .split('.')
+                .map(str::parse)
+                .collect::<Result<_, _>>()
+                .ok()?;
+            match parts[..] {
+                [0, year, month, ..] | [year, month] if year >= 20 => Some((year, month)),
+                _ => None,
+            }
+        })
+}
+
+/// The earliest OpenUSD release whose metadata registry a document's
+/// expected encoding assumes, with the reason, or `None` when it assumes
+/// nothing newer than the releases the tools are known to have.
+///
+/// An older OpenUSD stores such metadata as `SdfUnregisteredValue`, so its
+/// USDC of the same USDA differs from ours by design. Tests comparing
+/// against an installed tool skip the document then, saying why.
+pub fn minimum_openusd(name: &str) -> Option<(OpenUsdRelease, &'static str)> {
+    match name {
+        // UI hints proposal, implemented in 25.11
+        // (`OpenUSD-proposals/proposals/ui-hints`).
+        "metadata_dictionaries" => Some((
+            (25, 11),
+            "`uiHints` (usdUI) and `limits` are registered from OpenUSD 25.11",
+        )),
+        _ => None,
+    }
+}
+
 pub fn documents() -> Vec<(&'static str, Document)> {
     vec![
         ("identifiers", identifiers()),
         ("types", types()),
         ("metadata", metadata()),
+        ("metadata_dictionaries", metadata_dictionaries()),
         ("primvars", primvars()),
         ("cube", cube_document()),
         (

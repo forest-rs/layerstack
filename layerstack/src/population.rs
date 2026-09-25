@@ -766,14 +766,74 @@ fn expand_ancestral_paths(
     chain: &mut Chain<'_>,
     mapped_from: &mut MappedFrom,
 ) {
+    expand_ancestral_paths_from(
+        store,
+        stack,
+        dest_root,
+        target,
+        paths,
+        queue,
+        visited_refs,
+        visited_inherits,
+        chain,
+        mapped_from,
+        0,
+    );
+}
+
+/// Expands the arcs of the ancestors of `target` past the `skip` nearest
+/// ones, as [`expand_ancestral_paths`] does.
+///
+/// At the deepest relocation target of `stack` at or above the target, the
+/// arcs of the ancestors above it give way to those of its relocation
+/// source, extended towards the target, as composition expands them
+/// beneath a relocate node (AOUSD Core §10.3.2.6; see `AncestralArcs` in
+/// `compose.rs`).
+fn expand_ancestral_paths_from(
+    store: &mut dyn LayerStore,
+    stack: &LayerStack,
+    dest_root: PathId,
+    target: PathId,
+    paths: &mut BTreeSet<PathId>,
+    queue: &mut Vec<PathId>,
+    visited_refs: &mut HashSet<(PathId, LayerId, PathId)>,
+    visited_inherits: &mut HashSet<(PathId, PathId)>,
+    chain: &mut Chain<'_>,
+    mapped_from: &mut MappedFrom,
+    skip: usize,
+) {
     let anchor = layer_stack_root(stack);
     let target_path = store.paths().resolve(target).clone();
+    let mut ancestors = Vec::new();
     let mut cursor = target_path.parent();
-    while let Some(ancestor_path) = cursor {
-        if ancestor_path.depth() == 0 {
+    while let Some(path) = cursor {
+        if path.depth() == 0 {
             break;
         }
-        cursor = ancestor_path.parent();
+        cursor = path.parent();
+        ancestors.push(path);
+    }
+    ancestors.drain(..skip.min(ancestors.len()));
+    let table = chain.relocations.table(store, stack);
+    let relocated = if table.is_empty() {
+        None
+    } else {
+        let found = |path: &Path| {
+            let id = store.paths().lookup(path)?;
+            Some((id, table.source_of(id)?))
+        };
+        let own = (skip == 0).then(|| found(&target_path)).flatten();
+        own.map(|(at, source)| (0, at, source)).or_else(|| {
+            ancestors
+                .iter()
+                .enumerate()
+                .find_map(|(index, path)| found(path).map(|(at, source)| (index + 1, at, source)))
+        })
+    };
+    if let Some((kept, _, _)) = relocated {
+        ancestors.truncate(kept);
+    }
+    for ancestor_path in ancestors {
         let Some(ancestor) = store.paths().lookup(&ancestor_path) else {
             continue;
         };
@@ -836,6 +896,28 @@ fn expand_ancestral_paths(
             );
         }
     }
+    let Some((_, relocated_at, source)) = relocated else {
+        return;
+    };
+    let rel = target_path
+        .strip_prefix(store.paths().resolve(relocated_at))
+        .expect("the relocation target is at or above the target")
+        .to_vec();
+    let joined = store.paths().resolve(source).join(&rel);
+    let source_view = store.paths_mut().intern(joined);
+    expand_ancestral_paths_from(
+        store,
+        stack,
+        dest_root,
+        source_view,
+        paths,
+        queue,
+        visited_refs,
+        visited_inherits,
+        chain,
+        mapped_from,
+        rel.len(),
+    );
 }
 
 /// The chain of arcs population follows from one prim, with the

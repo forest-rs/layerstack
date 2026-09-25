@@ -202,6 +202,7 @@ fn main() {
                 offset: 10.0,
                 scale: 1.0,
             },
+            unresolved_asset: None,
         },
         // Defaults layer — no time offset (plays at global time).
         SublayerEntry::new(LayerId(2)),

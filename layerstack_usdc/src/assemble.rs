@@ -439,17 +439,28 @@ impl<'a> AssembleCtx<'a> {
             }
         }
 
-        // Spec: AOUSD Core §12.3.2.1 (sublayer offsets).
+        // Spec: AOUSD Core §12.3.2.1 (sublayer offsets). A sublayer that
+        // does not resolve keeps its place; composition reports it
+        // (§10.3.1, §10.6; OpenUSD `PcpErrorInvalidSublayerPath`).
         for (i, asset_path) in sublayer_paths.iter().enumerate() {
-            if let Some(resolved) = self.resolve_asset(asset_path) {
-                let mut entry = SublayerEntry::new(resolved.layer_id);
-                if let Some(&(offset, scale)) = sublayer_offsets.get(i) {
-                    entry.offset = LayerOffset { offset, scale };
-                }
-                layer.sublayers.push(entry);
-                if let Some(sub_layer) = resolved.layer {
-                    self.resolved_layers.push(sub_layer);
-                }
+            let offset =
+                sublayer_offsets
+                    .get(i)
+                    .map_or(LayerOffset::IDENTITY, |&(offset, scale)| LayerOffset {
+                        offset,
+                        scale,
+                    });
+            let Some(resolved) = self.resolve_asset(asset_path) else {
+                layer
+                    .sublayers
+                    .push(SublayerEntry::unresolved(asset_path.as_str(), offset));
+                continue;
+            };
+            layer
+                .sublayers
+                .push(SublayerEntry::with_offset(resolved.layer_id, offset));
+            if let Some(sub_layer) = resolved.layer {
+                self.resolved_layers.push(sub_layer);
             }
         }
 

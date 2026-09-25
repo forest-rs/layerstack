@@ -31,6 +31,10 @@ OpenUSD's reading of it.
   (signed zero kept), in scalars, arrays, a vector and time samples.
 - `numeric_rejected.txt`: attribute statements whose value OpenUSD rejects
   for the declared type; the script checks that it does.
+- `unresolved_sublayer`: a layer whose first sublayer does not exist and
+  whose second, `unresolved_sublayer_weak`, does. The script requires
+  OpenUSD to report the first as `PcpErrorInvalidSublayerPath` and to keep
+  the second, from the USDA and from the USDC.
 
 Pinned oracle: `usd-core` 26.8 from PyPI (OpenUSD v26.08), as for the
 `usdc_versions` fixtures:
@@ -42,7 +46,7 @@ Pinned oracle: `usd-core` 26.8 from PyPI (OpenUSD v26.08), as for the
 import os
 import sys
 
-from pxr import Gf, Sdf, Usd, Vt
+from pxr import Gf, Pcp, Sdf, Usd, Vt
 
 PINNED_USD_VERSION = (0, 26, 8)
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -193,6 +197,24 @@ def "Numbers"
     }
 }
 """,
+    "unresolved_sublayer": """#usda 1.0
+(
+    subLayers = [
+        @./missing.usda@ (offset = 5),
+        @./unresolved_sublayer_weak.usda@
+    ]
+)
+
+def "Root"
+{
+}
+""",
+    "unresolved_sublayer_weak": """#usda 1.0
+
+def "Weak"
+{
+}
+""",
 }
 
 # Values OpenUSD refuses for their declared type: each makes the whole layer
@@ -227,6 +249,9 @@ def main():
         source = os.path.join(HERE, name + ".usda")
         with open(source, "w") as f:
             f.write(text)
+        if name.endswith("_weak"):
+            # Read only as a sublayer, from its USDA.
+            continue
         layer = Sdf.Layer.FindOrOpen(source)
         if not layer or not layer.Export(os.path.join(HERE, name + ".usdc")):
             sys.exit("failed to convert " + source)
@@ -240,6 +265,22 @@ def main():
             sys.exit("OpenUSD accepts " + statement)
     with open(os.path.join(HERE, "numeric_rejected.txt"), "w") as f:
         f.write("".join(statement + "\n" for statement in REJECTED))
+    check_unresolved_sublayer()
+
+
+def check_unresolved_sublayer():
+    """Requires OpenUSD to compose `unresolved_sublayer` in both formats as
+    the test expects: the missing sublayer reported as
+    `PcpErrorInvalidSublayerPath`, the rest of the layer stack kept."""
+    for ext in ("usda", "usdc"):
+        stage = Usd.Stage.Open(os.path.join(HERE, "unresolved_sublayer." + ext))
+        prims = [str(p.GetPath()) for p in stage.Traverse()]
+        errors = stage.GetCompositionErrors()
+        if prims != ["/Weak", "/Root"] or [e.errorType for e in errors] != [
+            Pcp.ErrorType_InvalidSublayerPath
+        ] or "missing.usda" not in str(errors[0]):
+            sys.exit("unexpected composition of unresolved_sublayer.%s: %s %s"
+                     % (ext, prims, [str(e) for e in errors]))
 
 
 if __name__ == "__main__":

@@ -1,0 +1,11 @@
+#usda 1.0
+(
+    subLayers = [
+        @./missing.usda@ (offset = 5),
+        @./unresolved_sublayer_weak.usda@
+    ]
+)
+
+def "Root"
+{
+}

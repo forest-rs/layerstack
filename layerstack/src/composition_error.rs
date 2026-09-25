@@ -32,6 +32,9 @@ pub enum CompositionError {
     /// A reference or payload whose asset path could not be resolved. The
     /// arc contributed nothing.
     UnresolvedAsset(UnresolvedAsset),
+    /// A sublayer whose asset path could not be resolved. The sublayer was
+    /// ignored.
+    UnresolvedSublayer(UnresolvedSublayer),
 }
 
 impl CompositionError {
@@ -40,7 +43,7 @@ impl CompositionError {
     #[must_use]
     pub fn prim(&self) -> Option<PathId> {
         match self {
-            Self::SublayerCycle(_) => None,
+            Self::SublayerCycle(_) | Self::UnresolvedSublayer(_) => None,
             Self::ArcCycle(cycle) => Some(cycle.prim),
             Self::UnresolvedDefaultPrim(error) => Some(error.prim),
             Self::UnresolvedAsset(error) => Some(error.prim),
@@ -166,5 +169,27 @@ pub struct UnresolvedAsset {
     /// The arc: [`ArcKind::References`] or [`ArcKind::Payloads`].
     pub arc: ArcKind,
     /// The asset path as authored.
+    pub asset: String,
+}
+
+/// A sublayer whose asset path could not be resolved, found when gathering
+/// a layer stack.
+///
+/// Importers keep such a sublayer as a [`SublayerEntry::unresolved`] instead
+/// of dropping it. It contributes no layer, and the rest of the layer stack,
+/// including the sublayers after it, is gathered as usual. Each layer stack
+/// that reaches it reports it.
+///
+/// Spec: AOUSD Core §10.3.1 (sublayers), §10.6 (composition errors).
+/// OpenUSD reports it as `PcpErrorInvalidSublayerPath`
+/// (`PcpLayerStack::_BuildLayerStack`, `pxr/usd/pcp/layerStack.cpp`), with
+/// the layer that names the sublayer and the authored path.
+///
+/// [`SublayerEntry::unresolved`]: crate::SublayerEntry::unresolved
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct UnresolvedSublayer {
+    /// The layer whose `subLayers` names the sublayer.
+    pub layer: LayerId,
+    /// The sublayer's asset path as authored.
     pub asset: String,
 }

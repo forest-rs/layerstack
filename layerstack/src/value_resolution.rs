@@ -22,6 +22,7 @@ use opinionated::{
 use crate::{
     array_edit::ArrayEdit,
     doc::{InterpolationType, Value},
+    half::{from_f32 as f32_to_half, to_f32 as half_to_f32},
     prim_index::{Opinion, OpinionValue},
     property::PropertyType,
 };
@@ -805,68 +806,6 @@ fn lerp_f32s<const N: usize>(a: &[f32; N], b: &[f32; N], alpha: f64) -> [f32; N]
 
 fn lerp_f64s<const N: usize>(a: &[f64; N], b: &[f64; N], alpha: f64) -> [f64; N] {
     core::array::from_fn(|i| gf_lerp(a[i], b[i], alpha))
-}
-
-/// Widens IEEE 754 binary16 bits (`GfHalf`) to `f32`, exactly.
-fn half_to_f32(bits: u16) -> f32 {
-    let negative = bits & 0x8000 != 0;
-    let exponent = u32::from((bits >> 10) & 0x1f);
-    let mantissa = u32::from(bits & 0x3ff);
-    let magnitude = match exponent {
-        // Subnormal halves are `mantissa * 2^-24`, normal in `f32`.
-        0 => {
-            #[allow(clippy::cast_precision_loss, reason = "mantissa has 10 bits")]
-            let value = mantissa as f32 * (1.0 / 16_777_216.0);
-            return if negative { -value } else { value };
-        }
-        0x1f => 0x7f80_0000 | (mantissa << 13),
-        _ => ((exponent + 112) << 23) | (mantissa << 13),
-    };
-    f32::from_bits(u32::from(negative) << 31 | magnitude)
-}
-
-/// Narrows an `f32` to IEEE 754 binary16 bits, rounding to nearest even,
-/// as `GfHalf`'s conversion from `float` does.
-#[allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "bit manipulation of IEEE 754 fields"
-)]
-fn f32_to_half(value: f32) -> u16 {
-    let bits = value.to_bits();
-    let sign = ((bits >> 16) & 0x8000) as u16;
-    let exponent = ((bits >> 23) & 0xff) as i32;
-    let mantissa = bits & 0x007f_ffff;
-    if exponent == 0xff {
-        let nan = if mantissa == 0 {
-            0
-        } else {
-            0x0200 | (mantissa >> 13) as u16
-        };
-        return sign | 0x7c00 | nan;
-    }
-    // Rounds `significand >> shift` to nearest even.
-    let round = |significand: u32, shift: u32| {
-        let kept = significand >> shift;
-        let rest = significand & ((1 << shift) - 1);
-        let halfway = 1 << (shift - 1);
-        kept + u32::from(rest > halfway || (rest == halfway && kept & 1 == 1))
-    };
-    let half_exponent = exponent - 127 + 15;
-    if half_exponent >= 0x1f {
-        return sign | 0x7c00;
-    }
-    if half_exponent <= 0 {
-        // Below 2^-25 everything rounds to zero; otherwise a subnormal, whose
-        // rounding may carry into the smallest normal.
-        if half_exponent < -10 {
-            return sign;
-        }
-        let shift = (14 - half_exponent) as u32;
-        return sign | round(mantissa | 0x0080_0000, shift) as u16;
-    }
-    // A carry out of the mantissa increments the exponent, up to infinity.
-    sign | round(((half_exponent as u32) << 23) | mantissa, 13) as u16
 }
 
 /// `GfLerp` over `GfHalf`: computed in double precision, then narrowed
@@ -1792,33 +1731,6 @@ mod tests {
             None,
             "arrays of different sizes hold"
         );
-    }
-
-    #[test]
-    fn half_conversion_round_trips_and_rounds_to_nearest_even() {
-        for bits in 0..=u16::MAX {
-            let widened = half_to_f32(bits);
-            if widened.is_nan() {
-                assert!(half_to_f32(f32_to_half(widened)).is_nan(), "{bits:#06x}");
-            } else {
-                assert_eq!(f32_to_half(widened), bits, "{bits:#06x}");
-            }
-        }
-        let ulp = |exponent: i32| 2_f32.powi(exponent);
-        // Ties go to the even neighbour.
-        assert_eq!(f32_to_half(1.0 + ulp(-11)), 0x3c00);
-        assert_eq!(f32_to_half(1.0 + 3.0 * ulp(-11)), 0x3c02);
-        assert_eq!(f32_to_half(1.0 + ulp(-11) + ulp(-20)), 0x3c01);
-        // The largest half and overflow to infinity.
-        assert_eq!(f32_to_half(65_519.0), 0x7bff);
-        assert_eq!(f32_to_half(65_520.0), 0x7c00);
-        assert_eq!(f32_to_half(-1e9), 0xfc00);
-        // Subnormals, the tie at half the smallest one, and the carry into
-        // the smallest normal.
-        assert_eq!(f32_to_half(ulp(-25)), 0x0000);
-        assert_eq!(f32_to_half(1.5 * ulp(-25)), 0x0001);
-        assert_eq!(f32_to_half(-3.0 * ulp(-25)), 0x8002);
-        assert_eq!(f32_to_half(ulp(-14) - ulp(-26)), 0x0400);
     }
 
     #[test]

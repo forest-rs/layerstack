@@ -1384,44 +1384,7 @@ fn spline_to_value(spline: &SplineData, val: f64) -> Value {
     match spline.data_type {
         SplineDataType::Double | SplineDataType::Unspecified => Value::Double(val),
         SplineDataType::Float => Value::Float(val as f32),
-        SplineDataType::Half => Value::Half(half_from_f64(val)),
-    }
-}
-
-/// Convert an `f64` to IEEE 754 half-precision bits (no_std-compatible).
-///
-/// This is a simplified conversion that handles normal, denormal, infinity,
-/// and NaN cases.
-#[allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "intentional bit manipulation for f16 conversion"
-)]
-fn half_from_f64(v: f64) -> u16 {
-    // Convert through f32 first for simplicity.
-    let f = v as f32;
-    let bits = f.to_bits();
-    let sign = (bits >> 16) & 0x8000;
-    let exp = ((bits >> 23) & 0xFF) as i32 - 127 + 15;
-    let frac = bits & 0x007F_FFFF;
-
-    if exp <= 0 {
-        // Denormal or zero.
-        if exp < -10 {
-            sign as u16
-        } else {
-            let f_shifted = (frac | 0x0080_0000) >> (1 - exp);
-            (sign | (f_shifted >> 13)) as u16
-        }
-    } else if exp >= 31 {
-        // Infinity or NaN.
-        if frac == 0 {
-            (sign | 0x7C00) as u16
-        } else {
-            (sign | 0x7C00 | (frac >> 13)) as u16
-        }
-    } else {
-        (sign | ((exp as u32) << 10) | (frac >> 13)) as u16
+        SplineDataType::Half => Value::Half(crate::half::from_f64(val)),
     }
 }
 

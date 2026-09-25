@@ -3169,6 +3169,7 @@ fn intern_steps(
         };
         let graph = &mut out.get_mut(&dest).expect("path exists").graph;
         cursor.node = graph.intern_child(cursor.node, arc);
+        graph.set_layer_offset(cursor.node, step.layer_offset);
         if let Some(origin) = &step.origin {
             let node = cursor.node;
             if graph.node(node).and_then(PrimNode::origin).is_none() {
@@ -3231,7 +3232,12 @@ fn relocate_nodes(
             implied: false,
             skips_duplicates: false,
         };
+        let offset = graph.node(cursor.node).map(PrimNode::layer_offset);
         cursor.node = graph.intern_child(cursor.node, arc);
+        // A relocation is read in the layer stack of the node authoring it.
+        if let Some(offset) = offset {
+            graph.set_layer_offset(cursor.node, offset);
+        }
         cursor.variants.clear();
     }
     view

@@ -1,0 +1,16 @@
+#usda 1.2
+
+def "Edits"
+{
+    float[] empty = edit []
+    int[] ints = edit [write 9 to [0]; write [-1] to [1]; insert 5 at [2]; insert [0] at [-2]; prepend 1; prepend [-1]; append 4; append [2]; erase [-3]; minsize 2; minsize 6 fill 7; maxsize 20; resize 8; resize 10 fill -1]
+    point3f[] points = edit [append (1, 2, 3); resize 4 fill (0.5, 0, -1)]
+    double[] sampled.timeSamples = {
+        1: edit [resize 2 fill 0.25],
+        2: [1.5, 2.5],
+        3: edit [write 3.5 to [-1]],
+    }
+    string[] strings = edit [append 'say "hi"'; minsize 3 fill """x
+y"""]
+}
+

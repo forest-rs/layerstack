@@ -1076,9 +1076,22 @@ impl<'a> LowerCtx<'a> {
                     .lower_array_edit_index(node)
                     .unwrap_or(ArrayEditIndex::Position(0)),
             },
-            "minsize" => ArrayEditInstruction::MinSize(self.lower_array_edit_size(node)),
+            "minsize" => {
+                let len = self.lower_array_edit_size(node);
+                match self.lower_array_edit_fill(node) {
+                    Some(fill) => ArrayEditInstruction::MinSizeFill { len, fill },
+                    None => ArrayEditInstruction::MinSize(len),
+                }
+            }
             "maxsize" => ArrayEditInstruction::MaxSize(self.lower_array_edit_size(node)),
-            "resize" => ArrayEditInstruction::Resize(self.lower_array_edit_size(node)),
+            "resize" => {
+                let len = self.lower_array_edit_size(node);
+                match self.lower_array_edit_fill(node) {
+                    Some(fill) => ArrayEditInstruction::ResizeFill { len, fill },
+                    None => ArrayEditInstruction::Resize(len),
+                }
+            }
+            // The parser has reported the unknown instruction.
             _ => ArrayEditInstruction::Resize(0),
         }
     }
@@ -1128,16 +1141,21 @@ impl<'a> LowerCtx<'a> {
                         parsed
                     }));
                 }
-                SyntaxKind::Ident => {
-                    let text = self.text(self.node_from(tree, id));
-                    if text == "end" {
-                        return Some(ArrayEditIndex::End);
-                    }
-                }
                 _ => {}
             }
         }
         None
+    }
+
+    /// The `fill` literal of `minsize N fill <literal>` or `resize N fill
+    /// <literal>`: the value after the size.
+    fn lower_array_edit_fill(&mut self, node: SyntaxNode<'_>) -> Option<Value<'a>> {
+        let tree = node.tree();
+        let fill = node
+            .children_no_trivia()
+            .filter(|child| child.kind() == SyntaxKind::ValueExpr)
+            .nth(1)?;
+        Some(self.lower_value(self.node_from(tree, fill.id.0)))
     }
 
     fn lower_array_edit_size(&mut self, node: SyntaxNode<'_>) -> usize {

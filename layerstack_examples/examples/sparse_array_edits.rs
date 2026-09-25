@@ -101,20 +101,20 @@ def "Mesh" {
 
     let sparse_override = r#"#usda 1.0
 over "Mesh" {
-    int[] points = edit (
-        write 9 to [0],
-        append 4,
+    int[] points = edit [
+        write 9 to [0]
+        append 4
         erase [-2]
-    )
+    ]
 }
 "#;
 
     let time_sampled_sparse_override = r#"#usda 1.0
 over "Mesh" {
     int[] animated.timeSamples = {
-        0: edit (),
-        2: edit (write 8 to [1]),
-        3: edit ()
+        0: edit [],
+        2: edit [write 8 to [1]],
+        3: edit []
     }
 }
 "#;

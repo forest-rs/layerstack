@@ -44,7 +44,7 @@
    "description": "TestBasics: session-layer sparse samples compose over the root layer's dense default.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @session.usda@,\n        @base.usda@\n    ]\n)\n",
-    "session.usda": "#usda 1.0\nover \"TestBasics\"\n{\n    int[] attr.timeSamples = { 3: edit (prepend 3, append 3), 6: edit (prepend 6, append 7) }\n}\n",
+    "session.usda": "#usda 1.0\nover \"TestBasics\"\n{\n    int[] attr.timeSamples = { 3: edit [prepend 3; append 3], 6: edit [prepend 6; append 7] }\n}\n",
     "base.usda": "#usda 1.0\ndef \"TestBasics\"\n{\n    int[] attr = [3, 2, 1]\n}\n"
    },
    "queries": [
@@ -246,8 +246,8 @@
    "description": "TestBasics: root-layer sparse samples hide the root default and compose under the session-layer samples.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @session.usda@,\n        @base.usda@\n    ]\n)\n",
-    "session.usda": "#usda 1.0\nover \"TestBasics\"\n{\n    int[] attr.timeSamples = { 3: edit (prepend 3, append 3), 6: edit (prepend 6, append 7) }\n}\n",
-    "base.usda": "#usda 1.0\ndef \"TestBasics\"\n{\n    int[] attr.timeSamples = { 1: edit (prepend -1, append -1), 5: edit (prepend -5, append -5), 9: edit (prepend -9, append -9) }\n}\n"
+    "session.usda": "#usda 1.0\nover \"TestBasics\"\n{\n    int[] attr.timeSamples = { 3: edit [prepend 3; append 3], 6: edit [prepend 6; append 7] }\n}\n",
+    "base.usda": "#usda 1.0\ndef \"TestBasics\"\n{\n    int[] attr.timeSamples = { 1: edit [prepend -1; append -1], 5: edit [prepend -5; append -5], 9: edit [prepend -9; append -9] }\n}\n"
    },
    "queries": [
     {
@@ -529,7 +529,7 @@
    "name": "usd_interpolation_single_layer",
    "description": "TestInterpolation: a sparse `resize` sample interpolates towards a later dense sample.",
    "layers": {
-    "root.usda": "#usda 1.0\ndef \"TestInterpolation\"\n{\n    float[] attr.timeSamples = { 1: edit (resize 4), 3: [2, 4, 6, 8] }\n}\n"
+    "root.usda": "#usda 1.0\ndef \"TestInterpolation\"\n{\n    float[] attr.timeSamples = { 1: edit [resize 4], 3: [2, 4, 6, 8] }\n}\n"
    },
    "queries": [
     {
@@ -710,8 +710,8 @@
    "description": "TestInterpolation: a stronger sparse sample at a different time composes over both bracketing samples before interpolating.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @session.usda@,\n        @base.usda@\n    ]\n)\n",
-    "session.usda": "#usda 1.0\nover \"TestInterpolation\"\n{\n    float[] attr.timeSamples = { 2: edit (write 8 to [1]) }\n}\n",
-    "base.usda": "#usda 1.0\ndef \"TestInterpolation\"\n{\n    float[] attr.timeSamples = { 1: edit (resize 4), 3: [2, 4, 6, 8] }\n}\n"
+    "session.usda": "#usda 1.0\nover \"TestInterpolation\"\n{\n    float[] attr.timeSamples = { 2: edit [write 8 to [1]] }\n}\n",
+    "base.usda": "#usda 1.0\ndef \"TestInterpolation\"\n{\n    float[] attr.timeSamples = { 1: edit [resize 4], 3: [2, 4, 6, 8] }\n}\n"
    },
    "queries": [
     {
@@ -926,8 +926,8 @@
    "description": "Dense and sparse samples interleave across three layers at differing times.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @mid.usda@,\n        @weak.usda@\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 0: edit (write 10 to [0]), 4: [7, 7, 7], 6: edit (append 1) }\n}\n",
-    "mid.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 1: edit (write 20 to [1]), 3: [1, 2, 3], 5: edit (erase [0]) }\n}\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 0: edit [write 10 to [0]], 4: [7, 7, 7], 6: edit [append 1] }\n}\n",
+    "mid.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 1: edit [write 20 to [1]], 3: [1, 2, 3], 5: edit [erase [0]] }\n}\n",
     "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 0: [0, 0, 0], 2: [4, 4, 4], 8: [8, 8, 8] }\n}\n"
    },
    "queries": [
@@ -1449,8 +1449,8 @@
    "description": "Two sparse series at interleaved times compose over a dense default.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @mid.usda@,\n        @weak.usda@\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 1: edit (append 10), 3: edit (append 30) }\n}\n",
-    "mid.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 0: edit (prepend 0), 2: edit (prepend 2), 4: edit (prepend 4) }\n}\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 1: edit [append 10], 3: edit [append 30] }\n}\n",
+    "mid.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 0: edit [prepend 0], 2: edit [prepend 2], 4: edit [prepend 4] }\n}\n",
     "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    int[] x = [5]\n}\n"
    },
    "queries": [
@@ -1762,7 +1762,7 @@
    "description": "A dense lower sample hides weaker samples until the stronger series' next (sparse) sample, which composes over the weaker series there.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 1: [0, 0], 5: edit (write 9 to [0]) }\n}\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 1: [0, 0], 5: edit [write 9 to [0]] }\n}\n",
     "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 2: [1, 1], 4: [2, 2], 6: [4, 4] }\n}\n"
    },
    "queries": [
@@ -2034,8 +2034,8 @@
    "description": "As `dense_lower_sparse_upper`, with a middle series whose sample held at the upper time is sparse and whose next sample is dense.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @mid.usda@,\n        @weak.usda@\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 1: [0, 0], 5: edit (write 9 to [0]) }\n}\n",
-    "mid.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 4: edit (write 7 to [1]), 6: [3, 3] }\n}\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 1: [0, 0], 5: edit [write 9 to [0]] }\n}\n",
+    "mid.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 4: edit [write 7 to [1]], 6: [3, 3] }\n}\n",
     "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x = [1, 1]\n}\n"
    },
    "queries": [
@@ -2296,7 +2296,7 @@
    "description": "A sparse series behind a sublayer offset and scale composes over a dense series in stage time.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@ (offset = 10; scale = 2),\n        @weak.usda@\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 0: edit (write 9 to [0]), 1: edit (write 5 to [0]) }\n}\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 0: edit [write 9 to [0]], 1: edit [write 5 to [0]] }\n}\n",
     "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 10: [1, 2], 14: [3, 4] }\n}\n"
    },
    "queries": [
@@ -2489,7 +2489,7 @@
    "name": "reference_offset_scale",
    "description": "A local sparse series composes over a referenced dense series mapped by the reference's offset and scale.",
    "layers": {
-    "root.usda": "#usda 1.0\ndef \"A\" (\n    references = @ref.usda@</B> (offset = 5; scale = 0.5)\n)\n{\n    float[] x.timeSamples = { 6: edit (write 9 to [0]) }\n}\n",
+    "root.usda": "#usda 1.0\ndef \"A\" (\n    references = @ref.usda@</B> (offset = 5; scale = 0.5)\n)\n{\n    float[] x.timeSamples = { 6: edit [write 9 to [0]] }\n}\n",
     "ref.usda": "#usda 1.0\ndef \"B\"\n{\n    float[] x.timeSamples = { 0: [0, 0], 4: [4, 8] }\n}\n"
    },
    "queries": [
@@ -2683,7 +2683,7 @@
    "description": "Offsets compose through nested sublayers for both sparse and dense series.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@ (offset = -2),\n        @mid.usda@ (offset = 2)\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 3: edit (write 9 to [1]), 5: edit (write 1 to [1]) }\n}\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 3: edit [write 9 to [1]], 5: edit [write 1 to [1]] }\n}\n",
     "mid.usda": "#usda 1.0\n(\n    subLayers = [\n        @weak.usda@ (scale = 2)\n    ]\n)\n",
     "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 0: [0, 0], 2: [4, 4] }\n}\n"
    },
@@ -3785,8 +3785,8 @@
    "description": "Sparse and dense samples of different series less than 1e-6 apart compose as one sample time.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 0.0000005: edit (write 9 to [0]), 2: edit (write 7 to [0]) }\n    float[] y.timeSamples = { 0.0000005: [5, 5], 2: [6, 6] }\n}\n",
-    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 0: [0, 0], 1: [1, 1], 2.0000005: [2, 2] }\n    float[] y.timeSamples = { 0: edit (write 1 to [1]), 1.9999995: edit (write 2 to [1]) }\n}\n"
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 0.0000005: edit [write 9 to [0]], 2: edit [write 7 to [0]] }\n    float[] y.timeSamples = { 0.0000005: [5, 5], 2: [6, 6] }\n}\n",
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 0: [0, 0], 1: [1, 1], 2.0000005: [2, 2] }\n    float[] y.timeSamples = { 0: edit [write 1 to [1]], 1.9999995: edit [write 2 to [1]] }\n}\n"
    },
    "queries": [
     {
@@ -4239,7 +4239,7 @@
    "description": "A sampled block in the strongest series blocks while it is the held sample.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 0: edit (write 9 to [0]), 2: None, 4: [7, 7] }\n}\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 0: edit [write 9 to [0]], 2: None, 4: [7, 7] }\n}\n",
     "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x = [1, 2]\n}\n"
    },
    "queries": [
@@ -4419,7 +4419,7 @@
    "description": "A sampled block between two sparse samples of the strongest series.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 0: edit (append 7), 2: None, 4: edit (append 8) }\n}\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 0: edit [append 7], 2: None, 4: edit [append 8] }\n}\n",
     "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    int[] x = [1, 2]\n}\n"
    },
    "queries": [
@@ -4609,8 +4609,8 @@
    "description": "A sampled block in a weaker series ends the fold for the sparse sample above it; edits above materialize over the empty array.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @mid.usda@,\n        @weak.usda@\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 0: edit (append 7) }\n}\n",
-    "mid.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 0: None, 2: edit (append 5), 4: [3] }\n}\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 0: edit [append 7] }\n}\n",
+    "mid.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 0: None, 2: edit [append 5], 4: [3] }\n}\n",
     "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    int[] x = [1, 2]\n}\n"
    },
    "queries": [
@@ -4870,7 +4870,7 @@
    "description": "A default block between a sparse series and a dense default.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @mid.usda@,\n        @weak.usda@\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 0: edit (append 7) }\n}\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 0: edit [append 7] }\n}\n",
     "mid.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x = None\n}\n",
     "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    int[] x = [1, 2]\n}\n"
    },
@@ -5017,7 +5017,7 @@
    "description": "A sparse default composes over every sample of a weaker series.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x = edit (write 9 to [0])\n}\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x = edit [write 9 to [0]]\n}\n",
     "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 1: [0, 0], 3: [2, 2] }\n}\n"
    },
    "queries": [
@@ -5169,7 +5169,7 @@
    "description": "Sparse samples compose over a weaker dense default; before the first sample the first sample holds.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 2: edit (write 9 to [0]), 4: edit (write 5 to [0]) }\n}\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    int[] x.timeSamples = { 2: edit [write 9 to [0]], 4: edit [write 5 to [0]] }\n}\n",
     "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    int[] x = [1, 2]\n}\n"
    },
    "queries": [
@@ -5311,7 +5311,7 @@
    "description": "As `sparse_samples_over_weaker_default_int` with an interpolating type.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 2: edit (write 9 to [0]), 4: edit (write 5 to [0]) }\n}\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x.timeSamples = { 2: edit [write 9 to [0]], 4: edit [write 5 to [0]] }\n}\n",
     "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x = [1, 2]\n}\n"
    },
    "queries": [
@@ -5464,7 +5464,7 @@
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
     "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float[] x = [5, 5]\n}\n",
-    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 1: edit (write 1 to [0]), 3: [2, 2] }\n}\n"
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float[] x.timeSamples = { 1: edit [write 1 to [0]], 3: [2, 2] }\n}\n"
    },
    "queries": [
     {
@@ -5757,7 +5757,7 @@
    "description": "Half-precision arrays and half vector arrays interpolate element by element, rounding each result to half precision; a sparse edit composes first, and arrays of different sizes hold. The values are exact halves.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    half[] e.timeSamples = { 1: edit (write 8 to [1]) }\n}\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    half[] e.timeSamples = { 1: edit [write 8 to [1]] }\n}\n",
     "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    half[] h.timeSamples = { 0: [0, 1, -2, 0.0999755859375], 2: [1, 3, 0.5, 1000] }\n    half3[] v.timeSamples = { 0: [(0, 0, 0), (1, 1, 1)], 2: [(1, 2, 3), (0.5, 0.25, 2)] }\n    half[] sized.timeSamples = { 0: [0, 0], 2: [2, 4, 6] }\n    half[] e.timeSamples = { 0: [0, 0], 2: [2, 4] }\n}\n"
    },
    "queries": [
@@ -6361,7 +6361,7 @@
    "description": "Quaternion arrays interpolate element by element with `GfSlerp`, taking the shorter arc; a sparse edit composes first, and arrays of different sizes hold. The `quath` values are exact halves.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    quatf[] e.timeSamples = { 1: edit (write (0, 0, 1, 0) to [1]) }\n}\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    quatf[] e.timeSamples = { 1: edit [write (0, 0, 1, 0) to [1]] }\n}\n",
     "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    quath[] h.timeSamples = { 0: [(1, 0, 0, 0), (0.5, 0.5, 0.5, 0.5)], 2: [(0, 0, 0, 1), (-0.5, 0.5, 0.5, 0.5)] }\n    quatf[] f.timeSamples = { 0: [(1, 0, 0, 0), (0.5, 0.5, 0.5, 0.5)], 2: [(0, 0, 0, 1), (-0.5, 0.5, 0.5, 0.5)] }\n    quatd[] d.timeSamples = { 0: [(1, 0, 0, 0), (1, 0, 0, 0)], 2: [(0.6, 0, 0.8, 0), (0.999995, 0.0031622, 0, 0)] }\n    quatf[] sized.timeSamples = { 0: [(1, 0, 0, 0)], 2: [(0, 0, 0, 1), (1, 0, 0, 0)] }\n    quatf[] e.timeSamples = { 0: [(1, 0, 0, 0), (1, 0, 0, 0)], 2: [(0, 0, 0, 1), (1, 0, 0, 0)] }\n}\n"
    },
    "queries": [
@@ -7867,7 +7867,7 @@
    "description": "A sparse vector edit composes over both bracketing dense samples before interpolating.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float3[] x.timeSamples = { 2: edit (write (9, 9, 9) to [0]) }\n}\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float3[] x.timeSamples = { 2: edit [write (9, 9, 9) to [0]] }\n}\n",
     "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    float3[] x.timeSamples = { 1: [(0, 0, 0), (1, 1, 1)], 3: [(2, 2, 2), (3, 5, 7)] }\n}\n"
    },
    "queries": [
@@ -38711,7 +38711,7 @@
    "name": "schema_sparse_samples_over_fallback",
    "description": "Time-sampled sparse edits compose over the schema fallback; arrays of different sizes hold.",
    "layers": {
-    "root.usda": "#usda 1.0\ndef Cube \"A\"\n{\n    float3[] extent.timeSamples = { 1: edit (write (0, 0, 0) to [0]), 3: edit (append (5, 5, 5)) }\n}\n"
+    "root.usda": "#usda 1.0\ndef Cube \"A\"\n{\n    float3[] extent.timeSamples = { 1: edit [write (0, 0, 0) to [0]], 3: edit [append (5, 5, 5)] }\n}\n"
    },
    "queries": [
     {
@@ -39154,7 +39154,7 @@
    "description": "A default block discards weaker opinions; stronger sampled edits compose over the schema fallback, and with nothing stronger the fallback resolves.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @mid.usda@,\n        @weak.usda@\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float3[] extent.timeSamples = { 1: edit (append (5, 5, 5)) }\n}\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float3[] extent.timeSamples = { 1: edit [append (5, 5, 5)] }\n}\n",
     "mid.usda": "#usda 1.0\nover \"A\"\n{\n    float3[] extent = None\n    double size = None\n}\n",
     "weak.usda": "#usda 1.0\ndef Cube \"A\"\n{\n    float3[] extent = [(2, 2, 2)]\n    double size = 5\n}\n"
    },
@@ -39541,7 +39541,7 @@
    "description": "A held sampled block resolves the schema fallback, and stronger sparse edits compose over the fallback, as over a default block.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @mid.usda@,\n        @weak.usda@\n    ]\n)\n",
-    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float3[] extent.timeSamples = { 1: edit (append (5, 5, 5)) }\n}\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    float3[] extent.timeSamples = { 1: edit [append (5, 5, 5)] }\n}\n",
     "mid.usda": "#usda 1.0\nover \"A\"\n{\n    float3[] extent.timeSamples = { 0: None, 2: [(3, 3, 3)] }\n}\n",
     "weak.usda": "#usda 1.0\ndef Cube \"A\"\n{\n    float3[] extent = [(2, 2, 2)]\n}\n\ndef Cube \"B\"\n{\n    float3[] extent.timeSamples = { 0: [(1, 2, 3)], 2: None, 4: [(4, 4, 4)] }\n    double size.timeSamples = { 0: 1, 2: None, 4: 4 }\n}\n"
    },
@@ -40322,7 +40322,7 @@
    "description": "Sparse edits over the schema fallback and scalar samples behind a sublayer offset and scale.",
    "layers": {
     "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @anim.usda@ (offset = 10; scale = 2)\n    ]\n)\n\ndef Cube \"A\"\n{\n}\n",
-    "anim.usda": "#usda 1.0\nover \"A\"\n{\n    float3[] extent.timeSamples = { 0: edit (write (0, 0, 0) to [0]), 1: edit (write (4, 4, 4) to [0]) }\n    double size.timeSamples = { 0: 1, 1: 3 }\n}\n"
+    "anim.usda": "#usda 1.0\nover \"A\"\n{\n    float3[] extent.timeSamples = { 0: edit [write (0, 0, 0) to [0]], 1: edit [write (4, 4, 4) to [0]] }\n    double size.timeSamples = { 0: 1, 1: 3 }\n}\n"
    },
    "queries": [
     {

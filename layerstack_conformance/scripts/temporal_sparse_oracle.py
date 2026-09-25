@@ -9,10 +9,9 @@ example `pip install usd-core==26.8`. Writes
 `layerstack_conformance/tests/data/temporal_sparse.json` by default, which
 `tests/temporal_sparse.rs` replays against layerstack.
 
-Each case is a set of USDA layers (`root.usda` is the stage root) written in
-layerstack's array edit syntax, `edit (op, op)`. The script rewrites edits to
-OpenUSD's `edit [op; op]` before handing the layers to OpenUSD, and records
-for every query time and interpolation mode:
+Each case is a set of USDA layers (`root.usda` is the stage root), with array
+edits in OpenUSD's syntax, `edit [op; op]`. The script records for every query
+time and interpolation mode:
 
 - `openusd`: `UsdAttribute::Get` on the composed stage;
 - `flattened`: `UsdAttribute::Get` on `UsdStage::Flatten()` of that stage.
@@ -32,7 +31,6 @@ import json
 import math
 import os
 import random
-import re
 import struct
 import sys
 import tempfile
@@ -232,8 +230,8 @@ case(
         # The C++ test's session layer is the stronger sublayer here.
         "root.usda": sublayers("@session.usda@", "@base.usda@"),
         "session.usda": layer(prim("over", "TestBasics",
-                                   "int[] attr.timeSamples = { 3: edit (prepend 3, append 3), "
-                                   "6: edit (prepend 6, append 7) }")),
+                                   "int[] attr.timeSamples = { 3: edit [prepend 3; append 3], "
+                                   "6: edit [prepend 6; append 7] }")),
         "base.usda": layer(prim("def", "TestBasics", "int[] attr = [3, 2, 1]")),
     },
     {"/TestBasics.attr": [0, 3, 5, 6, 7]},
@@ -246,12 +244,12 @@ case(
     {
         "root.usda": sublayers("@session.usda@", "@base.usda@"),
         "session.usda": layer(prim("over", "TestBasics",
-                                   "int[] attr.timeSamples = { 3: edit (prepend 3, append 3), "
-                                   "6: edit (prepend 6, append 7) }")),
+                                   "int[] attr.timeSamples = { 3: edit [prepend 3; append 3], "
+                                   "6: edit [prepend 6; append 7] }")),
         "base.usda": layer(prim("def", "TestBasics",
-                                "int[] attr.timeSamples = { 1: edit (prepend -1, append -1), "
-                                "5: edit (prepend -5, append -5), "
-                                "9: edit (prepend -9, append -9) }")),
+                                "int[] attr.timeSamples = { 1: edit [prepend -1; append -1], "
+                                "5: edit [prepend -5; append -5], "
+                                "9: edit [prepend -9; append -9] }")),
     },
     {"/TestBasics.attr": [0, 3, 4, 5, 6, 7, 9, 10]},
 )
@@ -262,7 +260,7 @@ case(
     "later dense sample.",
     {
         "root.usda": layer(prim("def", "TestInterpolation",
-                                "float[] attr.timeSamples = { 1: edit (resize 4), "
+                                "float[] attr.timeSamples = { 1: edit [resize 4], "
                                 "3: [2, 4, 6, 8] }")),
     },
     {"/TestInterpolation.attr": [0, 1, 2, 3, 4]},
@@ -275,9 +273,9 @@ case(
     {
         "root.usda": sublayers("@session.usda@", "@base.usda@"),
         "session.usda": layer(prim("over", "TestInterpolation",
-                                   "float[] attr.timeSamples = { 2: edit (write 8 to [1]) }")),
+                                   "float[] attr.timeSamples = { 2: edit [write 8 to [1]] }")),
         "base.usda": layer(prim("def", "TestInterpolation",
-                                "float[] attr.timeSamples = { 1: edit (resize 4), "
+                                "float[] attr.timeSamples = { 1: edit [resize 4], "
                                 "3: [2, 4, 6, 8] }")),
     },
     {"/TestInterpolation.attr": [0, 1, 2, 2.5, 3, 4]},
@@ -292,11 +290,11 @@ case(
     {
         "root.usda": sublayers("@strong.usda@", "@mid.usda@", "@weak.usda@"),
         "strong.usda": layer(prim("over", "A",
-                                  "float[] x.timeSamples = { 0: edit (write 10 to [0]), "
-                                  "4: [7, 7, 7], 6: edit (append 1) }")),
+                                  "float[] x.timeSamples = { 0: edit [write 10 to [0]], "
+                                  "4: [7, 7, 7], 6: edit [append 1] }")),
         "mid.usda": layer(prim("over", "A",
-                               "float[] x.timeSamples = { 1: edit (write 20 to [1]), "
-                               "3: [1, 2, 3], 5: edit (erase [0]) }")),
+                               "float[] x.timeSamples = { 1: edit [write 20 to [1]], "
+                               "3: [1, 2, 3], 5: edit [erase [0]] }")),
         "weak.usda": layer(prim("def", "A",
                                 "float[] x.timeSamples = { 0: [0, 0, 0], 2: [4, 4, 4], "
                                 "8: [8, 8, 8] }")),
@@ -310,11 +308,11 @@ case(
     {
         "root.usda": sublayers("@strong.usda@", "@mid.usda@", "@weak.usda@"),
         "strong.usda": layer(prim("over", "A",
-                                  "int[] x.timeSamples = { 1: edit (append 10), "
-                                  "3: edit (append 30) }")),
+                                  "int[] x.timeSamples = { 1: edit [append 10], "
+                                  "3: edit [append 30] }")),
         "mid.usda": layer(prim("over", "A",
-                               "int[] x.timeSamples = { 0: edit (prepend 0), "
-                               "2: edit (prepend 2), 4: edit (prepend 4) }")),
+                               "int[] x.timeSamples = { 0: edit [prepend 0], "
+                               "2: edit [prepend 2], 4: edit [prepend 4] }")),
         "weak.usda": layer(prim("def", "A", "int[] x = [5]")),
     },
     {"/A.x": [-1, 0, 1, 1.5, 2, 2.5, 3, 3.5, 4, 5]},
@@ -328,7 +326,7 @@ case(
         "root.usda": sublayers("@strong.usda@", "@weak.usda@"),
         "strong.usda": layer(prim("over", "A",
                                   "float[] x.timeSamples = { 1: [0, 0], "
-                                  "5: edit (write 9 to [0]) }")),
+                                  "5: edit [write 9 to [0]] }")),
         "weak.usda": layer(prim("def", "A",
                                 "float[] x.timeSamples = { 2: [1, 1], 4: [2, 2], 6: [4, 4] }")),
     },
@@ -343,9 +341,9 @@ case(
         "root.usda": sublayers("@strong.usda@", "@mid.usda@", "@weak.usda@"),
         "strong.usda": layer(prim("over", "A",
                                   "float[] x.timeSamples = { 1: [0, 0], "
-                                  "5: edit (write 9 to [0]) }")),
+                                  "5: edit [write 9 to [0]] }")),
         "mid.usda": layer(prim("over", "A",
-                               "float[] x.timeSamples = { 4: edit (write 7 to [1]), "
+                               "float[] x.timeSamples = { 4: edit [write 7 to [1]], "
                                "6: [3, 3] }")),
         "weak.usda": layer(prim("def", "A", "float[] x = [1, 1]")),
     },
@@ -366,8 +364,8 @@ case(
     {
         "root.usda": sublayers("@strong.usda@ (offset = 10; scale = 2)", "@weak.usda@"),
         "strong.usda": layer(prim("over", "A",
-                                  "float[] x.timeSamples = { 0: edit (write 9 to [0]), "
-                                  "1: edit (write 5 to [0]) }")),
+                                  "float[] x.timeSamples = { 0: edit [write 9 to [0]], "
+                                  "1: edit [write 5 to [0]] }")),
         "weak.usda": layer(prim("def", "A",
                                 "float[] x.timeSamples = { 10: [1, 2], 14: [3, 4] }")),
     },
@@ -381,7 +379,7 @@ case(
     {
         "root.usda": layer(prim(
             "def", "A",
-            "float[] x.timeSamples = { 6: edit (write 9 to [0]) }",
+            "float[] x.timeSamples = { 6: edit [write 9 to [0]] }",
             meta=" (\n    references = @ref.usda@</B> (offset = 5; scale = 0.5)\n)")),
         "ref.usda": layer(prim("def", "B",
                                "float[] x.timeSamples = { 0: [0, 0], 4: [4, 8] }")),
@@ -396,8 +394,8 @@ case(
     {
         "root.usda": sublayers("@strong.usda@ (offset = -2)", "@mid.usda@ (offset = 2)"),
         "strong.usda": layer(prim("over", "A",
-                                  "float[] x.timeSamples = { 3: edit (write 9 to [1]), "
-                                  "5: edit (write 1 to [1]) }")),
+                                  "float[] x.timeSamples = { 3: edit [write 9 to [1]], "
+                                  "5: edit [write 1 to [1]] }")),
         "mid.usda": sublayers("@weak.usda@ (scale = 2)"),
         "weak.usda": layer(prim("def", "A",
                                 "float[] x.timeSamples = { 0: [0, 0], 2: [4, 4] }")),
@@ -483,13 +481,13 @@ case(
     {
         "root.usda": sublayers("@strong.usda@", "@weak.usda@"),
         "strong.usda": layer(prim("over", "A",
-                                  "float[] x.timeSamples = { 0.0000005: edit (write 9 to [0]), "
-                                  "2: edit (write 7 to [0]) }",
+                                  "float[] x.timeSamples = { 0.0000005: edit [write 9 to [0]], "
+                                  "2: edit [write 7 to [0]] }",
                                   "float[] y.timeSamples = { 0.0000005: [5, 5], 2: [6, 6] }")),
         "weak.usda": layer(prim("def", "A",
                                 "float[] x.timeSamples = { 0: [0, 0], 1: [1, 1], 2.0000005: [2, 2] }",
-                                "float[] y.timeSamples = { 0: edit (write 1 to [1]), "
-                                "1.9999995: edit (write 2 to [1]) }")),
+                                "float[] y.timeSamples = { 0: edit [write 1 to [1]], "
+                                "1.9999995: edit [write 2 to [1]] }")),
     },
     {"/A.x": [0, 0.00000025, 0.0000005, 0.5, 1, 1.5, 2, 2.00000025, 2.0000005, 3],
      "/A.y": [0, 0.00000025, 0.0000005, 1, 1.9999995, 2, 3]},
@@ -508,7 +506,7 @@ case(
     {
         "root.usda": sublayers("@strong.usda@", "@weak.usda@"),
         "strong.usda": layer(prim("over", "A",
-                                  "float[] x.timeSamples = { 0: edit (write 9 to [0]), "
+                                  "float[] x.timeSamples = { 0: edit [write 9 to [0]], "
                                   "2: None, 4: [7, 7] }")),
         "weak.usda": layer(prim("def", "A", "float[] x = [1, 2]")),
     },
@@ -524,8 +522,8 @@ case(
     {
         "root.usda": sublayers("@strong.usda@", "@weak.usda@"),
         "strong.usda": layer(prim("over", "A",
-                                  "int[] x.timeSamples = { 0: edit (append 7), 2: None, "
-                                  "4: edit (append 8) }")),
+                                  "int[] x.timeSamples = { 0: edit [append 7], 2: None, "
+                                  "4: edit [append 8] }")),
         "weak.usda": layer(prim("def", "A", "int[] x = [1, 2]")),
     },
     {"/A.x": [-1, 0, 1, 2, 3, 4, 5]},
@@ -537,9 +535,9 @@ case(
     "above it; edits above materialize over the empty array.",
     {
         "root.usda": sublayers("@strong.usda@", "@mid.usda@", "@weak.usda@"),
-        "strong.usda": layer(prim("over", "A", "int[] x.timeSamples = { 0: edit (append 7) }")),
+        "strong.usda": layer(prim("over", "A", "int[] x.timeSamples = { 0: edit [append 7] }")),
         "mid.usda": layer(prim("over", "A",
-                               "int[] x.timeSamples = { 0: None, 2: edit (append 5), 4: [3] }")),
+                               "int[] x.timeSamples = { 0: None, 2: edit [append 5], 4: [3] }")),
         "weak.usda": layer(prim("def", "A", "int[] x = [1, 2]")),
     },
     {"/A.x": [-1, 0, 1, 1.5, 2, 3, 4, 5]},
@@ -557,7 +555,7 @@ case(
     "A default block between a sparse series and a dense default.",
     {
         "root.usda": sublayers("@strong.usda@", "@mid.usda@", "@weak.usda@"),
-        "strong.usda": layer(prim("over", "A", "int[] x.timeSamples = { 0: edit (append 7) }")),
+        "strong.usda": layer(prim("over", "A", "int[] x.timeSamples = { 0: edit [append 7] }")),
         "mid.usda": layer(prim("over", "A", "int[] x = None")),
         "weak.usda": layer(prim("def", "A", "int[] x = [1, 2]")),
     },
@@ -583,7 +581,7 @@ case(
     "A sparse default composes over every sample of a weaker series.",
     {
         "root.usda": sublayers("@strong.usda@", "@weak.usda@"),
-        "strong.usda": layer(prim("over", "A", "float[] x = edit (write 9 to [0])")),
+        "strong.usda": layer(prim("over", "A", "float[] x = edit [write 9 to [0]]")),
         "weak.usda": layer(prim("def", "A", "float[] x.timeSamples = { 1: [0, 0], 3: [2, 2] }")),
     },
     {"/A.x": [0, 1, 2, 3, 4]},
@@ -599,8 +597,8 @@ case(
     {
         "root.usda": sublayers("@strong.usda@", "@weak.usda@"),
         "strong.usda": layer(prim("over", "A",
-                                  "int[] x.timeSamples = { 2: edit (write 9 to [0]), "
-                                  "4: edit (write 5 to [0]) }")),
+                                  "int[] x.timeSamples = { 2: edit [write 9 to [0]], "
+                                  "4: edit [write 5 to [0]] }")),
         "weak.usda": layer(prim("def", "A", "int[] x = [1, 2]")),
     },
     {"/A.x": [0, 2, 3, 4, 5]},
@@ -612,8 +610,8 @@ case(
     {
         "root.usda": sublayers("@strong.usda@", "@weak.usda@"),
         "strong.usda": layer(prim("over", "A",
-                                  "float[] x.timeSamples = { 2: edit (write 9 to [0]), "
-                                  "4: edit (write 5 to [0]) }")),
+                                  "float[] x.timeSamples = { 2: edit [write 9 to [0]], "
+                                  "4: edit [write 5 to [0]] }")),
         "weak.usda": layer(prim("def", "A", "float[] x = [1, 2]")),
     },
     {"/A.x": [0, 2, 3, 4, 5]},
@@ -629,7 +627,7 @@ case(
         "root.usda": sublayers("@strong.usda@", "@weak.usda@"),
         "strong.usda": layer(prim("over", "A", "float[] x = [5, 5]")),
         "weak.usda": layer(prim("def", "A",
-                                "float[] x.timeSamples = { 1: edit (write 1 to [0]), 3: [2, 2] }")),
+                                "float[] x.timeSamples = { 1: edit [write 1 to [0]], 3: [2, 2] }")),
     },
     {"/A.x": [0, 1, 2, 3, 4]},
 )
@@ -662,7 +660,7 @@ case(
     {
         "root.usda": sublayers("@strong.usda@", "@weak.usda@"),
         "strong.usda": layer(prim("over", "A",
-                                  "half[] e.timeSamples = { 1: edit (write 8 to [1]) }")),
+                                  "half[] e.timeSamples = { 1: edit [write 8 to [1]] }")),
         "weak.usda": layer(prim(
             "def", "A",
             "half[] h.timeSamples = { 0: [0, 1, -2, 0.0999755859375], "
@@ -687,7 +685,7 @@ case(
     {
         "root.usda": sublayers("@strong.usda@", "@weak.usda@"),
         "strong.usda": layer(prim("over", "A",
-                                  "quatf[] e.timeSamples = { 1: edit (write (0, 0, 1, 0) to [1]) }")),
+                                  "quatf[] e.timeSamples = { 1: edit [write (0, 0, 1, 0) to [1]] }")),
         "weak.usda": layer(prim(
             "def", "A",
             "quath[] h.timeSamples = { 0: [(1, 0, 0, 0), (0.5, 0.5, 0.5, 0.5)], "
@@ -716,7 +714,7 @@ case(
     {
         "root.usda": sublayers("@strong.usda@", "@weak.usda@"),
         "strong.usda": layer(prim("over", "A",
-                                  "float3[] x.timeSamples = { 2: edit (write (9, 9, 9) to [0]) }")),
+                                  "float3[] x.timeSamples = { 2: edit [write (9, 9, 9) to [0]] }")),
         "weak.usda": layer(prim("def", "A",
                                 "float3[] x.timeSamples = { 1: [(0, 0, 0), (1, 1, 1)], "
                                 "3: [(2, 2, 2), (3, 5, 7)] }")),
@@ -1000,8 +998,8 @@ case(
     {
         "root.usda": layer(prim(
             "def Cube", "A",
-            "float3[] extent.timeSamples = { 1: edit (write (0, 0, 0) to [0]), "
-            "3: edit (append (5, 5, 5)) }")),
+            "float3[] extent.timeSamples = { 1: edit [write (0, 0, 0) to [0]], "
+            "3: edit [append (5, 5, 5)] }")),
     },
     {"/A.extent": [None, 0, 1, 2, 3, 4]},
     divergences={
@@ -1019,7 +1017,7 @@ case(
     {
         "root.usda": sublayers("@strong.usda@", "@mid.usda@", "@weak.usda@"),
         "strong.usda": layer(prim("over", "A",
-                                  "float3[] extent.timeSamples = { 1: edit (append (5, 5, 5)) }")),
+                                  "float3[] extent.timeSamples = { 1: edit [append (5, 5, 5)] }")),
         "mid.usda": layer(prim("over", "A", "float3[] extent = None", "double size = None")),
         "weak.usda": layer(prim("def Cube", "A",
                                 "float3[] extent = [(2, 2, 2)]", "double size = 5")),
@@ -1044,7 +1042,7 @@ case(
     {
         "root.usda": sublayers("@strong.usda@", "@mid.usda@", "@weak.usda@"),
         "strong.usda": layer(prim("over", "A",
-                                  "float3[] extent.timeSamples = { 1: edit (append (5, 5, 5)) }")),
+                                  "float3[] extent.timeSamples = { 1: edit [append (5, 5, 5)] }")),
         "mid.usda": layer(prim("over", "A",
                                "float3[] extent.timeSamples = { 0: None, 2: [(3, 3, 3)] }")),
         "weak.usda": layer(
@@ -1081,8 +1079,8 @@ case(
         + "\n" + prim("def Cube", "A"),
         "anim.usda": layer(prim(
             "over", "A",
-            "float3[] extent.timeSamples = { 0: edit (write (0, 0, 0) to [0]), "
-            "1: edit (write (4, 4, 4) to [0]) }",
+            "float3[] extent.timeSamples = { 0: edit [write (0, 0, 0) to [0]], "
+            "1: edit [write (4, 4, 4) to [0]] }",
             "double size.timeSamples = { 0: 1, 1: 3 }")),
     },
     {"/A.extent": [None, 9, 10, 11, 12, 13], "/A.size": [None, 9, 10, 11, 12, 13]},
@@ -1095,39 +1093,6 @@ case(
 
 
 # -- Driver ------------------------------------------------------------------------
-
-EDIT = re.compile(r"\bedit\s*\(")
-
-
-def to_openusd(text):
-    """Rewrites layerstack's `edit (a, b)` array edits as `edit [a; b]`."""
-    out = []
-    pos = 0
-    while True:
-        m = EDIT.search(text, pos)
-        if not m:
-            out.append(text[pos:])
-            return "".join(out)
-        out.append(text[pos:m.start()])
-        i = m.end()
-        depth = 1
-        parts, cur = [], []
-        while depth:
-            c = text[i]
-            if c in "([":
-                depth += 1
-            elif c in ")]":
-                depth -= 1
-            if depth == 1 and c == ",":
-                parts.append("".join(cur))
-                cur = []
-            elif depth:
-                cur.append(c)
-            i += 1
-        parts.append("".join(cur))
-        out.append("edit [" + "; ".join(p.strip() for p in parts if p.strip()) + "]")
-        pos = i
-
 
 VECTORS = (Gf.Vec2h, Gf.Vec3h, Gf.Vec4h, Gf.Vec2f, Gf.Vec3f, Gf.Vec4f,
            Gf.Vec2d, Gf.Vec3d, Gf.Vec4d)
@@ -1219,7 +1184,7 @@ def run_case(tmp, spec, version):
     d = tempfile.mkdtemp(dir=tmp)
     for name, text in spec["layers"].items():
         with open(os.path.join(d, name), "w") as f:
-            f.write(to_openusd(text))
+            f.write(text)
     stage = Usd.Stage.Open(os.path.join(d, "root.usda"))
     flat = Usd.Stage.Open(stage.Flatten())
     queries = []

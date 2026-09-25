@@ -272,7 +272,7 @@ fn rejects_unsupported_features_with_their_source_paths() {
             Unsupported::ListOpMetadata("string list op"),
         ),
         (
-            "#usda 1.0\ndef \"A\"\n{\n    int[] a = edit (append 4)\n}\n",
+            "#usda 1.0\ndef \"A\"\n{\n    int[] a = edit [append 4]\n}\n",
             "/A.a",
             Unsupported::ArrayEdit,
         ),

@@ -6046,7 +6046,7 @@ mod instancing_tests {
         group_layer.insert_prim(group_c, over_c);
         store.insert_layer(group_layer);
 
-        // asset.usda: def "C" { double[] x = edit (resize 2) }
+        // asset.usda: def "C" { double[] x = edit [resize 2] }
         let asset_c = store.path("/Asset/C");
         let mut asset_layer = Layer::new(LayerId(3));
         asset_layer.insert_prim(

@@ -60,17 +60,23 @@ pub struct Toc {
 ///
 /// Spec: AOUSD Core §16.3.3.
 pub fn parse_toc(data: &[u8], toc_offset: u64) -> Result<Toc, UsdcError> {
-    #[allow(clippy::cast_possible_truncation, reason = "files >4 GiB unsupported")]
-    let off = toc_offset as usize;
-    if off + 8 > data.len() {
+    let Some(count) = usize::try_from(toc_offset)
+        .ok()
+        .and_then(|off| data.get(off..)?.first_chunk::<8>())
+    else {
         return Err(UsdcError::UnexpectedEof {
             section: "TOC",
             offset: toc_offset,
             expected: 8,
         });
-    }
+    };
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "the offset indexes `data`, so it fits a usize"
+    )]
+    let off = toc_offset as usize;
 
-    let num_sections = u64::from_le_bytes(data[off..off + 8].try_into().unwrap());
+    let num_sections = u64::from_le_bytes(*count);
     if num_sections > MAX_SECTIONS {
         return Err(UsdcError::Inconsistent {
             message: "TOC section count exceeds maximum",
@@ -78,6 +84,8 @@ pub fn parse_toc(data: &[u8], toc_offset: u64) -> Result<Toc, UsdcError> {
     }
 
     // Each entry: 16-byte name + 8-byte offset + 8-byte size = 32 bytes.
+    // `off + 8` is within `data` and the entries take at most 64 × 32 bytes,
+    // so this arithmetic cannot overflow, even on 32-bit targets.
     let entries_start = off + 8;
     #[allow(
         clippy::cast_possible_truncation,
@@ -106,8 +114,13 @@ pub fn parse_toc(data: &[u8], toc_offset: u64) -> Result<Toc, UsdcError> {
         let name_end = name_bytes.iter().position(|&b| b == 0).unwrap_or(16);
         let name = core::str::from_utf8(&name_bytes[..name_end]).unwrap_or("");
 
-        let section_offset = u64::from_le_bytes(data[base + 16..base + 24].try_into().unwrap());
-        let section_size = u64::from_le_bytes(data[base + 24..base + 32].try_into().unwrap());
+        let field = |at: usize| {
+            let mut bytes = [0_u8; 8];
+            bytes.copy_from_slice(&data[at..at + 8]);
+            u64::from_le_bytes(bytes)
+        };
+        let section_offset = field(base + 16);
+        let section_size = field(base + 24);
 
         let entry = SectionEntry {
             offset: section_offset,
@@ -115,7 +128,10 @@ pub fn parse_toc(data: &[u8], toc_offset: u64) -> Result<Toc, UsdcError> {
         };
 
         // Validate bounds.
-        if section_offset + section_size > data.len() as u64 {
+        if section_offset
+            .checked_add(section_size)
+            .is_none_or(|end| end > data.len() as u64)
+        {
             return Err(UsdcError::SectionOutOfBounds {
                 name: String::from(name),
                 offset: section_offset,
@@ -150,6 +166,22 @@ mod tests {
         buf[16..24].copy_from_slice(&offset.to_le_bytes());
         buf[24..32].copy_from_slice(&size.to_le_bytes());
         buf
+    }
+
+    #[test]
+    fn out_of_range_offsets_fail() {
+        let data = vec![0_u8; 64];
+        for offset in [60, 64, u64::MAX - 4, u64::MAX] {
+            assert!(parse_toc(&data, offset).is_err(), "{offset}");
+        }
+        // A section whose offset plus size overflows.
+        let mut data = vec![0_u8; 32];
+        data.extend_from_slice(&1_u64.to_le_bytes());
+        data.extend_from_slice(&make_toc_entry("TOKENS", u64::MAX, 2));
+        assert!(matches!(
+            parse_toc(&data, 32),
+            Err(UsdcError::SectionOutOfBounds { .. })
+        ));
     }
 
     #[test]

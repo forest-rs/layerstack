@@ -76,7 +76,9 @@ pub fn parse_header(data: &[u8]) -> Result<Header, UsdcError> {
     }
 
     // Bytes 16–23: TOC offset (u64 LE).
-    let toc_offset = u64::from_le_bytes(data[16..24].try_into().unwrap());
+    let mut toc_offset = [0_u8; 8];
+    toc_offset.copy_from_slice(&data[16..24]);
+    let toc_offset = u64::from_le_bytes(toc_offset);
 
     // Bytes 24–31: reserved (u64, should be zero).
     // Ignored per Python reference.

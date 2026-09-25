@@ -71,8 +71,10 @@ const INDENT: &str = "    ";
 /// A USDA layer to be written: layer metadata plus root prims.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Document {
-    /// The `defaultPrim` layer metadata field. When set, it must name one of
-    /// [`Self::prims`].
+    /// The `defaultPrim` layer metadata field, written as given. When set,
+    /// it must name a prim of the document: a root prim by name, or a prim
+    /// below the root by a relative (`Model/Geo`) or absolute (`/Model/Geo`)
+    /// path, as OpenUSD reads it (`SdfLayer::GetDefaultPrimAsPath`).
     ///
     /// Spec: AOUSD Core §7.6.1.2.3 (`defaultPrim`).
     pub default_prim: Option<String>,
@@ -123,6 +125,31 @@ impl Document {
         Ok(())
     }
 
+    /// Whether `path` (a root prim name, or a relative or absolute prim
+    /// path of names) names a prim of the document.
+    ///
+    /// The path is read as `layerstack::Layer::default_prim_path` reads it
+    /// (OpenUSD's `SdfLayer::ConvertDefaultPrimTokenToPath`): an optional
+    /// leading `/`, then `/`-separated prim names. Unlike composition, which
+    /// accepts any such path and reports a missing prim when an arc uses
+    /// it, the writer also requires the prim to be in the document.
+    fn names_prim(&self, path: &str) -> bool {
+        let mut segments = path.strip_prefix('/').unwrap_or(path).split('/');
+        let Some(first) = segments.next() else {
+            return false;
+        };
+        let Some(mut prim) = self.prims.iter().find(|p| p.name == first) else {
+            return false;
+        };
+        for segment in segments {
+            match prim.children.iter().find(|c| c.name == segment) {
+                Some(child) => prim = child,
+                None => return false,
+            }
+        }
+        true
+    }
+
     /// Checks everything [`Self::to_usda`] checks, without writing.
     ///
     /// Other serializations of a document (e.g. the binary crate writer in
@@ -140,7 +167,7 @@ impl Document {
         validate_metadata(&self.metadata, &mut keys, "/", false)?;
         validate_order(self.prim_order.as_deref(), "/", is_identifier)?;
         if let Some(name) = &self.default_prim
-            && !self.prims.iter().any(|p| &p.name == name)
+            && !self.names_prim(name)
         {
             return Err(WriteError::DefaultPrimNotFound { name: name.clone() });
         }
@@ -733,7 +760,7 @@ pub enum WriteError {
         /// Path of the owning object.
         path: String,
     },
-    /// `defaultPrim` does not name a root prim of the document.
+    /// `defaultPrim` does not name a prim of the document.
     DefaultPrimNotFound {
         /// The `defaultPrim` value.
         name: String,
@@ -796,7 +823,7 @@ impl fmt::Display for WriteError {
             }
             Self::NulInString { path } => write!(f, "{path}: string contains NUL"),
             Self::DefaultPrimNotFound { name } => {
-                write!(f, "defaultPrim {name:?} does not name a root prim")
+                write!(f, "defaultPrim {name:?} does not name a prim")
             }
             Self::InvalidTargetPath { path, target } => {
                 write!(f, "{path}: invalid target path {target:?}")
@@ -1096,6 +1123,34 @@ fn parse_type_name(type_name: &str) -> Option<Shape> {
 }
 
 impl Value {
+    /// An empty array of the declared array type `type_name` (such as
+    /// `point3f[]`), or `None` when the name is not an array type this
+    /// writer has a [`Value`] for.
+    pub(crate) fn empty_array_of(type_name: &str) -> Option<Self> {
+        let shape = parse_type_name(type_name).filter(|shape| shape.array)?;
+        Some(match (shape.elem, shape.arity) {
+            (Elem::Bool, 1) => Self::BoolArray(Vec::new()),
+            (Elem::Int, 1) => Self::IntArray(Vec::new()),
+            (Elem::UInt, 1) => Self::UIntArray(Vec::new()),
+            (Elem::Int64, 1) => Self::Int64Array(Vec::new()),
+            (Elem::Float, 1) => Self::FloatArray(Vec::new()),
+            (Elem::Double, 1) => Self::DoubleArray(Vec::new()),
+            (Elem::String, 1) => Self::StringArray(Vec::new()),
+            (Elem::Token, 1) => Self::TokenArray(Vec::new()),
+            (Elem::Asset, 1) => Self::AssetArray(Vec::new()),
+            (Elem::Float, 2) => Self::Float2Array(Vec::new()),
+            (Elem::Float, 3) => Self::Float3Array(Vec::new()),
+            (Elem::Float, 4) => Self::Float4Array(Vec::new()),
+            (Elem::Double, 2) => Self::Double2Array(Vec::new()),
+            (Elem::Double, 3) => Self::Double3Array(Vec::new()),
+            (Elem::Double, 4) => Self::Double4Array(Vec::new()),
+            (Elem::Int, 2) => Self::Int2Array(Vec::new()),
+            (Elem::Int, 3) => Self::Int3Array(Vec::new()),
+            (Elem::Int, 4) => Self::Int4Array(Vec::new()),
+            _ => return None,
+        })
+    }
+
     fn shape(&self) -> Option<Shape> {
         let (elem, arity, array) = match self {
             Self::Bool(_) => (Elem::Bool, 1, false),
@@ -1776,6 +1831,23 @@ def Xform "Root" (
             }),
             "defaultPrim must name a root prim"
         );
+        for path in ["Root/Tri", "/Root/Tri", "/Root"] {
+            let mut doc = mesh_doc();
+            doc.default_prim = Some(path.into());
+            let text = doc.to_usda().expect("a prim path names a prim");
+            assert!(
+                text.contains(&alloc::format!("defaultPrim = \"{path}\"")),
+                "written as authored"
+            );
+        }
+        for path in ["Root/Missing", "/Tri", "Root//Tri", "/"] {
+            let mut doc = mesh_doc();
+            doc.default_prim = Some(path.into());
+            assert!(
+                matches!(doc.to_usda(), Err(WriteError::DefaultPrimNotFound { .. })),
+                "{path} names no prim"
+            );
+        }
 
         let mut doc = mesh_doc();
         first_attribute(&mut doc.prims[0].children[0]).type_name = "normal3f".into();

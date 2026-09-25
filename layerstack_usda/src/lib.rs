@@ -26,8 +26,11 @@
 //!
 //! 5. **Writer** ([`writer`]) — Serializes an explicit *authored* document
 //!    (prims, typed attributes with `custom`/`uniform` qualifiers, and
-//!    layer/prim/attribute metadata) to deterministic USDA text. It does not
-//!    go through [`Layer`], which drops those authoring details.
+//!    layer/prim/attribute metadata) to deterministic USDA text.
+//!
+//! 6. **Save** ([`save`]) — Lowers an authored [`Layer`] to that document,
+//!    the single route by which both the USDA and the USDC writers save a
+//!    layer, rejecting what it cannot write before any output.
 //!
 //! The parser supports error recovery: malformed input produces partial
 //! trees with diagnostics rather than hard failures.
@@ -120,4 +123,5 @@ pub mod lower;
 )]
 pub mod emit;
 
+pub mod save;
 pub mod writer;

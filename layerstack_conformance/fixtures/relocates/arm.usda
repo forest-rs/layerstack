@@ -1,0 +1,34 @@
+#usda 1.0
+
+def "Arm"
+{
+    def "Rig"
+    {
+        def "Controls"
+        {
+            def "Wrist" (
+                inherits = </Arm/_class_Joint>
+            )
+            {
+                int angle = 1
+            }
+
+            def "Elbow"
+            {
+                int angle = 1
+            }
+        }
+
+        def "Debug"
+        {
+            int level = 1
+        }
+    }
+
+    class "_class_Joint"
+    {
+        int angle = 2
+        int twist = 2
+        int limit = 2
+    }
+}

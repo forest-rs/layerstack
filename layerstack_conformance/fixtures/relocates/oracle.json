@@ -1,0 +1,407 @@
+{
+ "generator": "layerstack_conformance/scripts/relocates_oracle.py",
+ "openusd_version": "0.26.8",
+ "root": "root.usda",
+ "prims": [
+  {
+   "path": "/Garden",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Garden"
+    ],
+    [
+     "root.usda",
+     "/_class_Garden"
+    ]
+   ]
+  },
+  {
+   "path": "/Garden/Plot",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Garden/Plot"
+    ],
+    [
+     "root.usda",
+     "/_class_Garden/Bed"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Garden",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Garden"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Garden/Bed",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Garden/Bed"
+    ]
+   ]
+  },
+  {
+   "path": "/Robot",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Robot"
+    ],
+    [
+     "arm.usda",
+     "/Arm"
+    ]
+   ]
+  },
+  {
+   "path": "/Robot/Rig",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Robot/Rig"
+    ],
+    [
+     "arm.usda",
+     "/Arm/Rig"
+    ]
+   ]
+  },
+  {
+   "path": "/Robot/Rig/Controls",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Robot/Rig/Controls"
+    ],
+    [
+     "arm.usda",
+     "/Arm/Rig/Controls"
+    ]
+   ]
+  },
+  {
+   "path": "/Robot/Rig/Controls/Elbow",
+   "prim_stack": [
+    [
+     "arm.usda",
+     "/Arm/Rig/Controls/Elbow"
+    ]
+   ]
+  },
+  {
+   "path": "/Robot/_class_Joint",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Robot/_class_Joint"
+    ],
+    [
+     "arm.usda",
+     "/Arm/_class_Joint"
+    ]
+   ]
+  },
+  {
+   "path": "/Robot/Anim",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Robot/Anim"
+    ]
+   ]
+  },
+  {
+   "path": "/Robot/Anim/Wrist",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Robot/Anim/Wrist"
+    ],
+    [
+     "root.usda",
+     "/Robot/_class_Joint"
+    ],
+    [
+     "arm.usda",
+     "/Arm/Rig/Controls/Wrist"
+    ],
+    [
+     "arm.usda",
+     "/Arm/_class_Joint"
+    ]
+   ]
+  },
+  {
+   "path": "/StaleWrist",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/StaleWrist"
+    ]
+   ]
+  },
+  {
+   "path": "/SpareWrist",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/SpareWrist"
+    ],
+    [
+     "root.usda",
+     "/Robot/Anim/Wrist"
+    ],
+    [
+     "root.usda",
+     "/Robot/_class_Joint"
+    ],
+    [
+     "arm.usda",
+     "/Arm/Rig/Controls/Wrist"
+    ],
+    [
+     "arm.usda",
+     "/Arm/_class_Joint"
+    ]
+   ]
+  },
+  {
+   "path": "/Pebble",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Pebble"
+    ],
+    [
+     "root.usda",
+     "/Pebble{cut=plain}"
+    ],
+    [
+     "stone.usda",
+     "/Stone"
+    ]
+   ]
+  },
+  {
+   "path": "/Pebble/Chip",
+   "prim_stack": [
+    [
+     "stone.usda",
+     "/Stone/Chip"
+    ]
+   ]
+  },
+  {
+   "path": "/Cobble",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Cobble"
+    ],
+    [
+     "root.usda",
+     "/Cobble{cut=moved}"
+    ],
+    [
+     "quarry.usda",
+     "/Stone"
+    ],
+    [
+     "stone.usda",
+     "/Stone"
+    ]
+   ]
+  },
+  {
+   "path": "/Cobble/Flake",
+   "prim_stack": [
+    [
+     "stone.usda",
+     "/Stone/Chip"
+    ]
+   ]
+  },
+  {
+   "path": "/Boulder",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Boulder"
+    ],
+    [
+     "stone.usda",
+     "/Stone"
+    ]
+   ]
+  },
+  {
+   "path": "/Rubble",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Rubble"
+    ],
+    [
+     "stone.usda",
+     "/Stone"
+    ]
+   ]
+  },
+  {
+   "path": "/Heap",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Heap"
+    ]
+   ]
+  },
+  {
+   "path": "/Heap/Flake",
+   "prim_stack": [
+    [
+     "stone.usda",
+     "/Stone/Chip"
+    ]
+   ]
+  },
+  {
+   "path": "/Gravel",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Gravel"
+    ],
+    [
+     "stone.usda",
+     "/Stone"
+    ]
+   ]
+  },
+  {
+   "path": "/Bin",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Bin"
+    ],
+    [
+     "bin.usda",
+     "/Bin"
+    ]
+   ]
+  },
+  {
+   "path": "/Bin/Tray",
+   "prim_stack": [
+    [
+     "bin.usda",
+     "/Bin/Tray"
+    ]
+   ]
+  },
+  {
+   "path": "/Bin/Tray/Flake",
+   "prim_stack": [
+    [
+     "stone.usda",
+     "/Stone/Chip"
+    ]
+   ]
+  },
+  {
+   "path": "/Crate",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Crate"
+    ],
+    [
+     "kit.usda",
+     "/Kit"
+    ]
+   ]
+  },
+  {
+   "path": "/Crate/Gear",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Crate/Gear"
+    ],
+    [
+     "kit.usda",
+     "/Kit/Gear"
+    ],
+    [
+     "parts.usda",
+     "/Parts/Gear"
+    ]
+   ]
+  },
+  {
+   "path": "/Crate/Parts",
+   "prim_stack": [
+    [
+     "kit.usda",
+     "/Kit/Parts"
+    ],
+    [
+     "parts.usda",
+     "/Parts"
+    ]
+   ]
+  },
+  {
+   "path": "/Crate/Parts/Spring",
+   "prim_stack": [
+    [
+     "parts.usda",
+     "/Parts/Spring"
+    ]
+   ]
+  }
+ ],
+ "values": {
+  "/Garden/Plot.depth": 0,
+  "/Garden/Plot.rows": 1,
+  "/_class_Garden/Bed.depth": 1,
+  "/_class_Garden/Bed.rows": 1,
+  "/Robot/Rig/Controls/Elbow.angle": 1,
+  "/Robot/_class_Joint.angle": 2,
+  "/Robot/_class_Joint.limit": 2,
+  "/Robot/_class_Joint.twist": 0,
+  "/Robot/Anim/Wrist.angle": 0,
+  "/Robot/Anim/Wrist.limit": 2,
+  "/Robot/Anim/Wrist.twist": 0,
+  "/SpareWrist.angle": 0,
+  "/SpareWrist.limit": 2,
+  "/SpareWrist.twist": 0,
+  "/Pebble/Chip.grain": 7,
+  "/Cobble/Flake.grain": 7,
+  "/Heap/Flake.grain": 7,
+  "/Bin/Tray.slots": 3,
+  "/Bin/Tray/Flake.grain": 7,
+  "/Crate/Gear.pitch": 2,
+  "/Crate/Gear.size": 1,
+  "/Crate/Gear.teeth": 0,
+  "/Crate/Parts/Spring.coils": 2
+ },
+ "errors": [
+  {
+   "kind": "ArcToProhibitedChild",
+   "prim": "/StaleWrist"
+  },
+  {
+   "kind": "OpinionAtRelocationSource",
+   "prim": "/Robot/Anim/Wrist"
+  }
+ ]
+}

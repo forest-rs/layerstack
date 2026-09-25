@@ -1,0 +1,12 @@
+#usda 1.0
+(
+    relocates = {
+        </Stone/Chip>: </Stone/Flake>
+    }
+)
+
+def "Stone" (
+    references = @./stone.usda@</Stone>
+)
+{
+}

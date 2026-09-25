@@ -1,0 +1,12 @@
+#usda 1.0
+
+over "Ref" (
+    specializes = </Class>
+)
+{
+}
+
+class "Class"
+{
+    int x = 1
+}

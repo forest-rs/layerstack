@@ -1,0 +1,455 @@
+{
+ "generator": "layerstack_conformance/scripts/specializes_oracle.py",
+ "openusd_version": "0.26.8",
+ "root": "root.usda",
+ "prims": [
+  {
+   "path": "/Minimal",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Minimal"
+    ],
+    [
+     "root.usda",
+     "/Ref"
+    ],
+    [
+     "root.usda",
+     "/Payload"
+    ],
+    [
+     "root.usda",
+     "/Class"
+    ]
+   ]
+  },
+  {
+   "path": "/Ref",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Ref"
+    ],
+    [
+     "root.usda",
+     "/Class"
+    ]
+   ]
+  },
+  {
+   "path": "/Class",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Class"
+    ]
+   ]
+  },
+  {
+   "path": "/Payload",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Payload"
+    ]
+   ]
+  },
+  {
+   "path": "/External",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/External"
+    ],
+    [
+     "ref.usda",
+     "/Ref"
+    ],
+    [
+     "payload.usda",
+     "/Payload"
+    ],
+    [
+     "root.usda",
+     "/Class"
+    ],
+    [
+     "ref.usda",
+     "/Class"
+    ]
+   ]
+  },
+  {
+   "path": "/Nested",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Nested"
+    ],
+    [
+     "outer.usda",
+     "/Outer"
+    ],
+    [
+     "ref.usda",
+     "/Ref"
+    ],
+    [
+     "payload.usda",
+     "/Payload"
+    ],
+    [
+     "root.usda",
+     "/Class"
+    ],
+    [
+     "ref.usda",
+     "/Class"
+    ]
+   ]
+  },
+  {
+   "path": "/InVariant",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/InVariant"
+    ],
+    [
+     "root.usda",
+     "/InVariant{v=a}"
+    ],
+    [
+     "root.usda",
+     "/Ref"
+    ],
+    [
+     "root.usda",
+     "/Payload"
+    ],
+    [
+     "root.usda",
+     "/Class"
+    ]
+   ]
+  },
+  {
+   "path": "/Chain",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Chain"
+    ],
+    [
+     "root.usda",
+     "/Base"
+    ]
+   ]
+  },
+  {
+   "path": "/Chain/Impl",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Chain/Impl"
+    ],
+    [
+     "root.usda",
+     "/Base/Impl"
+    ]
+   ]
+  },
+  {
+   "path": "/Chain/Child",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Base/Child"
+    ],
+    [
+     "root.usda",
+     "/Chain/Impl"
+    ],
+    [
+     "root.usda",
+     "/Base/Impl"
+    ]
+   ]
+  },
+  {
+   "path": "/Base",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Base"
+    ]
+   ]
+  },
+  {
+   "path": "/Base/Impl",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Base/Impl"
+    ]
+   ]
+  },
+  {
+   "path": "/Base/Child",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Base/Child"
+    ],
+    [
+     "root.usda",
+     "/Base/Impl"
+    ]
+   ]
+  },
+  {
+   "path": "/SiblingsC",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/SiblingsC"
+    ]
+   ]
+  },
+  {
+   "path": "/SiblingsA",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/SiblingsA"
+    ],
+    [
+     "root.usda",
+     "/SiblingsC"
+    ]
+   ]
+  },
+  {
+   "path": "/SiblingsB",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/SiblingsB"
+    ]
+   ]
+  },
+  {
+   "path": "/Siblings",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Siblings"
+    ],
+    [
+     "root.usda",
+     "/SiblingsA"
+    ],
+    [
+     "root.usda",
+     "/SiblingsC"
+    ],
+    [
+     "root.usda",
+     "/SiblingsB"
+    ]
+   ]
+  },
+  {
+   "path": "/SiblingsReversed",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/SiblingsReversed"
+    ],
+    [
+     "root.usda",
+     "/SiblingsB"
+    ],
+    [
+     "root.usda",
+     "/SiblingsA"
+    ],
+    [
+     "root.usda",
+     "/SiblingsC"
+    ]
+   ]
+  },
+  {
+   "path": "/DeepD",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/DeepD"
+    ]
+   ]
+  },
+  {
+   "path": "/DeepC",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/DeepC"
+    ],
+    [
+     "root.usda",
+     "/DeepD"
+    ]
+   ]
+  },
+  {
+   "path": "/DeepA",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/DeepA"
+    ],
+    [
+     "root.usda",
+     "/DeepC"
+    ],
+    [
+     "root.usda",
+     "/DeepD"
+    ]
+   ]
+  },
+  {
+   "path": "/DeepB",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/DeepB"
+    ]
+   ]
+  },
+  {
+   "path": "/Deep",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Deep"
+    ],
+    [
+     "root.usda",
+     "/DeepA"
+    ],
+    [
+     "root.usda",
+     "/DeepC"
+    ],
+    [
+     "root.usda",
+     "/DeepD"
+    ],
+    [
+     "root.usda",
+     "/DeepB"
+    ]
+   ]
+  },
+  {
+   "path": "/BothC",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/BothC"
+    ]
+   ]
+  },
+  {
+   "path": "/BothD",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/BothD"
+    ]
+   ]
+  },
+  {
+   "path": "/BothA",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/BothA"
+    ],
+    [
+     "root.usda",
+     "/BothC"
+    ]
+   ]
+  },
+  {
+   "path": "/BothB",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/BothB"
+    ],
+    [
+     "root.usda",
+     "/BothD"
+    ]
+   ]
+  },
+  {
+   "path": "/Both",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Both"
+    ],
+    [
+     "root.usda",
+     "/BothA"
+    ],
+    [
+     "root.usda",
+     "/BothC"
+    ],
+    [
+     "root.usda",
+     "/BothB"
+    ],
+    [
+     "root.usda",
+     "/BothD"
+    ]
+   ]
+  }
+ ],
+ "values": {
+  "/Minimal.x": 2,
+  "/Ref.x": 1,
+  "/Class.x": 1,
+  "/Payload.x": 2,
+  "/External.x": 2,
+  "/Nested.x": 2,
+  "/InVariant.x": 2,
+  "/Chain/Impl.y": 2,
+  "/Chain/Child.y": 2,
+  "/Base/Impl.y": 1,
+  "/Base/Child.y": 1,
+  "/SiblingsC.x": 3,
+  "/SiblingsA.x": 3,
+  "/SiblingsB.x": 2,
+  "/Siblings.x": 3,
+  "/SiblingsReversed.x": 2,
+  "/DeepD.x": 4,
+  "/DeepC.x": 4,
+  "/DeepA.x": 4,
+  "/DeepB.x": 2,
+  "/Deep.x": 4,
+  "/BothC.x": 3,
+  "/BothD.x": 5,
+  "/BothA.x": 3,
+  "/BothB.x": 5,
+  "/Both.x": 3
+ }
+}

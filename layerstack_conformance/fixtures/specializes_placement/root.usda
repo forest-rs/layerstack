@@ -1,0 +1,175 @@
+#usda 1.0
+
+# The minimized case: a specializes reached through a reference is weaker
+# than a payload of the referencing prim.
+def "Minimal" (
+    references = </Ref>
+    payload = </Payload>
+)
+{
+}
+
+over "Ref" (
+    specializes = </Class>
+)
+{
+}
+
+class "Class"
+{
+    int x = 1
+}
+
+over "Payload"
+{
+    int x = 2
+}
+
+# The same through a reference to another layer stack.
+def "External" (
+    references = @./ref.usda@</Ref>
+    payload = @./payload.usda@</Payload>
+)
+{
+}
+
+# Through two levels of references.
+def "Nested" (
+    references = @./outer.usda@</Outer>
+    payload = @./payload.usda@</Payload>
+)
+{
+}
+
+# Through a reference authored in a selected variant: the specialized class
+# is weaker than a payload of the prim.
+def "InVariant" (
+    payload = </Payload>
+    variants = {
+        string v = "a"
+    }
+    prepend variantSets = "v"
+)
+{
+    variantSet "v" = {
+        "a" (
+            prepend references = </Ref>
+        ) {
+        }
+    }
+}
+
+# A specializes authored inside a specialized class is weaker than the
+# whole class, and its implied copy under the instance ranks before it.
+def "Chain" (
+    specializes = </Base>
+)
+{
+    over "Impl"
+    {
+        int y = 2
+    }
+}
+
+class "Base"
+{
+    class "Impl"
+    {
+        int y = 1
+    }
+
+    def "Child" (
+        specializes = </Base/Impl>
+    )
+    {
+    }
+}
+
+# Sibling specializes: everything the stronger sibling brings in,
+# including the class it specializes in turn, outranks the weaker sibling.
+class "SiblingsC"
+{
+    int x = 3
+}
+
+class "SiblingsA" (
+    specializes = </SiblingsC>
+)
+{
+}
+
+class "SiblingsB"
+{
+    int x = 2
+}
+
+def "Siblings" (
+    specializes = [</SiblingsA>, </SiblingsB>]
+)
+{
+}
+
+# The same siblings in the other order.
+def "SiblingsReversed" (
+    specializes = [</SiblingsB>, </SiblingsA>]
+)
+{
+}
+
+# A deeper chain beside a sibling: A -> C -> D, then B.
+class "DeepD"
+{
+    int x = 4
+}
+
+class "DeepC" (
+    specializes = </DeepD>
+)
+{
+}
+
+class "DeepA" (
+    specializes = </DeepC>
+)
+{
+}
+
+class "DeepB"
+{
+    int x = 2
+}
+
+def "Deep" (
+    specializes = [</DeepA>, </DeepB>]
+)
+{
+}
+
+# A nested chain under both siblings: A -> C and B -> D.
+class "BothC"
+{
+    int x = 3
+}
+
+class "BothD"
+{
+    int x = 5
+}
+
+class "BothA" (
+    specializes = </BothC>
+)
+{
+}
+
+class "BothB" (
+    specializes = </BothD>
+)
+{
+}
+
+def "Both" (
+    specializes = [</BothA>, </BothB>]
+)
+{
+}

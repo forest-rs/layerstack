@@ -1293,7 +1293,7 @@ fn filter_variant_children(
         // inherited from the source prim. Use the source's filtered child
         // list to identify which children are inherited. Only reorder when
         // variant filtering actually removed children — otherwise
-        // `apply_authored_children_base_order` already established the
+        // `fold_child_order` already established the
         // correct ordering.
         if to_remove.is_empty() {
             continue;
@@ -6508,46 +6508,94 @@ fn apply_child_order(
     children: &mut HashMap<PathId, Vec<PathId>>,
 ) {
     for (parent, list) in children.iter_mut() {
-        let Some(graph) = prims.get(parent).map(|index| &index.graph) else {
+        let Some(index) = prims.get(parent) else {
             continue;
         };
-        if let Some(opinions) = authored_children.get(parent) {
-            apply_authored_children_base_order(store, graph, list, opinions);
-        }
-        if let Some(opinions) = prim_order.get(parent) {
-            apply_prim_order_chain(store, graph, list, opinions);
-        };
+        fold_child_order(
+            store,
+            &index.graph,
+            list,
+            &index.sources,
+            authored_children.get(parent).map_or(&[], Vec::as_slice),
+            prim_order.get(parent).map_or(&[], Vec::as_slice),
+        );
     }
 }
 
-fn apply_authored_children_base_order(
+/// Folds the `authored_children` and `prim_order` opinions of one prim's
+/// sources into its child order, weakest first.
+///
+/// Each spec appends the children it names that are not yet listed, then
+/// its `reorder nameChildren` reorders the names gathered so far, from its
+/// own spec and every weaker one. A spec that lists no children (one
+/// authored through `Layer::insert_prim`, whose hierarchy comes from prim
+/// paths) names the children its layer holds prim specs for, whatever
+/// other specs list. Children no spec names follow in their population
+/// order.
+///
+/// Spec: AOUSD Core §11 (stage population). OpenUSD:
+/// `PcpPrimIndex::ComputePrimChildNames`, which walks the prim index's
+/// nodes from weakest to strongest, and `PcpComposeSiteChildNames` in
+/// `pxr/usd/pcp/composeSite.cpp`, which walks each node's layers from
+/// weakest to strongest and applies each layer's `primOrder` as it goes.
+fn fold_child_order(
     store: &dyn LayerStore,
     graph: &PrimIndexGraph,
     children: &mut Vec<PathId>,
-    opinions: &[(OpinionKey, Vec<TokenId>)],
+    sources: &[OpinionKey],
+    authored: &[(OpinionKey, Vec<TokenId>)],
+    orders: &[(OpinionKey, Vec<TokenId>)],
 ) {
-    // Builds child ordering by processing opinions weakest-first: the
-    // weakest source establishes the baseline child order, and stronger
-    // sources append the children it lacks.
-    //
-    // Spec: AOUSD Core §11 (stage population). OpenUSD:
-    // `PcpPrimIndex::ComputePrimChildNames`, which walks the prim index's
-    // nodes from weakest to strongest.
+    if authored.is_empty() && orders.is_empty() {
+        return;
+    }
     let mut by_name = HashMap::<TokenId, PathId>::new();
     for child in children.iter().copied() {
         if let Some(name) = store.paths().resolve(child).leaf() {
             by_name.insert(name, child);
         }
     }
-    let mut sorted: Vec<_> = opinions.iter().collect();
-    sorted.sort_by(|a, b| graph.cmp_keys(&a.0, &b.0));
 
-    let mut out = Vec::new();
+    // A spec that lists no children names those its layer holds prim specs
+    // for. Each spec's list stands on its own: a stronger spec's explicit
+    // list never hides a child from a weaker spec.
+    let explicit: HashSet<&OpinionKey> = authored.iter().map(|(key, _)| key).collect();
+    let names: Vec<TokenId> = children
+        .iter()
+        .filter_map(|child| store.paths().resolve(*child).leaf())
+        .collect();
+    let derived: Vec<(&OpinionKey, Vec<TokenId>)> = sources
+        .iter()
+        .filter(|key| !explicit.contains(key))
+        .map(|key| (key, spec_children(store, key, &names)))
+        .filter(|(_, names)| !names.is_empty())
+        .collect();
+
+    // A spec's children come before its reorder: `false` sorts first.
+    let mut steps: Vec<(&OpinionKey, bool, &[TokenId])> = authored
+        .iter()
+        .map(|(key, names)| (key, false, names.as_slice()))
+        .chain(
+            derived
+                .iter()
+                .map(|(key, names)| (*key, false, names.as_slice())),
+        )
+        .chain(
+            orders
+                .iter()
+                .map(|(key, order)| (key, true, order.as_slice())),
+        )
+        .collect();
+    steps.sort_by(|a, b| graph.cmp_keys(b.0, a.0).then(a.1.cmp(&b.1)));
+
+    let mut out = Vec::with_capacity(children.len());
     let mut seen = HashSet::<PathId>::new();
-
-    // Process weakest-first.
-    for (_key, names) in sorted.iter().rev() {
-        for name in names.iter() {
+    for (_, is_order, names) in steps {
+        if is_order {
+            apply_reorder_op(store, &mut out, names);
+            continue;
+        }
+        for name in names {
             let Some(child_id) = by_name.get(name).copied() else {
                 continue;
             };
@@ -6556,36 +6604,47 @@ fn apply_authored_children_base_order(
             }
         }
     }
-
-    // Append remaining children not covered by any opinion.
     for child_id in children.iter().copied() {
         if seen.insert(child_id) {
             out.push(child_id);
         }
     }
-
     *children = out;
 }
 
-fn apply_prim_order_chain(
-    store: &dyn LayerStore,
-    graph: &PrimIndexGraph,
-    children: &mut Vec<PathId>,
-    opinions: &[(OpinionKey, Vec<TokenId>)],
-) {
-    // `reorder nameChildren = [...]` composes as a chain of reorder operations
-    // across the prim stack (weak-to-strong), rather than as a single strongest
-    // scalar field.
-    //
-    // This matches the supplemental composition fixtures (e.g.
-    // `BasicListEditing_root`).
-    let mut sorted = opinions.to_vec();
-    sorted.sort_by(|a, b| graph.cmp_keys(&a.0, &b.0));
-    for (_, order) in sorted.into_iter().rev() {
-        apply_reorder_op(store, children, &order);
-    }
+/// The names among `candidates`, in their order, that the spec `key`
+/// names has a child prim spec for.
+fn spec_children(store: &dyn LayerStore, key: &OpinionKey, candidates: &[TokenId]) -> Vec<TokenId> {
+    let Some(layer) = store.layer(key.layer_id) else {
+        return Vec::new();
+    };
+    let paths = store.paths();
+    let lookup = paths.resolve(key.lookup_path);
+    let spec_prim = paths.resolve(key.spec_path.prim_path());
+    candidates
+        .iter()
+        .copied()
+        .filter(|name| {
+            let Some(child_lookup) = paths.lookup(&lookup.join(&[*name])) else {
+                return false;
+            };
+            let Some(child_prim) = paths.lookup(&spec_prim.join(&[*name])) else {
+                return false;
+            };
+            let spec = key.spec_path.prim_spec().child(*name, child_prim);
+            layer.source_prim_spec(child_lookup, &spec, paths).is_some()
+        })
+        .collect()
 }
 
+/// Reorders `children` by one `reorder nameChildren` list.
+///
+/// The children before the first one `order` names keep their place in
+/// front. Each named child then follows in `order`'s order, and carries
+/// along the unnamed children that follow it. Names of absent children are
+/// ignored.
+///
+/// OpenUSD: `SdfApplyListOrdering` in `pxr/usd/sdf/listOp.cpp`.
 fn apply_reorder_op(store: &dyn LayerStore, children: &mut Vec<PathId>, order: &[TokenId]) {
     let mut by_name = HashMap::<TokenId, PathId>::new();
     for child in children.iter().copied() {
@@ -6594,16 +6653,16 @@ fn apply_reorder_op(store: &dyn LayerStore, children: &mut Vec<PathId>, order: &
         }
     }
 
+    let mut order_set = HashSet::<TokenId>::new();
     let order: Vec<TokenId> = order
         .iter()
         .copied()
-        .filter(|name| by_name.contains_key(name))
+        .filter(|name| by_name.contains_key(name) && order_set.insert(*name))
         .collect();
-    let Some((&first, rest)) = order.split_first() else {
+    if order.is_empty() {
         return;
-    };
+    }
 
-    let order_set: HashSet<TokenId> = order.iter().copied().collect();
     let mut prefix = Vec::new();
     let mut segments: HashMap<TokenId, Vec<PathId>> = HashMap::new();
     let mut current = None;
@@ -6622,31 +6681,13 @@ fn apply_reorder_op(store: &dyn LayerStore, children: &mut Vec<PathId>, order: &
     }
 
     let mut out = Vec::with_capacity(children.len());
-    out.push(by_name[&first]);
     out.extend(prefix);
-    if let Some(seg) = segments.get(&first) {
-        out.extend(seg.iter().copied());
-    }
-
-    for name in rest {
+    for name in &order {
         out.push(by_name[name]);
         if let Some(seg) = segments.get(name) {
             out.extend(seg.iter().copied());
         }
     }
-
-    // Preserve any remaining children (shouldn't happen if `prefix+segments`
-    // covered everything, but keep deterministic behavior for partial lists).
-    let mut seen = HashSet::<PathId>::new();
-    for id in out.iter().copied() {
-        seen.insert(id);
-    }
-    for id in children.iter().copied() {
-        if seen.insert(id) {
-            out.push(id);
-        }
-    }
-
     *children = out;
 }
 
@@ -6658,6 +6699,177 @@ mod child_order_tests {
     use crate::path::Path;
     use crate::prim_index::OpinionKey;
     use alloc::vec;
+
+    /// A hierarchy authored through `Layer::insert_prim` leaves
+    /// `authored_children` empty; a `reorder nameChildren` still orders the
+    /// children population finds, in every layer of the stack.
+    ///
+    /// Spec: AOUSD Core §11 (stage population).
+    #[test]
+    fn reorder_applies_to_children_no_spec_lists() {
+        let mut store = InMemoryStore::default();
+        let [p, a, b, c] = ["/P", "/P/A", "/P/B", "/P/C"].map(|path| {
+            store
+                .paths
+                .intern(Path::parse_absolute(path, &mut store.tokens).unwrap())
+        });
+        let name = |store: &InMemoryStore, path: PathId| store.paths.resolve(path).leaf().unwrap();
+        let (a_tok, b_tok, c_tok) = (name(&store, a), name(&store, b), name(&store, c));
+
+        let mut weak = Layer::new(LayerId(2));
+        weak.insert_prim(
+            p,
+            PrimSpec {
+                prim_order: Some(vec![b_tok, a_tok]),
+                ..PrimSpec::def()
+            },
+        );
+        weak.insert_prim(a, PrimSpec::def());
+        weak.insert_prim(b, PrimSpec::def());
+        store.insert_layer(weak);
+        let stage = Stage::compose(&mut store, LayerId(2), StageOptions::default());
+        assert_eq!(stage.children_of(p), Some(&[b, a][..]));
+
+        // A stronger layer adds `C` and moves it first.
+        let mut strong = Layer::new(LayerId(1));
+        strong.sublayers = vec![crate::SublayerEntry::new(LayerId(2))];
+        strong.insert_prim(
+            p,
+            PrimSpec {
+                prim_order: Some(vec![c_tok, b_tok]),
+                ..PrimSpec::over()
+            },
+        );
+        strong.insert_prim(c, PrimSpec::def());
+        store.insert_layer(strong);
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert_eq!(stage.children_of(p), Some(&[c, b, a][..]));
+    }
+
+    /// Each spec contributes its own children, listed in `authored_children`
+    /// or inferred from its layer's prim specs, then applies its reorder,
+    /// weakest spec first: a stronger spec's explicit list never hides a
+    /// child from a weaker spec's inferred list or reorder. Each case runs
+    /// with every mix of explicit and inferred lists (an inferred list
+    /// follows population order, so only a list in that order is inferred);
+    /// the expected orders are OpenUSD 26.08's, which always lists a
+    /// layer's children.
+    ///
+    /// Spec: AOUSD Core §11 (stage population). OpenUSD:
+    /// `PcpComposeSiteChildNames` in `pxr/usd/pcp/composeSite.cpp`.
+    #[test]
+    fn explicit_and_inferred_child_lists_fold_per_spec() {
+        // (weak children, weak reorder, strong children, strong reorder,
+        // composed order)
+        let cases = [
+            ("A B", "B A", "B", "", "B A"),
+            ("A B", "B A", "C D", "D A", "B D A C"),
+            ("A B C", "", "C A", "", "A B C"),
+            ("A B C", "", "C A D", "", "A B C D"),
+            ("C B A", "", "B D", "D C", "D C B A"),
+        ];
+        let sorted = |names: &str| names.split_whitespace().is_sorted();
+        for (weak_names, weak_order, strong_names, strong_order, expected) in cases {
+            for (weak_explicit, strong_explicit) in
+                [(false, false), (false, true), (true, false), (true, true)]
+            {
+                if (!weak_explicit && !sorted(weak_names))
+                    || (!strong_explicit && !sorted(strong_names))
+                {
+                    continue;
+                }
+                let mut store = InMemoryStore::default();
+                let p = store
+                    .paths
+                    .intern(Path::parse_absolute("/P", &mut store.tokens).unwrap());
+                let mut tokens = |names: &str| -> Vec<TokenId> {
+                    names
+                        .split_whitespace()
+                        .map(|name| store.tokens.intern(name))
+                        .collect()
+                };
+                let layers = [
+                    (LayerId(2), weak_names, weak_order, weak_explicit),
+                    (LayerId(1), strong_names, strong_order, strong_explicit),
+                ]
+                .map(|(id, names, order, explicit)| (id, tokens(names), tokens(order), explicit));
+                for (id, names, order, explicit) in layers {
+                    let mut layer = Layer::new(id);
+                    if id == LayerId(1) {
+                        layer.sublayers = vec![crate::SublayerEntry::new(LayerId(2))];
+                    }
+                    let mut parent = if id == LayerId(1) {
+                        PrimSpec::over()
+                    } else {
+                        PrimSpec::def()
+                    };
+                    parent.prim_order = (!order.is_empty()).then_some(order);
+                    if explicit {
+                        parent.authored_children.clone_from(&names);
+                    }
+                    layer.insert_prim(p, parent);
+                    for name in names {
+                        let child = store.paths.intern(store.paths.resolve(p).join(&[name]));
+                        layer.insert_prim(child, PrimSpec::over());
+                    }
+                    store.insert_layer(layer);
+                }
+                let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+                let composed: Vec<&str> = stage
+                    .children_of(p)
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|child| {
+                        let name = store.paths.resolve(*child).leaf().unwrap();
+                        store.tokens.resolve(name)
+                    })
+                    .collect();
+                let composed = composed.join(" ");
+                assert_eq!(
+                    composed, expected,
+                    "weak {weak_names} reorder {weak_order:?} (explicit: {weak_explicit}), \
+                     strong {strong_names} reorder {strong_order:?} (explicit: {strong_explicit})"
+                );
+            }
+        }
+    }
+
+    /// One `reorder nameChildren` keeps the children before the first name
+    /// it lists in front, and each listed child carries along the unlisted
+    /// children that follow it (checked against OpenUSD 26.08).
+    ///
+    /// OpenUSD: `SdfApplyListOrdering` in `pxr/usd/sdf/listOp.cpp`.
+    #[test]
+    fn reorder_keeps_the_leading_children_in_front() {
+        let mut store = InMemoryStore::default();
+        let mut reorder = |children: &str, order: &str| {
+            let names: Vec<TokenId> = children
+                .chars()
+                .map(|c| store.tokens.intern(alloc::format!("{c}")))
+                .collect();
+            let mut paths: Vec<PathId> = names
+                .iter()
+                .map(|name| store.paths.intern(Path::root().join(&[*name])))
+                .collect();
+            let order: Vec<TokenId> = order
+                .chars()
+                .map(|c| store.tokens.intern(alloc::format!("{c}")))
+                .collect();
+            apply_reorder_op(&store, &mut paths, &order);
+            paths
+                .iter()
+                .map(|path| {
+                    let name = store.paths.resolve(*path).leaf().unwrap();
+                    alloc::string::String::from(store.tokens.resolve(name))
+                })
+                .collect::<alloc::string::String>()
+        };
+        assert_eq!(reorder("cbad", "ad"), "cbad");
+        assert_eq!(reorder("abcd", "db"), "adbc");
+        assert_eq!(reorder("abcde", "eb"), "aebcd");
+        assert_eq!(reorder("abcde", "ca"), "cdeab");
+        assert_eq!(reorder("abc", "xba"), "bca");
+    }
 
     #[test]
     fn authored_children_compose_weakest_node_first() {
@@ -6740,7 +6952,7 @@ mod child_order_tests {
         ];
 
         let mut children = vec![c_geom, c_fr, c_fs, c_fcr, c_fcs];
-        apply_authored_children_base_order(&store, &graph, &mut children, &opinions);
+        fold_child_order(&store, &graph, &mut children, &[], &opinions, &[]);
 
         let result: Vec<&str> = children
             .iter()

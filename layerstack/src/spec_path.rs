@@ -265,6 +265,19 @@ impl SpecPath {
         out
     }
 
+    /// Returns the spec path of the child prim `name` of this prim spec,
+    /// whose concrete prim path is `child_prim_path`.
+    #[must_use]
+    pub(crate) fn child(&self, name: TokenId, child_prim_path: PathId) -> Self {
+        let mut components = self.components.to_vec();
+        components.push(SpecComponent::Prim(name));
+        Self {
+            prim_path: child_prim_path,
+            components: components.into_boxed_slice(),
+            property: None,
+        }
+    }
+
     /// Returns a copy of this path with a property suffix attached.
     #[must_use]
     pub fn with_property(&self, property: TokenId) -> Self {

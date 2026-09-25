@@ -1866,6 +1866,101 @@ mod tests {
         assert_eq!(live.stage().children_of(parent), Some(&[b, a][..]));
     }
 
+    /// The same reorder edit on a hierarchy authored only through
+    /// `Layer::insert_prim`, which leaves `authored_children` empty.
+    #[test]
+    fn reorder_edit_without_authored_children_matches_fresh() {
+        let mut store = InMemoryStore::default();
+        let parent = p(&mut store, "/P");
+        let a = p(&mut store, "/P/A");
+        let b = p(&mut store, "/P/B");
+        let a_tok = store.tokens.intern("A");
+        let b_tok = store.tokens.intern("B");
+
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(parent, PrimSpec::def());
+        layer.insert_prim(a, PrimSpec::def());
+        layer.insert_prim(b, PrimSpec::def());
+        store.insert_layer(layer);
+
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert_eq!(live.stage().children_of(parent), Some(&[a, b][..]));
+
+        store
+            .layers
+            .get_mut(&LayerId(1))
+            .unwrap()
+            .prims
+            .get_mut(&parent)
+            .unwrap()
+            .prim_order = Some(vec![b_tok, a_tok]);
+        live.notify_prim_edit(parent);
+        live.recompose(&mut store);
+        assert_matches_fresh(&live, &mut store, &[]);
+        assert_eq!(live.stage().children_of(parent), Some(&[b, a][..]));
+    }
+
+    /// Child order folds layer by layer: each layer appends its children,
+    /// then reorders the names gathered so far. Editing the weaker layer's
+    /// children or reorder recomposes to the same order as a fresh
+    /// composition.
+    ///
+    /// Spec: AOUSD Core §11 (stage population). OpenUSD:
+    /// `PcpComposeSiteChildNames` in `pxr/usd/pcp/composeSite.cpp`.
+    #[test]
+    fn child_order_edits_in_a_sublayer_match_fresh() {
+        let mut store = InMemoryStore::default();
+        let parent = p(&mut store, "/P");
+        let [a, b, c, d, e] = ["a", "b", "c", "d", "e"].map(|name| {
+            let path = p(&mut store, &alloc::format!("/P/{name}"));
+            (store.tokens.intern(name), path)
+        });
+
+        // The weaker layer lists `a b c` and reorders them `c b a`.
+        let mut weak = Layer::new(LayerId(2));
+        let mut weak_parent = PrimSpec::def();
+        weak_parent.authored_children = vec![a.0, b.0, c.0];
+        weak_parent.prim_order = Some(vec![c.0, b.0, a.0]);
+        weak.insert_prim(parent, weak_parent);
+        for (_, child) in [a, b, c] {
+            weak.insert_prim(child, PrimSpec::def());
+        }
+        store.insert_layer(weak);
+
+        // The stronger layer adds `d` and reorders `a d`: `c b` stay in front.
+        let mut strong = Layer::new(LayerId(1));
+        strong.sublayers = vec![SublayerEntry::new(LayerId(2))];
+        let mut strong_parent = PrimSpec::over();
+        strong_parent.authored_children = vec![d.0];
+        strong_parent.prim_order = Some(vec![a.0, d.0]);
+        strong.insert_prim(parent, strong_parent);
+        strong.insert_prim(d.1, PrimSpec::def());
+        store.insert_layer(strong);
+
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert_eq!(
+            live.stage().children_of(parent),
+            Some(&[c.1, b.1, a.1, d.1][..])
+        );
+        assert_matches_fresh(&live, &mut store, &[]);
+
+        // The weaker layer adds `e` and reorders `e a b`, and `b` carries
+        // `c` along; the stronger reorder leaves `e` in front, and `a`
+        // carries `b c` along.
+        let weak = store.layers.get_mut(&LayerId(2)).unwrap();
+        weak.insert_prim(e.1, PrimSpec::def());
+        let weak_parent = weak.prims.get_mut(&parent).unwrap();
+        weak_parent.authored_children.push(e.0);
+        weak_parent.prim_order = Some(vec![e.0, a.0, b.0]);
+        live.notify_layer_prim_edits(LayerId(2), &[parent, e.1]);
+        live.recompose(&mut store);
+        assert_matches_fresh(&live, &mut store, &[]);
+        assert_eq!(
+            live.stage().children_of(parent),
+            Some(&[e.1, a.1, b.1, c.1, d.1][..])
+        );
+    }
+
     /// Opinions and arcs authored beneath an instance never contribute:
     /// editing them, or toggling `instanceable`, recomposes to the same stage
     /// as a fresh composition. A prim that becomes or stops being an

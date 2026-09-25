@@ -1013,6 +1013,7 @@ mod tests {
             crate::spec_path::SpecPath::parse("/A", &mut tokens, &mut paths).expect("spec path");
         OpinionKey {
             is_local: true,
+            specializes: Vec::new(),
             arc_kind: ArcKind::Local,
             nested_arc_kind: None,
             namespace_depth: 1,

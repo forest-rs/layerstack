@@ -47,7 +47,8 @@
 //! Exact prim stacks, property stacks and values for sublayer stacks
 //! (including duplicate sublayers, cycles and time offsets), local opinions,
 //! single-level references, payloads and inherits, list-edited arcs and
-//! target paths, and variant selections that do not depend on the features
+//! target paths, specializes ranked after every other arc wherever they are
+//! authored, and variant selections that do not depend on the features
 //! below. Where only [`Cause::DuplicateSources`] is listed, composed values
 //! are unaffected: the repeated sites carry identical opinions.
 //!
@@ -56,8 +57,8 @@
 //! - Relocates ([`Cause::Relocates`]): diagnosed and ignored.
 //! - OpenUSD's node-graph strength order: implied class arcs
 //!   ([`Cause::ImpliedClasses`]), arcs nested two or more deep
-//!   ([`Cause::NestedArcDepth`]) and the global placement of specializes
-//!   ([`Cause::SpecializesPlacement`]). These change resolved values in
+//!   ([`Cause::NestedArcDepth`]) and implied specializes as nodes of their
+//!   own ([`Cause::SpecializesPlacement`]). These change resolved values in
 //!   several fixtures. Fixing them needs a composition context that records
 //!   the arc path (node) of each source instead of one nested arc kind.
 //! - One site per arc path ([`Cause::CollapsedNodes`]) and one registration
@@ -509,10 +510,12 @@ enum Cause {
     /// so arcs nested two or more deep, and the arcs of a nested target,
     /// interleave or outrank their own target.
     NestedArcDepth,
-    /// OpenUSD propagates specializes nodes to the root and ranks them after
-    /// every other arc of the whole graph (AOUSD Core §10.4.1;
-    /// `pxr/usd/pcp/primIndex.cpp`, `_EvalImpliedSpecializes`). Layerstack
-    /// ranks nested specializes inside their outer arc's bucket.
+    /// A specializes implied into a stronger layer stack is a node of its own
+    /// in OpenUSD, ranked with the arcs beneath it before the specializes
+    /// node it is implied from (AOUSD Core §10.4.1;
+    /// `pxr/usd/pcp/strengthOrdering.cpp`, `PcpCompareSiblingNodeStrength`).
+    /// Layerstack walks both layer stacks as one combined stack, so the
+    /// classes beneath the implied node follow the propagated node's site.
     SpecializesPlacement,
 
     // Missing sources or extra opinions.
@@ -721,34 +724,34 @@ const KNOWN: &[Known] = &[
         props: 0,
         values: 0,
         diffs: &[D::ExtraRepeat, D::Order],
-        reason: "`/Instance_1` ranks `/Inherits_1`, inherited by the specialized class, before `/Specializes_1`",
+        reason: "`/Instance_2` ranks `ref.usd /Specializes_2` before `root.usd /Inherits_2`, the class implied under the implied specializes `root.usd /Specializes_2`",
     },
     Known {
         fixture: "BasicSpecializesAndReferences_root",
-        causes: &[C::SpecializesPlacement, C::DuplicateSources],
+        causes: &[C::DuplicateSources],
         prims: 4,
         props: 0,
         values: 0,
-        diffs: &[D::ExtraRepeat, D::Order],
-        reason: "`/ShaderBindings/ShinyPlastic_BlueShinyPlastic` ranks the nested specializes target `/ShinyPlasticLook` before `ShinyPlastic`",
+        diffs: &[D::ExtraRepeat],
+        reason: "`/ShaderBindings/ShinyPlastic_BlueShinyPlastic` repeats its specializes target `root.usd /ShaderBindings_defaultShadingVariant/ShinyPlastic`",
     },
     Known {
         fixture: "BasicSpecializesAndVariants_root",
-        causes: &[C::DuplicateSources, C::SpecializesPlacement],
+        causes: &[C::DuplicateSources],
         prims: 3,
         props: 0,
         values: 0,
-        diffs: &[D::ExtraRepeat, D::Order],
-        reason: "`/Root` repeats `ref.usd /Ref{v=ref}`; specializes inside variants reorder",
+        diffs: &[D::ExtraRepeat],
+        reason: "`/Root` repeats `ref.usd /Ref{v=ref}`",
     },
     Known {
         fixture: "BasicSpecializes_root",
-        causes: &[C::DuplicateSources, C::SpecializesPlacement],
-        prims: 8,
+        causes: &[C::DuplicateSources],
+        prims: 6,
         props: 0,
         values: 0,
-        diffs: &[D::ExtraRepeat, D::Order],
-        reason: "`/Basic` repeats `root.usd /BasicSpecializes2`; specializes chains inside references reorder",
+        diffs: &[D::ExtraRepeat],
+        reason: "`/Basic` repeats `root.usd /BasicSpecializes2`",
     },
     Known {
         fixture: "BasicVariantWithConnections_root",
@@ -967,7 +970,7 @@ const KNOWN: &[Known] = &[
         props: 0,
         values: 0,
         diffs: &[D::ExtraRepeat, D::Order],
-        reason: "`/HumanMaleStdHair` repeats and reorders the specializes target `/_shared_HumanHair` across the reference",
+        reason: "`/HumanMaleStdHair/Hair_Chiang_Head_Chiang_Hair/Inner` interleaves the `Class` sites implied through `Hair_Chiang_Head_Chiang_Hair` with those of `Hair_Chiang`, and repeats the reference target",
     },
     Known {
         fixture: "SpecializesAndAncestralArcs3_root",
@@ -980,25 +983,21 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "SpecializesAndAncestralArcs4_root",
-        causes: &[
-            C::SpecializesPlacement,
-            C::AncestralArcs,
-            C::DuplicateSources,
-        ],
+        causes: &[C::ImpliedClasses, C::DuplicateSources],
         prims: 7,
         props: 0,
         values: 0,
         diffs: &[D::MissingSite, D::ExtraRepeat, D::Order],
-        reason: "`/Parent2` ranks `/PS` before `/PIS`: specializes reached through inherits are not moved after the inherited classes",
+        reason: "the inherit of `ref.usd /PR/Child` is not implied onto `/Parent/Sibling` with the root's inherits, so `/Parent/Child` ranks `/PI/Child` before `/Parent/Sibling`, and `/Parent2/Child` misses `/PS/Sibling` and `/PSI/Sibling`",
     },
     Known {
         fixture: "SpecializesAndAncestralArcs5_root",
-        causes: &[C::SpecializesPlacement, C::DuplicateSources],
+        causes: &[C::DuplicateSources],
         prims: 1,
         props: 0,
         values: 0,
-        diffs: &[D::ExtraRepeat, D::Order],
-        reason: "the specializes target `Cloth_C_Weave_09` ranks before `payload.usd`'s `Cloth_C_Weave_09_Satin`",
+        diffs: &[D::ExtraRepeat],
+        reason: "`/Overalls/Looks/Cloth_C_Weave_09_Satin` repeats the specializes target `root.usd /Overalls_defaultShadingVariant/Looks/Cloth_C_Weave_09`",
     },
     Known {
         fixture: "SpecializesAndAncestralArcs_root",
@@ -1007,38 +1006,34 @@ const KNOWN: &[Known] = &[
         props: 0,
         values: 0,
         diffs: &[D::ExtraRepeat, D::Order],
-        reason: "specializes of `/Ref/Child` rank after every class instead of inside the ancestral reference",
+        reason: "`/AncestralReference/Child` ranks `ref.usd /Specializes/Child` before `root.usd /Class`, the class implied under the implied specializes `root.usd /Specializes/Child`",
     },
     Known {
         fixture: "SpecializesAndVariants2_root",
-        causes: &[C::SpecializesPlacement, C::DuplicateSources],
+        causes: &[C::DuplicateSources],
         prims: 4,
         props: 6,
         values: 0,
-        diffs: &[D::ExtraRepeat, D::Order],
-        reason: "`/element` ranks `/implementation{testVariantSet=testVariant}` before `/referencedMiddleman`",
+        diffs: &[D::ExtraRepeat],
+        reason: "`/element` repeats `root.usd /referencedMiddleman` and `root.usd /implementation`",
     },
     Known {
         fixture: "SpecializesAndVariants3_root",
-        causes: &[
-            C::VariantSpecs,
-            C::SpecializesPlacement,
-            C::DuplicateSources,
-        ],
+        causes: &[C::VariantSpecs, C::DuplicateSources],
         prims: 3,
         props: 6,
         values: 3,
-        diffs: &[D::MissingSite, D::ExtraRepeat, D::Order],
+        diffs: &[D::MissingSite, D::ExtraRepeat],
         reason: "`/implementation` misses its own `{testVariantSet=testVariant}` branch, selected by the specialized class, so `variantAttr` has no value",
     },
     Known {
         fixture: "SpecializesAndVariants4_root",
-        causes: &[C::SpecializesPlacement, C::DuplicateSources],
+        causes: &[C::DuplicateSources],
         prims: 1,
         props: 1,
-        values: 1,
-        diffs: &[D::ExtraRepeat, D::Order],
-        reason: "the specializes introduced in `/_class_/render`'s variant is not implied onto `/A`, so `/A/render.test` resolves from `/_class_/defaultImplementation`",
+        values: 0,
+        diffs: &[D::ExtraRepeat],
+        reason: "`/A/render` repeats `root.usd /_class_/render{implementation=default}` and `root.usd /_class_/defaultImplementation`",
     },
     Known {
         fixture: "SpecializesAndVariants_root",
@@ -1305,15 +1300,6 @@ const KNOWN: &[Known] = &[
         reason: "implied `root.usd .../_Class_FingerRig` ranks after `HandsRig.usd .../IndexRig`",
     },
     Known {
-        fixture: "TrickyNestedSpecializes_root",
-        causes: &[C::SpecializesPlacement],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "`ref3.usd /Ref3`, referenced by a specializes target, ranks before `ref2.usd /Ref2/Nested`",
-    },
-    Known {
         fixture: "TrickyNestedVariants_root",
         causes: &[C::AncestralArcs],
         prims: 2,
@@ -1374,7 +1360,7 @@ const KNOWN: &[Known] = &[
         props: 0,
         values: 0,
         diffs: &[D::Order],
-        reason: "classes of specializes targets rank before `ref2.usd /Ref2/Nested`",
+        reason: "`/Root/Nested` ranks `ref.usd /Specializes/Nested` before `root.usd /NestedClass`, the class implied under the implied specializes `root.usd /Specializes/Nested`",
     },
     Known {
         fixture: "TrickySpecializesAndInherits3_root",
@@ -1392,7 +1378,7 @@ const KNOWN: &[Known] = &[
         props: 0,
         values: 0,
         diffs: &[D::ExtraRepeat, D::Order],
-        reason: "`/Model/A` ranks `ref.usd` specializes targets before `root.usd`'s",
+        reason: "`/Model/A` ranks `ref.usd /Ref/B` before `root.usd /Model/C`, the class implied under the implied specializes `root.usd /Model/B`",
     },
     Known {
         fixture: "TrickySpecializesAndRelocates_root",

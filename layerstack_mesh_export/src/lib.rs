@@ -22,6 +22,11 @@
 //! - stage metadata `upAxis` and `metersPerUnit` are always authored, and
 //!   the root prim is the layer's `defaultPrim`.
 //!
+//! Prim names must be USD identifiers and unique among siblings; the
+//! exporter checks them but never rewrites them. Kernels whose keys are
+//! arbitrary strings can derive names with [`sanitize_name`] and keep
+//! siblings apart with [`SiblingNames`].
+//!
 //! Face-varying indices are written exactly as given. They encode the
 //! primvar's own topology (seams and hard edges), so equal values at
 //! distinct indices are never merged.
@@ -215,6 +220,7 @@ mod error;
 mod instancer;
 mod material;
 mod mesh;
+mod names;
 mod scene;
 mod shading;
 mod transform;
@@ -228,6 +234,7 @@ pub use mesh::{
     CustomAttribute, CustomPrimvar, Faces, FamilyType, Interpolation, MaterialSubset, Mesh,
     Orientation, Primvar, PrimvarData,
 };
+pub use names::{SiblingNames, sanitize_name};
 pub use scene::{Node, Scene, StageSettings, UpAxis, UsdzProfile, Xform};
 pub use transform::Transform;
 

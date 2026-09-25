@@ -1,0 +1,15 @@
+#usda 1.0
+(
+    defaultPrim = "Ignored"
+)
+
+def Scope "Model"
+{
+    def Scope "SubChild"
+    {
+    }
+}
+
+def Scope "Ignored"
+{
+}

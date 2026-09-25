@@ -481,7 +481,9 @@ fn build_paths(
 
                 let element = &tokens[token_idx];
                 // Variant selections attach to their prim without a separator,
-                // and so does a prim below a selection: `/A{v=x}B.attr`.
+                // and so does a prim below a selection: `/A{v=x}B.attr`, as
+                // OpenUSD rebuilds paths with `SdfPath::AppendElementToken`
+                // (`pxr/usd/sdf/crateFile.cpp:4037`).
                 let sep = if is_property {
                     "."
                 } else if element.starts_with('{') || parent.ends_with('}') {
@@ -713,6 +715,46 @@ mod tests {
         assert_eq!(paths[0], "/");
         assert_eq!(paths[1], "/Sphere");
         assert_eq!(paths[2], "/Sphere.radius");
+    }
+
+    #[test]
+    fn build_paths_variant_selections_attach_to_their_prim() {
+        // "/", "/root", "/root{foo=}", "/root{foo=eggs}",
+        // "/root{foo=eggs}Child", "/root{foo=eggs}Child.attr".
+        let tokens = vec![
+            "root".to_string(),
+            "{foo=}".to_string(),
+            "{foo=eggs}".to_string(),
+            "Child".to_string(),
+            "attr".to_string(),
+        ];
+        let path_indices = vec![0, 1, 2, 3, 4, 5_i64];
+        let element_token_indices = vec![0, 0, 1, 2, 3, -4_i64];
+        // The variant set is a leaf with a sibling (the variant); the
+        // others each have one child.
+        let jumps = vec![-1, -1, 0, -1, -1, -2_i64];
+
+        let mut paths = vec![String::new(); 6];
+        build_paths(
+            &path_indices,
+            &element_token_indices,
+            &jumps,
+            &tokens,
+            &mut paths,
+        )
+        .unwrap();
+
+        assert_eq!(
+            paths,
+            [
+                "/",
+                "/root",
+                "/root{foo=}",
+                "/root{foo=eggs}",
+                "/root{foo=eggs}Child",
+                "/root{foo=eggs}Child.attr",
+            ]
+        );
     }
 
     #[test]

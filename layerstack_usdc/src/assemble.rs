@@ -1908,6 +1908,22 @@ mod tests {
     }
 
     #[test]
+    fn variant_paths_below_variant_children_are_not_the_variant() {
+        // A child prim of a variant, its property, and a nested selection.
+        for path in [
+            "/Prim{set=red}Child",
+            "/Prim{set=red}Child.color",
+            "/Prim{set=red}{inner=}",
+            "/Prim{set=red}{inner=x}",
+            "/Prim{set=red}{inner=x}.color",
+        ] {
+            assert_eq!(parse_variant_set_path(path), None, "{path}");
+            assert_eq!(parse_variant_path(path), None, "{path}");
+            assert_eq!(parse_variant_property_path(path), None, "{path}");
+        }
+    }
+
+    #[test]
     fn parent_prim_path_root_child() {
         assert_eq!(parent_prim_path("/Cube"), Some(String::from("/")));
     }

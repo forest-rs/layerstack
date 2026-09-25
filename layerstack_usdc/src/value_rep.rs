@@ -498,8 +498,11 @@ fn decode_integer_i64(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, Usdc
 
 fn decode_integer_u64(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> {
     if rep.is_inlined() && !rep.is_array() {
-        let v = rep.payload_offset(); // u48
-        return Ok(CrateValue::UInt64(v));
+        // Inlined only when it fits a `uint32_t`, which is stored in the low
+        // four payload bytes (`_EncodeInline`, `crateValueInliners.h`).
+        let p = rep.payload();
+        let v = u32::from_le_bytes([p[0], p[1], p[2], p[3]]);
+        return Ok(CrateValue::UInt64(u64::from(v)));
     }
     if rep.is_array() {
         let values = read_integer_array(rep, data, 8, false)?;
@@ -2342,6 +2345,23 @@ mod tests {
         let (count, size) = math_type_info(ValueType::Vec2h);
         let bytes = decode_inlined_math(&rep, ValueType::Vec2h, count, size).unwrap();
         assert_eq!(bytes, [0x00, 0x00, 0x00, 0x3C]);
+    }
+
+    /// An inlined `uint64` is the `uint32` in the low payload bytes; OpenUSD
+    /// truncates the payload to it (`_DecodeInline`,
+    /// `pxr/usd/sdf/crateValueInliners.h`), so higher bytes do not count.
+    #[test]
+    fn inlined_uint64_holds_32_bits() {
+        let sections = sections_with(CrateVersion::NEWEST_READABLE);
+        let mut bytes = [0_u8; 8];
+        bytes[..4].copy_from_slice(&u32::MAX.to_le_bytes());
+        bytes[4] = 0x01;
+        bytes[6] = ValueType::UInt64 as u8;
+        bytes[7] = 0x40; // inlined
+        match decode_value(&RawValueRep::new(bytes), &[], &sections) {
+            Ok(CrateValue::UInt64(v)) => assert_eq!(v, u64::from(u32::MAX)),
+            other => panic!("expected UInt64, got {other:?}"),
+        }
     }
 
     #[test]

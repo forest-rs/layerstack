@@ -291,12 +291,18 @@ fn sublayers_match_openusd() {
         .filter(|mismatch| !is_offset_sample(mismatch))
         .collect();
     assert!(unexpected.is_empty(), "{unexpected:#?}");
-    // The authored offset and scale are recorded on the sublayer entry.
+    // The authored asset path, offset and scale are recorded on the
+    // sublayer entry.
     let loaded = load_entry_usdc(&fixtures_dir().join("sublayers_root.usdc"));
     let root = &loaded.store.layers[&loaded.root_layer];
     assert_eq!(root.sublayers.len(), 1);
     assert_eq!(root.sublayers[0].offset.offset, 10.0);
     assert_eq!(root.sublayers[0].offset.scale, 2.0);
+    assert_eq!(
+        root.sublayers[0].asset.as_deref(),
+        Some("./sublayers_weak.usdc"),
+        "the authored asset path"
+    );
 }
 
 #[test]

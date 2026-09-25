@@ -456,9 +456,11 @@ impl<'a> AssembleCtx<'a> {
                     .push(SublayerEntry::unresolved(asset_path.as_str(), offset));
                 continue;
             };
-            layer
-                .sublayers
-                .push(SublayerEntry::with_offset(resolved.layer_id, offset));
+            layer.sublayers.push(SublayerEntry::with_asset(
+                resolved.layer_id,
+                asset_path.as_str(),
+                offset,
+            ));
             if let Some(sub_layer) = resolved.layer {
                 self.resolved_layers.push(sub_layer);
             }

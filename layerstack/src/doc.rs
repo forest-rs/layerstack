@@ -607,9 +607,11 @@ pub struct SublayerEntry {
     pub layer: LayerId,
     /// Time offset applied to this sublayer (§12.3.2.1).
     pub offset: LayerOffset,
-    /// The authored asset path of a sublayer that could not be resolved;
-    /// `None` for a resolved sublayer.
-    pub unresolved_asset: Option<String>,
+    /// The authored asset path, as written in the layer's `subLayers`
+    /// (not the resolved location); `None` for an entry built without one.
+    /// An unresolved sublayer always has it (see
+    /// [`SublayerEntry::unresolved`]).
+    pub asset: Option<String>,
 }
 
 impl SublayerEntry {
@@ -623,7 +625,17 @@ impl SublayerEntry {
         Self {
             layer,
             offset,
-            unresolved_asset: None,
+            asset: None,
+        }
+    }
+
+    /// Creates a sublayer entry for the authored asset path `asset`, which
+    /// resolved to `layer`.
+    pub fn with_asset(layer: LayerId, asset: impl Into<String>, offset: LayerOffset) -> Self {
+        Self {
+            layer,
+            offset,
+            asset: Some(asset.into()),
         }
     }
 
@@ -643,7 +655,7 @@ impl SublayerEntry {
         Self {
             layer: LayerId::UNRESOLVED,
             offset,
-            unresolved_asset: Some(asset.into()),
+            asset: Some(asset.into()),
         }
     }
 

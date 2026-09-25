@@ -1,0 +1,14 @@
+#usda 1.0
+(
+    subLayers = [
+        @./system_sub.usda@ (offset = 3; scale = 2)
+    ]
+)
+
+def "System"
+{
+    def "Planet"
+    {
+        int rings = 0
+    }
+}

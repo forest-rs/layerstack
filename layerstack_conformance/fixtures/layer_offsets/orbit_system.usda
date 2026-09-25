@@ -1,0 +1,12 @@
+#usda 1.0
+
+def "Orbit"
+{
+    def "Planet"
+    {
+        double phase.timeSamples = {
+            0: 0,
+            6: 12,
+        }
+    }
+}

@@ -1,0 +1,11 @@
+#usda 1.0
+(
+    subLayers = [
+        @./hub_sub.usda@ (offset = 5; scale = 2)
+    ]
+)
+
+def "Hub"
+{
+    int docks = 3
+}

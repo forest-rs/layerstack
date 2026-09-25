@@ -1,0 +1,25 @@
+#usda 1.0
+(
+    subLayers = [
+        @./shot.usda@ (offset = 10),
+        @./timing.usda@ (offset = 4; scale = 2)
+    ]
+)
+
+# A reference authored in this layer, which has no offset of its own, to a
+# prim whose layer stack authors a reference in a sublayer with an offset
+# and scale: 2 + (5 + 2 * (1 + t)).
+def "Station" (
+    references = @./hub.usda@</Hub> (offset = 2)
+)
+{
+}
+
+# A reference to a subroot target whose parent's reference is authored in
+# a sublayer with an offset and scale: the ancestral arc takes them too,
+# 3 + 2 * (1 + t).
+def "Probe" (
+    references = @./system.usda@</System/Planet>
+)
+{
+}

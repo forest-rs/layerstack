@@ -1,0 +1,8 @@
+#usda 1.0
+
+# A nested reference authored in a sublayer of the referenced layer stack.
+over "Hub" (
+    references = @./orbit.usda@</Orbit> (offset = 1)
+)
+{
+}

@@ -1,0 +1,442 @@
+{
+ "generator": "layerstack_conformance/scripts/layer_offsets_oracle.py",
+ "openusd_version": "0.26.8",
+ "root": "root.usda",
+ "prims": [
+  {
+   "path": "/Satellite",
+   "prim_stack": [
+    [
+     "timing.usda",
+     "/Satellite"
+    ],
+    [
+     "orbit.usda",
+     "/Orbit"
+    ]
+   ]
+  },
+  {
+   "path": "/Satellite/Moon",
+   "prim_stack": [
+    [
+     "orbit.usda",
+     "/Orbit/Moon"
+    ]
+   ]
+  },
+  {
+   "path": "/Beacon",
+   "prim_stack": [
+    [
+     "timing.usda",
+     "/Beacon"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Flare",
+   "prim_stack": [
+    [
+     "timing.usda",
+     "/_class_Flare"
+    ]
+   ]
+  },
+  {
+   "path": "/Comet",
+   "prim_stack": [
+    [
+     "shot.usda",
+     "/Comet"
+    ],
+    [
+     "orbit.usda",
+     "/Orbit"
+    ]
+   ]
+  },
+  {
+   "path": "/Comet/Moon",
+   "prim_stack": [
+    [
+     "orbit.usda",
+     "/Orbit/Moon"
+    ]
+   ]
+  },
+  {
+   "path": "/Echo",
+   "prim_stack": [
+    [
+     "shot.usda",
+     "/Echo"
+    ],
+    [
+     "timing.usda",
+     "/Beacon"
+    ]
+   ]
+  },
+  {
+   "path": "/Flare",
+   "prim_stack": [
+    [
+     "shot.usda",
+     "/Flare"
+    ],
+    [
+     "timing.usda",
+     "/_class_Flare"
+    ]
+   ]
+  },
+  {
+   "path": "/Station",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Station"
+    ],
+    [
+     "hub.usda",
+     "/Hub"
+    ],
+    [
+     "hub_sub.usda",
+     "/Hub"
+    ],
+    [
+     "orbit.usda",
+     "/Orbit"
+    ]
+   ]
+  },
+  {
+   "path": "/Station/Moon",
+   "prim_stack": [
+    [
+     "orbit.usda",
+     "/Orbit/Moon"
+    ]
+   ]
+  },
+  {
+   "path": "/Probe",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Probe"
+    ],
+    [
+     "system.usda",
+     "/System/Planet"
+    ],
+    [
+     "orbit_system.usda",
+     "/Orbit/Planet"
+    ]
+   ]
+  }
+ ],
+ "values": {
+  "/Satellite.radius": 1,
+  "/Satellite/Moon.radius": 2,
+  "/Comet.radius": 1,
+  "/Comet/Moon.radius": 2,
+  "/Station.docks": 3,
+  "/Station.radius": 1,
+  "/Station/Moon.radius": 2,
+  "/Probe.rings": 0
+ },
+ "samples": {
+  "/Satellite.phase": [
+   [
+    5.0,
+    0.0
+   ],
+   [
+    6.0,
+    0.0
+   ],
+   [
+    36.0,
+    50.0
+   ],
+   [
+    66.0,
+    100.0
+   ],
+   [
+    67.0,
+    100.0
+   ]
+  ],
+  "/Satellite/Moon.phase": [
+   [
+    5.0,
+    0.0
+   ],
+   [
+    6.0,
+    0.0
+   ],
+   [
+    18.0,
+    4.0
+   ],
+   [
+    30.0,
+    8.0
+   ],
+   [
+    31.0,
+    8.0
+   ]
+  ],
+  "/Beacon.phase": [
+   [
+    3.0,
+    0.0
+   ],
+   [
+    4.0,
+    0.0
+   ],
+   [
+    6.0,
+    10.0
+   ],
+   [
+    8.0,
+    20.0
+   ],
+   [
+    9.0,
+    20.0
+   ]
+  ],
+  "/_class_Flare.phase": [
+   [
+    3.0,
+    0.0
+   ],
+   [
+    4.0,
+    0.0
+   ],
+   [
+    5.0,
+    2.5
+   ],
+   [
+    6.0,
+    5.0
+   ],
+   [
+    7.0,
+    5.0
+   ]
+  ],
+  "/Comet.phase": [
+   [
+    14.0,
+    0.0
+   ],
+   [
+    15.0,
+    0.0
+   ],
+   [
+    20.0,
+    50.0
+   ],
+   [
+    25.0,
+    100.0
+   ],
+   [
+    26.0,
+    100.0
+   ]
+  ],
+  "/Comet/Moon.phase": [
+   [
+    14.0,
+    0.0
+   ],
+   [
+    15.0,
+    0.0
+   ],
+   [
+    17.0,
+    4.0
+   ],
+   [
+    19.0,
+    8.0
+   ],
+   [
+    20.0,
+    8.0
+   ]
+  ],
+  "/Echo.phase": [
+   [
+    3.0,
+    0.0
+   ],
+   [
+    4.0,
+    0.0
+   ],
+   [
+    6.0,
+    10.0
+   ],
+   [
+    8.0,
+    20.0
+   ],
+   [
+    9.0,
+    20.0
+   ]
+  ],
+  "/Flare.phase": [
+   [
+    3.0,
+    0.0
+   ],
+   [
+    4.0,
+    0.0
+   ],
+   [
+    5.0,
+    2.5
+   ],
+   [
+    6.0,
+    5.0
+   ],
+   [
+    7.0,
+    5.0
+   ]
+  ],
+  "/Station.phase": [
+   [
+    8.0,
+    0.0
+   ],
+   [
+    9.0,
+    0.0
+   ],
+   [
+    19.0,
+    50.0
+   ],
+   [
+    29.0,
+    100.0
+   ],
+   [
+    30.0,
+    100.0
+   ]
+  ],
+  "/Station/Moon.phase": [
+   [
+    8.0,
+    0.0
+   ],
+   [
+    9.0,
+    0.0
+   ],
+   [
+    13.0,
+    4.0
+   ],
+   [
+    17.0,
+    8.0
+   ],
+   [
+    18.0,
+    8.0
+   ]
+  ],
+  "/Probe.phase": [
+   [
+    4.0,
+    0.0
+   ],
+   [
+    5.0,
+    0.0
+   ],
+   [
+    11.0,
+    6.0
+   ],
+   [
+    17.0,
+    12.0
+   ],
+   [
+    18.0,
+    12.0
+   ]
+  ]
+ },
+ "offsets": {
+  "/Satellite.phase": [
+   6.0,
+   6.0
+  ],
+  "/Satellite/Moon.phase": [
+   6.0,
+   6.0
+  ],
+  "/Beacon.phase": [
+   4.0,
+   2.0
+  ],
+  "/_class_Flare.phase": [
+   4.0,
+   2.0
+  ],
+  "/Comet.phase": [
+   15.0,
+   1.0
+  ],
+  "/Comet/Moon.phase": [
+   15.0,
+   1.0
+  ],
+  "/Echo.phase": [
+   4.0,
+   2.0
+  ],
+  "/Flare.phase": [
+   4.0,
+   2.0
+  ],
+  "/Station.phase": [
+   9.0,
+   2.0
+  ],
+  "/Station/Moon.phase": [
+   9.0,
+   2.0
+  ],
+  "/Probe.phase": [
+   5.0,
+   2.0
+  ]
+ }
+}

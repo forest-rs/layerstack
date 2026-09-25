@@ -1130,14 +1130,13 @@ impl AssembleCtx<'_> {
             matches!(name.as_str(), "default" | "timeSamples") && crate_value_is_array(value)
         });
 
+        // `typeName` spells arrays with `[]` (`point3f[]`); the declared type
+        // keeps the element type name and the array flag apart, as USDA
+        // ingestion does.
         let is_array = type_name.ends_with("[]") || inferred_array;
         let base_name = type_name.strip_suffix("[]").unwrap_or(type_name.as_str());
         PropertyType::new(
-            if type_name.is_empty() {
-                base_name
-            } else {
-                type_name.as_str()
-            },
+            base_name,
             is_array,
             default_scalar_for_type(base_name, self.tokens),
         )

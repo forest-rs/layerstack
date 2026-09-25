@@ -579,6 +579,17 @@ fn openusd_optional_encodings_decode() {
         .chain([Value::Int64(-10_000_000_000)])
         .collect();
     assert_eq!(value(&mut parsed, "int64s"), Value::Array(int64s));
+
+    // `typeName` is `int[]`; the declared type is the element type plus
+    // the array flag, as for USDA.
+    let path = layerstack::path::Path::parse_absolute(root, &mut parsed.store.tokens).unwrap();
+    let prim_id = parsed.store.paths.lookup(&path).unwrap();
+    let name = parsed.store.tokens.intern("ints");
+    let layer = &parsed.store.layers[&parsed.layer_id];
+    let spec = layer.prims[&prim_id].property(name).expect("ints property");
+    let declared = spec.type_name.as_ref().expect("declared type");
+    assert_eq!(&*declared.type_name, "int", "element type name");
+    assert!(declared.is_array, "array flag");
 }
 
 // ---------------------------------------------------------------------------

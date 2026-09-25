@@ -653,10 +653,12 @@ pub(crate) struct Relocations {
     prohibited: HashSet<PathId>,
     /// Stage paths that population placed only through a relocation.
     moved: HashSet<PathId>,
-    /// Stage paths of lifted relocation targets, each with its source's.
-    targets: HashMap<PathId, PathId>,
-    /// The targets population proposes, as `targets`.
-    proposed: HashMap<PathId, PathId>,
+    /// The lifted relocations with a stage source and target, by stage
+    /// target.
+    targets: HashMap<PathId, LiftedRelocate>,
+    /// The lifted relocations population proposes, by stage target, as
+    /// `targets`.
+    proposed: HashMap<PathId, LiftedRelocate>,
     /// Every layer of the layer stacks whose tables were computed.
     layers: HashSet<LayerId>,
     /// Errors found computing tables, not yet reported.
@@ -718,7 +720,7 @@ impl Relocations {
             if let Some(source) = relocate.stage_source {
                 self.prohibited.insert(source);
                 if let Some(target) = relocate.stage_target {
-                    self.targets.entry(target).or_insert(source);
+                    self.targets.entry(target).or_insert(*relocate);
                 }
             }
         }
@@ -728,21 +730,31 @@ impl Relocations {
     /// through an arc composition may not follow, as possible stage paths.
     pub(crate) fn propose(&mut self, set: &LiftedSet) {
         for relocate in &set.entries {
-            if let (Some(source), Some(target)) = (relocate.stage_source, relocate.stage_target) {
-                self.proposed.entry(target).or_insert(source);
+            if let (Some(_), Some(target)) = (relocate.stage_source, relocate.stage_target) {
+                self.proposed.entry(target).or_insert(*relocate);
             }
         }
     }
 
-    /// Each lifted relocation target in the stage namespace that
-    /// population proposed or composition prohibited the source of, with
-    /// the stage path of its source.
-    pub(crate) fn proposed_targets(&self) -> impl Iterator<Item = (PathId, PathId)> + '_ {
+    /// Each lifted relocation with a stage target, `(target, source,
+    /// relocation)` by their stage paths.
+    pub(crate) fn targets(&self) -> impl Iterator<Item = (PathId, PathId, &LiftedRelocate)> + '_ {
+        self.targets
+            .iter()
+            .filter_map(|(&target, relocate)| Some((target, relocate.stage_source?, relocate)))
+    }
+
+    /// Each lifted relocation with a stage target that population
+    /// proposed or composition prohibited the source of, as
+    /// [`targets`](Self::targets).
+    pub(crate) fn proposed_targets(
+        &self,
+    ) -> impl Iterator<Item = (PathId, PathId, &LiftedRelocate)> + '_ {
         self.proposed
             .iter()
             .filter(|(target, _)| !self.targets.contains_key(*target))
             .chain(&self.targets)
-            .map(|(&target, &source)| (target, source))
+            .filter_map(|(&target, relocate)| Some((target, relocate.stage_source?, relocate)))
     }
 
     /// Returns `true` when `path` is a lifted relocation target.

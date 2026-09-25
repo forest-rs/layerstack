@@ -2020,6 +2020,7 @@ fn admitted_arcs(
         remote_path,
         &selections,
         &parent_selections,
+        scope,
     ));
     let mut payloads =
         resolve_payloads_for_prim_in(store, data_stack, remote_path, &parent_selections, scope);
@@ -2028,6 +2029,7 @@ fn admitted_arcs(
         data_stack,
         remote_path,
         &selections,
+        scope,
     ));
     AdmittedArcs {
         inherits: resolve_inherits_for_prim_in(

@@ -17,7 +17,7 @@ use alloc::vec::Vec;
 
 use super::compress::{IntWidth, LZ4_MAX_TOTAL_INPUT, compressed_ints, lz4_compress};
 use super::error::UsdcWriteError;
-use super::path::{CratePath, path_tree};
+use super::path::{CratePath, Element, path_tree};
 use super::{ListOp, Permission, Reference, Spec, Specifier, Value, Variability};
 use crate::toc;
 use crate::value_type::{SpecForm, ValueType};
@@ -174,7 +174,7 @@ impl Packer {
         if let Some(parent) = path.parent() {
             self.path(&parent)?;
         }
-        self.token(path.element_token())?;
+        self.token(&path.element_token())?;
         let i = index(self.paths.len())?;
         self.paths.push(Some(path.clone()));
         self.path_index.insert(path.clone(), i);
@@ -517,6 +517,28 @@ impl Packer {
                     bytes.extend_from_slice(&scale.to_le_bytes());
                 }
                 self.blob(T::LayerOffsetVector, 0, bytes, false)?
+            }
+            // `Write(SdfVariantSelectionMap)` (`WriteMap`): count, then each
+            // set name's and variant name's string index, in set name order
+            // as the `std::map` holds them.
+            Value::VariantSelectionMap(entries) => {
+                let mut sorted: Vec<&(String, String)> = entries.iter().collect();
+                sorted.sort_by(|a, b| a.0.cmp(&b.0));
+                if let Some(pair) = sorted.windows(2).find(|w| w[0].0 == w[1].0) {
+                    return Err(UsdcWriteError::DuplicateDictionaryKey {
+                        path: site.path.into(),
+                        field: site.field.into(),
+                        key: pair[0].0.clone(),
+                    });
+                }
+                let mut bytes = (sorted.len() as u64).to_le_bytes().to_vec();
+                for (set, variant) in sorted {
+                    for text in [set, variant] {
+                        site.check_text(text)?;
+                        bytes.extend_from_slice(&self.string(text)?.to_le_bytes());
+                    }
+                }
+                self.blob(T::VariantSelectionMap, 0, bytes, false)?
             }
             Value::UnregisteredValue(inner) => self.unregistered(inner, site)?,
             Value::TimeSamples(samples) => self.time_samples(samples, site)?,
@@ -945,7 +967,7 @@ impl Packer {
             let Some(path) = path else {
                 continue;
             };
-            let token = self.token_index[path.element_token()];
+            let token = self.token_index[&*path.element_token()];
             #[allow(clippy::cast_possible_truncation, reason = "path table is u32-indexed")]
             sorted.push((path, i as u32, token));
         }
@@ -1163,9 +1185,16 @@ fn prepare(specs: &[Spec]) -> Result<Vec<(CratePath, &Spec)>, UsdcWriteError> {
     let mut prepared = Vec::with_capacity(specs.len());
     for spec in specs {
         let path = CratePath::parse(&spec.path)?;
+        let last = path.last_element();
         let fits = match spec.form {
             SpecForm::PseudoRoot => path.is_root(),
-            SpecForm::Prim => !path.is_root() && !path.is_property(),
+            SpecForm::Prim => matches!(last, Some(Element::Prim(_))),
+            SpecForm::VariantSet => {
+                matches!(last, Some(Element::Variant { variant, .. }) if variant.is_empty())
+            }
+            SpecForm::Variant => {
+                matches!(last, Some(Element::Variant { variant, .. }) if !variant.is_empty())
+            }
             SpecForm::Attribute | SpecForm::Relationship => path.is_property(),
             form => {
                 return Err(UsdcWriteError::UnsupportedSpecForm {
@@ -1210,11 +1239,19 @@ fn prepare(specs: &[Spec]) -> Result<Vec<(CratePath, &Spec)>, UsdcWriteError> {
     if !forms.contains_key(&CratePath::root()) {
         return Err(UsdcWriteError::MissingPseudoRoot);
     }
+    // A prim, variant set or property belongs to a prim or variant (a root
+    // prim to the pseudo-root); a variant to its variant set.
     for (path, spec) in &prepared {
-        if let Some(parent) = path.parent() {
+        let owner = match spec.form {
+            SpecForm::Variant => path.variant_set(),
+            _ => path.parent(),
+        };
+        if let Some(owner) = owner {
             let ok = matches!(
-                (forms.get(&parent), path.is_property()),
-                (Some(SpecForm::Prim), _) | (Some(SpecForm::PseudoRoot), false)
+                (forms.get(&owner), spec.form),
+                (Some(SpecForm::Prim | SpecForm::Variant), _)
+                    | (Some(SpecForm::PseudoRoot), SpecForm::Prim)
+                    | (Some(SpecForm::VariantSet), SpecForm::Variant)
             );
             if !ok {
                 return Err(UsdcWriteError::MissingParent {

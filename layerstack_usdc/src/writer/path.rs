@@ -8,23 +8,45 @@
 //! (`_WritePaths`, `_BuildCompressedPathDataRecursive`) and `path.cpp`
 //! (`SdfPath::operator<`).
 
+use alloc::borrow::Cow;
 use alloc::string::String;
 use alloc::vec::Vec;
 
 use super::error::UsdcWriteError;
 
-/// An absolute path the writer supports: the pseudo-root, a prim path, or a
-/// prim property path.
+/// One element of a path's prim part.
+///
+/// The derived ordering is `Sdf_PathNode`'s for these nodes: a prim node
+/// before a variant selection node, prim nodes by name, and variant
+/// selection nodes by set name, then variant name.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum Element {
+    /// A prim name (`/A`).
+    Prim(String),
+    /// A variant selection (`{set=variant}`); an empty variant names the
+    /// variant set itself (`{set=}`).
+    Variant {
+        /// Variant set name.
+        set: String,
+        /// Variant name, or empty for the variant set.
+        variant: String,
+    },
+}
+
+/// An absolute path the writer supports: the pseudo-root, a prim path, a
+/// variant set or variant path (`/A{v=}`, `/A{v=x}`), a prim inside a
+/// variant (`/A{v=x}B`), or a property path of a prim or variant.
 ///
 /// The derived ordering is `SdfPath`'s for these paths: prim parts compare
 /// element by element (an ancestor before its descendants, names by byte
-/// order), and only then the property part, with no property first. So a
-/// prim is followed by its properties and then by its child prims.
+/// order, a prim before a variant selection), and only then the property
+/// part, with no property first. So a prim is followed by its properties,
+/// then by its child prims, then by its variant sets and variants.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct CratePath {
-    /// Prim names from the root; empty for the pseudo-root.
-    pub(crate) prims: Vec<String>,
-    /// Property name for a prim property path.
+    /// Prim part elements from the root; empty for the pseudo-root.
+    pub(crate) elements: Vec<Element>,
+    /// Property name for a property path.
     pub(crate) property: Option<String>,
 }
 
@@ -32,91 +54,165 @@ impl CratePath {
     /// The pseudo-root, `/`.
     pub(crate) fn root() -> Self {
         Self {
-            prims: Vec::new(),
+            elements: Vec::new(),
             property: None,
         }
     }
 
-    /// Parses `/`, `/A/B` or `/A/B.prop:name`.
+    /// Parses `/`, `/A/B`, `/A{v=x}B`, `/A{v=}` or `/A/B.prop:name`.
+    ///
+    /// A variant selection follows a prim or another selection and is
+    /// followed by a child prim name, another selection, a property or
+    /// the end; a variant set (`{v=}`) ends the path.
     pub(crate) fn parse(text: &str) -> Result<Self, UsdcWriteError> {
         let invalid = |reason| UsdcWriteError::InvalidPath {
             path: text.into(),
             reason,
         };
-        let Some(rest) = text.strip_prefix('/') else {
+        let Some(mut rest) = text.strip_prefix('/') else {
             return Err(invalid("not an absolute path"));
         };
         if rest.is_empty() {
             return Ok(Self::root());
         }
-        let (prim_part, property) = match rest.split_once('.') {
-            Some((prims, property)) => (prims, Some(property)),
-            None => (rest, None),
-        };
-        let mut prims = Vec::new();
-        for name in prim_part.split('/') {
+        let mut elements = Vec::new();
+        let mut property = None;
+        loop {
+            let end = rest.find(['/', '{', '.']).unwrap_or(rest.len());
+            let name = &rest[..end];
             if !is_name(name) {
                 return Err(invalid("prim name is not an identifier"));
             }
-            prims.push(name.into());
+            elements.push(Element::Prim(name.into()));
+            rest = &rest[end..];
+            while let Some(selection) = rest.strip_prefix('{') {
+                let Some((inner, after)) = selection.split_once('}') else {
+                    return Err(invalid("variant selection is not closed"));
+                };
+                let Some((set, variant)) = inner.split_once('=') else {
+                    return Err(invalid("variant selection has no `=`"));
+                };
+                if !is_name(set) || !(variant.is_empty() || is_variant_name(variant)) {
+                    return Err(invalid("variant selection names are not valid"));
+                }
+                elements.push(Element::Variant {
+                    set: set.into(),
+                    variant: variant.into(),
+                });
+                rest = after;
+            }
+            let after_selection = matches!(elements.last(), Some(Element::Variant { .. }));
+            match rest.chars().next() {
+                None => break,
+                Some('.') => {
+                    let name = &rest[1..];
+                    if !name.split(':').all(is_name) {
+                        return Err(invalid("property name is not a namespaced identifier"));
+                    }
+                    property = Some(name.into());
+                    break;
+                }
+                Some('/') if !after_selection => rest = &rest[1..],
+                Some(_) if after_selection => {}
+                Some(_) => return Err(invalid("prim name is not an identifier")),
+            }
         }
-        let property = match property {
-            Some(name) if name.split(':').all(is_name) => Some(name.into()),
-            Some(_) => return Err(invalid("property name is not a namespaced identifier")),
-            None => None,
-        };
-        Ok(Self { prims, property })
+        let is_set =
+            |e: &Element| matches!(e, Element::Variant { variant, .. } if variant.is_empty());
+        if let Some(i) = elements.iter().position(is_set)
+            && (i + 1 < elements.len() || property.is_some())
+        {
+            return Err(invalid("a variant set path has no children"));
+        }
+        Ok(Self { elements, property })
     }
 
-    /// Whether this is a prim property path.
+    /// Whether this is a property path.
     pub(crate) fn is_property(&self) -> bool {
         self.property.is_some()
     }
 
     /// Whether this is the pseudo-root.
     pub(crate) fn is_root(&self) -> bool {
-        self.prims.is_empty() && self.property.is_none()
+        self.elements.is_empty() && self.property.is_none()
     }
 
-    /// The parent path; `None` for the pseudo-root.
+    /// The last element of the prim part, for a path that is not a
+    /// property path.
+    pub(crate) fn last_element(&self) -> Option<&Element> {
+        self.elements.last().filter(|_| self.property.is_none())
+    }
+
+    /// The parent path, `SdfPath::GetParentPath`: the prim part of a
+    /// property path, otherwise the prim part less its last element (so a
+    /// variant's parent is the prim or variant holding its set); `None`
+    /// for the pseudo-root.
     pub(crate) fn parent(&self) -> Option<Self> {
         if self.property.is_some() {
             return Some(Self {
-                prims: self.prims.clone(),
+                elements: self.elements.clone(),
                 property: None,
             });
         }
-        let (_, parent) = self.prims.split_last()?;
+        let (_, parent) = self.elements.split_last()?;
         Some(Self {
-            prims: parent.to_vec(),
+            elements: parent.to_vec(),
             property: None,
         })
     }
 
-    /// Number of path elements below the pseudo-root.
-    pub(crate) fn depth(&self) -> usize {
-        self.prims.len() + usize::from(self.property.is_some())
+    /// The variant set path of a variant path (`/A{v=}` for `/A{v=x}`).
+    pub(crate) fn variant_set(&self) -> Option<Self> {
+        match self.last_element()? {
+            Element::Variant { set, variant } if !variant.is_empty() => {
+                let mut elements = self.elements.clone();
+                elements.pop();
+                elements.push(Element::Variant {
+                    set: set.clone(),
+                    variant: String::new(),
+                });
+                Some(Self {
+                    elements,
+                    property: None,
+                })
+            }
+            _ => None,
+        }
     }
 
-    /// The token stored for this path's last element: the property name for
-    /// a prim property path, otherwise the element (empty for the root).
-    /// `CrateFile::_AddPath`.
-    pub(crate) fn element_token(&self) -> &str {
-        match (&self.property, self.prims.last()) {
-            (Some(property), _) => property,
-            (None, Some(name)) => name,
-            (None, None) => "",
+    /// Number of path elements below the pseudo-root.
+    pub(crate) fn depth(&self) -> usize {
+        self.elements.len() + usize::from(self.property.is_some())
+    }
+
+    /// The token stored for this path's last element, as `CrateFile::_AddPath`
+    /// stores it: the property name for a property path, otherwise the
+    /// element's text (`B`, `{v=x}`, empty for the root).
+    pub(crate) fn element_token(&self) -> Cow<'_, str> {
+        match (&self.property, self.elements.last()) {
+            (Some(property), _) => Cow::Borrowed(property),
+            (None, Some(Element::Prim(name))) => Cow::Borrowed(name),
+            (None, Some(Element::Variant { set, variant })) => {
+                Cow::Owned(alloc::format!("{{{set}={variant}}}"))
+            }
+            (None, None) => Cow::Borrowed(""),
         }
     }
 }
 
 impl core::fmt::Display for CratePath {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        if self.prims.is_empty() && self.property.is_none() {
+        if self.is_root() {
             return f.write_str("/");
         }
-        for name in &self.prims {
-            write!(f, "/{name}")?;
+        let mut after_selection = false;
+        for element in &self.elements {
+            match element {
+                Element::Prim(name) if after_selection => f.write_str(name)?,
+                Element::Prim(name) => write!(f, "/{name}")?,
+                Element::Variant { set, variant } => write!(f, "{{{set}={variant}}}")?,
+            }
+            after_selection = matches!(element, Element::Variant { .. });
         }
         if let Some(property) = &self.property {
             write!(f, ".{property}")?;
@@ -137,6 +233,16 @@ fn is_name(name: &str) -> bool {
     };
     let ok = |c: char| !c.is_ascii() || c == '_' || c.is_ascii_alphanumeric();
     ok(first) && !first.is_ascii_digit() && chars.all(ok)
+}
+
+/// A structural variant name check, as [`is_name`] checks names: an
+/// optional leading `.`, then at least one character that is not ASCII
+/// punctuation other than `_`, `|` and `-`, whitespace or a control
+/// character (OpenUSD's `VariantName` path grammar, `pathParser.h`).
+fn is_variant_name(name: &str) -> bool {
+    let rest = name.strip_prefix('.').unwrap_or(name);
+    let ok = |c: char| !c.is_ascii() || matches!(c, '_' | '|' | '-') || c.is_ascii_alphanumeric();
+    !rest.is_empty() && rest.chars().all(ok)
 }
 
 /// The three integer arrays of the compressed PATHS section.
@@ -213,6 +319,11 @@ mod tests {
             "/A.x",
             "/A/B.primvars:st:indices",
             "/na\u{ef}ve",
+            "/A{v=a}",
+            "/A{v=}",
+            "/A{v=a}B/C.x",
+            "/A{v=a}{w=.b-c|d}",
+            "/A{v=a}.x",
         ] {
             assert_eq!(p(text).to_string(), text, "{text}");
         }
@@ -225,7 +336,12 @@ mod tests {
             "/A.b.c",
             "/1A",
             "/A.x:",
-            "/A{v=a}",
+            "/A{v=a}/B",
+            "/A{v=}B",
+            "/A{v=}.x",
+            "/A{v}",
+            "/A{v=a",
+            "/{v=a}",
             "/A.rel[/B]",
             "/A B",
         ] {
@@ -244,13 +360,31 @@ mod tests {
             p("/A.b"),
             p("/A/C.a"),
             p("/Ab"),
+            p("/A{v=b}"),
+            p("/A{v=}"),
+            p("/A{u=z}C"),
+            p("/A{v=b}.a"),
         ];
         paths.sort();
         let sorted: Vec<String> = paths.iter().map(ToString::to_string).collect();
         assert_eq!(
             sorted,
-            ["/", "/A", "/A.b", "/A.z", "/A/C", "/A/C.a", "/Ab", "/B"],
-            "prim part first, then property; ancestors first"
+            [
+                "/",
+                "/A",
+                "/A.b",
+                "/A.z",
+                "/A/C",
+                "/A/C.a",
+                "/A{u=z}C",
+                "/A{v=}",
+                "/A{v=b}",
+                "/A{v=b}.a",
+                "/Ab",
+                "/B"
+            ],
+            "prim part first, then property; ancestors first; prims before \
+             variant selections"
         );
     }
 

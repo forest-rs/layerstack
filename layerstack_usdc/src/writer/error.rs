@@ -27,7 +27,9 @@ pub enum UsdcWriteError {
         reason: &'static str,
     },
     /// A spec's form does not fit its path: the pseudo-root must be `/`,
-    /// prims need a prim path, attributes and relationships a property path.
+    /// prims need a prim path, variant sets a variant set path (`/P{v=}`),
+    /// variants a variant path (`/P{v=x}`), attributes and relationships a
+    /// property path.
     SpecPathMismatch {
         /// The spec path.
         path: String,
@@ -35,7 +37,7 @@ pub enum UsdcWriteError {
         form: SpecForm,
     },
     /// A spec form the writer does not produce (connection, relationship
-    /// target, variant, mapper and expression specs; OpenUSD derives
+    /// target, mapper and expression specs; OpenUSD derives
     /// connection and target specs from `connectionPaths` / `targetPaths`
     /// instead of storing them).
     UnsupportedSpecForm {
@@ -51,7 +53,9 @@ pub enum UsdcWriteError {
     },
     /// There is no pseudo-root spec at `/`.
     MissingPseudoRoot,
-    /// A spec's parent prim (or pseudo-root) has no spec.
+    /// A spec's owner has no spec: the prim or variant (or, for a root
+    /// prim, the pseudo-root) of a prim, variant set or property, or the
+    /// variant set of a variant.
     MissingParent {
         /// The orphaned spec's path.
         path: String,

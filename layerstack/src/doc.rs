@@ -29,6 +29,20 @@ use crate::{
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct LayerId(pub u64);
 
+impl LayerId {
+    /// The layer of a reference or payload whose asset path could not be
+    /// resolved (see [`Reference::unresolved`]).
+    ///
+    /// No layer store holds a layer with this ID: such an arc targets no
+    /// layer stack, contributes nothing, and composition reports it as
+    /// [`CompositionError::UnresolvedAsset`]. Importers use it so that a
+    /// failed resolution keeps the arc instead of dropping it or retargeting
+    /// it at another layer.
+    ///
+    /// [`CompositionError::UnresolvedAsset`]: crate::CompositionError::UnresolvedAsset
+    pub const UNRESOLVED: Self = Self(u64::MAX);
+}
+
 /// Prim specifier: determines how a prim spec contributes to composition.
 ///
 /// Spec: AOUSD Core §7.6 (specifier field), §12.2.1 (specifier resolution).
@@ -690,18 +704,54 @@ impl Reference {
         }
     }
 
+    /// Creates a reference or payload to `asset` whose resolution failed.
+    ///
+    /// The arc keeps its authored asset path, target and offset, and its
+    /// layer is [`LayerId::UNRESOLVED`]: it has no target, contributes
+    /// nothing, and composition reports it as
+    /// [`CompositionError::UnresolvedAsset`].
+    ///
+    /// Spec: AOUSD Core §10.3.2.1 ("If a layer stack cannot be computed for
+    /// a reference's layer asset path, it is a composition error and that
+    /// reference is ignored").
+    ///
+    /// [`CompositionError::UnresolvedAsset`]: crate::CompositionError::UnresolvedAsset
+    pub fn unresolved(
+        asset: impl Into<String>,
+        target: ReferenceTarget,
+        layer_offset: LayerOffset,
+    ) -> Self {
+        Self {
+            layer: LayerId::UNRESOLVED,
+            target,
+            asset: Some(asset.into()),
+            layer_offset,
+        }
+    }
+
+    /// Returns `true` when this arc's asset path could not be resolved (see
+    /// [`Reference::unresolved`]).
+    #[must_use]
+    pub fn is_unresolved(&self) -> bool {
+        self.layer == LayerId::UNRESOLVED
+    }
+
     /// Returns the prim path this arc targets in the layer stack rooted at
     /// [`Reference::layer`]: the authored path, or the path named by that
     /// layer's `defaultPrim` for a [`ReferenceTarget::DefaultPrim`] target.
     ///
-    /// Returns `None` when the target is `DefaultPrim` and the layer is not
-    /// in `store` or has no usable `defaultPrim` (see
+    /// Returns `None` when the arc's asset is unresolved
+    /// ([`Reference::is_unresolved`]), or when the target is `DefaultPrim`
+    /// and the layer is not in `store` or has no usable `defaultPrim` (see
     /// [`Layer::default_prim_path`]). A returned path need not have a prim
     /// spec.
     ///
     /// Spec: AOUSD Core §10.3.2.1 (an omitted prim path assumes the
     /// `defaultPrim` of the specified layer).
     pub fn target_path(&self, store: &mut dyn LayerStore) -> Option<PathId> {
+        if self.is_unresolved() {
+            return None;
+        }
         match self.target {
             ReferenceTarget::Prim(path) => Some(path),
             ReferenceTarget::DefaultPrim => {
@@ -1566,6 +1616,7 @@ pub struct InMemoryStore {
 impl InMemoryStore {
     /// Inserts (or replaces) a layer.
     pub fn insert_layer(&mut self, layer: Layer) {
+        debug_assert_ne!(layer.id, LayerId::UNRESOLVED, "reserved layer ID");
         self.layers.insert(layer.id, layer);
     }
 

@@ -24,7 +24,7 @@ use crate::{
         resolve_variant_branch_payloads, resolve_variant_child_references,
         resolve_variant_references_in, resolve_variant_selections_for_prim, spec_arcs_apply,
     },
-    composition_error::{CompositionError, UnresolvedDefaultPrim},
+    composition_error::{CompositionError, UnresolvedAsset, UnresolvedDefaultPrim},
     dependency_map::{ArcDependency, DependencyBuilder},
     doc::{
         FieldValue, LayerId, LayerOffset, LayerStore, Reference, ReferenceTarget, composed_entries,
@@ -2415,6 +2415,10 @@ fn add_local_and_variant_opinions(
 /// Resolves the prim a reference or payload (`arc`) followed for
 /// `dest_root` targets (see [`Reference::target_path`]).
 ///
+/// An arc whose asset path could not be resolved
+/// ([`Reference::is_unresolved`]) is reported as [`UnresolvedAsset`] and
+/// ignored (AOUSD Core §10.3.2.1; OpenUSD `PcpErrorInvalidAssetPath`).
+///
 /// For a [`ReferenceTarget::DefaultPrim`] target, records that `dest_root`
 /// depends on the target layer's `defaultPrim`, and reports
 /// [`UnresolvedDefaultPrim`] when it names no prim path (the arc is then
@@ -2433,6 +2437,14 @@ fn resolve_arc_target(
     cycles: &mut CycleDetector,
     deps: Option<&mut DependencyBuilder>,
 ) -> Option<PathId> {
+    if reference.is_unresolved() {
+        cycles.report(CompositionError::UnresolvedAsset(UnresolvedAsset {
+            prim: dest_root,
+            arc,
+            asset: reference.asset.clone().unwrap_or_default(),
+        }));
+        return None;
+    }
     let target = reference.target_path(store);
     if reference.target != ReferenceTarget::DefaultPrim {
         return target;
@@ -6720,5 +6732,67 @@ mod default_prim_tests {
         assert_eq!(children(&stage, &mut store, "/A"), Some(vec!["Geo".into()]));
         let expected = unresolved(&mut store, "/A", ArcKind::References, INNER, None);
         assert_eq!(stage.composition_errors(), [expected]);
+    }
+
+    /// An arc to an asset that could not be resolved contributes nothing and
+    /// is reported, even though the authoring layer has a `defaultPrim` (and
+    /// the explicit target's path) it could otherwise fall back to.
+    #[test]
+    fn unresolved_asset_never_falls_back_to_the_authoring_layer() {
+        let mut store = InMemoryStore::default();
+        let value = store.tokens.intern("value");
+        let local = store.path("/Local");
+        let arcs = [
+            ("/Ref", ArcKind::References, ReferenceTarget::DefaultPrim),
+            ("/Pay", ArcKind::Payloads, ReferenceTarget::DefaultPrim),
+            (
+                "/RefExplicit",
+                ArcKind::References,
+                ReferenceTarget::Prim(local),
+            ),
+            (
+                "/PayExplicit",
+                ArcKind::Payloads,
+                ReferenceTarget::Prim(local),
+            ),
+        ];
+        let mut prims = vec![(
+            "/Local",
+            PrimSpec::def()
+                .with_property(value, crate::PropertySpec::attribute().with_default(7_i64)),
+        )];
+        for (path, arc, target) in &arcs {
+            let reference =
+                Reference::unresolved("./absent.usda", target.clone(), LayerOffset::IDENTITY);
+            assert!(reference.is_unresolved());
+            let spec = match arc {
+                ArcKind::Payloads => PrimSpec::def().with_payload(reference),
+                _ => PrimSpec::def().with_reference(reference),
+            };
+            prims.push((path, spec));
+        }
+        let stage = compose(&mut store, Some("Local"), prims, vec![]);
+
+        let mut expected = Vec::new();
+        for (path, arc, _) in arcs {
+            let prim = store.path(path);
+            assert_eq!(sites(&stage, &mut store, path), [(ROOT, prim)]);
+            assert!(
+                stage
+                    .resolve_field_path(PropertyPath::new(prim, value))
+                    .is_none(),
+                "{path} resolves no value"
+            );
+            expected.push(CompositionError::UnresolvedAsset(UnresolvedAsset {
+                prim,
+                arc,
+                asset: "./absent.usda".into(),
+            }));
+        }
+        let errors = stage.composition_errors();
+        assert_eq!(errors.len(), expected.len(), "{errors:?}");
+        for error in &expected {
+            assert!(errors.contains(error), "missing {error:?} in {errors:?}");
+        }
     }
 }

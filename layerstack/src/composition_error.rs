@@ -12,7 +12,7 @@
 //!
 //! [`Stage::composition_errors`]: crate::Stage::composition_errors
 
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 
 use crate::{doc::LayerId, path::PathId, prim_index::ArcKind};
 
@@ -29,6 +29,9 @@ pub enum CompositionError {
     /// layer's `defaultPrim` does not name a prim. The arc contributed
     /// nothing.
     UnresolvedDefaultPrim(UnresolvedDefaultPrim),
+    /// A reference or payload whose asset path could not be resolved. The
+    /// arc contributed nothing.
+    UnresolvedAsset(UnresolvedAsset),
 }
 
 impl CompositionError {
@@ -40,6 +43,7 @@ impl CompositionError {
             Self::SublayerCycle(_) => None,
             Self::ArcCycle(cycle) => Some(cycle.prim),
             Self::UnresolvedDefaultPrim(error) => Some(error.prim),
+            Self::UnresolvedAsset(error) => Some(error.prim),
         }
     }
 }
@@ -138,4 +142,29 @@ pub struct SublayerCycle {
     pub layer: LayerId,
     /// The sublayer that closes the cycle.
     pub sublayer: LayerId,
+}
+
+/// A reference or payload whose asset path could not be resolved, found
+/// while composing `prim`.
+///
+/// Importers keep such an arc as a [`Reference::unresolved`] instead of
+/// dropping it; it targets no layer stack and contributes no opinions, and
+/// the rest of the prim is composed as normal. It never falls back to the
+/// authoring layer, whatever its target.
+///
+/// Spec: AOUSD Core §10.3.2.1 ("If a layer stack cannot be computed for a
+/// reference's layer asset path, it is a composition error and that
+/// reference is ignored"), §10.6. OpenUSD reports it as
+/// `PcpErrorInvalidAssetPath` (`_EvalRefOrPayloadArcs` in
+/// `pxr/usd/pcp/primIndex.cpp`).
+///
+/// [`Reference::unresolved`]: crate::Reference::unresolved
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct UnresolvedAsset {
+    /// The composed prim whose composition reached the arc.
+    pub prim: PathId,
+    /// The arc: [`ArcKind::References`] or [`ArcKind::Payloads`].
+    pub arc: ArcKind,
+    /// The asset path as authored.
+    pub asset: String,
 }

@@ -1414,56 +1414,42 @@ impl<'a> AssembleCtx<'a> {
                 }
             }
 
-            // Resolve the asset path. With neither an asset path nor a prim
-            // path, the arc is internal and targets this layer's
-            // `defaultPrim` (AOUSD Core §10.3.2.1), as `<>` does in USDA.
-            let (layer, target) = if !asset_path.is_empty() {
-                let resolved = self.resolve_asset(&asset_path);
-                let lid = resolved
-                    .as_ref()
-                    .map(|r| r.layer_id)
-                    .unwrap_or(self.layer_id);
-                if let Some(r) = resolved
-                    && let Some(layer) = r.layer
-                {
-                    self.resolved_layers.push(layer);
-                }
-                let target = if !prim_path.is_empty() {
-                    Path::parse_absolute(&prim_path, self.tokens)
-                        .ok()
-                        .map(|p| ReferenceTarget::Prim(self.paths.intern(p)))
-                        .unwrap_or(ReferenceTarget::DefaultPrim)
-                } else {
-                    ReferenceTarget::DefaultPrim
-                };
-                (lid, target)
+            // An empty prim path targets the `defaultPrim`; a malformed one
+            // is dropped like USDA's, never retargeted.
+            let target = if prim_path.is_empty() {
+                ReferenceTarget::DefaultPrim
             } else {
-                // Internal reference (same layer).
-                let target = if !prim_path.is_empty() {
-                    Path::parse_absolute(&prim_path, self.tokens)
-                        .ok()
-                        .map(|p| ReferenceTarget::Prim(self.paths.intern(p)))
-                        .unwrap_or(ReferenceTarget::DefaultPrim)
-                } else {
-                    ReferenceTarget::DefaultPrim
-                };
-                (self.layer_id, target)
+                let path = Path::parse_absolute(&prim_path, self.tokens).ok()?;
+                ReferenceTarget::Prim(self.paths.intern(path))
+            };
+            let layer_offset = LayerOffset {
+                offset: layer_offset_val,
+                scale: layer_scale_val,
             };
 
-            let asset = if asset_path.is_empty() {
-                None
-            } else {
-                Some(asset_path)
+            // With neither an asset path nor a prim path, the arc is internal
+            // and targets this layer's `defaultPrim` (AOUSD Core §10.3.2.1),
+            // as `<>` does in USDA. An asset path that cannot be resolved
+            // keeps the arc unresolved; it never becomes an internal arc.
+            if asset_path.is_empty() {
+                return Some(Reference {
+                    layer: self.layer_id,
+                    target,
+                    asset: None,
+                    layer_offset,
+                });
+            }
+            let Some(resolved) = self.resolve_asset(&asset_path) else {
+                return Some(Reference::unresolved(asset_path, target, layer_offset));
             };
-
+            if let Some(layer) = resolved.layer {
+                self.resolved_layers.push(layer);
+            }
             Some(Reference {
-                layer,
+                layer: resolved.layer_id,
                 target,
-                asset,
-                layer_offset: LayerOffset {
-                    offset: layer_offset_val,
-                    scale: layer_scale_val,
-                },
+                asset: Some(asset_path),
+                layer_offset,
             })
         } else {
             None

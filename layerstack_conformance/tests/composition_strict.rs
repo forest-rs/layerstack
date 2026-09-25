@@ -1204,15 +1204,6 @@ const KNOWN: &[Known] = &[
         reason: "ignores `</Pigeon/Rig/ToesRig/LToesRig/ThumbToeLOCALRig/Toe>` -> `</Pigeon/Anim/Legs/LToes/Thumb>` authored in `Pigeon_bodyrig.usd`",
     },
     Known {
-        fixture: "bug74847_root",
-        causes: &[C::AncestralArcs],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::ExtraSite],
-        reason: "`/A/B/B` gains `ref.usd /A`, the parent of the reference target",
-    },
-    Known {
         fixture: "bug92827_root",
         causes: &[C::Relocates],
         prims: 1,

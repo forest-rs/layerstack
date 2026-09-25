@@ -3462,12 +3462,25 @@ type PendingOpinion = (
 /// and [`drop_reached_copies`] drops every copied registration of a site the
 /// expansion reaches, so the copy keeps only what the expansion misses.
 ///
-// TODO(graph): AncestralArcs, SpecializesPlacement. The expansion misses
-// the arcs authored on a subroot target's namespace ancestors and the
-// specializes implied into the stage's layer stack, which the copy supplies
-// from the stage prim's index, as far as the stage prim has been composed
-// when the arc is expanded. Retire the copy once the graph covers these.
+/// A stage prim is the composed index of a site of the stage's own layer
+/// stack, so only an arc that targets that layer stack copies one; a class
+/// implied into it does (see [`implied_classes`]).
+///
+// TODO(graph): AncestralArcs. The expansion misses the arcs authored on a
+// subroot target's namespace ancestors, which the copy supplies from the
+// stage prim's index, as far as the stage prim has been composed when the
+// arc is expanded. Retire the copy once the graph covers them.
+//
+// TODO(graph): SpecializesPlacement. A specializes arc copies the stage prim
+// at its target path whichever layer stack it targets: that stage prim holds
+// the specializes implied into the stage's layer stack and the arcs beneath
+// it. Retire this once implied specializes are nodes of their own.
 struct Forwarding<'a> {
+    /// Root layer of the layer stack the forwarding arc targets.
+    layer_stack: LayerId,
+    /// `true` for a specializes arc (see the `SpecializesPlacement` note
+    /// above).
+    specializes_arc: bool,
     /// Specializes nodes the forwarding arc is expanded in.
     specializes: &'a [SpecializesOrigin],
     /// Arc kind a forwarded specializes placeholder ranks under (see
@@ -3529,6 +3542,9 @@ impl Forwarding<'_> {
         mapping: &[(PathId, PathId)],
         provenance_remap: Option<(PathId, PathId)>,
     ) {
+        if self.layer_stack != cycles.stage_layer_stack() && !self.specializes_arc {
+            return;
+        }
         for &(remote, dest) in mapping {
             // A stage prim at the target path of its own arc (`/Set`
             // referencing `/Set` of another layer stack) already holds every
@@ -4453,6 +4469,8 @@ fn add_inherit_edge_opinions(
     // What the class's composed index holds beyond this expansion (see
     // `Forwarding`).
     let forwarding = Forwarding {
+        layer_stack: arc_stack,
+        specializes_arc: false,
         specializes,
         arc_kind,
         nested_arc_kind: None,
@@ -5120,6 +5138,8 @@ fn add_reference_edge_opinions(
     // What the target's composed index holds beyond this expansion (see
     // `Forwarding`).
     let forwarding = Forwarding {
+        layer_stack: reference.layer,
+        specializes_arc: false,
         specializes,
         arc_kind: edge_arc_kind,
         nested_arc_kind: edge_direct_nested,
@@ -5954,6 +5974,8 @@ fn add_specializes_edge_opinions(
         },
     );
     let forwarding = Forwarding {
+        layer_stack: arc_stack,
+        specializes_arc: true,
         specializes,
         arc_kind,
         nested_arc_kind,

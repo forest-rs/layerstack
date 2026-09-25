@@ -32,6 +32,8 @@ def "Values"
     uchar[] ucharArray = [0, 255]
     uint uint = 4000000000
     uint64 uint64 = 9000000000000000000
+    uint64[] uint64Array = [1, 18446744073709551615]
+    uint64 uint64Max = 18446744073709551615
     uint[] uintArray = [1, 4000000000]
 }
 

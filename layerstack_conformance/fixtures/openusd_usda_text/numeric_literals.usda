@@ -21,6 +21,9 @@ def "Numbers"
     uint unsignedTruncated = 1.5
     int64 wide = 4294967296
     uint64 exponent = 1e3
+    uint64 largest = 18446744073709551615
+    bool unsigned = 18446744073709551615
+    double fromUnsigned = 18446744073709551615
     float floatNegativeZero = -0
     double doubleFromInt = 2
     timecode timecodeNegativeZero = -0

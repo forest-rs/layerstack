@@ -251,6 +251,8 @@ pub enum Value<'a> {
     Number(f64),
     /// An integer value.
     Int(i64),
+    /// A non-negative integer literal too large for `i64`.
+    UInt(u64),
     /// A string literal: its contents without the quotes, with escape
     /// sequences evaluated.
     String(Cow<'a, str>),

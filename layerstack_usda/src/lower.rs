@@ -970,6 +970,8 @@ impl<'a> LowerCtx<'a> {
                 SyntaxKind::Number => {
                     return match parse_number_value(text) {
                         Value::Int(n) => Value::Int(-n),
+                        // Below `i64::MIN`: a double, as in OpenUSD.
+                        Value::UInt(n) => Value::Number(-(n as f64)),
                         Value::Number(n) => Value::Number(-n),
                         other => other,
                     };
@@ -1174,6 +1176,7 @@ impl<'a> LowerCtx<'a> {
             .map(|child| self.lower_value(self.node_from(tree, child.id.0)))
             .and_then(|value| match value {
                 Value::Int(v) if v >= 0 => usize::try_from(v).ok(),
+                Value::UInt(v) => usize::try_from(v).ok(),
                 Value::Number(v) if v >= 0.0 => usize::try_from(v as i64).ok(),
                 _ => None,
             })
@@ -1697,9 +1700,18 @@ fn parse_f64(s: &str) -> f64 {
     s.parse().unwrap_or(0.0)
 }
 
+/// A number literal's value, typed as OpenUSD's text parser types it
+/// (`_GetNumericValueFromString`, `pxr/usd/sdf/textParserHelpers.cpp`): with
+/// `.`, `e` or `E` a double, otherwise an integer, which is unsigned 64-bit
+/// when it does not fit `i64`, and a double when it fits neither.
 fn parse_number_value(text: &str) -> Value<'_> {
-    if let Ok(n) = text.parse::<i64>() {
-        return Value::Int(n);
+    if !text.contains(['.', 'e', 'E']) {
+        if let Ok(n) = text.parse::<i64>() {
+            return Value::Int(n);
+        }
+        if let Ok(n) = text.parse::<u64>() {
+            return Value::UInt(n);
+        }
     }
     Value::Number(parse_f64(text))
 }
@@ -2441,6 +2453,27 @@ def Scope \"root\" {
         assert!(matches!(values[1], Value::Number(i) if *i == f64::NEG_INFINITY));
         assert!(matches!(values[2], Value::Int(-3)));
         assert!(matches!(values[3], Value::Number(y) if y.is_sign_negative()));
+    }
+
+    /// Integers beyond `i64` are unsigned, and beyond `u64` doubles, as in
+    /// OpenUSD's `_GetNumericValueFromString`.
+    #[test]
+    fn large_integer_literals() {
+        let src = "#usda 1.0\ndef \"P\" {\n    uint64 a = 18446744073709551615\n    double b = \
+                   18446744073709551616\n    double c = -9223372036854775809\n}\n";
+        let r = parse(src);
+        assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+        let values: vec::Vec<_> = r.layer.prims[0]
+            .children
+            .iter()
+            .map(|child| match child {
+                PrimChild::Attribute(a) => a.default.as_ref().unwrap(),
+                _ => panic!("expected attributes"),
+            })
+            .collect();
+        assert!(matches!(values[0], Value::UInt(u64::MAX)));
+        assert!(matches!(values[1], Value::Number(n) if *n == 18_446_744_073_709_551_616.0));
+        assert!(matches!(values[2], Value::Number(n) if *n == -9_223_372_036_854_775_809.0));
     }
 
     #[test]

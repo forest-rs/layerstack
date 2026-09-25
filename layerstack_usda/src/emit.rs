@@ -1128,6 +1128,7 @@ impl EmitCtx<'_> {
             // A number for a declared numeric or boolean type converted in
             // `convert_scalar`; for any other, it keeps its written type.
             ast::Value::Int(n) => Value::Int64(*n),
+            ast::Value::UInt(n) => Value::UInt64(*n),
             ast::Value::Number(n) => Value::Double(*n),
             ast::Value::String(s) => match type_hint {
                 "token" => Value::Token(self.tokens.intern(s)),
@@ -1573,6 +1574,7 @@ fn element_type_hint(hint: &str) -> &str {
 #[derive(Clone, Copy)]
 enum Number {
     Int(i64),
+    UInt(u64),
     Float(f64),
 }
 
@@ -1615,6 +1617,7 @@ fn convert_scalar(value: &ast::Value<'_>, ty: &str) -> Option<Result<Value, Stri
     let floating = matches!(ty, "half" | "float" | "double" | "timecode");
     let number = match value {
         ast::Value::Int(n) => Number::Int(*n),
+        ast::Value::UInt(n) => Number::UInt(*n),
         ast::Value::Number(n) => Number::Float(*n),
         ast::Value::Bool(b) if ty == "bool" => return Some(Ok(Value::Bool(*b))),
         ast::Value::String(s) if ty == "bool" => {
@@ -1641,12 +1644,14 @@ fn convert_scalar(value: &ast::Value<'_>, ty: &str) -> Option<Result<Value, Stri
 fn convert_number(number: Number, ty: &str) -> Result<Value, String> {
     let as_f64 = match number {
         Number::Int(n) => n as f64,
+        Number::UInt(n) => n as f64,
         Number::Float(f) => f,
     };
     // An integer target takes the value truncated toward zero, if finite.
     let integral = |min: i128, max: i128| -> Result<i128, String> {
         let n = match number {
             Number::Int(n) => i128::from(n),
+            Number::UInt(n) => i128::from(n),
             // `as` truncates toward zero.
             Number::Float(f) if f.is_finite() => f as i128,
             Number::Float(f) => return Err(alloc::format!("{f} is not a `{ty}`")),
@@ -1660,6 +1665,7 @@ fn convert_number(number: Number, ty: &str) -> Result<Value, String> {
     Ok(match ty {
         "bool" => Value::Bool(match number {
             Number::Int(n) => n != 0,
+            Number::UInt(n) => n != 0,
             Number::Float(f) => f != 0.0,
         }),
         "uchar" => Value::UChar(integral(0, u8::MAX.into())? as u8),
@@ -1669,10 +1675,12 @@ fn convert_number(number: Number, ty: &str) -> Result<Value, String> {
         "uint64" => Value::UInt64(integral(0, u64::MAX.into())? as u64),
         "half" => Value::Half(match number {
             Number::Int(n) => layerstack::half::from_f32(n as f32),
+            Number::UInt(n) => layerstack::half::from_f32(n as f32),
             Number::Float(f) => half_from_f64(f),
         }),
         "float" => Value::Float(match number {
             Number::Int(n) => n as f32,
+            Number::UInt(n) => n as f32,
             Number::Float(f) => f as f32,
         }),
         "double" => Value::Double(as_f64),
@@ -1803,6 +1811,7 @@ fn ast_to_f64(v: &ast::Value<'_>) -> f64 {
     match v {
         ast::Value::Number(n) => *n,
         ast::Value::Int(n) => *n as f64,
+        ast::Value::UInt(n) => *n as f64,
         _ => 0.0,
     }
 }
@@ -1811,6 +1820,7 @@ fn ast_to_f64(v: &ast::Value<'_>) -> f64 {
 fn ast_to_i32(v: &ast::Value<'_>) -> i32 {
     match v {
         ast::Value::Int(n) => *n as i32,
+        ast::Value::UInt(n) => *n as i32,
         ast::Value::Number(n) => *n as i32,
         _ => 0,
     }

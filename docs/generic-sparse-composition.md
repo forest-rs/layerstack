@@ -80,16 +80,28 @@ composing the sample values directly, on random chains with whole-frame times
 and with times closer than the tolerance.
 
 The composed samples are then held, or interpolated element by element with
-OpenUSD's rules: floating-point scalars, vectors, matrices and time codes
-interpolate, half-precision ones rounding each result to half precision as
-`GfHalf` arithmetic does, integers hold, arrays of different sizes hold, and a blocked
-upper sample holds the lower one. Before the first composed time sample, a
-default or fallback is the lower sample at `-inf` and holds. Scalar
-attributes, which do not compose, hold or interpolate the strongest series'
-samples with the same element rules and the same `1e-6` tolerance. Each type
-rounds as `GfLerp` does in its own arithmetic, bit for bit: scalars lerp in
-double precision and narrow once, while float vectors narrow each scaled
-component to `float` before adding (`vectors_interpolate_bit_exact`).
+OpenUSD's rules (`USD_LINEAR_INTERPOLATION_TYPES`, `_LerpVisitor` in
+`pxr/usd/usd/interpolators.cpp`):
+
+- floating-point scalars, vectors, matrices and time codes interpolate;
+- half-precision ones round each result to half precision, as `GfHalf`
+  arithmetic does;
+- quaternions interpolate by `GfSlerp` in their own precision (`libm`
+  supplies `acos` and `sin` without `std`, identically on every target);
+- integers hold, arrays of different sizes hold, and a blocked upper sample
+  holds the lower one.
+
+Each type rounds as `GfLerp` or `GfSlerp` does in its own arithmetic, bit for
+bit: scalars lerp in double precision and narrow once, while float and half
+vectors narrow each scaled component before adding (the
+`*_interpolate_bit_exact` vectors). `quatd` matches to a few units in the last
+place: its slerp keeps the last-place error of `acos` and `sin`, which
+differs between C libraries.
+
+Before the first composed time sample, a default or fallback is the lower
+sample at `-inf` and holds. Scalar attributes, which do not compose, hold or
+interpolate the strongest series' samples with the same element rules and the
+same `1e-6` tolerance.
 
 ### Block semantics
 
@@ -165,8 +177,6 @@ the sample's own time:
   `Stage::resolve_value_at_time` materializes edits over `[]`. OpenUSD seeds
   the fallback after a default block but uses the empty array after a sampled
   block; `layerstack` seeds the fallback after either.
-- **Interpolating quaternions.** OpenUSD interpolates them by slerp;
-  `layerstack` holds them.
 - **Value clips.** Not implemented, so clip series do not participate in the
   linearization.
 - **Diagnostics.** `resolve_family_chain_report` is available but unused;

@@ -572,6 +572,36 @@ case(
 )
 
 case(
+    "quaternion_arrays_slerp",
+    "Quaternion arrays interpolate element by element with `GfSlerp`, taking "
+    "the shorter arc; a sparse edit composes first, and arrays of different "
+    "sizes hold. The `quath` values are exact halves.",
+    {
+        "root.usda": sublayers("@strong.usda@", "@weak.usda@"),
+        "strong.usda": layer(prim("over", "A",
+                                  "quatf[] e.timeSamples = { 1: edit (write (0, 0, 1, 0) to [1]) }")),
+        "weak.usda": layer(prim(
+            "def", "A",
+            "quath[] h.timeSamples = { 0: [(1, 0, 0, 0), (0.5, 0.5, 0.5, 0.5)], "
+            "2: [(0, 0, 0, 1), (-0.5, 0.5, 0.5, 0.5)] }",
+            "quatf[] f.timeSamples = { 0: [(1, 0, 0, 0), (0.5, 0.5, 0.5, 0.5)], "
+            "2: [(0, 0, 0, 1), (-0.5, 0.5, 0.5, 0.5)] }",
+            "quatd[] d.timeSamples = { 0: [(1, 0, 0, 0), (1, 0, 0, 0)], "
+            "2: [(0.6, 0, 0.8, 0), (0.999995, 0.0031622, 0, 0)] }",
+            "quatf[] sized.timeSamples = { 0: [(1, 0, 0, 0)], "
+            "2: [(0, 0, 0, 1), (1, 0, 0, 0)] }",
+            "quatf[] e.timeSamples = { 0: [(1, 0, 0, 0), (1, 0, 0, 0)], "
+            "2: [(0, 0, 0, 1), (1, 0, 0, 0)] }",
+        )),
+    },
+    {"/A.h": [0, 0.3, 0.5, 1, 1.7, 2],
+     "/A.f": [0, 0.3, 0.5, 1, 1.7, 2],
+     "/A.d": [0, 0.3, 0.5, 1, 1.7, 2],
+     "/A.sized": [1],
+     "/A.e": [0, 1, 1.5, 2]},
+)
+
+case(
     "vector_sparse_over_dense_linear",
     "A sparse vector edit composes over both bracketing dense samples before "
     "interpolating.",
@@ -623,6 +653,27 @@ case(
         )),
     },
     {attr: [0, 0.3, 0.5, 1, 1.7] for attr in ("/A.h", "/A.v2", "/A.v3", "/A.v4")},
+)
+
+case(
+    "quaternion_scalars_slerp",
+    "Quaternion scalars interpolate with `GfSlerp` in their own precision: "
+    "the shorter arc when the dot product is negative, and a plain lerp when "
+    "the two rotations are within 1e-5 of each other. The `quath` values are "
+    "exact halves.",
+    {
+        "root.usda": layer(prim(
+            "def", "A",
+            "quath h.timeSamples = { 0: (1, 0, 0, 0), 2: (0, 0, 0, 1) }",
+            "quath hflip.timeSamples = { 0: (1, 0, 0, 0), 2: (-0.5, 0.5, 0.5, 0.5) }",
+            "quatf f.timeSamples = { 0: (1, 0, 0, 0), 2: (0.6, 0, 0.8, 0) }",
+            "quatf fflip.timeSamples = { 0: (0.5, 0.5, 0.5, 0.5), 2: (-0.6, 0, -0.8, 0) }",
+            "quatd d.timeSamples = { 0: (0.5, 0.5, 0.5, 0.5), 2: (0, 0, 0, 1) }",
+            "quatd near.timeSamples = { 0: (1, 0, 0, 0), 2: (0.999995, 0.0031622, 0, 0) }",
+        )),
+    },
+    {attr: [0, 0.3, 0.5, 1, 1.7, 2]
+     for attr in ("/A.h", "/A.hflip", "/A.f", "/A.fflip", "/A.d", "/A.near")},
 )
 
 case(
@@ -683,6 +734,25 @@ def exact_pair(rng, kind, count):
     return a, b
 
 
+def rotation_pair(rng, kind, count):
+    """Two quaternions (real part first): a random rotation and one that is
+    unrelated, its negation (the longer arc), or within 1e-5 of it (the
+    lerp branch). Components are exact in `kind` and rarely exactly unit."""
+    def unit():
+        q = [rng.gauss(0, 1) for _ in range(4)]
+        norm = math.sqrt(sum(c * c for c in q))
+        return [narrow(c / norm, kind) for c in q]
+    a = unit()
+    style = rng.randrange(3)
+    if style == 0:
+        b = unit()
+    elif style == 1:
+        b = [narrow(-c * (1 + rng.uniform(-0.2, 0.2)), kind) for c in a]
+    else:
+        b = [narrow(c + rng.uniform(-3e-3, 3e-3), kind) for c in a]
+    return a, b
+
+
 def usda_value(components, shape):
     """USDA text for one value: a number, a tuple, or rows of a matrix."""
     text = [repr(float(c)) for c in components]
@@ -695,13 +765,14 @@ def usda_value(components, shape):
     return "(" + ", ".join(text) + ")"
 
 
-def exact_case(name, description, types, seed, probes=(), scalars=3, elements=6):
+def exact_case(name, description, types, seed, probes=(), scalars=3, elements=6, ulps=0):
     """Registers a bit-exact interpolation case.
 
     `types` lists (USDA type, kind, shape), where shape is the component
-    count or ("matrix", n). Each type gets `scalars` scalar attributes and one
+    count, ("matrix", n), or "quat" for rotations. Each type gets `scalars` scalar attributes and one
     array of `elements`; each probe (type, a, b) adds a scalar and a
-    one-element array.
+    one-element array. `ulps` allows that many units in the last place,
+    where OpenUSD's result depends on the C library's `acos` and `sin`.
     """
     rng = random.Random(seed)
     lines, attrs = [], []
@@ -715,10 +786,12 @@ def exact_case(name, description, types, seed, probes=(), scalars=3, elements=6)
         attrs.append(attr)
 
     for type_name, kind, shape in types:
-        count = shape if isinstance(shape, int) else shape[1] ** 2
+        pair = rotation_pair if shape == "quat" else exact_pair
+        count = {"quat": 4}.get(shape, shape) if not isinstance(shape, tuple) \
+            else shape[1] ** 2
         for k in range(scalars):
-            add(type_name, shape, exact_pair(rng, kind, count), f"s{k}")
-        pairs = [exact_pair(rng, kind, count) for _ in range(elements)]
+            add(type_name, shape, pair(rng, kind, count), f"s{k}")
+        pairs = [pair(rng, kind, count) for _ in range(elements)]
         add(type_name, shape, ([a for a, _ in pairs], [b for _, b in pairs]), "array",
             array=True)
     for k, (type_name, shape, a, b) in enumerate(probes):
@@ -735,6 +808,7 @@ def exact_case(name, description, types, seed, probes=(), scalars=3, elements=6)
                      "rewrites the sample text.",
     )
     CASES[-1]["exact"] = True
+    CASES[-1]["ulps"] = ulps
 
 
 exact_case(
@@ -759,6 +833,30 @@ exact_case(
     [("half", "h", 1), ("half2", "h", 2), ("half3", "h", 3), ("half4", "h", 4)],
     seed=0x5eed_0002,
     probes=[("half2", 2, [-1.3857421875] * 2, [41.375] * 2)],
+)
+
+exact_case(
+    "quaternions_interpolate_bit_exact",
+    "`quath` and `quatf` scalars and arrays slerp bit for bit as `GfSlerp` "
+    "does in their scalar type: random rotations, negated ones that take the "
+    "shorter arc, and nearly equal ones that take the lerp branch.",
+    [("quath", "h", "quat"), ("quatf", "f", "quat")],
+    seed=0x5eed_0003,
+    scalars=4,
+    elements=8,
+)
+
+exact_case(
+    "quatd_interpolates_to_the_last_place",
+    "`quatd` slerps as `GfSlerp` does in double precision. Its result keeps "
+    "the last-place error of `acos` and `sin`, which differs between C "
+    "libraries (layerstack uses `libm` on every target), so it matches to "
+    "four units in the last place.",
+    [("quatd", "d", "quat")],
+    seed=0x5eed_0004,
+    scalars=4,
+    elements=8,
+    ulps=4,
 )
 
 
@@ -923,6 +1021,8 @@ def run_case(tmp, spec):
     }
     if spec.get("exact"):
         out["exact"] = True
+        if spec["ulps"]:
+            out["ulps"] = spec["ulps"]
     if spec["flatten_equivalent"]:
         out["flattened_layer"] = flattened_text(stage)
     else:

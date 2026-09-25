@@ -20,4 +20,5 @@ workspace = true
 [dependencies]
 hashbrown = { workspace = true }
 invalidation = { workspace = true }
+libm = { workspace = true }
 opinionated = { workspace = true }

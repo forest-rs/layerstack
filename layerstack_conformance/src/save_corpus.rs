@@ -17,8 +17,9 @@
 //! claims, other schemas carried as data, explicitly empty lists, a
 //! subroot `defaultPrim`, animation, and composition arcs written by their
 //! authored asset paths (placements of a shared asset, a retimed payload,
-//! inherits and specializes, and arcs whose assets are missing), within the
-//! supported subset of [`layerstack_usda::save`]. [`unsupported_cases`] are
+//! inherits and specializes, and arcs whose assets are missing), and
+//! variant sets with their selections, branch prim specs and nested sets,
+//! within the supported subset of [`layerstack_usda::save`]. [`unsupported_cases`] are
 //! encodings outside that subset, each with the error naming its source
 //! path.
 //!
@@ -35,6 +36,8 @@ use layerstack::doc::{FieldValue, Layer, LayerId, Value};
 use layerstack::interner::TokenInterner;
 use layerstack::listop::ListOp;
 use layerstack::path::{Path, PathInterner, PropertyPath};
+use layerstack::property::PropertyEntry;
+use layerstack::spec_path::{SpecComponent, SpecPath, VariantSelectionSite};
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, InterpolationType, ResolvedAsset,
     ResolvedValue, Stage, StageOptions,
@@ -164,6 +167,27 @@ impl Imported {
         let path = Path::parse_absolute(path, &mut self.tokens).expect("prim path");
         let id = self.paths.intern(path);
         self.layer.prims.get_mut(&id).expect("prim spec")
+    }
+
+    /// The variant `variant` of set `set` on the prim spec at `path`
+    /// outside any variant, for editing.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the prim spec has no such variant.
+    pub fn variant(
+        &mut self,
+        path: &str,
+        set: &str,
+        variant: &str,
+    ) -> &mut layerstack::doc::VariantSpec {
+        let set = self.tokens.intern(set);
+        let variant = self.tokens.intern(variant);
+        self.prim(path)
+            .variant_sets
+            .get_mut(&set)
+            .and_then(|set| set.variants.get_mut(&variant))
+            .expect("variant spec")
     }
 
     /// The authored property spec at `path`, for editing.
@@ -435,6 +459,27 @@ pub fn cases() -> Vec<SaveCase> {
             composition: Some(&[]),
             minimum_openusd: None,
         },
+        SaveCase {
+            name: "variant_sets",
+            covers: "variant sets of two branches with their selections: a branch with a \
+                     reference, metadata, time samples and a child prim, a variant set \
+                     nested in a branch with a selection of its own, a set declared \
+                     without variants, and a selection authored on a prim inside a \
+                     branch of its ancestor, and a branch child prim with a variant \
+                     set of its own; the edit changes an attribute inside a branch",
+            source: VARIANT_SETS,
+            edit: |layer| {
+                let height = layer.tokens.intern("height");
+                let summer = layer.variant("/Forest/Oak", "season", "summer");
+                layerstack::property::get_property_mut(&mut summer.properties, height)
+                    .expect("summer height")
+                    .default = Some(Value::Double(5.0));
+            },
+            expected: VARIANT_SETS_EDITED,
+            weaker: None,
+            composition: Some(&[("./assets/leaves.usda", LEAVES_ASSET)]),
+            minimum_openusd: None,
+        },
     ]
 }
 
@@ -591,18 +636,11 @@ pub fn composed(root: Root<'_>, assets: &[(&str, &str)]) -> String {
         let _ = writeln!(out, "{shown} {specifier:?} {type_name:?}");
         let mut names = BTreeSet::new();
         for (layer_id, spec_path) in stage.prim_stack(prim).unwrap_or_default() {
-            let spec_path = spec_path.display(&store.tokens);
-            let Ok(path) = Path::parse_absolute(&spec_path, &mut store.tokens) else {
-                continue;
-            };
-            let Some(id) = store.paths.lookup(&path) else {
-                continue;
-            };
-            let Some(spec) = store.layers[&layer_id].prims.get(&id) else {
+            let Some(properties) = stack_properties(&store, layer_id, &spec_path) else {
                 continue;
             };
             names.extend(
-                spec.properties
+                properties
                     .iter()
                     .map(|p| store.tokens.resolve(p.name).to_string()),
             );
@@ -632,6 +670,51 @@ pub fn composed(root: Root<'_>, assets: &[(&str, &str)]) -> String {
     }
     let _ = writeln!(out, "errors: {}", stage.composition_errors().len());
     out
+}
+
+/// The properties a prim stack entry authors: those of the prim spec at
+/// `spec_path`, in the variant branches that enclose it (`/A{v=x}B`), or of
+/// the variant it ends with (`/A{v=x}`).
+fn stack_properties<'a>(
+    store: &'a InMemoryStore,
+    layer_id: LayerId,
+    spec_path: &SpecPath,
+) -> Option<&'a [PropertyEntry]> {
+    let mut segments = Vec::new();
+    let mut sites = Vec::new();
+    let mut last = None;
+    for component in spec_path.components() {
+        match *component {
+            SpecComponent::Prim(name) => {
+                sites.extend(last.take());
+                segments.push(name);
+            }
+            SpecComponent::VariantSelection { set, variant } => {
+                sites.extend(last.take());
+                let host_path = store.paths.lookup(&Path::root().join(&segments))?;
+                last = Some(VariantSelectionSite {
+                    host_path,
+                    set,
+                    variant,
+                });
+            }
+        }
+    }
+    let id = store.paths.lookup(&Path::root().join(&segments))?;
+    // Selections on the prim itself name one of its spec's variants.
+    sites.retain(|site| site.host_path != id);
+    let spec = store.layers.get(&layer_id)?.prim_spec_in(id, &sites)?;
+    Some(match last {
+        Some(site) => {
+            &spec
+                .variant_sets
+                .get(&site.set)?
+                .variants
+                .get(&site.variant)?
+                .properties
+        }
+        None => &spec.properties,
+    })
 }
 
 /// A value with its tokens spelled out.
@@ -1404,6 +1487,247 @@ def Xform "Rig"
         5: 2,
     }
     float driven.connect = </Rig.intensity>
+}
+"#;
+
+const LEAVES_ASSET: &str = r#"#usda 1.0
+(
+    defaultPrim = "Leaves"
+)
+
+def Xform "Leaves"
+{
+    token shade = "green"
+
+    def Scope "Blade"
+    {
+    }
+}
+"#;
+
+const VARIANT_SETS: &str = r#"#usda 1.0
+(
+    defaultPrim = "Forest"
+)
+
+def Xform "Forest" (
+    variants = {
+        string density = "dense"
+    }
+    prepend variantSets = "density"
+)
+{
+    def Xform "Oak" (
+        variants = {
+            string season = "summer"
+        }
+        prepend variantSets = ["season", "shape"]
+    )
+    {
+        variantSet "season" = {
+            "summer" (
+                prepend references = @./assets/leaves.usda@
+                variants = {
+                    string size = "tall"
+                }
+                prepend variantSets = "size"
+            ) {
+                double height = 4
+                float sway.timeSamples = {
+                    0: 0,
+                    24: 1,
+                }
+
+                def Mesh "Canopy"
+                {
+                    float3[] extent = [(-1, -1, -1), (1, 1, 1)]
+                }
+
+                variantSet "size" = {
+                    "short" {
+                        double spread = 2
+                    }
+                    "tall" {
+                        double spread = 6
+
+                        def Scope "Crown"
+                        {
+                        }
+                    }
+                }
+            }
+            "winter" (
+                kind = "component"
+            ) {
+                double height = 2
+            }
+        }
+    }
+
+    def Xform "Pine" (
+        prepend variantSets = "season"
+    )
+    {
+        variantSet "season" = {
+            "summer" {
+                double height = 5
+            }
+            "winter" {
+                double height = 6
+
+                def Scope "Snow"
+                {
+                }
+            }
+        }
+    }
+
+    variantSet "density" = {
+        "dense" {
+            over "Pine" (
+                variants = {
+                    string season = "winter"
+                }
+            )
+            {
+            }
+
+            def Scope "Rock" (
+                variants = {
+                    string moss = "covered"
+                }
+                prepend variantSets = "moss"
+            )
+            {
+                int count = 3
+
+                variantSet "moss" = {
+                    "bare" {
+                    }
+                    "covered" {
+                        def Scope "Moss"
+                        {
+                        }
+                    }
+                }
+            }
+        }
+        "sparse" {
+        }
+    }
+}
+"#;
+
+const VARIANT_SETS_EDITED: &str = r#"#usda 1.0
+(
+    defaultPrim = "Forest"
+)
+
+def Xform "Forest" (
+    variants = {
+        string density = "dense"
+    }
+    prepend variantSets = "density"
+)
+{
+    def Xform "Oak" (
+        variants = {
+            string season = "summer"
+        }
+        prepend variantSets = ["season", "shape"]
+    )
+    {
+        variantSet "season" = {
+            "summer" (
+                prepend references = @./assets/leaves.usda@
+                variants = {
+                    string size = "tall"
+                }
+                prepend variantSets = "size"
+            ) {
+                double height = 5
+                float sway.timeSamples = {
+                    0: 0,
+                    24: 1,
+                }
+
+                def Mesh "Canopy"
+                {
+                    float3[] extent = [(-1, -1, -1), (1, 1, 1)]
+                }
+
+                variantSet "size" = {
+                    "short" {
+                        double spread = 2
+                    }
+                    "tall" {
+                        double spread = 6
+
+                        def Scope "Crown"
+                        {
+                        }
+                    }
+                }
+            }
+            "winter" (
+                kind = "component"
+            ) {
+                double height = 2
+            }
+        }
+    }
+
+    def Xform "Pine" (
+        prepend variantSets = "season"
+    )
+    {
+        variantSet "season" = {
+            "summer" {
+                double height = 5
+            }
+            "winter" {
+                double height = 6
+
+                def Scope "Snow"
+                {
+                }
+            }
+        }
+    }
+
+    variantSet "density" = {
+        "dense" {
+            over "Pine" (
+                variants = {
+                    string season = "winter"
+                }
+            )
+            {
+            }
+
+            def Scope "Rock" (
+                variants = {
+                    string moss = "covered"
+                }
+                prepend variantSets = "moss"
+            )
+            {
+                int count = 3
+
+                variantSet "moss" = {
+                    "bare" {
+                    }
+                    "covered" {
+                        def Scope "Moss"
+                        {
+                        }
+                    }
+                }
+            }
+        }
+        "sparse" {
+        }
+    }
 }
 "#;
 

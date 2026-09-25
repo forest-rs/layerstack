@@ -316,7 +316,11 @@ fn unresolved_sublayers_are_reported_by_both_readers() {
                         scale: 1.0
                     }
                 ),
-                SublayerEntry::new(LayerId(2)),
+                SublayerEntry::with_asset(
+                    LayerId(2),
+                    "./unresolved_sublayer_weak.usda",
+                    LayerOffset::IDENTITY
+                ),
             ],
             "{format}"
         );

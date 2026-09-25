@@ -126,9 +126,11 @@ impl EmitCtx<'_> {
                                 .push(SublayerEntry::unresolved(item.asset, offset));
                             continue;
                         };
-                        layer
-                            .sublayers
-                            .push(SublayerEntry::with_offset(resolved.layer_id, offset));
+                        layer.sublayers.push(SublayerEntry::with_asset(
+                            resolved.layer_id,
+                            item.asset,
+                            offset,
+                        ));
                         if let Some(sub_layer) = resolved.layer {
                             self.resolved_layers.push(sub_layer);
                         }
@@ -2089,7 +2091,11 @@ def \"A\" {
 ";
         let (result, _, _) = emit_source(src);
         assert_eq!(result.layer.sublayers.len(), 1);
-        assert_eq!(result.layer.sublayers[0], SublayerEntry::new(LayerId(100)));
+        assert_eq!(
+            result.layer.sublayers[0],
+            SublayerEntry::with_asset(LayerId(100), "./sub.usd", LayerOffset::IDENTITY),
+            "the authored asset path is kept"
+        );
         assert_eq!(result.resolved_layers.len(), 1);
     }
 

@@ -83,7 +83,7 @@ impl LayerStack {
                     if sub.is_unresolved() {
                         errors.push(CompositionError::UnresolvedSublayer(UnresolvedSublayer {
                             layer: id,
-                            asset: sub.unresolved_asset.clone().unwrap_or_default(),
+                            asset: sub.asset.clone().unwrap_or_default(),
                         }));
                         continue;
                     }
@@ -298,7 +298,7 @@ mod tests {
                     offset: 10.0,
                     scale: 1.0,
                 },
-                unresolved_asset: None,
+                asset: None,
             }],
             default_prim: None,
             metadata: Vec::new(),
@@ -313,7 +313,7 @@ mod tests {
                     offset: 20.0,
                     scale: 1.0,
                 },
-                unresolved_asset: None,
+                asset: None,
             }],
             default_prim: None,
             metadata: Vec::new(),
@@ -362,7 +362,7 @@ mod tests {
                     offset: 10.0,
                     scale: 2.0,
                 },
-                unresolved_asset: None,
+                asset: None,
             }],
             default_prim: None,
             metadata: Vec::new(),
@@ -377,7 +377,7 @@ mod tests {
                     offset: 5.0,
                     scale: 3.0,
                 },
-                unresolved_asset: None,
+                asset: None,
             }],
             default_prim: None,
             metadata: Vec::new(),

@@ -3402,13 +3402,50 @@ struct ImpliedClass {
 }
 
 /// One arc a class path is mapped across (see [`map_across`]).
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct Transfer {
     /// The namespace mapping of the site that authors the arc (see
     /// [`outer_namespace`]).
     outer: Option<(PathId, PathId)>,
     arc_dest: PathId,
     arc_target: PathId,
+    /// The relocations the arc maps the path through, and those above the
+    /// site authoring it (see [`TransferRelocates`]).
+    relocates: TransferRelocates,
+}
+
+/// The relocations lifted into the stage namespace that a class path
+/// mapped across an arc passes: `across`, those of the layer stacks above
+/// the arc, which move the path as the arc maps it into the stage
+/// namespace, and `above`, those above the site authoring the arc, which
+/// the path is mapped back through into that site's namespace.
+///
+/// Spec: AOUSD Core §10.3.2.6.1 (relocates are part of an arc's namespace
+/// mapping).
+#[derive(Clone, Default)]
+struct TransferRelocates {
+    across: Vec<Rc<LiftedSet>>,
+    above: Vec<Rc<LiftedSet>>,
+}
+
+impl TransferRelocates {
+    /// The relocations for an arc authored at the site the arcs `parent`
+    /// reach, in a stage whose layer stack relocates `stage`.
+    fn new(stage: &Rc<LiftedSet>, parent: &[ArcStep]) -> Self {
+        let sets = |steps: &[ArcStep]| -> Vec<Rc<LiftedSet>> {
+            core::iter::once(Rc::clone(stage))
+                .chain(steps.iter().filter_map(|step| step.relocates.clone()))
+                .collect()
+        };
+        let outer_at = parent
+            .iter()
+            .rposition(|step| matches!(step.target, StepTarget::Namespace { .. }))
+            .unwrap_or(0);
+        Self {
+            across: sets(parent),
+            above: sets(&parent[..outer_at]),
+        }
+    }
 }
 
 /// Where the class arc `class` (an inherits or specializes arc), authored at
@@ -3426,7 +3463,9 @@ struct Transfer {
 /// the layer stack and namespace; OpenUSD adds an implied class beneath them
 /// that contributes no opinions, so this looks past them. Each implied arc
 /// is implied further by its own expansion, so the class reaches every
-/// stronger layer stack on the way to the root.
+/// stronger layer stack on the way to the root. The class path maps
+/// through the relocations of the layer stacks it crosses
+/// (`stage_relocates` and those of `steps`; see [`map_across`]).
 ///
 /// A specializes node propagated to the root (see [`nest_step`]) stands
 /// in for its placeholder: the classes beneath it are implied from where the
@@ -3440,6 +3479,7 @@ struct Transfer {
 fn implied_classes(
     store: &mut dyn LayerStore,
     stage_layer_stack: LayerId,
+    stage_relocates: &Rc<LiftedSet>,
     steps: &[ArcStep],
     class: &ArcStep,
 ) -> Vec<ImpliedClass> {
@@ -3464,12 +3504,24 @@ fn implied_classes(
     // same layer stack: a class beneath it is implied from its parent, as
     // OpenUSD implies past relocate nodes (`_EvalImpliedClassTree`).
     if step.arc_kind == ArcKind::Relocates {
-        return implied_classes(store, stage_layer_stack, &steps[..len - 1], class);
+        return implied_classes(
+            store,
+            stage_layer_stack,
+            stage_relocates,
+            &steps[..len - 1],
+            class,
+        );
     }
     if let Some(placeholder) = propagated_from(step) {
         let mut steps_at_placeholder = placeholder.to_vec();
         steps_at_placeholder.extend_from_slice(&steps[len..]);
-        return implied_classes(store, stage_layer_stack, &steps_at_placeholder, class);
+        return implied_classes(
+            store,
+            stage_layer_stack,
+            stage_relocates,
+            &steps_at_placeholder,
+            class,
+        );
     }
     let StepTarget::Namespace {
         dest_root: arc_dest,
@@ -3498,7 +3550,8 @@ fn implied_classes(
         });
     if !in_hierarchy {
         let outer = outer_namespace(parent);
-        let mapped = map_across(store, outer, arc_dest, arc_target, path);
+        let relocates = TransferRelocates::new(stage_relocates, parent);
+        let mapped = map_across(store, outer, arc_dest, arc_target, &relocates, path);
         let level = parent
             .iter()
             .rev()
@@ -3507,7 +3560,7 @@ fn implied_classes(
         if mapped == path && layer_stack == step.layer_stack {
             // The same site: OpenUSD adds a node that contributes no
             // opinions and only carries the class further up.
-            implied = implied_classes(store, stage_layer_stack, parent, class);
+            implied = implied_classes(store, stage_layer_stack, stage_relocates, parent, class);
         } else {
             let host = ArcStep {
                 layer_stack,
@@ -3523,18 +3576,20 @@ fn implied_classes(
                     outer,
                     arc_dest,
                     arc_target,
+                    relocates,
                 }],
             });
         }
     }
     if class_based {
-        for hierarchy in implied_classes(store, stage_layer_stack, parent, step) {
+        for hierarchy in implied_classes(store, stage_layer_stack, stage_relocates, parent, step) {
             let mapped = hierarchy.transfers.iter().fold(path, |path, transfer| {
                 map_across(
                     store,
                     transfer.outer,
                     transfer.arc_dest,
                     transfer.arc_target,
+                    &transfer.relocates,
                     path,
                 )
             });
@@ -3632,11 +3687,22 @@ fn outer_namespace(parent: &[ArcStep]) -> Option<(PathId, PathId)> {
 ///
 /// OpenUSD: the arc's `PcpNodeRef::GetMapToParent` with
 /// `PcpMapExpression::AddRootIdentity`, as `_EvalImpliedClasses` applies it.
+///
+/// The arc maps `path` through the relocations of the layer stacks above
+/// it (`stage_relocates` and those `parent` reaches), and the path lands in
+/// the authoring site's namespace from before the relocations beneath that
+/// site (AOUSD Core §10.3.2.6.1).
+///
+/// The arc maps `path` through the relocations of the layer stacks above
+/// it (`relocates.across`), and the path lands in the authoring site's
+/// namespace from before the relocations beneath that site
+/// (`relocates.above`; AOUSD Core §10.3.2.6.1).
 fn map_across(
     store: &mut dyn LayerStore,
     outer: Option<(PathId, PathId)>,
     arc_dest: PathId,
     arc_target: PathId,
+    relocates: &TransferRelocates,
     path: PathId,
 ) -> PathId {
     let paths = store.paths();
@@ -3647,12 +3713,20 @@ fn map_across(
     else {
         return path;
     };
-    let joined = paths.resolve(arc_dest).join(&rel);
-    let stage_path = store.paths_mut().intern(joined);
+    let stage_path = Walk::new(relocates.across.iter().map(|set| &**set), None)
+        .map(store, arc_dest, &rel)
+        .unwrap_or_else(|| {
+            let joined = store.paths().resolve(arc_dest).join(&rel);
+            store.paths_mut().intern(joined)
+        });
     // Arc steps map from the composed prim's namespace; the outer mapping
     // maps into the namespace of the authoring site.
     match outer {
-        Some((dest_root, target_root)) => map_namespace(store, stage_path, dest_root, target_root),
+        Some((dest_root, target_root)) => {
+            let above = Walk::new(relocates.above.iter().map(|set| &**set), None);
+            let (_, view) = above.unwind(store, dest_root, stage_path);
+            map_namespace(store, view, dest_root, target_root)
+        }
         None => stage_path,
     }
 }
@@ -4506,6 +4580,16 @@ fn add_inherit_edge_opinions(
     ) {
         return;
     }
+    if targets_prohibited_child(
+        store,
+        cycles,
+        dest_root,
+        ArcKind::Inherits,
+        arc_stack,
+        inherited_root,
+    ) {
+        return;
+    }
     // One expansion per class site and layer stack, authored or implied.
     let layers_read = local_stack.layers.first().copied().unwrap_or(arc_stack);
     if !visited.insert((dest_root, layers_read, inherited_root, parent.implied)) {
@@ -4527,7 +4611,14 @@ fn add_inherit_edge_opinions(
         skips_duplicates: false,
         relocates: None,
     };
-    let implied = implied_classes(store, cycles.stage_layer_stack(), parent.steps, &step);
+    let stage_relocates = cycles.relocations().stage();
+    let implied = implied_classes(
+        store,
+        cycles.stage_layer_stack(),
+        &stage_relocates,
+        parent.steps,
+        &step,
+    );
     // The class implied into the next stronger layer stacks or namespaces,
     // with this arc's node as its origin; its own expansion implies it
     // further (AOUSD Core §10.4.2.4; `_EvalImpliedClasses`).
@@ -6406,6 +6497,16 @@ fn add_specializes_edge_opinions(
     ) {
         return;
     }
+    if targets_prohibited_child(
+        store,
+        cycles,
+        dest_root,
+        ArcKind::Specializes,
+        arc_stack,
+        specialized_root,
+    ) {
+        return;
+    }
     if !visited.insert((dest_root, arc_stack, specialized_root, parent.implied)) {
         return;
     }
@@ -6431,7 +6532,14 @@ fn add_specializes_edge_opinions(
     // namespaces, with the node this arc is authored as (its placeholder,
     // beneath the root) as their origin; each is implied further by its own
     // expansion (AOUSD Core §10.4.2.4; `_EvalImpliedClasses`).
-    let implied = implied_classes(store, cycles.stage_layer_stack(), parent.steps, &step);
+    let stage_relocates = cycles.relocations().stage();
+    let implied = implied_classes(
+        store,
+        cycles.stage_layer_stack(),
+        &stage_relocates,
+        parent.steps,
+        &step,
+    );
     let origin: Rc<[ArcStep]> = {
         let mut path = parent.steps.to_vec();
         path.push(ArcStep {

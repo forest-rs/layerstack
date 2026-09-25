@@ -166,7 +166,15 @@
     ],
     [
      "root.usda",
+     "/Zeta/_class_Rock"
+    ],
+    [
+     "root.usda",
      "/Quarry/Stone"
+    ],
+    [
+     "root.usda",
+     "/Quarry/_class_Rock"
     ]
    ]
   },
@@ -197,7 +205,15 @@
    "prim_stack": [
     [
      "root.usda",
+     "/Zeta/_class_Rock"
+    ],
+    [
+     "root.usda",
      "/Quarry/Stone"
+    ],
+    [
+     "root.usda",
+     "/Quarry/_class_Rock"
     ]
    ]
   },
@@ -207,6 +223,19 @@
     [
      "root.usda",
      "/Quarry/Stone/Chip"
+    ]
+   ]
+  },
+  {
+   "path": "/Zeta/_class_Rock",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Zeta/_class_Rock"
+    ],
+    [
+     "root.usda",
+     "/Quarry/_class_Rock"
     ]
    ]
   },
@@ -225,6 +254,10 @@
     [
      "root.usda",
      "/Quarry/Stone"
+    ],
+    [
+     "root.usda",
+     "/Quarry/_class_Rock"
     ]
    ]
   },
@@ -234,6 +267,15 @@
     [
      "root.usda",
      "/Quarry/Stone/Chip"
+    ]
+   ]
+  },
+  {
+   "path": "/Quarry/_class_Rock",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Quarry/_class_Rock"
     ]
    ]
   }
@@ -250,12 +292,22 @@
   "/Outcrop.moss": 0,
   "/_class_Cliff/Ledge.moss": 0,
   "/Crater.depth": 4,
+  "/Alpha.grain": 0,
+  "/Alpha.hardness": 5,
   "/Alpha.weight": 5,
   "/Alpha/Chip.size": 5,
+  "/Zeta/Stone.grain": 0,
+  "/Zeta/Stone.hardness": 5,
   "/Zeta/Stone.weight": 5,
   "/Zeta/Stone/Chip.size": 5,
+  "/Zeta/_class_Rock.grain": 0,
+  "/Zeta/_class_Rock.hardness": 5,
+  "/Quarry/Stone.grain": 5,
+  "/Quarry/Stone.hardness": 5,
   "/Quarry/Stone.weight": 5,
-  "/Quarry/Stone/Chip.size": 5
+  "/Quarry/Stone/Chip.size": 5,
+  "/Quarry/_class_Rock.grain": 5,
+  "/Quarry/_class_Rock.hardness": 5
  },
  "samples": {
   "/Clock.angle": [

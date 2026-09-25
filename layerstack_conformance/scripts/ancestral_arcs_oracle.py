@@ -108,6 +108,9 @@ def "Stopwatch" (
 
 # An internal reference to `/Zeta/Stone`, which only `/Zeta`'s reference to
 # `/Quarry` provides, and which comes after `/Alpha` in namespace order.
+# `/Quarry/Stone` inherits `/Quarry/_class_Rock`, outside the subroot
+# target: the class maps across `/Zeta`'s reference as authored, to
+# `/Zeta/_class_Rock`, whose opinion wins.
 def "Alpha" (
     references = </Zeta/Stone>
 )
@@ -118,11 +121,17 @@ def "Zeta" (
     references = </Quarry>
 )
 {
+    over "_class_Rock"
+    {
+        int grain = 0
+    }
 }
 
 def "Quarry"
 {
-    def "Stone"
+    def "Stone" (
+        inherits = </Quarry/_class_Rock>
+    )
     {
         int weight = 5
 
@@ -130,6 +139,12 @@ def "Quarry"
         {
             int size = 5
         }
+    }
+
+    class "_class_Rock"
+    {
+        int grain = 5
+        int hardness = 5
     }
 }
 ''',

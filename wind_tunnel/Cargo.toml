@@ -34,3 +34,7 @@ harness = false
 [[bench]]
 name = "variants"
 harness = false
+
+[[bench]]
+name = "resolve"
+harness = false

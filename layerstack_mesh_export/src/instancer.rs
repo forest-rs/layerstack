@@ -379,11 +379,17 @@ const UNSUPPORTED: [&str; 4] = [
 /// names ([`PointInstancer::names`]).
 pub const INSTANCE_NAMES: &str = "instancer:names";
 
+/// The custom `int64` attribute that holds an instance's id when a
+/// [`PointInstancer`] is written as instanced references
+/// ([`Instancing::References`](crate::Instancing::References)).
+pub const INSTANCE_ID: &str = "instancer:id";
+
 /// Schema properties the exporter authors itself, or that would override
 /// what it authors (`orientationsf` takes precedence over `orientations`
 /// when authored), and the exporter's own per-instance attributes.
-const RESERVED: [&str; 10] = [
+const RESERVED: [&str; 11] = [
     INSTANCE_NAMES,
+    INSTANCE_ID,
     "prototypes",
     "protoIndices",
     "ids",
@@ -604,12 +610,12 @@ fn orientation((instance, q): (usize, &[f32; 4])) -> Result<(), InstancerProblem
 // ── Bounds ──────────────────────────────────────────────────────────────
 
 /// A row-vector affine matrix (`p' = p · M`), as USD composes transforms.
-type Matrix = [[f64; 4]; 4];
+pub(crate) type Matrix = [[f64; 4]; 4];
 
 /// An axis-aligned box `[min, max]`.
 pub(crate) type Aabb = [[f64; 3]; 2];
 
-fn mul(a: &Matrix, b: &Matrix) -> Matrix {
+pub(crate) fn mul(a: &Matrix, b: &Matrix) -> Matrix {
     core::array::from_fn(|i| core::array::from_fn(|j| (0..4).map(|k| a[i][k] * b[k][j]).sum()))
 }
 
@@ -623,20 +629,111 @@ pub(crate) fn find<'s, 'a>(shared: &'s [Node<'a>], name: &str) -> Option<&'s Nod
 }
 
 /// The transform `node` applies to its content: its own, and for an
-/// [`Instance`], the shared prototype root's followed by the instance's.
+/// [`Instance`], [`instance_transform`].
 pub(crate) fn local_transform(node: &Node<'_>, shared: &[Node<'_>]) -> Option<Transform> {
     match node {
         Node::Instance(instance) => {
-            let root = find(shared, &instance.prototype).and_then(Node::transform);
-            match (root, instance.transform) {
-                (Some(root), Some(own)) => Some(Transform::from_usd_rows(mul(
-                    &root.usd_rows(),
-                    &own.usd_rows(),
-                ))),
-                (root, own) => own.or(root),
-            }
+            instance_transform(&instance.prototype, instance.transform, shared)
         }
         _ => node.transform(),
+    }
+}
+
+/// The transform of an instance of the shared prototype `prototype` whose
+/// own transform is `own`: the prototype root's effective transform
+/// ([`root_transform`]) followed by `own`, or that transform alone without
+/// one. The instance's `xformOp:transform` replaces the op its reference
+/// brings, so it must carry both.
+pub(crate) fn instance_transform(
+    prototype: &str,
+    own: Option<Transform>,
+    shared: &[Node<'_>],
+) -> Option<Transform> {
+    let root = root_transform(prototype, shared);
+    match own {
+        Some(own) => Some(then(root, own)),
+        None => root,
+    }
+}
+
+/// The transform the root prim of the shared prototype `name` composes
+/// to. When that root is itself an [`Instance`], its prim's transform is
+/// the one [`instance_transform`] gives it, so the chain of shared
+/// prototypes is followed to its end: `A` placing `B` at `T_A`, and `B`
+/// placing mesh `M` at `T_B`, has the root transform `M · T_B · T_A`
+/// (row vectors), or `M · T_B` when `A` has no transform of its own.
+///
+/// The chain is acyclic (`check_prototype_cycles` runs first); a cycle or
+/// an unknown name ends it.
+pub(crate) fn root_transform(name: &str, shared: &[Node<'_>]) -> Option<Transform> {
+    // The instances' own transforms, outermost first.
+    let mut owns = Vec::new();
+    let mut name = name;
+    let mut root = None;
+    for _ in 0..=shared.len() {
+        match find(shared, name) {
+            Some(Node::Instance(instance)) => {
+                owns.push(instance.transform);
+                name = &instance.prototype;
+            }
+            Some(node) => {
+                root = node.transform();
+                break;
+            }
+            None => break,
+        }
+    }
+    owns.iter()
+        .rev()
+        .flatten()
+        .fold(root, |inner, &own| Some(then(inner, own)))
+}
+
+/// Whether a prim that references `node` would compose an indexed
+/// `primvars:<name>`, i.e. an authored `primvars:<name>:indices`, from it.
+/// An [`Instance`] root passes on its own primvar when it has one (an
+/// unindexed one there blocks the indices, see `block_inherited_indices`
+/// in the builder), and otherwise what its prototype passes on.
+pub(crate) fn passes_indices(node: &Node<'_>, name: &str, shared: &[Node<'_>]) -> bool {
+    let indexed = |primvars: &[CustomPrimvar<'_>]| {
+        primvars
+            .iter()
+            .find(|p| p.name == name)
+            .map(|p| p.primvar.indices.is_some())
+    };
+    let mut node = node;
+    for _ in 0..=shared.len() {
+        match node {
+            Node::Mesh(mesh) => {
+                return indexed(&mesh.primvars).unwrap_or(false)
+                    || (name == "normals"
+                        && mesh.normals.as_ref().is_some_and(|n| n.indices.is_some()))
+                    || (name == "st" && mesh.uvs.as_ref().is_some_and(|u| u.indices.is_some()));
+            }
+            Node::PointInstancer(instancer) => {
+                return indexed(&instancer.primvars).unwrap_or(false);
+            }
+            Node::Xform(_) => return false,
+            Node::Instance(instance) => {
+                if let Some(indexed) = indexed(&instance.primvars) {
+                    return indexed;
+                }
+                match find(shared, &instance.prototype) {
+                    Some(prototype) => node = prototype,
+                    None => return false,
+                }
+            }
+        }
+    }
+    false
+}
+
+/// `first` followed by `second` (row vectors: `first · second`), where
+/// `first` may be absent.
+pub(crate) fn then(first: Option<Transform>, second: Transform) -> Transform {
+    match first {
+        None => second,
+        Some(first) => Transform::from_usd_rows(mul(&first.usd_rows(), &second.usd_rows())),
     }
 }
 

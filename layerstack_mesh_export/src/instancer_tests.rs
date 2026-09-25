@@ -723,3 +723,227 @@ fn instances_need_a_defined_acyclic_prototype() {
         })
     ));
 }
+
+#[test]
+fn references_replace_point_instancers() {
+    let indices = [0, 1, 0];
+    let positions = [[0.0, 0.0, 0.0], [10.0, 0.0, 0.0], [0.0, 5.0, 1.0]];
+    let orientations = [[0.0, 0.0, 0.0, 1.0], QUARTER_TURN_Z, [0.0, 0.0, 0.0, 1.0]];
+    let scales = [[1.0; 3], [1.0; 3], [2.0, 2.0, 1.0]];
+    let tints = [[1.0, 0.0, 0.0], [0.0, 0.0, 1.0]];
+    let instancer = PointInstancer::new("Field", &indices, &positions)
+        .with_prototype(tri().with_material("Bark"))
+        .with_prototype(
+            Xform::new("Pair")
+                .with_transform(Transform::from_translation([0.0, 0.0, 2.0]))
+                .with_mesh(Mesh::new("Quad", &QUAD_POINTS, QUAD)),
+        )
+        .with_orientations(&orientations)
+        .with_scales(&scales)
+        .with_ids(&[7, 3, -1])
+        .with_primvar(
+            "displayColor",
+            Primvar::per_instance(PrimvarData::color3(&tints)).with_indices(&[1, 0, 1]),
+        )
+        .with_primvar("site:zone", Primvar::constant(PrimvarData::int(&[4])))
+        .with_transform(Transform::from_translation([100.0, 0.0, 0.0]))
+        .with_attribute("site:set", Value::String("stones".into()));
+    let scene = scene(instancer.clone()).with_instancing(crate::Instancing::References);
+    let text = scene.to_usda().unwrap();
+    assert!(!text.contains("PointInstancer"), "{text}");
+    let expected = r#"
+    def Xform "Field"
+    {
+        int[] primvars:site:zone = [4] (
+            interpolation = "constant"
+        )
+        matrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (100, 0, 0, 1) )
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+        custom string site:set = "stones"
+
+        class "Prototypes"
+        {
+            def Mesh "Tri" ("#;
+    assert!(text.contains(expected), "{text}");
+    // The second instance: a quarter turn at (10, 0, 0), after the pair's
+    // own lift to z = 2.
+    for part in [
+        "def \"Tri_0\" (\n            instanceable = true\n            prepend references = </Root/Field/Prototypes/Tri>",
+        "def \"Pair_1\" (\n            instanceable = true\n            prepend references = </Root/Field/Prototypes/Pair>",
+        "def \"Tri_2\" (",
+        "color3f[] primvars:displayColor = [(1, 0, 0)] (\n                interpolation = \"constant\"",
+        "custom int64 instancer:id = 3",
+        "(10, 0, 2, 1) )",
+    ] {
+        assert!(text.contains(part), "{part}\n{text}");
+    }
+    assert_eq!(text.matches("instanceable = true").count(), 3, "{text}");
+
+    // Given names become the instance prims' names.
+    let named = scene_with(
+        instancer.with_names(["first", "second", "third"]),
+        crate::Instancing::References,
+    );
+    for name in ["first", "second", "third"] {
+        assert!(
+            named.contains(&alloc::format!("def \"{name}\" (")),
+            "{named}"
+        );
+    }
+    assert!(!named.contains("instancer:names"), "{named}");
+}
+
+fn scene_with(
+    instancer: PointInstancer<'_>,
+    instancing: crate::Instancing,
+) -> alloc::string::String {
+    scene(instancer)
+        .with_instancing(instancing)
+        .to_usda()
+        .unwrap()
+}
+
+#[test]
+fn referenced_instances_follow_shared_prototypes() {
+    let text = shared_scene()
+        .with_instancing(crate::Instancing::References)
+        .to_usda()
+        .unwrap();
+    assert!(!text.contains("PointInstancer"), "{text}");
+    assert_eq!(text.matches("def Mesh").count(), 1, "{text}");
+    // Instancer `A` places the shared triangle twice, straight from the
+    // shared scope, with the prototype root's lift folded in; it needs no
+    // prototypes of its own.
+    let a = &text[text.find("def Xform \"A\"").unwrap()..text.find("def Xform \"B\"").unwrap()];
+    assert!(!a.contains("class"), "{a}");
+    assert_eq!(
+        a.matches("prepend references = </Root/Prototypes/Tri>")
+            .count(),
+        2
+    );
+    assert!(a.contains("(10, 0, 1, 1) )"), "{a}");
+}
+
+#[test]
+fn arkit_packages_always_use_references() {
+    let indices = [0, 0];
+    let positions = [[0.0; 3], [3.0, 0.0, 0.0]];
+    let instancer = PointInstancer::new("Field", &indices, &positions).with_prototype(tri());
+    let scene = scene(instancer);
+    assert_eq!(scene.instancing, crate::Instancing::PointInstancers);
+    let layer = crate::build::document(&scene, crate::build::Target::ARKIT).unwrap();
+    let text = layer.to_usda().unwrap();
+    assert!(!text.contains("PointInstancer"), "{text}");
+    assert!(text.contains("prepend references"), "{text}");
+    assert!(
+        !text.contains("instanceable"),
+        "ModelIO would draw each instancing prototype once more: {text}"
+    );
+    let arkit = scene.to_usdz(UsdzProfile::Arkit, &[]).unwrap();
+    let expected = layerstack_usdc::writer::write_document(&layer).unwrap();
+    assert!(
+        arkit.windows(expected.len()).any(|w| w == expected),
+        "the package's layer is the referenced form"
+    );
+    let generic = scene.to_usdz(UsdzProfile::Generic, &[]).unwrap();
+    assert!(
+        generic
+            .windows(b"def PointInstancer".len())
+            .any(|w| w == b"def PointInstancer"),
+        "the generic profile keeps the instancer"
+    );
+}
+
+/// `Tri` at +10 X, `Alias` placing it at +20, `Bare` placing `Alias`
+/// without a transform: instances of `Bare` and `Alias` compose the whole
+/// chain.
+fn chained_scene(instancing: crate::Instancing) -> alloc::string::String {
+    let field = PointInstancer::new("Field", vec![0], vec![[30.0, 0.0, 0.0]])
+        .with_prototype(crate::Instance::new("P", "Bare"));
+    Scene::new(
+        StageSettings::new(UpAxis::Z, 1.0),
+        Xform::new("Root")
+            .with_instance(
+                crate::Instance::new("Direct", "Bare")
+                    .with_transform(Transform::from_translation([30.0, 0.0, 0.0])),
+            )
+            .with_instance(crate::Instance::new("Plain", "Bare"))
+            .with_point_instancer(field),
+    )
+    .with_prototype(tri().with_transform(Transform::from_translation([10.0, 0.0, 0.0])))
+    .with_prototype(
+        crate::Instance::new("Alias", "Tri")
+            .with_transform(Transform::from_translation([20.0, 0.0, 0.0])),
+    )
+    .with_prototype(crate::Instance::new("Bare", "Alias"))
+    .with_instancing(instancing)
+    .to_usda()
+    .unwrap()
+}
+
+#[test]
+fn shared_prototype_chains_compose_every_hop() {
+    let native = chained_scene(crate::Instancing::PointInstancers);
+    let direct = &native[native.find("def \"Direct\"").unwrap()..];
+    assert!(
+        direct.contains("(60, 0, 0, 1) )"),
+        "Tri (+10), Alias (+20) and Direct (+30): {direct}"
+    );
+    let plain =
+        &native[native.find("def \"Plain\"").unwrap()..native.find("def PointInstancer").unwrap()];
+    assert!(
+        !plain.contains("xformOp"),
+        "Plain inherits the chain: {plain}"
+    );
+    assert!(
+        native.contains("float3[] extent = [(60, 0, 0), (61, 1, 0)]"),
+        "the instancer bounds the chained prototype: {native}"
+    );
+    let references = chained_scene(crate::Instancing::References);
+    let field = &references[references.find("def Xform \"Field\"").unwrap()..];
+    assert!(field.contains("(60, 0, 0, 1) )"), "{field}");
+}
+
+#[test]
+fn unindexed_overrides_block_inherited_indices() {
+    let tinted = || {
+        tri().with_primvar(
+            "tint",
+            Primvar::constant(PrimvarData::float(vec![1.0, 2.0, 3.0])).with_indices(vec![2]),
+        )
+    };
+    let unindexed = |v: f32| Primvar::constant(PrimvarData::float(vec![v]));
+    let field = PointInstancer::new("Field", vec![0], vec![[0.0; 3]])
+        .with_prototype(tinted())
+        .with_primvar("tint", Primvar::per_instance(PrimvarData::float(vec![9.0])))
+        .with_primvar(
+            "plain",
+            Primvar::per_instance(PrimvarData::float(vec![4.0])),
+        );
+    let text = Scene::new(
+        StageSettings::new(UpAxis::Z, 1.0),
+        Xform::new("Root")
+            .with_instance(crate::Instance::new("Over", "Tri").with_primvar("tint", unindexed(9.0)))
+            .with_instance(crate::Instance::new("Kept", "Tri").with_primvar(
+                "tint",
+                Primvar::constant(PrimvarData::float(vec![7.0, 8.0])).with_indices(vec![1]),
+            ))
+            .with_point_instancer(field),
+    )
+    .with_prototype(tinted())
+    .with_instancing(crate::Instancing::References)
+    .to_usda()
+    .unwrap();
+    let block = "int[] primvars:tint:indices = None";
+    let over = &text[text.find("def \"Over\"").unwrap()..text.find("def \"Kept\"").unwrap()];
+    assert!(over.contains(block), "{over}");
+    let kept = &text[text.find("def \"Kept\"").unwrap()..text.find("def Xform \"Field\"").unwrap()];
+    assert!(kept.contains("int[] primvars:tint:indices = [1]"), "{kept}");
+    assert!(!kept.contains(block), "caller indices stay: {kept}");
+    let placed = &text[text.find("def \"Tri_0\"").unwrap()..];
+    assert!(placed.contains(block), "{placed}");
+    assert!(
+        !placed.contains("primvars:plain:indices"),
+        "nothing to block for a primvar the prototype lacks: {placed}"
+    );
+}

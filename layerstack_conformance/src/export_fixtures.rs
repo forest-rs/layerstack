@@ -1014,14 +1014,6 @@ pub fn minimum_openusd(name: &str) -> Option<(OpenUsdRelease, &'static str)> {
             (25, 11),
             "`arraySizeConstraint` is registered from OpenUSD 25.11",
         )),
-        // `usdchecker` runs the validation framework by default from 25.11;
-        // before, `--arkit` ran `UsdUtils.ComplianceChecker`, whose
-        // `ARKitPrimTypeChecker` allows a fixed list of prim types without
-        // `PointInstancer`.
-        "point_instancer_arkit" => Some((
-            (25, 11),
-            "`usdchecker --arkit` accepts `PointInstancer` prims from OpenUSD 25.11",
-        )),
         _ => None,
     }
 }

@@ -102,20 +102,33 @@
 //! A [`PointInstancer`] places a few prototypes many times: each prototype
 //! is an ordinary [`Mesh`] or [`Xform`] subtree, keeping its materials and
 //! face subsets, and each instance picks one by index and gives its own
-//! position, and optionally an orientation, a scale and a stable id. The
-//! prototypes are written under a `Prototypes` scope below the
-//! `PointInstancer` prim, in the order of its `prototypes` relationship;
-//! the per-instance arrays become `protoIndices`, `positions`,
-//! `orientationsf` (`quatf[]`; the half-precision `orientations` is
-//! written instead or as well on request, see [`OrientationPrecision`]),
-//! `scales` and `ids`, and the instancer's
-//! `extent` is computed from the prototypes' points and the instance
-//! transforms. Both layer formats, and therefore both USDZ profiles, carry
-//! it.
+//! position, and optionally an orientation, a scale, a stable id, a name
+//! and primvars (e.g. a per-instance `displayColor`).
+//! [`PointInstancer::push_affine`] appends an instance from an affine
+//! matrix, splitting it into scale (negative for a mirror), rotation and
+//! translation, and rejects shear ([`NotRigid`]).
+//!
+//! By default ([`Instancing::PointInstancers`]) it is written as a
+//! `PointInstancer` prim with its prototypes under a `Prototypes` scope,
+//! in the order of its `prototypes` relationship; the per-instance arrays
+//! become `protoIndices`, `positions`, `orientationsf` (`quatf[]`; the
+//! half-precision `orientations` is written instead or as well on request,
+//! see [`OrientationPrecision`]), `scales`, `ids` and `primvars:*`, and the
+//! instancer's `extent` is computed from the prototypes' points and the
+//! instance transforms.
+//!
+//! [`UsdzProfile::Arkit`] packages write it as references instead
+//! ([`Instancing::References`]): Apple's USD stack (AR Quick Look,
+//! `RealityKit`, `SceneKit`) does not implement `UsdGeomPointInstancer`
+//! and draws only the prototypes, once each, although `usdchecker --arkit`
+//! accepts the file. Each instance becomes a typeless prim with an
+//! internal reference to its prototype, which sits in a `class` prim, and
+//! one `xformOp:transform`; the same scene then draws the same meshes in
+//! both profiles.
 //!
 //! The arrays are checked before anything is written (indices in range,
-//! one element per instance, finite values, unit orientations, unique
-//! ids). Instancers are static: there are no time samples, no motion
+//! one element per instance, finite values, unit orientations, unique ids
+//! and names). Instancers are static: there are no time samples, no motion
 //! (`velocities`, `accelerations`, `angularVelocities`) and no masking
 //! (`invisibleIds`, `inactiveIds`).
 //!
@@ -247,7 +260,9 @@ mod transform;
 
 pub use error::{ExportError, InstancerProblem, MaterialProblem, MeshProblem};
 pub use instance::Instance;
-pub use instancer::{INSTANCE_NAMES, OrientationPrecision, PROTOTYPES_SCOPE, PointInstancer};
+pub use instancer::{
+    INSTANCE_ID, INSTANCE_NAMES, OrientationPrecision, PROTOTYPES_SCOPE, PointInstancer,
+};
 pub use layerstack_usda::writer::Value;
 pub use layerstack_usdz::PackageFile;
 pub use material::{Channel, ColorInput, FloatInput, MATERIALS_SCOPE, Material, Texture, Wrap};
@@ -256,7 +271,7 @@ pub use mesh::{
     Orientation, Primvar, PrimvarData,
 };
 pub use names::{SiblingNames, sanitize_name};
-pub use scene::{Node, Scene, StageSettings, UpAxis, UsdzProfile, Xform};
+pub use scene::{Instancing, Node, Scene, StageSettings, UpAxis, UsdzProfile, Xform};
 pub use transform::{NotRigid, SHEAR_TOLERANCE, Transform};
 
 #[cfg(test)]

@@ -80,6 +80,13 @@ pub enum UsdcError {
         /// The version the file declares.
         found: CrateVersion,
     },
+    /// Decoding would produce more than the read's
+    /// [`DecodeBudget`](crate::value_rep::DecodeBudget) allows, as a file that
+    /// references the same values many times can.
+    DecodeBudgetExceeded {
+        /// The budget's limit, in units.
+        limit: u64,
+    },
     /// A readable version's encoding that Layerstack cannot represent, such
     /// as a spline `loopBoundaryTime`. Reported instead of dropping data.
     UnsupportedFeature {
@@ -135,6 +142,12 @@ impl fmt::Display for UsdcError {
                 f,
                 "{feature} requires USDC version {required}, but the file declares {found}"
             ),
+            Self::DecodeBudgetExceeded { limit } => {
+                write!(
+                    f,
+                    "decoded values exceed the read's budget of {limit} units"
+                )
+            }
             Self::UnsupportedFeature { feature } => {
                 write!(f, "unsupported USDC feature: {feature}")
             }

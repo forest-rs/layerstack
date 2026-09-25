@@ -37,7 +37,8 @@ use layerstack::{AssetResolver, PropertyType, ReferenceTarget, ResolvedAsset};
 use crate::error::UsdcError;
 use crate::section::CrateSections;
 use crate::value_rep::{
-    CrateArrayEdit, CrateArrayEditOp, CrateListOp, CrateValue, RawValueRep, decode_value,
+    CrateArrayEdit, CrateArrayEditOp, CrateListOp, CrateValue, DecodeBudget, RawValueRep,
+    decode_value_within,
 };
 use crate::value_type::{SpecForm, ValueType};
 
@@ -72,6 +73,10 @@ pub struct AssembleDiagnostic {
 ///
 /// `data` is the full file byte slice (needed for offset-based value reads).
 /// `sections` holds the decoded token/string/path/field/spec tables.
+/// Everything assembly materializes is charged to `budget` (see
+/// [`DecodeBudget`]): every value decoded, including each repeat of a value
+/// that several fields share, and every use of a field name or spec path,
+/// which many specs may share.
 ///
 /// Spec: AOUSD Core §16.3.
 pub fn assemble(
@@ -81,6 +86,7 @@ pub fn assemble(
     tokens: &mut TokenInterner,
     paths: &mut PathInterner,
     resolver: &mut dyn AssetResolver,
+    budget: &mut DecodeBudget,
 ) -> Result<AssembleResult, UsdcError> {
     let mut ctx = AssembleCtx {
         data,
@@ -91,6 +97,7 @@ pub fn assemble(
         layer_id,
         resolved_layers: Vec::new(),
         diagnostics: Vec::new(),
+        budget,
     };
 
     let layer = ctx.assemble_layer()?;
@@ -115,16 +122,34 @@ struct AssembleCtx<'a> {
     layer_id: LayerId,
     resolved_layers: Vec<Layer>,
     diagnostics: Vec<AssembleDiagnostic>,
+    /// What the read may still materialize.
+    budget: &'a mut DecodeBudget,
 }
 
-impl AssembleCtx<'_> {
+/// A spec's fields: names borrowed from the token table, and their values.
+type Fields<'a> = Vec<(&'a str, CrateValue)>;
+
+impl<'a> AssembleCtx<'a> {
     /// Records content that could not be represented.
-    fn report(&mut self, spec_path: &str, field: Option<&str>, message: impl Into<String>) {
+    ///
+    /// A diagnostic copies the spec path, and a spec may report once per
+    /// field, so each diagnostic is charged for its text.
+    fn report(
+        &mut self,
+        spec_path: &str,
+        field: Option<&str>,
+        message: impl Into<String>,
+    ) -> Result<(), UsdcError> {
+        let message = message.into();
+        self.budget.charge(1)?;
+        self.budget
+            .charge_text(spec_path.len() + field.map_or(0, str::len) + message.len())?;
         self.diagnostics.push(AssembleDiagnostic {
             spec_path: String::from(spec_path),
             field: field.map(String::from),
-            message: message.into(),
+            message,
         });
+        Ok(())
     }
 
     /// Assembles all specs into a [`Layer`].
@@ -139,8 +164,8 @@ impl AssembleCtx<'_> {
         // 4. VariantSet/Variant specs (handle variant structures)
 
         // First pass: collect all spec fields by spec index.
-        let spec_fields: Vec<Vec<(String, CrateValue)>> = self
-            .sections
+        let sections = self.sections;
+        let spec_fields: Vec<Fields<'a>> = sections
             .specs
             .iter()
             .map(|spec| self.collect_fields(spec.fieldset_index))
@@ -164,15 +189,15 @@ impl AssembleCtx<'_> {
                 let path_str = self.lookup_path(spec.path_index)?;
                 // Prims inside variant branches (`/A{v=x}B`) keep their
                 // variant-qualified key until they are placed in the layer.
-                if path_str.contains('{') && split_branch_path(&path_str).is_none() {
-                    self.report(&path_str, None, "prim spec path could not be parsed");
+                if path_str.contains('{') && split_branch_path(path_str).is_none() {
+                    self.report(path_str, None, "prim spec path could not be parsed")?;
                     continue;
                 }
-                let (prim, children) = self.build_prim_spec(&path_str, &spec_fields[i])?;
+                let (prim, children) = self.build_prim_spec(path_str, &spec_fields[i])?;
                 if let Some(children) = children {
-                    property_children.insert(path_str.clone(), children);
+                    property_children.insert(String::from(path_str), children);
                 }
-                prim_specs_map.insert(path_str, prim);
+                prim_specs_map.insert(String::from(path_str), prim);
             }
         }
 
@@ -194,14 +219,14 @@ impl AssembleCtx<'_> {
                     Some((prim, _)) if prim.ends_with('}') => continue,
                     Some((prim, name)) => (String::from(prim), String::from(name)),
                     None => {
-                        self.report(&path_str, None, "property spec path could not be parsed");
+                        self.report(path_str, None, "property spec path could not be parsed")?;
                         continue;
                     }
                 }
             } else {
-                let Ok(property_path) = PropertyPath::parse(&path_str, self.tokens, self.paths)
+                let Ok(property_path) = PropertyPath::parse(path_str, self.tokens, self.paths)
                 else {
-                    self.report(&path_str, None, "property spec path could not be parsed");
+                    self.report(path_str, None, "property spec path could not be parsed")?;
                     continue;
                 };
                 (
@@ -210,13 +235,13 @@ impl AssembleCtx<'_> {
                 )
             };
             let Some(mut prim) = prim_specs_map.remove(&prim_path) else {
-                self.report(&path_str, None, "property spec has no owning prim spec");
+                self.report(path_str, None, "property spec has no owning prim spec")?;
                 continue;
             };
             if is_attribute {
-                self.apply_attribute_fields(&path_str, &spec_fields[i], &name, &mut prim)?;
+                self.apply_attribute_fields(path_str, &spec_fields[i], &name, &mut prim)?;
             } else {
-                self.apply_relationship_fields(&path_str, &spec_fields[i], &name, &mut prim)?;
+                self.apply_relationship_fields(path_str, &spec_fields[i], &name, &mut prim)?;
             }
             prim_specs_map.insert(prim_path, prim);
         }
@@ -225,7 +250,7 @@ impl AssembleCtx<'_> {
         for (i, spec) in self.sections.specs.iter().enumerate() {
             if spec.form == SpecForm::Connection {
                 let path_str = self.lookup_path(spec.path_index)?;
-                if let Ok(property_path) = PropertyPath::parse(&path_str, self.tokens, self.paths) {
+                if let Ok(property_path) = PropertyPath::parse(path_str, self.tokens, self.paths) {
                     let prim_path = self.paths.display(property_path.prim_path(), self.tokens);
                     let attr_name = String::from(self.tokens.resolve(property_path.property()));
                     if let Some(prim) = prim_specs_map.get_mut(&prim_path) {
@@ -253,10 +278,10 @@ impl AssembleCtx<'_> {
             if !handled && !spec_fields[i].is_empty() {
                 let path_str = self.lookup_path(spec.path_index)?;
                 self.report(
-                    &path_str,
+                    path_str,
                     None,
                     alloc::format!("unsupported: {:?} spec fields are not read", spec.form),
-                );
+                )?;
             }
         }
 
@@ -282,17 +307,23 @@ impl AssembleCtx<'_> {
         for (path_str, mut prim) in prim_specs {
             let namespace = match split_branch_path(&path_str) {
                 Some((namespace, sites)) => {
-                    prim.outer_variant_sites = sites
-                        .into_iter()
-                        .filter_map(|(host, set, variant)| {
-                            let host = Path::parse_absolute(&host, self.tokens).ok()?;
-                            Some(VariantSelectionSite {
-                                host_path: self.paths.intern(host),
-                                set: self.tokens.intern(&set),
-                                variant: self.tokens.intern(&variant),
-                            })
-                        })
-                        .collect();
+                    // Each selection's host path is parsed and interned, so
+                    // a path with many selections is charged for each.
+                    let mut outer_sites = Vec::with_capacity(sites.len());
+                    for (host_len, set, variant) in sites {
+                        self.budget.charge(1)?;
+                        self.budget.charge_text(host_len)?;
+                        let Ok(host) = Path::parse_absolute(&namespace[..host_len], self.tokens)
+                        else {
+                            continue;
+                        };
+                        outer_sites.push(VariantSelectionSite {
+                            host_path: self.paths.intern(host),
+                            set: self.tokens.intern(set),
+                            variant: self.tokens.intern(variant),
+                        });
+                    }
+                    prim.outer_variant_sites = outer_sites;
                     namespace
                 }
                 None => path_str,
@@ -307,7 +338,14 @@ impl AssembleCtx<'_> {
     }
 
     /// Collects decoded fields for a spec from the fieldsets/fields tables.
-    fn collect_fields(&self, fieldset_index: u32) -> Result<Vec<(String, CrateValue)>, UsdcError> {
+    ///
+    /// Field names are borrowed from the token table: specs sharing a
+    /// fieldset share its names. Each use is still charged by the name's
+    /// length, since assembly matches, interns or reports it.
+    fn collect_fields(&mut self, fieldset_index: u32) -> Result<Fields<'a>, UsdcError> {
+        // A spec can become a field of its own (an attribute declared
+        // without a value), so each spec is charged too.
+        self.budget.charge(1)?;
         let mut result = Vec::new();
         let start = fieldset_index as usize;
 
@@ -327,8 +365,9 @@ impl AssembleCtx<'_> {
             if fi < self.sections.fields.len() {
                 let field_def = &self.sections.fields[fi];
                 let field_name = self.lookup_token(field_def.token_index);
+                self.budget.charge_text(field_name.len())?;
                 let rep = RawValueRep::new(field_def.value_rep);
-                let value = decode_value(&rep, self.data, self.sections)?;
+                let value = decode_value_within(&rep, self.data, self.sections, self.budget)?;
                 result.push((field_name, value));
             }
             idx += 1;
@@ -343,7 +382,7 @@ impl AssembleCtx<'_> {
     /// Spec: AOUSD Core §7.6.1 (layer spec fields).
     fn process_pseudo_root(
         &mut self,
-        fields: &[(String, CrateValue)],
+        fields: &[(&str, CrateValue)],
         layer: &mut Layer,
     ) -> Result<(), UsdcError> {
         let mut root_children = Vec::new();
@@ -352,7 +391,7 @@ impl AssembleCtx<'_> {
         let mut sublayer_offsets: &[(f64, f64)] = &[];
 
         for (name, value) in fields {
-            match name.as_str() {
+            match *name {
                 // OpenUSD stores `subLayers` as a `std::vector<std::string>`
                 // (`StringVector`) and `subLayerOffsets` as a
                 // `LayerOffsetVector` parallel to it.
@@ -379,10 +418,10 @@ impl AssembleCtx<'_> {
                 }
                 "layerRelocates" | "relocates" => {
                     // Relocates (AOUSD Core §10) are not modelled.
-                    self.report("/", Some(name), "unsupported: relocates are not read");
+                    self.report("/", Some(name), "unsupported: relocates are not read")?;
                 }
                 _ => {
-                    if let Some(field_value) = self.convert_metadata("/", name, value) {
+                    if let Some(field_value) = self.convert_metadata("/", name, value)? {
                         let key = self.tokens.intern(name);
                         set_field_vec(&mut layer.metadata, key, field_value);
                     }
@@ -426,13 +465,13 @@ impl AssembleCtx<'_> {
     fn build_prim_spec(
         &mut self,
         spec_path: &str,
-        fields: &[(String, CrateValue)],
+        fields: &[(&str, CrateValue)],
     ) -> Result<(PrimSpec, Option<Vec<TokenId>>), UsdcError> {
         let mut spec = PrimSpec::default();
         let mut property_children = None;
 
         for (name, value) in fields {
-            match name.as_str() {
+            match *name {
                 "specifier" => {
                     if let CrateValue::Specifier(v) = value {
                         spec.specifier = Some(match v {
@@ -522,12 +561,12 @@ impl AssembleCtx<'_> {
                 }
                 "relocates" => {
                     // Relocates (AOUSD Core §10) are not modelled.
-                    self.report(spec_path, Some(name), "unsupported: relocates are not read");
+                    self.report(spec_path, Some(name), "unsupported: relocates are not read")?;
                 }
                 _ => {
                     // Generic metadata field (`kind`, `documentation`,
                     // `apiSchemas`, `customData`, `hidden`, …).
-                    if let Some(field_value) = self.convert_metadata(spec_path, name, value) {
+                    if let Some(field_value) = self.convert_metadata(spec_path, name, value)? {
                         let key = self.tokens.intern(name);
                         set_field_vec(&mut spec.fields, key, field_value);
                     }
@@ -542,7 +581,7 @@ impl AssembleCtx<'_> {
     fn apply_attribute_fields(
         &mut self,
         spec_path: &str,
-        fields: &[(String, CrateValue)],
+        fields: &[(&str, CrateValue)],
         attr_name: &str,
         prim: &mut PrimSpec,
     ) -> Result<(), UsdcError> {
@@ -556,7 +595,7 @@ impl AssembleCtx<'_> {
     fn apply_relationship_fields(
         &mut self,
         spec_path: &str,
-        fields: &[(String, CrateValue)],
+        fields: &[(&str, CrateValue)],
         rel_name: &str,
         prim: &mut PrimSpec,
     ) -> Result<(), UsdcError> {
@@ -570,14 +609,14 @@ impl AssembleCtx<'_> {
     /// attribute itself authors no `connectionPaths`.
     fn apply_connection_fields(
         &mut self,
-        fields: &[(String, CrateValue)],
+        fields: &[(&str, CrateValue)],
         attr_name: &str,
         prim: &mut PrimSpec,
     ) -> Result<(), UsdcError> {
         let name_tok = self.tokens.intern(attr_name);
 
         for (field_name, value) in fields {
-            if field_name == "connectionPaths" || field_name == "targetPaths" {
+            if *field_name == "connectionPaths" || *field_name == "targetPaths" {
                 let listop = self.convert_connection_value(value)?;
                 let spec = property_entry(&mut prim.properties, name_tok, PropertyKind::Attribute);
                 if spec.targets.is_none() {
@@ -593,7 +632,7 @@ impl AssembleCtx<'_> {
     /// Processes `VariantSet` and `Variant` specs.
     fn process_variant_specs(
         &mut self,
-        spec_fields: &[Vec<(String, CrateValue)>],
+        spec_fields: &[Fields<'_>],
         prim_specs: &mut HashMap<String, PrimSpec>,
     ) -> Result<(), UsdcError> {
         // Collect variant set info: path → variant set name → variant branches.
@@ -604,7 +643,7 @@ impl AssembleCtx<'_> {
             if spec.form == SpecForm::VariantSet {
                 let path_str = self.lookup_path(spec.path_index)?;
                 // Path like: /Prim{varSetName=}
-                if let Some((prim_path, vset_name)) = parse_variant_set_path(&path_str)
+                if let Some((prim_path, vset_name)) = parse_variant_set_path(path_str)
                     && let Some(prim) = prim_specs.get_mut(&prim_path)
                 {
                     let vset_tok = self.tokens.intern(&vset_name);
@@ -626,7 +665,7 @@ impl AssembleCtx<'_> {
             if spec.form == SpecForm::Variant {
                 let path_str = self.lookup_path(spec.path_index)?;
                 // Path like: /Prim{varSetName=branchName}
-                if let Some((prim_path, vset_name, branch_name)) = parse_variant_path(&path_str)
+                if let Some((prim_path, vset_name, branch_name)) = parse_variant_path(path_str)
                     && let Some(prim) = prim_specs.get_mut(&prim_path)
                 {
                     let vset_tok = self.tokens.intern(&vset_name);
@@ -636,7 +675,7 @@ impl AssembleCtx<'_> {
 
                     // Process variant fields.
                     for (name, value) in &spec_fields[i] {
-                        match name.as_str() {
+                        match *name {
                             "primChildren" => {
                                 variant.authored_children = self.extract_token_names(value);
                             }
@@ -684,7 +723,7 @@ impl AssembleCtx<'_> {
                             }
                             _ => {
                                 // Generic variant field.
-                                if let Some(fv) = self.convert_metadata(&path_str, name, value) {
+                                if let Some(fv) = self.convert_metadata(path_str, name, value)? {
                                     let key = self.tokens.intern(name);
                                     set_field_vec(&mut variant.fields, key, fv);
                                 }
@@ -702,10 +741,10 @@ impl AssembleCtx<'_> {
                     vset.variants.insert(branch_tok, variant);
                 } else {
                     self.report(
-                        &path_str,
+                        path_str,
                         None,
                         "unsupported: variant specs below a variant branch are not read",
-                    );
+                    )?;
                 }
             }
         }
@@ -726,24 +765,24 @@ impl AssembleCtx<'_> {
                 }
                 // Check if this is under a variant context.
                 if let Some((prim_path, vset_name, branch_name, prop_name)) =
-                    parse_variant_property_path(&path_str)
+                    parse_variant_property_path(path_str)
                     && let Some(prim) = prim_specs.get_mut(&prim_path)
                     && let Some(vset) = prim.variant_sets.get_mut(&self.tokens.intern(&vset_name))
                     && let Some(variant) = vset.variants.get_mut(&self.tokens.intern(&branch_name))
                 {
                     let prop_tok = self.tokens.intern(&prop_name);
                     let property = if spec.form == SpecForm::Attribute {
-                        self.build_attribute_spec(&path_str, &spec_fields[i])?
+                        self.build_attribute_spec(path_str, &spec_fields[i])?
                     } else {
-                        self.build_relationship_spec(&path_str, &spec_fields[i])?
+                        self.build_relationship_spec(path_str, &spec_fields[i])?
                     };
                     set_property_vec(&mut variant.properties, prop_tok, property);
                 } else {
                     self.report(
-                        &path_str,
+                        path_str,
                         None,
                         "unsupported: properties of nested variants are not read",
-                    );
+                    )?;
                 }
             }
         }
@@ -885,7 +924,18 @@ impl AssembleCtx<'_> {
     /// still count from the end. Out-of-range indices are kept and skipped
     /// when the edit is applied, as in `VtArrayEdit`
     /// (`pxr/base/vt/arrayEditOps.h`).
+    ///
+    /// Any number of instructions may use one literal, as OpenUSD stores
+    /// each distinct literal once, so the literals are converted once and
+    /// each instruction holds a clone of its converted literal. The
+    /// literals are scalars, so a clone shares a string's allocation and
+    /// copies anything else in constant size.
     fn convert_array_edit(&mut self, edit: &CrateArrayEdit) -> ArrayEdit {
+        let literals: Vec<Value> = edit
+            .literals
+            .iter()
+            .map(|literal| self.convert_crate_value(literal))
+            .collect();
         let index = |i: i64| {
             if i == CrateArrayEdit::END {
                 ArrayIndex::End
@@ -902,9 +952,7 @@ impl AssembleCtx<'_> {
                     literal,
                     index: dst,
                 } => ArrayEditOp::Write {
-                    src: ArrayEditOperand::Literal(
-                        self.convert_crate_value(&edit.literals[literal]),
-                    ),
+                    src: ArrayEditOperand::Literal(literals[literal].clone()),
                     index: index(dst),
                 },
                 CrateArrayEditOp::WriteRef { src, index: dst } => ArrayEditOp::Write {
@@ -915,9 +963,7 @@ impl AssembleCtx<'_> {
                     literal,
                     index: dst,
                 } => ArrayEditOp::Insert {
-                    src: ArrayEditOperand::Literal(
-                        self.convert_crate_value(&edit.literals[literal]),
-                    ),
+                    src: ArrayEditOperand::Literal(literals[literal].clone()),
                     index: index(dst),
                 },
                 CrateArrayEditOp::InsertRef { src, index: dst } => ArrayEditOp::Insert {
@@ -928,12 +974,12 @@ impl AssembleCtx<'_> {
                 CrateArrayEditOp::MinSize { len: n } => ArrayEditOp::MinSize { len: len(n) },
                 CrateArrayEditOp::MinSizeFill { len: n, literal } => ArrayEditOp::MinSizeFill {
                     len: len(n),
-                    fill: self.convert_crate_value(&edit.literals[literal]),
+                    fill: literals[literal].clone(),
                 },
                 CrateArrayEditOp::SetSize { len: n } => ArrayEditOp::Resize { len: len(n) },
                 CrateArrayEditOp::SetSizeFill { len: n, literal } => ArrayEditOp::ResizeFill {
                     len: len(n),
-                    fill: self.convert_crate_value(&edit.literals[literal]),
+                    fill: literals[literal].clone(),
                 },
                 CrateArrayEditOp::MaxSize { len: n } => ArrayEditOp::MaxSize { len: len(n) },
             })
@@ -952,59 +998,61 @@ impl AssembleCtx<'_> {
         spec_path: &str,
         field: &str,
         cv: &CrateValue,
-    ) -> Option<FieldValue> {
-        match cv {
-            CrateValue::ListOp(listop) => match listop.op_type {
-                ValueType::TokenListOp => {
-                    Some(FieldValue::TokenListOp(self.convert_token_listop(listop)))
-                }
-                ValueType::PathListOp => {
-                    match self.convert_connection_value(&CrateValue::ListOp(listop.clone())) {
-                        Ok(converted) => Some(FieldValue::PathListOp(converted)),
-                        Err(error) => {
-                            self.report(spec_path, Some(field), alloc::format!("{error}"));
-                            return None;
+    ) -> Result<Option<FieldValue>, UsdcError> {
+        Ok(match cv {
+            CrateValue::ListOp(listop) => {
+                let converted = match listop.op_type {
+                    ValueType::TokenListOp => {
+                        Some(FieldValue::TokenListOp(self.convert_token_listop(listop)))
+                    }
+                    ValueType::PathListOp => {
+                        match self.convert_connection_value(&CrateValue::ListOp(listop.clone())) {
+                            Ok(converted) => Some(FieldValue::PathListOp(converted)),
+                            Err(error) => {
+                                self.report(spec_path, Some(field), alloc::format!("{error}"))?;
+                                return Ok(None);
+                            }
                         }
                     }
+                    ValueType::StringListOp => convert_scalar_listop(listop, |v| match v {
+                        CrateValue::String(s) => Some(Arc::from(s.as_str())),
+                        _ => None,
+                    })
+                    .map(FieldValue::StringListOp),
+                    ValueType::IntListOp => convert_scalar_listop(listop, |v| match v {
+                        CrateValue::Int(v) => Some(*v),
+                        _ => None,
+                    })
+                    .map(FieldValue::IntListOp),
+                    ValueType::UIntListOp => convert_scalar_listop(listop, |v| match v {
+                        CrateValue::UInt(v) => Some(*v),
+                        _ => None,
+                    })
+                    .map(FieldValue::UIntListOp),
+                    ValueType::Int64ListOp => convert_scalar_listop(listop, |v| match v {
+                        CrateValue::Int64(v) => Some(*v),
+                        _ => None,
+                    })
+                    .map(FieldValue::Int64ListOp),
+                    ValueType::UInt64ListOp => convert_scalar_listop(listop, |v| match v {
+                        CrateValue::UInt64(v) => Some(*v),
+                        _ => None,
+                    })
+                    .map(FieldValue::UInt64ListOp),
+                    // Reference and payload list ops are arcs, read by their
+                    // dedicated fields; unregistered-value list ops have no
+                    // element type.
+                    _ => None,
+                };
+                if converted.is_none() {
+                    self.report(
+                        spec_path,
+                        Some(field),
+                        alloc::format!("unsupported: {:?} metadata is not read", listop.op_type),
+                    )?;
                 }
-                ValueType::StringListOp => convert_scalar_listop(listop, |v| match v {
-                    CrateValue::String(s) => Some(Arc::from(s.as_str())),
-                    _ => None,
-                })
-                .map(FieldValue::StringListOp),
-                ValueType::IntListOp => convert_scalar_listop(listop, |v| match v {
-                    CrateValue::Int(v) => Some(*v),
-                    _ => None,
-                })
-                .map(FieldValue::IntListOp),
-                ValueType::UIntListOp => convert_scalar_listop(listop, |v| match v {
-                    CrateValue::UInt(v) => Some(*v),
-                    _ => None,
-                })
-                .map(FieldValue::UIntListOp),
-                ValueType::Int64ListOp => convert_scalar_listop(listop, |v| match v {
-                    CrateValue::Int64(v) => Some(*v),
-                    _ => None,
-                })
-                .map(FieldValue::Int64ListOp),
-                ValueType::UInt64ListOp => convert_scalar_listop(listop, |v| match v {
-                    CrateValue::UInt64(v) => Some(*v),
-                    _ => None,
-                })
-                .map(FieldValue::UInt64ListOp),
-                // Reference and payload list ops are arcs, read by their
-                // dedicated fields; unregistered-value list ops have no
-                // element type.
-                _ => None,
+                converted
             }
-            .or_else(|| {
-                self.report(
-                    spec_path,
-                    Some(field),
-                    alloc::format!("unsupported: {:?} metadata is not read", listop.op_type),
-                );
-                None
-            }),
             // `SdfPermission` (deprecated, Core §7.6.2.7): stored as the token
             // USDA spells it with.
             CrateValue::Permission(0) => Some(FieldValue::Value(Value::Token(
@@ -1024,11 +1072,11 @@ impl AssembleCtx<'_> {
                     spec_path,
                     Some(field),
                     "unsupported: this value type is not read as metadata",
-                );
+                )?;
                 None
             }
             _ => Some(FieldValue::Value(self.convert_crate_value(cv))),
-        }
+        })
     }
 
     /// Builds an attribute [`PropertySpec`] from its crate fields, keeping
@@ -1039,11 +1087,11 @@ impl AssembleCtx<'_> {
     fn build_attribute_spec(
         &mut self,
         spec_path: &str,
-        fields: &[(String, CrateValue)],
+        fields: &[(&str, CrateValue)],
     ) -> Result<PropertySpec, UsdcError> {
         let mut spec = PropertySpec::typed_attribute(self.attribute_property_type(fields));
         for (name, value) in fields {
-            match (name.as_str(), value) {
+            match (*name, value) {
                 ("default", value) => spec.default = Some(self.convert_crate_value(value)),
                 ("timeSamples", CrateValue::TimeSamples(samples)) => {
                     let samples = samples
@@ -1059,7 +1107,7 @@ impl AssembleCtx<'_> {
                 // Read by `attribute_property_type`; `connectionChildren`
                 // restates `connectionPaths`.
                 ("typeName" | "connectionChildren", _) => {}
-                _ => self.apply_property_field(spec_path, name, value, &mut spec),
+                _ => self.apply_property_field(spec_path, name, value, &mut spec)?,
             }
         }
         Ok(spec)
@@ -1076,7 +1124,7 @@ impl AssembleCtx<'_> {
         name: &str,
         value: &CrateValue,
         spec: &mut PropertySpec,
-    ) {
+    ) -> Result<(), UsdcError> {
         match (name, value) {
             ("custom", CrateValue::Bool(custom)) => spec.custom = *custom,
             ("variability", CrateValue::Variability(variability)) => {
@@ -1088,18 +1136,19 @@ impl AssembleCtx<'_> {
                             spec_path,
                             Some(name),
                             alloc::format!("unknown variability {other}; kept as varying"),
-                        );
+                        )?;
                         Variability::Varying
                     }
                 };
             }
             _ => {
-                if let Some(field_value) = self.convert_metadata(spec_path, name, value) {
+                if let Some(field_value) = self.convert_metadata(spec_path, name, value)? {
                     let key = self.tokens.intern(name);
                     set_field_vec(&mut spec.metadata, key, field_value);
                 }
             }
         }
+        Ok(())
     }
 
     /// Builds a relationship [`PropertySpec`] from its crate fields.
@@ -1108,24 +1157,24 @@ impl AssembleCtx<'_> {
     fn build_relationship_spec(
         &mut self,
         spec_path: &str,
-        fields: &[(String, CrateValue)],
+        fields: &[(&str, CrateValue)],
     ) -> Result<PropertySpec, UsdcError> {
         let mut spec = PropertySpec::relationship();
         for (name, value) in fields {
-            match name.as_str() {
+            match *name {
                 "targetPaths" => spec.targets = Some(self.convert_connection_value(value)?),
                 // `targetChildren` restates `targetPaths`.
                 "targetChildren" => {}
-                _ => self.apply_property_field(spec_path, name, value, &mut spec),
+                _ => self.apply_property_field(spec_path, name, value, &mut spec)?,
             }
         }
         Ok(spec)
     }
 
-    fn attribute_property_type(&mut self, fields: &[(String, CrateValue)]) -> PropertyType {
+    fn attribute_property_type(&mut self, fields: &[(&str, CrateValue)]) -> PropertyType {
         let mut type_name = String::new();
         for (name, value) in fields {
-            if name == "typeName"
+            if *name == "typeName"
                 && let CrateValue::Token(token) = value
             {
                 type_name = token.clone();
@@ -1134,7 +1183,7 @@ impl AssembleCtx<'_> {
         }
 
         let inferred_array = fields.iter().any(|(name, value)| {
-            matches!(name.as_str(), "default" | "timeSamples") && crate_value_is_array(value)
+            matches!(*name, "default" | "timeSamples") && crate_value_is_array(value)
         });
 
         // `typeName` spells arrays with `[]` (`point3f[]`); the declared type
@@ -1460,26 +1509,30 @@ impl AssembleCtx<'_> {
         }
     }
 
-    /// Looks up a path string from the paths table.
-    fn lookup_path(&self, index: u32) -> Result<String, UsdcError> {
-        let idx = index as usize;
-        if idx < self.sections.paths.len() {
-            Ok(self.sections.paths[idx].clone())
-        } else {
-            Err(UsdcError::Inconsistent {
+    /// Looks up a spec path in the paths table.
+    ///
+    /// The path is borrowed, but each lookup is charged by its length: every
+    /// pass that looks a spec's path up parses, splits or copies it.
+    fn lookup_path(&mut self, index: u32) -> Result<&'a str, UsdcError> {
+        let sections = self.sections;
+        let path = sections
+            .paths
+            .get(index as usize)
+            .ok_or(UsdcError::Inconsistent {
                 message: "path index out of range",
-            })
-        }
+            })?;
+        self.budget.charge_text(path.len())?;
+        Ok(path)
     }
 
-    /// Looks up a token string from the tokens table.
-    fn lookup_token(&self, index: u32) -> String {
-        let idx = index as usize;
-        if idx < self.sections.tokens.len() {
-            self.sections.tokens[idx].clone()
-        } else {
-            String::new()
-        }
+    /// Looks up a token in the tokens table, or the empty string when out of
+    /// range.
+    fn lookup_token(&self, index: u32) -> &'a str {
+        let sections = self.sections;
+        sections
+            .tokens
+            .get(index as usize)
+            .map_or("", String::as_str)
     }
 
     /// Resolves an asset path.
@@ -1504,14 +1557,17 @@ fn append_unique(list: &mut Vec<TokenId>, names: impl IntoIterator<Item = TokenI
 }
 
 /// A variant selection in a crate path: host prim path, set and variant.
-type BranchSite = (String, String, String);
+///
+/// The host is the first `host_len` bytes of the namespace path; the set and
+/// variant are borrowed from the crate path.
+type BranchSite<'p> = (usize, &'p str, &'p str);
 
 /// Splits the crate path of a prim inside variant branches, such as
 /// `/A{v=x}B/C`, into its namespace path (`/A/B/C`) and its variant
 /// selections with their host prim paths, outer to inner.
 ///
 /// Returns `None` for a path outside any variant branch or a malformed one.
-fn split_branch_path(path: &str) -> Option<(String, Vec<BranchSite>)> {
+fn split_branch_path(path: &str) -> Option<(String, Vec<BranchSite<'_>>)> {
     let mut namespace = String::new();
     let mut sites = Vec::new();
     let mut rest = path;
@@ -1522,7 +1578,7 @@ fn split_branch_path(path: &str) -> Option<(String, Vec<BranchSite>)> {
             if set.is_empty() || variant.is_empty() || namespace.is_empty() {
                 return None;
             }
-            sites.push((namespace.clone(), String::from(set), String::from(variant)));
+            sites.push((namespace.len(), set, variant));
             rest = &inner[close + 1..];
             if !rest.is_empty() && !rest.starts_with('/') && !rest.starts_with('{') {
                 namespace.push('/');
@@ -1932,6 +1988,115 @@ fn merge_path_listop(target: &mut ListOp<PathId>, source: ListOp<PathId>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::section::{FieldDef, SpecDef};
+    use crate::version::CrateVersion;
+    use layerstack::AssetResolveError;
+
+    /// A resolver that resolves nothing.
+    struct NoAssets;
+
+    impl AssetResolver for NoAssets {
+        fn resolve(
+            &mut self,
+            _: &str,
+            _: Option<LayerId>,
+            _: &mut TokenInterner,
+            _: &mut PathInterner,
+        ) -> Result<ResolvedAsset, AssetResolveError> {
+            Err(AssetResolveError::NotFound)
+        }
+
+        fn resolved_path(&self, _: LayerId) -> Option<&str> {
+            None
+        }
+    }
+
+    /// Sections of `n` prim specs sharing one fieldset whose single field,
+    /// an inlined int, is named with `name_len` bytes; spec `i` has path
+    /// `path_of(i)`.
+    fn shared_fieldset_sections(
+        n: u32,
+        name_len: usize,
+        paths: Vec<String>,
+        path_of: impl Fn(u32) -> u32,
+    ) -> CrateSections {
+        let mut rep = [0_u8; 8];
+        rep[6] = ValueType::Int as u8;
+        rep[7] = 0x40; // inlined
+        CrateSections {
+            tokens: alloc::vec!["x".repeat(name_len)],
+            strings: Vec::new(),
+            fields: alloc::vec![FieldDef {
+                token_index: 0,
+                value_rep: rep,
+            }],
+            fieldsets: alloc::vec![0, -1],
+            paths,
+            specs: (0..n)
+                .map(|i| SpecDef {
+                    path_index: path_of(i),
+                    fieldset_index: 0,
+                    form: SpecForm::Prim,
+                })
+                .collect(),
+            version: CrateVersion::NEWEST_READABLE,
+        }
+    }
+
+    fn assemble_within(
+        sections: &CrateSections,
+        budget: &mut DecodeBudget,
+    ) -> Result<AssembleResult, UsdcError> {
+        assemble(
+            &[],
+            sections,
+            LayerId(1),
+            &mut TokenInterner::default(),
+            &mut PathInterner::default(),
+            &mut NoAssets,
+            budget,
+        )
+    }
+
+    /// The re-review's probe: specs sharing a fieldset share its long field
+    /// name, and each use is charged by the name's length, so a budget that
+    /// covers only the specs and their values fails.
+    #[test]
+    fn shared_field_names_are_charged_per_use() {
+        let n = 128;
+        let name_len = 4096;
+        let sections = shared_fieldset_sections(
+            n,
+            name_len,
+            (0..n).map(|i| alloc::format!("/P{i}")).collect(),
+            |i| i,
+        );
+
+        let mut budget = DecodeBudget::with_limit(2 * u64::from(n));
+        assert_eq!(
+            assemble_within(&sections, &mut budget).err(),
+            Some(UsdcError::DecodeBudgetExceeded {
+                limit: 2 * u64::from(n)
+            })
+        );
+
+        let mut budget = DecodeBudget::with_limit(u64::MAX);
+        assemble_within(&sections, &mut budget).unwrap();
+        let names = u64::from(n) * (name_len / 16) as u64;
+        assert!(budget.used() >= names, "{} < {names}", budget.used());
+    }
+
+    /// Specs sharing one long path are charged for each use of it.
+    #[test]
+    fn shared_spec_paths_are_charged_per_use() {
+        let n = 128;
+        let path = alloc::format!("/{}", "P".repeat(4095));
+        let sections = shared_fieldset_sections(n, 1, alloc::vec![path], |_| 0);
+        let mut budget = DecodeBudget::with_limit(u64::MAX);
+        assemble_within(&sections, &mut budget).unwrap();
+        let paths = u64::from(n) * 4096 / 16;
+        assert!(budget.used() >= paths, "{} < {paths}", budget.used());
+    }
 
     #[test]
     fn split_property_simple() {

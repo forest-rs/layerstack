@@ -306,26 +306,36 @@ pub struct CrateReference {
 // Decoding entry point
 // ---------------------------------------------------------------------------
 
-/// Decodes a raw value representation into a `CrateValue`.
+/// Decodes a raw value representation into a `CrateValue`, within a fresh
+/// [`DecodeBudget::for_input`] budget for `data`.
 ///
 /// `data` is the full file byte slice (needed for offset-based reads).
 /// `sections` provides the decoded token/string/path tables.
-///
-/// Values nest (dictionaries, time samples, `VtValue`s) through offsets the
-/// file chooses, so a malformed file can make them nest without end or, by
-/// sharing, into exponentially many values. Nesting deeper than
-/// [`MAX_VALUE_DEPTH`], or decoding more nested values than the file has
-/// bytes, fails with [`UsdcError::Inconsistent`].
 pub fn decode_value(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
-    let mut nest = Nesting {
-        depth: 0,
-        remaining: data.len().saturating_add(1024),
-    };
-    decode_nested(rep, data, sections, &mut nest)
+    decode_value_within(
+        rep,
+        data,
+        sections,
+        &mut DecodeBudget::for_input(data.len()),
+    )
+}
+
+/// Decodes a raw value representation into a `CrateValue`, charging what it
+/// decodes to `budget`.
+///
+/// Sharing one budget across a whole read bounds everything the read
+/// decodes, however often the file references the same value.
+pub fn decode_value_within(
+    rep: &RawValueRep,
+    data: &[u8],
+    sections: &CrateSections,
+    budget: &mut DecodeBudget,
+) -> Result<CrateValue, UsdcError> {
+    decode_nested(rep, data, sections, budget)
 }
 
 /// How deeply decoded values may nest.
@@ -335,35 +345,131 @@ pub fn decode_value(
 /// on depth also stops deep but finite chains from exhausting the stack.
 pub const MAX_VALUE_DEPTH: usize = 64;
 
-/// The nesting state of one [`decode_value`] call.
-struct Nesting {
+/// A bound on what decoding may produce, shared across a whole read.
+///
+/// Values reference other values through offsets the file chooses, and
+/// OpenUSD deduplicates values, so one small array or dictionary may be
+/// referenced any number of times, and each reference decodes into its own
+/// copy. Without a bound, a small malformed file could expand into
+/// quadratically or exponentially many values.
+///
+/// The same holds for text: many specs may share one field name, one path
+/// or one fieldset, and each use would otherwise copy the text again. So
+/// the budget covers everything a read materializes, not only values.
+///
+/// The budget is counted in units, charged before the allocation they
+/// cover:
+///
+/// - each decoded value, each array, vector or list element, each section
+///   table entry and each spec costs one unit;
+/// - text costs a further unit per 16 bytes each time it is used, whether
+///   cloned or borrowed: token, string and path lookups, dictionary keys,
+///   field names, spec paths and the path table itself, whose paths are
+///   built from shared tokens;
+/// - decompressed section data costs a unit per 16 bytes.
+///
+/// Text shorter than 16 bytes rides on the unit of the value, element, entry
+/// or spec it belongs to, so every unit covers at most one value and 16 bytes
+/// of text. Exceeding the budget fails with
+/// [`UsdcError::DecodeBudgetExceeded`]. Nesting deeper than
+/// [`MAX_VALUE_DEPTH`] fails with [`UsdcError::Inconsistent`].
+#[derive(Clone, Debug)]
+pub struct DecodeBudget {
+    /// The units the budget started with.
+    limit: u64,
+    /// Units not yet charged.
+    remaining: u64,
     /// Values being decoded that enclose the current one.
     depth: usize,
-    /// Nested values that may still be decoded.
-    remaining: usize,
 }
 
-/// Decodes a value nested in another, within the bounds of `nest`.
+impl DecodeBudget {
+    /// Units allowed per byte of input by [`DecodeBudget::for_input`].
+    ///
+    /// LZ4 expands a block at most 255-fold and the integer coding packs up
+    /// to four elements per byte, so one array can legitimately decode into
+    /// about 1020 elements per input byte; this covers any single array.
+    pub const UNITS_PER_INPUT_BYTE: u64 = 1024;
+
+    /// Units allowed regardless of input size by [`DecodeBudget::for_input`].
+    pub const BASE_UNITS: u64 = 1 << 16;
+
+    /// The default budget for a file of `len` bytes:
+    /// [`BASE_UNITS`](Self::BASE_UNITS) plus
+    /// [`UNITS_PER_INPUT_BYTE`](Self::UNITS_PER_INPUT_BYTE) per byte.
+    #[must_use]
+    pub fn for_input(len: usize) -> Self {
+        let len = u64::try_from(len).unwrap_or(u64::MAX);
+        Self::with_limit(
+            len.saturating_mul(Self::UNITS_PER_INPUT_BYTE)
+                .saturating_add(Self::BASE_UNITS),
+        )
+    }
+
+    /// A budget of `units`.
+    #[must_use]
+    pub fn with_limit(units: u64) -> Self {
+        Self {
+            limit: units,
+            remaining: units,
+            depth: 0,
+        }
+    }
+
+    /// The units not yet charged.
+    #[must_use]
+    pub fn remaining(&self) -> u64 {
+        self.remaining
+    }
+
+    /// The units charged so far.
+    #[must_use]
+    pub fn used(&self) -> u64 {
+        self.limit - self.remaining
+    }
+
+    /// Charges `units`, failing when the budget cannot cover them.
+    pub(crate) fn charge(&mut self, units: u64) -> Result<(), UsdcError> {
+        self.remaining = self
+            .remaining
+            .checked_sub(units)
+            .ok_or(UsdcError::DecodeBudgetExceeded { limit: self.limit })?;
+        Ok(())
+    }
+
+    /// Charges `count` elements.
+    pub(crate) fn charge_elements(&mut self, count: usize) -> Result<(), UsdcError> {
+        self.charge(u64::try_from(count).unwrap_or(u64::MAX))
+    }
+
+    /// Charges a use of `len` bytes of text or data: a unit per 16 bytes.
+    pub(crate) fn charge_text(&mut self, len: usize) -> Result<(), UsdcError> {
+        self.charge_elements(len / 16)
+    }
+
+    /// Clones `s`, charging a unit per 16 bytes.
+    fn clone_str(&mut self, s: &str) -> Result<String, UsdcError> {
+        self.charge_text(s.len())?;
+        Ok(String::from(s))
+    }
+}
+
+/// Decodes a value nested in another, within `budget`.
 fn decode_nested(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
-    nest: &mut Nesting,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
-    if nest.depth >= MAX_VALUE_DEPTH {
+    if budget.depth >= MAX_VALUE_DEPTH {
         return Err(UsdcError::Inconsistent {
             message: "values nest too deeply",
         });
     }
-    nest.remaining = nest
-        .remaining
-        .checked_sub(1)
-        .ok_or(UsdcError::Inconsistent {
-            message: "more nested values than the file can hold",
-        })?;
-    nest.depth += 1;
-    let value = decode_one(rep, data, sections, nest);
-    nest.depth -= 1;
+    budget.charge(1)?;
+    budget.depth += 1;
+    let value = decode_one(rep, data, sections, budget);
+    budget.depth -= 1;
     value
 }
 
@@ -371,11 +477,11 @@ fn decode_one(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
-    nest: &mut Nesting,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     let vtype = rep.value_type()?;
     if rep.is_array_edit() {
-        return decode_array_edit(rep, data, sections, vtype, nest);
+        return decode_array_edit(rep, data, sections, vtype, budget);
     }
 
     match vtype {
@@ -383,22 +489,22 @@ fn decode_one(
             message: "encountered Unknown value type",
         }),
         ValueType::ValueBlock => Ok(CrateValue::None),
-        ValueType::Bool => decode_bool(rep, data),
-        ValueType::UChar => decode_integer_u8(rep, data),
-        ValueType::Int => decode_integer_i32(rep, data),
-        ValueType::UInt => decode_integer_u32(rep, data),
-        ValueType::Int64 => decode_integer_i64(rep, data),
-        ValueType::UInt64 => decode_integer_u64(rep, data),
+        ValueType::Bool => decode_bool(rep, data, budget),
+        ValueType::UChar => decode_integer_u8(rep, data, budget),
+        ValueType::Int => decode_integer_i32(rep, data, budget),
+        ValueType::UInt => decode_integer_u32(rep, data, budget),
+        ValueType::Int64 => decode_integer_i64(rep, data, budget),
+        ValueType::UInt64 => decode_integer_u64(rep, data, budget),
         ValueType::Half | ValueType::Float | ValueType::Double | ValueType::TimeCode => {
-            decode_float(rep, data, vtype)
+            decode_float(rep, data, vtype, budget)
         }
-        ValueType::String => decode_string(rep, data, sections),
-        ValueType::Token => decode_token(rep, data, sections),
-        ValueType::AssetPath => decode_asset_path(rep, data, sections),
+        ValueType::String => decode_string(rep, data, sections, budget),
+        ValueType::Token => decode_token(rep, data, sections, budget),
+        ValueType::AssetPath => decode_asset_path(rep, data, sections, budget),
         // Stored like an asset path (Core §16.3.10.14), but typed apart:
         // the text is an `SdfPathExpression`, not an asset to resolve.
         ValueType::PathExpression => {
-            decode_asset_path(rep, data, sections).map(asset_path_to_path_expression)
+            decode_asset_path(rep, data, sections, budget).map(asset_path_to_path_expression)
         }
         ValueType::Specifier => {
             let v = decode_inlined_or_offset_u32(rep, data)?;
@@ -412,9 +518,9 @@ fn decode_one(
             let v = decode_inlined_or_offset_u32(rep, data)?;
             Ok(CrateValue::Permission(v))
         }
-        ValueType::Dictionary => decode_dictionary(rep, data, sections, nest),
-        ValueType::VariantSelectionMap => decode_variant_selection_map(rep, data, sections),
-        ValueType::Relocates => decode_relocates_map(rep, data, sections),
+        ValueType::Dictionary => decode_dictionary(rep, data, sections, budget),
+        ValueType::VariantSelectionMap => decode_variant_selection_map(rep, data, sections, budget),
+        ValueType::Relocates => decode_relocates_map(rep, data, sections, budget),
         ValueType::TokenListOp
         | ValueType::StringListOp
         | ValueType::PathListOp
@@ -424,13 +530,13 @@ fn decode_one(
         | ValueType::Int64ListOp
         | ValueType::UIntListOp
         | ValueType::UInt64ListOp
-        | ValueType::UnregisteredValueListOp => decode_list_op(rep, data, sections, nest),
-        ValueType::TimeSamples => decode_time_samples(rep, data, sections, nest),
-        ValueType::PathVector => decode_path_vector(rep, data, sections),
-        ValueType::TokenVector => decode_token_vector(rep, data, sections),
-        ValueType::DoubleVector => decode_double_vector(rep, data),
-        ValueType::StringVector => decode_string_vector(rep, data, sections),
-        ValueType::LayerOffsetVector => decode_layer_offset_vector(rep, data),
+        | ValueType::UnregisteredValueListOp => decode_list_op(rep, data, sections, budget),
+        ValueType::TimeSamples => decode_time_samples(rep, data, sections, budget),
+        ValueType::PathVector => decode_path_vector(rep, data, sections, budget),
+        ValueType::TokenVector => decode_token_vector(rep, data, sections, budget),
+        ValueType::DoubleVector => decode_double_vector(rep, data, budget),
+        ValueType::StringVector => decode_string_vector(rep, data, sections, budget),
+        ValueType::LayerOffsetVector => decode_layer_offset_vector(rep, data, budget),
         // Math types (vectors, quaternions, matrices) — read raw bytes.
         ValueType::Quatd
         | ValueType::Quatf
@@ -449,11 +555,11 @@ fn decode_one(
         | ValueType::Vec4i
         | ValueType::Matrix2d
         | ValueType::Matrix3d
-        | ValueType::Matrix4d => decode_math_type(rep, data, vtype),
-        ValueType::Value => decode_value_indirection(rep, data, sections, nest),
-        ValueType::UnregisteredValue => decode_unregistered_value(rep, data, sections, nest),
-        ValueType::Payload => decode_payload(rep, data, sections),
-        ValueType::Spline => decode_spline(rep, data, sections, nest),
+        | ValueType::Matrix4d => decode_math_type(rep, data, vtype, budget),
+        ValueType::Value => decode_value_indirection(rep, data, sections, budget),
+        ValueType::UnregisteredValue => decode_unregistered_value(rep, data, sections, budget),
+        ValueType::Payload => decode_payload(rep, data, sections, budget),
+        ValueType::Spline => decode_spline(rep, data, sections, budget),
     }
 }
 
@@ -461,12 +567,16 @@ fn decode_one(
 // Integer decoders
 // ---------------------------------------------------------------------------
 
-fn decode_bool(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> {
+fn decode_bool(
+    rep: &RawValueRep,
+    data: &[u8],
+    budget: &mut DecodeBudget,
+) -> Result<CrateValue, UsdcError> {
     if rep.is_inlined() && !rep.is_array() {
         return Ok(CrateValue::Bool(rep.payload()[0] != 0));
     }
     if rep.is_array() {
-        let values = read_integer_array(rep, data, 1, false)?;
+        let values = read_integer_array(rep, data, 1, false, budget)?;
         let arr = values
             .into_iter()
             .map(|v| CrateValue::Bool(v != 0))
@@ -477,12 +587,16 @@ fn decode_bool(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> 
     Ok(CrateValue::Bool(read_u8(data, &mut off)? != 0))
 }
 
-fn decode_integer_u8(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> {
+fn decode_integer_u8(
+    rep: &RawValueRep,
+    data: &[u8],
+    budget: &mut DecodeBudget,
+) -> Result<CrateValue, UsdcError> {
     if rep.is_inlined() && !rep.is_array() {
         return Ok(CrateValue::UChar(rep.payload()[0]));
     }
     if rep.is_array() {
-        let values = read_integer_array(rep, data, 1, false)?;
+        let values = read_integer_array(rep, data, 1, false, budget)?;
         let arr = values
             .into_iter()
             .map(|v| {
@@ -496,14 +610,18 @@ fn decode_integer_u8(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcE
     Ok(CrateValue::UChar(read_u8(data, &mut off)?))
 }
 
-fn decode_integer_i32(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> {
+fn decode_integer_i32(
+    rep: &RawValueRep,
+    data: &[u8],
+    budget: &mut DecodeBudget,
+) -> Result<CrateValue, UsdcError> {
     if rep.is_inlined() && !rep.is_array() {
         let p = rep.payload();
         let v = i32::from_le_bytes([p[0], p[1], p[2], p[3]]);
         return Ok(CrateValue::Int(v));
     }
     if rep.is_array() {
-        let values = read_integer_array(rep, data, 4, true)?;
+        let values = read_integer_array(rep, data, 4, true, budget)?;
         #[allow(clippy::cast_possible_truncation, reason = "i32 range")]
         let arr = values
             .into_iter()
@@ -515,14 +633,18 @@ fn decode_integer_i32(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, Usdc
     Ok(CrateValue::Int(read_i32_le(data, &mut off)?))
 }
 
-fn decode_integer_u32(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> {
+fn decode_integer_u32(
+    rep: &RawValueRep,
+    data: &[u8],
+    budget: &mut DecodeBudget,
+) -> Result<CrateValue, UsdcError> {
     if rep.is_inlined() && !rep.is_array() {
         let p = rep.payload();
         let v = u32::from_le_bytes([p[0], p[1], p[2], p[3]]);
         return Ok(CrateValue::UInt(v));
     }
     if rep.is_array() {
-        let values = read_integer_array(rep, data, 4, false)?;
+        let values = read_integer_array(rep, data, 4, false, budget)?;
         #[allow(clippy::cast_possible_truncation, reason = "u32 range")]
         let arr = values
             .into_iter()
@@ -534,7 +656,11 @@ fn decode_integer_u32(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, Usdc
     Ok(CrateValue::UInt(read_u32_le(data, &mut off)?))
 }
 
-fn decode_integer_i64(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> {
+fn decode_integer_i64(
+    rep: &RawValueRep,
+    data: &[u8],
+    budget: &mut DecodeBudget,
+) -> Result<CrateValue, UsdcError> {
     if rep.is_inlined() && !rep.is_array() {
         // Inlined int64 values are stored as an `int32` in the low four
         // payload bytes (`crateValueInliners.h`, `_EncodeInline` for integral
@@ -545,7 +671,7 @@ fn decode_integer_i64(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, Usdc
         return Ok(CrateValue::Int64(i64::from(v)));
     }
     if rep.is_array() {
-        let values = read_integer_array(rep, data, 8, true)?;
+        let values = read_integer_array(rep, data, 8, true, budget)?;
         let arr = values.into_iter().map(CrateValue::Int64).collect();
         return Ok(CrateValue::Array(arr));
     }
@@ -553,7 +679,11 @@ fn decode_integer_i64(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, Usdc
     Ok(CrateValue::Int64(read_u64_at(data, off)?.cast_signed()))
 }
 
-fn decode_integer_u64(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> {
+fn decode_integer_u64(
+    rep: &RawValueRep,
+    data: &[u8],
+    budget: &mut DecodeBudget,
+) -> Result<CrateValue, UsdcError> {
     if rep.is_inlined() && !rep.is_array() {
         // Inlined only when it fits a `uint32_t`, which is stored in the low
         // four payload bytes (`_EncodeInline`, `crateValueInliners.h`).
@@ -562,7 +692,7 @@ fn decode_integer_u64(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, Usdc
         return Ok(CrateValue::UInt64(u64::from(v)));
     }
     if rep.is_array() {
-        let values = read_integer_array(rep, data, 8, false)?;
+        let values = read_integer_array(rep, data, 8, false, budget)?;
         #[allow(clippy::cast_sign_loss, reason = "unsigned context")]
         let arr = values
             .into_iter()
@@ -580,6 +710,7 @@ fn read_integer_array(
     data: &[u8],
     element_size: usize,
     _signed: bool,
+    budget: &mut DecodeBudget,
 ) -> Result<Vec<i64>, UsdcError> {
     let off = payload_offset_usize(rep, data)?;
     if off == 0 {
@@ -588,6 +719,7 @@ fn read_integer_array(
     let count = read_u64_at(data, off)?;
     let arr_start = off + 8;
 
+    budget.charge(count)?;
     // Like float arrays, short arrays are stored uncompressed.
     if rep.is_compressed() && count >= MIN_COMPRESSED_ARRAY_SIZE as u64 {
         // `read_compressed_ints` checks the count against the compressed data
@@ -613,7 +745,12 @@ fn read_integer_array(
 /// (`MinCompressedArraySize`, `pxr/usd/sdf/crateFile.cpp:1912`).
 const MIN_COMPRESSED_ARRAY_SIZE: usize = 16;
 
-fn decode_float(rep: &RawValueRep, data: &[u8], vtype: ValueType) -> Result<CrateValue, UsdcError> {
+fn decode_float(
+    rep: &RawValueRep,
+    data: &[u8],
+    vtype: ValueType,
+    budget: &mut DecodeBudget,
+) -> Result<CrateValue, UsdcError> {
     let (element_size, to_value): (usize, fn(f64) -> CrateValue) = match vtype {
         ValueType::Half => (2, |v| CrateValue::Half(f64_to_half_bits(v))),
         ValueType::Float => (4, |v| {
@@ -660,6 +797,7 @@ fn decode_float(rep: &RawValueRep, data: &[u8], vtype: ValueType) -> Result<Crat
     }
     let count = read_u64_at(data, off)?;
     let arr_start = off + 8;
+    budget.charge(count)?;
 
     // Arrays shorter than `MinCompressedArraySize` are stored uncompressed
     // even when flagged compressed (`_ReadPossiblyCompressedArray`,
@@ -696,6 +834,7 @@ fn decode_float(rep: &RawValueRep, data: &[u8], vtype: ValueType) -> Result<Crat
         // LUT compression.
         let lut_count = read_u32_le(data, &mut pos)?;
         let lut_count = element_count(data, pos, u64::from(lut_count), element_size)?;
+        budget.charge_elements(lut_count)?;
         let luts = (0..lut_count)
             .map(|i| element(bytes_at(data, pos + i * element_size, element_size)?))
             .collect::<Result<Vec<_>, _>>()?;
@@ -821,40 +960,52 @@ fn decode_string(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     if rep.is_array() {
-        let indices = read_u32_array_or_inlined(rep, data)?;
+        let indices = read_u32_array_or_inlined(rep, data, budget)?;
         let arr = indices
             .into_iter()
             .map(|i| {
-                let s = lookup_string(sections, i as usize);
-                CrateValue::String(s)
+                Ok(CrateValue::String(lookup_string(
+                    sections, i as usize, budget,
+                )?))
             })
-            .collect();
+            .collect::<Result<_, UsdcError>>()?;
         return Ok(CrateValue::Array(arr));
     }
     let idx = decode_inlined_or_offset_u32(rep, data)?;
-    Ok(CrateValue::String(lookup_string(sections, idx as usize)))
+    Ok(CrateValue::String(lookup_string(
+        sections,
+        idx as usize,
+        budget,
+    )?))
 }
 
 fn decode_token(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     if rep.is_array() {
-        let indices = read_u32_array_or_inlined(rep, data)?;
+        let indices = read_u32_array_or_inlined(rep, data, budget)?;
         let arr = indices
             .into_iter()
             .map(|i| {
-                let s = lookup_token(sections, i as usize);
-                CrateValue::Token(s)
+                Ok(CrateValue::Token(lookup_token(
+                    sections, i as usize, budget,
+                )?))
             })
-            .collect();
+            .collect::<Result<_, UsdcError>>()?;
         return Ok(CrateValue::Array(arr));
     }
     let idx = decode_inlined_or_offset_u32(rep, data)?;
-    Ok(CrateValue::Token(lookup_token(sections, idx as usize)))
+    Ok(CrateValue::Token(lookup_token(
+        sections,
+        idx as usize,
+        budget,
+    )?))
 }
 
 /// Retypes decoded asset-path text as path-expression text.
@@ -875,43 +1026,54 @@ fn decode_asset_path(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     if rep.is_array() {
-        let indices = read_u32_array_or_inlined(rep, data)?;
+        let indices = read_u32_array_or_inlined(rep, data, budget)?;
         let arr = indices
             .into_iter()
             .map(|i| {
-                let s = lookup_string(sections, i as usize);
-                CrateValue::AssetPath(s)
+                Ok(CrateValue::AssetPath(lookup_string(
+                    sections, i as usize, budget,
+                )?))
             })
-            .collect();
+            .collect::<Result<_, UsdcError>>()?;
         return Ok(CrateValue::Array(arr));
     }
     let idx = decode_inlined_or_offset_u32(rep, data)?;
     // Inlined asset paths use tokens; offset-based use strings.
     if rep.is_inlined() {
-        Ok(CrateValue::AssetPath(lookup_token(sections, idx as usize)))
+        Ok(CrateValue::AssetPath(lookup_token(
+            sections,
+            idx as usize,
+            budget,
+        )?))
     } else {
-        Ok(CrateValue::AssetPath(lookup_string(sections, idx as usize)))
+        Ok(CrateValue::AssetPath(lookup_string(
+            sections,
+            idx as usize,
+            budget,
+        )?))
     }
 }
 
-fn lookup_string(sections: &CrateSections, idx: usize) -> String {
-    if idx < sections.strings.len() {
-        let tok_idx = sections.strings[idx] as usize;
-        if tok_idx < sections.tokens.len() {
-            return sections.tokens[tok_idx].clone();
-        }
-    }
-    String::new()
+/// Looks up a string by index, or the empty string when out of range.
+fn lookup_string(
+    sections: &CrateSections,
+    idx: usize,
+    budget: &mut DecodeBudget,
+) -> Result<String, UsdcError> {
+    let token = sections.strings.get(idx).map(|tok| *tok as usize);
+    lookup_token(sections, token.unwrap_or(usize::MAX), budget)
 }
 
-fn lookup_token(sections: &CrateSections, idx: usize) -> String {
-    if idx < sections.tokens.len() {
-        sections.tokens[idx].clone()
-    } else {
-        String::new()
-    }
+/// Looks up a token by index, or the empty string when out of range.
+fn lookup_token(
+    sections: &CrateSections,
+    idx: usize,
+    budget: &mut DecodeBudget,
+) -> Result<String, UsdcError> {
+    budget.clone_str(sections.tokens.get(idx).map_or("", String::as_str))
 }
 
 // ---------------------------------------------------------------------------
@@ -1005,6 +1167,7 @@ fn decode_math_type(
     rep: &RawValueRep,
     data: &[u8],
     vtype: ValueType,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     let (elem_count, elem_size) = math_type_info(vtype);
     let total_bytes = elem_count * elem_size;
@@ -1031,6 +1194,7 @@ fn decode_math_type(
     }
     let arr_start = off + 8;
     let count = element_count(data, arr_start, read_u64_at(data, off)?, total_bytes)?;
+    budget.charge_elements(count)?;
     let arr = (0..count)
         .map(|i| {
             Ok(CrateValue::Opaque {
@@ -1050,7 +1214,7 @@ fn decode_dictionary(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
-    nest: &mut Nesting,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     // Only the empty dictionary is inlined (`_EncodeInline`,
     // `pxr/usd/sdf/crateValueInliners.h`).
@@ -1058,7 +1222,7 @@ fn decode_dictionary(
         return Ok(CrateValue::Dictionary(vec![]));
     }
     let off = payload_offset_usize(rep, data)?;
-    let (entries, _) = decode_dictionary_at(data, off, sections, nest)?;
+    let (entries, _) = decode_dictionary_at(data, off, sections, budget)?;
     Ok(CrateValue::Dictionary(entries))
 }
 
@@ -1070,7 +1234,7 @@ fn decode_dictionary_at(
     data: &[u8],
     off: usize,
     sections: &CrateSections,
-    nest: &mut Nesting,
+    budget: &mut DecodeBudget,
 ) -> Result<(Vec<(String, CrateValue)>, usize), UsdcError> {
     // Each entry advances past at least 12 bytes, so the loop ends at the
     // end of the data.
@@ -1079,12 +1243,15 @@ fn decode_dictionary_at(
     let mut entries = Vec::new();
 
     for _ in 0..num_items {
+        // The entry, and its key's first 16 bytes, are charged before the
+        // key is copied; the value charges for itself.
+        budget.charge(1)?;
         // Key: u32 string index.
         let key_idx = read_u32_le(data, &mut pos)? as usize;
-        let key = lookup_string(sections, key_idx);
+        let key = lookup_string(sections, key_idx, budget)?;
 
         // Value: a `VtValue` reached through a relative offset.
-        let child_val = read_vt_value(data, &mut pos, sections, nest)?;
+        let child_val = read_vt_value(data, &mut pos, sections, budget)?;
         entries.push((key, child_val));
     }
 
@@ -1099,7 +1266,7 @@ fn decode_list_op(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
-    nest: &mut Nesting,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     let vtype = rep.value_type()?;
     let off = payload_offset_usize(rep, data)?;
@@ -1134,7 +1301,7 @@ fn decode_list_op(
     let mut deleted_items = vec![];
 
     if add_explicit {
-        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, nest)?;
+        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, budget)?;
         explicit_items = Some(items);
         pos += consumed;
     } else if make_explicit {
@@ -1142,32 +1309,32 @@ fn decode_list_op(
     }
 
     if add_items_flag {
-        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, nest)?;
+        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, budget)?;
         added_items = items;
         pos += consumed;
     }
 
     if prepend_flag {
-        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, nest)?;
+        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, budget)?;
         prepended_items = items;
         pos += consumed;
     }
 
     if append_flag {
-        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, nest)?;
+        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, budget)?;
         appended_items = items;
         pos += consumed;
     }
 
     if delete_flag {
-        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, nest)?;
+        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, budget)?;
         deleted_items = items;
         pos += consumed;
     }
 
     if reorder_flag {
         // Deprecated; skip.
-        let (_items, _consumed) = read_list_op_items(vtype, data, pos, sections, nest)?;
+        let (_items, _consumed) = read_list_op_items(vtype, data, pos, sections, budget)?;
     }
 
     // Map deprecated 'add' to 'append' when it's the only composable op.
@@ -1203,7 +1370,7 @@ fn read_list_op_items(
     data: &[u8],
     pos: usize,
     sections: &CrateSections,
-    nest: &mut Nesting,
+    budget: &mut DecodeBudget,
 ) -> Result<(Vec<CrateValue>, usize), UsdcError> {
     let num = read_u64_at(data, pos)?;
     let mut cursor = pos + 8;
@@ -1218,21 +1385,22 @@ fn read_list_op_items(
         });
     }
     let num = num as usize;
+    budget.charge_elements(num)?;
 
     let mut items = Vec::with_capacity(num);
     for _ in 0..num {
         let item = match vtype {
             ValueType::TokenListOp => {
                 let idx = read_u32_le(data, &mut cursor)? as usize;
-                CrateValue::Token(lookup_token(sections, idx))
+                CrateValue::Token(lookup_token(sections, idx, budget)?)
             }
             ValueType::PathListOp => {
                 let idx = read_u32_le(data, &mut cursor)? as usize;
-                CrateValue::String(lookup_path(sections, idx))
+                CrateValue::String(lookup_path(sections, idx, budget)?)
             }
             ValueType::StringListOp => {
                 let idx = read_u32_le(data, &mut cursor)? as usize;
-                CrateValue::String(lookup_string(sections, idx))
+                CrateValue::String(lookup_string(sections, idx, budget)?)
             }
             ValueType::IntListOp => CrateValue::Int(read_i32_le(data, &mut cursor)?),
             ValueType::UIntListOp => CrateValue::UInt(read_u32_le(data, &mut cursor)?),
@@ -1246,9 +1414,11 @@ fn read_list_op_items(
                 cursor += 8;
                 CrateValue::UInt64(v)
             }
-            ValueType::ReferenceListOp => decode_reference_at(data, &mut cursor, sections, nest)?,
-            ValueType::PayloadListOp => decode_payload_at(data, &mut cursor, sections)?,
-            ValueType::UnregisteredValueListOp => read_vt_value(data, &mut cursor, sections, nest)?,
+            ValueType::ReferenceListOp => decode_reference_at(data, &mut cursor, sections, budget)?,
+            ValueType::PayloadListOp => decode_payload_at(data, &mut cursor, sections, budget)?,
+            ValueType::UnregisteredValueListOp => {
+                read_vt_value(data, &mut cursor, sections, budget)?
+            }
             _ => {
                 return Err(UsdcError::Inconsistent {
                     message: "unsupported list op type",
@@ -1269,12 +1439,12 @@ fn read_vt_value(
     data: &[u8],
     pos: &mut usize,
     sections: &CrateSections,
-    nest: &mut Nesting,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     let mut rep_offset = relative_offset(data, *pos)?;
     let child_rep = RawValueRep::new(read_bytes(data, &mut rep_offset)?);
     *pos = rep_offset;
-    decode_nested(&child_rep, data, sections, nest)
+    decode_nested(&child_rep, data, sections, budget)
 }
 
 /// Reads the offset field at `pos`, which OpenUSD's `_RecursiveRead`
@@ -1294,8 +1464,12 @@ fn relative_offset(data: &[u8], pos: usize) -> Result<usize, UsdcError> {
 }
 
 /// Looks up a path by index, or the empty string when out of range.
-fn lookup_path(sections: &CrateSections, idx: usize) -> String {
-    sections.paths.get(idx).cloned().unwrap_or_default()
+fn lookup_path(
+    sections: &CrateSections,
+    idx: usize,
+    budget: &mut DecodeBudget,
+) -> Result<String, UsdcError> {
+    budget.clone_str(sections.paths.get(idx).map_or("", String::as_str))
 }
 
 /// Reads an `SdfReference` (`Write(SdfReference)`,
@@ -1309,13 +1483,13 @@ fn decode_reference_at(
     data: &[u8],
     pos: &mut usize,
     sections: &CrateSections,
-    nest: &mut Nesting,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
-    let asset_path = lookup_string(sections, read_u32_le(data, pos)? as usize);
-    let prim_path = lookup_path(sections, read_u32_le(data, pos)? as usize);
+    let asset_path = lookup_string(sections, read_u32_le(data, pos)? as usize, budget)?;
+    let prim_path = lookup_path(sections, read_u32_le(data, pos)? as usize, budget)?;
     let layer_offset = read_f64_le(data, pos)?;
     let layer_scale = read_f64_le(data, pos)?;
-    let (_custom_data, end) = decode_dictionary_at(data, *pos, sections, nest)?;
+    let (_custom_data, end) = decode_dictionary_at(data, *pos, sections, budget)?;
     *pos = end;
     Ok(reference_dictionary(
         asset_path,
@@ -1334,9 +1508,10 @@ fn decode_payload_at(
     data: &[u8],
     pos: &mut usize,
     sections: &CrateSections,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
-    let asset_path = lookup_string(sections, read_u32_le(data, pos)? as usize);
-    let prim_path = lookup_path(sections, read_u32_le(data, pos)? as usize);
+    let asset_path = lookup_string(sections, read_u32_le(data, pos)? as usize, budget)?;
+    let prim_path = lookup_path(sections, read_u32_le(data, pos)? as usize, budget)?;
     let (layer_offset, layer_scale) = if sections.version.has(CrateVersion::PAYLOAD_LAYER_OFFSETS) {
         (read_f64_le(data, pos)?, read_f64_le(data, pos)?)
     } else {
@@ -1376,7 +1551,7 @@ fn decode_time_samples(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
-    nest: &mut Nesting,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     let off = payload_offset_usize(rep, data)?;
     if off == 0 {
@@ -1404,7 +1579,7 @@ fn decode_time_samples(
     // 4. Decode timecodes. OpenUSD packs them as a `std::vector<double>`
     //    (`TimeSamples::times`, `pxr/usd/sdf/crateFile.cpp:1596`), which is
     //    the `DoubleVector` type, not a `double[]` array.
-    let tc_value = decode_nested(&tc_rep, data, sections, nest)?;
+    let tc_value = decode_nested(&tc_rep, data, sections, budget)?;
     let timecodes: Vec<f64> = match tc_value {
         CrateValue::DoubleVector(times) => times,
         CrateValue::Array(arr) => arr
@@ -1426,12 +1601,13 @@ fn decode_time_samples(
             message: "timeSamples has a different number of times and values",
         });
     }
+    budget.charge_elements(timecodes.len())?;
     let mut samples = Vec::with_capacity(timecodes.len());
     let mut rep_off = val_off + 8;
 
     for time in timecodes {
         let vr = RawValueRep::new(read_bytes(data, &mut rep_off)?);
-        let val = decode_nested(&vr, data, sections, nest)?;
+        let val = decode_nested(&vr, data, sections, budget)?;
         samples.push((time, val));
     }
 
@@ -1446,10 +1622,11 @@ fn decode_path_vector(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
-    let indices = read_index_vector(rep, data, 4)?;
+    let indices = read_index_vector(rep, data, 4, budget)?;
     let paths = indices
-        .map(|mut pos| Ok(lookup_path(sections, read_u32_le(data, &mut pos)? as usize)))
+        .map(|mut pos| lookup_path(sections, read_u32_le(data, &mut pos)? as usize, budget))
         .collect::<Result<_, UsdcError>>()?;
     Ok(CrateValue::PathVector(paths))
 }
@@ -1458,21 +1635,21 @@ fn decode_token_vector(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
-    let indices = read_index_vector(rep, data, 4)?;
+    let indices = read_index_vector(rep, data, 4, budget)?;
     let tokens = indices
-        .map(|mut pos| {
-            Ok(lookup_token(
-                sections,
-                read_u32_le(data, &mut pos)? as usize,
-            ))
-        })
+        .map(|mut pos| lookup_token(sections, read_u32_le(data, &mut pos)? as usize, budget))
         .collect::<Result<_, UsdcError>>()?;
     Ok(CrateValue::TokenVector(tokens))
 }
 
-fn decode_double_vector(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> {
-    let doubles = read_index_vector(rep, data, 8)?
+fn decode_double_vector(
+    rep: &RawValueRep,
+    data: &[u8],
+    budget: &mut DecodeBudget,
+) -> Result<CrateValue, UsdcError> {
+    let doubles = read_index_vector(rep, data, 8, budget)?
         .map(|mut pos| read_f64_le(data, &mut pos))
         .collect::<Result<_, _>>()?;
     Ok(CrateValue::DoubleVector(doubles))
@@ -1482,20 +1659,20 @@ fn decode_string_vector(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
-    let strings = read_index_vector(rep, data, 4)?
-        .map(|mut pos| {
-            Ok(lookup_string(
-                sections,
-                read_u32_le(data, &mut pos)? as usize,
-            ))
-        })
+    let strings = read_index_vector(rep, data, 4, budget)?
+        .map(|mut pos| lookup_string(sections, read_u32_le(data, &mut pos)? as usize, budget))
         .collect::<Result<_, UsdcError>>()?;
     Ok(CrateValue::StringVector(strings))
 }
 
-fn decode_layer_offset_vector(rep: &RawValueRep, data: &[u8]) -> Result<CrateValue, UsdcError> {
-    let offsets = read_index_vector(rep, data, 16)?
+fn decode_layer_offset_vector(
+    rep: &RawValueRep,
+    data: &[u8],
+    budget: &mut DecodeBudget,
+) -> Result<CrateValue, UsdcError> {
+    let offsets = read_index_vector(rep, data, 16, budget)?
         .map(|mut pos| Ok((read_f64_le(data, &mut pos)?, read_f64_le(data, &mut pos)?)))
         .collect::<Result<_, UsdcError>>()?;
     Ok(CrateValue::LayerOffsetVector(offsets))
@@ -1508,10 +1685,12 @@ fn read_index_vector(
     rep: &RawValueRep,
     data: &[u8],
     size: usize,
-) -> Result<impl Iterator<Item = usize>, UsdcError> {
+    budget: &mut DecodeBudget,
+) -> Result<impl Iterator<Item = usize> + use<>, UsdcError> {
     let off = payload_offset_usize(rep, data)?;
     let start = off + 8;
     let count = element_count(data, start, read_u64_at(data, off)?, size)?;
+    budget.charge_elements(count)?;
     Ok((0..count).map(move |i| start + i * size))
 }
 
@@ -1523,14 +1702,15 @@ fn decode_variant_selection_map(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     if payload_offset_usize(rep, data)? == 0 {
         return Ok(CrateValue::VariantSelectionMap(vec![]));
     }
-    let pairs = read_index_vector(rep, data, 8)?
+    let pairs = read_index_vector(rep, data, 8, budget)?
         .map(|mut pos| {
-            let key = lookup_string(sections, read_u32_le(data, &mut pos)? as usize);
-            let val = lookup_string(sections, read_u32_le(data, &mut pos)? as usize);
+            let key = lookup_string(sections, read_u32_le(data, &mut pos)? as usize, budget)?;
+            let val = lookup_string(sections, read_u32_le(data, &mut pos)? as usize, budget)?;
             Ok((key, val))
         })
         .collect::<Result<_, UsdcError>>()?;
@@ -1545,14 +1725,15 @@ fn decode_relocates_map(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     if payload_offset_usize(rep, data)? == 0 {
         return Ok(CrateValue::RelocatesMap(vec![]));
     }
-    let pairs = read_index_vector(rep, data, 8)?
+    let pairs = read_index_vector(rep, data, 8, budget)?
         .map(|mut pos| {
-            let source = lookup_path(sections, read_u32_le(data, &mut pos)? as usize);
-            let target = lookup_path(sections, read_u32_le(data, &mut pos)? as usize);
+            let source = lookup_path(sections, read_u32_le(data, &mut pos)? as usize, budget)?;
+            let target = lookup_path(sections, read_u32_le(data, &mut pos)? as usize, budget)?;
             Ok((source, target))
         })
         .collect::<Result<_, UsdcError>>()?;
@@ -1570,10 +1751,10 @@ fn decode_value_indirection(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
-    nest: &mut Nesting,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     let mut pos = payload_offset_usize(rep, data)?;
-    read_vt_value(data, &mut pos, sections, nest)
+    read_vt_value(data, &mut pos, sections, budget)
 }
 
 /// Decodes an `SdfUnregisteredValue`, which OpenUSD stores as a `VtValue`
@@ -1582,22 +1763,23 @@ fn decode_unregistered_value(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
-    nest: &mut Nesting,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     let mut pos = payload_offset_usize(rep, data)?;
-    read_vt_value(data, &mut pos, sections, nest)
+    read_vt_value(data, &mut pos, sections, budget)
 }
 
 fn decode_payload(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     let off = payload_offset_usize(rep, data)?;
     if off == 0 {
         return Ok(CrateValue::None);
     }
-    decode_payload_at(data, &mut { off }, sections)
+    decode_payload_at(data, &mut { off }, sections, budget)
 }
 
 // ---------------------------------------------------------------------------
@@ -1617,7 +1799,7 @@ fn decode_array_edit(
     data: &[u8],
     sections: &CrateSections,
     element_type: ValueType,
-    nest: &mut Nesting,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     require_version(sections, CrateVersion::ARRAY_EDITS, "array edit")?;
     if rep.is_array() || rep.is_inlined() || rep.is_compressed() {
@@ -1664,12 +1846,12 @@ fn decode_array_edit(
         });
     }
 
-    let CrateValue::Array(literals) = decode_nested(&literals_rep, data, sections, nest)? else {
+    let CrateValue::Array(literals) = decode_nested(&literals_rep, data, sections, budget)? else {
         return Err(UsdcError::Inconsistent {
             message: "array edit literals did not decode to an array",
         });
     };
-    let CrateValue::Array(indexes) = decode_nested(&indexes_rep, data, sections, nest)? else {
+    let CrateValue::Array(indexes) = decode_nested(&indexes_rep, data, sections, budget)? else {
         return Err(UsdcError::Inconsistent {
             message: "array edit instructions did not decode to an array",
         });
@@ -1875,8 +2057,12 @@ fn decode_inlined_or_offset_u32(rep: &RawValueRep, data: &[u8]) -> Result<u32, U
     }
 }
 
-fn read_u32_array_or_inlined(rep: &RawValueRep, data: &[u8]) -> Result<Vec<i64>, UsdcError> {
-    read_integer_array(rep, data, 4, false)
+fn read_u32_array_or_inlined(
+    rep: &RawValueRep,
+    data: &[u8],
+    budget: &mut DecodeBudget,
+) -> Result<Vec<i64>, UsdcError> {
+    read_integer_array(rep, data, 4, false, budget)
 }
 
 // ---------------------------------------------------------------------------
@@ -1908,7 +2094,7 @@ fn decode_spline(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
-    nest: &mut Nesting,
+    budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
     require_version(sections, CrateVersion::SPLINES, "spline value")?;
     let off = payload_offset_usize(rep, data)?;
@@ -1927,7 +2113,7 @@ fn decode_spline(
             offset: blob_start as u64,
             expected: blob_len,
         })?;
-    let spline = parse_ts_spline(&data[..blob_end], blob_start, sections.version)?;
+    let spline = parse_ts_spline(&data[..blob_end], blob_start, sections.version, budget)?;
 
     // Knot custom data: `u64` count, then per knot a `f64` time and a
     // dictionary.
@@ -1935,7 +2121,7 @@ fn decode_spline(
     let mut pos = blob_end + 8;
     for _ in 0..count {
         read_f64_le(data, &mut pos)?;
-        let (_, end) = decode_dictionary_at(data, pos, sections, nest)?;
+        let (_, end) = decode_dictionary_at(data, pos, sections, budget)?;
         pos = end;
     }
 
@@ -1952,10 +2138,14 @@ fn decode_spline(
 /// `GfTimeCode`-valued splines and `loopBoundaryTime` have no
 /// [`SplineData`] representation and fail with
 /// [`UsdcError::UnsupportedFeature`]. The data must be consumed exactly.
+///
+/// The declared knots are charged to `budget` before any is read, so a
+/// spline that fails to parse later has still paid for what it allocated.
 fn parse_ts_spline(
     data: &[u8],
     mut pos: usize,
     version: CrateVersion,
+    budget: &mut DecodeBudget,
 ) -> Result<SplineData, UsdcError> {
     // An empty blob is an empty spline.
     if pos == data.len() {
@@ -2063,6 +2253,7 @@ fn parse_ts_spline(
     let mut knots = Vec::new();
     if data_type != SplineDataType::Unspecified || pos != data.len() {
         let num_knots = read_u32_le(data, &mut pos)?;
+        budget.charge(u64::from(num_knots))?;
         let is_hermite = default_curve_type == CurveType::Hermite;
         for _ in 0..num_knots {
             knots.push(read_knot(data, &mut pos, data_type, is_hermite, format)?);
@@ -2277,7 +2468,7 @@ mod tests {
         for bits in 0..=u16::MAX {
             let [lo, hi] = bits.to_le_bytes();
             let rep = inlined(ValueType::Half, [lo, hi, 0, 0]);
-            match decode_float(&rep, &[], ValueType::Half) {
+            match decode_float(&rep, &[], ValueType::Half, &mut DecodeBudget::with_limit(1)) {
                 Ok(CrateValue::Half(read)) => assert_eq!(read, bits, "{bits:#06x}"),
                 other => panic!("expected Half, got {other:?}"),
             }
@@ -2395,7 +2586,7 @@ mod tests {
     }
 
     fn parse(blob: &[u8], version: CrateVersion) -> Result<SplineData, UsdcError> {
-        parse_ts_spline(blob, 0, version)
+        parse_ts_spline(blob, 0, version, &mut DecodeBudget::with_limit(u64::MAX))
     }
 
     #[test]
@@ -2868,12 +3059,66 @@ mod tests {
         }
         data.extend_from_slice(&0_u64.to_le_bytes());
         let rep = list_op_rep(ValueType::Dictionary, 8);
+        assert!(matches!(
+            decode_value(&rep, &data, &sections),
+            Err(UsdcError::DecodeBudgetExceeded { .. })
+        ));
+    }
+
+    /// A dictionary whose `n` entries all reference one `n`-element array
+    /// decodes `n²` elements from `O(n)` bytes. The elements are charged
+    /// on every reference, before they are allocated.
+    #[test]
+    fn shared_arrays_are_charged_on_every_reference() {
+        let sections = sections_with(CrateVersion::NEWEST_READABLE);
+        let n = 128_u64;
+        // At 8: an `int[]` of `n` elements.
+        let mut data = vec![0_u8; 8];
+        data.extend_from_slice(&n.to_le_bytes());
+        for i in 0..n {
+            data.extend_from_slice(&u32::try_from(i).unwrap().to_le_bytes());
+        }
+        let mut array = 8_u64.to_le_bytes();
+        array[6] = ValueType::Int as u8;
+        array[7] = 0x80; // array
+        // Then a dictionary of `n` entries, each an offset of 8 to a copy of
+        // the array's rep.
+        let dict = data.len() as u64;
+        data.extend_from_slice(&n.to_le_bytes());
+        for _ in 0..n {
+            data.extend_from_slice(&0_u32.to_le_bytes());
+            data.extend_from_slice(&8_i64.to_le_bytes());
+            data.extend_from_slice(&array);
+        }
+        let mut bytes = [0_u8; 8];
+        bytes[..6].copy_from_slice(&dict.to_le_bytes()[..6]);
+        bytes[6] = ValueType::Dictionary as u8;
+        let rep = RawValueRep::new(bytes);
+
+        let mut unlimited = DecodeBudget::with_limit(u64::MAX);
+        let value = decode_value_within(&rep, &data, &sections, &mut unlimited).unwrap();
+        let CrateValue::Dictionary(entries) = value else {
+            panic!("expected a dictionary");
+        };
+        assert_eq!(entries.len() as u64, n);
+        assert!(unlimited.used() >= n * n, "{}", unlimited.used());
+
+        let mut small = DecodeBudget::with_limit(n * n);
         assert_eq!(
-            decode_value(&rep, &data, &sections).err(),
-            Some(UsdcError::Inconsistent {
-                message: "more nested values than the file can hold"
-            })
+            decode_value_within(&rep, &data, &sections, &mut small).err(),
+            Some(UsdcError::DecodeBudgetExceeded { limit: n * n })
         );
+    }
+
+    /// Repeated long strings are charged by length.
+    #[test]
+    fn cloned_strings_are_charged_by_length() {
+        let mut sections = sections_with(CrateVersion::NEWEST_READABLE);
+        sections.tokens[0] = "x".repeat(1600);
+        let rep = inlined(ValueType::Token, [0, 0, 0, 0]);
+        let mut budget = DecodeBudget::with_limit(u64::MAX);
+        decode_value_within(&rep, &[], &sections, &mut budget).unwrap();
+        assert_eq!(budget.used(), 1 + 100);
     }
 
     #[test]

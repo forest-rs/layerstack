@@ -699,3 +699,40 @@ fn timecodes_decode_to_time_codes() {
         Value::Array(vec![Value::TimeCode(100.1), Value::TimeCode(13.1234)])
     );
 }
+
+/// Reads `data` within `budget`.
+fn read_within(
+    data: &[u8],
+    budget: &mut layerstack_usdc::DecodeBudget,
+) -> Result<layerstack_usdc::AssembleResult, layerstack_usdc::UsdcError> {
+    layerstack_usdc::read_usdc_within(
+        data,
+        LayerId(1),
+        &mut TokenInterner::default(),
+        &mut PathInterner::default(),
+        &mut StubResolver,
+        budget,
+    )
+}
+
+/// One budget covers a whole read: the values of every field, including
+/// the time samples and arrays many specs share, are charged to it, so a
+/// budget one unit short of the read's total fails.
+#[test]
+fn one_budget_covers_the_whole_read() {
+    use layerstack_usdc::{DecodeBudget, UsdcError};
+
+    let data = std::fs::read(binary_assets_dir().join("toy_biplane_idle.usdc")).unwrap();
+    let mut budget = DecodeBudget::with_limit(u64::MAX);
+    read_within(&data, &mut budget).unwrap();
+    let used = budget.used();
+    // Well within the default budget, and far more than one field's worth.
+    assert!(used > 100_000, "{used}");
+    assert!(used < DecodeBudget::for_input(data.len()).remaining());
+
+    assert!(read_within(&data, &mut DecodeBudget::with_limit(used)).is_ok());
+    assert_eq!(
+        read_within(&data, &mut DecodeBudget::with_limit(used - 1)).err(),
+        Some(UsdcError::DecodeBudgetExceeded { limit: used - 1 })
+    );
+}

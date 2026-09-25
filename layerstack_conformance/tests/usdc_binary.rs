@@ -685,3 +685,17 @@ fn variant_set_order_follows_variant_set_names() {
         .collect();
     assert_eq!(names, ["geotype_selector", "geotype"]);
 }
+
+/// `timecode` values decode to time codes, not doubles.
+#[test]
+fn timecodes_decode_to_time_codes() {
+    let mut parsed = read_gen("timecodes");
+    assert_eq!(
+        parsed.expect_value("/root", "single"),
+        Value::TimeCode(11.0)
+    );
+    assert_eq!(
+        parsed.expect_value("/root", "array"),
+        Value::Array(vec![Value::TimeCode(100.1), Value::TimeCode(13.1234)])
+    );
+}

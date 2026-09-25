@@ -809,6 +809,7 @@ impl AssembleCtx<'_> {
             CrateValue::Half(v) => Value::Half(*v),
             CrateValue::Float(v) => Value::Float(*v),
             CrateValue::Double(v) => Value::Double(*v),
+            CrateValue::TimeCode(v) => Value::TimeCode(*v),
             CrateValue::String(s) => Value::String(Arc::from(s.as_str())),
             CrateValue::Token(t) => Value::Token(self.tokens.intern(t)),
             CrateValue::AssetPath(p) => Value::Asset(Arc::from(p.as_str())),

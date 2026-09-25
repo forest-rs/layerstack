@@ -49,10 +49,11 @@
 //! references, payloads and inherits nested to any depth, ranked by walking
 //! each prim's composition graph ([`Stage::explain_prim_graph`]), inherits
 //! implied into every stronger layer stack on the way to the root, internal
-//! references and payloads authored anywhere in a layer stack, list-edited
-//! arcs and target paths, specializes propagated to the root of the graph
-//! and implied like inherits, and variant selections that do not depend on
-//! the features below.
+//! references and payloads authored anywhere in a layer stack, the arcs
+//! authored on the ancestors of subroot arc targets, list-edited arcs and
+//! target paths, specializes propagated to the root of the graph and
+//! implied like inherits, and variant selections that do not depend on the
+//! features below.
 //!
 //! # Not supported
 //!
@@ -62,7 +63,8 @@
 //! - Implied classes in population and variant selection
 //!   ([`Cause::ImpliedClasses`]).
 //! - One site per arc path ([`Cause::CollapsedNodes`]).
-//! - Ancestral arcs of subroot arc targets ([`Cause::AncestralArcs`]),
+//! - Variant selections of the sites ancestral arcs reach, made before the
+//!   prim's index is complete ([`Cause::AncestralArcs`]),
 //!   some nested variant specs ([`Cause::VariantSpecs`]), conflicting
 //!   property spec types ([`Cause::PropertyTypeConflict`]), asset-path
 //!   expressions ([`Cause::ExpressionVariables`]) and variant fallbacks
@@ -503,9 +505,11 @@ enum Cause {
     /// (`PcpCompareSiblingNodeStrength` compares `GetSiblingNumAtOrigin`).
     VariantSetOrder,
     // Missing sources or extra opinions.
-    /// Arcs on namespace ancestors map wrongly into descendants: a subroot
-    /// arc target misses its ancestors' arcs and variant selections, or an
-    /// ancestral site is added where OpenUSD has none.
+    /// The variant sets of a site that an arc authored on a namespace
+    /// ancestor reaches are selected when that arc is expanded, before the
+    /// prim's stronger sites are known; OpenUSD evaluates them once the
+    /// prim's arcs are all added (`_EvalNodeAncestralVariantSets` in
+    /// `pxr/usd/pcp/primIndex.cpp`).
     AncestralArcs,
     /// Variant branch sites are missing: a variant set nested in a branch of
     /// the same prim that reuses an enclosing set's name shares that set's
@@ -599,15 +603,6 @@ const KNOWN: &[Known] = &[
         reason: "`C.usd /C` is reached through `A` and `B` but listed once",
     },
     Known {
-        fixture: "BasicPayload_root",
-        causes: &[C::AncestralArcs],
-        prims: 4,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingSite],
-        reason: "subroot targets under `ref.usd` `/RefPrimA` and `/PayloadPrimA` miss their ancestors' `ref2.usd /PrimC`",
-    },
-    Known {
         fixture: "BasicReferenceDiamond_root",
         causes: &[C::CollapsedNodes],
         prims: 1,
@@ -691,7 +686,7 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "ErrorInvalidReferenceToRelocationSource_root",
         causes: &[C::Relocates],
-        prims: 14,
+        prims: 16,
         props: 0,
         values: 0,
         diffs: &[D::MissingPrim, D::ExtraPrim, D::MissingSite, D::ExtraSite],
@@ -763,29 +758,11 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "RelocateToNone_root",
         causes: &[C::Relocates],
-        prims: 14,
+        prims: 18,
         props: 0,
         values: 0,
         diffs: &[D::ExtraPrim, D::MissingSite, D::ExtraSite],
         reason: "ignores `</Char/ToBeDeleted>` -> `<>` authored in `root.usd`",
-    },
-    Known {
-        fixture: "SpecializesAndAncestralArcs3_root",
-        causes: &[C::AncestralArcs],
-        prims: 6,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingPrim, D::MissingSite],
-        reason: "`/Root/Child/GrandChild` misses `ref2.usd /Ref2Root/Ref2Child`, referenced from its ancestor inside `ref.usd`",
-    },
-    Known {
-        fixture: "SpecializesAndAncestralArcs4_root",
-        causes: &[C::AncestralArcs],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingSite],
-        reason: "`/Parent2/Child` misses `/PS/Sibling` and `/PSI/Sibling`, the ancestral specializes of the implied class `/Parent2/Sibling`",
     },
     Known {
         fixture: "SpecializesAndVariants3_root",
@@ -797,24 +774,6 @@ const KNOWN: &[Known] = &[
         reason: "`/implementation` misses its own `{testVariantSet=testVariant}` branch, selected by the specialized class, so `variantAttr` has no value",
     },
     Known {
-        fixture: "SubrootInheritsAndVariants_root",
-        causes: &[C::AncestralArcs],
-        prims: 1,
-        props: 1,
-        values: 1,
-        diffs: &[D::MissingSite, D::ExtraSite],
-        reason: "the subroot inherit of `/Root/Child` uses `{v=x}`, not the `{v=z}` selected on its ancestor `/Group`, so `a` is `v_x`",
-    },
-    Known {
-        fixture: "SubrootReferenceAndClasses_root",
-        causes: &[C::AncestralArcs],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingSite],
-        reason: "the subroot reference to `/Set/Model` misses classes inherited and specialized through its ancestor `/Set`",
-    },
-    Known {
         fixture: "SubrootReferenceAndRelocates_root",
         causes: &[C::Relocates],
         prims: 1,
@@ -824,27 +783,9 @@ const KNOWN: &[Known] = &[
         reason: "ignores `</Groups/CharGroup/Char>` -> `</Groups/CrowdGroup/Char>` authored in `groups.usd`",
     },
     Known {
-        fixture: "SubrootReferenceAndVariants2_root",
-        causes: &[C::AncestralArcs],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingSite],
-        reason: "the subroot reference to `/CHARGROUP/CHARACTER` misses its ancestor's variant and class sites",
-    },
-    Known {
-        fixture: "SubrootReferenceNonCycle_root",
-        causes: &[C::AncestralArcs],
-        prims: 4,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingPrim, D::MissingSite],
-        reason: "`/ImplNoCycle/A/D` misses `/ImplNoCycle/A/B`, reached through a subroot reference to an ancestor",
-    },
-    Known {
         fixture: "TrickyConnectionToRelocatedAttribute_root",
         causes: &[C::Relocates],
-        prims: 8,
+        prims: 6,
         props: 0,
         values: 4,
         diffs: &[D::MissingPrim, D::ExtraPrim],
@@ -862,10 +803,10 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "TrickyInheritsAndRelocates3_root",
         causes: &[C::Relocates],
-        prims: 8,
+        prims: 6,
         props: 0,
         values: 0,
-        diffs: &[D::MissingPrim, D::ExtraPrim, D::MissingSite],
+        diffs: &[D::ExtraPrim, D::MissingSite],
         reason: "ignores `</GuitarRig/Rig/StringsRig/String1Rig/String>` -> `</GuitarRig/Anim/Strings/String1>` authored in `rig.usd`",
     },
     Known {
@@ -880,9 +821,9 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "TrickyInheritsAndRelocates5_root",
         causes: &[C::Relocates],
-        prims: 16,
+        prims: 10,
         props: 0,
-        values: 5,
+        values: 3,
         diffs: &[D::MissingPrim, D::ExtraPrim],
         reason: "ignores `</TentacleRig/TentacleInterface/Knot03Rig/Anim>` -> `</TentacleRig/Tentacle/Knot03>` authored in `root.usd`",
     },
@@ -907,10 +848,10 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "TrickyLocalClassHierarchyWithRelocates_root",
         causes: &[C::Relocates],
-        prims: 6,
+        prims: 4,
         props: 0,
         values: 0,
-        diffs: &[D::MissingPrim, D::MissingSite],
+        diffs: &[D::MissingPrim],
         reason: "ignores `</C/ArmsRig/LArmRig/ArmRegion/Region>` -> `</C/CollisionRig/Body/CollBody/SimRegions/LArm>` authored in `Sullivan_masterrig.usd`",
     },
     Known {
@@ -961,7 +902,7 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "TrickyMultipleRelocationsAndClasses_root",
         causes: &[C::Relocates],
-        prims: 16,
+        prims: 12,
         props: 0,
         values: 4,
         diffs: &[D::MissingPrim, D::ExtraPrim],
@@ -978,12 +919,12 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "TrickyNestedClasses4_root",
-        causes: &[C::AncestralArcs, C::ImpliedClasses],
-        prims: 3,
+        causes: &[C::ImpliedClasses],
+        prims: 2,
         props: 0,
         values: 0,
-        diffs: &[D::MissingPrim, D::MissingSite],
-        reason: "`/Rig/_Class_ToesRig/ThumbToeLOCALRig` misses the ancestral sites of its subroot class, and population misses the namespace children of the classes implied onto `/Rig/SymToesRig` and `/Rig/LToesRig`",
+        diffs: &[D::MissingPrim],
+        reason: "population misses the namespace children of the classes implied onto `/Rig/SymToesRig` and `/Rig/LToesRig`",
     },
     Known {
         fixture: "TrickyRelocatedTargetInVariant_root",
@@ -1033,10 +974,10 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "TrickySpookyInheritsInSymmetricArmRig_root",
         causes: &[C::Relocates],
-        prims: 3,
+        prims: 2,
         props: 1,
         values: 1,
-        diffs: &[D::MissingPrim, D::MissingSite],
+        diffs: &[D::ExtraPrim, D::MissingSite],
         reason: "ignores `</HumanRig/Rig/LArm/Anim>` -> `</HumanRig/Anim/LArm>` authored in `humanRig.usd`",
     },
     Known {
@@ -1060,10 +1001,10 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "TrickySpookyVariantSelectionInClass_root",
         causes: &[C::Relocates],
-        prims: 5,
-        props: 1,
-        values: 3,
-        diffs: &[D::MissingPrim, D::MissingSite],
+        prims: 6,
+        props: 0,
+        values: 2,
+        diffs: &[D::MissingPrim, D::ExtraPrim, D::MissingSite],
         reason: "ignores `</CharRig/Rig/LeftLegRig/Anim>` -> `</CharRig/Anim/LeftLeg>` authored in `CharRig.usd`",
     },
     Known {
@@ -1082,7 +1023,7 @@ const KNOWN: &[Known] = &[
         props: 0,
         values: 0,
         diffs: &[D::MissingSite, D::Order],
-        reason: "`/Root/B/C` misses the variants of its ancestral sites, and ranks `ref2.usd /C{v2=Z}` before `{v1=C}`",
+        reason: "`/Root/B/C` selects the variants of `ref2.usd /A/B/C` and `/B/C`, reached through its ancestors' references, before its index is complete, so it misses their `{v1=C}` and `{v2=Z}`, and ranks `ref2.usd /C{v2=Z}` before `{v1=C}`",
     },
     Known {
         fixture: "TrickyVariantIndependentSelection_root",
@@ -1121,30 +1062,12 @@ const KNOWN: &[Known] = &[
         reason: "implied `root.usd /Class` selects `pin=latest` in OpenUSD; here `mcat.usd`'s `pin=stable` wins",
     },
     Known {
-        fixture: "VariantSpecializesAndReferenceSurprisingBehavior_root",
-        causes: &[C::AncestralArcs],
-        prims: 1,
-        props: 1,
-        values: 1,
-        diffs: &[D::MissingSite],
-        reason: "`/Model/Material_Child` misses `root.usd /Model_defaultShadingVariant/Material`, which the specializes implied as `/Model/Material` reaches through the reference on `/Model`, so `myInt` is 1, not 0",
-    },
-    Known {
-        fixture: "VariantSpecializesAndReference_root",
-        causes: &[C::AncestralArcs],
-        prims: 1,
-        props: 1,
-        values: 0,
-        diffs: &[D::MissingSite],
-        reason: "`/Model/Material_Child` misses `/Model_defaultShadingVariant/Material`, which the specialized `/New_Shading_Variant/Material` reaches through the reference on `/New_Shading_Variant`",
-    },
-    Known {
         fixture: "bug69932_root",
         causes: &[C::Relocates],
-        prims: 15,
+        prims: 5,
         props: 0,
         values: 0,
-        diffs: &[D::MissingPrim, D::MissingSite, D::ExtraSite],
+        diffs: &[D::MissingPrim, D::ExtraPrim, D::MissingSite, D::ExtraSite],
         reason: "ignores `</Pigeon/Rig/ToesRig/LToesRig/ThumbToeLOCALRig/Toe>` -> `</Pigeon/Anim/Legs/LToes/Thumb>` authored in `Pigeon_bodyrig.usd`",
     },
     Known {
@@ -1223,6 +1146,13 @@ fn strict_prim_stacks_match_pcp_txt() {
         let entry = known.get(name.as_str());
         if print_all && !clean {
             println!("{name:?} => {actual}");
+            if std::env::var("STRICT_ONLY")
+                .is_ok_and(|only| only == "all" || only.split(',').any(|o| o == name))
+            {
+                for line in &observed.detail {
+                    println!("    {}", line.replace('\n', "\n    "));
+                }
+            }
         }
         match entry {
             None if clean => passing.push(name.as_str()),

@@ -233,34 +233,6 @@ impl CycleDetector {
         self.arcs.pop();
     }
 
-    /// Returns `true` when an opinion found at `path` in `layer`, copied
-    /// into the composed prim `dest` from the index of the site the current
-    /// arc targets, would close a cycle: `path` is prefix-related to a site
-    /// on the chain before that target, in a layer stack that contains
-    /// `layer`.
-    ///
-    /// Composition copies opinions the target prim has already accumulated
-    /// through its own arcs. Those arcs were checked against that prim's
-    /// chain, not this one, so a copy can carry `dest` back into its own
-    /// namespace (`/P2/C2/C1` copying `/P1/C1`'s inherit of `/P2`). The
-    /// cycle itself was reported when this chain rejected the arc. The
-    /// target's own site is excluded: its opinions are what the arc brings.
-    pub(crate) fn copies_cycle(
-        &self,
-        paths: &PathInterner,
-        dest: PathId,
-        layer: LayerId,
-        path: PathId,
-    ) -> bool {
-        let sites = &self.chain.sites;
-        let before_target = &sites[..sites.len().saturating_sub(1)];
-        reaches(before_target, paths, dest, path, |stack| {
-            self.stack_layers
-                .get(&stack)
-                .is_some_and(|layers| layers.contains(&layer))
-        })
-    }
-
     /// Gathers the layer stack rooted at `root`, recording each sublayer it
     /// ignores (a cycle or an unresolved asset path).
     pub(crate) fn gather_layer_stack(

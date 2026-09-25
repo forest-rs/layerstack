@@ -1532,6 +1532,231 @@ mod tests {
         assert_matches_fresh(&live, &mut store, &[field_x]);
     }
 
+    /// `/A` references `/Parent/Child` of a library whose `/Parent`
+    /// references `/Source`, and `/B` references `/Parent/Child` of the
+    /// stage's own layer stack, where `/Parent` references `/Source` as
+    /// well. Each reaches `/Source/Child` through the ancestral reference of
+    /// its subroot target. Editing that site, then an opinion on the
+    /// target's parent, recomposes exactly the prims that read it and
+    /// matches a fresh composition each time.
+    ///
+    /// Spec: AOUSD Core §10.2 (a subroot target's ancestral arcs); OpenUSD
+    /// `_BuildInitialPrimIndexFromAncestor` in `pxr/usd/pcp/primIndex.cpp`.
+    #[test]
+    fn ancestral_arc_source_edit_recomposes_subroot_referencing_prims() {
+        let mut store = InMemoryStore::default();
+        let field_x = store.tokens.intern("x");
+        let a = p(&mut store, "/A");
+        let b = p(&mut store, "/B");
+        let parent = p(&mut store, "/Parent");
+        let child = p(&mut store, "/Parent/Child");
+        let source_child = p(&mut store, "/Source/Child");
+        let source = p(&mut store, "/Source");
+
+        let mut root = Layer::new(LayerId(1));
+        root.insert_prim(
+            a,
+            PrimSpec::def().with_reference(Reference::new(LayerId(2), child)),
+        );
+        root.insert_prim(
+            b,
+            PrimSpec::def().with_reference(Reference::new(LayerId(1), child)),
+        );
+        root.insert_prim(
+            parent,
+            PrimSpec::def().with_reference(Reference::new(LayerId(1), source)),
+        );
+        root.insert_prim(child, PrimSpec::over());
+        root.insert_prim(source, PrimSpec::def());
+        root.insert_prim(
+            source_child,
+            PrimSpec::def().with_property(field_x, attr(1)),
+        );
+        store.insert_layer(root);
+
+        let mut library = Layer::new(LayerId(2));
+        library.insert_prim(
+            parent,
+            PrimSpec::def().with_reference(Reference::new(LayerId(2), source)),
+        );
+        library.insert_prim(child, PrimSpec::def());
+        library.insert_prim(source, PrimSpec::def());
+        library.insert_prim(
+            source_child,
+            PrimSpec::def().with_property(field_x, attr(10)),
+        );
+        store.insert_layer(library);
+
+        let options = StageOptions {
+            with_provenance: true,
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+        let x_of = |live: &LiveStage, prim: PathId| {
+            live.stage()
+                .resolve_field_path(PropertyPath::new(prim, field_x))
+                .unwrap()
+                .value
+        };
+        assert_eq!(x_of(&live, a), Value::Int64(10));
+        assert_eq!(x_of(&live, b), Value::Int64(1));
+        assert_eq!(
+            live.composed_prims_for_source(LayerId(2), source_child),
+            [a]
+        );
+
+        let edit = |store: &mut InMemoryStore, layer: LayerId, prim: PathId, value: i64| {
+            store
+                .layers
+                .get_mut(&layer)
+                .unwrap()
+                .prims
+                .get_mut(&prim)
+                .unwrap()
+                .set_property(field_x, attr(value));
+        };
+
+        edit(&mut store, LayerId(2), source_child, 20);
+        live.notify_layer_prim_edits(LayerId(2), &[source_child]);
+        assert_eq!(live.recompose(&mut store), [a]);
+        assert_eq!(x_of(&live, a), Value::Int64(20));
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+
+        edit(&mut store, LayerId(1), source_child, 2);
+        live.notify_layer_prim_edits(LayerId(1), &[source_child]);
+        let updated = live.recompose(&mut store);
+        assert!(updated.contains(&b), "`/B` reads `/Source/Child`");
+        assert_eq!(x_of(&live, b), Value::Int64(2));
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+
+        // An opinion on the target's parent is not an opinion of the
+        // target: the parent's arcs reach it, its properties do not.
+        edit(&mut store, LayerId(2), parent, 30);
+        live.notify_layer_prim_edits(LayerId(2), &[parent]);
+        assert!(live.recompose(&mut store).is_empty());
+        assert_eq!(x_of(&live, a), Value::Int64(20));
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+    }
+
+    /// `/R` references `/Parent/Child` and `/P` has a payload to it; the
+    /// library's `/Parent` references, and has a payload to, the
+    /// `defaultPrim` of a third layer, so each reaches `Child` of that
+    /// prim through an ancestral arc of its subroot target. Those arcs
+    /// depend on the `defaultPrim` as direct arcs do: a missing one is
+    /// reported for each destination, and setting and retargeting it
+    /// recompose both prims to match a fresh composition.
+    ///
+    /// Spec: AOUSD Core §10.3.2.1 (an omitted prim path assumes the
+    /// `defaultPrim`), §10.2 (a subroot target's ancestral arcs).
+    #[test]
+    fn default_prim_edit_recomposes_prims_reaching_it_through_ancestral_arcs() {
+        use crate::CompositionError;
+
+        let mut store = InMemoryStore::default();
+        let field_x = store.tokens.intern("x");
+        let r = p(&mut store, "/R");
+        let pl = p(&mut store, "/P");
+        let parent = p(&mut store, "/Parent");
+        let child = p(&mut store, "/Parent/Child");
+        let first_tok = store.tokens.intern("First");
+        let second_tok = store.tokens.intern("Second");
+
+        let mut root = Layer::new(LayerId(1));
+        root.insert_prim(
+            r,
+            PrimSpec::def().with_reference(Reference::new(LayerId(2), child)),
+        );
+        root.insert_prim(
+            pl,
+            PrimSpec::def().with_payload(Reference::new(LayerId(2), child)),
+        );
+        store.insert_layer(root);
+
+        let mut library = Layer::new(LayerId(2));
+        library.insert_prim(
+            parent,
+            PrimSpec::def()
+                .with_reference(Reference::to_default_prim(LayerId(3)))
+                .with_payload(Reference::to_default_prim(LayerId(3))),
+        );
+        library.insert_prim(child, PrimSpec::def());
+        store.insert_layer(library);
+
+        let mut target = Layer::new(LayerId(3));
+        for (name, value) in [("First", 1_i64), ("Second", 2_i64)] {
+            let prim = p(&mut store, &alloc::format!("/{name}"));
+            let prim_child = p(&mut store, &alloc::format!("/{name}/Child"));
+            target.insert_prim(prim, PrimSpec::def());
+            target.insert_prim(
+                prim_child,
+                PrimSpec::def().with_property(field_x, attr(value)),
+            );
+        }
+        store.insert_layer(target);
+
+        let options = StageOptions {
+            with_provenance: true,
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+        let x_of = |live: &LiveStage, prim: PathId| {
+            live.stage()
+                .resolve_field_path(PropertyPath::new(prim, field_x))
+                .map(|resolved| resolved.value)
+        };
+        assert_eq!(x_of(&live, r), None);
+        assert_eq!(live.prims_using_default_prim(LayerId(3)), [r, pl]);
+        let unresolved: Vec<PathId> = live
+            .stage()
+            .composition_errors()
+            .iter()
+            .filter_map(|error| match error {
+                CompositionError::UnresolvedDefaultPrim(error) => {
+                    assert_eq!((error.layer, error.path), (LayerId(3), None));
+                    Some(error.prim)
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(unresolved.contains(&r) && unresolved.contains(&pl));
+        assert_errors_match_fresh(&live, &mut store);
+
+        for (default_prim, value) in [(first_tok, 1_i64), (second_tok, 2_i64)] {
+            store.layers.get_mut(&LayerId(3)).unwrap().default_prim = Some(default_prim);
+            live.notify_default_prim_edit(LayerId(3));
+            let updated = live.recompose(&mut store);
+            assert!(updated.contains(&r) && updated.contains(&pl));
+            assert_eq!(x_of(&live, r), Some(Value::Int64(value)));
+            assert_eq!(x_of(&live, pl), Some(Value::Int64(value)));
+            assert!(live.stage().composition_errors().is_empty());
+            assert_matches_fresh(&live, &mut store, &[field_x]);
+            assert_errors_match_fresh(&live, &mut store);
+        }
+
+        // A `defaultPrim` naming no prim is reported with the path it names.
+        let absent_tok = store.tokens.intern("Absent");
+        let absent = p(&mut store, "/Absent");
+        store.layers.get_mut(&LayerId(3)).unwrap().default_prim = Some(absent_tok);
+        live.notify_default_prim_edit(LayerId(3));
+        live.recompose(&mut store);
+        assert_eq!(x_of(&live, r), None);
+        let dangling = live
+            .stage()
+            .composition_errors()
+            .iter()
+            .filter(|error| {
+                matches!(error, CompositionError::UnresolvedDefaultPrim(error)
+                    if error.layer == LayerId(3) && error.path == Some(absent))
+            })
+            .count();
+        assert_eq!(
+            dangling, 4,
+            "the reference and the payload, for `/R` and `/P`"
+        );
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+        assert_errors_match_fresh(&live, &mut store);
+    }
+
     /// Regression: recomposing one sibling used to replace the root's child
     /// list with the masked composition's partial list, dropping `/B` from
     /// traversal while `has_prim(/B)` stayed true.

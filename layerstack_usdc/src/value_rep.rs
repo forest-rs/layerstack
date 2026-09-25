@@ -308,14 +308,72 @@ pub struct CrateReference {
 ///
 /// `data` is the full file byte slice (needed for offset-based reads).
 /// `sections` provides the decoded token/string/path tables.
+///
+/// Values nest (dictionaries, time samples, `VtValue`s) through offsets the
+/// file chooses, so a malformed file can make them nest without end or, by
+/// sharing, into exponentially many values. Nesting deeper than
+/// [`MAX_VALUE_DEPTH`], or decoding more nested values than the file has
+/// bytes, fails with [`UsdcError::Inconsistent`].
 pub fn decode_value(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
+    let mut nest = Nesting {
+        depth: 0,
+        remaining: data.len().saturating_add(1024),
+    };
+    decode_nested(rep, data, sections, &mut nest)
+}
+
+/// How deeply decoded values may nest.
+///
+/// OpenUSD guards only against a value that contains itself
+/// (`_LocalUnpackRecursionGuard`, `pxr/usd/sdf/crateFile.cpp:355`); a bound
+/// on depth also stops deep but finite chains from exhausting the stack.
+pub const MAX_VALUE_DEPTH: usize = 64;
+
+/// The nesting state of one [`decode_value`] call.
+struct Nesting {
+    /// Values being decoded that enclose the current one.
+    depth: usize,
+    /// Nested values that may still be decoded.
+    remaining: usize,
+}
+
+/// Decodes a value nested in another, within the bounds of `nest`.
+fn decode_nested(
+    rep: &RawValueRep,
+    data: &[u8],
+    sections: &CrateSections,
+    nest: &mut Nesting,
+) -> Result<CrateValue, UsdcError> {
+    if nest.depth >= MAX_VALUE_DEPTH {
+        return Err(UsdcError::Inconsistent {
+            message: "values nest too deeply",
+        });
+    }
+    nest.remaining = nest
+        .remaining
+        .checked_sub(1)
+        .ok_or(UsdcError::Inconsistent {
+            message: "more nested values than the file can hold",
+        })?;
+    nest.depth += 1;
+    let value = decode_one(rep, data, sections, nest);
+    nest.depth -= 1;
+    value
+}
+
+fn decode_one(
+    rep: &RawValueRep,
+    data: &[u8],
+    sections: &CrateSections,
+    nest: &mut Nesting,
+) -> Result<CrateValue, UsdcError> {
     let vtype = rep.value_type()?;
     if rep.is_array_edit() {
-        return decode_array_edit(rep, data, sections, vtype);
+        return decode_array_edit(rep, data, sections, vtype, nest);
     }
 
     match vtype {
@@ -352,7 +410,7 @@ pub fn decode_value(
             let v = decode_inlined_or_offset_u32(rep, data)?;
             Ok(CrateValue::Permission(v))
         }
-        ValueType::Dictionary => decode_dictionary(rep, data, sections),
+        ValueType::Dictionary => decode_dictionary(rep, data, sections, nest),
         ValueType::VariantSelectionMap => decode_variant_selection_map(rep, data, sections),
         ValueType::Relocates => decode_relocates_map(rep, data, sections),
         ValueType::TokenListOp
@@ -364,8 +422,8 @@ pub fn decode_value(
         | ValueType::Int64ListOp
         | ValueType::UIntListOp
         | ValueType::UInt64ListOp
-        | ValueType::UnregisteredValueListOp => decode_list_op(rep, data, sections),
-        ValueType::TimeSamples => decode_time_samples(rep, data, sections),
+        | ValueType::UnregisteredValueListOp => decode_list_op(rep, data, sections, nest),
+        ValueType::TimeSamples => decode_time_samples(rep, data, sections, nest),
         ValueType::PathVector => decode_path_vector(rep, data, sections),
         ValueType::TokenVector => decode_token_vector(rep, data, sections),
         ValueType::DoubleVector => decode_double_vector(rep, data),
@@ -390,10 +448,10 @@ pub fn decode_value(
         | ValueType::Matrix2d
         | ValueType::Matrix3d
         | ValueType::Matrix4d => decode_math_type(rep, data, vtype),
-        ValueType::Value => decode_value_indirection(rep, data, sections),
-        ValueType::UnregisteredValue => decode_unregistered_value(rep, data, sections),
+        ValueType::Value => decode_value_indirection(rep, data, sections, nest),
+        ValueType::UnregisteredValue => decode_unregistered_value(rep, data, sections, nest),
         ValueType::Payload => decode_payload(rep, data, sections),
-        ValueType::Spline => decode_spline(rep, data, sections),
+        ValueType::Spline => decode_spline(rep, data, sections, nest),
     }
 }
 
@@ -989,6 +1047,7 @@ fn decode_dictionary(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
+    nest: &mut Nesting,
 ) -> Result<CrateValue, UsdcError> {
     // Only the empty dictionary is inlined (`_EncodeInline`,
     // `pxr/usd/sdf/crateValueInliners.h`).
@@ -996,7 +1055,7 @@ fn decode_dictionary(
         return Ok(CrateValue::Dictionary(vec![]));
     }
     let off = payload_offset_usize(rep, data)?;
-    let (entries, _) = decode_dictionary_at(data, off, sections)?;
+    let (entries, _) = decode_dictionary_at(data, off, sections, nest)?;
     Ok(CrateValue::Dictionary(entries))
 }
 
@@ -1008,6 +1067,7 @@ fn decode_dictionary_at(
     data: &[u8],
     off: usize,
     sections: &CrateSections,
+    nest: &mut Nesting,
 ) -> Result<(Vec<(String, CrateValue)>, usize), UsdcError> {
     // Each entry advances past at least 12 bytes, so the loop ends at the
     // end of the data.
@@ -1021,7 +1081,7 @@ fn decode_dictionary_at(
         let key = lookup_string(sections, key_idx);
 
         // Value: a `VtValue` reached through a relative offset.
-        let child_val = read_vt_value(data, &mut pos, sections)?;
+        let child_val = read_vt_value(data, &mut pos, sections, nest)?;
         entries.push((key, child_val));
     }
 
@@ -1036,6 +1096,7 @@ fn decode_list_op(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
+    nest: &mut Nesting,
 ) -> Result<CrateValue, UsdcError> {
     let vtype = rep.value_type()?;
     let off = payload_offset_usize(rep, data)?;
@@ -1070,7 +1131,7 @@ fn decode_list_op(
     let mut deleted_items = vec![];
 
     if add_explicit {
-        let (items, consumed) = read_list_op_items(vtype, data, pos, sections)?;
+        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, nest)?;
         explicit_items = Some(items);
         pos += consumed;
     } else if make_explicit {
@@ -1078,32 +1139,32 @@ fn decode_list_op(
     }
 
     if add_items_flag {
-        let (items, consumed) = read_list_op_items(vtype, data, pos, sections)?;
+        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, nest)?;
         added_items = items;
         pos += consumed;
     }
 
     if prepend_flag {
-        let (items, consumed) = read_list_op_items(vtype, data, pos, sections)?;
+        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, nest)?;
         prepended_items = items;
         pos += consumed;
     }
 
     if append_flag {
-        let (items, consumed) = read_list_op_items(vtype, data, pos, sections)?;
+        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, nest)?;
         appended_items = items;
         pos += consumed;
     }
 
     if delete_flag {
-        let (items, consumed) = read_list_op_items(vtype, data, pos, sections)?;
+        let (items, consumed) = read_list_op_items(vtype, data, pos, sections, nest)?;
         deleted_items = items;
         pos += consumed;
     }
 
     if reorder_flag {
         // Deprecated; skip.
-        let (_items, _consumed) = read_list_op_items(vtype, data, pos, sections)?;
+        let (_items, _consumed) = read_list_op_items(vtype, data, pos, sections, nest)?;
     }
 
     // Map deprecated 'add' to 'append' when it's the only composable op.
@@ -1139,6 +1200,7 @@ fn read_list_op_items(
     data: &[u8],
     pos: usize,
     sections: &CrateSections,
+    nest: &mut Nesting,
 ) -> Result<(Vec<CrateValue>, usize), UsdcError> {
     let num = read_u64_at(data, pos)?;
     let mut cursor = pos + 8;
@@ -1181,9 +1243,9 @@ fn read_list_op_items(
                 cursor += 8;
                 CrateValue::UInt64(v)
             }
-            ValueType::ReferenceListOp => decode_reference_at(data, &mut cursor, sections)?,
+            ValueType::ReferenceListOp => decode_reference_at(data, &mut cursor, sections, nest)?,
             ValueType::PayloadListOp => decode_payload_at(data, &mut cursor, sections)?,
-            ValueType::UnregisteredValueListOp => read_vt_value(data, &mut cursor, sections)?,
+            ValueType::UnregisteredValueListOp => read_vt_value(data, &mut cursor, sections, nest)?,
             _ => {
                 return Err(UsdcError::Inconsistent {
                     message: "unsupported list op type",
@@ -1204,11 +1266,12 @@ fn read_vt_value(
     data: &[u8],
     pos: &mut usize,
     sections: &CrateSections,
+    nest: &mut Nesting,
 ) -> Result<CrateValue, UsdcError> {
     let mut rep_offset = relative_offset(data, *pos)?;
     let child_rep = RawValueRep::new(read_bytes(data, &mut rep_offset)?);
     *pos = rep_offset;
-    decode_value(&child_rep, data, sections)
+    decode_nested(&child_rep, data, sections, nest)
 }
 
 /// Reads the offset field at `pos`, which OpenUSD's `_RecursiveRead`
@@ -1243,12 +1306,13 @@ fn decode_reference_at(
     data: &[u8],
     pos: &mut usize,
     sections: &CrateSections,
+    nest: &mut Nesting,
 ) -> Result<CrateValue, UsdcError> {
     let asset_path = lookup_string(sections, read_u32_le(data, pos)? as usize);
     let prim_path = lookup_path(sections, read_u32_le(data, pos)? as usize);
     let layer_offset = read_f64_le(data, pos)?;
     let layer_scale = read_f64_le(data, pos)?;
-    let (_custom_data, end) = decode_dictionary_at(data, *pos, sections)?;
+    let (_custom_data, end) = decode_dictionary_at(data, *pos, sections, nest)?;
     *pos = end;
     Ok(reference_dictionary(
         asset_path,
@@ -1309,6 +1373,7 @@ fn decode_time_samples(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
+    nest: &mut Nesting,
 ) -> Result<CrateValue, UsdcError> {
     let off = payload_offset_usize(rep, data)?;
     if off == 0 {
@@ -1336,7 +1401,7 @@ fn decode_time_samples(
     // 4. Decode timecodes. OpenUSD packs them as a `std::vector<double>`
     //    (`TimeSamples::times`, `pxr/usd/sdf/crateFile.cpp:1596`), which is
     //    the `DoubleVector` type, not a `double[]` array.
-    let tc_value = decode_value(&tc_rep, data, sections)?;
+    let tc_value = decode_nested(&tc_rep, data, sections, nest)?;
     let timecodes: Vec<f64> = match tc_value {
         CrateValue::DoubleVector(times) => times,
         CrateValue::Array(arr) => arr
@@ -1363,7 +1428,7 @@ fn decode_time_samples(
 
     for time in timecodes {
         let vr = RawValueRep::new(read_bytes(data, &mut rep_off)?);
-        let val = decode_value(&vr, data, sections)?;
+        let val = decode_nested(&vr, data, sections, nest)?;
         samples.push((time, val));
     }
 
@@ -1502,9 +1567,10 @@ fn decode_value_indirection(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
+    nest: &mut Nesting,
 ) -> Result<CrateValue, UsdcError> {
     let mut pos = payload_offset_usize(rep, data)?;
-    read_vt_value(data, &mut pos, sections)
+    read_vt_value(data, &mut pos, sections, nest)
 }
 
 /// Decodes an `SdfUnregisteredValue`, which OpenUSD stores as a `VtValue`
@@ -1513,9 +1579,10 @@ fn decode_unregistered_value(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
+    nest: &mut Nesting,
 ) -> Result<CrateValue, UsdcError> {
     let mut pos = payload_offset_usize(rep, data)?;
-    read_vt_value(data, &mut pos, sections)
+    read_vt_value(data, &mut pos, sections, nest)
 }
 
 fn decode_payload(
@@ -1547,6 +1614,7 @@ fn decode_array_edit(
     data: &[u8],
     sections: &CrateSections,
     element_type: ValueType,
+    nest: &mut Nesting,
 ) -> Result<CrateValue, UsdcError> {
     require_version(sections, CrateVersion::ARRAY_EDITS, "array edit")?;
     if rep.is_array() || rep.is_inlined() || rep.is_compressed() {
@@ -1593,12 +1661,12 @@ fn decode_array_edit(
         });
     }
 
-    let CrateValue::Array(literals) = decode_value(&literals_rep, data, sections)? else {
+    let CrateValue::Array(literals) = decode_nested(&literals_rep, data, sections, nest)? else {
         return Err(UsdcError::Inconsistent {
             message: "array edit literals did not decode to an array",
         });
     };
-    let CrateValue::Array(indexes) = decode_value(&indexes_rep, data, sections)? else {
+    let CrateValue::Array(indexes) = decode_nested(&indexes_rep, data, sections, nest)? else {
         return Err(UsdcError::Inconsistent {
             message: "array edit instructions did not decode to an array",
         });
@@ -1837,6 +1905,7 @@ fn decode_spline(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
+    nest: &mut Nesting,
 ) -> Result<CrateValue, UsdcError> {
     require_version(sections, CrateVersion::SPLINES, "spline value")?;
     let off = payload_offset_usize(rep, data)?;
@@ -1863,7 +1932,7 @@ fn decode_spline(
     let mut pos = blob_end + 8;
     for _ in 0..count {
         read_f64_le(data, &mut pos)?;
-        let (_, end) = decode_dictionary_at(data, pos, sections)?;
+        let (_, end) = decode_dictionary_at(data, pos, sections, nest)?;
         pos = end;
     }
 
@@ -2754,6 +2823,54 @@ mod tests {
         ] {
             assert!(decode_value(&rep(vtype, flags, 8), &data, &sections).is_err());
         }
+    }
+
+    /// A `VtValue` whose offset leads back to itself nests without end;
+    /// decoding stops at the depth bound instead of overflowing the stack.
+    #[test]
+    fn self_containing_values_are_rejected() {
+        let sections = sections_with(CrateVersion::NEWEST_READABLE);
+        // At 8: an offset of 8 to the rep at 16, which is a `VtValue` at 8.
+        let mut data = vec![0_u8; 8];
+        data.extend_from_slice(&8_i64.to_le_bytes());
+        data.extend_from_slice(&[8, 0, 0, 0, 0, 0, ValueType::Value as u8, 0]);
+        let rep = list_op_rep(ValueType::Value, 8);
+        assert_eq!(
+            decode_value(&rep, &data, &sections).err(),
+            Some(UsdcError::Inconsistent {
+                message: "values nest too deeply"
+            })
+        );
+    }
+
+    /// Dictionaries whose entries share one nested dictionary would decode
+    /// into exponentially many values; decoding stops at the budget.
+    #[test]
+    fn shared_values_are_bounded() {
+        let sections = sections_with(CrateVersion::NEWEST_READABLE);
+        // Dictionary `d` at 8 + 48·d has two entries whose values are both
+        // dictionary `d + 1`; dictionary 40 is empty.
+        let mut data = vec![0_u8; 8];
+        for d in 0..40_u64 {
+            let next = 8 + 48 * (d + 1);
+            data.extend_from_slice(&2_u64.to_le_bytes());
+            for _ in 0..2 {
+                data.extend_from_slice(&0_u32.to_le_bytes());
+                data.extend_from_slice(&8_i64.to_le_bytes());
+                let mut rep = next.to_le_bytes();
+                rep[6] = ValueType::Dictionary as u8;
+                rep[7] = 0;
+                data.extend_from_slice(&rep);
+            }
+        }
+        data.extend_from_slice(&0_u64.to_le_bytes());
+        let rep = list_op_rep(ValueType::Dictionary, 8);
+        assert_eq!(
+            decode_value(&rep, &data, &sections).err(),
+            Some(UsdcError::Inconsistent {
+                message: "more nested values than the file can hold"
+            })
+        );
     }
 
     #[test]

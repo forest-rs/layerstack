@@ -13,24 +13,35 @@ use alloc::vec::Vec;
 use hashbrown::HashMap;
 
 use crate::{
-    doc::{LayerStore, PrimSpec, Reference, ReferenceTarget, VariantSpec},
+    doc::{LayerStore, PrimSpec, Reference, ReferenceTarget, VariantSpec, default_prim_names},
     interner::TokenId,
     layer_stack::LayerStack,
     listop::{ListOp, resolve_list_chain},
     path::{Path, PathId},
 };
 
-pub(crate) fn resolve_reference_target_path(
+/// Returns the prim path `reference` targets, like
+/// [`Reference::target_path`], without interning: a `defaultPrim` target
+/// whose path has never been interned has no prim spec in any layer and
+/// yields `None`.
+///
+/// For read-only passes that only look for specs at the target. Passes that
+/// follow the arc use [`Reference::target_path`], so the arc can be
+/// reported when it does not resolve.
+pub(crate) fn lookup_reference_target_path(
     store: &dyn LayerStore,
     reference: &Reference,
 ) -> Option<PathId> {
     match reference.target {
         ReferenceTarget::Prim(path) => Some(path),
         ReferenceTarget::DefaultPrim => {
-            let layer = store.layer(reference.layer)?;
-            let default_prim = layer.default_prim?;
-            let path = Path::root().join(&[default_prim]);
-            store.paths().lookup(&path)
+            let default_prim = store.layer(reference.layer)?.default_prim?;
+            let names = default_prim_names(store.tokens().resolve(default_prim))?;
+            let segments = names
+                .into_iter()
+                .map(|name| store.tokens().lookup(name))
+                .collect::<Option<Vec<_>>>()?;
+            store.paths().lookup(&Path::root().join(&segments))
         }
     }
 }

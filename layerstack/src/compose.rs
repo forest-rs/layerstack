@@ -17,16 +17,18 @@ use hashbrown::{HashMap, HashSet};
 use crate::{
     arc_cycle::CycleDetector,
     arcs::{
-        SelectionScope, resolve_branch_payloads_in, resolve_direct_references_for_prim,
-        resolve_inherits_for_prim, resolve_inherits_for_prim_in, resolve_payloads_for_prim,
-        resolve_payloads_for_prim_in, resolve_reference_target_path, resolve_references_for_prim,
-        resolve_specializes_for_prim, resolve_specializes_for_prim_in,
+        SelectionScope, lookup_reference_target_path, resolve_branch_payloads_in,
+        resolve_direct_references_for_prim, resolve_inherits_for_prim,
+        resolve_inherits_for_prim_in, resolve_payloads_for_prim, resolve_payloads_for_prim_in,
+        resolve_references_for_prim, resolve_specializes_for_prim, resolve_specializes_for_prim_in,
         resolve_variant_branch_payloads, resolve_variant_child_references,
         resolve_variant_references_in, resolve_variant_selections_for_prim, spec_arcs_apply,
     },
-    composition_error::CompositionError,
+    composition_error::{CompositionError, UnresolvedDefaultPrim},
     dependency_map::{ArcDependency, DependencyBuilder},
-    doc::{FieldValue, LayerId, LayerOffset, LayerStore, Reference, composed_entries},
+    doc::{
+        FieldValue, LayerId, LayerOffset, LayerStore, Reference, ReferenceTarget, composed_entries,
+    },
     interner::TokenId,
     layer_stack::LayerStack,
     path::{PathId, PropertyPath, TargetPath},
@@ -260,15 +262,12 @@ pub(crate) fn compose_stage(
         builder.retain_prims(&prims);
     }
     let dependencies = dep_builder.map(DependencyBuilder::finish);
-    // Only prims of the composed stage report arc cycles: population
+    // Only prims of the composed stage report arc errors: population
     // over-approximates, and pruned prims are not part of the stage.
     let errors = cycles
         .into_errors()
         .into_iter()
-        .filter(|error| match error {
-            CompositionError::ArcCycle(cycle) => prims.contains_key(&cycle.prim),
-            _ => true,
-        })
+        .filter(|error| error.prim().is_none_or(|prim| prims.contains_key(&prim)))
         .collect();
     Stage::from_parts(prims, children, options.with_provenance, dependencies)
         .with_composition_errors(errors)
@@ -1622,7 +1621,7 @@ fn resolve_full_variant_selections(
     let mut ref_stacks: Vec<(LayerStack, PathId)> = Vec::new();
     for reference in refs {
         let ref_stack = LayerStack::gather(store, reference.layer);
-        let Some(reference_path) = resolve_reference_target_path(store, &reference) else {
+        let Some(reference_path) = lookup_reference_target_path(store, &reference) else {
             continue;
         };
         let ref_selections = resolve_variant_selections_for_prim(store, &ref_stack, reference_path);
@@ -1684,7 +1683,7 @@ fn resolve_full_variant_selections(
     let mut payload_stacks: Vec<(LayerStack, PathId)> = Vec::new();
     for payload in payloads {
         let payload_stack = LayerStack::gather(store, payload.layer);
-        let Some(payload_path) = resolve_reference_target_path(store, &payload) else {
+        let Some(payload_path) = lookup_reference_target_path(store, &payload) else {
             continue;
         };
         let payload_selections =
@@ -2413,6 +2412,55 @@ fn add_local_and_variant_opinions(
     }
 }
 
+/// Resolves the prim a reference or payload (`arc`) followed for
+/// `dest_root` targets (see [`Reference::target_path`]).
+///
+/// For a [`ReferenceTarget::DefaultPrim`] target, reports
+/// [`UnresolvedDefaultPrim`] when the target layer's `defaultPrim` names no
+/// prim path (the arc is then ignored) or no layer of the target layer stack
+/// has a spec at the path it names (the arc is followed and contributes
+/// nothing, as in OpenUSD).
+///
+/// Spec: AOUSD Core §10.3.2.1 (an omitted prim path assumes the target
+/// layer's `defaultPrim`; a reference to a path without specs is a
+/// composition error). OpenUSD: `_EvalRefOrPayloadArcs` and
+/// `_EvalUnresolvedPrimPathError` in `pxr/usd/pcp/primIndex.cpp`.
+fn resolve_arc_target(
+    store: &mut dyn LayerStore,
+    reference: &Reference,
+    dest_root: PathId,
+    arc: ArcKind,
+    cycles: &mut CycleDetector,
+) -> Option<PathId> {
+    let target = reference.target_path(store);
+    if reference.target != ReferenceTarget::DefaultPrim {
+        return target;
+    }
+    let has_spec = |store: &dyn LayerStore, path: PathId| {
+        LayerStack::gather(store, reference.layer)
+            .layers
+            .iter()
+            .filter_map(|id| store.layer(*id))
+            .any(|layer| layer.prims.contains_key(&path))
+    };
+    let unresolved = match target {
+        None => Some(None),
+        Some(path) if !has_spec(store, path) => Some(Some(path)),
+        Some(_) => None,
+    };
+    if let Some(path) = unresolved {
+        cycles.report(CompositionError::UnresolvedDefaultPrim(
+            UnresolvedDefaultPrim {
+                prim: dest_root,
+                arc,
+                layer: reference.layer,
+                path,
+            },
+        ));
+    }
+    target
+}
+
 fn add_reference_opinions(
     store: &mut dyn LayerStore,
     local_stack: &LayerStack,
@@ -2440,10 +2488,10 @@ fn add_reference_opinions(
             let arc_list_index = u16::try_from(arc_list_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_root).depth()).unwrap_or(u16::MAX);
-            let Some(reference_path) = resolve_reference_target_path(store, &reference) else {
-                continue;
-            };
-            if let Some(d) = deps.as_deref_mut() {
+            // An unresolved target is reported when the arc is followed.
+            if let Some(d) = deps.as_deref_mut()
+                && let Some(reference_path) = reference.target_path(store)
+            {
                 d.add_arc(ArcDependency {
                     source: reference_path,
                     target: dest_root,
@@ -3487,7 +3535,9 @@ fn add_reference_edge_opinions(
     if !out.contains_key(&dest_root) {
         return;
     }
-    let Some(reference_path) = resolve_reference_target_path(store, &reference) else {
+    let Some(reference_path) =
+        resolve_arc_target(store, &reference, dest_root, ArcKind::References, cycles)
+    else {
         return;
     };
     // An arc that would close a cycle is a composition error and is skipped
@@ -4411,10 +4461,10 @@ fn add_payload_opinions(
             let arc_list_index = u16::try_from(arc_list_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_root).depth()).unwrap_or(u16::MAX);
-            let Some(payload_path) = resolve_reference_target_path(store, &payload) else {
-                continue;
-            };
-            if let Some(d) = deps.as_deref_mut() {
+            // An unresolved target is reported when the arc is followed.
+            if let Some(d) = deps.as_deref_mut()
+                && let Some(payload_path) = payload.target_path(store)
+            {
                 d.add_arc(ArcDependency {
                     source: payload_path,
                     target: dest_root,
@@ -4484,7 +4534,9 @@ fn add_payload_edge_opinions(
     if !out.contains_key(&dest_root) {
         return;
     }
-    let Some(reference_path) = resolve_reference_target_path(store, &reference) else {
+    let Some(reference_path) =
+        resolve_arc_target(store, &reference, dest_root, ArcKind::Payloads, cycles)
+    else {
         return;
     };
     // An arc that would close a cycle is a composition error and is skipped
@@ -6388,5 +6440,271 @@ mod instancing_tests {
                 Value::Double(0.0)
             ])))
         );
+    }
+}
+
+/// References and payloads with no authored prim path, which target the
+/// `defaultPrim` of their layer.
+///
+/// Spec: AOUSD Core §7.6.1.2.3 (`defaultPrim`), §10.3.2.1 (references),
+/// §10.3.2.2 (payloads). Expectations follow OpenUSD 26.08; the conformance
+/// crate's `default_prim` test replays the same cases from files.
+#[cfg(test)]
+mod default_prim_tests {
+    use super::*;
+    use crate::{
+        composition_error::UnresolvedDefaultPrim,
+        doc::{InMemoryStore, Layer, PrimSpec},
+    };
+    use alloc::{string::String, vec};
+
+    const ROOT: LayerId = LayerId(1);
+    const ASSET: LayerId = LayerId(2);
+    const INNER: LayerId = LayerId(3);
+
+    /// A layer defining `/Model/Geo/Mesh` and `/Other/OtherChild`, with the
+    /// given `defaultPrim`.
+    fn asset(store: &mut InMemoryStore, id: LayerId, default_prim: Option<&str>) -> Layer {
+        let mut layer = Layer::new(id);
+        layer.default_prim = default_prim.map(|name| store.tokens.intern(name));
+        for (path, child) in [
+            ("/Model", Some("Geo")),
+            ("/Model/Geo", Some("Mesh")),
+            ("/Model/Geo/Mesh", None),
+            ("/Other", Some("OtherChild")),
+            ("/Other/OtherChild", None),
+        ] {
+            let children = child.map(|c| store.tokens.intern(c)).into_iter().collect();
+            let path = store.path(path);
+            layer.insert_prim(path, PrimSpec::def().with_children(children));
+        }
+        layer
+    }
+
+    /// Inserts a root layer holding `prims`, plus `layers`, and composes it.
+    fn compose(
+        store: &mut InMemoryStore,
+        default_prim: Option<&str>,
+        prims: Vec<(&str, PrimSpec)>,
+        layers: Vec<Layer>,
+    ) -> Stage {
+        let mut root = Layer::new(ROOT);
+        root.default_prim = default_prim.map(|name| store.tokens.intern(name));
+        for (path, spec) in prims {
+            let id = store.path(path);
+            root.insert_prim(id, spec);
+        }
+        store.insert_layer(root);
+        for layer in layers {
+            store.insert_layer(layer);
+        }
+        Stage::compose(store, ROOT, StageOptions::default())
+    }
+
+    /// The child names of `prim`, or `None` when it is not composed.
+    fn children(stage: &Stage, store: &mut InMemoryStore, prim: &str) -> Option<Vec<String>> {
+        let prim = store.path(prim);
+        if !stage.has_prim(prim) {
+            return None;
+        }
+        Some(
+            stage
+                .children_of(prim)
+                .unwrap_or(&[])
+                .iter()
+                .map(|child| {
+                    let leaf = store.paths.resolve(*child).leaf().expect("child name");
+                    String::from(store.tokens.resolve(leaf))
+                })
+                .collect(),
+        )
+    }
+
+    /// The `(layer, path)` sites of `prim`'s prim stack.
+    fn sites(stage: &Stage, store: &mut InMemoryStore, prim: &str) -> Vec<(LayerId, PathId)> {
+        let prim = store.path(prim);
+        stage
+            .explain_prim(prim)
+            .expect("prim is composed")
+            .iter()
+            .map(|key| (key.layer_id, key.lookup_path))
+            .collect()
+    }
+
+    fn unresolved(
+        store: &mut InMemoryStore,
+        prim: &str,
+        arc: ArcKind,
+        layer: LayerId,
+        path: Option<&str>,
+    ) -> CompositionError {
+        CompositionError::UnresolvedDefaultPrim(UnresolvedDefaultPrim {
+            prim: store.path(prim),
+            arc,
+            layer,
+            path: path.map(|path| store.path(path)),
+        })
+    }
+
+    #[test]
+    fn two_placements_compose_only_the_default_prim() {
+        let mut store = InMemoryStore::default();
+        let asset = asset(&mut store, ASSET, Some("Model"));
+        let other = store.path("/Other");
+        let stage = compose(
+            &mut store,
+            None,
+            vec![
+                (
+                    "/A",
+                    PrimSpec::def().with_reference(Reference::to_default_prim(ASSET)),
+                ),
+                (
+                    "/B",
+                    PrimSpec::def().with_payload(Reference::to_default_prim(ASSET)),
+                ),
+                (
+                    "/Explicit",
+                    PrimSpec::def().with_reference(Reference::new(ASSET, other)),
+                ),
+            ],
+            vec![asset],
+        );
+
+        let model = store.path("/Model");
+        for placement in ["/A", "/B"] {
+            assert_eq!(
+                children(&stage, &mut store, placement),
+                Some(vec!["Geo".into()]),
+                "{placement} composes the default prim's children only"
+            );
+            let root_site = store.path(placement);
+            assert_eq!(
+                sites(&stage, &mut store, placement),
+                [(ROOT, root_site), (ASSET, model)],
+                "{placement} shows the selected source"
+            );
+        }
+        assert_eq!(
+            children(&stage, &mut store, "/A/Geo"),
+            Some(vec!["Mesh".into()])
+        );
+        assert_eq!(children(&stage, &mut store, "/A/OtherChild"), None);
+        assert_eq!(children(&stage, &mut store, "/Other"), None);
+        assert_eq!(
+            children(&stage, &mut store, "/Explicit"),
+            Some(vec!["OtherChild".into()]),
+            "an explicit target ignores `defaultPrim`"
+        );
+        assert_eq!(stage.composition_errors(), []);
+    }
+
+    #[test]
+    fn default_prim_may_name_a_subroot_prim() {
+        let mut store = InMemoryStore::default();
+        let asset = asset(&mut store, ASSET, Some("Model/Geo"));
+        let stage = compose(
+            &mut store,
+            None,
+            vec![(
+                "/A",
+                PrimSpec::def().with_reference(Reference::to_default_prim(ASSET)),
+            )],
+            vec![asset],
+        );
+        assert_eq!(
+            children(&stage, &mut store, "/A"),
+            Some(vec!["Mesh".into()])
+        );
+        assert_eq!(stage.composition_errors(), []);
+    }
+
+    #[test]
+    fn internal_arc_targets_the_authoring_layers_default_prim() {
+        let mut store = InMemoryStore::default();
+        let local_child = store.tokens.intern("LocalChild");
+        let stage = compose(
+            &mut store,
+            Some("Local"),
+            vec![
+                ("/Local", PrimSpec::def().with_children(vec![local_child])),
+                ("/Local/LocalChild", PrimSpec::def()),
+                (
+                    "/A",
+                    PrimSpec::def().with_reference(Reference::to_default_prim(ROOT)),
+                ),
+            ],
+            vec![],
+        );
+        assert_eq!(
+            children(&stage, &mut store, "/A"),
+            Some(vec!["LocalChild".into()])
+        );
+        assert_eq!(stage.composition_errors(), []);
+    }
+
+    #[test]
+    fn missing_or_invalid_default_prim_is_reported() {
+        for (default_prim, arc, path) in [
+            (None, ArcKind::References, None),
+            (Some("Model.attr"), ArcKind::Payloads, None),
+            (Some("1Model"), ArcKind::References, None),
+            (Some("Missing"), ArcKind::Payloads, Some("/Missing")),
+            (
+                Some("Model/Missing"),
+                ArcKind::References,
+                Some("/Model/Missing"),
+            ),
+        ] {
+            let mut store = InMemoryStore::default();
+            let asset = asset(&mut store, ASSET, default_prim);
+            let reference = Reference::to_default_prim(ASSET);
+            let spec = match arc {
+                ArcKind::Payloads => PrimSpec::def().with_payload(reference),
+                _ => PrimSpec::def().with_reference(reference),
+            };
+            let stage = compose(&mut store, None, vec![("/A", spec)], vec![asset]);
+
+            assert_eq!(
+                children(&stage, &mut store, "/A"),
+                Some(vec![]),
+                "defaultPrim {default_prim:?}: the arc contributes nothing"
+            );
+            let a = store.path("/A");
+            assert_eq!(sites(&stage, &mut store, "/A"), [(ROOT, a)]);
+            let expected = unresolved(&mut store, "/A", arc, ASSET, path);
+            assert_eq!(
+                stage.composition_errors(),
+                [expected],
+                "defaultPrim {default_prim:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn unresolved_default_prim_inside_an_asset_is_reported_on_the_placement() {
+        // `/A` references the asset's `/Model` explicitly; `/Model` in turn
+        // references an inner layer without a `defaultPrim`.
+        let mut store = InMemoryStore::default();
+        let mut outer = asset(&mut store, ASSET, None);
+        let model = store.path("/Model");
+        let inner = asset(&mut store, INNER, None);
+        outer
+            .prims
+            .get_mut(&model)
+            .expect("asset defines /Model")
+            .add_reference(Reference::to_default_prim(INNER));
+        let stage = compose(
+            &mut store,
+            None,
+            vec![(
+                "/A",
+                PrimSpec::def().with_reference(Reference::new(ASSET, model)),
+            )],
+            vec![outer, inner],
+        );
+        assert_eq!(children(&stage, &mut store, "/A"), Some(vec!["Geo".into()]));
+        let expected = unresolved(&mut store, "/A", ArcKind::References, INNER, None);
+        assert_eq!(stage.composition_errors(), [expected]);
     }
 }

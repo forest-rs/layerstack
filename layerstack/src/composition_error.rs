@@ -25,6 +25,57 @@ pub enum CompositionError {
     SublayerCycle(SublayerCycle),
     /// A composition arc that would form a cycle. The arc was ignored.
     ArcCycle(ArcCycle),
+    /// A reference or payload with no authored prim path whose target
+    /// layer's `defaultPrim` does not name a prim. The arc contributed
+    /// nothing.
+    UnresolvedDefaultPrim(UnresolvedDefaultPrim),
+}
+
+impl CompositionError {
+    /// Returns the composed prim whose composition found the error, or
+    /// `None` for an error in a layer stack.
+    #[must_use]
+    pub fn prim(&self) -> Option<PathId> {
+        match self {
+            Self::SublayerCycle(_) => None,
+            Self::ArcCycle(cycle) => Some(cycle.prim),
+            Self::UnresolvedDefaultPrim(error) => Some(error.prim),
+        }
+    }
+}
+
+/// A reference or payload with no authored prim path
+/// ([`ReferenceTarget::DefaultPrim`]) whose target could not be resolved,
+/// found while composing `prim`.
+///
+/// Such an arc targets the prim named by the `defaultPrim` of `layer`, the
+/// root layer of the target layer stack (the authoring layer, for an
+/// internal arc). It does not resolve when `layer` has no `defaultPrim`, when
+/// `defaultPrim` is not a prim path ([`Layer::default_prim_path`]), or when
+/// no layer of the target layer stack has a prim spec at the path it names.
+/// The arc contributes no opinions and the rest of the prim is composed as
+/// normal.
+///
+/// Spec: AOUSD Core §10.3.2.1 ("If there are no specs in any of the layers
+/// of the referenced layer stack for the reference prim path, it is a
+/// composition error and that reference is ignored"), §10.6. OpenUSD reports
+/// both cases as `PcpErrorUnresolvedPrimPath` (`_EvalRefOrPayloadArcs` and
+/// `_EvalUnresolvedPrimPathError` in `pxr/usd/pcp/primIndex.cpp`), with the
+/// unresolved path `<defaultPrim>` or the path `defaultPrim` names.
+///
+/// [`ReferenceTarget::DefaultPrim`]: crate::ReferenceTarget::DefaultPrim
+/// [`Layer::default_prim_path`]: crate::Layer::default_prim_path
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct UnresolvedDefaultPrim {
+    /// The composed prim whose composition reached the arc.
+    pub prim: PathId,
+    /// The arc: [`ArcKind::References`] or [`ArcKind::Payloads`].
+    pub arc: ArcKind,
+    /// The layer whose `defaultPrim` was consulted.
+    pub layer: LayerId,
+    /// The prim path `defaultPrim` names when no prim spec exists there, or
+    /// `None` when `layer` has no `defaultPrim` or it is not a prim path.
+    pub path: Option<PathId>,
 }
 
 /// A composition arc that would form a cycle, found while composing `prim`.

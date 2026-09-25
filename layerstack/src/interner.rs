@@ -58,6 +58,12 @@ impl TokenInterner {
         id
     }
 
+    /// Returns the [`TokenId`] of `s` if it has been interned.
+    #[must_use]
+    pub fn lookup(&self, s: &str) -> Option<TokenId> {
+        self.by_str.get(s).copied()
+    }
+
     /// Resolves a [`TokenId`] back to its string.
     #[must_use]
     pub fn resolve(&self, id: TokenId) -> &str {

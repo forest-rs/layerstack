@@ -300,7 +300,8 @@ fn fold_array_chain<'o>(
 ///   see [`Entry::compose_under`];
 /// - within one series, two bracketing samples this close in layer time do
 ///   not interpolate: the lower one holds (`_GetInterpolatingSamplesImpl` in
-///   `pxr/usd/usd/interpolators.cpp`), see [`Bracket::of`].
+///   `pxr/usd/usd/interpolators.cpp`), see [`Bracket::of`] and
+///   [`interpolate_samples`].
 ///
 /// Both use `GfIsClose(a, b, 1e-6)`, a strict `|a - b| < 1e-6`.
 const TIME_EPSILON: f64 = 1e-6;
@@ -750,27 +751,51 @@ fn lerp_arrays(lower: &[Value], upper: &[Value], alpha: f64) -> Option<Vec<Value
         .collect()
 }
 
-/// `GfLerp`: `(1 - alpha) * a + alpha * b`, evaluated in double precision.
+// `GfLerp(alpha, a, b)` is `(1 - alpha) * a + alpha * b` in the arithmetic
+// of the value type (`pxr/base/gf/math.h`), so the rounding differs by type:
+//
+// - a scalar promotes to `double`, and the sum narrows once;
+// - a vector scales and adds with its `GfVec` operators, which narrow each
+//   scaled component to the element type before a sum in that type;
+// - `double` vectors and matrices round like `double` scalars.
+//
+// Rounding once instead of per term is not a tolerance matter: for
+// `(1e10, ..)` to `(-1e10, ..)` at `0.500000001` the two float terms cancel
+// exactly in OpenUSD, and a double-precision sum leaves `-20`.
+
+/// `GfLerp` over `double`, and `float` promoted to `double`.
 fn gf_lerp(a: f64, b: f64, alpha: f64) -> f64 {
     (1.0 - alpha) * a + alpha * b
 }
 
 #[allow(
     clippy::cast_possible_truncation,
-    reason = "single-precision elements interpolate in double precision, as `GfLerp` does"
+    reason = "a float scalar interpolates in double precision and narrows once, as `GfLerp` does"
 )]
 fn lerp_f32(a: f32, b: f32, alpha: f64) -> f32 {
     gf_lerp(f64::from(a), f64::from(b), alpha) as f32
 }
 
+/// `GfLerp` over `GfVec2f`, `GfVec3f` and `GfVec4f`: each component scales
+/// in double precision and narrows to `float` (`GfVec3f::operator*=(double)`),
+/// and the two scaled vectors add in `float`.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "each scaled component narrows to float, as `GfVec3f` arithmetic does"
+)]
 fn lerp_f32s<const N: usize>(a: &[f32; N], b: &[f32; N], alpha: f64) -> [f32; N] {
-    core::array::from_fn(|i| lerp_f32(a[i], b[i], alpha))
+    let scaled = |value: f32, scale: f64| (f64::from(value) * scale) as f32;
+    core::array::from_fn(|i| scaled(a[i], 1.0 - alpha) + scaled(b[i], alpha))
 }
 
 fn lerp_f64s<const N: usize>(a: &[f64; N], b: &[f64; N], alpha: f64) -> [f64; N] {
     core::array::from_fn(|i| gf_lerp(a[i], b[i], alpha))
 }
 
+/// Interpolates one pair of elements or scalars, or returns `None` when the
+/// pair holds (`_LerpVisitor` in `pxr/usd/usd/interpolators.cpp`).
+///
+/// Spec: AOUSD Core §12.5 (interpolation).
 fn lerp_element(a: &Value, b: &Value, alpha: f64) -> Option<Value> {
     Some(match (a, b) {
         (Value::Float(a), Value::Float(b)) => Value::Float(lerp_f32(*a, *b, alpha)),
@@ -795,9 +820,19 @@ fn lerp_element(a: &Value, b: &Value, alpha: f64) -> Option<Value> {
     })
 }
 
-/// Interpolates a value from sorted time samples at the given time.
+/// Holds or interpolates one opinion's sorted scalar time samples at layer
+/// time `time`.
 ///
-/// Spec: AOUSD Core §12.5 (interpolation methods).
+/// The samples bracketing `time` follow `SdfLayer::GetBracketingTimeSamples`,
+/// clamped to the first or last sample outside the authored range. Held
+/// interpolation, and two bracketing samples closer than [`TIME_EPSILON`],
+/// hold the lower sample (`_GetInterpolatingSamplesImpl` in
+/// `pxr/usd/usd/interpolators.cpp`). Otherwise the pair interpolates with the
+/// element rules of composed arrays ([`lerp_element`]): integers, and values
+/// of different or non-interpolating types, hold the lower sample, and so does
+/// a blocked upper sample.
+///
+/// Spec: AOUSD Core §12.3.2.2 (time samples), §12.5 (interpolation methods).
 pub(crate) fn interpolate_samples(
     samples: &[(f64, Value)],
     time: f64,
@@ -811,66 +846,17 @@ pub(crate) fn interpolate_samples(
         .binary_search_by(|(t, _)| t.partial_cmp(&time).unwrap_or(core::cmp::Ordering::Equal))
     {
         Ok(idx) => Some(samples[idx].1.clone()),
+        Err(0) => Some(samples[0].1.clone()),
+        Err(idx) if idx >= samples.len() => Some(samples[samples.len() - 1].1.clone()),
         Err(idx) => {
-            if idx == 0 {
-                Some(samples[0].1.clone())
-            } else if idx >= samples.len() {
-                Some(samples.last().expect("non-empty samples").1.clone())
-            } else {
-                match interp {
-                    InterpolationType::Held => Some(samples[idx - 1].1.clone()),
-                    InterpolationType::Linear => lerp_values(
-                        &samples[idx - 1].1,
-                        &samples[idx].1,
-                        samples[idx - 1].0,
-                        samples[idx].0,
-                        time,
-                    ),
-                }
+            let ((lower_time, lower), (upper_time, upper)) = (&samples[idx - 1], &samples[idx]);
+            if interp == InterpolationType::Held || times_close(*lower_time, *upper_time) {
+                return Some(lower.clone());
             }
+            let alpha = (time - lower_time) / (upper_time - lower_time);
+            Some(lerp_element(lower, upper, alpha).unwrap_or_else(|| lower.clone()))
         }
     }
-}
-
-/// Linear interpolation between two values. Falls back to held for
-/// non-numeric types.
-fn lerp_values(a: &Value, b: &Value, t_a: f64, t_b: f64, t: f64) -> Option<Value> {
-    let alpha = if (t_b - t_a).abs() < f64::EPSILON {
-        0.0
-    } else {
-        (t - t_a) / (t_b - t_a)
-    };
-
-    match (a, b) {
-        (Value::Double(va), Value::Double(vb)) => Some(Value::Double(va + (vb - va) * alpha)),
-        #[allow(
-            clippy::cast_possible_truncation,
-            reason = "f64→f32 intentional for single-precision lerp"
-        )]
-        (Value::Float(va), Value::Float(vb)) => {
-            let alpha_f = alpha as f32;
-            Some(Value::Float(va + (vb - va) * alpha_f))
-        }
-        (Value::TimeCode(va), Value::TimeCode(vb)) => Some(Value::TimeCode(va + (vb - va) * alpha)),
-        (Value::Int64(va), Value::Int64(vb)) => {
-            let result = *va as f64 + (*vb as f64 - *va as f64) * alpha;
-            #[allow(clippy::cast_possible_truncation, reason = "clamped by f64 range")]
-            let i = lerp_round(result) as i64;
-            Some(Value::Int64(i))
-        }
-        (Value::Int(va), Value::Int(vb)) => {
-            let result = *va as f64 + (*vb as f64 - *va as f64) * alpha;
-            #[allow(clippy::cast_possible_truncation, reason = "clamped by f64 range")]
-            let i = lerp_round(result) as i32;
-            Some(Value::Int(i))
-        }
-        _ => Some(a.clone()),
-    }
-}
-
-/// Round-to-nearest for lerp results (no_std-compatible).
-fn lerp_round(v: f64) -> f64 {
-    if v >= 0.0 { v + 0.5 } else { v - 0.5 }
 }
 
 #[cfg(test)]
@@ -1588,6 +1574,15 @@ mod tests {
             Some(Value::Matrix2d(alloc::boxed::Box::new([1.0; 4])))
         );
         assert_eq!(
+            lerp_arrays(
+                &[Value::Vec3f([1e10; 3])],
+                &[Value::Vec3f([-1e10; 3])],
+                0.500_000_001
+            ),
+            Some(vec![Value::Vec3f([0.0; 3])]),
+            "float vector terms narrow to float before they cancel, as in OpenUSD"
+        );
+        assert_eq!(
             lerp(Value::Int(0), Value::Int(4)),
             None,
             "integers hold, as in OpenUSD"
@@ -1600,6 +1595,34 @@ mod tests {
             ),
             None,
             "arrays of different sizes hold"
+        );
+    }
+
+    #[test]
+    fn scalar_samples_follow_the_element_rules() {
+        let linear = InterpolationType::Linear;
+        let ints = [(0.0, Value::Int(0)), (2.0, Value::Int(4))];
+        assert_eq!(
+            interpolate_samples(&ints, 1.0, linear),
+            Some(Value::Int(0)),
+            "integers hold, as in OpenUSD"
+        );
+        let vectors = [(0.0, Value::Vec3d([0.0; 3])), (2.0, Value::Vec3d([2.0; 3]))];
+        assert_eq!(
+            interpolate_samples(&vectors, 0.5, linear),
+            Some(Value::Vec3d([0.5; 3]))
+        );
+        let close = [(0.0, Value::Double(0.0)), (5e-7, Value::Double(10.0))];
+        assert_eq!(
+            interpolate_samples(&close, 2.5e-7, linear),
+            Some(Value::Double(0.0)),
+            "samples closer than 1e-6 hold the lower one"
+        );
+        let blocked = [(0.0, Value::Double(1.0)), (2.0, Value::Blocked)];
+        assert_eq!(
+            interpolate_samples(&blocked, 1.0, linear),
+            Some(Value::Double(1.0)),
+            "a blocked upper sample holds the lower one"
         );
     }
 

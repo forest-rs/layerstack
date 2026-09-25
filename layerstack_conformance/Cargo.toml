@@ -20,4 +20,5 @@ layerstack_usda = { path = "../layerstack_usda" }
 layerstack_usdc = { path = "../layerstack_usdc" }
 layerstack_usdz = { path = "../layerstack_usdz" }
 serde = { features = ["derive"], version = "1.0" }
-serde_json = "1.0"
+# `float_roundtrip` parses the bit-exact vectors exactly.
+serde_json = { features = ["float_roundtrip"], version = "1.0" }

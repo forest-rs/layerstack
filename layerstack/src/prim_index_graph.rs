@@ -280,6 +280,9 @@ pub(crate) struct NodeArc {
     pub(crate) sibling_index: u16,
     /// `true` for an implied class arc (see [`PrimNode::is_implied`]).
     pub(crate) implied: bool,
+    /// `true` for a node copied from another prim's graph by the late copy
+    /// of an arc target's composed sources.
+    pub(crate) copied: bool,
     /// The strength key the node's opinions are ranked by.
     pub(crate) strength: NodeStrength,
 }
@@ -437,6 +440,7 @@ impl PrimIndexGraph {
                 && other.namespace_depth == arc.namespace_depth
                 && other.sibling_index == arc.sibling_index
                 && other.implied == arc.implied
+                && other.copied == arc.copied
         };
         if let Some(existing) = self.nodes[parent.index()]
             .children
@@ -543,6 +547,7 @@ impl PrimIndexGraph {
             namespace_depth: strength.namespace_depth,
             sibling_index,
             implied: false,
+            copied: false,
             strength,
         };
         let mut graph = Self::new(arc(root, 0));

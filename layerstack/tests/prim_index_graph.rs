@@ -117,13 +117,10 @@ fn sources_name_the_node_of_their_arc_path() {
     assert_eq!(root_node.arc_kind(), ArcKind::Local);
     assert_eq!(root_node.parent(), None);
 
-    // A site may be listed more than once (see `DuplicateSources` in the
-    // strict conformance harness); each listing names the same node.
-    let mut paths: Vec<_> = sources
+    let paths: Vec<_> = sources
         .iter()
         .map(|source| arc_path(&store, graph, source.node))
         .collect();
-    paths.dedup();
     let local = (ArcKind::Local, LayerId(1), "/Grove".to_owned());
     let reference = (ArcKind::References, LayerId(2), "/Tree".to_owned());
     assert_eq!(

@@ -8,7 +8,7 @@
 //! (`scripts/prim_index_graph_oracle.py`, which also writes those layers):
 //! for every prim, each source of its prim stack with the arc path of the
 //! node that provides it, from the root node down. Layerstack must compose
-//! the same sources, and each source must name a node of
+//! the same sources, repeats included, and each source must name a node of
 //! [`Stage::explain_prim_graph`] with the same arc path.
 //!
 //! The fixture authors variant branches where they change the arc path: a
@@ -124,9 +124,7 @@ fn sources_name_the_nodes_openusd_provides_them_from() {
                 site: display(&loaded, &key.spec_path),
                 arc_path: arc_path(&loaded, graph, key.node),
             };
-            if !sources.contains(&source) {
-                sources.push(source);
-            }
+            sources.push(source);
         }
         if sources != prim.sources {
             mismatches.push(format!(

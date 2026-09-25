@@ -4,6 +4,53 @@
  "root": "root.usda",
  "prims": [
   {
+   "path": "/Anchored",
+   "sources": [
+    {
+     "layer": "sub.usda",
+     "site": "/Anchored",
+     "arc_path": [
+      [
+       "Local",
+       "/Anchored"
+      ]
+     ]
+    },
+    {
+     "layer": "sub.usda",
+     "site": "/Anchored{v=x}",
+     "arc_path": [
+      [
+       "Local",
+       "/Anchored"
+      ],
+      [
+       "Variants",
+       "/Anchored{v=x}"
+      ]
+     ]
+    },
+    {
+     "layer": "root.usda",
+     "site": "/Target",
+     "arc_path": [
+      [
+       "Local",
+       "/Anchored"
+      ],
+      [
+       "Variants",
+       "/Anchored{v=x}"
+      ],
+      [
+       "References",
+       "/Target"
+      ]
+     ]
+    }
+   ]
+  },
+  {
    "path": "/Nested",
    "sources": [
     {

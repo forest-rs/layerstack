@@ -16,7 +16,9 @@
 //! a branch, a child authored only inside an ancestor's branch, and such a
 //! child reached through inherits, specializes, a reference and a payload.
 //! Each branch is a node beneath the node whose site hosts its variant set,
-//! and what the branch authors sits beneath the branch's node.
+//! and what the branch authors sits beneath the branch's node, including an
+//! internal reference a sublayer authors on a branch (`sub.usda`), which
+//! targets the root layer stack.
 //!
 //! Spec: AOUSD Core §10.3.2.5 (variants), §10.4 (an arc's target ranks
 //! beneath the site that authors it). OpenUSD: `PcpPrimIndex::GetGraph()`;

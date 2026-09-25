@@ -682,7 +682,8 @@ pub enum ReferenceTarget {
     /// layer's `defaultPrim` (see [`Layer::default_prim_path`]).
     ///
     /// For an external arc (`@./asset.usda@`) that is the asset's root
-    /// layer; for an internal arc (`<>`) it is the authoring layer. When the
+    /// layer; for an internal arc (`<>`) it is the root layer of the layer
+    /// stack containing the arc (see [`Reference::layer`]). When the
     /// layer has no usable `defaultPrim`, or no prim spec exists at the path
     /// it names, the arc contributes nothing and composition reports
     /// [`CompositionError::UnresolvedDefaultPrim`].
@@ -700,7 +701,17 @@ pub enum ReferenceTarget {
 /// A composition reference or payload arc.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Reference {
-    /// The referenced layer/document.
+    /// The root layer of the referenced layer stack.
+    ///
+    /// An arc with no [`Reference::asset`] whose layer is the layer that
+    /// authors it is internal (`</Prim>`, `<>`): it targets the layer stack
+    /// containing the site that authors it, not that layer alone, so an
+    /// internal arc authored in a sublayer reads every layer of the stack.
+    /// Composition anchors it to that stack's root layer.
+    ///
+    /// Spec: AOUSD Core §10.3.2.1 ("the layer stack containing the
+    /// reference is assumed"). OpenUSD: `_EvalRefOrPayloadArcs` in
+    /// `pxr/usd/pcp/primIndex.cpp`.
     pub layer: LayerId,
     /// The authored target within that layer/document.
     pub target: ReferenceTarget,
@@ -712,6 +723,9 @@ pub struct Reference {
 
 impl Reference {
     /// Creates a reference with no asset path.
+    ///
+    /// With `layer` set to the layer that authors it, the arc is internal
+    /// (see [`Reference::layer`]).
     pub fn new(layer: LayerId, prim_path: PathId) -> Self {
         Self {
             layer,

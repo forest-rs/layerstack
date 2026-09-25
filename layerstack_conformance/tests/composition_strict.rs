@@ -46,7 +46,8 @@
 //!
 //! Exact prim stacks, property stacks and values for sublayer stacks
 //! (including duplicate sublayers, cycles and time offsets), local opinions,
-//! single-level references, payloads and inherits, list-edited arcs and
+//! single-level references, payloads and inherits, internal references and
+//! payloads authored anywhere in a layer stack, list-edited arcs and
 //! target paths, specializes ranked after every other arc wherever they are
 //! authored, and variant selections that do not depend on the features
 //! below. Where only [`Cause::DuplicateSources`] is listed, composed values
@@ -67,8 +68,7 @@
 //!   per arc path ([`Cause::DuplicateSources`]); the same node model would
 //!   remove both.
 //! - Ancestral arcs of subroot arc targets ([`Cause::AncestralArcs`]),
-//!   some nested variant specs ([`Cause::VariantSpecs`]), internal arcs
-//!   authored in sublayers ([`Cause::InternalArcAnchoring`]), conflicting
+//!   some nested variant specs ([`Cause::VariantSpecs`]), conflicting
 //!   property spec types ([`Cause::PropertyTypeConflict`]), asset-path
 //!   expressions ([`Cause::ExpressionVariables`]) and variant fallbacks
 //!   ([`Cause::FallbackVariants`]).
@@ -530,10 +530,6 @@ enum Cause {
     /// [`layerstack::VariantSpec`]s, and a branch selected only through
     /// another arc is not composed at every site hosting it.
     VariantSpecs,
-    /// An internal arc authored in a sublayer sees only that sublayer, not the
-    /// containing layer stack (AOUSD Core §10.3.2.1: "the layer stack
-    /// containing the reference is assumed").
-    InternalArcAnchoring,
     /// A property spec whose type conflicts with the defining spec is kept;
     /// OpenUSD ignores it.
     PropertyTypeConflict,
@@ -667,12 +663,12 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "BasicPayload_root",
-        causes: &[C::InternalArcAnchoring, C::AncestralArcs, C::NestedArcDepth],
-        prims: 7,
+        causes: &[C::AncestralArcs, C::NestedArcDepth],
+        prims: 5,
         props: 0,
         values: 0,
         diffs: &[D::MissingSite, D::Order],
-        reason: "internal arcs authored in `sublayer.usd` see only that sublayer, not the containing root layer stack; subroot targets under `ref.usd` `/RefPrimA` and `/PayloadPrimA` miss their ancestors' `ref2.usd /PrimC`; `/PrimWithPayloads` ranks `ref2.usd /PrimB` before the nested `/PrimC`",
+        reason: "subroot targets under `ref.usd` `/RefPrimA` and `/PayloadPrimA` miss their ancestors' `ref2.usd /PrimC`; `/PrimWithPayloads` ranks `ref2.usd /PrimB` before the nested `/PrimC`",
     },
     Known {
         fixture: "BasicReferenceAndClassDiamond_root",

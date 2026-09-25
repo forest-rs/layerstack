@@ -331,6 +331,13 @@ impl PrimNode {
     }
 
     /// The root layer of the layer stack this node's site is in.
+    ///
+    /// The node reads every layer of that stack: the root layer and its
+    /// sublayers, as [`crate::LayerStack::gather`] composes them. A node
+    /// reached through an internal reference or payload is in the layer stack
+    /// of its parent node, whichever layer of that stack authors the arc.
+    ///
+    /// OpenUSD: `PcpNodeRef::GetLayerStack`.
     #[must_use]
     pub fn layer_stack(&self) -> LayerId {
         self.arc.layer_stack

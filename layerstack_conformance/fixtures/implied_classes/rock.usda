@@ -1,0 +1,34 @@
+#usda 1.0
+
+def "Boulder" (
+    inherits = </_class_Boulder>
+)
+{
+    def "Face"
+    {
+        int grain = 1
+    }
+
+    over "_class_Face"
+    {
+        int grain = 2
+        int lichen = 2
+    }
+}
+
+class "_class_Boulder"
+{
+    class "_class_Face"
+    {
+        int grain = 3
+        int lichen = 3
+        int crack = 3
+    }
+
+    over "Face" (
+        inherits = </_class_Boulder/_class_Face>
+    )
+    {
+        int crack = 4
+    }
+}

@@ -1,0 +1,152 @@
+{
+ "generator": "layerstack_conformance/scripts/implied_classes_oracle.py",
+ "openusd_version": "0.26.8",
+ "root": "root.usda",
+ "prims": [
+  {
+   "path": "/Grove",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Grove"
+    ],
+    [
+     "root.usda",
+     "/_class_Bark"
+    ],
+    [
+     "stand.usda",
+     "/Stand"
+    ],
+    [
+     "stand.usda",
+     "/_class_Bark"
+    ],
+    [
+     "bark.usda",
+     "/Trunk"
+    ],
+    [
+     "bark.usda",
+     "/_class_Bark"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Bark",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Bark"
+    ]
+   ]
+  },
+  {
+   "path": "/Field",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Field"
+    ],
+    [
+     "root.usda",
+     "/_class_Grass"
+    ],
+    [
+     "meadow.usda",
+     "/Meadow"
+    ],
+    [
+     "meadow.usda",
+     "/_class_Grass"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Grass",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Grass"
+    ]
+   ]
+  },
+  {
+   "path": "/Cliff",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Cliff"
+    ],
+    [
+     "rock.usda",
+     "/Boulder"
+    ],
+    [
+     "rock.usda",
+     "/_class_Boulder"
+    ]
+   ]
+  },
+  {
+   "path": "/Cliff/_class_Face",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Cliff/_class_Face"
+    ],
+    [
+     "rock.usda",
+     "/Boulder/_class_Face"
+    ],
+    [
+     "rock.usda",
+     "/_class_Boulder/_class_Face"
+    ]
+   ]
+  },
+  {
+   "path": "/Cliff/Face",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Cliff/_class_Face"
+    ],
+    [
+     "rock.usda",
+     "/Boulder/Face"
+    ],
+    [
+     "rock.usda",
+     "/Boulder/_class_Face"
+    ],
+    [
+     "rock.usda",
+     "/_class_Boulder/Face"
+    ],
+    [
+     "rock.usda",
+     "/_class_Boulder/_class_Face"
+    ]
+   ]
+  }
+ ],
+ "values": {
+  "/Grove.height": 0,
+  "/Grove.knot": 2,
+  "/Grove.moss": 2,
+  "/Grove.ring": 1,
+  "/Grove.width": 0,
+  "/_class_Bark.height": 0,
+  "/_class_Bark.width": 0,
+  "/Field.blade": 0,
+  "/Field.root": 2,
+  "/_class_Grass.blade": 0,
+  "/Cliff/_class_Face.crack": 3,
+  "/Cliff/_class_Face.grain": 0,
+  "/Cliff/_class_Face.lichen": 2,
+  "/Cliff/Face.crack": 4,
+  "/Cliff/Face.grain": 0,
+  "/Cliff/Face.lichen": 2
+ }
+}

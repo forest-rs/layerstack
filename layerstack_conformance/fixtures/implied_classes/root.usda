@@ -1,0 +1,43 @@
+#usda 1.0
+
+# `bark.usda /Trunk` inherits `/_class_Bark` two references down; the class
+# is implied into `stand.usda` and into this layer, and each implied class
+# outranks the reference that implies it.
+def "Grove" (
+    references = @./stand.usda@</Stand>
+)
+{
+}
+
+# Local opinions on the implied class outrank every referenced opinion.
+over "_class_Bark"
+{
+    int height = 0
+    int width = 0
+}
+
+# `meadow.usda /Meadow` inherits `/_class_Grass` through a payload.
+def "Field" (
+    payload = @./meadow.usda@</Meadow>
+)
+{
+}
+
+over "_class_Grass"
+{
+    int blade = 0
+}
+
+# `rock.usda /Boulder` inherits `/_class_Boulder`, whose `Face` inherits the
+# nested class `/_class_Boulder/_class_Face`. That class is implied across
+# the ancestral inherit as `/Boulder/_class_Face`, then across the reference
+# as `/Cliff/_class_Face`, where this layer overrides it.
+def "Cliff" (
+    references = @./rock.usda@</Boulder>
+)
+{
+    over "_class_Face"
+    {
+        int grain = 0
+    }
+}

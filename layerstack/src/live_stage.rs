@@ -56,6 +56,9 @@ pub struct LiveStage {
     source_to_prims: HashMap<(LayerId, PathId), HashSet<PathId>>,
     /// Composed prim → source sites recorded in `source_to_prims`.
     prim_to_sources: HashMap<PathId, Vec<(LayerId, PathId)>>,
+    /// Layer → composed prims with a reference or payload that targets that
+    /// layer's `defaultPrim`, resolved or not.
+    default_prim_dependents: HashMap<LayerId, HashSet<PathId>>,
     root: LayerId,
     options: StageOptions,
     needs_full_rebuild: bool,
@@ -81,6 +84,7 @@ impl LiveStage {
             prim_to_layers: deps.prim_to_layers,
             source_to_prims: HashMap::new(),
             prim_to_sources: HashMap::new(),
+            default_prim_dependents: deps.default_prim_dependents,
             root,
             options,
             needs_full_rebuild: false,
@@ -164,6 +168,51 @@ impl LiveStage {
         for &prim in prims {
             self.tracker.mark(prim, OPINION_EDIT);
         }
+    }
+
+    /// Notifies that the `defaultPrim` of `layer` was authored, changed or
+    /// cleared.
+    ///
+    /// A reference or payload with no authored prim path targets the prim
+    /// `defaultPrim` names, so the change retargets every such arc to
+    /// `layer`: the prims it composes into gain and lose children. When any
+    /// composed prim has such an arc (see
+    /// [`prims_using_default_prim`](Self::prims_using_default_prim)), including
+    /// one that did not resolve, the next [`recompose`](Self::recompose)
+    /// rebuilds the whole stage, as for
+    /// [`notify_structural_change`](Self::notify_structural_change).
+    /// Otherwise nothing depends on the change and nothing is recomposed.
+    ///
+    /// Spec: AOUSD Core §10.3.2.1 (an omitted prim path assumes the
+    /// `defaultPrim` of the target layer). OpenUSD treats a `defaultPrim`
+    /// change as a resync of the prims that depend on it (`PcpChanges::DidChange`
+    /// in `pxr/usd/pcp/changes.cpp`).
+    pub fn notify_default_prim_edit(&mut self, layer: LayerId) {
+        if self
+            .default_prim_dependents
+            .get(&layer)
+            .is_some_and(|prims| !prims.is_empty())
+        {
+            self.needs_full_rebuild = true;
+        }
+    }
+
+    /// Returns the composed prims with a reference or payload, authored or
+    /// reached through other arcs, that targets the `defaultPrim` of `layer`,
+    /// sorted by [`PathId`]. Prims whose arc did not resolve are included.
+    ///
+    /// These are the prims a
+    /// [`notify_default_prim_edit`](Self::notify_default_prim_edit) of
+    /// `layer` recomposes. The set reflects the last composition.
+    #[must_use]
+    pub fn prims_using_default_prim(&self, layer: LayerId) -> Vec<PathId> {
+        let mut prims: Vec<PathId> = self
+            .default_prim_dependents
+            .get(&layer)
+            .map(|set| set.iter().copied().collect())
+            .unwrap_or_default();
+        prims.sort_unstable();
+        prims
     }
 
     /// Notifies that a structural change occurred (prims added/removed, arcs changed).
@@ -308,6 +357,21 @@ impl LiveStage {
         if !layers_for_prim.is_empty() {
             self.prim_to_layers.insert(prim, layers_for_prim);
         }
+
+        // Replace the prim's `defaultPrim` dependencies.
+        for dependents in self.default_prim_dependents.values_mut() {
+            dependents.remove(&prim);
+        }
+        for (layer, dependents) in &partial.default_prim_dependents {
+            if dependents.contains(&prim) {
+                self.default_prim_dependents
+                    .entry(*layer)
+                    .or_default()
+                    .insert(prim);
+            }
+        }
+        self.default_prim_dependents
+            .retain(|_, dependents| !dependents.is_empty());
     }
 
     /// Recomposes the whole stage and returns every path in the new stage
@@ -331,6 +395,7 @@ impl LiveStage {
         self.arc_metadata = deps.arcs;
         self.layer_to_prims = deps.layer_to_prims;
         self.prim_to_layers = deps.prim_to_layers;
+        self.default_prim_dependents = deps.default_prim_dependents;
         self.reindex_all_sources();
 
         // A before/after difference, not an edit log: removed paths are those
@@ -1209,6 +1274,11 @@ mod tests {
             live.prim_to_layers, fresh_deps.prim_to_layers,
             "prim → layer dependencies differ"
         );
+        assert_eq!(
+            non_empty(&live.default_prim_dependents),
+            non_empty(&fresh_deps.default_prim_dependents),
+            "`defaultPrim` dependencies differ"
+        );
 
         let fresh_live = LiveStage::compose(store, live.root, live.options.clone());
         assert_eq!(
@@ -1394,5 +1464,168 @@ mod tests {
         live.recompose(&mut store);
         assert_matches_fresh(&live, &mut store, &[field_x]);
         assert_eq!(live.stage().children_of(parent), Some(&[b, a][..]));
+    }
+
+    /// Asserts that `live` reports the same composition errors as a fresh
+    /// composition, in any order.
+    fn assert_errors_match_fresh(live: &LiveStage, store: &mut InMemoryStore) {
+        let fresh = Stage::compose(store, live.root, live.options.clone());
+        let as_set =
+            |errors: &[crate::CompositionError]| errors.iter().cloned().collect::<HashSet<_>>();
+        assert_eq!(
+            as_set(live.stage().composition_errors()),
+            as_set(fresh.composition_errors()),
+            "composition errors differ"
+        );
+    }
+
+    /// Editing an asset's `defaultPrim` retargets every reference and payload
+    /// with no authored prim path to that asset; each edit, once notified,
+    /// recomposes to the same stage as a clean composition.
+    ///
+    /// Spec: AOUSD Core §10.3.2.1 (an omitted prim path assumes the target
+    /// layer's `defaultPrim`).
+    #[test]
+    fn default_prim_edit_recomposes_dependent_placements() {
+        let mut store = InMemoryStore::default();
+        let field_x = store.tokens.intern("x");
+        let a = p(&mut store, "/A");
+        let b = p(&mut store, "/B");
+        let c = p(&mut store, "/C");
+        let model = p(&mut store, "/Model");
+        let model_child = p(&mut store, "/Model/ModelChild");
+        let other = p(&mut store, "/Other");
+        let other_child = p(&mut store, "/Other/OtherChild");
+        let model_tok = store.tokens.intern("Model");
+        let other_tok = store.tokens.intern("Other");
+        let model_child_tok = store.tokens.intern("ModelChild");
+        let other_child_tok = store.tokens.intern("OtherChild");
+
+        let mut root = Layer::new(LayerId(1));
+        root.insert_prim(
+            a,
+            PrimSpec::def().with_reference(Reference::to_default_prim(LayerId(2))),
+        );
+        root.insert_prim(
+            b,
+            PrimSpec::def()
+                .with_payload(Reference::to_default_prim(LayerId(2)))
+                .with_property(field_x, attr(5_i64)),
+        );
+        root.insert_prim(
+            c,
+            PrimSpec::def().with_reference(Reference::new(LayerId(2), other)),
+        );
+        store.insert_layer(root);
+
+        let mut asset = Layer::new(LayerId(2));
+        asset.default_prim = Some(model_tok);
+        asset.insert_prim(
+            model,
+            PrimSpec::def()
+                .with_children(vec![model_child_tok])
+                .with_property(field_x, attr(1_i64)),
+        );
+        asset.insert_prim(model_child, PrimSpec::def());
+        asset.insert_prim(
+            other,
+            PrimSpec::def()
+                .with_children(vec![other_child_tok])
+                .with_property(field_x, attr(2_i64)),
+        );
+        asset.insert_prim(other_child, PrimSpec::def());
+        store.insert_layer(asset);
+
+        let options = StageOptions {
+            with_provenance: true,
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+        assert_eq!(live.prims_using_default_prim(LayerId(2)), [a, b]);
+        assert!(live.prims_using_default_prim(LayerId(1)).is_empty());
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+
+        let a_child = |live: &LiveStage, store: &mut InMemoryStore, name: &str| {
+            let child = p(store, &alloc::format!("/A/{name}"));
+            live.stage().children_of(a) == Some(&[child][..])
+        };
+        assert!(a_child(&live, &mut store, "ModelChild"));
+
+        // Nothing targets the root layer's `defaultPrim`, and an opinion
+        // edit keeps the recorded dependencies.
+        live.notify_default_prim_edit(LayerId(1));
+        assert!(live.recompose(&mut store).is_empty());
+        live.notify_prim_edit(a);
+        assert_eq!(live.recompose(&mut store), [a]);
+        assert_eq!(live.prims_using_default_prim(LayerId(2)), [a, b]);
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+
+        // Retarget: `/A` and `/B` now compose `/Other`; `/C` is unchanged.
+        store.layers.get_mut(&LayerId(2)).unwrap().default_prim = Some(other_tok);
+        live.notify_default_prim_edit(LayerId(2));
+        let updated = live.recompose(&mut store);
+        assert!(updated.contains(&a) && updated.contains(&b));
+        assert!(a_child(&live, &mut store, "OtherChild"));
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+        assert_errors_match_fresh(&live, &mut store);
+
+        // Clear: both arcs are unresolved and contribute nothing.
+        store.layers.get_mut(&LayerId(2)).unwrap().default_prim = None;
+        live.notify_default_prim_edit(LayerId(2));
+        live.recompose(&mut store);
+        assert!(live.stage().children_of(a).unwrap_or(&[]).is_empty());
+        assert_eq!(live.stage().composition_errors().len(), 2);
+        assert_eq!(
+            live.prims_using_default_prim(LayerId(2)),
+            [a, b],
+            "unresolved arcs still depend on the `defaultPrim`"
+        );
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+        assert_errors_match_fresh(&live, &mut store);
+
+        // Author it again: the placements resolve and the errors go away.
+        store.layers.get_mut(&LayerId(2)).unwrap().default_prim = Some(model_tok);
+        live.notify_default_prim_edit(LayerId(2));
+        live.recompose(&mut store);
+        assert!(a_child(&live, &mut store, "ModelChild"));
+        assert_eq!(live.stage().composition_errors(), []);
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+        assert_errors_match_fresh(&live, &mut store);
+    }
+
+    /// A scoped recomposition replaces the unresolved `defaultPrim` errors of
+    /// the prims it recomposes, keeping the others.
+    #[test]
+    fn scoped_recompose_keeps_default_prim_errors() {
+        let mut store = InMemoryStore::default();
+        let field_x = store.tokens.intern("x");
+        let a = p(&mut store, "/A");
+        let b = p(&mut store, "/B");
+
+        let mut root = Layer::new(LayerId(1));
+        for prim in [a, b] {
+            root.insert_prim(
+                prim,
+                PrimSpec::def()
+                    .with_reference(Reference::to_default_prim(LayerId(2)))
+                    .with_property(field_x, attr(1_i64)),
+            );
+        }
+        store.insert_layer(root);
+        store.insert_layer(Layer::new(LayerId(2)));
+
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert_eq!(live.stage().composition_errors().len(), 2);
+
+        store
+            .layers
+            .get_mut(&LayerId(1))
+            .unwrap()
+            .set_property(PropertyPath::new(a, field_x), attr(2_i64));
+        live.notify_prim_edit(a);
+        assert_eq!(live.recompose(&mut store), [a]);
+        assert_eq!(live.stage().composition_errors().len(), 2);
+        assert_errors_match_fresh(&live, &mut store);
+        assert_matches_fresh(&live, &mut store, &[field_x]);
     }
 }

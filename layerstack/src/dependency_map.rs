@@ -52,6 +52,9 @@ pub(crate) struct CompositionDeps {
     pub layer_to_prims: HashMap<LayerId, HashSet<PathId>>,
     /// Prim → layers that contribute opinions to it.
     pub prim_to_layers: HashMap<PathId, HashSet<LayerId>>,
+    /// Layer → prims whose composition follows (or fails to resolve) a
+    /// reference or payload targeting that layer's `defaultPrim`.
+    pub default_prim_dependents: HashMap<LayerId, HashSet<PathId>>,
 }
 
 /// Builder for composition dependency data, used during composition.
@@ -63,6 +66,7 @@ pub(crate) struct DependencyBuilder {
     arc_set: HashSet<ArcDependency>,
     layer_to_prims: HashMap<LayerId, HashSet<PathId>>,
     prim_to_layers: HashMap<PathId, HashSet<LayerId>>,
+    default_prim_dependents: HashMap<LayerId, HashSet<PathId>>,
 }
 
 impl DependencyBuilder {
@@ -72,6 +76,7 @@ impl DependencyBuilder {
             arc_set: HashSet::new(),
             layer_to_prims: HashMap::new(),
             prim_to_layers: HashMap::new(),
+            default_prim_dependents: HashMap::new(),
         }
     }
 
@@ -95,6 +100,19 @@ impl DependencyBuilder {
     pub(crate) fn add_layer_opinion(&mut self, layer: LayerId, prim: PathId) {
         self.layer_to_prims.entry(layer).or_default().insert(prim);
         self.prim_to_layers.entry(prim).or_default().insert(layer);
+    }
+
+    /// Records that composing `prim` consulted the `defaultPrim` of `layer`,
+    /// whether or not it resolved.
+    ///
+    /// Changing that `defaultPrim` retargets the arc, so `prim` must be
+    /// recomposed (OpenUSD treats the change as a resync, see
+    /// `PcpChanges::DidChange` in `pxr/usd/pcp/changes.cpp`).
+    pub(crate) fn add_default_prim_dependency(&mut self, layer: LayerId, prim: PathId) {
+        self.default_prim_dependents
+            .entry(layer)
+            .or_default()
+            .insert(prim);
     }
 
     /// Drops every recorded dependency whose dependent prim is not in `prims`.
@@ -123,6 +141,11 @@ impl DependencyBuilder {
             .retain(|_, layer_prims| !layer_prims.is_empty());
         self.prim_to_layers
             .retain(|prim, _| prims.contains_key(prim));
+        for dependents in self.default_prim_dependents.values_mut() {
+            dependents.retain(|prim| prims.contains_key(prim));
+        }
+        self.default_prim_dependents
+            .retain(|_, dependents| !dependents.is_empty());
     }
 
     /// Consumes the builder and produces [`CompositionDeps`].
@@ -132,6 +155,7 @@ impl DependencyBuilder {
             arcs: self.arc_set,
             layer_to_prims: self.layer_to_prims,
             prim_to_layers: self.prim_to_layers,
+            default_prim_dependents: self.default_prim_dependents,
         }
     }
 }

@@ -2415,11 +2415,11 @@ fn add_local_and_variant_opinions(
 /// Resolves the prim a reference or payload (`arc`) followed for
 /// `dest_root` targets (see [`Reference::target_path`]).
 ///
-/// For a [`ReferenceTarget::DefaultPrim`] target, reports
-/// [`UnresolvedDefaultPrim`] when the target layer's `defaultPrim` names no
-/// prim path (the arc is then ignored) or no layer of the target layer stack
-/// has a spec at the path it names (the arc is followed and contributes
-/// nothing, as in OpenUSD).
+/// For a [`ReferenceTarget::DefaultPrim`] target, records that `dest_root`
+/// depends on the target layer's `defaultPrim`, and reports
+/// [`UnresolvedDefaultPrim`] when it names no prim path (the arc is then
+/// ignored) or no layer of the target layer stack has a spec at the path it
+/// names (the arc is followed and contributes nothing, as in OpenUSD).
 ///
 /// Spec: AOUSD Core §10.3.2.1 (an omitted prim path assumes the target
 /// layer's `defaultPrim`; a reference to a path without specs is a
@@ -2431,10 +2431,14 @@ fn resolve_arc_target(
     dest_root: PathId,
     arc: ArcKind,
     cycles: &mut CycleDetector,
+    deps: Option<&mut DependencyBuilder>,
 ) -> Option<PathId> {
     let target = reference.target_path(store);
     if reference.target != ReferenceTarget::DefaultPrim {
         return target;
+    }
+    if let Some(d) = deps {
+        d.add_default_prim_dependency(reference.layer, dest_root);
     }
     let has_spec = |store: &dyn LayerStore, path: PathId| {
         LayerStack::gather(store, reference.layer)
@@ -3535,9 +3539,14 @@ fn add_reference_edge_opinions(
     if !out.contains_key(&dest_root) {
         return;
     }
-    let Some(reference_path) =
-        resolve_arc_target(store, &reference, dest_root, ArcKind::References, cycles)
-    else {
+    let Some(reference_path) = resolve_arc_target(
+        store,
+        &reference,
+        dest_root,
+        ArcKind::References,
+        cycles,
+        deps.as_deref_mut(),
+    ) else {
         return;
     };
     // An arc that would close a cycle is a composition error and is skipped
@@ -4534,9 +4543,14 @@ fn add_payload_edge_opinions(
     if !out.contains_key(&dest_root) {
         return;
     }
-    let Some(reference_path) =
-        resolve_arc_target(store, &reference, dest_root, ArcKind::Payloads, cycles)
-    else {
+    let Some(reference_path) = resolve_arc_target(
+        store,
+        &reference,
+        dest_root,
+        ArcKind::Payloads,
+        cycles,
+        deps.as_deref_mut(),
+    ) else {
         return;
     };
     // An arc that would close a cycle is a composition error and is skipped

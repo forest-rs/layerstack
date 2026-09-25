@@ -32,6 +32,9 @@ pub(crate) fn lookup_reference_target_path(
     store: &dyn LayerStore,
     reference: &Reference,
 ) -> Option<PathId> {
+    if reference.is_unresolved() {
+        return None;
+    }
     match reference.target {
         ReferenceTarget::Prim(path) => Some(path),
         ReferenceTarget::DefaultPrim => {

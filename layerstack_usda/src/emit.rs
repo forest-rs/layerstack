@@ -1107,17 +1107,6 @@ impl EmitCtx<'_> {
     }
 
     fn emit_arc_ref(&mut self, arc_ref: &ast::ArcRef<'_>) -> Option<Reference> {
-        let layer_id = if let Some(asset) = arc_ref.asset {
-            let resolved = self.resolve_asset(asset)?;
-            if let Some(layer) = resolved.layer {
-                self.resolved_layers.push(layer);
-            }
-            resolved.layer_id
-        } else {
-            // Self-reference (same layer).
-            self.layer_id
-        };
-
         // An omitted prim path, and the empty path `<>`, target the layer's
         // `defaultPrim`. OpenUSD warns that `<>` is ill-formed, reads it as
         // the empty path and composes it as an omitted target.
@@ -1131,17 +1120,35 @@ impl EmitCtx<'_> {
             _ => ReferenceTarget::DefaultPrim,
         };
 
-        let asset_str = arc_ref.asset.map(String::from);
-
         let layer_offset = LayerOffset {
             offset: arc_ref.offset.unwrap_or(0.0),
             scale: arc_ref.scale.unwrap_or(1.0),
         };
 
+        // Without an asset path the arc is internal. An asset path that
+        // cannot be resolved keeps the arc unresolved, so composition
+        // reports it; it never becomes an internal arc.
+        //
+        // Spec: AOUSD Core §10.3.2.1 (a reference whose layer stack cannot
+        // be computed is a composition error and is ignored).
+        let Some(asset) = arc_ref.asset else {
+            return Some(Reference {
+                layer: self.layer_id,
+                target,
+                asset: None,
+                layer_offset,
+            });
+        };
+        let Some(resolved) = self.resolve_asset(asset) else {
+            return Some(Reference::unresolved(asset, target, layer_offset));
+        };
+        if let Some(layer) = resolved.layer {
+            self.resolved_layers.push(layer);
+        }
         Some(Reference {
-            layer: layer_id,
+            layer: resolved.layer_id,
             target,
-            asset: asset_str,
+            asset: Some(String::from(asset)),
             layer_offset,
         })
     }

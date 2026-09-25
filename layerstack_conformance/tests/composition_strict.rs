@@ -624,11 +624,11 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "ErrorInvalidReferenceToRelocationSource_root",
         causes: &[C::Relocates],
-        prims: 4,
+        prims: 3,
         props: 0,
         values: 0,
         diffs: &[D::MissingPrim, D::MissingSite],
-        reason: "references to `char.usd /Char/Relocated` miss `model.usd /Model/PreRelo` and its child, and the spec-less `/Bad_ReloOfPreRelo` is not populated",
+        reason: "`root.usd` relocates `/ReferencedChar/Relocated`, itself relocated from `char.usd /Char/PreRelo`, and `/ReferencedChar/PreRelo`: the second relocation of the same stage path wins, so `/Good_ReloOfRelocated` misses `model.usd /Model/PreRelo` and its child, and `/Bad_ReloOfPreRelo` is not composed",
     },
     Known {
         fixture: "ErrorOpinionAtRelocationSource_root",

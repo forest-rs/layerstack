@@ -14,6 +14,46 @@ use crate::{CustomAttribute, InstancerProblem, Mesh, Node, Transform, Xform};
 /// prototypes.
 pub const PROTOTYPES_SCOPE: &str = "Prototypes";
 
+/// The attributes that store a [`PointInstancer`]'s orientations.
+///
+/// `UsdGeomPointInstancer` has two: `orientations` (`quath[]`, half
+/// precision, the original) and `orientationsf` (`quatf[]`, added in
+/// OpenUSD 24.03). When `orientationsf` is authored and not empty, readers
+/// that know it use it and ignore `orientations`
+/// (`UsdGeomPointInstancer::UsesOrientationsf`,
+/// `pxr/usd/usdGeom/pointInstancer.cpp`); older readers see only
+/// `orientations`.
+///
+/// Half precision keeps about three significant digits: rounding a unit
+/// quaternion moves a point a meter from the prototype's origin by up to
+/// a millimeter or so ([`PointInstancer::half_orientation_error`]), which
+/// shows as gaps between parts that should touch.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum OrientationPrecision {
+    /// `orientationsf` only: exact, for OpenUSD 24.03 and later. The
+    /// default, since those releases are what current tools ship, and a
+    /// single authored rotation cannot disagree with itself.
+    #[default]
+    Float,
+    /// `orientations` only: half the size, rounded to `half`.
+    Half,
+    /// Both: exact for readers that know `orientationsf`, rounded for
+    /// older ones.
+    FloatAndHalf,
+}
+
+impl OrientationPrecision {
+    /// Whether `orientationsf` is authored.
+    pub fn writes_float(self) -> bool {
+        matches!(self, Self::Float | Self::FloatAndHalf)
+    }
+
+    /// Whether `orientations` is authored.
+    pub fn writes_half(self) -> bool {
+        matches!(self, Self::Half | Self::FloatAndHalf)
+    }
+}
+
 /// Many placements of a few prototypes, written as a `PointInstancer` prim.
 ///
 /// Each prototype is an ordinary [`Mesh`] or [`Xform`] subtree (or a nested
@@ -55,11 +95,12 @@ pub struct PointInstancer<'a> {
     pub proto_indices: Cow<'a, [u32]>,
     /// Position of each instance (`positions`), in the instancer's space.
     pub positions: Cow<'a, [[f32; 3]]>,
-    /// Rotation of each instance (`orientations`), as unit quaternions
-    /// `[x, y, z, w]` (imaginary part first, real part last). They are
-    /// stored at half precision (`quath[]`), as `UsdGeomPointInstancer`
-    /// defines them, so each component is rounded to the nearest `half`.
+    /// Rotation of each instance, as unit quaternions `[x, y, z, w]`
+    /// (imaginary part first, real part last), authored as
+    /// [`Self::orientation_precision`] says.
     pub orientations: Option<Cow<'a, [[f32; 4]]>>,
+    /// Which attributes store [`Self::orientations`].
+    pub orientation_precision: OrientationPrecision,
     /// Scale of each instance along the prototype's axes (`scales`),
     /// applied before the rotation.
     pub scales: Option<Cow<'a, [[f32; 3]]>>,
@@ -86,6 +127,7 @@ impl<'a> PointInstancer<'a> {
             proto_indices: proto_indices.into(),
             positions: positions.into(),
             orientations: None,
+            orientation_precision: OrientationPrecision::default(),
             scales: None,
             ids: None,
             attributes: Vec::new(),
@@ -106,6 +148,47 @@ impl<'a> PointInstancer<'a> {
     pub fn with_orientations(mut self, orientations: impl Into<Cow<'a, [[f32; 4]]>>) -> Self {
         self.orientations = Some(orientations.into());
         self
+    }
+
+    /// Sets which attributes store the orientations.
+    #[must_use]
+    pub fn with_orientation_precision(mut self, precision: OrientationPrecision) -> Self {
+        self.orientation_precision = precision;
+        self
+    }
+
+    /// The largest error that rounding the orientations to `half`
+    /// (`quath`) introduces, as a fraction of distance from the prototype's
+    /// origin: an instance point `d` away from it moves by at most
+    /// `error * d` when a reader uses `orientations` instead of
+    /// `orientationsf`. `0.0` without orientations.
+    ///
+    /// The bound is the Frobenius norm of the difference between the
+    /// rotation matrices OpenUSD builds from the `float` and the `half`
+    /// quaternion (`GfMatrix4d::SetRotate`, which does not renormalize),
+    /// which is at least the spectral norm. Unit quaternions round to
+    /// errors of about `1e-3`, so a 2 m wide prototype can be off by a
+    /// millimeter or two. Orientations are not validated here.
+    pub fn half_orientation_error(&self) -> f64 {
+        self.orientations
+            .as_deref()
+            .unwrap_or_default()
+            .iter()
+            .map(|q| {
+                let exact = rotation(q.map(f64::from));
+                let rounded =
+                    rotation(q.map(|c| {
+                        f64::from(layerstack::half::to_f32(layerstack::half::from_f32(c)))
+                    }));
+                let mut sum = 0.0;
+                for (a, b) in exact.iter().zip(&rounded) {
+                    for (x, y) in a.iter().zip(b) {
+                        sum += (x - y) * (x - y);
+                    }
+                }
+                libm::sqrt(sum)
+            })
+            .fold(0.0, f64::max)
     }
 
     /// Sets the per-instance scales.
@@ -204,8 +287,12 @@ const RESERVED: [&str; 9] = [
 pub(crate) struct Checked {
     /// `protoIndices` as USD `int`s.
     pub(crate) proto_indices: Vec<i32>,
-    /// `orientations` as half bits, `[i, j, k, r]`.
-    pub(crate) orientations: Option<Vec<[u16; 4]>>,
+    /// `orientations` as half bits, `[i, j, k, r]`, when authored.
+    pub(crate) half_orientations: Option<Vec<[u16; 4]>>,
+    /// The rotation readers apply to each instance, `[x, y, z, w]`: the
+    /// `float` quaternion when `orientationsf` is authored, else the
+    /// `half` one read back.
+    pub(crate) rotations: Option<Vec<[f64; 4]>>,
 }
 
 /// Validates `instancer` as `UsdGeomPointInstancer` requires: indices in
@@ -261,11 +348,31 @@ pub(crate) fn check(instancer: &PointInstancer<'_>) -> Result<Checked, Instancer
         .collect::<Result<Vec<_>, _>>()?;
     finite("positions", &instancer.positions)?;
     finite("scales", instancer.scales.as_deref().unwrap_or_default())?;
-    let orientations = instancer
-        .orientations
-        .as_deref()
-        .map(|quats| quats.iter().enumerate().map(orientation).collect())
-        .transpose()?;
+    let orientations: Option<&[[f32; 4]]> = instancer.orientations.as_deref();
+    if let Some(quats) = orientations {
+        quats.iter().enumerate().try_for_each(orientation)?;
+    }
+    let precision = instancer.orientation_precision;
+    let half_orientations = orientations
+        .filter(|_| precision.writes_half())
+        .map(|quats| {
+            quats
+                .iter()
+                .map(|q| q.map(layerstack::half::from_f32))
+                .collect()
+        });
+    let rotations = orientations.map(|quats| {
+        quats
+            .iter()
+            .map(|q| {
+                if precision.writes_float() {
+                    q.map(f64::from)
+                } else {
+                    q.map(|c| f64::from(layerstack::half::to_f32(layerstack::half::from_f32(c))))
+                }
+            })
+            .collect()
+    });
     if let Some(ids) = &instancer.ids {
         let mut sorted: Vec<(i64, usize)> = ids.iter().copied().zip(0..).collect();
         sorted.sort_unstable();
@@ -279,7 +386,8 @@ pub(crate) fn check(instancer: &PointInstancer<'_>) -> Result<Checked, Instancer
     }
     Ok(Checked {
         proto_indices,
-        orientations,
+        half_orientations,
+        rotations,
     })
 }
 
@@ -290,9 +398,8 @@ fn finite(name: &'static str, values: &[[f32; 3]]) -> Result<(), InstancerProble
     }
 }
 
-/// Checks one `[x, y, z, w]` orientation and rounds it to `quath` bits,
-/// which are stored in the same order (`GfQuath`'s `[i, j, k, r]`).
-fn orientation((instance, q): (usize, &[f32; 4])) -> Result<[u16; 4], InstancerProblem> {
+/// Checks one `[x, y, z, w]` orientation: finite and unit length.
+fn orientation((instance, q): (usize, &[f32; 4])) -> Result<(), InstancerProblem> {
     if !q.iter().all(|c| c.is_finite()) {
         return Err(InstancerProblem::NonFinite {
             name: "orientations",
@@ -303,7 +410,7 @@ fn orientation((instance, q): (usize, &[f32; 4])) -> Result<[u16; 4], InstancerP
     if (norm2 - 1.0).abs() > 1e-3 {
         return Err(InstancerProblem::NonUnitOrientation { instance });
     }
-    Ok(q.map(layerstack::half::from_f32))
+    Ok(())
 }
 
 // ── Bounds ──────────────────────────────────────────────────────────────
@@ -366,14 +473,37 @@ fn include(bounds: &mut Option<Aabb>, p: [f64; 3]) {
     }
 }
 
+/// The 3×3 rotation `GfMatrix4d::SetRotate(GfQuatd)` builds from an
+/// `[x, y, z, w]` quaternion, in row-vector form, without renormalizing
+/// (`pxr/base/gf/matrix4d.cpp`).
+pub(crate) fn rotation([x, y, z, r]: [f64; 4]) -> [[f64; 3]; 3] {
+    [
+        [
+            1.0 - 2.0 * (y * y + z * z),
+            2.0 * (x * y + z * r),
+            2.0 * (z * x - y * r),
+        ],
+        [
+            2.0 * (x * y - z * r),
+            1.0 - 2.0 * (z * z + x * x),
+            2.0 * (y * z + x * r),
+        ],
+        [
+            2.0 * (z * x + y * r),
+            2.0 * (y * z - x * r),
+            1.0 - 2.0 * (y * y + x * x),
+        ],
+    ]
+}
+
 /// The transform of one instance, before the prototype root's own
 /// transform: scale, then rotation, then translation, as
 /// `UsdGeomPointInstancer::ComputeInstanceTransformsAtTime` builds it
-/// (`pxr/usd/usdGeom/pointInstancer.cpp`), with the orientation read back
-/// at the half precision it is stored with.
-fn instance_matrix(
+/// (`pxr/usd/usdGeom/pointInstancer.cpp`), with the rotation readers
+/// apply ([`Checked::rotations`]).
+pub(crate) fn instance_matrix(
     position: [f32; 3],
-    orientation: Option<[u16; 4]>,
+    orientation: Option<[f64; 4]>,
     scale: Option<[f32; 3]>,
 ) -> Matrix {
     let mut m = Transform::IDENTITY.usd_rows();
@@ -383,27 +513,11 @@ fn instance_matrix(
         }
     }
     if let Some(q) = orientation {
-        let [x, y, z, r] = q.map(|bits| f64::from(layerstack::half::to_f32(bits)));
-        // `GfMatrix4d::SetRotate(GfQuatd)` (`pxr/base/gf/matrix4d.cpp`).
+        let r = rotation(q);
         let rotation = [
-            [
-                1.0 - 2.0 * (y * y + z * z),
-                2.0 * (x * y + z * r),
-                2.0 * (z * x - y * r),
-                0.0,
-            ],
-            [
-                2.0 * (x * y - z * r),
-                1.0 - 2.0 * (z * z + x * x),
-                2.0 * (y * z + x * r),
-                0.0,
-            ],
-            [
-                2.0 * (z * x + y * r),
-                2.0 * (y * z - x * r),
-                1.0 - 2.0 * (y * y + x * x),
-                0.0,
-            ],
+            [r[0][0], r[0][1], r[0][2], 0.0],
+            [r[1][0], r[1][1], r[1][2], 0.0],
+            [r[2][0], r[2][1], r[2][2], 0.0],
             [0.0, 0.0, 0.0, 1.0],
         ];
         m = mul(&m, &rotation);
@@ -446,7 +560,7 @@ pub(crate) fn extent(instancer: &PointInstancer<'_>, checked: &Checked) -> Optio
             root,
             &instance_matrix(
                 instancer.positions[instance],
-                checked.orientations.as_ref().map(|q| q[instance]),
+                checked.rotations.as_ref().map(|q| q[instance]),
                 instancer.scales.as_deref().map(|s| s[instance]),
             ),
         );

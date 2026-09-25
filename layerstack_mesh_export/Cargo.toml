@@ -15,6 +15,9 @@ layerstack = { path = "../layerstack" }
 layerstack_usda = { path = "../layerstack_usda" }
 layerstack_usdc = { path = "../layerstack_usdc" }
 layerstack_usdz = { path = "../layerstack_usdz" }
+# Square roots for instance transforms in `no_std`; `layerstack` already
+# depends on it.
+libm = { workspace = true }
 
 [lints]
 workspace = true

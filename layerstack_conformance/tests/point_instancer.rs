@@ -19,11 +19,12 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Instant;
 
+use layerstack::half;
 use layerstack_conformance::export_fixtures::{
     OpenUsdRelease, minimum_openusd, parse_openusd_release,
 };
 use layerstack_conformance::instancer_fixtures::{Field, PINE, SHRUB};
-use layerstack_mesh_export::UsdzProfile;
+use layerstack_mesh_export::{Node, OrientationPrecision, UsdzProfile};
 use serde::Deserialize;
 
 /// A per-test directory under Cargo's integration-test scratch space.
@@ -110,6 +111,8 @@ struct LayerReport {
     computed_extent: Vec<[f64; 3]>,
     transforms: Vec<[f64; 16]>,
     bindings: Vec<[String; 2]>,
+    orientationsf: Vec<[f64; 4]>,
+    orientations: Vec<[f64; 4]>,
 }
 
 const PROTOTYPES: [&str; 3] = [
@@ -148,7 +151,16 @@ fn instance_transforms_match_openusd() {
         "the field mixes prototypes"
     );
     let dir = scratch_dir("oracle");
-    let layers = write_field(&field, &dir);
+    let mut layers = write_field(&field, &dir);
+    // Both orientation attributes: readers must prefer `orientationsf`.
+    let mut both = field.scene();
+    let Node::PointInstancer(instancer) = &mut both.root.children[0] else {
+        unreachable!("the field is one instancer");
+    };
+    instancer.orientation_precision = OrientationPrecision::FloatAndHalf;
+    let both_path = dir.join("field_both.usda");
+    std::fs::write(&both_path, both.to_usda().unwrap()).unwrap();
+    layers.push(both_path.clone());
     let script = Path::new(env!("CARGO_MANIFEST_DIR")).join("scripts/point_instancer_oracle.py");
     let out = Command::new(&python)
         .arg(&script)
@@ -178,6 +190,25 @@ fn instance_transforms_match_openusd() {
             "{name}: protoIndices"
         );
         assert_eq!(got.ids, field.ids, "{name}: ids");
+        // `orientationsf` round-trips exactly; `orientations` is authored
+        // only alongside it, rounded to `half`, and does not win.
+        let exact: Vec<[f64; 4]> = field
+            .orientations
+            .iter()
+            .map(|q| q.map(f64::from))
+            .collect();
+        assert_eq!(got.orientationsf, exact, "{name}: orientationsf");
+        if *layer == both_path {
+            let rounded: Vec<[f64; 4]> = field
+                .orientations
+                .iter()
+                .map(|q| q.map(|c| f64::from(half::to_f32(half::from_f32(c)))))
+                .collect();
+            assert_eq!(got.orientations, rounded, "{name}: orientations");
+            assert_ne!(rounded, exact, "{name}: the half values differ");
+        } else {
+            assert!(got.orientations.is_empty(), "{name}: no quath");
+        }
         assert_eq!(got.transforms.len(), expected.len(), "{name}: instances");
         for (i, (m, want)) in got.transforms.iter().zip(&expected).enumerate() {
             for (k, value) in m.iter().enumerate() {

@@ -10,6 +10,8 @@ with one entry per LAYER:
 
 - `prototypes`: the `prototypes` relationship's targets, in order;
 - `protoIndices`, `ids`: the authored arrays;
+- `orientationsf`, `orientations`: the authored `quatf[]` and `quath[]`
+  arrays as `[x, y, z, w]` lists (empty when not authored);
 - `extent`: the authored extent, and `computedExtent`,
   `UsdGeomPointInstancer::ComputeExtentAtTime` at the default time;
 - `transforms`: `ComputeInstanceTransformsAtTime` at the default time
@@ -25,6 +27,11 @@ import json
 import sys
 
 from pxr import Usd, UsdGeom, UsdShade
+
+
+def quats(values):
+    """`[x, y, z, w]` lists of a quaternion array, or `[]` when unauthored."""
+    return [list(q.GetImaginary()) + [q.GetReal()] for q in (values or [])]
 
 
 def report(layer, instancer_path):
@@ -45,6 +52,8 @@ def report(layer, instancer_path):
         "prototypes": [str(p) for p in prototypes],
         "protoIndices": list(instancer.GetProtoIndicesAttr().Get(default)),
         "ids": list(instancer.GetIdsAttr().Get(default) or []),
+        "orientationsf": quats(instancer.GetOrientationsfAttr().Get(default)),
+        "orientations": quats(instancer.GetOrientationsAttr().Get(default)),
         "extent": [list(v) for v in instancer.GetExtentAttr().Get(default)],
         "computedExtent": [list(v) for v in instancer.ComputeExtentAtTime(default, default)],
         "transforms": [[m[r][c] for r in range(4) for c in range(4)] for m in transforms],

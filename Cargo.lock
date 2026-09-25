@@ -299,6 +299,7 @@ dependencies = [
  "layerstack_usda",
  "layerstack_usdc",
  "layerstack_usdz",
+ "libm",
 ]
 
 [[package]]

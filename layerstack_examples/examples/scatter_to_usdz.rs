@@ -141,8 +141,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "the prototypes relationship keeps the prototype order"
     );
     assert!(
-        usda.contains("quath[] orientations = ["),
-        "orientations are half-precision quaternions"
+        usda.contains("quatf[] orientationsf = ["),
+        "orientations are single-precision quaternions"
     );
 
     let bytes = scene.to_usdz(profile, &[])?;

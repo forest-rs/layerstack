@@ -1,0 +1,15 @@
+#usda 1.0
+
+def "Basin" (
+    references = </Lake>
+)
+{
+}
+
+def "Lake"
+{
+    def "Pool"
+    {
+        int depth = 4
+    }
+}

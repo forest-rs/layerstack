@@ -1,0 +1,10 @@
+#usda 1.0
+
+def "Flowers"
+{
+    def "Patch"
+    {
+        int bloom = 2
+        int petals = 2
+    }
+}

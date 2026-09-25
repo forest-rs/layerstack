@@ -1,0 +1,350 @@
+{
+ "generator": "layerstack_conformance/scripts/ancestral_arcs_oracle.py",
+ "openusd_version": "0.26.8",
+ "root": "root.usda",
+ "prims": [
+  {
+   "path": "/Orchard",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Orchard"
+    ],
+    [
+     "grove.usda",
+     "/Grove/Tree"
+    ],
+    [
+     "forest.usda",
+     "/Forest/Tree"
+    ]
+   ]
+  },
+  {
+   "path": "/Orchard/Branch",
+   "prim_stack": [
+    [
+     "forest.usda",
+     "/Forest/Tree/Branch"
+    ]
+   ]
+  },
+  {
+   "path": "/Twig",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Twig"
+    ],
+    [
+     "forest.usda",
+     "/Forest/Tree/Branch"
+    ]
+   ]
+  },
+  {
+   "path": "/Meadow",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Meadow"
+    ],
+    [
+     "field.usda",
+     "/Field/Patch"
+    ],
+    [
+     "field.usda",
+     "/Field{season=summer}Patch"
+    ],
+    [
+     "flowers.usda",
+     "/Flowers/Patch"
+    ]
+   ]
+  },
+  {
+   "path": "/Outcrop",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Outcrop"
+    ],
+    [
+     "root.usda",
+     "/_class_Cliff/Ledge"
+    ],
+    [
+     "cliff.usda",
+     "/Cliff/Ledge"
+    ],
+    [
+     "cliff.usda",
+     "/_class_Cliff/Ledge"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Cliff",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Cliff"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Cliff/Ledge",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Cliff/Ledge"
+    ]
+   ]
+  },
+  {
+   "path": "/Crater",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Crater"
+    ],
+    [
+     "basin.usda",
+     "/Lake/Pool"
+    ]
+   ]
+  },
+  {
+   "path": "/Clock",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Clock"
+    ],
+    [
+     "dial.usda",
+     "/Dial/Hand"
+    ],
+    [
+     "gears.usda",
+     "/Gears/Hand"
+    ],
+    [
+     "gears_sub.usda",
+     "/Gears/Hand"
+    ]
+   ]
+  },
+  {
+   "path": "/Stopwatch",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Stopwatch"
+    ],
+    [
+     "dial.usda",
+     "/Timer/Hand"
+    ],
+    [
+     "gears.usda",
+     "/Gears/Hand"
+    ],
+    [
+     "gears_sub.usda",
+     "/Gears/Hand"
+    ]
+   ]
+  },
+  {
+   "path": "/Alpha",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Alpha"
+    ],
+    [
+     "root.usda",
+     "/Quarry/Stone"
+    ]
+   ]
+  },
+  {
+   "path": "/Alpha/Chip",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Quarry/Stone/Chip"
+    ]
+   ]
+  },
+  {
+   "path": "/Zeta",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Zeta"
+    ],
+    [
+     "root.usda",
+     "/Quarry"
+    ]
+   ]
+  },
+  {
+   "path": "/Zeta/Stone",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Quarry/Stone"
+    ]
+   ]
+  },
+  {
+   "path": "/Zeta/Stone/Chip",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Quarry/Stone/Chip"
+    ]
+   ]
+  },
+  {
+   "path": "/Quarry",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Quarry"
+    ]
+   ]
+  },
+  {
+   "path": "/Quarry/Stone",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Quarry/Stone"
+    ]
+   ]
+  },
+  {
+   "path": "/Quarry/Stone/Chip",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Quarry/Stone/Chip"
+    ]
+   ]
+  }
+ ],
+ "values": {
+  "/Orchard.height": 2,
+  "/Orchard.width": 1,
+  "/Orchard/Branch.leaves": 2,
+  "/Twig.leaves": 2,
+  "/Meadow.bloom": 1,
+  "/Meadow.grass": 1,
+  "/Meadow.petals": 2,
+  "/Outcrop.grain": 1,
+  "/Outcrop.moss": 0,
+  "/_class_Cliff/Ledge.moss": 0,
+  "/Crater.depth": 4,
+  "/Alpha.weight": 5,
+  "/Alpha/Chip.size": 5,
+  "/Zeta/Stone.weight": 5,
+  "/Zeta/Stone/Chip.size": 5,
+  "/Quarry/Stone.weight": 5,
+  "/Quarry/Stone/Chip.size": 5
+ },
+ "samples": {
+  "/Clock.angle": [
+   [
+    15.0,
+    0.0
+   ],
+   [
+    16.0,
+    0.0
+   ],
+   [
+    24.0,
+    1.0
+   ],
+   [
+    32.0,
+    2.0
+   ],
+   [
+    33.0,
+    2.0
+   ]
+  ],
+  "/Clock.spin": [
+   [
+    23.0,
+    0.0
+   ],
+   [
+    24.0,
+    0.0
+   ],
+   [
+    56.0,
+    2.0
+   ],
+   [
+    88.0,
+    4.0
+   ],
+   [
+    89.0,
+    4.0
+   ]
+  ],
+  "/Stopwatch.angle": [
+   [
+    -1.0,
+    0.0
+   ],
+   [
+    0.0,
+    0.0
+   ],
+   [
+    1.5,
+    1.0
+   ],
+   [
+    3.0,
+    2.0
+   ],
+   [
+    4.0,
+    2.0
+   ]
+  ],
+  "/Stopwatch.spin": [
+   [
+    0.5,
+    0.0
+   ],
+   [
+    1.5,
+    0.0
+   ],
+   [
+    7.5,
+    2.0
+   ],
+   [
+    13.5,
+    4.0
+   ],
+   [
+    14.5,
+    4.0
+   ]
+  ]
+ }
+}

@@ -1,0 +1,98 @@
+#usda 1.0
+
+# `grove.usda /Grove` references `/Forest`, so `/Grove/Tree` reaches
+# `forest.usda /Forest/Tree` and its children.
+def "Orchard" (
+    references = @./grove.usda@</Grove/Tree>
+)
+{
+}
+
+# Two levels below the ancestor that authors the reference.
+def "Twig" (
+    references = @./grove.usda@</Grove/Tree/Branch>
+)
+{
+}
+
+# `field.usda /Field` selects `season = "summer"`; its branch holds
+# opinions for `Patch` and references `flowers.usda /Flowers`. The
+# selection authored here is for `/Meadow`'s own variant set, not for
+# `/Field`'s, which the reference does not map.
+def "Meadow" (
+    references = @./field.usda@</Field/Patch>
+    variants = {
+        string season = "winter"
+    }
+)
+{
+}
+
+# `cliff.usda /Cliff` inherits `/_class_Cliff`, so `/Cliff/Ledge` inherits
+# `/_class_Cliff/Ledge`, a class implied into this layer stack as well.
+def "Outcrop" (
+    references = @./cliff.usda@</Cliff/Ledge>
+)
+{
+}
+
+over "_class_Cliff"
+{
+    over "Ledge"
+    {
+        int moss = 0
+    }
+}
+
+# A payload to a subroot target whose parent references a sibling prim of
+# its own layer.
+def "Crater" (
+    payload = @./basin.usda@</Basin/Pool>
+)
+{
+}
+
+# Layer offsets compose across every arc: `/Clock` references
+# `dial.usda /Dial/Hand` with offset 10 and scale 2, and `/Dial` references
+# `gears.usda /Gears` with offset 3 and scale 4, so a sample at time t in
+# `gears.usda` lands at 10 + 2 * (3 + 4 * t); `spin` comes from a sublayer
+# of `gears.usda` with its own offset and scale. `/Stopwatch` reaches the
+# same prims through payloads.
+def "Clock" (
+    prepend references = @./dial.usda@</Dial/Hand> (offset = 10; scale = 2)
+)
+{
+}
+
+def "Stopwatch" (
+    prepend payload = @./dial.usda@</Timer/Hand> (offset = 6; scale = 3)
+)
+{
+}
+
+# An internal reference to `/Zeta/Stone`, which only `/Zeta`'s reference to
+# `/Quarry` provides, and which comes after `/Alpha` in namespace order.
+def "Alpha" (
+    references = </Zeta/Stone>
+)
+{
+}
+
+def "Zeta" (
+    references = </Quarry>
+)
+{
+}
+
+def "Quarry"
+{
+    def "Stone"
+    {
+        int weight = 5
+
+        def "Chip"
+        {
+            int size = 5
+        }
+    }
+}

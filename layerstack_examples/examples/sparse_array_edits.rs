@@ -130,6 +130,7 @@ over "Mesh" {
         SublayerEntry {
             layer: LayerId(1),
             offset: LayerOffset::IDENTITY,
+            unresolved_asset: None,
         },
     ];
     store.insert_layer(root);

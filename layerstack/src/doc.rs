@@ -600,21 +600,58 @@ impl LayerOffset {
 }
 
 /// A sublayer entry with an optional time offset.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SublayerEntry {
-    /// The sublayer's layer ID.
+    /// The sublayer's layer ID, or [`LayerId::UNRESOLVED`] when its asset
+    /// path could not be resolved (see [`SublayerEntry::unresolved`]).
     pub layer: LayerId,
     /// Time offset applied to this sublayer (§12.3.2.1).
     pub offset: LayerOffset,
+    /// The authored asset path of a sublayer that could not be resolved;
+    /// `None` for a resolved sublayer.
+    pub unresolved_asset: Option<String>,
 }
 
 impl SublayerEntry {
     /// Creates a sublayer entry with no time offset.
     pub fn new(layer: LayerId) -> Self {
+        Self::with_offset(layer, LayerOffset::IDENTITY)
+    }
+
+    /// Creates a sublayer entry with a time offset.
+    pub fn with_offset(layer: LayerId, offset: LayerOffset) -> Self {
         Self {
             layer,
-            offset: LayerOffset::IDENTITY,
+            offset,
+            unresolved_asset: None,
         }
+    }
+
+    /// Creates a sublayer entry for `asset`, whose resolution failed.
+    ///
+    /// The entry keeps its place and authored asset path, and its layer is
+    /// [`LayerId::UNRESOLVED`]: gathering the layer stack skips it and
+    /// composition reports it as [`CompositionError::UnresolvedSublayer`],
+    /// keeping the rest of the layer stack.
+    ///
+    /// Spec: AOUSD Core §10.3.1 (sublayers), §10.6 (composition errors).
+    /// OpenUSD reports it as `PcpErrorInvalidSublayerPath`
+    /// (`PcpLayerStack::_BuildLayerStack`, `pxr/usd/pcp/layerStack.cpp`).
+    ///
+    /// [`CompositionError::UnresolvedSublayer`]: crate::CompositionError::UnresolvedSublayer
+    pub fn unresolved(asset: impl Into<String>, offset: LayerOffset) -> Self {
+        Self {
+            layer: LayerId::UNRESOLVED,
+            offset,
+            unresolved_asset: Some(asset.into()),
+        }
+    }
+
+    /// Returns `true` when this sublayer's asset path could not be resolved
+    /// (see [`SublayerEntry::unresolved`]).
+    #[must_use]
+    pub fn is_unresolved(&self) -> bool {
+        self.layer == LayerId::UNRESOLVED
     }
 }
 

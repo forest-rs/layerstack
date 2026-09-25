@@ -10,13 +10,26 @@
 //! values are also checked directly, so that a mistake shared by both
 //! readers cannot pass.
 
-use layerstack::Value;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use layerstack::doc::{LayerId, LayerOffset, SublayerEntry};
+use layerstack::interner::TokenInterner;
+use layerstack::path::PathInterner;
+use layerstack::{
+    AssetResolveError, AssetResolver, CompositionError, InMemoryStore, ResolvedAsset, Stage,
+    StageOptions, UnresolvedSublayer, Value,
+};
 use layerstack_conformance::authored::{Names, dump_layer};
 use layerstack_conformance::save_corpus::Imported;
 use layerstack_conformance::workspace_root;
 
+fn fixture_dir() -> PathBuf {
+    workspace_root().join("layerstack_conformance/fixtures/openusd_usda_text")
+}
+
 fn fixture(name: &str) -> (Imported, Imported) {
-    let dir = workspace_root().join("layerstack_conformance/fixtures/openusd_usda_text");
+    let dir = fixture_dir();
     let text = std::fs::read_to_string(dir.join(format!("{name}.usda"))).unwrap();
     let bytes = std::fs::read(dir.join(format!("{name}.usdc"))).unwrap();
     (Imported::usda(&text), Imported::usdc(&bytes))
@@ -157,11 +170,11 @@ fn values_openusd_rejects_are_reported() {
         );
         let parsed = layerstack_usda::parser::parse(&source);
         assert!(parsed.diagnostics.is_empty(), "{statement}");
-        let mut tokens = layerstack::interner::TokenInterner::default();
-        let mut paths = layerstack::path::PathInterner::default();
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
         let result = layerstack_usda::emit::emit(
             &parsed.layer,
-            layerstack::doc::LayerId(1),
+            LayerId(1),
             &mut tokens,
             &mut paths,
             &mut layerstack_conformance::save_corpus::AnyAsset::default(),
@@ -175,6 +188,104 @@ fn values_openusd_rejects_are_reported() {
                     "{statement}: a value was imported"
                 );
             }
+        }
+    }
+}
+
+/// Resolves assets to the USDA fixtures beside the layer being read; any
+/// other asset path does not resolve.
+struct FixtureResolver;
+
+impl AssetResolver for FixtureResolver {
+    fn resolve(
+        &mut self,
+        asset_path: &str,
+        _: Option<LayerId>,
+        tokens: &mut TokenInterner,
+        paths: &mut PathInterner,
+    ) -> Result<ResolvedAsset, AssetResolveError> {
+        let path = fixture_dir().join(asset_path);
+        let text = std::fs::read_to_string(&path).map_err(|_| AssetResolveError::NotFound)?;
+        let parsed = layerstack_usda::parser::parse(&text);
+        assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+        let id = LayerId(2);
+        let emitted = layerstack_usda::emit::emit(&parsed.layer, id, tokens, paths, self);
+        Ok(ResolvedAsset {
+            layer_id: id,
+            resolved_path: Arc::from(path.to_string_lossy().as_ref()),
+            layer: Some(emitted.layer),
+        })
+    }
+
+    fn resolved_path(&self, _: LayerId) -> Option<&str> {
+        None
+    }
+}
+
+/// A sublayer whose asset does not resolve is kept by both readers and
+/// reported when the layer stack is gathered, and the rest of the layer
+/// stack composes, as OpenUSD reports `PcpErrorInvalidSublayerPath` for the
+/// same files (`generate.py` checks that).
+///
+/// Spec: AOUSD Core §10.3.1, §10.6.
+#[test]
+fn unresolved_sublayers_are_reported_by_both_readers() {
+    let text = std::fs::read_to_string(fixture_dir().join("unresolved_sublayer.usda")).unwrap();
+    let bytes = std::fs::read(fixture_dir().join("unresolved_sublayer.usdc")).unwrap();
+    for format in ["usda", "usdc"] {
+        let mut store = InMemoryStore::default();
+        let root = LayerId(1);
+        let (layer, resolved) = if format == "usda" {
+            let parsed = layerstack_usda::parser::parse(&text);
+            let emitted = layerstack_usda::emit::emit(
+                &parsed.layer,
+                root,
+                &mut store.tokens,
+                &mut store.paths,
+                &mut FixtureResolver,
+            );
+            assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
+            (emitted.layer, emitted.resolved_layers)
+        } else {
+            let read = layerstack_usdc::read_usdc(
+                &bytes,
+                root,
+                &mut store.tokens,
+                &mut store.paths,
+                &mut FixtureResolver,
+            )
+            .unwrap();
+            (read.layer, read.resolved_layers)
+        };
+        assert_eq!(
+            layer.sublayers,
+            [
+                SublayerEntry::unresolved(
+                    "./missing.usda",
+                    LayerOffset {
+                        offset: 5.0,
+                        scale: 1.0
+                    }
+                ),
+                SublayerEntry::new(LayerId(2)),
+            ],
+            "{format}"
+        );
+        store.insert_layer(layer);
+        for layer in resolved {
+            store.insert_layer(layer);
+        }
+        let stage = Stage::compose(&mut store, root, StageOptions::default());
+        assert_eq!(
+            stage.composition_errors(),
+            [CompositionError::UnresolvedSublayer(UnresolvedSublayer {
+                layer: root,
+                asset: "./missing.usda".into(),
+            })],
+            "{format}"
+        );
+        for prim in ["/Root", "/Weak"] {
+            assert!(stage.has_prim(store.path(prim)), "{format}: {prim}");
         }
     }
 }

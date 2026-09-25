@@ -113,18 +113,24 @@ impl EmitCtx<'_> {
             match meta {
                 ast::LayerMeta::SubLayers(items) => {
                     for item in items {
-                        if let Some(resolved) = self.resolve_asset(item.asset) {
-                            let offset = LayerOffset {
-                                offset: item.offset.unwrap_or(0.0),
-                                scale: item.scale.unwrap_or(1.0),
-                            };
-                            layer.sublayers.push(SublayerEntry {
-                                layer: resolved.layer_id,
-                                offset,
-                            });
-                            if let Some(sub_layer) = resolved.layer {
-                                self.resolved_layers.push(sub_layer);
-                            }
+                        let offset = LayerOffset {
+                            offset: item.offset.unwrap_or(0.0),
+                            scale: item.scale.unwrap_or(1.0),
+                        };
+                        // A sublayer that does not resolve keeps its place;
+                        // composition reports it (AOUSD Core §10.3.1, §10.6;
+                        // OpenUSD `PcpErrorInvalidSublayerPath`).
+                        let Some(resolved) = self.resolve_asset(item.asset) else {
+                            layer
+                                .sublayers
+                                .push(SublayerEntry::unresolved(item.asset, offset));
+                            continue;
+                        };
+                        layer
+                            .sublayers
+                            .push(SublayerEntry::with_offset(resolved.layer_id, offset));
+                        if let Some(sub_layer) = resolved.layer {
+                            self.resolved_layers.push(sub_layer);
                         }
                     }
                 }

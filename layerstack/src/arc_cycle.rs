@@ -261,17 +261,17 @@ impl CycleDetector {
         })
     }
 
-    /// Gathers the layer stack rooted at `root`, recording each sublayer
-    /// cycle it ignores.
+    /// Gathers the layer stack rooted at `root`, recording each sublayer it
+    /// ignores (a cycle or an unresolved asset path).
     pub(crate) fn gather_layer_stack(
         &mut self,
         store: &dyn LayerStore,
         root: LayerId,
     ) -> LayerStack {
-        let mut sublayer_cycles = Vec::new();
-        let stack = LayerStack::gather_reporting(store, root, &mut sublayer_cycles);
-        for cycle in sublayer_cycles {
-            self.report(CompositionError::SublayerCycle(cycle));
+        let mut errors = Vec::new();
+        let stack = LayerStack::gather_reporting(store, root, &mut errors);
+        for error in errors {
+            self.report(error);
         }
         self.stack_layers
             .entry(root)

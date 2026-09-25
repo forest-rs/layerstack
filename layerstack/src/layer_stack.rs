@@ -13,7 +13,7 @@ use alloc::vec::Vec;
 use hashbrown::HashSet;
 
 use crate::{
-    composition_error::SublayerCycle,
+    composition_error::{CompositionError, SublayerCycle, UnresolvedSublayer},
     doc::{LayerId, LayerOffset, LayerStore},
 };
 
@@ -35,27 +35,36 @@ pub struct LayerStack {
 impl LayerStack {
     /// Gathers the layer stack rooted at `root`.
     ///
-    /// A sublayer that would form a cycle is ignored; composition reports it
-    /// as a [`SublayerCycle`] through
+    /// A sublayer that would form a cycle, or whose asset path could not be
+    /// resolved, is ignored; composition reports it as a [`SublayerCycle`]
+    /// or an [`UnresolvedSublayer`] through
     /// [`Stage::composition_errors`](crate::Stage::composition_errors).
     #[must_use]
     pub fn gather(store: &dyn LayerStore, root: LayerId) -> Self {
         Self::gather_reporting(store, root, &mut Vec::new())
     }
 
-    /// Gathers the layer stack rooted at `root`, appending each sublayer
-    /// cycle it ignores to `cycles`.
+    /// Gathers the layer stack rooted at `root`, appending an error for
+    /// each sublayer it ignores to `errors`: a [`SublayerCycle`] or an
+    /// [`UnresolvedSublayer`].
     ///
     /// A sublayer forms a cycle when it is already on the chain of sublayers
     /// from `root` to the layer that names it. A layer repeated elsewhere in
-    /// the hierarchy is not a cycle and appears once per occurrence.
+    /// the hierarchy is not a cycle and appears once per occurrence. A
+    /// sublayer whose asset path could not be resolved
+    /// ([`SublayerEntry::is_unresolved`]) contributes no layer; the rest of
+    /// the stack is gathered as usual.
     ///
     /// Spec: AOUSD Core §10.3.1 (a sublayer that would form a cycle is a
-    /// composition error and is ignored).
+    /// composition error and is ignored), §10.6. OpenUSD reports the two as
+    /// `PcpErrorSublayerCycle` and `PcpErrorInvalidSublayerPath`
+    /// (`PcpLayerStack::_BuildLayerStack`, `pxr/usd/pcp/layerStack.cpp`).
+    ///
+    /// [`SublayerEntry::is_unresolved`]: crate::SublayerEntry::is_unresolved
     pub(crate) fn gather_reporting(
         store: &dyn LayerStore,
         root: LayerId,
-        cycles: &mut Vec<SublayerCycle>,
+        errors: &mut Vec<CompositionError>,
     ) -> Self {
         fn visit(
             store: &dyn LayerStore,
@@ -64,18 +73,25 @@ impl LayerStack {
             visiting: &mut HashSet<LayerId>,
             out: &mut Vec<LayerId>,
             offsets: &mut Vec<LayerOffset>,
-            cycles: &mut Vec<SublayerCycle>,
+            errors: &mut Vec<CompositionError>,
         ) {
             visiting.insert(id);
             out.push(id);
             offsets.push(accumulated);
             if let Some(layer) = store.layer(id) {
                 for sub in &layer.sublayers {
+                    if sub.is_unresolved() {
+                        errors.push(CompositionError::UnresolvedSublayer(UnresolvedSublayer {
+                            layer: id,
+                            asset: sub.unresolved_asset.clone().unwrap_or_default(),
+                        }));
+                        continue;
+                    }
                     if visiting.contains(&sub.layer) {
-                        cycles.push(SublayerCycle {
+                        errors.push(CompositionError::SublayerCycle(SublayerCycle {
                             layer: id,
                             sublayer: sub.layer,
-                        });
+                        }));
                         continue;
                     }
                     let child_offset = accumulated.compose(sub.offset);
@@ -86,7 +102,7 @@ impl LayerStack {
                         visiting,
                         out,
                         offsets,
-                        cycles,
+                        errors,
                     );
                 }
             }
@@ -103,7 +119,7 @@ impl LayerStack {
             &mut HashSet::new(),
             &mut layers,
             &mut offsets,
-            cycles,
+            errors,
         );
         Self { layers, offsets }
     }
@@ -205,10 +221,40 @@ mod tests {
         assert_eq!(stack.layers, vec![LayerId(1), LayerId(2), LayerId(3)]);
         assert_eq!(
             cycles,
-            vec![SublayerCycle {
+            vec![CompositionError::SublayerCycle(SublayerCycle {
                 layer: LayerId(3),
                 sublayer: LayerId(2),
-            }]
+            })]
+        );
+    }
+
+    /// An unresolved sublayer contributes no layer and is reported; the
+    /// sublayers around it, and their offsets, are kept.
+    #[test]
+    fn unresolved_sublayers_are_reported_and_skipped() {
+        let mut store = InMemoryStore::default();
+        let offset = LayerOffset {
+            offset: 5.0,
+            scale: 1.0,
+        };
+        let mut root = Layer::new(LayerId(1));
+        root.sublayers = vec![
+            SublayerEntry::unresolved("./missing.usda", offset),
+            SublayerEntry::with_offset(LayerId(2), offset),
+        ];
+        store.insert_layer(root);
+        store.insert_layer(Layer::new(LayerId(2)));
+
+        let mut errors = Vec::new();
+        let stack = LayerStack::gather_reporting(&store, LayerId(1), &mut errors);
+        assert_eq!(stack.layers, [LayerId(1), LayerId(2)]);
+        assert_eq!(stack.offsets, [LayerOffset::IDENTITY, offset]);
+        assert_eq!(
+            errors,
+            [CompositionError::UnresolvedSublayer(UnresolvedSublayer {
+                layer: LayerId(1),
+                asset: "./missing.usda".into(),
+            })]
         );
     }
 
@@ -252,6 +298,7 @@ mod tests {
                     offset: 10.0,
                     scale: 1.0,
                 },
+                unresolved_asset: None,
             }],
             default_prim: None,
             metadata: Vec::new(),
@@ -266,6 +313,7 @@ mod tests {
                     offset: 20.0,
                     scale: 1.0,
                 },
+                unresolved_asset: None,
             }],
             default_prim: None,
             metadata: Vec::new(),
@@ -314,6 +362,7 @@ mod tests {
                     offset: 10.0,
                     scale: 2.0,
                 },
+                unresolved_asset: None,
             }],
             default_prim: None,
             metadata: Vec::new(),
@@ -328,6 +377,7 @@ mod tests {
                     offset: 5.0,
                     scale: 3.0,
                 },
+                unresolved_asset: None,
             }],
             default_prim: None,
             metadata: Vec::new(),

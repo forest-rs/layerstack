@@ -1539,46 +1539,27 @@ fn decode_relocates_map(
 // Value indirection & payload decoders
 // ---------------------------------------------------------------------------
 
+/// Decodes a `VtValue` value (type 44). OpenUSD unpacks it with
+/// `Read<VtValue>` at the payload offset (`pxr/usd/sdf/crateFile.cpp:1314`):
+/// an offset to the value's `ValueRep`, relative to the offset field.
 fn decode_value_indirection(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
-    let off = payload_offset_usize(rep)?;
-    if off + 8 > data.len() {
-        return Err(UsdcError::UnexpectedEof {
-            section: "Value indirection",
-            offset: off as u64,
-            expected: 8,
-        });
-    }
-    let mut rb = [0_u8; 8];
-    rb.copy_from_slice(&data[off..off + 8]);
-    let child_rep = RawValueRep::new(rb);
-    decode_value(&child_rep, data, sections)
+    let mut pos = payload_offset_usize(rep)?;
+    read_vt_value(data, &mut pos, sections)
 }
 
+/// Decodes an `SdfUnregisteredValue`, which OpenUSD stores as a `VtValue`
+/// (`pxr/usd/sdf/crateFile.cpp:1261`).
 fn decode_unregistered_value(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
 ) -> Result<CrateValue, UsdcError> {
-    let off = payload_offset_usize(rep)?;
-    let local_offset = read_u64_at(data, off)?;
-    let target = off as u64 + local_offset;
-    #[allow(clippy::cast_possible_truncation, reason = "offset within file bounds")]
-    let target_off = target as usize;
-    if target_off + 8 > data.len() {
-        return Err(UsdcError::UnexpectedEof {
-            section: "UnregisteredValue",
-            offset: target,
-            expected: 8,
-        });
-    }
-    let mut rb = [0_u8; 8];
-    rb.copy_from_slice(&data[target_off..target_off + 8]);
-    let child_rep = RawValueRep::new(rb);
-    decode_value(&child_rep, data, sections)
+    let mut pos = payload_offset_usize(rep)?;
+    read_vt_value(data, &mut pos, sections)
 }
 
 fn decode_payload(
@@ -2711,6 +2692,24 @@ mod tests {
             reference_fields(&value),
             (String::from("./ref.usd"), String::from("/Ref"), 0.0, 1.0)
         );
+    }
+
+    /// A `VtValue` value is reached through an offset relative to its
+    /// payload offset, like the values of a dictionary.
+    #[test]
+    fn vt_values_are_read_through_their_relative_offset() {
+        let sections = sections_with(CrateVersion::NEWEST_READABLE);
+        let mut data = vec![0_u8; 8];
+        data.extend_from_slice(&16_i64.to_le_bytes());
+        data.extend_from_slice(&[0xEE; 8]); // Not the value.
+        data.extend_from_slice(&[5, 0, 0, 0, 0, 0, ValueType::Int as u8, 0x40]);
+        for vtype in [ValueType::Value, ValueType::UnregisteredValue] {
+            let rep = list_op_rep(vtype, 8);
+            match decode_value(&rep, &data, &sections) {
+                Ok(CrateValue::Int(5)) => {}
+                other => panic!("expected Int(5), got {other:?}"),
+            }
+        }
     }
 
     #[test]

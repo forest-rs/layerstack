@@ -14,8 +14,8 @@ use layerstack_usda::writer::{
 
 use crate::{
     CustomAttribute, ExportError, Faces, FamilyType, Interpolation, MATERIALS_SCOPE, Material,
-    MaterialSubset, Mesh, MeshProblem, Node, Orientation, Primvar, PrimvarData, Scene, Transform,
-    UpAxis, Xform,
+    MaterialSubset, Mesh, MeshProblem, Node, Orientation, PROTOTYPES_SCOPE, PointInstancer,
+    Primvar, PrimvarData, Scene, Transform, UpAxis, Xform,
 };
 
 /// What mesh prims need to know about the scene's materials.
@@ -83,11 +83,107 @@ fn xform_prim(
     prim.properties
         .extend(attrs.into_iter().map(Property::Attribute));
     for child in &xform.children {
-        prim.children.push(match child {
-            Node::Xform(x) => xform_prim(x, &path, materials)?,
-            Node::Mesh(m) => mesh_prim(m, &path, materials)?,
-        });
+        prim.children.push(node_prim(child, &path, materials)?);
     }
+    Ok(prim)
+}
+
+fn node_prim(
+    node: &Node<'_>,
+    parent: &str,
+    materials: &Materials<'_, '_>,
+) -> Result<Prim, ExportError> {
+    match node {
+        Node::Xform(x) => xform_prim(x, parent, materials),
+        Node::Mesh(m) => mesh_prim(m, parent, materials),
+        Node::PointInstancer(p) => instancer_prim(p, parent, materials),
+    }
+}
+
+/// A `PointInstancer` prim (`pxr/usd/usdGeom/pointInstancer.h`) with its
+/// prototypes in a `Prototypes` scope below it, targeted in order by the
+/// `prototypes` relationship.
+fn instancer_prim(
+    instancer: &PointInstancer<'_>,
+    parent: &str,
+    materials: &Materials<'_, '_>,
+) -> Result<Prim, ExportError> {
+    let path = format!("{parent}/{}", instancer.name);
+    let checked =
+        crate::instancer::check(instancer).map_err(|problem| ExportError::InvalidInstancer {
+            path: path.clone(),
+            problem,
+        })?;
+    let scope_path = format!("{path}/{PROTOTYPES_SCOPE}");
+    let mut scope = Prim::def("Scope", PROTOTYPES_SCOPE);
+    let mut targets = Vec::with_capacity(instancer.prototypes.len());
+    for prototype in &instancer.prototypes {
+        scope
+            .children
+            .push(node_prim(prototype, &scope_path, materials)?);
+        targets.push(format!("{scope_path}/{}", prototype.name()));
+    }
+
+    let mut attrs = Vec::new();
+    // Prototype bounds come from the validated meshes built above.
+    if let Some([lo, hi]) = crate::instancer::extent(instancer, &checked) {
+        #[allow(
+            clippy::cast_possible_truncation,
+            reason = "`extent` is `float3[]`; OpenUSD rounds its double range the same way"
+        )]
+        let extent = vec![lo.map(|c| c as f32), hi.map(|c| c as f32)];
+        attrs.push(Attribute::new(
+            "extent",
+            "float3[]",
+            Value::Float3Array(extent),
+        ));
+    }
+    if let Some(ids) = instancer.ids {
+        attrs.push(Attribute::new(
+            "ids",
+            "int64[]",
+            Value::Int64Array(ids.to_vec()),
+        ));
+    }
+    if let Some(orientations) = checked.orientations {
+        attrs.push(Attribute::new(
+            "orientations",
+            "quath[]",
+            Value::QuathArray(orientations),
+        ));
+    }
+    attrs.push(Attribute::new(
+        "positions",
+        "point3f[]",
+        Value::Float3Array(instancer.positions.to_vec()),
+    ));
+    attrs.push(Attribute::new(
+        "protoIndices",
+        "int[]",
+        Value::IntArray(checked.proto_indices),
+    ));
+    if let Some(scales) = instancer.scales {
+        attrs.push(Attribute::new(
+            "scales",
+            "float3[]",
+            Value::Float3Array(scales.to_vec()),
+        ));
+    }
+    push_transform(&mut attrs, instancer.transform);
+    push_custom(&mut attrs, &instancer.attributes);
+
+    let mut prim = Prim::def("PointInstancer", instancer.name);
+    prim.properties
+        .extend(attrs.into_iter().map(Property::Attribute));
+    // `prototypes` is an ordered target list: a prototype's position in it
+    // is the value `protoIndices` uses for it.
+    prim.push_property(Relationship {
+        name: "prototypes".into(),
+        custom: false,
+        targets: Some(ListOp::explicit(targets)),
+        metadata: Vec::new(),
+    });
+    prim.children.push(scope);
     Ok(prim)
 }
 

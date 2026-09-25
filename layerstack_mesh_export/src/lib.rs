@@ -83,6 +83,51 @@
 //! displacement); and texture coordinates are not transformed
 //! (`UsdTransform2d`).
 //!
+//! # Repeated geometry
+//!
+//! A [`PointInstancer`] places a few prototypes many times: each prototype
+//! is an ordinary [`Mesh`] or [`Xform`] subtree, keeping its materials and
+//! face subsets, and each instance picks one by index and gives its own
+//! position, and optionally an orientation, a scale and a stable id. The
+//! prototypes are written under a `Prototypes` scope below the
+//! `PointInstancer` prim, in the order of its `prototypes` relationship;
+//! the per-instance arrays become `protoIndices`, `positions`,
+//! `orientations` (`quath[]`), `scales` and `ids`, and the instancer's
+//! `extent` is computed from the prototypes' points and the instance
+//! transforms. Both layer formats, and therefore both USDZ profiles, carry
+//! it.
+//!
+//! The arrays are checked before anything is written (indices in range,
+//! one element per instance, finite values, unit orientations, unique
+//! ids). Instancers are static: there are no time samples, no motion
+//! (`velocities`, `accelerations`, `angularVelocities`) and no masking
+//! (`invisibleIds`, `inactiveIds`).
+//!
+//! ```
+//! use layerstack_mesh_export::{
+//!     Faces, Mesh, PointInstancer, Scene, StageSettings, UpAxis, Xform,
+//! };
+//!
+//! let stone = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
+//! let proto_indices = [0, 0, 0];
+//! let positions = [[0.0, 0.0, 0.0], [4.0, 0.0, 0.0], [0.0, 4.0, 0.0]];
+//! let turned = core::f32::consts::FRAC_1_SQRT_2;
+//! // `[x, y, z, w]`: none, a quarter turn about Z, none.
+//! let orientations = [[0.0, 0.0, 0.0, 1.0], [0.0, 0.0, turned, turned], [0.0, 0.0, 0.0, 1.0]];
+//! let field = PointInstancer::new("Stones", &proto_indices, &positions)
+//!     .with_prototype(Mesh::new("Stone", &stone, Faces::Triangles(&[0, 1, 2])))
+//!     .with_orientations(&orientations)
+//!     .with_ids(&[10, 11, 12]);
+//! let scene = Scene::new(
+//!     StageSettings::new(UpAxis::Z, 1.0),
+//!     Xform::new("Root").with_point_instancer(field),
+//! );
+//! let usda = scene.to_usda()?;
+//! assert!(usda.contains("rel prototypes = </Root/Stones/Prototypes/Stone>"));
+//! assert!(usda.contains("int[] protoIndices = [0, 0, 0]"));
+//! # Ok::<(), layerstack_mesh_export::ExportError>(())
+//! ```
+//!
 //! # Example
 //!
 //! ```
@@ -145,9 +190,11 @@
 //! [`xformable.h`](https://openusd.org/dev/api/class_usd_geom_xformable.html)
 //! (`xformOpOrder`),
 //! [`gprim.h`](https://openusd.org/dev/api/class_usd_geom_gprim.html)
-//! (`orientation`, `doubleSided`), and
+//! (`orientation`, `doubleSided`),
 //! [`boundable.h`](https://openusd.org/dev/api/class_usd_geom_boundable.html)
-//! (`extent`).
+//! (`extent`), and
+//! [`pointInstancer.h`](https://openusd.org/dev/api/class_usd_geom_point_instancer.html)
+//! (prototypes, per-instance arrays, instance transforms).
 //!
 //! Materials follow the `UsdPreviewSurface` specification (OpenUSD
 //! `docs/spec_usdpreviewsurface.rst`: inputs, fallbacks, color spaces,
@@ -165,13 +212,15 @@ extern crate alloc;
 
 mod build;
 mod error;
+mod instancer;
 mod material;
 mod mesh;
 mod scene;
 mod shading;
 mod transform;
 
-pub use error::{ExportError, MaterialProblem, MeshProblem};
+pub use error::{ExportError, InstancerProblem, MaterialProblem, MeshProblem};
+pub use instancer::{PROTOTYPES_SCOPE, PointInstancer};
 pub use layerstack_usda::writer::Value;
 pub use layerstack_usdz::PackageFile;
 pub use material::{Channel, ColorInput, FloatInput, MATERIALS_SCOPE, Material, Texture, Wrap};
@@ -182,6 +231,8 @@ pub use mesh::{
 pub use scene::{Node, Scene, StageSettings, UpAxis, UsdzProfile, Xform};
 pub use transform::Transform;
 
+#[cfg(test)]
+mod instancer_tests;
 #[cfg(test)]
 mod material_tests;
 #[cfg(test)]

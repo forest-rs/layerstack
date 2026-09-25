@@ -113,4 +113,6 @@ required, and a missing fill never invents an element: the growth is skipped.
 `ArrayEdit::compose_over` concatenates a weaker program before a stronger one,
 so applying the composed edit equals applying the weaker edit and then the
 stronger one. That lets a host fold edits through an `OpinionFamily`, keeping
-them sparse until a dense value or block ends the chain.
+them sparse until a dense value or block ends the chain. `layerstack` uses
+`ArrayEdit<Value>` for USD sparse array edits and derives the fill from the
+property's type.

@@ -20,7 +20,7 @@ use opinionated::{
 };
 
 use crate::{
-    array_edit::ArrayEdit,
+    array_edit::{ArrayEdit, PropertyTypeFill, apply_to_array},
     doc::{InterpolationType, Value},
     half::{from_f32 as f32_to_half, to_f32 as half_to_f32},
     prim_index::{Opinion, OpinionValue},
@@ -128,7 +128,7 @@ impl OpinionFamily<Opinion> for ArrayFamily<'_> {
 
     fn apply(&self, edit: Self::Edit, base: Self::Value) -> Self::Value {
         let mut value = base;
-        edit.apply_in_place(&mut value, self.property_type);
+        edit.apply_in_place(&mut value, PropertyTypeFill(self.property_type));
         value
     }
 
@@ -142,7 +142,7 @@ impl OpinionFamily<Opinion> for ArrayFamily<'_> {
     fn seed(&self) -> Self::Value {
         match self.fallback {
             Some(Value::Array(items)) => items.clone(),
-            Some(Value::ArrayEdit(edit)) => edit.compose_over_array(&[], self.property_type),
+            Some(Value::ArrayEdit(edit)) => apply_to_array(edit, &[], self.property_type),
             _ => Vec::new(),
         }
     }
@@ -1955,8 +1955,8 @@ mod tests {
             };
             Some(match weak {
                 Sample::Sparse(w) => Sample::Sparse(s.compose_over(w)),
-                Sample::Dense(d) => Sample::Dense(s.compose_over_array(d, Some(ty))),
-                Sample::Block => Sample::Dense(s.compose_over_array(seed, Some(ty))),
+                Sample::Dense(d) => Sample::Dense(apply_to_array(s, d, Some(ty))),
+                Sample::Block => Sample::Dense(apply_to_array(s, seed, Some(ty))),
             })
         }
 
@@ -2050,7 +2050,7 @@ mod tests {
             }
             let finish = |s: &Sample| match s {
                 Sample::Dense(d) => Some(d.clone()),
-                Sample::Sparse(e) => Some(e.compose_over_array(&seed, Some(ty))),
+                Sample::Sparse(e) => Some(apply_to_array(e, &seed, Some(ty))),
                 Sample::Block => None,
             };
             let (lo_time, lo) = &composed[0];

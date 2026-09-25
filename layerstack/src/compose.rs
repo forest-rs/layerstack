@@ -180,6 +180,8 @@ pub(crate) fn compose_stage(
     for error in cycles.relocations_mut().take_errors() {
         cycles.report(error);
     }
+    let stage_relocates = cycles.relocations().stage();
+    cycles.report_source_opinions(store, &stage_relocates);
 
     // Every prim's graph starts at its own site in the root layer stack
     // (OpenUSD: the root node of `PcpPrimIndex`).

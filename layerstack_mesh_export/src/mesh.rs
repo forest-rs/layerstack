@@ -142,6 +142,15 @@ impl<V> Primvar<'_, V> {
     pub fn face_varying(values: impl Into<V>) -> Self {
         Self::new(values, Interpolation::FaceVarying)
     }
+
+    /// One value per instance of a
+    /// [`PointInstancer`](crate::PointInstancer): `vertex` interpolation,
+    /// which the schema reads as one element per instance
+    /// (`pxr/usd/usdGeom/pointInstancer.h`, "Primvars on
+    /// `PointInstancer`").
+    pub fn per_instance(values: impl Into<V>) -> Self {
+        Self::new(values, Interpolation::Vertex)
+    }
 }
 
 impl<'a, V> Primvar<'a, V> {

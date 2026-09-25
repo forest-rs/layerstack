@@ -13,9 +13,9 @@ use layerstack_usda::writer::{
 };
 
 use crate::{
-    CustomAttribute, ExportError, Faces, FamilyType, Interpolation, MATERIALS_SCOPE, Material,
-    MaterialSubset, Mesh, MeshProblem, Node, Orientation, PROTOTYPES_SCOPE, PointInstancer,
-    Primvar, PrimvarData, Scene, Transform, UpAxis, Xform,
+    CustomAttribute, ExportError, Faces, FamilyType, INSTANCE_NAMES, Interpolation,
+    MATERIALS_SCOPE, Material, MaterialSubset, Mesh, MeshProblem, Node, Orientation,
+    PROTOTYPES_SCOPE, PointInstancer, Primvar, PrimvarData, Scene, Transform, UpAxis, Xform,
 };
 
 /// What mesh prims need to know about the scene's materials.
@@ -172,6 +172,16 @@ fn instancer_prim(
         "point3f[]",
         Value::Float3Array(instancer.positions.to_vec()),
     ));
+    // Instance primvars, checked above: `vertex` is one element per
+    // instance (`pxr/usd/usdGeom/pointInstancer.h`, "Primvars on
+    // PointInstancer").
+    for custom in &instancer.primvars {
+        push_primvar_unchecked(
+            &mut attrs,
+            &format!("primvars:{}", custom.name),
+            &custom.primvar,
+        );
+    }
     attrs.push(Attribute::new(
         "protoIndices",
         "int[]",
@@ -186,6 +196,16 @@ fn instancer_prim(
     }
     push_transform(&mut attrs, instancer.transform);
     push_custom(&mut attrs, &instancer.attributes);
+    if let Some(names) = &instancer.names {
+        attrs.push(
+            Attribute::new(
+                INSTANCE_NAMES,
+                "token[]",
+                Value::TokenArray(names.iter().map(|n| n.to_string()).collect()),
+            )
+            .custom(),
+        );
+    }
 
     let mut prim = Prim::def("PointInstancer", &*instancer.name);
     prim.properties
@@ -586,6 +606,34 @@ fn check_primvar<V>(
         });
     }
     Ok(())
+}
+
+/// Writes an already checked primvar of any type: `name` with its
+/// `interpolation` metadata and, when indexed, `name:indices`
+/// (`pxr/usd/usdGeom/primvar.h:497`).
+fn push_primvar_unchecked(
+    attrs: &mut Vec<Attribute>,
+    name: &str,
+    primvar: &Primvar<'_, PrimvarData<'_>>,
+) {
+    attrs.push(
+        Attribute::new(name, primvar.values.type_name(), primvar.values.to_value()).with_metadata(
+            "interpolation",
+            Value::Token(primvar.interpolation.token().into()),
+        ),
+    );
+    if let Some(indices) = &primvar.indices {
+        #[allow(
+            clippy::cast_possible_wrap,
+            reason = "instance primvar indices were checked to fit in `int`"
+        )]
+        let indices = indices.iter().map(|&i| i as i32).collect();
+        attrs.push(Attribute::new(
+            format!("{name}:indices"),
+            "int[]",
+            Value::IntArray(indices),
+        ));
+    }
 }
 
 /// Writes `name` with its `interpolation` metadata and, when indexed, the

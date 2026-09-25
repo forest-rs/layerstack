@@ -10,7 +10,7 @@ use layerstack_usda::writer::WriteError;
 use layerstack_usdc::writer::UsdcWriteError;
 use layerstack_usdz::UsdzWriteError;
 
-use crate::UsdzProfile;
+use crate::{Interpolation, UsdzProfile};
 
 /// Why a scene could not be exported.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -208,6 +208,51 @@ pub enum InstancerProblem {
         /// Instance number.
         instance: usize,
     },
+    /// An instance name is not a USD identifier, or is the prototypes
+    /// scope's name.
+    InvalidName {
+        /// Instance number.
+        instance: usize,
+        /// The name.
+        name: String,
+    },
+    /// Two instances have the same name.
+    DuplicateName {
+        /// The name.
+        name: String,
+        /// The first instance with it.
+        first: usize,
+        /// The next instance with it.
+        second: usize,
+    },
+    /// A primvar of the instances has an interpolation other than
+    /// `constant` (one value for all) or `vertex` / `varying` (one per
+    /// instance).
+    PrimvarInterpolation {
+        /// Attribute name (e.g. `primvars:displayColor`).
+        name: String,
+        /// Its interpolation.
+        interpolation: Interpolation,
+    },
+    /// A primvar of the instances has the wrong number of values (or
+    /// indices) for its interpolation.
+    PrimvarLength {
+        /// Attribute name.
+        name: String,
+        /// Elements the interpolation requires.
+        expected: usize,
+        /// Elements (or indices) supplied.
+        actual: usize,
+    },
+    /// A primvar index refers to a value that does not exist.
+    PrimvarIndexOutOfRange {
+        /// Attribute name.
+        name: String,
+        /// The index.
+        index: u32,
+        /// Number of values.
+        values: usize,
+    },
     /// A custom attribute would author a time-varying or masking property
     /// of the schema (`velocities`, `accelerations`, `angularVelocities`,
     /// `invisibleIds`), which this static export does not support.
@@ -342,6 +387,36 @@ impl fmt::Display for InstancerProblem {
             Self::NonUnitOrientation { instance } => write!(
                 f,
                 "orientation of instance {instance} is not a unit quaternion"
+            ),
+            Self::InvalidName { instance, name } => write!(
+                f,
+                "instance {instance} is named {name:?}, which is not a prim name it can use"
+            ),
+            Self::DuplicateName {
+                name,
+                first,
+                second,
+            } => write!(f, "instances {first} and {second} are both named {name:?}"),
+            Self::PrimvarInterpolation {
+                name,
+                interpolation,
+            } => write!(
+                f,
+                "{name} is {}; instance primvars are constant or one per instance (vertex)",
+                interpolation.token()
+            ),
+            Self::PrimvarLength {
+                name,
+                expected,
+                actual,
+            } => write!(f, "{name} needs {expected} elements, got {actual}"),
+            Self::PrimvarIndexOutOfRange {
+                name,
+                index,
+                values,
+            } => write!(
+                f,
+                "{name} index {index} is out of range for {values} values"
             ),
             Self::UnsupportedProperty { name } => write!(
                 f,

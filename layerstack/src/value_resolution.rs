@@ -737,9 +737,10 @@ fn fold_entry(
 /// (half precision included), vectors, matrices and time codes interpolate,
 /// and integers do not (`USD_LINEAR_INTERPOLATION_TYPES` in
 /// `pxr/usd/usd/interpolation.h`, `_LerpVisitor` in
-/// `pxr/usd/usd/interpolators.cpp`). Quaternion elements hold.
+/// `pxr/usd/usd/interpolators.cpp`); quaternions interpolate by slerp
+/// ([`gf_slerp`]).
 ///
-/// Spec: AOUSD Core §12.5 (interpolation).
+/// Spec: AOUSD Core §12.5.2 (the linearly interpolating types; others hold).
 fn lerp_arrays(lower: &[Value], upper: &[Value], alpha: f64) -> Option<Vec<Value>> {
     if lower.len() != upper.len() {
         return None;
@@ -877,10 +878,90 @@ fn lerp_halves<const N: usize>(a: &[u16; N], b: &[u16; N], alpha: f64) -> [u16; 
     core::array::from_fn(|i| f32_to_half(scaled(a[i], 1.0 - alpha) + scaled(b[i], alpha)))
 }
 
+/// `GfSlerp(alpha, q0, q1)` (`pxr/base/gf/quat.template.cpp`) over
+/// quaternion components stored `[i, j, k, r]` and widened to `f64`.
+///
+/// OpenUSD evaluates it in the quaternion's own scalar type, so the steps
+/// round where `GfQuath`, `GfQuatf` and `GfQuatd` arithmetic rounds: `narrow`
+/// rounds to that scalar type, and `accumulate` to the precision the dot
+/// product accumulates in (`float` for `quath` and `quatf`). The angle, its
+/// sine and both scales are scalars; each scaled component narrows before
+/// the two add. The dot product's sign picks the shorter arc, and rotations
+/// within `1e-5` of each other lerp.
+///
+/// Spec: AOUSD Core §12.5.2 (quaternions interpolate "via quaternion
+/// slerp"); OpenUSD's `Usd_Lerp` in `pxr/usd/usd/interpolators.cpp`.
+fn gf_slerp(
+    alpha: f64,
+    q0: [f64; 4],
+    q1: [f64; 4],
+    narrow: fn(f64) -> f64,
+    accumulate: fn(f64) -> f64,
+) -> [f64; 4] {
+    let imaginary = narrow(accumulate(
+        accumulate(accumulate(q0[0] * q1[0]) + accumulate(q0[1] * q1[1]))
+            + accumulate(q0[2] * q1[2]),
+    ));
+    let mut cos_theta = accumulate(imaginary + accumulate(q0[3] * q1[3]));
+    let flip = cos_theta < 0.0;
+    if flip {
+        cos_theta = -cos_theta;
+    }
+    let (scale0, mut scale1) = if 1.0 - cos_theta > 0.00001 {
+        let theta = narrow(libm::acos(cos_theta));
+        let sin_theta = narrow(libm::sin(theta));
+        (
+            narrow(libm::sin((1.0 - alpha) * theta) / sin_theta),
+            narrow(libm::sin(alpha * theta) / sin_theta),
+        )
+    } else {
+        (narrow(1.0 - alpha), narrow(alpha))
+    };
+    if flip {
+        scale1 = -scale1;
+    }
+    core::array::from_fn(|c| narrow(narrow(scale0 * q0[c]) + narrow(scale1 * q1[c])))
+}
+
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "rounds to single precision, as `float` arithmetic does"
+)]
+fn round_f32(value: f64) -> f64 {
+    f64::from(value as f32)
+}
+
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "rounds to half precision, as `GfHalf` arithmetic does"
+)]
+fn round_half(value: f64) -> f64 {
+    f64::from(half_to_f32(f32_to_half(value as f32)))
+}
+
+fn slerp_quath(a: &[u16; 4], b: &[u16; 4], alpha: f64) -> [u16; 4] {
+    let widen = |q: &[u16; 4]| q.map(|c| f64::from(half_to_f32(c)));
+    let q = gf_slerp(alpha, widen(a), widen(b), round_half, round_f32);
+    #[allow(clippy::cast_possible_truncation, reason = "already half precision")]
+    q.map(|c| f32_to_half(c as f32))
+}
+
+fn slerp_quatf(a: &[f32; 4], b: &[f32; 4], alpha: f64) -> [f32; 4] {
+    let q = gf_slerp(
+        alpha,
+        a.map(f64::from),
+        b.map(f64::from),
+        round_f32,
+        round_f32,
+    );
+    #[allow(clippy::cast_possible_truncation, reason = "already single precision")]
+    q.map(|c| c as f32)
+}
+
 /// Interpolates one pair of elements or scalars, or returns `None` when the
 /// pair holds (`_LerpVisitor` in `pxr/usd/usd/interpolators.cpp`).
 ///
-/// Spec: AOUSD Core §12.5 (interpolation).
+/// Spec: AOUSD Core §12.5.2 (the linearly interpolating types; others hold).
 fn lerp_element(a: &Value, b: &Value, alpha: f64) -> Option<Value> {
     Some(match (a, b) {
         (Value::Half(a), Value::Half(b)) => Value::Half(lerp_half(*a, *b, alpha)),
@@ -905,6 +986,9 @@ fn lerp_element(a: &Value, b: &Value, alpha: f64) -> Option<Value> {
         (Value::Matrix4d(a), Value::Matrix4d(b)) => {
             Value::Matrix4d(alloc::boxed::Box::new(lerp_f64s(a, b, alpha)))
         }
+        (Value::Quath(a), Value::Quath(b)) => Value::Quath(slerp_quath(a, b, alpha)),
+        (Value::Quatf(a), Value::Quatf(b)) => Value::Quatf(slerp_quatf(a, b, alpha)),
+        (Value::Quatd(a), Value::Quatd(b)) => Value::Quatd(gf_slerp(alpha, *a, *b, |x| x, |x| x)),
         _ => return None,
     })
 }
@@ -1721,6 +1805,49 @@ mod tests {
         assert_eq!(f32_to_half(1.5 * ulp(-25)), 0x0001);
         assert_eq!(f32_to_half(-3.0 * ulp(-25)), 0x8002);
         assert_eq!(f32_to_half(ulp(-14) - ulp(-26)), 0x0400);
+    }
+
+    #[test]
+    fn quaternions_slerp_along_the_shorter_arc() {
+        let close = |a: [f64; 4], b: [f64; 4]| a.iter().zip(&b).all(|(x, y)| (x - y).abs() < 1e-12);
+        let half_turn = core::f64::consts::FRAC_1_SQRT_2;
+        // Identity to a half turn about z: halfway is a quarter turn.
+        let Some(Value::Quatd(q)) = lerp_element(
+            &Value::Quatd([0.0, 0.0, 0.0, 1.0]),
+            &Value::Quatd([0.0, 0.0, 1.0, 0.0]),
+            0.5,
+        ) else {
+            panic!("quatd slerps");
+        };
+        assert!(close(q, [0.0, 0.0, half_turn, half_turn]), "{q:?}");
+        // `-q` is the same rotation: the negative dot product flips it onto
+        // the shorter arc.
+        let identity = Value::Quatd([0.0, 0.0, 0.0, 1.0]);
+        let q = lerp_element(&identity, &Value::Quatd([0.0, 0.0, 0.8, 0.6]), 0.25);
+        let negated = lerp_element(&identity, &Value::Quatd([0.0, 0.0, -0.8, -0.6]), 0.25);
+        let (Some(Value::Quatd(q)), Some(Value::Quatd(negated))) = (q, negated) else {
+            panic!("quatd slerps");
+        };
+        assert!(close(q, negated), "{q:?} != {negated:?}");
+        // Nearly equal rotations lerp.
+        let Some(Value::Quatd(q)) = lerp_element(
+            &Value::Quatd([0.0, 0.0, 0.0, 1.0]),
+            &Value::Quatd([0.002, 0.0, 0.0, 0.999_998]),
+            0.5,
+        ) else {
+            panic!("quatd slerps");
+        };
+        assert!(close(q, [0.001, 0.0, 0.0, 0.999_999]), "{q:?}");
+        // Half quaternions round to half precision: 0x39a8 is the half
+        // nearest to 0.7071.
+        assert_eq!(
+            lerp_element(
+                &Value::Quath([0, 0, 0, 0x3c00]),
+                &Value::Quath([0, 0, 0x3c00, 0]),
+                0.5
+            ),
+            Some(Value::Quath([0, 0, 0x39a8, 0x39a8]))
+        );
     }
 
     #[test]

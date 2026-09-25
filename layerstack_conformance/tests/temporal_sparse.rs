@@ -44,6 +44,29 @@ struct Case {
     /// Values must match OpenUSD bit for bit rather than within a tolerance.
     #[serde(default)]
     exact: bool,
+    /// With `exact`, the units in the last place allowed (for results that
+    /// go through the C library's `acos` and `sin`).
+    #[serde(default)]
+    ulps: u64,
+}
+
+/// How closely a case's values must match.
+#[derive(Clone, Copy)]
+enum Tolerance {
+    /// Within a relative `1e-5`.
+    Relative,
+    /// Within this many units in the last place; `0` is bit for bit.
+    Ulps(u64),
+}
+
+impl Case {
+    fn tolerance(&self) -> Tolerance {
+        if self.exact {
+            Tolerance::Ulps(self.ulps)
+        } else {
+            Tolerance::Relative
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -143,19 +166,23 @@ impl Element {
             Value::Matrix2d(v) => v.to_vec(),
             Value::Matrix3d(v) => v.to_vec(),
             Value::Matrix4d(v) => v.to_vec(),
+            Value::Quath([i, j, k, r]) => halves(&[*r, *i, *j, *k]),
+            Value::Quatf([i, j, k, r]) => floats(&[*r, *i, *j, *k]),
+            Value::Quatd([i, j, k, r]) => vec![*r, *i, *j, *k],
             other => panic!("unexpected value {other:?}"),
         })
     }
 
-    /// Within a relative `1e-5`, or bit for bit when `exact` (NaN matching
-    /// NaN).
-    fn close(&self, other: &Self, exact: bool) -> bool {
+    /// Whether every component is within `tolerance` (NaN matching NaN).
+    fn close(&self, other: &Self, tolerance: Tolerance) -> bool {
         self.0.len() == other.0.len()
-            && self.0.iter().zip(&other.0).all(|(a, b)| {
-                if exact {
-                    a.to_bits() == b.to_bits() || (a.is_nan() && b.is_nan())
-                } else {
-                    (a - b).abs() <= 1e-5 * a.abs().max(1.0)
+            && self.0.iter().zip(&other.0).all(|(a, b)| match tolerance {
+                Tolerance::Relative => (a - b).abs() <= 1e-5 * a.abs().max(1.0),
+                Tolerance::Ulps(ulps) => {
+                    (a.is_nan() && b.is_nan())
+                        || a.to_bits() == b.to_bits()
+                        || (a.is_sign_positive() == b.is_sign_positive()
+                            && a.to_bits().abs_diff(b.to_bits()) <= ulps)
                 }
             })
     }
@@ -175,15 +202,15 @@ fn half_to_f64(bits: u16) -> f64 {
 }
 
 fn same(a: Option<&Resolved>, b: Option<&Resolved>) -> bool {
-    same_within(a, b, false)
+    same_within(a, b, Tolerance::Relative)
 }
 
-fn same_within(a: Option<&Resolved>, b: Option<&Resolved>, exact: bool) -> bool {
+fn same_within(a: Option<&Resolved>, b: Option<&Resolved>, tolerance: Tolerance) -> bool {
     match (a, b) {
         (None, None) => true,
-        (Some(Resolved::Scalar(a)), Some(Resolved::Scalar(b))) => a.close(b, exact),
+        (Some(Resolved::Scalar(a)), Some(Resolved::Scalar(b))) => a.close(b, tolerance),
         (Some(Resolved::Array(a)), Some(Resolved::Array(b))) => {
-            a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.close(y, exact))
+            a.len() == b.len() && a.iter().zip(b).all(|(x, y)| x.close(y, tolerance))
         }
         _ => false,
     }
@@ -333,7 +360,7 @@ fn composed_resolution_matches_openusd() {
             checked += 1;
             let expected = query.expected();
             let actual = composed.resolve(query);
-            if !same_within(actual.as_ref(), expected.as_ref(), case.exact) {
+            if !same_within(actual.as_ref(), expected.as_ref(), case.tolerance()) {
                 let _ = writeln!(
                     failures,
                     "{}: layerstack {} != expected {}{}",

@@ -8,7 +8,7 @@
 //!
 //! Spec: AOUSD Core §9–§12 (layer stacks, arcs/strength ordering, population, and resolution).
 
-use alloc::{collections::BTreeSet, vec::Vec};
+use alloc::{borrow::Cow, collections::BTreeSet, vec::Vec};
 
 use core::cmp::Ordering;
 
@@ -17,7 +17,7 @@ use hashbrown::{HashMap, HashSet};
 use crate::{
     arc_cycle::CycleDetector,
     arcs::{
-        SelectionScope, lookup_reference_target_path, resolve_branch_payloads_in,
+        ArcAuthoring, SelectionScope, lookup_reference_target_path, resolve_branch_payloads_in,
         resolve_direct_references_for_prim, resolve_inherits_for_prim,
         resolve_inherits_for_prim_in, resolve_payloads_for_prim, resolve_payloads_for_prim_in,
         resolve_references_for_prim, resolve_specializes_for_prim, resolve_specializes_for_prim_in,
@@ -33,7 +33,8 @@ use crate::{
     layer_stack::LayerStack,
     path::{PathId, PropertyPath, TargetPath},
     population::populate,
-    prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue, PrimIndex, SpecializesOrigin},
+    prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue, PrimIndex},
+    prim_index_graph::{NodeArc, NodeId, NodeStrength, PrimIndexGraph, SpecializesOrigin},
     property::PropertyType,
     spec_path::{SpecPath, VariantSelectionSite},
     stage::{Stage, StageOptions},
@@ -164,10 +165,25 @@ pub(crate) fn compose_stage(
     let layer_stack = cycles.gather_layer_stack(store, root);
     let (paths, mut children) = populate(store, &layer_stack, options.mask.as_ref());
 
+    // Every prim's graph starts at its own site in the root layer stack
+    // (OpenUSD: the root node of `PcpPrimIndex`).
     let mut prims: HashMap<PathId, PrimIndex> = paths
         .iter()
         .copied()
-        .map(|path| (path, PrimIndex::default()))
+        .map(|path| {
+            let namespace_depth =
+                u16::try_from(store.paths().resolve(path).depth()).unwrap_or(u16::MAX);
+            let root_node = NodeArc {
+                arc_kind: ArcKind::Local,
+                layer_stack: root,
+                site: SpecPath::from_prim_path(path, store.paths()),
+                namespace_depth,
+                sibling_index: 0,
+                implied: false,
+                strength: NodeStrength::local(namespace_depth),
+            };
+            (path, PrimIndex::new(PrimIndexGraph::new(root_node)))
+        })
         .collect();
 
     let mut prim_order_opinions: HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>> = HashMap::new();
@@ -238,6 +254,7 @@ pub(crate) fn compose_stage(
 
     apply_child_order(
         store,
+        &prims,
         &authored_children_opinions,
         &prim_order_opinions,
         &mut children,
@@ -506,7 +523,7 @@ fn prune_unselected_variant_specs(
             prims
                 .get_mut(&prim_path)
                 .expect("prim exists")
-                .retain_keys(|key| !is_rejected(key));
+                .retain_keys(|_, key| !is_rejected(key));
             // Read this prim's selections again from what remains.
             selection_cache.remove(&prim_path);
         }
@@ -776,7 +793,8 @@ fn filter_variant_children(
                     if let Some(set_spec) = spec.variant_sets.get(set_tok)
                         && let Some(variant_spec) = set_spec.variants.get(&selected_variant)
                     {
-                        let group = arc_groups.entry(source.arc_list_index).or_default();
+                        let arc_list_index = prim_index.graph.strength(source.node).arc_list_index;
+                        let group = arc_groups.entry(arc_list_index).or_default();
                         for child in &variant_spec.authored_children {
                             if !group.contains(child) {
                                 group.push(*child);
@@ -1001,10 +1019,11 @@ fn filter_variant_children(
         // prim's opinion sources for inherit-kind arcs.
         let mut inherited_sources: Vec<PathId> = Vec::new();
         for source in &prim_index.sources {
-            if source.arc_kind == ArcKind::Inherits
-                || source.arc_kind == ArcKind::Specializes
-                || source.nested_arc_kind == Some(ArcKind::Inherits)
-                || source.nested_arc_kind == Some(ArcKind::Specializes)
+            let strength = prim_index.graph.strength(source.node);
+            if strength.arc_kind == ArcKind::Inherits
+                || strength.arc_kind == ArcKind::Specializes
+                || strength.nested_arc_kind == Some(ArcKind::Inherits)
+                || strength.nested_arc_kind == Some(ArcKind::Specializes)
             {
                 // The spec_path points to the source prim in its original namespace.
                 // We need the mapped path in the same namespace as parent_path.
@@ -1225,6 +1244,7 @@ fn strip_instance_descendants(
 
         // Check for composition arcs (references, payloads, inherits).
         let has_arcs = index.sources.iter().any(|s| {
+            let s = index.graph.strength(s.node);
             matches!(
                 s.arc_kind,
                 ArcKind::References | ArcKind::Payloads | ArcKind::Inherits
@@ -1237,7 +1257,7 @@ fn strip_instance_descendants(
         // Collect identity paths: local sources and sources with instanceable=true.
         let mut identity_paths: Vec<(LayerId, PathId)> = Vec::new();
         for source in &index.sources {
-            if source.is_local {
+            if index.graph.strength(source.node).is_local {
                 identity_paths.push((source.layer_id, source.lookup_path));
                 continue;
             }
@@ -1366,9 +1386,9 @@ fn strip_instance_descendants(
             // type then comes from the strongest surviving declaration.
             // Variant/inherit/reference sources of the instance's own arcs
             // survive.
-            desc_index.retain_keys(|key| {
-                if !key.is_local {
-                    return key.namespace_depth >= instance_depth;
+            desc_index.retain_keys(|strength, key| {
+                if !strength.is_local {
+                    return strength.namespace_depth >= instance_depth;
                 }
                 !is_identity_descendant(store, key.layer_id, key.lookup_path, identity_paths)
             });
@@ -1923,7 +1943,7 @@ fn enclosing_variant_selections(
                         .get(&dest_host)
                         .map(|index| {
                             let mut sources = index.sources.clone();
-                            sources.sort_by(|a, b| a.cmp_strongest_first(b));
+                            sources.sort_by(|a, b| index.graph.cmp_keys(a, b));
                             let so_far = PrimIndex {
                                 sources,
                                 ..PrimIndex::default()
@@ -1962,12 +1982,15 @@ fn enclosing_variant_selections(
 /// This is the single place that decides which arcs nested inside another arc
 /// are followed, whichever outer arc (reference, payload, inherit or
 /// specialize) brought the content in.
+///
+/// Each arc comes with the variant branches of the prim that author it,
+/// outermost first (see [`ArcAuthoring::sites`]); its node goes beneath theirs.
 #[derive(Debug, Default)]
 struct AdmittedArcs {
-    inherits: Vec<PathId>,
-    specializes: Vec<PathId>,
-    references: Vec<Reference>,
-    payloads: Vec<Reference>,
+    inherits: Vec<(PathId, Vec<VariantSelectionSite>)>,
+    specializes: Vec<(PathId, Vec<VariantSelectionSite>)>,
+    references: Vec<(Reference, Vec<VariantSelectionSite>)>,
+    payloads: Vec<(Reference, Vec<VariantSelectionSite>)>,
 }
 
 /// Resolves the arcs authored for `remote_path` in `data_stack` that apply
@@ -2031,25 +2054,42 @@ fn admitted_arcs(
         &selections,
         scope,
     ));
+    let inherits = resolve_inherits_for_prim_in(
+        store,
+        data_stack,
+        remote_path,
+        &selections,
+        &parent_selections,
+        scope,
+    );
+    let specializes = resolve_specializes_for_prim_in(
+        store,
+        data_stack,
+        remote_path,
+        &selections,
+        &parent_selections,
+        scope,
+    );
+    let authoring = ArcAuthoring {
+        store,
+        stack: data_stack,
+        prim: remote_path,
+        selections: &selections,
+        scope,
+    };
     AdmittedArcs {
-        inherits: resolve_inherits_for_prim_in(
-            store,
-            data_stack,
-            remote_path,
-            &selections,
-            &parent_selections,
-            scope,
+        inherits: authoring.with_sites(inherits, |spec| &spec.inherits, |branch| &branch.inherits),
+        specializes: authoring.with_sites(
+            specializes,
+            |spec| &spec.specializes,
+            |branch| &branch.specializes,
         ),
-        specializes: resolve_specializes_for_prim_in(
-            store,
-            data_stack,
-            remote_path,
-            &selections,
-            &parent_selections,
-            scope,
+        references: authoring.with_sites(
+            references,
+            |spec| &spec.references,
+            |branch| &branch.references,
         ),
-        references,
-        payloads,
+        payloads: authoring.with_sites(payloads, |spec| &spec.payloads, |branch| &branch.payloads),
     }
 }
 
@@ -2156,8 +2196,42 @@ fn resolve_forwarded_variant_selections(
     selections
 }
 
+/// The node in `out[path]`'s graph of the local variant branches `sites`,
+/// outermost first: the selected branches of the prim's own variant sets, or
+/// of an ancestor's variant sets that author a spec for the prim. Each branch
+/// is a node beneath the node of the branch enclosing it, or the root.
+///
+/// Spec: AOUSD Core §10.3.2.5 (variants), §10.4 (LIVERPS: local before
+/// variants). OpenUSD: `_EvalNodeVariantSets` in `pxr/usd/pcp/primIndex.cpp`.
+fn local_variant_node(
+    store: &mut dyn LayerStore,
+    out: &mut HashMap<PathId, PrimIndex>,
+    path: PathId,
+    sites: &[VariantSelectionSite],
+) -> NodeId {
+    let layer_stack = root_layer_stack(out, path);
+    let mut cursor = PathCursor::root(path);
+    intern_steps(
+        store,
+        out,
+        path,
+        &local_variant_steps(layer_stack, sites),
+        &mut cursor,
+    );
+    cursor.node
+}
+
+/// The layer stack of the root node of `out[path]`'s graph: the stage's.
+fn root_layer_stack(out: &HashMap<PathId, PrimIndex>, path: PathId) -> LayerId {
+    out[&path]
+        .graph
+        .node(NodeId::ROOT)
+        .expect("a prim graph has a root")
+        .layer_stack()
+}
+
 fn add_local_and_variant_opinions(
-    store: &dyn LayerStore,
+    store: &mut dyn LayerStore,
     local_stack: &LayerStack,
     paths: &BTreeSet<PathId>,
     out: &mut HashMap<PathId, PrimIndex>,
@@ -2167,8 +2241,6 @@ fn add_local_and_variant_opinions(
 ) {
     for path in paths.iter().copied() {
         let selections = resolve_full_variant_selections(store, local_stack, path);
-        let namespace_depth =
-            u16::try_from(store.paths().resolve(path).depth()).unwrap_or(u16::MAX);
 
         for (layer_strength_idx, layer_id) in local_stack.layers.iter().copied().enumerate() {
             let Some(layer) = store.layer(layer_id).cloned() else {
@@ -2186,36 +2258,25 @@ fn add_local_and_variant_opinions(
                 // weaker than local opinions from every layer of the stack.
                 //
                 // Spec: AOUSD Core §10.4 (LIVERPS: local before variants).
-                let (is_local, arc_kind) = if spec.outer_variant_sites.is_empty() {
-                    (true, ArcKind::Local)
+                let spec_path = prim_spec_path(store, path, &spec.outer_variant_sites);
+                let node = if spec.outer_variant_sites.is_empty() {
+                    NodeId::ROOT
                 } else {
-                    (false, ArcKind::Variants)
+                    local_variant_node(store, out, path, &spec.outer_variant_sites)
                 };
                 out.get_mut(&path)
                     .expect("path exists")
                     .add_source(OpinionKey {
-                        is_local,
-                        specializes: Vec::new(),
-                        arc_kind,
-                        nested_arc_kind: None,
-                        namespace_depth,
-                        authored: true,
-                        arc_list_index: 0,
+                        node,
                         layer_strength,
                         layer_id,
                         lookup_path: path,
-                        spec_path: prim_spec_path(store, path, &spec.outer_variant_sites),
+                        spec_path: spec_path.clone(),
                     });
 
                 for entry in composed_entries(&spec.fields, &spec.properties) {
                     let key = OpinionKey {
-                        is_local,
-                        specializes: Vec::new(),
-                        arc_kind,
-                        nested_arc_kind: None,
-                        namespace_depth,
-                        authored: true,
-                        arc_list_index: 0,
+                        node,
                         layer_strength,
                         layer_id,
                         lookup_path: path,
@@ -2241,17 +2302,11 @@ fn add_local_and_variant_opinions(
                 if !spec.authored_children.is_empty() {
                     authored_children_out.entry(path).or_default().push((
                         OpinionKey {
-                            is_local,
-                            specializes: Vec::new(),
-                            arc_kind,
-                            nested_arc_kind: None,
-                            namespace_depth,
-                            authored: true,
-                            arc_list_index: 0,
+                            node,
                             layer_strength,
                             layer_id,
                             lookup_path: path,
-                            spec_path: prim_spec_path(store, path, &spec.outer_variant_sites),
+                            spec_path: spec_path.clone(),
                         },
                         spec.authored_children.clone(),
                     ));
@@ -2260,17 +2315,11 @@ fn add_local_and_variant_opinions(
                 if let Some(order) = &spec.prim_order {
                     prim_order_out.entry(path).or_default().push((
                         OpinionKey {
-                            is_local,
-                            specializes: Vec::new(),
-                            arc_kind,
-                            nested_arc_kind: None,
-                            namespace_depth,
-                            authored: true,
-                            arc_list_index: 0,
+                            node,
                             layer_strength,
                             layer_id,
                             lookup_path: path,
-                            spec_path: prim_spec_path(store, path, &spec.outer_variant_sites),
+                            spec_path: spec_path.clone(),
                         },
                         order.clone(),
                     ));
@@ -2292,31 +2341,21 @@ fn add_local_and_variant_opinions(
                         },
                     );
 
+                    let branch_path = variant_spec_path(store, path, &branch_selections);
+                    let variant_node = local_variant_node(store, out, path, &branch_selections);
                     out.get_mut(&path)
                         .expect("path exists")
                         .add_source(OpinionKey {
-                            is_local: false,
-                            specializes: Vec::new(),
-                            arc_kind: ArcKind::Variants,
-                            nested_arc_kind: None,
-                            namespace_depth,
-                            authored: true,
-                            arc_list_index: 0,
+                            node: variant_node,
                             layer_strength,
                             layer_id,
                             lookup_path: path,
-                            spec_path: variant_spec_path(store, path, &branch_selections),
+                            spec_path: branch_path,
                         });
 
                     for entry in composed_entries(&variant_spec.fields, &variant_spec.properties) {
                         let key = OpinionKey {
-                            is_local: false,
-                            specializes: Vec::new(),
-                            arc_kind: ArcKind::Variants,
-                            nested_arc_kind: None,
-                            namespace_depth,
-                            authored: true,
-                            arc_list_index: 0,
+                            node: variant_node,
                             layer_strength,
                             layer_id,
                             lookup_path: path,
@@ -2436,6 +2475,7 @@ fn add_reference_opinions(
         let variant_child_refs =
             resolve_variant_child_references(store, local_stack, local_stack, dest_root);
         let all_refs = refs.into_iter().chain(variant_child_refs);
+        let selections = resolve_full_variant_selections(store, local_stack, dest_root);
         for (arc_list_index, reference) in all_refs.enumerate() {
             let arc_list_index = u16::try_from(arc_list_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -2451,6 +2491,19 @@ fn add_reference_opinions(
                     layer: reference.layer,
                 });
             }
+            let sites = ArcAuthoring {
+                store,
+                stack: local_stack,
+                prim: dest_root,
+                selections: &selections,
+                scope: SelectionScope::Stack,
+            }
+            .sites(
+                &reference,
+                |spec| &spec.references,
+                |branch| &branch.references,
+            );
+            let branch = local_variant_steps(root_layer_stack(out, dest_root), &sites);
             add_reference_edge_opinions(
                 store,
                 local_stack,
@@ -2460,6 +2513,7 @@ fn add_reference_opinions(
                 &[],
                 namespace_depth,
                 arc_list_index,
+                ArcParent::nested(&branch),
                 out,
                 &mut visited,
                 &mut visited_inherits,
@@ -2492,6 +2546,7 @@ fn add_inherit_opinions(
         cycles.begin(dest_root);
         let inherits =
             resolve_inherits_for_prim(store, local_stack, dest_root, SelectionScope::Stack);
+        let selections = resolve_full_variant_selections(store, local_stack, dest_root);
         for (arc_list_index, inherited_root) in inherits.into_iter().enumerate() {
             let arc_list_index = u16::try_from(arc_list_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -2504,6 +2559,19 @@ fn add_inherit_opinions(
                     layer: local_stack.layers[0],
                 });
             }
+            let sites = ArcAuthoring {
+                store,
+                stack: local_stack,
+                prim: dest_root,
+                selections: &selections,
+                scope: SelectionScope::Stack,
+            }
+            .sites(
+                &inherited_root,
+                |spec| &spec.inherits,
+                |branch| &branch.inherits,
+            );
+            let branch = local_variant_steps(root_layer_stack(out, dest_root), &sites);
             add_inherit_edge_opinions(
                 store,
                 local_stack,
@@ -2514,6 +2582,7 @@ fn add_inherit_opinions(
                 &[],
                 namespace_depth,
                 arc_list_index,
+                ArcParent::nested(&branch),
                 out,
                 &mut visited,
                 &mut visited_specializes,
@@ -2544,8 +2613,418 @@ fn specializes_chain(
     chain
 }
 
+/// What an [`ArcStep`] reaches for a composed prim.
+#[derive(Clone, Copy, Debug)]
+enum StepTarget {
+    /// An arc that maps the namespace at `dest_root` onto `target_root`, so
+    /// the node it adds to a prim at or below `dest_root` has the site the
+    /// prim's path maps to (AOUSD Core §10.2; OpenUSD
+    /// `PcpNodeRef::GetMapToParent`).
+    Namespace {
+        dest_root: PathId,
+        target_root: PathId,
+    },
+    /// The selected branch of a variant set hosted at the previous step's
+    /// site or at one of its namespace ancestors: the node's site is that
+    /// site with this selection after those of the variant steps before it
+    /// (`/A{v=x}Child`, `/A{v=x}{b=y}`).
+    Variant(VariantSelectionSite),
+    /// A [`StepTarget::Variant`] of the composed prim's own layer stack. Its
+    /// node ranks with the prim's local variant opinions, at the composed
+    /// prim's namespace depth, whatever the step's `namespace_depth` and
+    /// `strength` (see [`local_variant_strength`]).
+    LocalVariant(VariantSelectionSite),
+}
+
+impl StepTarget {
+    fn is_variant(self) -> bool {
+        matches!(self, Self::Variant(_) | Self::LocalVariant(_))
+    }
+}
+
+/// One arc on the way from a composed prim to the sites an arc expansion
+/// reads: the step from a parent node to a child node of the prim's
+/// [`PrimIndexGraph`].
+#[derive(Clone, Debug)]
+struct ArcStep {
+    arc_kind: ArcKind,
+    layer_stack: LayerId,
+    target: StepTarget,
+    namespace_depth: u16,
+    sibling_index: u16,
+    implied: bool,
+    /// The strength of the opinions the arc's node holds.
+    strength: NodeStrength,
+}
+
+/// Where interning an arc path has reached in a composed prim's graph: the
+/// node, the prim path of the last namespace step's site and the variant
+/// selections below it.
+struct PathCursor {
+    node: NodeId,
+    prim: PathId,
+    variants: Vec<VariantSelectionSite>,
+}
+
+impl PathCursor {
+    /// The root node of the composed prim `dest`.
+    fn root(dest: PathId) -> Self {
+        Self {
+            node: NodeId::ROOT,
+            prim: dest,
+            variants: Vec::new(),
+        }
+    }
+}
+
+impl ArcStep {
+    /// The node this step adds beneath `cursor` for the composed prim `dest`,
+    /// moving `cursor` to its site; `None` for a variant hosted outside the
+    /// cursor's site, which the step cannot reach.
+    fn arc(
+        &self,
+        store: &mut dyn LayerStore,
+        dest: PathId,
+        cursor: &mut PathCursor,
+    ) -> Option<NodeArc> {
+        let (site, namespace_depth, strength) = match self.target {
+            StepTarget::Namespace {
+                dest_root,
+                target_root,
+            } => {
+                cursor.prim = map_namespace(store, dest, dest_root, target_root);
+                cursor.variants.clear();
+                (
+                    SpecPath::from_prim_path(cursor.prim, store.paths()),
+                    self.namespace_depth,
+                    self.strength.clone(),
+                )
+            }
+            StepTarget::Variant(site) | StepTarget::LocalVariant(site) => {
+                let paths = store.paths();
+                let hosted = paths
+                    .resolve(cursor.prim)
+                    .strip_prefix(paths.resolve(site.host_path))
+                    .is_some();
+                debug_assert!(hosted, "a variant step is hosted at or above its site");
+                if !hosted {
+                    return None;
+                }
+                cursor.variants.push(site);
+                let site =
+                    SpecPath::from_variant_selection_sites(cursor.prim, &cursor.variants, paths);
+                if let StepTarget::LocalVariant(_) = self.target {
+                    let depth = u16::try_from(paths.resolve(dest).depth()).unwrap_or(u16::MAX);
+                    (site, depth, local_variant_strength(depth))
+                } else {
+                    (site, self.namespace_depth, self.strength.clone())
+                }
+            }
+        };
+        Some(NodeArc {
+            arc_kind: self.arc_kind,
+            layer_stack: self.layer_stack,
+            site,
+            namespace_depth,
+            sibling_index: self.sibling_index,
+            implied: self.implied,
+            strength,
+        })
+    }
+}
+
+/// Maps the composed prim `dest` through an arc from `dest_root` to
+/// `target_root`; a prim outside `dest_root` maps to `target_root`.
+fn map_namespace(
+    store: &mut dyn LayerStore,
+    dest: PathId,
+    dest_root: PathId,
+    target_root: PathId,
+) -> PathId {
+    if dest == dest_root {
+        return target_root;
+    }
+    let rel = store
+        .paths()
+        .resolve(dest)
+        .strip_prefix(store.paths().resolve(dest_root))
+        .map(<[_]>::to_vec);
+    match rel {
+        Some(rel) => {
+            let target = store.paths().resolve(target_root).join(&rel);
+            store.paths_mut().intern(target)
+        }
+        None => target_root,
+    }
+}
+
+/// Adds the nodes of `steps` beneath `cursor` in the graph of the composed
+/// prim `dest`, moving `cursor` to the last one.
+///
+/// A variant node on the way to a later step is shared with any node of the
+/// same branch, whatever its strength: only the last step's node holds the
+/// opinions that strength ranks.
+fn intern_steps(
+    store: &mut dyn LayerStore,
+    out: &mut HashMap<PathId, PrimIndex>,
+    dest: PathId,
+    steps: &[ArcStep],
+    cursor: &mut PathCursor,
+) {
+    for (index, step) in steps.iter().enumerate() {
+        let Some(arc) = step.arc(store, dest, cursor) else {
+            continue;
+        };
+        let graph = &mut out.get_mut(&dest).expect("path exists").graph;
+        cursor.node = if index + 1 < steps.len() && step.target.is_variant() {
+            graph.intern_branch(cursor.node, arc)
+        } else {
+            graph.intern_child(cursor.node, arc)
+        };
+    }
+}
+
+/// The steps from a composed prim's root node through the selected branches
+/// `sites` of the prim's own layer stack, rooted at `layer_stack`.
+fn local_variant_steps(layer_stack: LayerId, sites: &[VariantSelectionSite]) -> Vec<ArcStep> {
+    sites
+        .iter()
+        .map(|site| ArcStep {
+            arc_kind: ArcKind::Variants,
+            layer_stack,
+            target: StepTarget::LocalVariant(*site),
+            namespace_depth: 0,
+            sibling_index: 0,
+            implied: false,
+            strength: local_variant_strength(0),
+        })
+        .collect()
+}
+
+/// The strength of a composed prim's local variant opinions, at the prim's
+/// `namespace_depth`: weaker than its local opinions from every layer of the
+/// stack (AOUSD Core §10.4, LIVERPS).
+fn local_variant_strength(namespace_depth: u16) -> NodeStrength {
+    NodeStrength {
+        is_local: false,
+        arc_kind: ArcKind::Variants,
+        ..NodeStrength::local(namespace_depth)
+    }
+}
+
+/// The arcs an arc expansion is nested in, outermost first, and whether the
+/// expansion is a class arc implied into a stronger layer stack.
+#[derive(Clone, Copy, Debug)]
+struct ArcParent<'a> {
+    steps: &'a [ArcStep],
+    implied: bool,
+}
+
+impl<'a> ArcParent<'a> {
+    /// An arc authored at a site the arcs `steps` reach.
+    fn nested(steps: &'a [ArcStep]) -> Self {
+        Self {
+            steps,
+            implied: false,
+        }
+    }
+
+    /// The same arc, implied into a stronger layer stack.
+    ///
+    // TODO(graph): ImpliedClasses. OpenUSD adds an implied class node under
+    // the node of the stronger layer stack the class is implied into, with
+    // the class node it is implied from as its origin
+    // (`pxr/usd/pcp/primIndex.cpp`, `_EvalImpliedClasses`); this places it
+    // beside the class node it is implied from, and ranks it with that node.
+    fn implied(self) -> Self {
+        Self {
+            implied: true,
+            ..self
+        }
+    }
+}
+
+/// The nodes one arc expansion adds to the graph of each prim it composes
+/// into.
+///
+/// Spec: AOUSD Core §10.4 (an arc's target is ranked beneath the site that
+/// authors it). OpenUSD: `_AddArc` in `pxr/usd/pcp/primIndex.cpp`.
+struct ArcNodes {
+    /// The arc path from the composed prim to this arc, this arc last.
+    path: Vec<ArcStep>,
+    /// The node of this arc in each destination prim's graph, and the prim
+    /// path of its site.
+    nodes: HashMap<PathId, (NodeId, PathId)>,
+}
+
+impl ArcNodes {
+    /// The nodes of the arc `step` authored at a site `parent` reaches.
+    fn new(parent: ArcParent<'_>, step: ArcStep) -> Self {
+        let mut path = Vec::with_capacity(parent.steps.len() + 1);
+        path.extend_from_slice(parent.steps);
+        path.push(ArcStep {
+            implied: parent.implied,
+            ..step
+        });
+        Self {
+            path,
+            nodes: HashMap::new(),
+        }
+    }
+
+    /// The arc path to this arc's selected branches `sites`, for arcs
+    /// authored inside them (see [`Self::variant_node`]); to this arc for
+    /// arcs authored outside every branch.
+    fn branch_path(
+        &self,
+        sites: &[VariantSelectionSite],
+        nested_arc_kind: Option<ArcKind>,
+    ) -> Cow<'_, [ArcStep]> {
+        if sites.is_empty() {
+            return Cow::Borrowed(&self.path);
+        }
+        let mut path = self.path.clone();
+        path.extend(self.variant_steps(sites, nested_arc_kind));
+        Cow::Owned(path)
+    }
+
+    fn step(&self) -> &ArcStep {
+        self.path.last().expect("an arc path ends with its arc")
+    }
+
+    /// The arc's node in the graph of the composed prim `dest`, added with
+    /// the nodes of the arcs it is nested in.
+    fn node(
+        &mut self,
+        store: &mut dyn LayerStore,
+        out: &mut HashMap<PathId, PrimIndex>,
+        dest: PathId,
+    ) -> NodeId {
+        self.cursor(store, out, dest).node
+    }
+
+    fn cursor(
+        &mut self,
+        store: &mut dyn LayerStore,
+        out: &mut HashMap<PathId, PrimIndex>,
+        dest: PathId,
+    ) -> PathCursor {
+        if let Some(&(node, prim)) = self.nodes.get(&dest) {
+            return PathCursor {
+                node,
+                prim,
+                variants: Vec::new(),
+            };
+        }
+        let mut cursor = PathCursor::root(dest);
+        intern_steps(store, out, dest, &self.path, &mut cursor);
+        self.nodes.insert(dest, (cursor.node, cursor.prim));
+        cursor
+    }
+
+    /// The variant steps through the selected branches `sites` of this arc's
+    /// target, whose nodes rank with `nested_arc_kind`.
+    fn variant_steps(
+        &self,
+        sites: &[VariantSelectionSite],
+        nested_arc_kind: Option<ArcKind>,
+    ) -> impl Iterator<Item = ArcStep> {
+        let step = self.step();
+        let strength = NodeStrength {
+            nested_arc_kind,
+            ..step.strength.clone()
+        };
+        let (layer_stack, namespace_depth) = (step.layer_stack, step.namespace_depth);
+        sites.iter().map(move |site| ArcStep {
+            arc_kind: ArcKind::Variants,
+            layer_stack,
+            target: StepTarget::Variant(*site),
+            namespace_depth,
+            sibling_index: 0,
+            implied: false,
+            strength: strength.clone(),
+        })
+    }
+
+    /// The node of the selected variant branches `sites` of the arc's
+    /// target, outermost first, in the graph of the composed prim `dest`,
+    /// whose opinions rank with `nested_arc_kind`. Each branch is a node
+    /// beneath the node of the branch enclosing it, or the arc's node.
+    ///
+    /// Spec: AOUSD Core §10.3.2.5 (variants). OpenUSD adds the branch as a
+    /// variant node under the node hosting the variant set
+    /// (`_EvalNodeVariantSets` in `pxr/usd/pcp/primIndex.cpp`).
+    fn variant_node(
+        &mut self,
+        store: &mut dyn LayerStore,
+        out: &mut HashMap<PathId, PrimIndex>,
+        dest: PathId,
+        sites: &[VariantSelectionSite],
+        nested_arc_kind: Option<ArcKind>,
+    ) -> NodeId {
+        let mut cursor = self.cursor(store, out, dest);
+        let steps: Vec<ArcStep> = self.variant_steps(sites, nested_arc_kind).collect();
+        intern_steps(store, out, dest, &steps, &mut cursor);
+        cursor.node
+    }
+
+    /// The node of a spec of the arc's target authored inside the branches
+    /// `sites` (its [`crate::doc::PrimSpec::outer_variant_sites`]), in the graph of the
+    /// composed prim `dest`: the arc's node for a spec outside every branch.
+    /// Its opinions rank with the arc's own.
+    fn spec_node(
+        &mut self,
+        store: &mut dyn LayerStore,
+        out: &mut HashMap<PathId, PrimIndex>,
+        dest: PathId,
+        sites: &[VariantSelectionSite],
+    ) -> NodeId {
+        let nested_arc_kind = self.step().strength.nested_arc_kind;
+        self.variant_node(store, out, dest, sites, nested_arc_kind)
+    }
+}
+
+/// The strength of an arc's node: an arc no specializes arc encloses is
+/// ranked `(arc_kind, nested_arc_kind)`; see [`NodeStrength`].
+fn arc_strength(
+    specializes: &[SpecializesOrigin],
+    arc_kind: ArcKind,
+    nested_arc_kind: Option<ArcKind>,
+    namespace_depth: u16,
+    arc_list_index: u16,
+) -> NodeStrength {
+    NodeStrength {
+        is_local: false,
+        specializes: specializes.to_vec(),
+        arc_kind,
+        nested_arc_kind,
+        namespace_depth,
+        authored: true,
+        arc_list_index,
+    }
+}
+
+/// An opinion of a class arc's target, held until the sources of its layer
+/// are added: the destination prim, the source prim, the spec path, the
+/// field, the value, the declared property type and the node.
+type PendingOpinion = (
+    PathId,
+    PathId,
+    SpecPath,
+    TokenId,
+    OpinionValue,
+    Option<PropertyType>,
+    NodeId,
+);
+
 /// How an arc forwards the opinions already composed for its target prim
 /// to its destination prim.
+///
+// TODO(graph): DuplicateSources. This late copy grafts the whole graph of
+// the stage prim at the arc's target path beneath the arc's node, so sites
+// the arc's own expansion already added are registered again under a
+// different strength. OpenUSD builds an arc's target subgraph once, with the
+// arc's node as its root (`_AddArc` in `pxr/usd/pcp/primIndex.cpp`).
 struct Forwarding<'a> {
     /// Specializes nodes the forwarding arc is expanded in.
     specializes: &'a [SpecializesOrigin],
@@ -2559,39 +3038,31 @@ struct Forwarding<'a> {
 }
 
 impl Forwarding<'_> {
-    /// The key of `source`, an opinion of the target prim `remote`,
+    /// The strength of `source`, a node of the target prim `remote`,
     /// forwarded to `dest`.
     ///
-    /// An opinion no specializes arc introduces is ranked inside the
-    /// forwarding arc. An opinion of a specializes node keeps its rank
-    /// within that node; the node's placeholder now sits under the
-    /// forwarding arc, so its first origin is re-ranked there and its
-    /// namespace depth follows the namespace mapping from `remote` to `dest`
-    /// (AOUSD Core §10.4.1; OpenUSD `_EvalImpliedSpecializes` in
-    /// `pxr/usd/pcp/primIndex.cpp`).
-    fn key(
+    /// A node no specializes arc introduces is ranked inside the forwarding
+    /// arc. A node of a specializes node keeps its rank within that node;
+    /// the node's placeholder now sits under the forwarding arc, so its first
+    /// origin is re-ranked there and its namespace depth follows the
+    /// namespace mapping from `remote` to `dest` (AOUSD Core §10.4.1; OpenUSD
+    /// `_EvalImpliedSpecializes` in `pxr/usd/pcp/primIndex.cpp`).
+    fn strength(
         &self,
         store: &dyn LayerStore,
-        source: &OpinionKey,
+        source: &NodeStrength,
         remote: PathId,
         dest: PathId,
-        spec_path: SpecPath,
-    ) -> OpinionKey {
+    ) -> NodeStrength {
         let nest = |kind: ArcKind| self.nested_arc_kind.or(Some(kind));
         let Some((first, rest)) = source.specializes.split_first() else {
-            return OpinionKey {
-                is_local: false,
-                specializes: self.specializes.to_vec(),
-                arc_kind: self.arc_kind,
-                nested_arc_kind: nest(source.arc_kind),
-                namespace_depth: self.namespace_depth,
-                authored: true,
-                arc_list_index: self.arc_list_index,
-                layer_strength: source.layer_strength,
-                layer_id: source.layer_id,
-                lookup_path: source.lookup_path,
-                spec_path,
-            };
+            return arc_strength(
+                self.specializes,
+                self.arc_kind,
+                nest(source.arc_kind),
+                self.namespace_depth,
+                self.arc_list_index,
+            );
         };
         let depth = |path: PathId| i64::try_from(store.paths().resolve(path).depth()).unwrap_or(0);
         let shifted = i64::from(first.namespace_depth) + depth(dest) - depth(remote);
@@ -2606,11 +3077,78 @@ impl Forwarding<'_> {
             },
         );
         specializes.extend_from_slice(rest);
-        OpinionKey {
+        NodeStrength {
             specializes,
-            spec_path,
             ..source.clone()
         }
+    }
+
+    /// Grafts the target prim `remote`'s graph `source` beneath the
+    /// forwarding arc's node in the graph of `dest`.
+    fn graft<'g>(&'g self, source: &'g PrimIndexGraph, remote: PathId, dest: PathId) -> Graft<'g> {
+        Graft {
+            forwarding: self,
+            source,
+            remote,
+            dest,
+            under: None,
+            copies: HashMap::new(),
+        }
+    }
+}
+
+/// The copy of one target prim's graph beneath a forwarding arc's node.
+struct Graft<'a> {
+    forwarding: &'a Forwarding<'a>,
+    source: &'a PrimIndexGraph,
+    remote: PathId,
+    dest: PathId,
+    /// The forwarding arc's node in the graph of `dest`, once added.
+    under: Option<NodeId>,
+    /// The copy of each source node already grafted.
+    copies: HashMap<NodeId, NodeId>,
+}
+
+impl Graft<'_> {
+    /// The copy of the source node `node` in `out[dest]`'s graph, grafted
+    /// with its ancestors below the source root beneath the forwarding arc's
+    /// node (`nodes`); the source root's own copy is a child of that node.
+    fn node(
+        &mut self,
+        store: &mut dyn LayerStore,
+        out: &mut HashMap<PathId, PrimIndex>,
+        nodes: &mut ArcNodes,
+        node: NodeId,
+    ) -> NodeId {
+        if let Some(copy) = self.copies.get(&node) {
+            return *copy;
+        }
+        let graph = self.source;
+        let source = graph.node(node).expect("source node exists");
+        let parent = match source.parent() {
+            Some(NodeId::ROOT) | None => match self.under {
+                Some(under) => under,
+                None => {
+                    let under = nodes.node(store, out, self.dest);
+                    self.under = Some(under);
+                    under
+                }
+            },
+            Some(parent) => self.node(store, out, nodes, parent),
+        };
+        let arc = NodeArc {
+            strength: self
+                .forwarding
+                .strength(store, &source.arc.strength, self.remote, self.dest),
+            ..source.arc.clone()
+        };
+        let copy = out
+            .get_mut(&self.dest)
+            .expect("path exists")
+            .graph
+            .intern_child(parent, arc);
+        self.copies.insert(node, copy);
+        copy
     }
 }
 
@@ -2626,6 +3164,8 @@ fn add_inherit_edge_opinions(
     specializes: &[SpecializesOrigin],
     namespace_depth: u16,
     arc_list_index: u16,
+    // The arcs this arc is authored inside, and whether it is implied.
+    parent: ArcParent<'_>,
     out: &mut HashMap<PathId, PrimIndex>,
     visited: &mut HashSet<(PathId, PathId)>,
     visited_specializes: &mut HashSet<(PathId, PathId)>,
@@ -2711,18 +3251,32 @@ fn add_inherit_edge_opinions(
         Some(outer) => (outer, Some(ArcKind::Inherits)),
         None => (ArcKind::Inherits, None),
     };
+    let mut nodes = ArcNodes::new(
+        parent,
+        ArcStep {
+            arc_kind: ArcKind::Inherits,
+            layer_stack: arc_stack,
+            target: StepTarget::Namespace {
+                dest_root,
+                target_root: inherited_root,
+            },
+            namespace_depth,
+            sibling_index: arc_list_index,
+            implied: false,
+            strength: arc_strength(
+                specializes,
+                arc_kind,
+                nested_arc_kind,
+                namespace_depth,
+                arc_list_index,
+            ),
+        },
+    );
 
     for (layer_strength_idx, layer_id) in local_stack.layers.iter().copied().enumerate() {
         let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
         let layer_offset = base_offset.compose(local_stack.offset_at(layer_strength_idx));
-        let mut pending: Vec<(
-            PathId,
-            PathId,
-            SpecPath,
-            TokenId,
-            OpinionValue,
-            Option<PropertyType>,
-        )> = Vec::new();
+        let mut pending: Vec<PendingOpinion> = Vec::new();
         let mut pending_sources = Vec::new();
         {
             let Some(layer) = store.layer(layer_id).cloned() else {
@@ -2734,16 +3288,12 @@ fn add_inherit_edge_opinions(
                     if let Some(d) = deps.as_deref_mut() {
                         d.add_layer_opinion(layer_id, *dest_path_id);
                     }
+                    let node =
+                        nodes.spec_node(store, out, *dest_path_id, &spec.outer_variant_sites);
                     if let Some(order) = &spec.prim_order {
                         prim_order_out.entry(*dest_path_id).or_default().push((
                             OpinionKey {
-                                is_local: false,
-                                specializes: specializes.to_vec(),
-                                arc_kind,
-                                nested_arc_kind,
-                                namespace_depth,
-                                authored: true,
-                                arc_list_index,
+                                node,
                                 layer_strength,
                                 layer_id,
                                 lookup_path: *remote_path_id,
@@ -2764,13 +3314,7 @@ fn add_inherit_edge_opinions(
                             .or_default()
                             .push((
                                 OpinionKey {
-                                    is_local: false,
-                                    specializes: specializes.to_vec(),
-                                    arc_kind,
-                                    nested_arc_kind,
-                                    namespace_depth,
-                                    authored: true,
-                                    arc_list_index,
+                                    node,
                                     layer_strength,
                                     layer_id,
                                     lookup_path: *remote_path_id,
@@ -2788,13 +3332,7 @@ fn add_inherit_edge_opinions(
                     pending_sources.push((
                         *dest_path_id,
                         OpinionKey {
-                            is_local: false,
-                            specializes: specializes.to_vec(),
-                            arc_kind,
-                            nested_arc_kind,
-                            namespace_depth,
-                            authored: true,
-                            arc_list_index,
+                            node,
                             layer_strength,
                             layer_id,
                             lookup_path: *remote_path_id,
@@ -2820,6 +3358,7 @@ fn add_inherit_edge_opinions(
                             entry.name(),
                             entry.value(),
                             entry.property_type().cloned(),
+                            node,
                         ));
                     }
 
@@ -2843,25 +3382,39 @@ fn add_inherit_edge_opinions(
                                     variant: *selected,
                                 },
                             );
+                            let branch_path = normalized_variant_spec_path(
+                                store,
+                                *remote_path_id,
+                                &branch_selections,
+                                provenance_remap,
+                            );
+                            let variant_node = nodes.variant_node(
+                                store,
+                                out,
+                                *dest_path_id,
+                                &branch_selections,
+                                nested_arc_kind.or(Some(ArcKind::Variants)),
+                            );
+                            // TODO(graph): NestedArcDepth. The branch's
+                            // opinions rank with the inherit's own opinions,
+                            // not with the branch's variant node, which
+                            // OpenUSD ranks beneath the inherit's site
+                            // (`PcpCompareSiblingNodeStrength`).
+                            let branch_opinions_node = nodes.variant_node(
+                                store,
+                                out,
+                                *dest_path_id,
+                                &branch_selections,
+                                nested_arc_kind,
+                            );
                             pending_sources.push((
                                 *dest_path_id,
                                 OpinionKey {
-                                    is_local: false,
-                                    specializes: specializes.to_vec(),
-                                    arc_kind,
-                                    nested_arc_kind: nested_arc_kind.or(Some(ArcKind::Variants)),
-                                    namespace_depth,
-                                    authored: true,
-                                    arc_list_index,
+                                    node: variant_node,
                                     layer_strength,
                                     layer_id,
                                     lookup_path: *remote_path_id,
-                                    spec_path: normalized_variant_spec_path(
-                                        store,
-                                        *remote_path_id,
-                                        &branch_selections,
-                                        provenance_remap,
-                                    ),
+                                    spec_path: branch_path,
                                 },
                             ));
                             for entry in
@@ -2880,6 +3433,7 @@ fn add_inherit_edge_opinions(
                                     entry.name(),
                                     entry.value(),
                                     entry.property_type().cloned(),
+                                    branch_opinions_node,
                                 ));
                             }
                         }
@@ -2894,7 +3448,8 @@ fn add_inherit_edge_opinions(
                 .add_source(key);
         }
 
-        for (dest_path_id, remote_path_id, spec_path, field, value, property_type) in pending {
+        for (dest_path_id, remote_path_id, spec_path, field, value, property_type, node) in pending
+        {
             let mut value = value;
             remap_opinion_target_paths(store, &base_path, &inherited_path, &mut value);
             // Also apply reference namespace remapping if within a reference context.
@@ -2902,13 +3457,7 @@ fn add_inherit_edge_opinions(
                 remap_opinion_target_paths(store, ref_dest, ref_src, &mut value);
             }
             let key = OpinionKey {
-                is_local: false,
-                specializes: specializes.to_vec(),
-                arc_kind,
-                nested_arc_kind,
-                namespace_depth,
-                authored: true,
-                arc_list_index,
+                node,
                 layer_strength,
                 layer_id,
                 lookup_path: remote_path_id,
@@ -2942,6 +3491,7 @@ fn add_inherit_edge_opinions(
     for &(remote_path_id, dest_path_id) in &mapping {
         let src_index = out.get(&remote_path_id).cloned();
         if let Some(src_index) = src_index {
+            let mut graft = forwarding.graft(&src_index.graph, remote_path_id, dest_path_id);
             for source in &src_index.sources {
                 if cycles.copies_cycle(
                     store.paths(),
@@ -2951,12 +3501,16 @@ fn add_inherit_edge_opinions(
                 ) {
                     continue;
                 }
-                if source.arc_kind == ArcKind::Local {
+                if src_index.graph.strength(source.node).arc_kind == ArcKind::Local {
                     continue;
                 }
                 let spec_path =
                     normalize_forwarded_spec_path(store, &source.spec_path, provenance_remap);
-                let key = forwarding.key(store, source, remote_path_id, dest_path_id, spec_path);
+                let key = OpinionKey {
+                    node: graft.node(store, out, &mut nodes, source.node),
+                    spec_path,
+                    ..source.clone()
+                };
                 out.get_mut(&dest_path_id)
                     .expect("path exists")
                     .add_source(key);
@@ -2971,7 +3525,7 @@ fn add_inherit_edge_opinions(
                     ) {
                         continue;
                     }
-                    if opinion.key.arc_kind == ArcKind::Local {
+                    if src_index.graph.strength(opinion.key.node).arc_kind == ArcKind::Local {
                         continue;
                     }
                     let spec_path = normalize_forwarded_spec_path(
@@ -2979,16 +3533,15 @@ fn add_inherit_edge_opinions(
                         &opinion.key.spec_path,
                         provenance_remap,
                     );
+                    let node = graft.node(store, out, &mut nodes, opinion.key.node);
                     out.get_mut(&dest_path_id)
                         .expect("path exists")
                         .add_opinion(Opinion {
-                            key: forwarding.key(
-                                store,
-                                &opinion.key,
-                                remote_path_id,
-                                dest_path_id,
+                            key: OpinionKey {
+                                node,
                                 spec_path,
-                            ),
+                                ..opinion.key.clone()
+                            },
                             field: opinion.field,
                             value: opinion.value.clone(),
                             layer_offset: opinion.layer_offset,
@@ -3014,7 +3567,8 @@ fn add_inherit_edge_opinions(
             dest_path_id,
             &mut host_selection_cache,
         );
-        for (nested_index, nested) in nested_inherits.into_iter().enumerate() {
+        for (nested_index, (nested, sites)) in nested_inherits.into_iter().enumerate() {
+            let branch = nodes.branch_path(&sites, nested_arc_kind.or(Some(ArcKind::Variants)));
             let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
@@ -3044,6 +3598,7 @@ fn add_inherit_edge_opinions(
                     specializes,
                     namespace_depth,
                     nested_index,
+                    ArcParent::nested(&branch).implied(),
                     out,
                     visited,
                     visited_specializes,
@@ -3083,6 +3638,7 @@ fn add_inherit_edge_opinions(
                         specializes,
                         namespace_depth,
                         nested_index,
+                        ArcParent::nested(&branch).implied(),
                         out,
                         visited,
                         visited_specializes,
@@ -3107,6 +3663,7 @@ fn add_inherit_edge_opinions(
                 specializes,
                 namespace_depth,
                 nested_index,
+                ArcParent::nested(&branch),
                 out,
                 visited,
                 visited_specializes,
@@ -3130,7 +3687,8 @@ fn add_inherit_edge_opinions(
         //
         // Spec: AOUSD Core §10 (LIVERPS composition ordering), §10.4.1 (the
         // specializes node ranks after every other opinion of the prim).
-        for (spec_index, specialized) in nested_specializes.into_iter().enumerate() {
+        for (spec_index, (specialized, sites)) in nested_specializes.into_iter().enumerate() {
+            let branch = nodes.branch_path(&sites, nested_arc_kind.or(Some(ArcKind::Variants)));
             let spec_index = u16::try_from(spec_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
@@ -3160,6 +3718,7 @@ fn add_inherit_edge_opinions(
                     &chain(true),
                     namespace_depth,
                     spec_index,
+                    ArcParent::nested(&branch).implied(),
                     out,
                     visited_specializes,
                     prim_order_out,
@@ -3187,6 +3746,7 @@ fn add_inherit_edge_opinions(
                         &chain(true),
                         namespace_depth,
                         spec_index,
+                        ArcParent::nested(&branch).implied(),
                         out,
                         visited_specializes,
                         prim_order_out,
@@ -3209,6 +3769,7 @@ fn add_inherit_edge_opinions(
                 &chain(false),
                 namespace_depth,
                 spec_index,
+                ArcParent::nested(&branch),
                 out,
                 visited_specializes,
                 prim_order_out,
@@ -3227,7 +3788,8 @@ fn add_inherit_edge_opinions(
         // for inherits: the inherited namespace's references contribute opinions.
         //
         // Spec: AOUSD Core §10 (LIVERPS composition ordering).
-        for (ref_index, nested_ref) in nested_refs.into_iter().enumerate() {
+        for (ref_index, (nested_ref, sites)) in nested_refs.into_iter().enumerate() {
+            let branch = nodes.branch_path(&sites, nested_arc_kind.or(Some(ArcKind::Variants)));
             let ref_index = u16::try_from(ref_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
@@ -3240,6 +3802,7 @@ fn add_inherit_edge_opinions(
                 specializes,
                 namespace_depth,
                 ref_index,
+                ArcParent::nested(&branch),
                 out,
                 visited_refs,
                 visited,
@@ -3255,7 +3818,8 @@ fn add_inherit_edge_opinions(
         // Propagate payloads from the inherited class, as for references.
         //
         // Spec: AOUSD Core §10 (LIVERPS composition ordering).
-        for (payload_index, nested_payload) in nested_payloads.into_iter().enumerate() {
+        for (payload_index, (nested_payload, sites)) in nested_payloads.into_iter().enumerate() {
+            let branch = nodes.branch_path(&sites, nested_arc_kind.or(Some(ArcKind::Variants)));
             let payload_index = u16::try_from(payload_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
@@ -3268,6 +3832,7 @@ fn add_inherit_edge_opinions(
                 specializes,
                 namespace_depth,
                 payload_index,
+                ArcParent::nested(&branch),
                 out,
                 visited_refs,
                 visited,
@@ -3308,6 +3873,7 @@ fn add_inherit_edge_opinions(
         // Copy sources and opinions from the source PrimIndex entry.
         let src_index = out.get(&src_path_id).cloned();
         if let Some(src_index) = src_index {
+            let mut graft = forwarding.graft(&src_index.graph, src_path_id, dest_path_id);
             for source in &src_index.sources {
                 if cycles.copies_cycle(
                     store.paths(),
@@ -3319,7 +3885,11 @@ fn add_inherit_edge_opinions(
                 }
                 let spec_path =
                     remap_spec_path(store, &source.spec_path, &base_path, &inherited_path);
-                let key = forwarding.key(store, source, src_path_id, dest_path_id, spec_path);
+                let key = OpinionKey {
+                    node: graft.node(store, out, &mut nodes, source.node),
+                    spec_path,
+                    ..source.clone()
+                };
                 out.get_mut(&dest_path_id)
                     .expect("path exists")
                     .add_source(key);
@@ -3336,16 +3906,15 @@ fn add_inherit_edge_opinions(
                     }
                     let spec_path =
                         remap_spec_path(store, &opinion.key.spec_path, &base_path, &inherited_path);
+                    let node = graft.node(store, out, &mut nodes, opinion.key.node);
                     out.get_mut(&dest_path_id)
                         .expect("path exists")
                         .add_opinion(Opinion {
-                            key: forwarding.key(
-                                store,
-                                &opinion.key,
-                                src_path_id,
-                                dest_path_id,
+                            key: OpinionKey {
+                                node,
                                 spec_path,
-                            ),
+                                ..opinion.key.clone()
+                            },
                             field: opinion.field,
                             value: opinion.value.clone(),
                             layer_offset: opinion.layer_offset,
@@ -3493,6 +4062,8 @@ fn add_reference_edge_opinions(
     specializes: &[SpecializesOrigin],
     namespace_depth: u16,
     arc_list_index: u16,
+    // The arcs this arc is authored inside, and whether it is implied.
+    parent: ArcParent<'_>,
     out: &mut HashMap<PathId, PrimIndex>,
     visited: &mut HashSet<(PathId, LayerId, PathId)>,
     visited_inherits: &mut HashSet<(PathId, PathId)>,
@@ -3513,10 +4084,10 @@ fn add_reference_edge_opinions(
     // ranking a node above all of its descendants and comparing siblings below
     // the common ancestor (`pxr/usd/pcp/strengthOrdering.cpp:309`).
     //
-    // Limitation: the flat `OpinionKey` records only the outermost arc and one
-    // nested kind. Arcs nested two or more levels deep share this bucket and are
-    // ordered by the remaining tie-breakers, not by their position in the arc
-    // graph; that needs a composition-context (node path) representation.
+    // TODO(graph): NestedArcDepth. The node's strength records only the
+    // outermost arc and one nested kind, so arcs nested two or more levels
+    // deep share this bucket and are ordered by the remaining tie-breakers,
+    // not by their position in the prim's graph.
     let (edge_arc_kind, edge_direct_nested, edge_variant_nested) = match outer_arc_kind {
         Some(outer) => (outer, Some(ArcKind::References), Some(ArcKind::References)),
         None => (ArcKind::References, None, Some(ArcKind::Variants)),
@@ -3545,6 +4116,9 @@ fn add_reference_edge_opinions(
     ) {
         return;
     }
+    // TODO(graph): CollapsedNodes. A site reached twice (a diamond, or an
+    // arc listed twice with different offsets) is one arc path per
+    // occurrence in OpenUSD, each with its own node; this expands it once.
     if !visited.insert((dest_root, reference.layer, reference_path)) {
         return;
     }
@@ -3555,6 +4129,10 @@ fn add_reference_edge_opinions(
         ArcKind::References,
     );
 
+    // TODO(graph): InternalArcAnchoring. An internal arc (no asset path)
+    // targets the layer stack it is authored in (AOUSD Core §10.3.2.1), but
+    // `reference.layer` names the authoring layer, so the node's layer stack
+    // is that layer's own sublayer stack rather than the containing one.
     let remote_stack = cycles.gather_layer_stack(store, reference.layer);
     let combined_stack = LayerStack {
         layers: stage_stack
@@ -3572,6 +4150,27 @@ fn add_reference_edge_opinions(
     };
     let target_root = store.paths().resolve(reference_path).clone();
     let dest_root_path = store.paths().resolve(dest_root).clone();
+    let mut nodes = ArcNodes::new(
+        parent,
+        ArcStep {
+            arc_kind: ArcKind::References,
+            layer_stack: reference.layer,
+            target: StepTarget::Namespace {
+                dest_root,
+                target_root: reference_path,
+            },
+            namespace_depth,
+            sibling_index: arc_list_index,
+            implied: false,
+            strength: arc_strength(
+                specializes,
+                edge_arc_kind,
+                edge_direct_nested,
+                namespace_depth,
+                arc_list_index,
+            ),
+        },
+    );
 
     let mut remote_paths: Vec<PathId> = remote_stack
         .layers
@@ -3587,6 +4186,11 @@ fn add_reference_edge_opinions(
     });
     remote_paths.dedup();
 
+    // TODO(graph): AncestralArcs. The arc maps only the target and its
+    // namespace descendants. OpenUSD computes a subroot target's prim index
+    // from its parent's (`_BuildInitialPrimIndexFromAncestor` in
+    // `pxr/usd/pcp/primIndex.cpp`), so arcs and variant selections authored
+    // on the target's ancestors contribute nodes beneath this one.
     let mut mapping: Vec<(PathId, PathId)> = Vec::new();
     for remote_path_id in remote_paths {
         let rel: Vec<_> = {
@@ -3631,14 +4235,10 @@ fn add_reference_edge_opinions(
                 if let Some(d) = deps.as_deref_mut() {
                     d.add_layer_opinion(remote_layer_id, *dest_path_id);
                 }
+                let node =
+                    nodes.spec_node(store, out, *dest_path_id, &remote_spec.outer_variant_sites);
                 let base_key = OpinionKey {
-                    is_local: false,
-                    specializes: specializes.to_vec(),
-                    arc_kind: edge_arc_kind,
-                    nested_arc_kind: edge_direct_nested,
-                    namespace_depth,
-                    authored: true,
-                    arc_list_index,
+                    node,
                     layer_strength,
                     layer_id: remote_layer_id,
                     lookup_path: *remote_path_id,
@@ -3693,25 +4293,27 @@ fn add_reference_edge_opinions(
                                     variant: *selected,
                                 },
                             );
+                            let branch_path = normalized_variant_spec_path(
+                                store,
+                                *remote_path_id,
+                                &branch_selections,
+                                provenance_remap,
+                            );
+                            let variant_node = nodes.variant_node(
+                                store,
+                                out,
+                                *dest_path_id,
+                                &branch_selections,
+                                edge_variant_nested,
+                            );
                             pending_sources.push((
                                 *dest_path_id,
                                 OpinionKey {
-                                    is_local: false,
-                                    specializes: specializes.to_vec(),
-                                    arc_kind: edge_arc_kind,
-                                    nested_arc_kind: edge_variant_nested,
-                                    namespace_depth,
-                                    authored: true,
-                                    arc_list_index,
+                                    node: variant_node,
                                     layer_strength,
                                     layer_id: remote_layer_id,
                                     lookup_path: *remote_path_id,
-                                    spec_path: normalized_variant_spec_path(
-                                        store,
-                                        *remote_path_id,
-                                        &branch_selections,
-                                        provenance_remap,
-                                    ),
+                                    spec_path: branch_path.clone(),
                                 },
                             ));
                             for entry in
@@ -3721,13 +4323,7 @@ fn add_reference_edge_opinions(
                                     *dest_path_id,
                                     entry.name(),
                                     OpinionKey {
-                                        is_local: false,
-                                        specializes: specializes.to_vec(),
-                                        arc_kind: edge_arc_kind,
-                                        nested_arc_kind: edge_variant_nested,
-                                        namespace_depth,
-                                        authored: true,
-                                        arc_list_index,
+                                        node: variant_node,
                                         layer_strength,
                                         layer_id: remote_layer_id,
                                         lookup_path: *remote_path_id,
@@ -3751,13 +4347,7 @@ fn add_reference_edge_opinions(
                 if let Some(order) = &remote_spec.prim_order {
                     prim_order_out.entry(*dest_path_id).or_default().push((
                         OpinionKey {
-                            is_local: false,
-                            specializes: specializes.to_vec(),
-                            arc_kind: edge_arc_kind,
-                            nested_arc_kind: edge_direct_nested,
-                            namespace_depth,
-                            authored: true,
-                            arc_list_index,
+                            node,
                             layer_strength,
                             layer_id: remote_layer_id,
                             lookup_path: *remote_path_id,
@@ -3777,13 +4367,7 @@ fn add_reference_edge_opinions(
                         .or_default()
                         .push((
                             OpinionKey {
-                                is_local: false,
-                                specializes: specializes.to_vec(),
-                                arc_kind: edge_arc_kind,
-                                nested_arc_kind: edge_direct_nested,
-                                namespace_depth,
-                                authored: true,
-                                arc_list_index,
+                                node,
                                 layer_strength,
                                 layer_id: remote_layer_id,
                                 lookup_path: *remote_path_id,
@@ -3816,25 +4400,27 @@ fn add_reference_edge_opinions(
                                 variant: *selected,
                             },
                         );
+                        let branch_path = normalized_variant_spec_path(
+                            store,
+                            *remote_path_id,
+                            &branch_selections,
+                            provenance_remap,
+                        );
+                        let variant_node = nodes.variant_node(
+                            store,
+                            out,
+                            *dest_path_id,
+                            &branch_selections,
+                            edge_variant_nested,
+                        );
                         pending_sources.push((
                             *dest_path_id,
                             OpinionKey {
-                                is_local: false,
-                                specializes: specializes.to_vec(),
-                                arc_kind: edge_arc_kind,
-                                nested_arc_kind: edge_variant_nested,
-                                namespace_depth,
-                                authored: true,
-                                arc_list_index,
+                                node: variant_node,
                                 layer_strength,
                                 layer_id: remote_layer_id,
                                 lookup_path: *remote_path_id,
-                                spec_path: normalized_variant_spec_path(
-                                    store,
-                                    *remote_path_id,
-                                    &branch_selections,
-                                    provenance_remap,
-                                ),
+                                spec_path: branch_path.clone(),
                             },
                         ));
 
@@ -3842,13 +4428,7 @@ fn add_reference_edge_opinions(
                             composed_entries(&variant_spec.fields, &variant_spec.properties)
                         {
                             let key = OpinionKey {
-                                is_local: false,
-                                specializes: specializes.to_vec(),
-                                arc_kind: edge_arc_kind,
-                                nested_arc_kind: edge_variant_nested,
-                                namespace_depth,
-                                authored: true,
-                                arc_list_index,
+                                node: variant_node,
                                 layer_strength,
                                 layer_id: remote_layer_id,
                                 lookup_path: *remote_path_id,
@@ -3913,7 +4493,8 @@ fn add_reference_edge_opinions(
             &mut host_selection_cache,
         );
         let inherits = arcs.inherits;
-        for (inherit_index, inherited_root) in inherits.into_iter().enumerate() {
+        for (inherit_index, (inherited_root, sites)) in inherits.into_iter().enumerate() {
+            let branch = nodes.branch_path(&sites, edge_variant_nested);
             let inherit_index = u16::try_from(inherit_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
@@ -3937,6 +4518,7 @@ fn add_reference_edge_opinions(
                     specializes,
                     namespace_depth,
                     inherit_index,
+                    ArcParent::nested(&branch).implied(),
                     out,
                     visited_inherits,
                     visited_specializes,
@@ -3961,6 +4543,7 @@ fn add_reference_edge_opinions(
                 specializes,
                 namespace_depth,
                 inherit_index,
+                ArcParent::nested(&branch),
                 out,
                 visited_inherits,
                 visited_specializes,
@@ -3979,7 +4562,8 @@ fn add_reference_edge_opinions(
         // headers, and references authored for it inside its parent's
         // selected branches.
         let all_nested = arcs.references;
-        for (nested_index, nested_ref) in all_nested.into_iter().enumerate() {
+        for (nested_index, (nested_ref, sites)) in all_nested.into_iter().enumerate() {
+            let branch = nodes.branch_path(&sites, edge_variant_nested);
             let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
@@ -3992,6 +4576,7 @@ fn add_reference_edge_opinions(
                 specializes,
                 namespace_depth,
                 nested_index,
+                ArcParent::nested(&branch),
                 out,
                 visited,
                 visited_inherits,
@@ -4006,7 +4591,8 @@ fn add_reference_edge_opinions(
 
         // Handle nested payloads inside referenced content.
         let nested_payloads = arcs.payloads;
-        for (nested_index, nested_payload) in nested_payloads.into_iter().enumerate() {
+        for (nested_index, (nested_payload, sites)) in nested_payloads.into_iter().enumerate() {
+            let branch = nodes.branch_path(&sites, edge_variant_nested);
             let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
@@ -4019,6 +4605,7 @@ fn add_reference_edge_opinions(
                 specializes,
                 namespace_depth,
                 nested_index,
+                ArcParent::nested(&branch),
                 out,
                 visited,
                 visited_inherits,
@@ -4039,7 +4626,8 @@ fn add_reference_edge_opinions(
         //
         // Spec: AOUSD Core §10.4.1; OpenUSD `_EvalImpliedSpecializes` in
         // `pxr/usd/pcp/primIndex.cpp`.
-        for (spec_index, specialized_root) in arcs.specializes.into_iter().enumerate() {
+        for (spec_index, (specialized_root, sites)) in arcs.specializes.into_iter().enumerate() {
+            let branch = nodes.branch_path(&sites, edge_variant_nested);
             let spec_index = u16::try_from(spec_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
@@ -4069,6 +4657,7 @@ fn add_reference_edge_opinions(
                     &chain(true),
                     namespace_depth,
                     spec_index,
+                    ArcParent::nested(&branch).implied(),
                     out,
                     visited_specializes,
                     prim_order_out,
@@ -4090,6 +4679,7 @@ fn add_reference_edge_opinions(
                 &chain(false),
                 namespace_depth,
                 spec_index,
+                ArcParent::nested(&branch),
                 out,
                 visited_specializes,
                 prim_order_out,
@@ -4115,6 +4705,7 @@ fn add_reference_edge_opinions(
     for &(remote_path_id, dest_path_id) in &mapping {
         let src_index = out.get(&remote_path_id).cloned();
         if let Some(src_index) = src_index {
+            let mut graft = forwarding.graft(&src_index.graph, remote_path_id, dest_path_id);
             for source in &src_index.sources {
                 if cycles.copies_cycle(
                     store.paths(),
@@ -4124,12 +4715,16 @@ fn add_reference_edge_opinions(
                 ) {
                     continue;
                 }
-                if source.arc_kind == ArcKind::Local {
+                if src_index.graph.strength(source.node).arc_kind == ArcKind::Local {
                     continue;
                 }
                 let spec_path =
                     normalize_forwarded_spec_path(store, &source.spec_path, provenance_remap);
-                let key = forwarding.key(store, source, remote_path_id, dest_path_id, spec_path);
+                let key = OpinionKey {
+                    node: graft.node(store, out, &mut nodes, source.node),
+                    spec_path,
+                    ..source.clone()
+                };
                 out.get_mut(&dest_path_id)
                     .expect("path exists")
                     .add_source(key);
@@ -4144,7 +4739,7 @@ fn add_reference_edge_opinions(
                     ) {
                         continue;
                     }
-                    if opinion.key.arc_kind == ArcKind::Local {
+                    if src_index.graph.strength(opinion.key.node).arc_kind == ArcKind::Local {
                         continue;
                     }
                     let spec_path = normalize_forwarded_spec_path(
@@ -4152,16 +4747,15 @@ fn add_reference_edge_opinions(
                         &opinion.key.spec_path,
                         provenance_remap,
                     );
+                    let node = graft.node(store, out, &mut nodes, opinion.key.node);
                     out.get_mut(&dest_path_id)
                         .expect("path exists")
                         .add_opinion(Opinion {
-                            key: forwarding.key(
-                                store,
-                                &opinion.key,
-                                remote_path_id,
-                                dest_path_id,
+                            key: OpinionKey {
+                                node,
                                 spec_path,
-                            ),
+                                ..opinion.key.clone()
+                            },
                             field: opinion.field,
                             value: opinion.value.clone(),
                             layer_offset: opinion.layer_offset,
@@ -4217,6 +4811,7 @@ fn add_payload_opinions(
         let branch_payloads =
             resolve_variant_branch_payloads(store, local_stack, local_stack, dest_root);
         let all_payloads = payloads.into_iter().chain(branch_payloads);
+        let selections = resolve_full_variant_selections(store, local_stack, dest_root);
         for (arc_list_index, payload) in all_payloads.enumerate() {
             let arc_list_index = u16::try_from(arc_list_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -4232,6 +4827,15 @@ fn add_payload_opinions(
                     layer: payload.layer,
                 });
             }
+            let sites = ArcAuthoring {
+                store,
+                stack: local_stack,
+                prim: dest_root,
+                selections: &selections,
+                scope: SelectionScope::Stack,
+            }
+            .sites(&payload, |spec| &spec.payloads, |branch| &branch.payloads);
+            let branch = local_variant_steps(root_layer_stack(out, dest_root), &sites);
             add_payload_edge_opinions(
                 store,
                 local_stack,
@@ -4241,6 +4845,7 @@ fn add_payload_opinions(
                 &[],
                 namespace_depth,
                 arc_list_index,
+                ArcParent::nested(&branch),
                 out,
                 &mut visited,
                 &mut visited_inherits,
@@ -4265,6 +4870,8 @@ fn add_payload_edge_opinions(
     specializes: &[SpecializesOrigin],
     namespace_depth: u16,
     arc_list_index: u16,
+    // The arcs this arc is authored inside, and whether it is implied.
+    parent: ArcParent<'_>,
     out: &mut HashMap<PathId, PrimIndex>,
     visited: &mut HashSet<(PathId, LayerId, PathId)>,
     visited_inherits: &mut HashSet<(PathId, PathId)>,
@@ -4285,10 +4892,10 @@ fn add_payload_edge_opinions(
     // ranking a node above all of its descendants and comparing siblings below
     // the common ancestor (`pxr/usd/pcp/strengthOrdering.cpp:309`).
     //
-    // Limitation: the flat `OpinionKey` records only the outermost arc and one
-    // nested kind. Arcs nested two or more levels deep share this bucket and are
-    // ordered by the remaining tie-breakers, not by their position in the arc
-    // graph; that needs a composition-context (node path) representation.
+    // TODO(graph): NestedArcDepth. The node's strength records only the
+    // outermost arc and one nested kind, so arcs nested two or more levels
+    // deep share this bucket and are ordered by the remaining tie-breakers,
+    // not by their position in the prim's graph.
     let (edge_arc_kind, edge_direct_nested, edge_variant_nested) = match outer_arc_kind {
         Some(outer) => (outer, Some(ArcKind::Payloads), Some(ArcKind::Payloads)),
         None => (ArcKind::Payloads, None, Some(ArcKind::Variants)),
@@ -4318,6 +4925,9 @@ fn add_payload_edge_opinions(
     ) {
         return;
     }
+    // TODO(graph): CollapsedNodes. A site reached twice (a diamond, or an
+    // arc listed twice with different offsets) is one arc path per
+    // occurrence in OpenUSD, each with its own node; this expands it once.
     if !visited.insert((dest_root, reference.layer, reference_path)) {
         return;
     }
@@ -4328,6 +4938,10 @@ fn add_payload_edge_opinions(
         ArcKind::Payloads,
     );
 
+    // TODO(graph): InternalArcAnchoring. An internal arc (no asset path)
+    // targets the layer stack it is authored in (AOUSD Core §10.3.2.1), but
+    // `reference.layer` names the authoring layer, so the node's layer stack
+    // is that layer's own sublayer stack rather than the containing one.
     let remote_stack = cycles.gather_layer_stack(store, reference.layer);
     let combined_stack = LayerStack {
         layers: stage_stack
@@ -4345,6 +4959,27 @@ fn add_payload_edge_opinions(
     };
     let target_root = store.paths().resolve(reference_path).clone();
     let dest_root_path = store.paths().resolve(dest_root).clone();
+    let mut nodes = ArcNodes::new(
+        parent,
+        ArcStep {
+            arc_kind: ArcKind::Payloads,
+            layer_stack: reference.layer,
+            target: StepTarget::Namespace {
+                dest_root,
+                target_root: reference_path,
+            },
+            namespace_depth,
+            sibling_index: arc_list_index,
+            implied: false,
+            strength: arc_strength(
+                specializes,
+                edge_arc_kind,
+                edge_direct_nested,
+                namespace_depth,
+                arc_list_index,
+            ),
+        },
+    );
 
     let mut remote_paths: Vec<PathId> = remote_stack
         .layers
@@ -4360,6 +4995,11 @@ fn add_payload_edge_opinions(
     });
     remote_paths.dedup();
 
+    // TODO(graph): AncestralArcs. The arc maps only the target and its
+    // namespace descendants. OpenUSD computes a subroot target's prim index
+    // from its parent's (`_BuildInitialPrimIndexFromAncestor` in
+    // `pxr/usd/pcp/primIndex.cpp`), so arcs and variant selections authored
+    // on the target's ancestors contribute nodes beneath this one.
     let mut mapping: Vec<(PathId, PathId)> = Vec::new();
     for remote_path_id in remote_paths {
         let rel: Vec<_> = {
@@ -4391,16 +5031,12 @@ fn add_payload_edge_opinions(
                 if let Some(d) = deps.as_deref_mut() {
                     d.add_layer_opinion(remote_layer_id, *dest_path_id);
                 }
+                let node =
+                    nodes.spec_node(store, out, *dest_path_id, &remote_spec.outer_variant_sites);
                 pending_sources.push((
                     *dest_path_id,
                     OpinionKey {
-                        is_local: false,
-                        specializes: specializes.to_vec(),
-                        arc_kind: edge_arc_kind,
-                        nested_arc_kind: edge_direct_nested,
-                        namespace_depth,
-                        authored: true,
-                        arc_list_index,
+                        node,
                         layer_strength,
                         layer_id: remote_layer_id,
                         lookup_path: *remote_path_id,
@@ -4415,13 +5051,7 @@ fn add_payload_edge_opinions(
 
                 for entry in composed_entries(&remote_spec.fields, &remote_spec.properties) {
                     let key = OpinionKey {
-                        is_local: false,
-                        specializes: specializes.to_vec(),
-                        arc_kind: edge_arc_kind,
-                        nested_arc_kind: edge_direct_nested,
-                        namespace_depth,
-                        authored: true,
-                        arc_list_index,
+                        node,
                         layer_strength,
                         layer_id: remote_layer_id,
                         lookup_path: *remote_path_id,
@@ -4448,13 +5078,7 @@ fn add_payload_edge_opinions(
                 if let Some(order) = &remote_spec.prim_order {
                     prim_order_out.entry(*dest_path_id).or_default().push((
                         OpinionKey {
-                            is_local: false,
-                            specializes: specializes.to_vec(),
-                            arc_kind: edge_arc_kind,
-                            nested_arc_kind: edge_direct_nested,
-                            namespace_depth,
-                            authored: true,
-                            arc_list_index,
+                            node,
                             layer_strength,
                             layer_id: remote_layer_id,
                             lookup_path: *remote_path_id,
@@ -4475,13 +5099,7 @@ fn add_payload_edge_opinions(
                         .or_default()
                         .push((
                             OpinionKey {
-                                is_local: false,
-                                specializes: specializes.to_vec(),
-                                arc_kind: edge_arc_kind,
-                                nested_arc_kind: edge_direct_nested,
-                                namespace_depth,
-                                authored: true,
-                                arc_list_index,
+                                node,
                                 layer_strength,
                                 layer_id: remote_layer_id,
                                 lookup_path: *remote_path_id,
@@ -4515,25 +5133,27 @@ fn add_payload_edge_opinions(
                                 variant: *selected,
                             },
                         );
+                        let branch_path = normalized_variant_spec_path(
+                            store,
+                            *remote_path_id,
+                            &branch_selections,
+                            provenance_remap,
+                        );
+                        let variant_node = nodes.variant_node(
+                            store,
+                            out,
+                            *dest_path_id,
+                            &branch_selections,
+                            edge_variant_nested,
+                        );
                         pending_sources.push((
                             *dest_path_id,
                             OpinionKey {
-                                is_local: false,
-                                specializes: specializes.to_vec(),
-                                arc_kind: edge_arc_kind,
-                                nested_arc_kind: edge_variant_nested,
-                                namespace_depth,
-                                authored: true,
-                                arc_list_index,
+                                node: variant_node,
                                 layer_strength,
                                 layer_id: remote_layer_id,
                                 lookup_path: *remote_path_id,
-                                spec_path: normalized_variant_spec_path(
-                                    store,
-                                    *remote_path_id,
-                                    &branch_selections,
-                                    provenance_remap,
-                                ),
+                                spec_path: branch_path.clone(),
                             },
                         ));
 
@@ -4541,13 +5161,7 @@ fn add_payload_edge_opinions(
                             composed_entries(&variant_spec.fields, &variant_spec.properties)
                         {
                             let key = OpinionKey {
-                                is_local: false,
-                                specializes: specializes.to_vec(),
-                                arc_kind: edge_arc_kind,
-                                nested_arc_kind: edge_variant_nested,
-                                namespace_depth,
-                                authored: true,
-                                arc_list_index,
+                                node: variant_node,
                                 layer_strength,
                                 layer_id: remote_layer_id,
                                 lookup_path: *remote_path_id,
@@ -4599,7 +5213,8 @@ fn add_payload_edge_opinions(
             &mut host_selection_cache,
         );
         let inherits = arcs.inherits;
-        for (inherit_index, inherited_root) in inherits.into_iter().enumerate() {
+        for (inherit_index, (inherited_root, sites)) in inherits.into_iter().enumerate() {
+            let branch = nodes.branch_path(&sites, edge_variant_nested);
             let inherit_index = u16::try_from(inherit_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
@@ -4617,6 +5232,7 @@ fn add_payload_edge_opinions(
                     specializes,
                     namespace_depth,
                     inherit_index,
+                    ArcParent::nested(&branch).implied(),
                     out,
                     visited_inherits,
                     visited_specializes,
@@ -4641,6 +5257,7 @@ fn add_payload_edge_opinions(
                 specializes,
                 namespace_depth,
                 inherit_index,
+                ArcParent::nested(&branch),
                 out,
                 visited_inherits,
                 visited_specializes,
@@ -4658,7 +5275,8 @@ fn add_payload_edge_opinions(
         // Direct references and those authored for this prim inside its own
         // or its parent's selected variant branches.
         let nested = arcs.references;
-        for (nested_index, nested_ref) in nested.into_iter().enumerate() {
+        for (nested_index, (nested_ref, sites)) in nested.into_iter().enumerate() {
+            let branch = nodes.branch_path(&sites, edge_variant_nested);
             let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
@@ -4671,6 +5289,7 @@ fn add_payload_edge_opinions(
                 specializes,
                 namespace_depth,
                 nested_index,
+                ArcParent::nested(&branch),
                 out,
                 visited,
                 visited_inherits,
@@ -4685,7 +5304,8 @@ fn add_payload_edge_opinions(
 
         // Handle nested payloads inside payload targets.
         let nested_payloads = arcs.payloads;
-        for (nested_index, nested_payload) in nested_payloads.into_iter().enumerate() {
+        for (nested_index, (nested_payload, sites)) in nested_payloads.into_iter().enumerate() {
+            let branch = nodes.branch_path(&sites, edge_variant_nested);
             let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
@@ -4698,6 +5318,7 @@ fn add_payload_edge_opinions(
                 specializes,
                 namespace_depth,
                 nested_index,
+                ArcParent::nested(&branch),
                 out,
                 visited,
                 visited_inherits,
@@ -4712,7 +5333,8 @@ fn add_payload_edge_opinions(
 
         // Handle nested specializes inside payload targets, placed as for
         // references (AOUSD Core §10.4.1).
-        for (spec_index, specialized_root) in arcs.specializes.into_iter().enumerate() {
+        for (spec_index, (specialized_root, sites)) in arcs.specializes.into_iter().enumerate() {
+            let branch = nodes.branch_path(&sites, edge_variant_nested);
             let spec_index = u16::try_from(spec_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
@@ -4742,6 +5364,7 @@ fn add_payload_edge_opinions(
                     &chain(true),
                     namespace_depth,
                     spec_index,
+                    ArcParent::nested(&branch).implied(),
                     out,
                     visited_specializes,
                     prim_order_out,
@@ -4763,6 +5386,7 @@ fn add_payload_edge_opinions(
                 &chain(false),
                 namespace_depth,
                 spec_index,
+                ArcParent::nested(&branch),
                 out,
                 visited_specializes,
                 prim_order_out,
@@ -4794,6 +5418,7 @@ fn add_specializes_opinions(
         cycles.begin(dest_root);
         let specializes =
             resolve_specializes_for_prim(store, local_stack, dest_root, SelectionScope::Stack);
+        let selections = resolve_full_variant_selections(store, local_stack, dest_root);
         for (arc_list_index, specialized_root) in specializes.into_iter().enumerate() {
             let arc_list_index = u16::try_from(arc_list_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -4806,6 +5431,19 @@ fn add_specializes_opinions(
                     layer: local_stack.layers[0],
                 });
             }
+            let sites = ArcAuthoring {
+                store,
+                stack: local_stack,
+                prim: dest_root,
+                selections: &selections,
+                scope: SelectionScope::Stack,
+            }
+            .sites(
+                &specialized_root,
+                |spec| &spec.specializes,
+                |branch| &branch.specializes,
+            );
+            let branch = local_variant_steps(root_layer_stack(out, dest_root), &sites);
             add_specializes_edge_opinions(
                 store,
                 local_stack,
@@ -4823,6 +5461,7 @@ fn add_specializes_opinions(
                 }],
                 namespace_depth,
                 arc_list_index,
+                ArcParent::nested(&branch),
                 out,
                 &mut visited,
                 prim_order_out,
@@ -4856,6 +5495,8 @@ fn add_specializes_edge_opinions(
     specializes: &[SpecializesOrigin],
     namespace_depth: u16,
     arc_list_index: u16,
+    // The arcs this arc is authored inside, and whether it is implied.
+    parent: ArcParent<'_>,
     out: &mut HashMap<PathId, PrimIndex>,
     visited: &mut HashSet<(PathId, PathId)>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
@@ -4951,6 +5592,33 @@ fn add_specializes_edge_opinions(
     // authored inside it nest under that node.
     let arc_kind = ArcKind::Specializes;
     let nested_arc_kind: Option<ArcKind> = None;
+    // TODO(graph): SpecializesPlacement. OpenUSD propagates a specializes
+    // node to the root of the prim index, with the node where the arc is
+    // authored as its origin (`_EvalImpliedSpecializes` in
+    // `pxr/usd/pcp/primIndex.cpp`); this keeps the node where the arc is
+    // authored and ranks it globally weaker through its strength's
+    // specializes chain instead.
+    let mut nodes = ArcNodes::new(
+        parent,
+        ArcStep {
+            arc_kind: ArcKind::Specializes,
+            layer_stack: arc_stack,
+            target: StepTarget::Namespace {
+                dest_root,
+                target_root: specialized_root,
+            },
+            namespace_depth,
+            sibling_index: arc_list_index,
+            implied: false,
+            strength: arc_strength(
+                specializes,
+                arc_kind,
+                nested_arc_kind,
+                namespace_depth,
+                arc_list_index,
+            ),
+        },
+    );
     let forwarding = Forwarding {
         specializes,
         arc_kind,
@@ -4962,14 +5630,7 @@ fn add_specializes_edge_opinions(
     for (layer_strength_idx, layer_id) in local_stack.layers.iter().copied().enumerate() {
         let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
         let layer_offset = base_offset.compose(local_stack.offset_at(layer_strength_idx));
-        let mut pending: Vec<(
-            PathId,
-            PathId,
-            SpecPath,
-            TokenId,
-            OpinionValue,
-            Option<PropertyType>,
-        )> = Vec::new();
+        let mut pending: Vec<PendingOpinion> = Vec::new();
         let mut pending_sources = Vec::new();
         {
             let Some(layer) = store.layer(layer_id).cloned() else {
@@ -4993,16 +5654,12 @@ fn add_specializes_edge_opinions(
                     if let Some(d) = deps.as_deref_mut() {
                         d.add_layer_opinion(layer_id, *dest_path_id);
                     }
+                    let node =
+                        nodes.spec_node(store, out, *dest_path_id, &spec.outer_variant_sites);
                     if let Some(order) = &spec.prim_order {
                         prim_order_out.entry(*dest_path_id).or_default().push((
                             OpinionKey {
-                                is_local: false,
-                                specializes: specializes.to_vec(),
-                                arc_kind,
-                                nested_arc_kind,
-                                namespace_depth,
-                                authored: true,
-                                arc_list_index,
+                                node,
                                 layer_strength,
                                 layer_id,
                                 lookup_path: *remote_path_id,
@@ -5023,13 +5680,7 @@ fn add_specializes_edge_opinions(
                             .or_default()
                             .push((
                                 OpinionKey {
-                                    is_local: false,
-                                    specializes: specializes.to_vec(),
-                                    arc_kind,
-                                    nested_arc_kind,
-                                    namespace_depth,
-                                    authored: true,
-                                    arc_list_index,
+                                    node,
                                     layer_strength,
                                     layer_id,
                                     lookup_path: *remote_path_id,
@@ -5047,13 +5698,7 @@ fn add_specializes_edge_opinions(
                     pending_sources.push((
                         *dest_path_id,
                         OpinionKey {
-                            is_local: false,
-                            specializes: specializes.to_vec(),
-                            arc_kind,
-                            nested_arc_kind,
-                            namespace_depth,
-                            authored: true,
-                            arc_list_index,
+                            node,
                             layer_strength,
                             layer_id,
                             lookup_path: *remote_path_id,
@@ -5079,6 +5724,7 @@ fn add_specializes_edge_opinions(
                             entry.name(),
                             entry.value(),
                             entry.property_type().cloned(),
+                            node,
                         ));
                     }
 
@@ -5102,25 +5748,39 @@ fn add_specializes_edge_opinions(
                                     variant: *selected,
                                 },
                             );
+                            let branch_path = normalized_variant_spec_path(
+                                store,
+                                *remote_path_id,
+                                &branch_selections,
+                                provenance_remap,
+                            );
+                            let variant_node = nodes.variant_node(
+                                store,
+                                out,
+                                *dest_path_id,
+                                &branch_selections,
+                                nested_arc_kind.or(Some(ArcKind::Variants)),
+                            );
+                            // TODO(graph): NestedArcDepth. The branch's
+                            // opinions rank with the specializes node's own
+                            // opinions, not with the branch's variant node,
+                            // which OpenUSD ranks beneath the specialized
+                            // site (`PcpCompareSiblingNodeStrength`).
+                            let branch_opinions_node = nodes.variant_node(
+                                store,
+                                out,
+                                *dest_path_id,
+                                &branch_selections,
+                                nested_arc_kind,
+                            );
                             pending_sources.push((
                                 *dest_path_id,
                                 OpinionKey {
-                                    is_local: false,
-                                    specializes: specializes.to_vec(),
-                                    arc_kind,
-                                    nested_arc_kind: nested_arc_kind.or(Some(ArcKind::Variants)),
-                                    namespace_depth,
-                                    authored: true,
-                                    arc_list_index,
+                                    node: variant_node,
                                     layer_strength,
                                     layer_id,
                                     lookup_path: *remote_path_id,
-                                    spec_path: normalized_variant_spec_path(
-                                        store,
-                                        *remote_path_id,
-                                        &branch_selections,
-                                        provenance_remap,
-                                    ),
+                                    spec_path: branch_path,
                                 },
                             ));
                             for entry in
@@ -5139,6 +5799,7 @@ fn add_specializes_edge_opinions(
                                     entry.name(),
                                     entry.value(),
                                     entry.property_type().cloned(),
+                                    branch_opinions_node,
                                 ));
                             }
                         }
@@ -5153,17 +5814,12 @@ fn add_specializes_edge_opinions(
                 .add_source(key);
         }
 
-        for (dest_path_id, remote_path_id, spec_path, field, value, property_type) in pending {
+        for (dest_path_id, remote_path_id, spec_path, field, value, property_type, node) in pending
+        {
             let mut value = value;
             remap_opinion_target_paths(store, &base_path, &specialized_path, &mut value);
             let key = OpinionKey {
-                is_local: false,
-                specializes: specializes.to_vec(),
-                arc_kind,
-                nested_arc_kind,
-                namespace_depth,
-                authored: true,
-                arc_list_index,
+                node,
                 layer_strength,
                 layer_id,
                 lookup_path: remote_path_id,
@@ -5187,6 +5843,7 @@ fn add_specializes_edge_opinions(
     for &(remote_path_id, dest_path_id) in &mapping {
         let src_index = out.get(&remote_path_id).cloned();
         if let Some(src_index) = src_index {
+            let mut graft = forwarding.graft(&src_index.graph, remote_path_id, dest_path_id);
             for source in &src_index.sources {
                 if cycles.copies_cycle(
                     store.paths(),
@@ -5196,12 +5853,16 @@ fn add_specializes_edge_opinions(
                 ) {
                     continue;
                 }
-                if source.arc_kind == ArcKind::Local {
+                if src_index.graph.strength(source.node).arc_kind == ArcKind::Local {
                     continue;
                 }
                 let spec_path =
                     normalize_forwarded_spec_path(store, &source.spec_path, provenance_remap);
-                let key = forwarding.key(store, source, remote_path_id, dest_path_id, spec_path);
+                let key = OpinionKey {
+                    node: graft.node(store, out, &mut nodes, source.node),
+                    spec_path,
+                    ..source.clone()
+                };
                 out.get_mut(&dest_path_id)
                     .expect("path exists")
                     .add_source(key);
@@ -5216,7 +5877,7 @@ fn add_specializes_edge_opinions(
                     ) {
                         continue;
                     }
-                    if opinion.key.arc_kind == ArcKind::Local {
+                    if src_index.graph.strength(opinion.key.node).arc_kind == ArcKind::Local {
                         continue;
                     }
                     let spec_path = normalize_forwarded_spec_path(
@@ -5224,16 +5885,15 @@ fn add_specializes_edge_opinions(
                         &opinion.key.spec_path,
                         provenance_remap,
                     );
+                    let node = graft.node(store, out, &mut nodes, opinion.key.node);
                     out.get_mut(&dest_path_id)
                         .expect("path exists")
                         .add_opinion(Opinion {
-                            key: forwarding.key(
-                                store,
-                                &opinion.key,
-                                remote_path_id,
-                                dest_path_id,
+                            key: OpinionKey {
+                                node,
                                 spec_path,
-                            ),
+                                ..opinion.key.clone()
+                            },
                             field: opinion.field,
                             value: opinion.value.clone(),
                             layer_offset: opinion.layer_offset,
@@ -5268,7 +5928,8 @@ fn add_specializes_edge_opinions(
             &mut host_selection_cache,
         );
         let nested_specializes = arcs.specializes;
-        for (nested_index, nested) in nested_specializes.into_iter().enumerate() {
+        for (nested_index, (nested, sites)) in nested_specializes.into_iter().enumerate() {
+            let branch = nodes.branch_path(&sites, nested_arc_kind.or(Some(ArcKind::Variants)));
             let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
@@ -5301,6 +5962,7 @@ fn add_specializes_edge_opinions(
                     &chain(true),
                     namespace_depth,
                     nested_index,
+                    ArcParent::nested(&branch).implied(),
                     out,
                     visited,
                     prim_order_out,
@@ -5329,6 +5991,7 @@ fn add_specializes_edge_opinions(
                         &chain(true),
                         namespace_depth,
                         nested_index,
+                        ArcParent::nested(&branch).implied(),
                         out,
                         visited,
                         prim_order_out,
@@ -5351,6 +6014,7 @@ fn add_specializes_edge_opinions(
                 &chain(false),
                 namespace_depth,
                 nested_index,
+                ArcParent::nested(&branch),
                 out,
                 visited,
                 prim_order_out,
@@ -5398,7 +6062,8 @@ fn add_specializes_edge_opinions(
             &mut host_selection_cache,
         );
         let nested_inherits = arcs.inherits;
-        for (nested_index, inherited) in nested_inherits.into_iter().enumerate() {
+        for (nested_index, (inherited, sites)) in nested_inherits.into_iter().enumerate() {
+            let branch = nodes.branch_path(&sites, nested_arc_kind.or(Some(ArcKind::Variants)));
             let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
@@ -5418,18 +6083,19 @@ fn add_specializes_edge_opinions(
                 )),
                 _ => None,
             };
+            // Each target, and whether it is an implied copy of the class.
             let mut targets = Vec::with_capacity(3);
             if translated != inherited {
-                targets.push(translated);
+                targets.push((translated, true));
             }
             if let Some(parent_translated) = parent_translated
                 && parent_translated != translated
                 && parent_translated != inherited
             {
-                targets.push(parent_translated);
+                targets.push((parent_translated, true));
             }
-            targets.push(inherited);
-            for target in targets {
+            targets.push((inherited, false));
+            for (target, implied) in targets {
                 add_inherit_edge_opinions(
                     store,
                     local_stack,
@@ -5440,6 +6106,11 @@ fn add_specializes_edge_opinions(
                     specializes,
                     namespace_depth,
                     nested_index,
+                    if implied {
+                        ArcParent::nested(&branch).implied()
+                    } else {
+                        ArcParent::nested(&branch)
+                    },
                     out,
                     &mut visited_inherits,
                     visited,
@@ -5487,7 +6158,8 @@ fn add_specializes_edge_opinions(
             selection_path_id,
             &mut host_selection_cache,
         );
-        for (ref_index, reference) in arcs.references.into_iter().enumerate() {
+        for (ref_index, (reference, sites)) in arcs.references.into_iter().enumerate() {
+            let branch = nodes.branch_path(&sites, nested_arc_kind.or(Some(ArcKind::Variants)));
             let ref_index = u16::try_from(ref_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
@@ -5501,6 +6173,7 @@ fn add_specializes_edge_opinions(
                 specializes,
                 namespace_depth,
                 ref_index,
+                ArcParent::nested(&branch),
                 out,
                 &mut visited_refs,
                 &mut visited_inherits,
@@ -5515,7 +6188,8 @@ fn add_specializes_edge_opinions(
 
         // Payloads authored in the specialized class propagate like its
         // references.
-        for (payload_index, payload) in arcs.payloads.into_iter().enumerate() {
+        for (payload_index, (payload, sites)) in arcs.payloads.into_iter().enumerate() {
+            let branch = nodes.branch_path(&sites, nested_arc_kind.or(Some(ArcKind::Variants)));
             let payload_index = u16::try_from(payload_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
@@ -5528,6 +6202,7 @@ fn add_specializes_edge_opinions(
                 specializes,
                 namespace_depth,
                 payload_index,
+                ArcParent::nested(&branch),
                 out,
                 &mut visited_refs,
                 &mut visited_inherits,
@@ -5546,6 +6221,7 @@ fn add_specializes_edge_opinions(
     for &(remote_path_id, dest_path_id) in &mapping {
         let src_index = out.get(&remote_path_id).cloned();
         if let Some(src_index) = src_index {
+            let mut graft = forwarding.graft(&src_index.graph, remote_path_id, dest_path_id);
             for source in &src_index.sources {
                 if cycles.copies_cycle(
                     store.paths(),
@@ -5555,12 +6231,16 @@ fn add_specializes_edge_opinions(
                 ) {
                     continue;
                 }
-                if source.arc_kind == ArcKind::Local {
+                if src_index.graph.strength(source.node).arc_kind == ArcKind::Local {
                     continue;
                 }
                 let spec_path =
                     normalize_forwarded_spec_path(store, &source.spec_path, provenance_remap);
-                let key = forwarding.key(store, source, remote_path_id, dest_path_id, spec_path);
+                let key = OpinionKey {
+                    node: graft.node(store, out, &mut nodes, source.node),
+                    spec_path,
+                    ..source.clone()
+                };
                 out.get_mut(&dest_path_id)
                     .expect("path exists")
                     .add_source(key);
@@ -5575,7 +6255,7 @@ fn add_specializes_edge_opinions(
                     ) {
                         continue;
                     }
-                    if opinion.key.arc_kind == ArcKind::Local {
+                    if src_index.graph.strength(opinion.key.node).arc_kind == ArcKind::Local {
                         continue;
                     }
                     let spec_path = normalize_forwarded_spec_path(
@@ -5583,16 +6263,15 @@ fn add_specializes_edge_opinions(
                         &opinion.key.spec_path,
                         provenance_remap,
                     );
+                    let node = graft.node(store, out, &mut nodes, opinion.key.node);
                     out.get_mut(&dest_path_id)
                         .expect("path exists")
                         .add_opinion(Opinion {
-                            key: forwarding.key(
-                                store,
-                                &opinion.key,
-                                remote_path_id,
-                                dest_path_id,
+                            key: OpinionKey {
+                                node,
                                 spec_path,
-                            ),
+                                ..opinion.key.clone()
+                            },
                             field: opinion.field,
                             value: opinion.value.clone(),
                             layer_offset: opinion.layer_offset,
@@ -5604,24 +6283,32 @@ fn add_specializes_edge_opinions(
     cycles.exit();
 }
 
+/// Orders each prim's children from the `authored_children` and
+/// `prim_order` opinions of its sources, whose keys name nodes of the
+/// prim's graph in `prims`.
 fn apply_child_order(
     store: &dyn LayerStore,
+    prims: &HashMap<PathId, PrimIndex>,
     authored_children: &HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     prim_order: &HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     children: &mut HashMap<PathId, Vec<PathId>>,
 ) {
     for (parent, list) in children.iter_mut() {
+        let Some(graph) = prims.get(parent).map(|index| &index.graph) else {
+            continue;
+        };
         if let Some(opinions) = authored_children.get(parent) {
-            apply_authored_children_base_order(store, list, opinions);
+            apply_authored_children_base_order(store, graph, list, opinions);
         }
         if let Some(opinions) = prim_order.get(parent) {
-            apply_prim_order_chain(store, list, opinions);
+            apply_prim_order_chain(store, graph, list, opinions);
         };
     }
 }
 
 fn apply_authored_children_base_order(
     store: &dyn LayerStore,
+    graph: &PrimIndexGraph,
     children: &mut Vec<PathId>,
     opinions: &[(OpinionKey, Vec<TokenId>)],
 ) {
@@ -5648,13 +6335,13 @@ fn apply_authored_children_base_order(
     // opinions walk the combined stack and their `layer_strength` reflects the
     // correct position of each layer in the unified composition order.
     //
-    // References and payloads nested inside another arc keep
-    // `nested_arc_kind = Some(References | Payloads)` for strength ordering,
+    // References and payloads nested inside another arc keep a node strength
+    // of `nested_arc_kind = Some(References | Payloads)` for strength ordering,
     // but they do not walk the combined stack and so are not a reliable layer
     // position source; treat them like direct opinions here.
     let walks_combined_stack = |key: &OpinionKey| {
         matches!(
-            key.nested_arc_kind,
+            graph.strength(key.node).nested_arc_kind,
             Some(kind) if !matches!(kind, ArcKind::References | ArcKind::Payloads)
         )
     };
@@ -5674,13 +6361,14 @@ fn apply_authored_children_base_order(
     let max_inherit_pos = layer_position.values().copied().max().unwrap_or(0);
     for (key, _) in opinions {
         layer_position.entry(key.layer_id).or_insert_with(|| {
-            if key.is_local {
+            let strength = graph.strength(key.node);
+            if strength.is_local {
                 0
             } else {
                 // Place after all inherit-discovered layers, offset by
                 // namespace_depth to preserve relative ordering among
                 // layers that only have direct reference opinions.
-                max_inherit_pos + 1 + key.namespace_depth
+                max_inherit_pos + 1 + strength.namespace_depth
             }
         });
     }
@@ -5702,7 +6390,10 @@ fn apply_authored_children_base_order(
             return pos;
         }
         // Within the same layer: local first, then direct, then nested.
-        match (a.0.is_local, b.0.is_local) {
+        match (
+            graph.strength(a.0.node).is_local,
+            graph.strength(b.0.node).is_local,
+        ) {
             (true, false) => return Ordering::Less,
             (false, true) => return Ordering::Greater,
             _ => {}
@@ -5742,6 +6433,7 @@ fn apply_authored_children_base_order(
 
 fn apply_prim_order_chain(
     store: &dyn LayerStore,
+    graph: &PrimIndexGraph,
     children: &mut Vec<PathId>,
     opinions: &[(OpinionKey, Vec<TokenId>)],
 ) {
@@ -5752,7 +6444,7 @@ fn apply_prim_order_chain(
     // This matches the supplemental composition fixtures (e.g.
     // `BasicListEditing_root`).
     let mut sorted = opinions.to_vec();
-    sorted.sort_by(|a, b| a.0.cmp_strongest_first(&b.0));
+    sorted.sort_by(|a, b| graph.cmp_keys(&a.0, &b.0));
     for (_, order) in sorted.into_iter().rev() {
         apply_reorder_op(store, children, &order);
     }
@@ -5873,16 +6565,28 @@ mod child_order_tests {
             .paths
             .intern(Path::parse_absolute("/_C", &mut store.tokens).unwrap());
 
+        // The prim's local node, a reference at `/P` and one at `/P/I`, and
+        // an inherit inside the reference at `/P/I`.
+        let reference = |nested_arc_kind, namespace_depth| NodeStrength {
+            is_local: false,
+            arc_kind: ArcKind::References,
+            nested_arc_kind,
+            ..NodeStrength::local(namespace_depth)
+        };
+        let graph = PrimIndexGraph::from_strengths(
+            prim_spec_path(&store, sp_local, &[]),
+            NodeStrength::local(2),
+            [
+                reference(None, 1),
+                reference(None, 2),
+                reference(Some(ArcKind::Inherits), 2),
+            ],
+        );
+        let ids: Vec<NodeId> = graph.nodes().map(|(id, _)| id).collect();
         let opinions: Vec<(OpinionKey, Vec<TokenId>)> = vec![
             (
                 OpinionKey {
-                    is_local: true,
-                    specializes: Vec::new(),
-                    arc_kind: ArcKind::Local,
-                    nested_arc_kind: None,
-                    namespace_depth: 2,
-                    authored: true,
-                    arc_list_index: 0,
+                    node: ids[0],
                     layer_strength: 0,
                     layer_id: root_layer,
                     lookup_path: sp_local,
@@ -5892,13 +6596,7 @@ mod child_order_tests {
             ),
             (
                 OpinionKey {
-                    is_local: false,
-                    specializes: Vec::new(),
-                    arc_kind: ArcKind::References,
-                    nested_arc_kind: None,
-                    namespace_depth: 1,
-                    authored: true,
-                    arc_list_index: 0,
+                    node: ids[1],
                     layer_strength: 0,
                     layer_id: set_layer,
                     lookup_path: sp_set,
@@ -5908,13 +6606,7 @@ mod child_order_tests {
             ),
             (
                 OpinionKey {
-                    is_local: false,
-                    specializes: Vec::new(),
-                    arc_kind: ArcKind::References,
-                    nested_arc_kind: None,
-                    namespace_depth: 2,
-                    authored: true,
-                    arc_list_index: 0,
+                    node: ids[2],
                     layer_strength: 0,
                     layer_id: prop_layer,
                     lookup_path: sp_prop,
@@ -5924,13 +6616,7 @@ mod child_order_tests {
             ),
             (
                 OpinionKey {
-                    is_local: false,
-                    specializes: Vec::new(),
-                    arc_kind: ArcKind::References,
-                    nested_arc_kind: Some(ArcKind::Inherits),
-                    namespace_depth: 2,
-                    authored: true,
-                    arc_list_index: 0,
+                    node: ids[3],
                     layer_strength: 0,
                     layer_id: root_layer,
                     lookup_path: sp_class,
@@ -5940,13 +6626,7 @@ mod child_order_tests {
             ),
             (
                 OpinionKey {
-                    is_local: false,
-                    specializes: Vec::new(),
-                    arc_kind: ArcKind::References,
-                    nested_arc_kind: Some(ArcKind::Inherits),
-                    namespace_depth: 2,
-                    authored: true,
-                    arc_list_index: 0,
+                    node: ids[3],
                     layer_strength: 1,
                     layer_id: set_layer,
                     lookup_path: sp_class,
@@ -5957,7 +6637,7 @@ mod child_order_tests {
         ];
 
         let mut children = vec![c_geom, c_fr, c_fs, c_fcr, c_fcs];
-        apply_authored_children_base_order(&store, &mut children, &opinions);
+        apply_authored_children_base_order(&store, &graph, &mut children, &opinions);
 
         let result: Vec<&str> = children
             .iter()
@@ -6071,21 +6751,18 @@ mod child_order_tests {
         prims.insert(
             parent_path,
             PrimIndex {
-                opinions_by_field: HashMap::new(),
-                property_types_by_field: HashMap::new(),
                 sources: vec![OpinionKey {
-                    is_local: true,
-                    specializes: Vec::new(),
-                    arc_kind: ArcKind::Local,
-                    nested_arc_kind: None,
-                    namespace_depth: 1,
-                    authored: true,
-                    arc_list_index: 0,
+                    node: NodeId::ROOT,
                     layer_strength: 0,
                     layer_id,
                     lookup_path: parent_path,
                     spec_path: prim_spec_path(&store, parent_path, &[]),
                 }],
+                ..PrimIndex::new(PrimIndexGraph::from_strengths(
+                    prim_spec_path(&store, parent_path, &[]),
+                    NodeStrength::local(1),
+                    [],
+                ))
             },
         );
 

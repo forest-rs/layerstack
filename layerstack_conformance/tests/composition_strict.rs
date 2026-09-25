@@ -59,8 +59,10 @@
 //!   ([`Cause::ImpliedClasses`]), arcs nested two or more deep
 //!   ([`Cause::NestedArcDepth`]) and implied specializes as nodes of their
 //!   own ([`Cause::SpecializesPlacement`]). These change resolved values in
-//!   several fixtures. Fixing them needs a composition context that records
-//!   the arc path (node) of each source instead of one nested arc kind.
+//!   several fixtures. Each prim's composition graph
+//!   ([`Stage::explain_prim_graph`]) records the arc path of every source;
+//!   fixing them means ranking sources by walking that graph instead of by
+//!   each node's flat strength key, which holds one nested arc kind.
 //! - One site per arc path ([`Cause::CollapsedNodes`]) and one registration
 //!   per arc path ([`Cause::DuplicateSources`]); the same node model would
 //!   remove both.
@@ -504,7 +506,7 @@ enum Cause {
     /// Layerstack ranks every implied copy inside the nested arc's bucket, so
     /// `root.usd /Class` sorts after the reference target.
     ImpliedClasses,
-    /// `OpinionKey::nested_arc_kind` holds one nested arc kind, while OpenUSD
+    /// A graph node's strength key holds one nested arc kind, while OpenUSD
     /// orders arcs per introducing layer stack (AOUSD Core §10.4;
     /// `pxr/usd/pcp/strengthOrdering.cpp`),
     /// so arcs nested two or more deep, and the arcs of a nested target,

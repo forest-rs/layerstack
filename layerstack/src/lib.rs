@@ -78,6 +78,7 @@ pub mod listop;
 pub mod path;
 pub(crate) mod population;
 pub mod prim_index;
+pub mod prim_index_graph;
 pub mod property;
 pub mod schema;
 pub mod spec_path;
@@ -107,7 +108,8 @@ pub use path::{
     Path, PathError, PathId, PathInterner, PropertyPath, PropertyPathError, TargetPath,
     TargetPathError,
 };
-pub use prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue, SpecializesOrigin};
+pub use prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue};
+pub use prim_index_graph::{NodeId, PrimIndexGraph, PrimNode};
 pub use property::{
     PropertyEntry, PropertyKind, PropertySpec, PropertyType, TimeSample, Variability,
 };

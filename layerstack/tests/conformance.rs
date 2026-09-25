@@ -9,10 +9,21 @@ extern crate alloc;
 
 use layerstack::{
     ArcKind, ArrayEdit, ArrayEditOp, FieldEntry, FieldValue, InterpolationType, Layer, LayerId,
-    ListOp, PrimSpec, PropertyPath, PropertySpec, PropertyType, Reference, ResolvedValue,
-    SchemaDefinition, SchemaRegistry, Stage, StageOptions, SublayerEntry, TargetPath, Value,
-    VariantSetSpec, VariantSpec, doc::InMemoryStore,
+    ListOp, NodeId, PrimIndexGraph, PrimSpec, PropertyPath, PropertySpec, PropertyType, Reference,
+    ResolvedValue, SchemaDefinition, SchemaRegistry, Stage, StageOptions, SublayerEntry,
+    TargetPath, Value, VariantSetSpec, VariantSpec, doc::InMemoryStore,
 };
+
+/// The arc kinds from the root of `graph` to `node`, outermost first.
+fn arc_path(graph: &PrimIndexGraph, mut node: NodeId) -> Vec<ArcKind> {
+    let mut kinds = Vec::new();
+    while let Some(parent) = graph.node(node).expect("node exists").parent() {
+        kinds.push(graph.node(node).expect("node exists").arc_kind());
+        node = parent;
+    }
+    kinds.reverse();
+    kinds
+}
 
 /// An attribute spec authoring only `samples`.
 fn sampled(samples: Vec<(f64, Value)>) -> PropertySpec {
@@ -2565,16 +2576,17 @@ fn nested_reference_is_weaker_than_referenced_site_opinions() {
     );
 
     let opinions = stage.explain_field(root_child, field_x).expect("opinions");
+    let graph = stage.explain_prim_graph(root_child).expect("graph");
     assert_eq!(opinions.len(), 2, "both opinions participate");
     assert_eq!(
-        (opinions[0].key.arc_kind, opinions[0].key.nested_arc_kind),
-        (ArcKind::References, None),
+        arc_path(graph, opinions[0].key.node),
+        [ArcKind::References],
         "direct referenced opinion is strongest"
     );
     assert_eq!(
-        (opinions[1].key.arc_kind, opinions[1].key.nested_arc_kind),
-        (ArcKind::References, Some(ArcKind::References)),
-        "nested reference stays in the outer reference bucket"
+        arc_path(graph, opinions[1].key.node),
+        [ArcKind::References, ArcKind::References],
+        "nested reference stays beneath the outer reference"
     );
 }
 
@@ -2612,10 +2624,11 @@ fn reference_nested_in_payload_is_weaker_than_payload_site() {
     let resolved = stage.resolve_field(p, field_x).expect("field exists");
     assert_eq!(resolved.value, Value::Int64(2), "payload site must win");
     let opinions = stage.explain_field(p, field_x).expect("opinions");
+    let graph = stage.explain_prim_graph(p).expect("graph");
     assert!(
         opinions
             .iter()
-            .all(|op| op.key.arc_kind == ArcKind::Payloads),
+            .all(|op| arc_path(graph, op.key.node).first() == Some(&ArcKind::Payloads)),
         "everything under the payload stays at payload strength"
     );
 }

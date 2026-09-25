@@ -20,6 +20,7 @@ use crate::{
     layer_stack::LayerStack,
     listop::{ListOp, resolve_list_chain},
     path::{Path, PathId},
+    spec_path::VariantSelectionSite,
 };
 
 /// Returns the prim path `reference` targets, like
@@ -167,6 +168,121 @@ fn variant_host_specs<'a>(
         .prim_specs(prim)
         .filter(|spec| spec_branches_selected(store, stack, spec, scope))
         .collect()
+}
+
+/// Finds where the arcs resolved for `prim` in `stack` are authored among its
+/// variant branches.
+///
+/// Arc resolution chains every spec's list op into one list; this finds, for
+/// one arc of that list, the strongest opinion that adds it, so the arc's
+/// node can be placed beneath the variant node of the branch that authors
+/// it.
+///
+/// Spec: AOUSD Core §10.3.2.5 (arcs authored inside a variant apply when it
+/// is selected). OpenUSD adds them beneath the variant node
+/// (`pxr/usd/pcp/primIndex.cpp`, `_AddVariantArc`, `_AddArc`).
+pub(crate) struct ArcAuthoring<'a> {
+    pub(crate) store: &'a dyn LayerStore,
+    pub(crate) stack: &'a LayerStack,
+    pub(crate) prim: PathId,
+    /// The variant selections of `prim`'s own variant sets.
+    pub(crate) selections: &'a HashMap<TokenId, TokenId>,
+    /// Decides whether the branches enclosing a spec are selected.
+    pub(crate) scope: SelectionScope<'a>,
+}
+
+impl ArcAuthoring<'_> {
+    /// Returns the variant branches that author `item`, outermost first:
+    /// empty for an arc authored on a spec outside every branch, the
+    /// enclosing branches of a selected spec authored inside branches
+    /// (`/P{v=x}C`), or the selected branch of one of the prim's own variant
+    /// sets whose header authors it (`/P{v=x}`), after the branches enclosing
+    /// that set.
+    pub(crate) fn sites<T: PartialEq>(
+        &self,
+        item: &T,
+        spec_arcs: fn(&PrimSpec) -> &ListOp<T>,
+        branch_arcs: fn(&VariantSpec) -> &ListOp<T>,
+    ) -> Vec<VariantSelectionSite> {
+        let Self {
+            store,
+            stack,
+            prim,
+            selections,
+            scope,
+        } = *self;
+        let adds = |op: &ListOp<T>| {
+            op.explicit
+                .as_ref()
+                .is_some_and(|items| items.contains(item))
+                || op.prepend.contains(item)
+                || op.append.contains(item)
+        };
+        let layers = || stack.layers.iter().filter_map(|id| store.layer(*id));
+        let outside = layers().any(|layer| {
+            layer
+                .prim_specs(prim)
+                .any(|spec| spec.outer_variant_sites.is_empty() && adds(spec_arcs(spec)))
+        });
+        if outside {
+            return Vec::new();
+        }
+        for layer in layers() {
+            for spec in layer.prim_specs(prim) {
+                if !spec.outer_variant_sites.is_empty()
+                    && adds(spec_arcs(spec))
+                    && spec_branches_selected(store, stack, spec, scope)
+                {
+                    return spec.outer_variant_sites.clone();
+                }
+            }
+        }
+        let mut selected: Vec<(TokenId, TokenId)> = selections
+            .iter()
+            .map(|(set, variant)| (*set, *variant))
+            .collect();
+        selected.sort_unstable();
+        for layer in layers() {
+            for spec in variant_host_specs(store, stack, layer, prim, scope) {
+                for &(set, variant) in &selected {
+                    let Some(branch) = spec
+                        .variant_sets
+                        .get(&set)
+                        .and_then(|set_spec| set_spec.variants.get(&variant))
+                    else {
+                        continue;
+                    };
+                    if adds(branch_arcs(branch)) {
+                        let mut sites = branch.outer_variant_sites.clone();
+                        sites.push(VariantSelectionSite {
+                            host_path: prim,
+                            set,
+                            variant,
+                        });
+                        return sites;
+                    }
+                }
+            }
+        }
+        Vec::new()
+    }
+
+    /// Pairs each arc of `items` with the branches that author it (see
+    /// [`Self::sites`]).
+    pub(crate) fn with_sites<T: PartialEq>(
+        &self,
+        items: Vec<T>,
+        spec_arcs: fn(&PrimSpec) -> &ListOp<T>,
+        branch_arcs: fn(&VariantSpec) -> &ListOp<T>,
+    ) -> Vec<(T, Vec<VariantSelectionSite>)> {
+        items
+            .into_iter()
+            .map(|item| {
+                let sites = self.sites(&item, spec_arcs, branch_arcs);
+                (item, sites)
+            })
+            .collect()
+    }
 }
 
 /// Returns the parent of `prim`, if it has been interned.

@@ -22,6 +22,7 @@ use crate::{
     listop::{ListOp, resolve_list_chain},
     path::{PathId, PropertyPath, TargetPath},
     prim_index::{Opinion, OpinionKey, OpinionValue, PrimIndex},
+    prim_index_graph::PrimIndexGraph,
     property::{PropertyKind, PropertySpec, PropertyType, Variability},
     schema::SchemaRegistry,
     spec_path::SpecPath,
@@ -1003,6 +1004,22 @@ impl Stage {
         self.prims.get(&prim).map(|index| index.sources.as_slice())
     }
 
+    /// Returns the composition graph of `prim`: one node per arc expansion
+    /// that contributes to it, with its arc kind, layer stack, site and
+    /// parent. Every [`OpinionKey::node`] of the prim's opinions and sources
+    /// names a node of this graph.
+    ///
+    /// This is an inspection API intended for conformance and debugging;
+    /// see [`PrimIndexGraph`] for how the graph relates to strength order.
+    /// It mirrors OpenUSD's `PcpPrimIndex::GetGraph()`
+    /// (`pxr/usd/pcp/primIndex.h`).
+    ///
+    /// Spec: AOUSD Core §10.4 (strength ordering).
+    #[must_use]
+    pub fn explain_prim_graph(&self, prim: PathId) -> Option<&PrimIndexGraph> {
+        self.prims.get(&prim).map(|index| &index.graph)
+    }
+
     /// Returns the composed prim stack as `(layer_id, spec_path)` pairs (strongest-first).
     ///
     /// Each `(layer, spec)` site appears once, at its strongest position; use
@@ -1448,13 +1465,7 @@ mod tests {
         let mut paths = PathInterner::default();
         let spec_path = SpecPath::parse("/A", &mut tokens, &mut paths).expect("spec path");
         OpinionKey {
-            is_local: true,
-            specializes: Vec::new(),
-            arc_kind: crate::prim_index::ArcKind::Local,
-            nested_arc_kind: None,
-            namespace_depth: 1,
-            authored: true,
-            arc_list_index: 0,
+            node: crate::prim_index_graph::NodeId::ROOT,
             layer_strength: 0,
             layer_id: layer,
             lookup_path,

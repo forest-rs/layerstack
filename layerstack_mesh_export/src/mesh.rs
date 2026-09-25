@@ -273,6 +273,20 @@ impl PrimvarData<'_> {
         }
     }
 
+    /// Element `i` alone, as a one-element array of the same type.
+    pub(crate) fn element(&self, i: usize) -> Value {
+        match self {
+            Self::Float(v) => Value::FloatArray(alloc::vec![v[i]]),
+            Self::Float2(v) | Self::TexCoord2(v) => Value::Float2Array(alloc::vec![v[i]]),
+            Self::Float3(v) | Self::Color3(v) | Self::Vector3(v) => {
+                Value::Float3Array(alloc::vec![v[i]])
+            }
+            Self::Float4(v) | Self::Color4(v) => Value::Float4Array(alloc::vec![v[i]]),
+            Self::Int(v) => Value::IntArray(alloc::vec![v[i]]),
+            Self::UInt(v) => Value::UIntArray(alloc::vec![v[i]]),
+        }
+    }
+
     pub(crate) fn to_value(&self) -> Value {
         match self {
             Self::Float(v) => Value::FloatArray(v.to_vec()),

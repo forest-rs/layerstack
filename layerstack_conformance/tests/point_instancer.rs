@@ -4,14 +4,16 @@
 //! `PointInstancer` export checked by OpenUSD.
 //!
 //! A scattered field of three prototypes ([`Field`]) is written as USDA,
-//! USDC and both USDZ profiles. OpenUSD's Python bindings (the Python named
+//! USDC and a generic USDZ package (`ARKit` packages write instanced
+//! references instead; `tests/instanced_references.rs` checks those).
+//! OpenUSD's Python bindings (the Python named
 //! by `LAYERSTACK_USD_PYTHON`, or `python3`, when it imports `pxr`) read
 //! each file through `scripts/point_instancer_oracle.py`: every instance
 //! transform `UsdGeomPointInstancer::ComputeInstanceTransformsAtTime`
 //! computes must match the one the inputs define, and the prototype order,
 //! ids, extent and prototype material bindings must be as authored.
-//! `usdchecker`, when on `PATH`, must accept the layers and, with
-//! `--arkit`, the `ARKit` package. Tools older than the release a check
+//! `usdchecker`, when on `PATH`, must accept each file. Tools older than
+//! the release a check
 //! needs (`export_fixtures::minimum_openusd`) are skipped with the reason
 //! printed; without the tools the tests report that they skipped and pass.
 
@@ -61,7 +63,7 @@ fn too_old(version: &str, name: &str) -> Option<String> {
     }
 }
 
-/// Writes the field as USDA, USDC and both USDZ profiles into `dir`.
+/// Writes the field as USDA, USDC and a generic USDZ package into `dir`.
 fn write_field(field: &Field, dir: &Path) -> Vec<PathBuf> {
     let scene = field.scene();
     let files = [
@@ -70,10 +72,6 @@ fn write_field(field: &Field, dir: &Path) -> Vec<PathBuf> {
         (
             "field.usdz",
             scene.to_usdz(UsdzProfile::Generic, &[]).unwrap(),
-        ),
-        (
-            "field_arkit.usdz",
-            scene.to_usdz(UsdzProfile::Arkit, &[]).unwrap(),
         ),
     ];
     files
@@ -302,17 +300,6 @@ fn usdchecker_accepts_the_field() {
         if let Err(e) = usdchecker(&[layer]) {
             failures.push(format!("usdchecker {}: {e}", layer.display()));
         }
-    }
-    // OpenUSD 26.05 removed `--arkit`; from then on the USDZ validators
-    // always run, so the plain check above covers the package.
-    let help = Command::new("usdchecker").arg("--help").output().unwrap();
-    let arkit = layers.last().unwrap();
-    if !String::from_utf8_lossy(&help.stdout).contains("--arkit") {
-        eprintln!("skipped --arkit: usdchecker {version:?} has no such option");
-    } else if let Some(reason) = too_old(&version, "point_instancer_arkit") {
-        eprintln!("skipped --arkit: usdchecker {reason}");
-    } else if let Err(e) = usdchecker(&[Path::new("--arkit"), arkit]) {
-        failures.push(format!("usdchecker --arkit {}: {e}", arkit.display()));
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }

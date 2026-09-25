@@ -18,7 +18,10 @@ use crate::{CustomAttribute, CustomPrimvar, Primvar, PrimvarData, Transform};
 /// `/<root>/`[`Prototypes`](crate::PROTOTYPES_SCOPE)`/<prototype>`, so its
 /// type, geometry, materials and children all come from the prototype,
 /// and consumers that support scene graph instancing load that geometry
-/// once. The prototype root's own transform still applies, before
+/// once. [`UsdzProfile::Arkit`](crate::UsdzProfile::Arkit) packages leave
+/// `instanceable` out, because Apple's importer also draws each instancing
+/// prototype where it is defined; the reference alone composes the same
+/// prim. The prototype root's own transform still applies, before
 /// [`Self::transform`]; since the instance's `xformOp:transform` replaces
 /// the one the reference brings, the exporter authors their product.
 ///

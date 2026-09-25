@@ -32,7 +32,11 @@ pub enum UsdzProfile {
     /// Types"; `pxr/usd/usdUtils/usdzPackage.h`,
     /// `UsdUtilsCreateNewARKitUsdzPackage`, which flattens to one `.usdc`
     /// first layer). Other members are limited to PNG and JPEG images and
-    /// M4A, MP3 and WAV audio.
+    /// M4A, MP3 and WAV audio. Point instancers are written as references
+    /// ([`Instancing::References`]), whatever [`Scene::instancing`] says,
+    /// and no prim is marked `instanceable`, since Apple's stack draws
+    /// neither `PointInstancer` instances nor scene graph instancing
+    /// correctly.
     Arkit,
 }
 
@@ -56,6 +60,43 @@ impl UsdzProfile {
                 .is_some_and(|(_, ext)| ["png", "jpg", "jpeg", "m4a", "mp3", "wav"].contains(&ext)),
         }
     }
+}
+
+/// How [`PointInstancer`]s are written.
+///
+/// Spec: `UsdGeomPointInstancer`
+/// (<https://openusd.org/dev/api/class_usd_geom_point_instancer.html>);
+/// scene graph instancing, AOUSD Core §11 and §5.1.14 (`instanceable`).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Instancing {
+    /// As `PointInstancer` prims: the most compact form, which OpenUSD and
+    /// Hydra-based viewers draw.
+    #[default]
+    PointInstancers,
+    /// As instanced references: each instancer becomes an `Xform` holding
+    /// its prototypes in a `class` prim named
+    /// [`Prototypes`](crate::PROTOTYPES_SCOPE) (abstract, so not drawn in
+    /// place) and one typeless, `instanceable` prim per instance, with an
+    /// internal reference to its prototype and a single
+    /// `xformOp:transform`: the prototype root's transform followed by the
+    /// instance's scale, rotation and translation. Instances are named by
+    /// [`PointInstancer::names`], or `<prototype>_<index>` without them;
+    /// ids become `int64 instancer:id` ([`INSTANCE_ID`](crate::INSTANCE_ID))
+    /// and per-instance primvars become constant primvars on each
+    /// instance, while constant ones stay on the group. Shared
+    /// prototypes are referenced where they are defined.
+    ///
+    /// Apple's USD stack (AR Quick Look, `RealityKit`, `SceneKit` and
+    /// `ModelIO`) does not implement `UsdGeomPointInstancer`: it draws
+    /// each prototype once, where it is defined, and none of the
+    /// instances, even though `usdchecker --arkit` accepts the file.
+    /// References are what it draws, so [`UsdzProfile::Arkit`] packages
+    /// always use this form. They also leave out `instanceable` (here and
+    /// on every [`Instance`]): Apple's importer draws each scene graph
+    /// instancing prototype (`/__Prototype_N`) once more, at the
+    /// prototype's own origin, besides its instances. The references then
+    /// compose into ordinary prims; the file is no larger.
+    References,
 }
 
 /// The stage's up axis.
@@ -208,6 +249,11 @@ pub struct Scene<'a> {
     /// are not drawn where they are defined (AOUSD Core §7.6, §12.2.1).
     /// Their names must be unique.
     pub prototypes: Vec<Node<'a>>,
+    /// How point instancers are written by [`Self::to_document`],
+    /// [`Self::to_usda`], [`Self::to_usdc`] and generic USDZ packages;
+    /// [`UsdzProfile::Arkit`] packages always use
+    /// [`Instancing::References`].
+    pub instancing: Instancing,
 }
 
 impl<'a> Scene<'a> {
@@ -218,7 +264,15 @@ impl<'a> Scene<'a> {
             root,
             materials: Vec::new(),
             prototypes: Vec::new(),
+            instancing: Instancing::default(),
         }
+    }
+
+    /// Sets how point instancers are written.
+    #[must_use]
+    pub fn with_instancing(mut self, instancing: Instancing) -> Self {
+        self.instancing = instancing;
+        self
     }
 
     /// Adds a shared prototype, which [`Instance`]s name by its prim name.
@@ -253,7 +307,7 @@ impl<'a> Scene<'a> {
     /// material; and [`ExportError::Usda`] for names or values USDA cannot
     /// represent (including duplicate material names).
     pub fn to_document(&self) -> Result<Document, ExportError> {
-        crate::build::document(self)
+        crate::build::document(self, crate::build::Target::stage(self.instancing))
     }
 
     /// Serializes the scene as USDA text.
@@ -326,7 +380,9 @@ impl<'a> Scene<'a> {
         }
         let layer = match profile {
             UsdzProfile::Generic => self.to_usda()?.into_bytes(),
-            UsdzProfile::Arkit => self.to_usdc()?,
+            UsdzProfile::Arkit => {
+                write_document(&crate::build::document(self, crate::build::Target::ARKIT)?)?
+            }
         };
         let mut files = Vec::with_capacity(assets.len() + 1);
         files.push(PackageFile::new(profile.root_layer_path(), &layer));

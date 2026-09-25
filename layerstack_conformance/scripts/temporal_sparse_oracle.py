@@ -547,6 +547,31 @@ case(
 )
 
 case(
+    "half_arrays_interpolate",
+    "Half-precision arrays and half vector arrays interpolate element by "
+    "element, rounding each result to half precision; a sparse edit composes "
+    "first, and arrays of different sizes hold. The values are exact halves.",
+    {
+        "root.usda": sublayers("@strong.usda@", "@weak.usda@"),
+        "strong.usda": layer(prim("over", "A",
+                                  "half[] e.timeSamples = { 1: edit (write 8 to [1]) }")),
+        "weak.usda": layer(prim(
+            "def", "A",
+            "half[] h.timeSamples = { 0: [0, 1, -2, 0.0999755859375], "
+            "2: [1, 3, 0.5, 1000] }",
+            "half3[] v.timeSamples = { 0: [(0, 0, 0), (1, 1, 1)], "
+            "2: [(1, 2, 3), (0.5, 0.25, 2)] }",
+            "half[] sized.timeSamples = { 0: [0, 0], 2: [2, 4, 6] }",
+            "half[] e.timeSamples = { 0: [0, 0], 2: [2, 4] }",
+        )),
+    },
+    {"/A.h": [0, 0.3, 0.5, 1, 1.7, 2],
+     "/A.v": [0, 0.3, 1, 1.9],
+     "/A.sized": [1],
+     "/A.e": [0, 0.5, 1, 1.5, 2]},
+)
+
+case(
     "vector_sparse_over_dense_linear",
     "A sparse vector edit composes over both bracketing dense samples before "
     "interpolating.",
@@ -582,6 +607,22 @@ case(
     },
     {attr: [-1, 0, 0.5, 1, 1.5, 2, 3]
      for attr in ("/A.i", "/A.i64", "/A.f", "/A.d", "/A.v", "/A.dv", "/A.m")},
+)
+
+case(
+    "half_scalars_interpolate",
+    "Half-precision scalars and vectors interpolate, rounding to half "
+    "precision. The values are exact halves.",
+    {
+        "root.usda": layer(prim(
+            "def", "A",
+            "half h.timeSamples = { 0: 0.0999755859375, 2: 1 }",
+            "half2 v2.timeSamples = { 0: (0, 1), 2: (1, 0.5) }",
+            "half3 v3.timeSamples = { 0: (0, 0, 0), 2: (1, 2, 3) }",
+            "half4 v4.timeSamples = { 0: (0, 0, 0, 0), 2: (1, -1, 1000, 0.25) }",
+        )),
+    },
+    {attr: [0, 0.3, 0.5, 1, 1.7] for attr in ("/A.h", "/A.v2", "/A.v3", "/A.v4")},
 )
 
 case(
@@ -707,6 +748,17 @@ exact_case(
      ("matrix4d", "d", ("matrix", 4))],
     seed=0x5eed_0001,
     probes=[("float3", 3, [1e10] * 3, [-1e10] * 3)],
+)
+
+exact_case(
+    "half_vectors_interpolate_bit_exact",
+    "Half scalars and half vectors interpolate bit for bit as OpenUSD does: "
+    "a half scalar in double precision, narrowed once; a half vector scaling "
+    "by the alpha narrowed to float, narrowing each term to half and adding "
+    "in half.",
+    [("half", "h", 1), ("half2", "h", 2), ("half3", "h", 3), ("half4", "h", 4)],
+    seed=0x5eed_0002,
+    probes=[("half2", 2, [-1.3857421875] * 2, [41.375] * 2)],
 )
 
 

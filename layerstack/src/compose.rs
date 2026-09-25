@@ -270,7 +270,7 @@ pub(crate) fn compose_stage(
 
     filter_variant_children(store, &prims, &mut children);
 
-    strip_instance_descendants(
+    let mut instances = strip_instance_descendants(
         store,
         &mut prims,
         &mut children,
@@ -282,6 +282,7 @@ pub(crate) fn compose_stage(
     // Runs last so the ordering passes above see the populated child lists;
     // removal only drops entries.
     remove_prims_without_specs(store, &mut prims, &mut children);
+    instances.retain(|instance| prims.contains_key(instance));
 
     if let Some(builder) = dep_builder.as_mut() {
         builder.retain_prims(&prims);
@@ -296,6 +297,7 @@ pub(crate) fn compose_stage(
         .collect();
     Stage::from_parts(prims, children, options.with_provenance, dependencies)
         .with_composition_errors(errors)
+        .with_instances(instances)
 }
 
 /// The arc path of `node` (see [`PrimIndexGraph::arc_path`]) without the
@@ -1398,7 +1400,12 @@ fn nested_branch_requirements(
 ///    sites reached through arcs authored on the instance's ancestors are
 ///    local to the instance, not brought in by its own arcs. OpenUSD marks
 ///    those nodes inert (`pxr/usd/pcp/instancing.h`,
-///    `Pcp_ChildNodeIsInstanceable`).
+///    `Pcp_ChildNodeIsInstanceable`). An arc authored beneath the instance
+///    survives only when the node it is authored at does, so the local
+///    opinions' own arcs are stripped with them (see
+///    [`contributes_beneath_instance`]).
+///
+/// Returns the effective instances.
 ///
 /// Spec: AOUSD Core §11.3.3 (scene graph instancing: only opinions brought
 /// in by the instance's composition arcs are used), §5.1.14 (instanceable).
@@ -1407,7 +1414,7 @@ fn strip_instance_descendants(
     prims: &mut HashMap<PathId, PrimIndex>,
     children: &mut HashMap<PathId, Vec<PathId>>,
     authored_children_opinions: &HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
-) {
+) -> HashSet<PathId> {
     use hashbrown::HashSet;
 
     // Step 1: Identify effective instances and their identity paths.
@@ -1592,9 +1599,7 @@ fn strip_instance_descendants(
             // survive.
             desc_index.retain_keys(|graph, key| {
                 if key.node != NodeId::ROOT {
-                    return graph
-                        .node(key.node)
-                        .is_some_and(|node| node.namespace_depth() >= instance_depth);
+                    return contributes_beneath_instance(graph, key.node, instance_depth);
                 }
                 !is_identity_descendant(store, key.layer_id, key.lookup_path, identity_paths)
             });
@@ -1639,6 +1644,45 @@ fn strip_instance_descendants(
                     children.remove(&desc_path);
                 }
             }
+        }
+    }
+
+    instance_identity
+        .into_iter()
+        .map(|(instance_path, _)| instance_path)
+        .filter(|instance_path| prims.contains_key(instance_path))
+        .collect()
+}
+
+/// Whether `node` of an instance descendant's graph still contributes
+/// opinions, for an instance at namespace depth `instance_depth`.
+///
+/// Beneath an instance, OpenUSD marks the root node inert, along with every
+/// node reached through an arc authored above the instance: they hold
+/// opinions local to the instance, which are not part of its prototype.
+/// An inert node's own arcs are never evaluated, so an arc authored beneath
+/// the instance survives only when the node it is authored at does. An arc
+/// authored at the instance itself survives: the instance's own arcs bring
+/// in the prototype.
+///
+/// Spec: AOUSD Core §11.3.3 (scene graph instancing). OpenUSD:
+/// `Pcp_ChildNodeIsInstanceable` in `pxr/usd/pcp/instancing.h`, and
+/// `_ConvertNodeForChild` in `pxr/usd/pcp/primIndex.cpp`, which marks the
+/// other nodes inert.
+fn contributes_beneath_instance(graph: &PrimIndexGraph, node: NodeId, instance_depth: u16) -> bool {
+    let mut cursor = node;
+    loop {
+        let Some(current) = graph.node(cursor) else {
+            return false;
+        };
+        let Some(parent) = current.parent() else {
+            // The root node is inert beneath an instance.
+            return false;
+        };
+        match current.namespace_depth().cmp(&instance_depth) {
+            Ordering::Less => return false,
+            Ordering::Equal => return true,
+            Ordering::Greater => cursor = parent,
         }
     }
 }

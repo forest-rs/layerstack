@@ -14,7 +14,7 @@ pub use explain::{
 
 use alloc::{sync::Arc, vec, vec::Vec};
 
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 
 use invalidation::InvalidationGraph;
 
@@ -265,6 +265,9 @@ pub struct Stage {
     with_provenance: bool,
     deps: Option<CompositionDeps>,
     errors: Vec<CompositionError>,
+    /// The prims composed as instances, whose descendants hold only the
+    /// opinions of the instance's own arcs.
+    instances: HashSet<PathId>,
 }
 
 impl Stage {
@@ -285,7 +288,14 @@ impl Stage {
             with_provenance,
             deps,
             errors: Vec::new(),
+            instances: HashSet::new(),
         }
+    }
+
+    /// Records the prims composed as instances.
+    pub(crate) fn with_instances(mut self, instances: HashSet<PathId>) -> Self {
+        self.instances = instances;
+        self
     }
 
     /// Attaches the composition errors found while building this stage.
@@ -325,6 +335,11 @@ impl Stage {
             if let Some(index) = partial.prims.remove(path) {
                 self.prims.insert(*path, index);
             }
+            if partial.instances.contains(path) {
+                self.instances.insert(*path);
+            } else {
+                self.instances.remove(path);
+            }
         }
         let is_recomposed =
             |error: &CompositionError| error.prim().is_some_and(|prim| recomposed.contains(&prim));
@@ -339,7 +354,8 @@ impl Stage {
 
     /// Returns `true` if a partial composition shows that recomposing
     /// `recomposed` changes hierarchy: a recomposed prim appears or
-    /// disappears, or its children differ in membership or order.
+    /// disappears, its children differ in membership or order, or it becomes
+    /// or stops being an instance, which recomposes all its descendants.
     ///
     /// The partial composition's mask must include the current children of
     /// every recomposed prim, so its child lists for those prims are complete
@@ -352,6 +368,7 @@ impl Stage {
             self.has_prim(*prim) != partial.has_prim(*prim)
                 || self.children_of(*prim).unwrap_or(&[])
                     != partial.children_of(*prim).unwrap_or(&[])
+                || self.instances.contains(prim) != partial.instances.contains(prim)
         })
     }
 
@@ -371,7 +388,7 @@ impl Stage {
             .sources
             .iter()
             .chain(index.opinions_by_field.values().flatten().map(|op| &op.key));
-        let mut sites = hashbrown::HashSet::new();
+        let mut sites = HashSet::new();
         for key in keys {
             sites.insert((key.layer_id, key.lookup_path));
             sites.insert((key.layer_id, key.spec_path.prim_path()));

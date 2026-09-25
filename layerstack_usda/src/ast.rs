@@ -266,7 +266,7 @@ pub enum Value<'a> {
     Tuple(Vec<Self>),
     /// An array/list value: `[1, 2, 3]`.
     Array(Vec<Self>),
-    /// A sparse array edit value: `edit (...)`.
+    /// A sparse array edit value: `edit [...]`.
     ArrayEdit(ArrayEdit<'a>),
     /// A dictionary: `{ "key": "value", ... }`.
     Dictionary(Vec<DictionaryEntry<'a>>),
@@ -305,10 +305,24 @@ pub enum ArrayEditInstruction<'a> {
     },
     /// `minsize N`
     MinSize(usize),
+    /// `minsize N fill <literal>`
+    MinSizeFill {
+        /// Minimum size.
+        len: usize,
+        /// Value of each element the edit adds.
+        fill: Value<'a>,
+    },
     /// `maxsize N`
     MaxSize(usize),
     /// `resize N`
     Resize(usize),
+    /// `resize N fill <literal>`
+    ResizeFill {
+        /// Final size.
+        len: usize,
+        /// Value of each element the edit adds.
+        fill: Value<'a>,
+    },
 }
 
 /// A sparse array edit operand.
@@ -325,7 +339,7 @@ pub enum ArrayEditOperand<'a> {
 pub enum ArrayEditIndex {
     /// Numeric position, including negative indexing.
     Position(i64),
-    /// The index past the final element.
+    /// The index past the final element, where `append` inserts.
     End,
 }
 

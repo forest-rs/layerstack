@@ -346,7 +346,7 @@ pub fn unsupported_cases() -> Vec<(&'static str, &'static str, SaveError)> {
         ),
         (
             "array_edit",
-            "#usda 1.0\ndef \"A\"\n{\n    int[] ids = edit (append 4)\n}\n",
+            "#usda 1.0\ndef \"A\"\n{\n    int[] ids = edit [append 4]\n}\n",
             unsupported("/A.ids", Unsupported::ArrayEdit),
         ),
         (

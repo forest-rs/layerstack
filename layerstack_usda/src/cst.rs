@@ -138,11 +138,11 @@ pub enum SyntaxKind {
     TupleValue,
     /// Array value `[...]`.
     ArrayValue,
-    /// Sparse array edit value `edit (...)`.
+    /// Sparse array edit value `edit [...]`.
     ArrayEditValue,
     /// Sparse array edit instruction.
     ArrayEditInstruction,
-    /// Sparse array edit index `[0]`, `[-1]`, or `[end]`.
+    /// Sparse array edit index `[0]` or `[-1]`.
     ArrayEditIndex,
     /// Dictionary value `{ ... }`.
     DictionaryValue,

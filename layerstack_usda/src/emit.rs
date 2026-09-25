@@ -1170,8 +1170,16 @@ impl EmitCtx<'_> {
                 index: convert_array_edit_index(*index),
             },
             ast::ArrayEditInstruction::MinSize(len) => ArrayEditOp::MinSize { len: *len },
+            ast::ArrayEditInstruction::MinSizeFill { len, fill } => ArrayEditOp::MinSizeFill {
+                len: *len,
+                fill: self.convert_value(fill, element_hint),
+            },
             ast::ArrayEditInstruction::MaxSize(len) => ArrayEditOp::MaxSize { len: *len },
             ast::ArrayEditInstruction::Resize(len) => ArrayEditOp::Resize { len: *len },
+            ast::ArrayEditInstruction::ResizeFill { len, fill } => ArrayEditOp::ResizeFill {
+                len: *len,
+                fill: self.convert_value(fill, element_hint),
+            },
         }
     }
 
@@ -2873,7 +2881,7 @@ def \"A\" {
     #[test]
     fn emit_array_edit_value() {
         let src =
-            "#usda 1.0\ndef \"A\" {\n    int[] x = edit (write 3 to [0], append 4, resize 3)\n}\n";
+            "#usda 1.0\ndef \"A\" {\n    int[] x = edit [write 3 to [0]; append 4; resize 3]\n}\n";
         let (result, mut tokens, paths) = emit_source(src);
         let a_path = Path::parse_absolute("/A", &mut tokens).unwrap();
         let a_id = paths.lookup(&a_path).expect("/A");

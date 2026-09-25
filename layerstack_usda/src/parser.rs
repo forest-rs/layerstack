@@ -1323,7 +1323,7 @@ impl<'a> Parser<'a> {
             }
             Some(TokenKind::Ident) => {
                 if self.current_text() == "edit"
-                    && self.next_non_trivia_kind() == Some(TokenKind::LeftParen)
+                    && self.next_non_trivia_kind() == Some(TokenKind::LeftBracket)
                 {
                     self.parse_array_edit_value();
                 } else {
@@ -1375,24 +1375,55 @@ impl<'a> Parser<'a> {
         self.builder.finish_node(end);
     }
 
+    /// Parses `edit [instruction; instruction ...]`, whose instructions are
+    /// separated by `;` or a line break, as OpenUSD's text format writes
+    /// them (`ArrayEditValue`, `StatementSequenceOf` in
+    /// `pxr/usd/sdf/textFileFormatParser.h`; `Vt_ArrayEditStreamImpl` in
+    /// `pxr/base/vt/arrayEdit.cpp`).
     fn parse_array_edit_value(&mut self) {
         let start = self.current_span().start;
         self.builder.start_node(SyntaxKind::ArrayEditValue, start);
         self.bump(); // `edit`
-        self.expect(TokenKind::LeftParen);
+        self.expect(TokenKind::LeftBracket);
 
+        let mut separated = true;
         loop {
-            self.eat_trivia();
-            if self.peek() == Some(TokenKind::RightParen) || self.current().is_none() {
+            separated |= self.eat_trivia_crossing_newline();
+            if self.peek() == Some(TokenKind::RightBracket) || self.current().is_none() {
                 break;
             }
+            if !separated {
+                let span = self.current_span();
+                self.error(
+                    span,
+                    "expected `;` or a line break between array edit instructions",
+                );
+            }
             self.parse_array_edit_instruction();
-            self.eat(TokenKind::Comma);
+            separated = self.eat_trivia_crossing_newline();
+            if self.peek() == Some(TokenKind::Semicolon) {
+                self.bump();
+                separated = true;
+            }
         }
 
-        self.expect(TokenKind::RightParen);
+        self.expect(TokenKind::RightBracket);
         let end = self.current_span().start;
         self.builder.finish_node(end);
+    }
+
+    /// Consumes trivia, returning whether it included a line break.
+    fn eat_trivia_crossing_newline(&mut self) -> bool {
+        let mut newline = false;
+        while let Some(tok) = self.current() {
+            if !is_trivia(tok.kind) {
+                break;
+            }
+            newline |= tok.kind == TokenKind::Newline;
+            self.builder.token(SyntaxKind::from(tok.kind), tok.span);
+            self.pos += 1;
+        }
+        newline
     }
 
     fn parse_array_edit_instruction(&mut self) {
@@ -1434,8 +1465,31 @@ impl<'a> Parser<'a> {
                 if matches!(self.peek(), Some(TokenKind::Number | TokenKind::Minus)) {
                     self.parse_value_expr();
                 }
+                // `minsize N fill <literal>`, `resize N fill <literal>`.
+                let fill = self
+                    .peek_past_trivia_from(self.pos)
+                    .is_some_and(|(i, kind)| {
+                        kind == TokenKind::Ident && self.tokens[i].text(self.source) == "fill"
+                    });
+                if keyword != "maxsize" && fill {
+                    self.eat_keyword("fill");
+                    self.parse_value_expr();
+                }
             }
-            _ => {}
+            _ => {
+                let span = self.current_span();
+                self.error(span, format!("unknown array edit instruction `{keyword}`"));
+                // Recover at the next separator or the closing bracket.
+                while let Some(tok) = self.current() {
+                    if matches!(
+                        tok.kind,
+                        TokenKind::Newline | TokenKind::Semicolon | TokenKind::RightBracket
+                    ) {
+                        break;
+                    }
+                    self.bump();
+                }
+            }
         }
 
         let end = self.current_span().start;
@@ -1460,10 +1514,11 @@ impl<'a> Parser<'a> {
             self.bump();
         }
         self.eat_trivia();
-        if self.peek() == Some(TokenKind::Number)
-            || (self.peek() == Some(TokenKind::Ident) && self.current_text() == "end")
-        {
+        if self.peek() == Some(TokenKind::Number) {
             self.bump();
+        } else {
+            let span = self.current_span();
+            self.error(span, "expected an array index");
         }
         self.expect(TokenKind::RightBracket);
         let end = self.current_span().start;
@@ -1733,6 +1788,61 @@ mod tests {
         };
         assert_eq!(b.name, "b");
         assert!(matches!(b.default, Some(Value::Int(1))));
+    }
+
+    /// Diagnostics for `int[] x = <value>`.
+    fn array_edit_diagnostics(value: &str) -> usize {
+        let src = format!("#usda 1.2\ndef \"A\"\n{{\n    int[] x = {value}\n}}\n");
+        parse(&src).diagnostics.len()
+    }
+
+    /// Each form is accepted or rejected as OpenUSD 26.08
+    /// (`Sdf.Layer.ImportFromString`) accepts or rejects it.
+    #[test]
+    fn array_edit_syntax_follows_openusd() {
+        for accepted in [
+            "edit []",
+            "edit [ ]",
+            "edit [append 4]",
+            "edit [append 1;]",
+            "edit [minsize 3 fill 7; resize 2 fill -1; maxsize 9]",
+            "edit [\n        write 9 to [0]\n        append 4\n        erase [-2]\n    ]",
+        ] {
+            assert_eq!(array_edit_diagnostics(accepted), 0, "{accepted}");
+        }
+        for rejected in [
+            "edit (append 4)",
+            "edit [append 4, append 5]",
+            "edit [write 1 to [end]]",
+            "edit [append 1 append 2]",
+            "edit [;append 1]",
+            "edit [append 1;;append 2]",
+        ] {
+            assert_ne!(array_edit_diagnostics(rejected), 0, "{rejected}");
+        }
+    }
+
+    #[test]
+    fn array_edit_fill_forms_parse() {
+        let src = "#usda 1.2\ndef \"A\"\n{\n    int[] x = edit [minsize 3 fill 7; resize 2]\n}\n";
+        let result = parse(src);
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        let PrimChild::Attribute(a) = &result.layer.prims[0].children[0] else {
+            panic!("expected an attribute");
+        };
+        let Some(Value::ArrayEdit(edit)) = &a.default else {
+            panic!("expected an array edit");
+        };
+        assert!(matches!(
+            edit.instructions[..],
+            [
+                ArrayEditInstruction::MinSizeFill {
+                    len: 3,
+                    fill: Value::Int(7)
+                },
+                ArrayEditInstruction::Resize(2)
+            ]
+        ));
     }
 
     #[test]

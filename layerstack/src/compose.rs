@@ -278,6 +278,12 @@ pub(crate) fn compose_stage(
 
     prune_unselected_variant_specs(store, &layer_stack, &mut prims);
 
+    relocated_child_names(
+        store,
+        cycles.relocations(),
+        &prims,
+        &mut authored_children_opinions,
+    );
     apply_child_order(
         store,
         &prims,
@@ -7152,6 +7158,89 @@ fn add_specializes_edge_opinions(
         deps,
     );
     cycles.exit();
+}
+
+/// Adds to the authored child names of each composed prim in `prims` the
+/// children relocates move beneath it, and renames the children they
+/// rename within it.
+///
+/// A relocation that moves a prim beneath a new parent adds its name at
+/// the parent's node of the relocating layer stack, before the names that
+/// node's own specs author, in name order among the names added there. One
+/// that renames a prim within its parent renames it in place, keeping its
+/// position.
+///
+/// Spec: AOUSD Core §11.3.1 (relocates "rename" children in place and
+/// "extend" a prim with sorted children). OpenUSD:
+/// `_ComposePrimChildNamesAtNode` in `pxr/usd/pcp/primIndex.cpp`.
+fn relocated_child_names(
+    store: &dyn LayerStore,
+    relocations: &Relocations,
+    prims: &HashMap<PathId, PrimIndex>,
+    authored_children: &mut HashMap<PathId, ChildOrderOpinions>,
+) {
+    let paths = store.paths();
+    let mut added: HashMap<(PathId, NodeId), (LayerId, Vec<TokenId>)> = HashMap::new();
+    for (target, source, relocate) in relocations.targets() {
+        let (target_path, source_path) = (paths.resolve(target), paths.resolve(source));
+        let (Some(parent_path), Some(name)) = (target_path.parent(), target_path.leaf()) else {
+            continue;
+        };
+        let Some(parent) = paths.lookup(&parent_path) else {
+            continue;
+        };
+        let Some(index) = prims.get(&parent) else {
+            continue;
+        };
+        if source_path.parent().as_ref() == Some(&parent_path) {
+            let Some(old) = source_path.leaf() else {
+                continue;
+            };
+            for (_, names) in authored_children.get_mut(&parent).into_iter().flatten() {
+                for authored in names.iter_mut().filter(|authored| **authored == old) {
+                    *authored = name;
+                }
+            }
+            continue;
+        }
+        // The parent's node of the relocating layer stack.
+        let site = relocate
+            .target
+            .and_then(|target| paths.resolve(target).parent())
+            .and_then(|site| paths.lookup(&site));
+        let Some((node, _)) = index.graph.nodes().find(|(_, node)| {
+            node.layer_stack() == relocate.layer_stack && Some(node.site().prim_path()) == site
+        }) else {
+            continue;
+        };
+        added
+            .entry((parent, node))
+            .or_insert_with(|| (relocate.layer_stack, Vec::new()))
+            .1
+            .push(name);
+    }
+    for ((parent, node), (layer, mut names)) in added {
+        names.sort_by(|a, b| store.tokens().resolve(*a).cmp(store.tokens().resolve(*b)));
+        names.dedup();
+        let site = prims[&parent]
+            .graph
+            .node(node)
+            .expect("found node")
+            .site()
+            .clone();
+        // Weaker than every spec of the node.
+        let key = OpinionKey {
+            node,
+            layer_strength: u16::MAX,
+            layer_id: layer,
+            lookup_path: parent,
+            spec_path: site,
+        };
+        authored_children
+            .entry(parent)
+            .or_default()
+            .push((key, names));
+    }
 }
 
 /// Orders each prim's children from the `authored_children` and

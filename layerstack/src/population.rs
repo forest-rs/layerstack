@@ -127,7 +127,7 @@ fn add_relocation_targets(
     // A target may lie beneath another target: repeat until none is added.
     loop {
         let mut added = Vec::new();
-        for (target, source) in relocations.proposed_targets() {
+        for (target, source, _) in relocations.proposed_targets() {
             if paths.contains(&target) {
                 continue;
             }

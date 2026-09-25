@@ -791,7 +791,6 @@ fn reference_list_ops_with_offsets_root_crate() {
 }
 
 #[test]
-#[ignore = "requires relocates: `pcp.json` expects `/RelocatedInheritOfChild/Object`, relocated from `/RelocatedInheritOfChild/Child/Object`, and layerstack does not compose relocates; `error_arc_cycle_root_composes` checks the rest"]
 fn error_arc_cycle_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("ErrorArcCycle_root");
     assert_layer_stack_matches(&loaded, &pcp_path);
@@ -802,8 +801,11 @@ fn error_arc_cycle_root_layer_stack_matches() {
 /// Composition must terminate, report each cycle, skip the arc that closes
 /// it, and match the ordered prim stacks and child names in `pcp.txt`.
 ///
-/// Not checked: `/RelocatedInheritOfChild/Object` and its cycle error (no
-/// relocates support).
+/// `/RelocatedInheritOfChild/Object` is relocated from beneath the class
+/// of the cyclic inherit, so it composes no opinions and comes first among
+/// its parent's children. Not checked: the cycle error OpenUSD reports on
+/// it, through the relocation, besides the one on
+/// `/RelocatedInheritOfChild/Child`.
 #[test]
 fn error_arc_cycle_root_composes() {
     assert_error_arc_cycle_root_composes(load_fixture);
@@ -906,6 +908,12 @@ fn assert_error_arc_cycle_root_composes(load: fn(&str) -> (LoadedStage, PathBuf)
             &["root.usd /InheritOfChild/Child"],
             &[],
         ),
+        (
+            "/RelocatedInheritOfChild",
+            &["root.usd /RelocatedInheritOfChild"],
+            &["Object", "Child"],
+        ),
+        ("/RelocatedInheritOfChild/Object", &[], &[]),
         (
             "/RelocatedInheritOfChild/Child",
             &["root.usd /RelocatedInheritOfChild/Child"],

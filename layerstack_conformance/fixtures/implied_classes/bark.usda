@@ -1,0 +1,18 @@
+#usda 1.0
+
+def "Trunk" (
+    inherits = </_class_Bark>
+)
+{
+    int ring = 2
+    int knot = 2
+}
+
+class "_class_Bark"
+{
+    int height = 2
+    int width = 2
+    int ring = 2
+    int knot = 2
+    int moss = 2
+}

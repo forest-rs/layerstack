@@ -1,0 +1,14 @@
+#usda 1.0
+
+def "Stand" (
+    references = @./bark.usda@</Trunk>
+)
+{
+    int height = 1
+}
+
+over "_class_Bark"
+{
+    int width = 1
+    int ring = 1
+}

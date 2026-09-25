@@ -1,0 +1,174 @@
+#usda 1.0
+(
+    relocates = {
+        </Garden/Bed>: </Garden/Plot>,
+        </Robot/Rig/Controls/Wrist>: </Robot/Anim/Wrist>,
+        </Robot/Rig/Debug>: <>,
+        </Boulder/Chip>: </Nowhere/Flake>,
+        </Rubble/Chip>: </Heap/Flake>,
+        </Gravel/Chip>: </Bin/Tray/Flake>
+    }
+)
+
+# A local relocate: `/Garden/Bed` comes from the class `/_class_Garden`
+# that `/Garden` inherits, and composes at `/Garden/Plot`.
+def "Garden" (
+    inherits = </_class_Garden>
+)
+{
+    over "Plot"
+    {
+        int depth = 0
+    }
+}
+
+class "_class_Garden"
+{
+    def "Bed"
+    {
+        int depth = 1
+        int rows = 1
+    }
+}
+
+# The rig case: `/Robot/Rig/Controls/Wrist` comes from the reference to
+# `arm.usda`, and composes at `/Robot/Anim/Wrist`. The wrist inherits a
+# class of the arm, implied into this layer stack as `/Robot/_class_Joint`.
+# `/Robot/Rig/Debug` is relocated to nothing: it no longer exists.
+def "Robot" (
+    references = @./arm.usda@</Arm>
+)
+{
+    def "Anim"
+    {
+        over "Wrist"
+        {
+            int angle = 0
+        }
+    }
+
+    # Opinions at the relocation sources are ignored.
+    over "Rig"
+    {
+        over "Controls"
+        {
+            over "Wrist"
+            {
+                int angle = 9
+                int twist = 9
+            }
+        }
+
+        over "Debug"
+        {
+            int level = 9
+        }
+    }
+
+    over "_class_Joint"
+    {
+        int twist = 0
+    }
+}
+
+# A reference to a relocation source contributes nothing.
+def "StaleWrist" (
+    references = </Robot/Rig/Controls/Wrist>
+)
+{
+}
+
+# A reference to the relocation target composes the relocated prim.
+def "SpareWrist" (
+    references = </Robot/Anim/Wrist>
+)
+{
+}
+
+# Relocates authored in the layer stack an unselected variant branch
+# references do not apply: `/Pebble/Chip` stays where the selected branch
+# puts it, and `/Cobble`, which selects the other branch, has it at
+# `/Cobble/Flake`.
+def "Pebble" (
+    variantSets = "cut"
+    variants = {
+        string cut = "plain"
+    }
+)
+{
+    variantSet "cut" = {
+        "moved" (
+            references = @./quarry.usda@</Stone>
+        )
+        {
+        }
+        "plain" (
+            references = @./stone.usda@</Stone>
+        )
+        {
+        }
+    }
+}
+
+def "Cobble" (
+    variantSets = "cut"
+    variants = {
+        string cut = "moved"
+    }
+)
+{
+    variantSet "cut" = {
+        "moved" (
+            references = @./quarry.usda@</Stone>
+        )
+        {
+        }
+        "plain" (
+            references = @./stone.usda@</Stone>
+        )
+        {
+        }
+    }
+}
+
+# A relocated prim composes at its target only beneath a parent that
+# exists without it: `/Nowhere` does not, `/Heap` has a spec here, and
+# `/Bin/Tray` comes from the reference to `bin.usda`.
+def "Boulder" (
+    references = @./stone.usda@</Stone>
+)
+{
+}
+
+def "Rubble" (
+    references = @./stone.usda@</Stone>
+)
+{
+}
+
+def "Heap"
+{
+}
+
+def "Gravel" (
+    references = @./stone.usda@</Stone>
+)
+{
+}
+
+def "Bin" (
+    references = @./bin.usda@</Bin>
+)
+{
+}
+
+# Relocates of a referenced layer stack apply through the reference.
+def "Crate" (
+    references = @./kit.usda@</Kit>
+)
+{
+    over "Gear"
+    {
+        int teeth = 0
+    }
+}

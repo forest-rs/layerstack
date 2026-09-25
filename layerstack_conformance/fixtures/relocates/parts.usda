@@ -1,0 +1,16 @@
+#usda 1.0
+
+def "Parts"
+{
+    def "Gear"
+    {
+        int teeth = 2
+        int size = 2
+        int pitch = 2
+    }
+
+    def "Spring"
+    {
+        int coils = 2
+    }
+}

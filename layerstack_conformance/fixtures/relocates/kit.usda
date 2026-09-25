@@ -1,0 +1,21 @@
+#usda 1.0
+(
+    relocates = {
+        </Kit/Parts/Gear>: </Kit/Gear>
+    }
+)
+
+def "Kit"
+{
+    def "Parts" (
+        references = @./parts.usda@</Parts>
+    )
+    {
+    }
+
+    over "Gear"
+    {
+        int teeth = 1
+        int size = 1
+    }
+}

@@ -1,34 +1,24 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Differential tests for how often an arc target's sites appear in a prim
-//! stack.
+//! Differential tests for the strength order of arcs nested two or more
+//! deep.
 //!
-//! `fixtures/arc_target_sites/oracle.json` records what OpenUSD 26.08
-//! composes from `fixtures/arc_target_sites/root.usda`
-//! (`scripts/arc_target_sites_oracle.py`, which also writes those layers).
-//! Layerstack must compose the same prims with the same ordered prim stacks,
-//! repeats included, and resolve the same attribute defaults.
+//! `fixtures/nested_arc_depth/oracle.json` records what OpenUSD 26.08
+//! composes from `fixtures/nested_arc_depth/root.usda`
+//! (`scripts/nested_arc_depth_oracle.py`, which also writes those layers).
+//! Layerstack must compose the same prims with the same ordered prim stacks
+//! and resolve the same attribute defaults.
 //!
-//! OpenUSD builds an arc's target subgraph once, so each site appears once
-//! per arc path: the selected branch of a referenced prim (`/Trunk`), an
-//! asset reached through references nested in another asset (`/Grove/Oak`,
-//! `/Grove/Elm`), and a class a prim inherits directly that its referenced
-//! prim implies again (`/Bush`).
+//! Opinions rank by a strong-to-weak depth-first walk of each prim's graph:
+//! the nodes beneath an arc rank before that arc's weaker siblings, however
+//! deep they are nested. `/Boulder`'s first reference reaches `vein.usda
+//! /Vein` through a payload and another reference, which outranks
+//! `pebble.usda /Pebble`, its second reference; `/Crag` lists the two the
+//! other way around.
 //!
-//! A class reached twice is one site at its strongest registration,
-//! whichever arc expansion reaches it first: `/Pine` and `/Fir` inherit
-//! `/Bark` directly and through the specializes of `/Needle`, in either list
-//! order, `/Larch` specializes it directly, `/Cedar` reaches it more strongly
-//! through a chain of inherits than through the direct inherit listed after
-//! it, and `/Spruce` reaches the first shape through a reference. Each
-//! resolves `x` from the site OpenUSD ranks strongest. `/Maple` repeats the
-//! first shape with a selected variant on the class reached twice: the
-//! branch goes with the registration that stays and appears once.
-//!
-//! Spec: AOUSD Core §10.4 (an arc's target ranks beneath the site that
-//! authors it), §10.4.2.4 (implied class arcs); `pxr/usd/pcp/primIndex.cpp`
-//! (`_AddArc`, `_IsRedundantSite`).
+//! Spec: AOUSD Core §10.4 (strength ordering); OpenUSD
+//! `PcpCompareNodeStrength` in `pxr/usd/pcp/strengthOrdering.cpp`.
 
 #![allow(missing_docs, reason = "integration tests")]
 
@@ -41,7 +31,7 @@ use layerstack_conformance::{
 };
 use serde::Deserialize;
 
-const ORACLE: &str = include_str!("../fixtures/arc_target_sites/oracle.json");
+const ORACLE: &str = include_str!("../fixtures/nested_arc_depth/oracle.json");
 
 #[derive(Deserialize)]
 struct Oracle {
@@ -70,7 +60,7 @@ fn oracle() -> Oracle {
 fn compose(oracle: &Oracle) -> (LoadedStage, Stage) {
     let mut loaded = load_entry_usda(
         &workspace_root()
-            .join("layerstack_conformance/fixtures/arc_target_sites")
+            .join("layerstack_conformance/fixtures/nested_arc_depth")
             .join(&oracle.root),
     );
     let stage = Stage::compose(
@@ -91,7 +81,7 @@ fn layer_name(loaded: &LoadedStage, layer: layerstack::LayerId) -> String {
 }
 
 #[test]
-fn prim_stacks_list_each_site_once_per_arc_path() {
+fn prim_stacks_rank_nested_arcs_beneath_their_arc() {
     let oracle = oracle();
     let (mut loaded, stage) = compose(&oracle);
     let pseudo_root = loaded.store.path("/");

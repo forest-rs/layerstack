@@ -1,0 +1,16 @@
+#usda 1.0
+
+# A reference inside a payload inside the first reference outranks the
+# second reference.
+def "Boulder" (
+    references = [@./quarry.usda@</Quarry>, @./pebble.usda@</Pebble>]
+)
+{
+}
+
+# Listed second, the same nest ranks after the direct reference.
+def "Crag" (
+    references = [@./pebble.usda@</Pebble>, @./quarry.usda@</Quarry>]
+)
+{
+}

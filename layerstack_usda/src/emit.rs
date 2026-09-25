@@ -1118,11 +1118,17 @@ impl EmitCtx<'_> {
             self.layer_id
         };
 
-        let target = if let Some(path_str) = arc_ref.prim_path {
-            let path = Path::parse_absolute(path_str, self.tokens).ok()?;
-            ReferenceTarget::Prim(self.paths.intern(path))
-        } else {
-            ReferenceTarget::DefaultPrim
+        // An omitted prim path, and the empty path `<>`, target the layer's
+        // `defaultPrim`. OpenUSD warns that `<>` is ill-formed, reads it as
+        // the empty path and composes it as an omitted target.
+        //
+        // Spec: AOUSD Core §10.3.2.1 (references with no prim path).
+        let target = match arc_ref.prim_path {
+            Some(path_str) if !path_str.is_empty() => {
+                let path = Path::parse_absolute(path_str, self.tokens).ok()?;
+                ReferenceTarget::Prim(self.paths.intern(path))
+            }
+            _ => ReferenceTarget::DefaultPrim,
         };
 
         let asset_str = arc_ref.asset.map(String::from);

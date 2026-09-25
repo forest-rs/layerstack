@@ -1345,7 +1345,14 @@ impl<'a> AssembleCtx<'a> {
     ///
     /// The field holds a payload list op from crate 0.8. Earlier files hold
     /// a single `SdfPayload`, which is an explicit list of that payload, or
-    /// no payload when empty (`pxr/usd/sdf/crateFile.cpp:393`).
+    /// no payload when empty (`pxr/usd/sdf/crateFile.cpp:393`); OpenUSD
+    /// still writes one payload with an identity layer offset that way while
+    /// the file needs no later version.
+    ///
+    /// A single payload with an empty asset path is an explicitly empty list,
+    /// not an internal payload: internal payloads were introduced with
+    /// payload list ops (`_ToPayloadListOpValue` in
+    /// `pxr/usd/sdf/crateData.cpp`).
     ///
     /// Spec: AOUSD Core §7.6.2.3.2 (`payload`).
     fn convert_payload_value(
@@ -1354,10 +1361,21 @@ impl<'a> AssembleCtx<'a> {
     ) -> Result<Option<ListOp<Reference>>, UsdcError> {
         match value {
             CrateValue::ListOp(listop) => self.convert_ref_listop(listop).map(Some),
-            CrateValue::Dictionary(_) => Ok(Some(ListOp {
-                explicit: Some(self.convert_crate_to_reference(value).into_iter().collect()),
-                ..ListOp::default()
-            })),
+            CrateValue::Dictionary(entries) => {
+                let has_asset = entries.iter().any(|(key, value)| {
+                    key == "assetPath"
+                        && matches!(value, CrateValue::AssetPath(asset) if !asset.is_empty())
+                });
+                let explicit = if has_asset {
+                    self.convert_crate_to_reference(value).into_iter().collect()
+                } else {
+                    Vec::new()
+                };
+                Ok(Some(ListOp {
+                    explicit: Some(explicit),
+                    ..ListOp::default()
+                }))
+            }
             _ => Ok(None),
         }
     }
@@ -1396,11 +1414,9 @@ impl<'a> AssembleCtx<'a> {
                 }
             }
 
-            // Resolve the asset path.
-            if asset_path.is_empty() && prim_path.is_empty() {
-                return None;
-            }
-
+            // Resolve the asset path. With neither an asset path nor a prim
+            // path, the arc is internal and targets this layer's
+            // `defaultPrim` (AOUSD Core §10.3.2.1), as `<>` does in USDA.
             let (layer, target) = if !asset_path.is_empty() {
                 let resolved = self.resolve_asset(&asset_path);
                 let lid = resolved

@@ -64,7 +64,19 @@ fn assert_layer_stack_matches(loaded: &LoadedStage, pcp_path: &Path) {
 }
 
 fn assert_pcp_composing(loaded: &mut LoadedStage, pcp_path: &Path) {
+    assert_pcp_composing_except(loaded, pcp_path, &[]);
+}
+
+/// Checks every prim of `pcp.json` except those in `skipped`, each of which
+/// must be a prim the fixture composes.
+fn assert_pcp_composing_except(loaded: &mut LoadedStage, pcp_path: &Path, skipped: &[&str]) {
     let pcp = load_pcp_json(pcp_path);
+    for prim in skipped {
+        assert!(
+            pcp.composing.contains_key(*prim),
+            "skipped prim {prim} is not in {pcp_path:?}"
+        );
+    }
 
     let stage = Stage::compose(
         &mut loaded.store,
@@ -73,6 +85,9 @@ fn assert_pcp_composing(loaded: &mut LoadedStage, pcp_path: &Path) {
     );
 
     for (prim_path, expectations) in pcp.composing {
+        if skipped.contains(&prim_path.as_str()) {
+            continue;
+        }
         let prim = layerstack::Path::parse_absolute(&prim_path, &mut loaded.store.tokens)
             .expect("pcp path")
             .clone();
@@ -393,8 +408,35 @@ fn basic_specializes_root_layer_stack_matches() {
     assert_pcp_composing(&mut loaded, &pcp_path);
 }
 
+/// Prims of `BasicPayload_root` that need composition features beyond
+/// payloads and `defaultPrim` targets; `basic_payload_root_layer_stack_matches`
+/// checks them and stays ignored until they compose.
+const BASIC_PAYLOAD_SKIPPED: &[&str] = &[
+    // Subroot arc targets miss the arcs of their ancestors: `ref.usd`
+    // `/RefPrimA` and `/PayloadPrimA` bring `ref2.usd` `/PrimC`, so
+    // `/PrimC/PrimC_Child` belongs to each of these prim stacks.
+    "/PayloadPrimWithSubrootInReference",
+    "/RefPrimWithSubrootInReference",
+    "/PayloadPrimWithSubrootInPayload",
+    "/RefPrimWithSubrootInPayload",
+    // An internal arc authored in `sublayer.usd` targets only that layer,
+    // not the root layer stack it is part of, so `root.usd`'s over of
+    // `/InternalSublayerPayload` is missing (AOUSD Core §10.3.2.1: "the
+    // layer stack containing the reference is assumed").
+    "/PrimInSublayerWithInternalPayload",
+    "/PrimInSublayerWithInternalPayload/InternalSublayerPayload_Child",
+];
+
 #[test]
-#[ignore = "requires nested payload-through-subroot, self-payload, and default prim features"]
+fn basic_payload_root_layer_stack_matches_except_known_limits() {
+    let (mut loaded, pcp_path) = load_fixture("BasicPayload_root");
+    assert_layer_stack_matches(&loaded, &pcp_path);
+    assert_pcp_composing_except(&mut loaded, &pcp_path, BASIC_PAYLOAD_SKIPPED);
+}
+
+#[test]
+#[ignore = "subroot arc targets miss their ancestors' arcs, and internal arcs in a sublayer miss \
+            the root layer stack (`BASIC_PAYLOAD_SKIPPED`)"]
 fn basic_payload_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("BasicPayload_root");
     assert_layer_stack_matches(&loaded, &pcp_path);

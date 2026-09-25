@@ -61,6 +61,7 @@ pub(crate) fn document(scene: &Scene<'_>) -> Result<Document, ExportError> {
             Metadatum::new("metersPerUnit", Value::Double(stage.meters_per_unit)),
             Metadatum::new("upAxis", Value::Token(up_axis.into())),
         ],
+        prim_order: None,
         prims: vec![root],
     })
 }

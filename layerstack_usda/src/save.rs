@@ -20,7 +20,7 @@
 //!
 //! # Supported subset
 //!
-//! A layer without variants:
+//! A layer with:
 //!
 //! - layer metadata, including `defaultPrim` and bare-string comments, and
 //!   sublayers with their layer offsets;
@@ -40,7 +40,16 @@
 //!   interleaved;
 //! - values of every scalar, vector, quaternion and matrix type (`half`
 //!   and the other binary16 types kept as their bit patterns), and arrays
-//!   of them.
+//!   of them;
+//! - variant selections, the `variantSets` of each prim spec (written as
+//!   `prepend`) and variant sets with their variants, each variant with
+//!   everything a prim spec holds: metadata, arcs, selections, properties,
+//!   `reorder properties`, child prims (the prim specs the layer keeps in
+//!   that branch, [`Layer::branch_prim_specs`]) and nested variant sets,
+//!   written inside the branch that encloses them.
+//!
+//! Variant sets are written in the prim spec's `variantSets` order, then by
+//! name; variants and selections by name, as OpenUSD writes them.
 //!
 //! Arcs are written from what was authored, never from what they resolved
 //! to: a sublayer, reference or payload by its authored asset path (an arc
@@ -55,16 +64,16 @@
 //! [`layer_document`] checks the whole layer before a writer runs and
 //! returns the first problem it finds, naming its source path:
 //!
-//! - [`SaveError::Unsupported`]: variant sets, variant selections and
-//!   specs authored inside variant branches; splines; sparse array edits
-//!   (as a default or a time sample); list ops mixing an explicit list with
+//! - [`SaveError::Unsupported`]: splines; sparse array edits (as a
+//!   default or a time sample); list ops mixing an explicit list with
 //!   edits; `varying` relationships; path list-op metadata; and values the
 //!   writers have no representation for (`pathExpression`, `opaque`,
 //!   `timecode` outside an attribute value, and arrays whose element type
 //!   is not recorded, such as an empty array in a dictionary);
 //! - [`SaveError::Invalid`]: a layer the file formats cannot hold as it
-//!   stands, such as a prim spec that no parent lists among its children,
-//!   an attribute without a type, a relationship with time samples, or a
+//!   stands, such as a prim spec that no parent or variant lists among its
+//!   children, a variant whose enclosing branches the layer does not
+//!   hold, an attribute without a type, a relationship with time samples, or a
 //!   sublayer or arc into another layer built from a layer id alone, with
 //!   no authored asset path to write;
 //! - [`SaveError::Document`]: what the writers' shared validation rejects
@@ -85,19 +94,21 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt;
 
-use layerstack::HashSet;
 use layerstack::doc::{
     FieldEntry, FieldValue, Layer, LayerOffset as LayerLayerOffset, PrimSpec,
-    Reference as LayerReference, ReferenceTarget, Specifier, Value as LayerValue,
+    Reference as LayerReference, ReferenceTarget, Specifier, Value as LayerValue, VariantSpec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp as LayerListOp;
 use layerstack::path::{Path, PathId, PathInterner, TargetPath};
 use layerstack::property::{PropertyEntry, PropertyKind, Variability};
+use layerstack::spec_path::VariantSelectionSite;
+use layerstack::{HashMap, HashSet};
 
 use crate::writer::{
     Attribute, Document, LayerOffset, ListOp, Metadatum, Prim, Property, Reference, Relationship,
-    Specifier as WriterSpecifier, SubLayer, Value, Variability as WriterVariability, WriteError,
+    Specifier as WriterSpecifier, SubLayer, Value, Variability as WriterVariability, VariantSet,
+    WriteError,
 };
 
 /// Lowers an authored layer to the [`Document`] both writers serialize.
@@ -182,12 +193,6 @@ impl core::error::Error for SaveError {
 /// Authored content outside the supported subset.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Unsupported {
-    /// A prim's variant sets (`variantSetNames` or variant set specs).
-    VariantSets,
-    /// A prim's variant selections.
-    VariantSelections,
-    /// A prim spec authored inside a variant branch.
-    VariantSpec,
     /// An attribute's `spline`.
     Spline,
     /// A sparse array edit.
@@ -207,9 +212,6 @@ pub enum Unsupported {
 impl fmt::Display for Unsupported {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::VariantSets => f.write_str("variant sets"),
-            Self::VariantSelections => f.write_str("variant selections"),
-            Self::VariantSpec => f.write_str("specs inside variant branches"),
             Self::Spline => f.write_str("splines"),
             Self::ArrayEdit => f.write_str("sparse array edits"),
             Self::MixedListOp => f.write_str("a list op with an explicit list and edits"),
@@ -227,8 +229,9 @@ pub enum Invalid {
     MissingSpecifier,
     /// An attribute spec has no declared type.
     MissingTypeName,
-    /// A prim spec is not listed among its parent's authored children, so
-    /// it has no place in the written namespace.
+    /// A prim spec is not listed among the authored children of its parent
+    /// (of the variant that holds it, for a prim spec in a variant branch),
+    /// so it has no place in the written namespace.
     UnlistedPrim,
     /// A prim lists a child that has no prim spec.
     MissingChildSpec,
@@ -239,6 +242,10 @@ pub enum Invalid {
     /// A sublayer, or a reference or payload into another layer, records no
     /// authored asset path to write (it was built from a layer id alone).
     ArcWithoutAsset,
+    /// A variant's branch context ([`VariantSpec::outer_variant_sites`])
+    /// names no branch of the layer, so it has no place in the written
+    /// namespace.
+    UnplacedVariant,
 }
 
 impl fmt::Display for Invalid {
@@ -251,6 +258,7 @@ impl fmt::Display for Invalid {
             Self::RelationshipValue => "relationship holds a type or values",
             Self::PseudoRootOpinions => "pseudo-root spec holds prim opinions",
             Self::ArcWithoutAsset => "arc to another layer has no authored asset path",
+            Self::UnplacedVariant => "variant is not inside a branch of the layer",
         })
     }
 }
@@ -304,24 +312,6 @@ impl Lowering<'_> {
 
     /// Spec: AOUSD Core §7.6.1 (layer spec fields).
     fn layer(&self, layer: &Layer) -> Result<Document, SaveError> {
-        let mut in_branches: Vec<String> = layer
-            .variant_prims
-            .iter()
-            .filter(|(_, specs)| !specs.is_empty())
-            .map(|(path, _)| self.display(*path))
-            .chain(
-                layer
-                    .prims
-                    .iter()
-                    .filter(|(_, spec)| !spec.outer_variant_sites.is_empty())
-                    .map(|(path, _)| self.display(*path)),
-            )
-            .collect();
-        in_branches.sort();
-        if let Some(path) = in_branches.into_iter().next() {
-            return unsupported(path, Unsupported::VariantSpec);
-        }
-
         let mut doc = Document::new();
         doc.default_prim = layer.default_prim.map(|t| self.name(t));
         doc.metadata = self.metadata(&layer.metadata, "/")?;
@@ -338,24 +328,37 @@ impl Lowering<'_> {
         }
 
         let root = self.paths.lookup(&Path::root());
-        let mut visited: HashSet<PathId> = HashSet::new();
+        let mut visited = Visited::new();
         if let Some((root, spec)) = root.and_then(|id| Some((id, layer.prims.get(&id)?))) {
-            visited.insert(root);
+            visited.insert((root, Vec::new()));
             if !is_children_only(spec) {
                 return invalid("/", Invalid::PseudoRootOpinions);
             }
             doc.prim_order = spec.prim_order.as_ref().map(|o| self.names(o));
             for &child in &spec.authored_children {
+                let parent = Parent {
+                    path: &Path::root(),
+                    shown: "/",
+                    sites: &[],
+                };
                 doc.prims
-                    .push(self.prim(layer, &Path::root(), child, &mut visited)?);
+                    .push(self.prim(layer, parent, child, &mut visited)?);
             }
         }
 
+        // Every prim spec, outside variants or inside one, must have been
+        // reached from the pseudo-root through the children lists.
         let mut unlisted: Vec<String> = layer
             .prims
-            .keys()
-            .filter(|path| !visited.contains(*path))
-            .map(|path| self.display(*path))
+            .iter()
+            .chain(
+                layer
+                    .variant_prims
+                    .iter()
+                    .flat_map(|(path, specs)| specs.iter().map(move |spec| (path, spec))),
+            )
+            .filter(|(path, spec)| !visited.contains(&(**path, spec.outer_variant_sites.clone())))
+            .map(|(path, spec)| self.spec_display(*path, &spec.outer_variant_sites))
             .collect();
         unlisted.sort();
         if let Some(path) = unlisted.into_iter().next() {
@@ -368,41 +371,54 @@ impl Lowering<'_> {
         names.iter().map(|&t| self.name(t)).collect()
     }
 
+    /// The variant-qualified path of the prim spec at `path` inside the
+    /// branches `sites` (`/A{v=x}B`), as OpenUSD names it.
+    fn spec_display(&self, path: PathId, sites: &[VariantSelectionSite]) -> String {
+        let segments = self.paths.resolve(path).segments();
+        let mut out = String::new();
+        for (i, &segment) in segments.iter().enumerate() {
+            out = child_display(&out, self.tokens.resolve(segment));
+            for site in sites {
+                if self.paths.resolve(site.host_path).segments() == &segments[..=i] {
+                    out = branch_display(
+                        &out,
+                        self.tokens.resolve(site.set),
+                        self.tokens.resolve(site.variant),
+                    );
+                }
+            }
+        }
+        if out.is_empty() {
+            out.push('/');
+        }
+        out
+    }
+
     // ── Prims ───────────────────────────────────────────────────────
 
-    /// Spec: AOUSD Core §7.6.2 (prim spec fields).
+    /// Lowers the prim spec named `name` below `parent`, in the variant
+    /// branches `parent.sites` enclose it in (none outside variants).
+    ///
+    /// Spec: AOUSD Core §7.6.2 (prim spec fields), §7.3.6 (variant specs
+    /// contain prim specs).
     fn prim(
         &self,
         layer: &Layer,
-        parent: &Path,
+        parent: Parent<'_>,
         name: TokenId,
-        visited: &mut HashSet<PathId>,
+        visited: &mut Visited,
     ) -> Result<Prim, SaveError> {
-        let path = parent.join(&[name]);
-        let shown = path.display(self.tokens);
+        let path = parent.path.join(&[name]);
+        let shown = child_display(parent.shown, self.tokens.resolve(name));
         let Some((id, spec)) = self
             .paths
             .lookup(&path)
-            .and_then(|id| Some((id, layer.prims.get(&id)?)))
+            .and_then(|id| Some((id, layer.prim_spec_in(id, parent.sites)?)))
         else {
             return invalid(shown, Invalid::MissingChildSpec);
         };
-        visited.insert(id);
+        visited.insert((id, parent.sites.to_vec()));
 
-        for (op_authored, feature) in [
-            (
-                !spec.variant_sets.is_empty() || !spec.variant_set_order.is_empty(),
-                Unsupported::VariantSets,
-            ),
-            (
-                !spec.variant_selections.is_empty(),
-                Unsupported::VariantSelections,
-            ),
-        ] {
-            if op_authored {
-                return unsupported(shown, feature);
-            }
-        }
         let specifier = match spec.specifier {
             Some(Specifier::Def) => WriterSpecifier::Def,
             Some(Specifier::Over) => WriterSpecifier::Over,
@@ -423,18 +439,77 @@ impl Lowering<'_> {
                 prim.metadata.push(Metadatum::new(key, Value::Bool(value)));
             }
         }
-        // Spec: AOUSD Core §7.6.2.3 (prim composition fields), §10.3.2.1–
-        // §10.3.2.4 (references, payloads, inherits, specializes).
-        let arcs = |op: &LayerListOp<LayerReference>, key: &str| {
+        let arcs = Arcs {
+            references: &spec.references,
+            payloads: &spec.payloads,
+            inherits: &spec.inherits,
+            specializes: &spec.specializes,
+        };
+        self.arcs(layer, arcs, &mut prim, &shown)?;
+        prim.variant_selections = self.selections(&spec.variant_selections);
+        prim.property_order = spec.property_order.as_ref().map(|o| self.names(o));
+        prim.prim_order = spec.prim_order.as_ref().map(|o| self.names(o));
+        for entry in &spec.properties {
+            prim.properties.push(self.property(entry, &shown)?);
+        }
+        let here = Parent {
+            path: &path,
+            shown: &shown,
+            sites: parent.sites,
+        };
+        for &child in &spec.authored_children {
+            prim.children.push(self.prim(layer, here, child, visited)?);
+        }
+
+        let mut host = Host {
+            id,
+            spec,
+            placed: HashSet::new(),
+        };
+        (prim.variant_set_names, prim.variant_sets) =
+            self.variant_sets(layer, &mut host, here, true, visited)?;
+        // Every variant of the prim spec must sit in a branch written above.
+        let mut unplaced: Vec<String> = spec
+            .variant_sets
+            .iter()
+            .flat_map(|(&set, spec)| spec.variants.keys().map(move |&variant| (set, variant)))
+            .filter(|site| !host.placed.contains(site))
+            .map(|(set, variant)| {
+                branch_display(
+                    &shown,
+                    self.tokens.resolve(set),
+                    self.tokens.resolve(variant),
+                )
+            })
+            .collect();
+        unplaced.sort();
+        if let Some(path) = unplaced.into_iter().next() {
+            return invalid(path, Invalid::UnplacedVariant);
+        }
+        Ok(prim)
+    }
+
+    /// Sets a prim's or variant's composition arcs.
+    ///
+    /// Spec: AOUSD Core §7.6.2.3 (prim composition fields), §10.3.2.1–
+    /// §10.3.2.4 (references, payloads, inherits, specializes).
+    fn arcs(
+        &self,
+        layer: &Layer,
+        arcs: Arcs<'_>,
+        prim: &mut Prim,
+        shown: &str,
+    ) -> Result<(), SaveError> {
+        let references = |op: &LayerListOp<LayerReference>, key: &str| {
             if !is_authored(op) {
                 return Ok(None);
             }
             let path = format!("{shown}#{key}");
-            self.list_op(op, &path, |r| self.arc(layer, r, &shown))
+            self.list_op(op, &path, |r| self.arc(layer, r, shown))
                 .map(Some)
         };
-        prim.payloads = arcs(&spec.payloads, "payload")?;
-        prim.references = arcs(&spec.references, "references")?;
+        prim.payloads = references(arcs.payloads, "payload")?;
+        prim.references = references(arcs.references, "references")?;
         let paths = |op: &LayerListOp<PathId>, key: &str| {
             if !is_authored(op) {
                 return Ok(None);
@@ -442,16 +517,154 @@ impl Lowering<'_> {
             let path = format!("{shown}#{key}");
             self.list_op(op, &path, |p| Ok(self.display(*p))).map(Some)
         };
-        prim.inherits = paths(&spec.inherits, "inheritPaths")?;
-        prim.specializes = paths(&spec.specializes, "specializes")?;
-        prim.property_order = spec.property_order.as_ref().map(|o| self.names(o));
-        prim.prim_order = spec.prim_order.as_ref().map(|o| self.names(o));
-        for entry in &spec.properties {
+        prim.inherits = paths(arcs.inherits, "inheritPaths")?;
+        prim.specializes = paths(arcs.specializes, "specializes")?;
+        Ok(())
+    }
+
+    /// Variant selections, by set name as OpenUSD writes them.
+    ///
+    /// Spec: AOUSD Core §7.6.2.3.4 (`variantSelection`).
+    fn selections(&self, selections: &HashMap<TokenId, TokenId>) -> Vec<(String, String)> {
+        let mut out: Vec<(String, String)> = selections
+            .iter()
+            .map(|(&set, &variant)| (self.name(set), self.name(variant)))
+            .collect();
+        out.sort();
+        out
+    }
+
+    // ── Variants ────────────────────────────────────────────────────
+
+    /// The variant sets of `host` whose variants sit directly in `owner`:
+    /// the prim spec itself (`top`), or one of its variants, for the sets
+    /// nested there. Returns the `variantSets` list op naming them, with,
+    /// on the prim spec, the sets it declares without variants, and the
+    /// sets.
+    ///
+    /// The layer model keeps every variant set of a prim spec on it, nested
+    /// ones included, each variant recording the branches enclosing it
+    /// ([`VariantSpec::outer_variant_sites`]); a variant goes to the owner
+    /// whose branch context that is. Sets are written in the prim spec's
+    /// `variantSets` order, then by name, and variants by name, as
+    /// `Sdf_WriteVariantSet` sorts them. The list op is written as
+    /// `prepend`, which adds the sets to weaker opinions as composition of
+    /// the layer model does.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
+    /// specs), §7.6.2.3.5 (`variantSetNames`), §7.6.6–§7.6.7.
+    fn variant_sets(
+        &self,
+        layer: &Layer,
+        host: &mut Host<'_>,
+        owner: Parent<'_>,
+        top: bool,
+        visited: &mut Visited,
+    ) -> Result<(Option<ListOp<String>>, Vec<VariantSet>), SaveError> {
+        let spec = host.spec;
+        let mut order: Vec<TokenId> = spec.variant_set_order.clone();
+        let mut unordered: Vec<TokenId> = spec
+            .variant_sets
+            .keys()
+            .copied()
+            .filter(|set| !order.contains(set))
+            .collect();
+        unordered.sort_by(|a, b| self.tokens.resolve(*a).cmp(self.tokens.resolve(*b)));
+        order.extend(unordered);
+
+        let mut names = Vec::new();
+        let mut sets = Vec::new();
+        for set in order {
+            let mut here: Vec<(TokenId, &VariantSpec)> = spec
+                .variant_sets
+                .get(&set)
+                .into_iter()
+                .flat_map(|set| &set.variants)
+                .filter(|(_, variant)| variant.outer_variant_sites == owner.sites)
+                .map(|(&name, variant)| (name, variant))
+                .collect();
+            if here.is_empty() {
+                // A set declared without variants belongs to the prim spec.
+                let declared_only = spec
+                    .variant_sets
+                    .get(&set)
+                    .is_none_or(|set| set.variants.is_empty());
+                if top && declared_only {
+                    names.push(self.name(set));
+                }
+                continue;
+            }
+            here.sort_by(|a, b| self.tokens.resolve(a.0).cmp(self.tokens.resolve(b.0)));
+            let mut variants = Vec::with_capacity(here.len());
+            for (name, variant) in here {
+                host.placed.insert((set, name));
+                variants.push(self.variant(layer, host, owner, set, name, variant, visited)?);
+            }
+            names.push(self.name(set));
+            sets.push(VariantSet {
+                name: self.name(set),
+                variants,
+            });
+        }
+        let names = (!names.is_empty()).then(|| ListOp::prepend(names));
+        Ok((names, sets))
+    }
+
+    /// Lowers one variant of `host` in `owner` to the prim spec it holds:
+    /// its metadata, arcs, selections, properties, child prims (the prim
+    /// specs the layer keeps in this branch) and nested variant sets.
+    ///
+    /// Spec: AOUSD Core §7.3.6, §7.6.7 (variant specs), §10.3.2.5.
+    #[allow(
+        clippy::too_many_arguments,
+        reason = "the variant, its set and where it is written"
+    )]
+    fn variant(
+        &self,
+        layer: &Layer,
+        host: &mut Host<'_>,
+        owner: Parent<'_>,
+        set: TokenId,
+        name: TokenId,
+        variant: &VariantSpec,
+        visited: &mut Visited,
+    ) -> Result<Prim, SaveError> {
+        let shown = branch_display(
+            owner.shown,
+            self.tokens.resolve(set),
+            self.tokens.resolve(name),
+        );
+        let mut sites = owner.sites.to_vec();
+        sites.push(VariantSelectionSite {
+            host_path: host.id,
+            set,
+            variant: name,
+        });
+        let mut prim = Prim::new(WriterSpecifier::Over, None, self.name(name));
+        prim.metadata = self.metadata(&variant.fields, &shown)?;
+        let arcs = Arcs {
+            references: &variant.references,
+            payloads: &variant.payloads,
+            inherits: &variant.inherits,
+            specializes: &variant.specializes,
+        };
+        self.arcs(layer, arcs, &mut prim, &shown)?;
+        prim.variant_selections = self.selections(&variant.variant_selections);
+        prim.property_order = variant.property_order.as_ref().map(|o| self.names(o));
+        for entry in &variant.properties {
             prim.properties.push(self.property(entry, &shown)?);
         }
-        for &child in &spec.authored_children {
-            prim.children.push(self.prim(layer, &path, child, visited)?);
+        let branch = Parent {
+            path: owner.path,
+            shown: &shown,
+            sites: &sites,
+        };
+        for &child in &variant.authored_children {
+            prim.children
+                .push(self.prim(layer, branch, child, visited)?);
         }
+        (prim.variant_set_names, prim.variant_sets) =
+            self.variant_sets(layer, host, branch, false, visited)?;
         Ok(prim)
     }
 
@@ -750,6 +963,51 @@ fn is_children_only(spec: &PrimSpec) -> bool {
         && spec.active.is_none()
         && spec.instanceable.is_none()
         && spec.outer_variant_sites.is_empty()
+}
+
+/// The prim specs reached so far, by path and branch context.
+type Visited = HashSet<(PathId, Vec<VariantSelectionSite>)>;
+
+/// Where a prim spec or variant is written: the namespace path of the prim
+/// spec it belongs to, its variant-qualified display path, and the variant
+/// branches enclosing it.
+#[derive(Clone, Copy)]
+struct Parent<'a> {
+    path: &'a Path,
+    shown: &'a str,
+    sites: &'a [VariantSelectionSite],
+}
+
+/// The prim spec whose variant sets are being written, and the variants
+/// written so far (set, variant).
+struct Host<'a> {
+    id: PathId,
+    spec: &'a PrimSpec,
+    placed: HashSet<(TokenId, TokenId)>,
+}
+
+/// The arc list ops of a prim spec or variant.
+#[derive(Clone, Copy)]
+struct Arcs<'a> {
+    references: &'a LayerListOp<LayerReference>,
+    payloads: &'a LayerListOp<LayerReference>,
+    inherits: &'a LayerListOp<PathId>,
+    specializes: &'a LayerListOp<PathId>,
+}
+
+/// The display path of child prim `name` of `parent` (`/`, `/A` or
+/// `/A{v=x}`): a prim inside a variant follows its selection directly.
+fn child_display(parent: &str, name: &str) -> String {
+    if parent.ends_with('}') {
+        format!("{parent}{name}")
+    } else {
+        format!("{}/{name}", parent.trim_end_matches('/'))
+    }
+}
+
+/// The display path of variant `variant` of set `set` on `owner`.
+fn branch_display(owner: &str, set: &str, variant: &str) -> String {
+    format!("{owner}{{{set}={variant}}}")
 }
 
 fn layer_offset(offset: LayerLayerOffset) -> LayerOffset {

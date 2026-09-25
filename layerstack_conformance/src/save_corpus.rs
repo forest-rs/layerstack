@@ -447,21 +447,6 @@ pub fn unsupported_cases() -> Vec<(&'static str, &'static str, SaveError)> {
     };
     vec![
         (
-            "variant_set",
-            "#usda 1.0\ndef \"A\" (\n    variantSets = \"lod\"\n)\n{\n    variantSet \"lod\" = {\n        \"high\" {\n            float detail = 1\n        }\n    }\n}\n",
-            unsupported("/A", Unsupported::VariantSets),
-        ),
-        (
-            "variant_sets",
-            "#usda 1.0\ndef \"A\" (\n    variantSets = \"lod\"\n)\n{\n    variantSet \"lod\" = {\n        \"high\" {\n            def \"Geom\"\n            {\n            }\n        }\n    }\n}\n",
-            unsupported("/A/Geom", Unsupported::VariantSpec),
-        ),
-        (
-            "variant_selections",
-            "#usda 1.0\ndef \"A\" (\n    variants = {\n        string lod = \"high\"\n    }\n)\n{\n}\n",
-            unsupported("/A", Unsupported::VariantSelections),
-        ),
-        (
             "array_edit",
             "#usda 1.0\ndef \"A\"\n{\n    int[] ids = edit [append 4]\n}\n",
             unsupported("/A.ids", Unsupported::ArrayEdit),

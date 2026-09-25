@@ -1,0 +1,10 @@
+# Crate files are binary; keep them in Git LFS.
+*.usdc filter=lfs diff=lfs merge=lfs -text
+
+# Test data is byte-exact oracle input. Line breaks inside USDA string
+# literals and expected JSON/text are part of the data, so never convert
+# line endings on checkout (Windows would otherwise write CRLF).
+core-spec-supplemental-release_dec2025/** -text
+layerstack_conformance/fixtures/** -text
+layerstack_conformance/tests/assets/** -text
+layerstack_conformance/tests/data/** -text

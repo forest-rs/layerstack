@@ -98,6 +98,7 @@ pub mod spec_path;
 pub mod spline;
 pub mod stage;
 mod value_resolution;
+pub mod variant_fallbacks;
 
 pub mod live_stage;
 
@@ -139,5 +140,6 @@ pub use stage::{
     PopulationMask, PropertyDeclaration, Provenance, Resolved, ResolvedValue, SampleUse, Stage,
     StageOptions, Traverse, ValueExplanation, ValueSource,
 };
+pub use variant_fallbacks::VariantFallbacks;
 
 pub use live_stage::LiveStage;

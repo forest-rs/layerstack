@@ -1125,7 +1125,13 @@ impl Stage {
     ) -> HashMap<TokenId, TokenId> {
         self.prims
             .get(&prim)
-            .map(|index| crate::compose::strength_ordered_variant_selections(store, index))
+            .map(|index| {
+                crate::compose::strength_ordered_variant_selections(
+                    store,
+                    &crate::VariantFallbacks::default(),
+                    index,
+                )
+            })
             .unwrap_or_default()
     }
 

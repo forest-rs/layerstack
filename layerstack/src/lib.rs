@@ -87,6 +87,7 @@ pub(crate) mod population;
 pub mod prim_index;
 pub mod prim_index_graph;
 pub mod property;
+pub mod relocates;
 pub mod schema;
 pub mod spec_path;
 pub mod spline;
@@ -98,8 +99,9 @@ pub mod live_stage;
 pub use array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
 pub use asset::{AssetResolveError, AssetResolver, ResolvedAsset};
 pub use composition_error::{
-    ArcCycle, ArcCycleSite, CompositionError, SublayerCycle, UnresolvedAsset,
-    UnresolvedDefaultPrim, UnresolvedSublayer,
+    ArcCycle, ArcCycleSite, CompositionError, InvalidAuthoredRelocation,
+    InvalidConflictingRelocation, InvalidRelocationReason, InvalidSameTargetRelocations,
+    RelocationConflict, SublayerCycle, UnresolvedAsset, UnresolvedDefaultPrim, UnresolvedSublayer,
 };
 pub use dependency_map::ArcDependency;
 pub use doc::{
@@ -120,6 +122,7 @@ pub use prim_index_graph::{NodeId, PrimIndexGraph, PrimNode};
 pub use property::{
     PropertyEntry, PropertyKind, PropertySpec, PropertyType, TimeSample, Variability,
 };
+pub use relocates::RelocationTable;
 pub use schema::{PropertyDefinition, SchemaDefinition, SchemaRegistry};
 pub use spec_path::{SpecComponent, SpecPath, SpecPathError};
 pub use spline::SplineData;

@@ -35,6 +35,15 @@ pub enum CompositionError {
     /// A sublayer whose asset path could not be resolved. The sublayer was
     /// ignored.
     UnresolvedSublayer(UnresolvedSublayer),
+    /// A `layerRelocates` entry that is invalid on its own. The entry was
+    /// ignored.
+    InvalidAuthoredRelocation(InvalidAuthoredRelocation),
+    /// A `layerRelocates` entry that conflicts with another entry of its
+    /// layer stack. The entry was ignored.
+    InvalidConflictingRelocation(InvalidConflictingRelocation),
+    /// `layerRelocates` entries of one layer stack that move different
+    /// sources to one target. Every one of them was ignored.
+    InvalidSameTargetRelocations(InvalidSameTargetRelocations),
 }
 
 impl CompositionError {
@@ -43,7 +52,11 @@ impl CompositionError {
     #[must_use]
     pub fn prim(&self) -> Option<PathId> {
         match self {
-            Self::SublayerCycle(_) | Self::UnresolvedSublayer(_) => None,
+            Self::SublayerCycle(_)
+            | Self::UnresolvedSublayer(_)
+            | Self::InvalidAuthoredRelocation(_)
+            | Self::InvalidConflictingRelocation(_)
+            | Self::InvalidSameTargetRelocations(_) => None,
             Self::ArcCycle(cycle) => Some(cycle.prim),
             Self::UnresolvedDefaultPrim(error) => Some(error.prim),
             Self::UnresolvedAsset(error) => Some(error.prim),
@@ -192,4 +205,100 @@ pub struct UnresolvedSublayer {
     pub layer: LayerId,
     /// The sublayer's asset path as authored.
     pub asset: String,
+}
+
+/// A `layerRelocates` entry that is invalid whatever else its layer stack
+/// authors, found when computing the relocation table of a layer stack
+/// holding `layer`.
+///
+/// Spec: AOUSD Core §10.3.2.6 ("If an entry in the layerRelocates field
+/// violates any of the following restrictions, it is a composition error
+/// and that entry is ignored"). OpenUSD reports it as
+/// `PcpErrorInvalidAuthoredRelocation` (`Pcp_IsValidRelocatesEntry` in
+/// `pxr/usd/pcp/layerStack.cpp`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct InvalidAuthoredRelocation {
+    /// The layer whose `layerRelocates` authors the entry.
+    pub layer: LayerId,
+    /// The entry's source path.
+    pub source: PathId,
+    /// The entry's target path; `None` for a relocate to `<>`.
+    pub target: Option<PathId>,
+    /// Why the entry is invalid.
+    pub reason: InvalidRelocationReason,
+}
+
+/// Why a `layerRelocates` entry is invalid on its own (see
+/// [`InvalidAuthoredRelocation`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum InvalidRelocationReason {
+    /// The source is a root prim, whose parent, the pseudo-root, authors no
+    /// arcs.
+    RootPrimSource,
+    /// The target is the source itself.
+    TargetIsSource,
+    /// The target is a namespace ancestor of the source.
+    TargetIsAncestor,
+    /// The target is a namespace descendant of the source.
+    TargetIsDescendant,
+}
+
+/// A `layerRelocates` entry that conflicts with another valid entry of the
+/// same layer stack, found when computing that layer stack's relocation
+/// table. Each side of a conflict is reported on its own, and both entries
+/// are ignored.
+///
+/// Spec: AOUSD Core §10.3.2.6 (each source has one target and each target
+/// one source; a source must use the ancestral relocated path). OpenUSD
+/// reports it as `PcpErrorInvalidConflictingRelocation`
+/// (`_ValidateAndRemoveConflictingRelocates` in
+/// `pxr/usd/pcp/layerStack.cpp`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct InvalidConflictingRelocation {
+    /// The layer whose `layerRelocates` authors the ignored entry.
+    pub layer: LayerId,
+    /// The ignored entry's source path.
+    pub source: PathId,
+    /// The ignored entry's target path; `None` for a relocate to `<>`.
+    pub target: Option<PathId>,
+    /// The layer authoring the entry it conflicts with.
+    pub conflict_layer: LayerId,
+    /// The conflicting entry's source path.
+    pub conflict_source: PathId,
+    /// The conflicting entry's target path.
+    pub conflict_target: Option<PathId>,
+    /// How the two entries conflict.
+    pub reason: RelocationConflict,
+}
+
+/// How two `layerRelocates` entries conflict (see
+/// [`InvalidConflictingRelocation`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum RelocationConflict {
+    /// The entry's target is the other entry's source.
+    TargetIsConflictSource,
+    /// The entry's source is the other entry's target.
+    SourceIsConflictTarget,
+    /// The entry's target is a namespace descendant of the other entry's
+    /// source, so it is not a fully relocated path.
+    TargetIsConflictSourceDescendant,
+    /// The entry's source is a namespace descendant of the other entry's
+    /// source, so it does not use the ancestral relocated path.
+    SourceIsConflictSourceDescendant,
+}
+
+/// `layerRelocates` entries of one layer stack that move different sources
+/// to the same target, found when computing that layer stack's relocation
+/// table. Every one of them is ignored.
+///
+/// Spec: AOUSD Core §10.3.2.6 ("each target may only have one possible
+/// source path"). OpenUSD reports it as
+/// `PcpErrorInvalidSameTargetRelocations`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct InvalidSameTargetRelocations {
+    /// The shared target path.
+    pub target: PathId,
+    /// Each entry moving a prim there: the authoring layer and the source
+    /// path, ordered by source path.
+    pub sources: Vec<(LayerId, PathId)>,
 }

@@ -960,14 +960,23 @@ impl<'a> LowerCtx<'a> {
             return Value::Blocked;
         }
 
-        // Negated number.
-        if sig.len() >= 2 && sig[0].0 == SyntaxKind::Minus && sig[1].0 == SyntaxKind::Number {
+        // Negated number. As in OpenUSD (`_GetNumericValueFromString`,
+        // `pxr/usd/sdf/textParserHelpers.cpp`), `-0` is the double `-0.0`
+        // rather than the integer zero, and `-inf` is negative infinity.
+        if sig.len() >= 2 && sig[0].0 == SyntaxKind::Minus {
             let text = self.text(self.node_from(tree, sig[1].1));
-            return match parse_number_value(text) {
-                Value::Int(n) => Value::Int(-n),
-                Value::Number(n) => Value::Number(-n),
-                other => other,
-            };
+            match sig[1].0 {
+                SyntaxKind::Number if text == "0" => return Value::Number(-0.0),
+                SyntaxKind::Number => {
+                    return match parse_number_value(text) {
+                        Value::Int(n) => Value::Int(-n),
+                        Value::Number(n) => Value::Number(-n),
+                        other => other,
+                    };
+                }
+                SyntaxKind::Ident if text == "inf" => return Value::Number(f64::NEG_INFINITY),
+                _ => {}
+            }
         }
 
         let (kind, id) = sig[0];
@@ -2395,6 +2404,34 @@ def Scope \"root\" {
         };
         assert_eq!(dict[0].key, "kA");
         assert!(matches!(&dict[0].value, Value::String(s) if s == "v\n"));
+    }
+
+    /// `-0` is the double `-0.0`, and `-inf` negative infinity, as in
+    /// OpenUSD's `_GetNumericValueFromString`.
+    #[test]
+    fn negative_zero_and_infinity() {
+        let src = "#usda 1.0\ndef \"P\" {\n    double z = -0\n    double i = -inf\n    int n = -3\n    double \
+                   y = -0.0\n}\n";
+        let r = parse(src);
+        assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+        let values: vec::Vec<_> = r.layer.prims[0]
+            .children
+            .iter()
+            .map(|child| match child {
+                PrimChild::Attribute(a) => a.default.as_ref().unwrap(),
+                _ => panic!("expected attributes"),
+            })
+            .collect();
+        assert!(matches!(values[0], Value::Number(z) if *z == 0.0 && z.is_sign_negative()));
+        assert!(matches!(values[1], Value::Number(i) if *i == f64::NEG_INFINITY));
+        assert!(matches!(values[2], Value::Int(-3)));
+        assert!(matches!(values[3], Value::Number(y) if y.is_sign_negative()));
+    }
+
+    #[test]
+    fn a_minus_without_a_number_is_reported() {
+        let cst = parse_cst("#usda 1.0\ndef \"P\" {\n    double x = -nan\n}\n");
+        assert_eq!(cst.diagnostics.len(), 1, "{:?}", cst.diagnostics);
     }
 
     #[test]

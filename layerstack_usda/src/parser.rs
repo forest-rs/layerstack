@@ -1294,8 +1294,15 @@ impl<'a> Parser<'a> {
             Some(TokenKind::Minus) => {
                 self.bump(); // `-`
                 self.eat_trivia();
-                if self.peek() == Some(TokenKind::Number) {
+                // `Number <- (Minus)? BasePart (ExponentPart)? / 'inf' /
+                // Minus 'inf' / 'nan'` (AOUSD Core §16.2.5).
+                if self.peek() == Some(TokenKind::Number)
+                    || (self.peek() == Some(TokenKind::Ident) && self.current_text() == "inf")
+                {
                     self.bump();
+                } else {
+                    let span = self.current_span();
+                    self.error(span, "expected a number after `-`");
                 }
             }
             Some(

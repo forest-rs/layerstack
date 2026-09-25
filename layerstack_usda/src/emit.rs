@@ -36,6 +36,7 @@ use layerstack::{
     ReferenceTarget, ResolvedAsset,
 };
 
+use crate::Span;
 use crate::ast;
 use crate::diagnostic::Diagnostic;
 
@@ -77,6 +78,7 @@ pub fn emit(
         layer_id,
         resolved_layers: Vec::new(),
         diagnostics: Vec::new(),
+        rejections: Vec::new(),
     };
     let layer = ctx.emit_layer(ast);
     EmitResult {
@@ -95,6 +97,9 @@ struct EmitCtx<'a> {
     layer_id: LayerId,
     resolved_layers: Vec<Layer>,
     diagnostics: Vec<Diagnostic>,
+    /// Why values being converted could not take their declared type; the
+    /// caller that owns the value reports them (see [`EmitCtx::checked`]).
+    rejections: Vec<String>,
 }
 
 impl EmitCtx<'_> {
@@ -419,7 +424,11 @@ impl EmitCtx<'_> {
             }
             return;
         }
-        let value = self.convert_metadata_value(&entry.value, field_type.type_hint());
+        let Some(value) = self.checked(entry.span, |ctx| {
+            ctx.convert_metadata_value(&entry.value, field_type.type_hint())
+        }) else {
+            return;
+        };
         set_field_vec(fields, key, FieldValue::Value(value));
     }
 
@@ -513,11 +522,10 @@ impl EmitCtx<'_> {
         let time_samples = attr
             .time_samples
             .as_ref()
-            .map(|samples| self.convert_time_samples(samples, attr.type_name));
-        let default = attr
-            .default
-            .as_ref()
-            .map(|value| self.convert_value(value, attr.type_name));
+            .map(|samples| self.convert_time_samples(samples, attr.type_name, attr.span));
+        let default = attr.default.as_ref().and_then(|value| {
+            self.checked(attr.span, |ctx| ctx.convert_value(value, attr.type_name))
+        });
         let mut metadata = Vec::new();
         for entry in &attr.metadata {
             self.emit_metadata_entry(entry, &mut metadata);
@@ -614,7 +622,7 @@ impl EmitCtx<'_> {
         properties: &'p mut Vec<PropertyEntry>,
         name_tok: TokenId,
         name: &str,
-        span: crate::Span,
+        span: Span,
         kind: PropertyKind,
     ) -> Option<&'p mut PropertySpec> {
         let spec = property_entry(properties, name_tok, kind);
@@ -1031,12 +1039,7 @@ impl EmitCtx<'_> {
     /// against the prim path `anchor`, and unparsable ones are reported.
     ///
     /// Spec: AOUSD Core §8 (paths), §12.4 (targets).
-    fn target_paths(
-        &mut self,
-        targets: &[&str],
-        anchor: &str,
-        span: crate::Span,
-    ) -> Vec<TargetPath> {
+    fn target_paths(&mut self, targets: &[&str], anchor: &str, span: Span) -> Vec<TargetPath> {
         targets
             .iter()
             .filter_map(|target| {
@@ -1070,29 +1073,56 @@ impl EmitCtx<'_> {
     ///
     /// A `None` sample is a value block in effect from its time until the
     /// next sample (AOUSD Core §12.3.6: individual time samples can be
-    /// blocked), so it stays in the series as [`Value::Blocked`].
+    /// blocked), so it stays in the series as [`Value::Blocked`]. A sample
+    /// whose value does not convert to the declared type is reported and
+    /// left out.
     fn convert_time_samples(
         &mut self,
         samples: &[ast::TimeSample<'_>],
         type_hint: &str,
+        span: Span,
     ) -> Vec<(f64, Value)> {
         samples
             .iter()
-            .map(|s| {
-                let value = s
-                    .value
-                    .as_ref()
-                    .map_or(Value::Blocked, |v| self.convert_value(v, type_hint));
-                (s.time, value)
+            .filter_map(|s| {
+                let value = match &s.value {
+                    Some(v) => self.checked(span, |ctx| ctx.convert_value(v, type_hint))?,
+                    None => Value::Blocked,
+                };
+                Some((s.time, value))
             })
             .collect()
     }
 
+    /// Runs `convert`, returning its value only when every value it
+    /// converted took its declared type; otherwise reports each rejection at
+    /// `span` and returns `None`, so that no value of another type is
+    /// imported.
+    fn checked(&mut self, span: Span, convert: impl FnOnce(&mut Self) -> Value) -> Option<Value> {
+        let before = self.rejections.len();
+        let value = convert(self);
+        if self.rejections.len() == before {
+            return Some(value);
+        }
+        for message in self.rejections.drain(before..) {
+            self.diagnostics.push(Diagnostic::error(span, message));
+        }
+        None
+    }
+
     fn convert_value(&mut self, val: &ast::Value<'_>, type_hint: &str) -> Value {
+        if let Some(converted) = convert_scalar(val, type_hint) {
+            return converted.unwrap_or_else(|message| {
+                self.rejections.push(message);
+                Value::Blocked
+            });
+        }
         match val {
             ast::Value::Bool(b) => Value::Bool(*b),
-            ast::Value::Int(n) => convert_int(*n, type_hint),
-            ast::Value::Number(n) => convert_float(*n, type_hint),
+            // A number for a declared numeric or boolean type converted in
+            // `convert_scalar`; for any other, it keeps its written type.
+            ast::Value::Int(n) => Value::Int64(*n),
+            ast::Value::Number(n) => Value::Double(*n),
             ast::Value::String(s) => match type_hint {
                 "token" => Value::Token(self.tokens.intern(s)),
                 "asset" => Value::Asset(Arc::from(&**s)),
@@ -1237,6 +1267,12 @@ impl EmitCtx<'_> {
     ) -> Option<Value> {
         // Strip array suffix for matching: "float3[]" → "float3".
         let base = type_hint.strip_suffix("[]").unwrap_or(type_hint);
+        if let Some(component) = component_type(base)
+            && let Err(message) = check_components(items, component)
+        {
+            self.rejections.push(alloc::format!("`{base}`: {message}"));
+            return Some(Value::Blocked);
+        }
         match base {
             // Vectors — f64
             "double2" => Some(Value::Vec2d(extract_f64s::<2>(items))),
@@ -1524,31 +1560,150 @@ fn element_type_hint(hint: &str) -> &str {
 
 // ── Numeric conversion with type hints ──────────────────────────────────
 
-fn convert_int(n: i64, type_hint: &str) -> Value {
-    match type_hint {
-        // USDA writes `bool` values as `0` or `1` inside dictionaries.
-        "bool" => Value::Bool(n != 0),
-        "int" => Value::Int(n as i32),
-        "uint" => Value::UInt(n as u32),
-        "int64" => Value::Int64(n),
-        "uint64" => Value::UInt64(n as u64),
-        "float" => Value::Float(n as f32),
-        "double" => Value::Double(n as f64),
-        "half" => Value::Half(half_from_f64(n as f64)),
-        "timecode" => Value::TimeCode(n as f64),
-        _ => Value::Int64(n),
+/// A number literal's value, as OpenUSD's text parser holds it.
+#[derive(Clone, Copy)]
+enum Number {
+    Int(i64),
+    Float(f64),
+}
+
+/// Converts a number, boolean or string literal to the scalar type `ty` as
+/// OpenUSD's text parser does (`Sdf_ParserHelpers::_GetImpl`,
+/// `pxr/usd/sdf/parserHelpers.h`, through `GfNumericCast`,
+/// `pxr/base/gf/numericCast.h`), so that the value always has the declared
+/// type or is rejected:
+///
+/// - `bool` takes `true`/`false`, a number (true when nonzero, NaN
+///   included), or a string `Sdf_BoolFromString` accepts;
+/// - an integer type takes an integer in its range, or a finite number whose
+///   value truncated toward zero is;
+/// - `half`, `float`, `double` and `timecode` take any number (a `half`
+///   narrows through `float`), or the strings `"inf"`, `"-inf"` and `"nan"`.
+///
+/// Returns `None` when `ty` is not one of these types, and for a value
+/// block, an array or an array edit, whose elements convert one by one.
+///
+/// Spec: AOUSD Core §6.3 (scalar value types), §16.2.11 (values).
+fn convert_scalar(value: &ast::Value<'_>, ty: &str) -> Option<Result<Value, String>> {
+    if !matches!(
+        ty,
+        "bool" | "int" | "uint" | "int64" | "uint64" | "half" | "float" | "double" | "timecode"
+    ) || matches!(
+        value,
+        ast::Value::Blocked | ast::Value::Array(_) | ast::Value::ArrayEdit(_)
+    ) {
+        return None;
+    }
+    let floating = matches!(ty, "half" | "float" | "double" | "timecode");
+    let number = match value {
+        ast::Value::Int(n) => Number::Int(*n),
+        ast::Value::Number(n) => Number::Float(*n),
+        ast::Value::Bool(b) if ty == "bool" => return Some(Ok(Value::Bool(*b))),
+        ast::Value::String(s) if ty == "bool" => {
+            return Some(
+                bool_from_string(s)
+                    .map(Value::Bool)
+                    .ok_or_else(|| alloc::format!("`{s}` is not a `bool`")),
+            );
+        }
+        ast::Value::String(s) if floating && matches!(&**s, "inf" | "-inf" | "nan") => {
+            Number::Float(match &**s {
+                "inf" => f64::INFINITY,
+                "-inf" => f64::NEG_INFINITY,
+                _ => f64::NAN,
+            })
+        }
+        _ => return Some(Err(alloc::format!("a `{ty}` value must be a number"))),
+    };
+    Some(convert_number(number, ty))
+}
+
+/// Converts `number` to the numeric or boolean type `ty` (see
+/// [`convert_scalar`]).
+fn convert_number(number: Number, ty: &str) -> Result<Value, String> {
+    let as_f64 = match number {
+        Number::Int(n) => n as f64,
+        Number::Float(f) => f,
+    };
+    // An integer target takes the value truncated toward zero, if finite.
+    let integral = |min: i128, max: i128| -> Result<i128, String> {
+        let n = match number {
+            Number::Int(n) => i128::from(n),
+            // `as` truncates toward zero.
+            Number::Float(f) if f.is_finite() => f as i128,
+            Number::Float(f) => return Err(alloc::format!("{f} is not a `{ty}`")),
+        };
+        if (min..=max).contains(&n) {
+            Ok(n)
+        } else {
+            Err(alloc::format!("{as_f64} is out of range for `{ty}`"))
+        }
+    };
+    Ok(match ty {
+        "bool" => Value::Bool(match number {
+            Number::Int(n) => n != 0,
+            Number::Float(f) => f != 0.0,
+        }),
+        "int" => Value::Int(integral(i32::MIN.into(), i32::MAX.into())? as i32),
+        "uint" => Value::UInt(integral(0, u32::MAX.into())? as u32),
+        "int64" => Value::Int64(integral(i64::MIN.into(), i64::MAX.into())? as i64),
+        "uint64" => Value::UInt64(integral(0, u64::MAX.into())? as u64),
+        "half" => Value::Half(match number {
+            Number::Int(n) => layerstack::half::from_f32(n as f32),
+            Number::Float(f) => half_from_f64(f),
+        }),
+        "float" => Value::Float(match number {
+            Number::Int(n) => n as f32,
+            Number::Float(f) => f as f32,
+        }),
+        "double" => Value::Double(as_f64),
+        "timecode" => Value::TimeCode(as_f64),
+        _ => unreachable!("`convert_scalar` passes numeric types only"),
+    })
+}
+
+/// `Sdf_BoolFromString` (`pxr/usd/sdf/parserHelpers.cpp`): `true`, `yes`,
+/// `1`, `false`, `no` or `0`, in any case.
+fn bool_from_string(s: &str) -> Option<bool> {
+    let s = s.to_ascii_lowercase();
+    match s.as_str() {
+        "true" | "yes" | "1" => Some(true),
+        "false" | "no" | "0" => Some(false),
+        _ => None,
     }
 }
 
-fn convert_float(n: f64, type_hint: &str) -> Value {
-    match type_hint {
-        "float" => Value::Float(n as f32),
-        "half" => Value::Half(half_from_f64(n)),
-        "int" => Value::Int(n as i32),
-        "int64" => Value::Int64(n as i64),
-        "timecode" => Value::TimeCode(n),
-        _ => Value::Double(n),
+/// The scalar type of each component of the vector, matrix or quaternion
+/// type `base`, or `None` for other types.
+fn component_type(base: &str) -> Option<&'static str> {
+    match base {
+        "int2" | "int3" | "int4" => Some("int"),
+        "double2" | "double3" | "double4" | "matrix2d" | "matrix3d" | "matrix4d" | "quatd" => {
+            Some("double")
+        }
+        "float2" | "float3" | "float4" | "quatf" => Some("float"),
+        "half2" | "half3" | "half4" | "quath" => Some("half"),
+        _ if is_semantic_vec_alias(base, 'd') => Some("double"),
+        _ if is_semantic_vec_alias(base, 'f') => Some("float"),
+        _ if is_semantic_vec_alias(base, 'h') => Some("half"),
+        _ => None,
     }
+}
+
+/// Checks that every component of a vector, matrix or quaternion (rows
+/// included) converts to `component`.
+fn check_components(items: &[ast::Value<'_>], component: &str) -> Result<(), String> {
+    for item in items {
+        match item {
+            ast::Value::Tuple(row) => check_components(row, component)?,
+            other => {
+                convert_scalar(other, component).unwrap_or_else(|| {
+                    Err(alloc::format!("a `{component}` component must be a number"))
+                })?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// A `half` literal's bits: the parsed `double`, narrowed through `float`
@@ -2901,6 +3056,136 @@ def \"A\" {
         let path = Path::parse_absolute(path, tokens).unwrap();
         let id = paths.lookup(&path).expect("path interned");
         result.layer.prims.get(&id).expect("prim spec")
+    }
+
+    /// The default and time samples of each attribute of `/P`, by name, and
+    /// the number of diagnostics.
+    #[allow(clippy::type_complexity, reason = "test helper")]
+    fn attribute_values(
+        body: &str,
+    ) -> (
+        Vec<(String, Option<Value>, Option<Vec<(f64, Value)>>)>,
+        usize,
+    ) {
+        let src = alloc::format!("#usda 1.0\ndef \"P\" {{\n{body}\n}}\n");
+        let (result, mut tokens, paths) = emit_source(&src);
+        let spec = prim(&result, &mut tokens, &paths, "/P");
+        let values = spec
+            .properties
+            .iter()
+            .map(|entry| {
+                (
+                    String::from(tokens.resolve(entry.name)),
+                    entry.spec.default.clone(),
+                    entry.spec.time_samples.clone(),
+                )
+            })
+            .collect();
+        (values, result.diagnostics.len())
+    }
+
+    /// A number given for `bool` is true when nonzero, as OpenUSD 26.08
+    /// reads it (`Sdf_ParserHelpers::_GetImpl<bool>`), in scalars, arrays
+    /// and time samples.
+    #[test]
+    fn numbers_for_bool_are_true_when_nonzero() {
+        let (values, diagnostics) = attribute_values(
+            "    bool a = -0\n    bool b = 2\n    bool c = 1.5\n    bool d = -inf\n    bool e = \
+             nan\n    bool f = 0\n    bool[] g = [-0, 2, 0.0, -1]\n    bool h.timeSamples = {\n        \
+             1: -0,\n        2: 1.5,\n    }",
+        );
+        assert_eq!(diagnostics, 0);
+        let expect = [
+            ("a", Value::Bool(false)),
+            ("b", Value::Bool(true)),
+            ("c", Value::Bool(true)),
+            ("d", Value::Bool(true)),
+            ("e", Value::Bool(true)),
+            ("f", Value::Bool(false)),
+            (
+                "g",
+                Value::Array(vec![
+                    Value::Bool(false),
+                    Value::Bool(true),
+                    Value::Bool(false),
+                    Value::Bool(true),
+                ]),
+            ),
+        ];
+        for (name, value) in expect {
+            let found = values.iter().find(|v| v.0 == name).unwrap();
+            assert_eq!(found.1.as_ref(), Some(&value), "{name}");
+        }
+        let h = values.iter().find(|v| v.0 == "h").unwrap();
+        assert_eq!(
+            h.2.as_deref(),
+            Some(&[(1.0, Value::Bool(false)), (2.0, Value::Bool(true))][..])
+        );
+    }
+
+    /// Each number converts to the declared type as OpenUSD 26.08 converts
+    /// it (`GfNumericCast`): toward zero for integers, signed zero kept for
+    /// floating point.
+    #[test]
+    fn numbers_convert_to_the_declared_type() {
+        let (values, diagnostics) = attribute_values(
+            "    int a = 1.5\n    int b = -1.5\n    uint c = 1.5\n    int64 d = 4294967296\n    \
+             float e = -0\n    double f = 2\n    timecode g = -0\n    half h = -0\n    uint64 i = \
+             1e3\n    float[] j = [1, -0, 1.5]\n    int k.timeSamples = {\n        1: 2.5,\n    }",
+        );
+        assert_eq!(diagnostics, 0);
+        let expect = [
+            ("a", Value::Int(1)),
+            ("b", Value::Int(-1)),
+            ("c", Value::UInt(1)),
+            ("d", Value::Int64(4_294_967_296)),
+            ("f", Value::Double(2.0)),
+            ("h", Value::Half(0x8000)),
+            ("i", Value::UInt64(1000)),
+        ];
+        for (name, value) in expect {
+            let found = values.iter().find(|v| v.0 == name).unwrap();
+            assert_eq!(found.1.as_ref(), Some(&value), "{name}");
+        }
+        let signed = |name: &str| {
+            values
+                .iter()
+                .find(|v| v.0 == name)
+                .and_then(|v| v.1.clone())
+                .unwrap()
+        };
+        assert!(matches!(signed("e"), Value::Float(z) if z == 0.0 && z.is_sign_negative()));
+        assert!(matches!(signed("g"), Value::TimeCode(z) if z == 0.0 && z.is_sign_negative()));
+        assert!(matches!(
+            signed("j"),
+            Value::Array(items) if matches!(items[..],
+                [Value::Float(a), Value::Float(b), Value::Float(c)]
+                    if a == 1.0 && b.is_sign_negative() && c == 1.5)
+        ));
+        let k = values.iter().find(|v| v.0 == "k").unwrap();
+        assert_eq!(k.2.as_deref(), Some(&[(1.0, Value::Int(2))][..]));
+    }
+
+    /// A value OpenUSD 26.08 rejects for the declared type (out of range,
+    /// not finite for an integer, or not a number) is reported and not
+    /// imported; the other values and samples are kept.
+    #[test]
+    fn values_that_do_not_convert_are_rejected() {
+        let (values, diagnostics) = attribute_values(
+            "    uint a = -1\n    int b = inf\n    int c = nan\n    int d = 4294967296\n    int64 e \
+             = 1e30\n    float f = true\n    int g = \"3\"\n    int[] h = [1, 1.5e10]\n    float3 i \
+             = (1, true, 2)\n    int j.timeSamples = {\n        1: 1e20,\n        2: 3,\n    }\n    \
+             double ok = 1",
+        );
+        assert_eq!(diagnostics, 10);
+        for name in ["a", "b", "c", "d", "e", "f", "g", "h", "i"] {
+            let found = values.iter().find(|v| v.0 == name).unwrap();
+            assert_eq!(found.1, None, "{name}");
+        }
+        let j = values.iter().find(|v| v.0 == "j").unwrap();
+        assert_eq!(j.2.as_deref(), Some(&[(2.0, Value::Int(3))][..]));
+        let ok = values.iter().find(|v| v.0 == "ok").unwrap();
+        assert_eq!(ok.1, Some(Value::Double(1.0)));
     }
 
     #[test]

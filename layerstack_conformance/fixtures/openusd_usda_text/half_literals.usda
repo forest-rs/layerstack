@@ -15,7 +15,9 @@ def "Halves"
     half largest = 65519
     half overflow = 65520
     half negativeOverflow = -1e9
+    half negativeZero = -0
     half infinity = inf
+    half negativeInfinity = -inf
     half notANumber = nan
     half2 pair = (0.1, -0.333)
     half3 triple = (1e-7, 65519, 0.2)

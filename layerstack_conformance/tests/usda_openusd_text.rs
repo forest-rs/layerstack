@@ -98,6 +98,9 @@ fn half_literals_round_as_openusd_rounds_them() {
         ("largest", 0x7bff),
         ("overflow", 0x7c00),
         ("negativeOverflow", 0xfc00),
+        ("negativeZero", 0x8000),
+        ("infinity", 0x7c00),
+        ("negativeInfinity", 0xfc00),
         ("notANumber", 0x7e00),
     ] {
         assert_eq!(
@@ -105,6 +108,74 @@ fn half_literals_round_as_openusd_rounds_them() {
             Value::Half(bits),
             "{name}"
         );
+    }
+}
+
+/// A number takes the declared type as in OpenUSD's reading of the same
+/// text: for `bool`, true when nonzero; for an integer type, truncated
+/// toward zero; for a floating-point type, signed zero kept.
+///
+/// Spec: AOUSD Core §6.3; `Sdf_ParserHelpers::_GetImpl`
+/// (`pxr/usd/sdf/parserHelpers.h`), `GfNumericCast`.
+#[test]
+fn numbers_take_the_declared_type_as_openusd_reads_them() {
+    let mut layer = read_alike("numeric_literals");
+    for (name, value) in [
+        ("negativeZero", Value::Bool(false)),
+        ("two", Value::Bool(true)),
+        ("fraction", Value::Bool(true)),
+        ("negativeInfinity", Value::Bool(true)),
+        ("notANumber", Value::Bool(true)),
+        (
+            "array",
+            Value::Array([false, true, false, true, false].map(Value::Bool).to_vec()),
+        ),
+        ("truncated", Value::Int(1)),
+        ("negativeTruncated", Value::Int(-1)),
+        ("unsignedTruncated", Value::UInt(1)),
+        ("vector", Value::Vec3i([1, -2, 3])),
+    ] {
+        assert_eq!(
+            default_value(&mut layer, &format!("/Numbers.{name}")),
+            value,
+            "{name}"
+        );
+    }
+}
+
+/// Every attribute statement OpenUSD rejects for its declared type (see
+/// `numeric_rejected.txt`, checked by `generate.py`) is reported, and its
+/// value is not imported as another type.
+#[test]
+fn values_openusd_rejects_are_reported() {
+    let dir = workspace_root().join("layerstack_conformance/fixtures/openusd_usda_text");
+    let statements = std::fs::read_to_string(dir.join("numeric_rejected.txt")).unwrap();
+    for statement in statements.lines() {
+        let source = format!(
+            "#usda 1.0\ndef \"P\"\n{{\n    {}\n}}\n",
+            statement.replace("\\n", "\n")
+        );
+        let parsed = layerstack_usda::parser::parse(&source);
+        assert!(parsed.diagnostics.is_empty(), "{statement}");
+        let mut tokens = layerstack::interner::TokenInterner::default();
+        let mut paths = layerstack::path::PathInterner::default();
+        let result = layerstack_usda::emit::emit(
+            &parsed.layer,
+            layerstack::doc::LayerId(1),
+            &mut tokens,
+            &mut paths,
+            &mut layerstack_conformance::save_corpus::AnyAsset::default(),
+        );
+        assert!(!result.diagnostics.is_empty(), "{statement}: not reported");
+        for prim in result.layer.prims.values() {
+            for entry in &prim.properties {
+                assert!(
+                    entry.spec.default.is_none()
+                        && entry.spec.time_samples.as_ref().is_none_or(Vec::is_empty),
+                    "{statement}: a value was imported"
+                );
+            }
+        }
     }
 }
 

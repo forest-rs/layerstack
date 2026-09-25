@@ -8,7 +8,7 @@
 //!
 //! Spec: AOUSD Core §11 (stage population).
 
-use alloc::{collections::BTreeSet, vec::Vec};
+use alloc::{collections::BTreeSet, rc::Rc, vec::Vec};
 
 use hashbrown::{HashMap, HashSet};
 
@@ -23,25 +23,97 @@ use crate::{
     doc::{LayerId, Reference, ReferenceTarget},
     layer_stack::LayerStack,
     path::{Path, PathId, PathInterner},
+    relocates::{LiftedSet, Relocations, Walk},
     stage::PopulationMask,
 };
 
 /// Produces the set of populated prim paths and a parent→children index.
+///
+/// Arcs place their targets' prims through the relocations of the layer
+/// stacks they reach; a prim at or beneath a relocation source of the
+/// stage's layer stack is not populated (AOUSD Core §10.3.2.6). Population
+/// follows the arcs of unselected variant branches too, so the sources of
+/// the relocations it lifts through them stay: composition removes those
+/// of the arcs it follows.
 pub(crate) fn populate(
     store: &mut dyn LayerStore,
     local_stack: &LayerStack,
     mask: Option<&PopulationMask>,
+    relocations: &mut Relocations,
 ) -> (BTreeSet<PathId>, HashMap<PathId, Vec<PathId>>) {
-    let mut paths = gather_populated_paths(store, local_stack);
+    let mut paths = gather_populated_paths(store, local_stack, relocations);
+    let moved = relocations.take_moved();
+    let placed = split_moved_paths(store, &mut paths, &moved);
     add_ancestor_paths(store, &mut paths);
+    add_moved_paths(store, &mut paths, placed);
+    paths.retain(|path| !relocations.is_prohibited(store.paths(), *path));
     apply_population_mask(store, &mut paths, mask);
     let children = build_children_index(store, paths.iter().copied());
     (paths, children)
 }
 
+/// Removes from `paths` those an arc placed only through a relocation,
+/// `moved`, and those beneath them, and returns them.
+fn split_moved_paths(
+    store: &dyn LayerStore,
+    paths: &mut BTreeSet<PathId>,
+    moved: &HashSet<PathId>,
+) -> Vec<PathId> {
+    if moved.is_empty() {
+        return Vec::new();
+    }
+    let interner = store.paths();
+    let beneath_moved = |path: PathId| {
+        let mut current = interner.resolve(path).parent();
+        while let Some(parent) = current {
+            if interner
+                .lookup(&parent)
+                .is_some_and(|id| moved.contains(&id))
+            {
+                return true;
+            }
+            current = parent.parent();
+        }
+        false
+    };
+    let split: Vec<PathId> = paths
+        .iter()
+        .copied()
+        .filter(|path| moved.contains(path) || beneath_moved(*path))
+        .collect();
+    for path in &split {
+        paths.remove(path);
+    }
+    split
+}
+
+/// Adds each of `placed`, paths an arc placed through a relocation and
+/// those beneath them, whose parent is populated, parents first.
+///
+/// A relocated prim composes at its target only beneath a parent that
+/// exists without it: moving a prim never creates the target's ancestors.
+///
+/// Spec: AOUSD Core §10.3.2.6, §11.3.1 (a prim's children are composed
+/// from the prim index of the prim, which exists first). OpenUSD:
+/// `_ComposePrimChildNamesAtNode` in `pxr/usd/pcp/primIndex.cpp`.
+fn add_moved_paths(store: &dyn LayerStore, paths: &mut BTreeSet<PathId>, mut placed: Vec<PathId>) {
+    let interner = store.paths();
+    placed.sort_by_key(|path| interner.resolve(*path).depth());
+    for path in placed {
+        let parent = interner
+            .resolve(path)
+            .parent()
+            .and_then(|parent| interner.lookup(&parent));
+        if parent.is_some_and(|parent| paths.contains(&parent)) {
+            paths.insert(path);
+        }
+    }
+}
+
 fn gather_populated_paths(
     store: &mut dyn LayerStore,
     local_stack: &LayerStack,
+    relocations: &mut Relocations,
 ) -> BTreeSet<PathId> {
     // Keep this ordered set: deterministic iteration here helps keep derived
     // path interning stable across runs.
@@ -69,7 +141,7 @@ fn gather_populated_paths(
     while idx < queue.len() {
         let path = queue[idx];
         idx += 1;
-        let mut chain = ArcChain::new(stage_layer_stack, path);
+        let mut chain = Chain::new(stage_layer_stack, path, relocations);
 
         let inherits =
             resolve_inherits_for_prim(store, local_stack, path, SelectionScope::Discover);
@@ -223,7 +295,7 @@ fn gather_populated_paths(
     while idx < queue.len() {
         let path = queue[idx];
         idx += 1;
-        let mut chain = ArcChain::new(stage_layer_stack, path);
+        let mut chain = Chain::new(stage_layer_stack, path, relocations);
 
         let inherits =
             resolve_inherits_for_prim(store, local_stack, path, SelectionScope::Discover);
@@ -253,7 +325,7 @@ fn expand_inherit_paths(
     paths: &mut BTreeSet<PathId>,
     queue: &mut Vec<PathId>,
     visited: &mut HashSet<(PathId, PathId)>,
-    chain: &mut ArcChain,
+    chain: &mut Chain<'_>,
     mapped_from: &mut MappedFrom,
 ) {
     let layer_stack = layer_stack_root(stack);
@@ -263,10 +335,9 @@ fn expand_inherit_paths(
     if !visited.insert((dest_root, inherited_root)) {
         return;
     }
-    chain.push(layer_stack, inherited_root, dest_root);
+    chain.push(store, stack, inherited_root, dest_root);
 
     let src_root = store.paths().resolve(inherited_root).clone();
-    let dest_root_path = store.paths().resolve(dest_root).clone();
 
     let mut remote_paths: Vec<PathId> = stack
         .layers
@@ -291,8 +362,12 @@ fn expand_inherit_paths(
             rel.to_vec()
         };
 
-        let dest_path_id = store.paths_mut().intern(dest_root_path.join(&rel));
-        if paths.insert(dest_path_id) {
+        let Some((dest_path_id, moved)) = chain.walk().place(store, dest_root, &rel) else {
+            continue;
+        };
+        let new = paths.insert(dest_path_id);
+        chain.relocations.place(dest_path_id, moved, new);
+        if new {
             queue.push(dest_path_id);
             mapped_from.insert(dest_path_id, (remote_path_id, rel.len()));
         }
@@ -367,7 +442,7 @@ fn expand_reference_paths(
     queue: &mut Vec<PathId>,
     visited: &mut HashSet<(PathId, LayerId, PathId)>,
     visited_inherits: &mut HashSet<(PathId, PathId)>,
-    chain: &mut ArcChain,
+    chain: &mut Chain<'_>,
     mapped_from: &mut MappedFrom,
 ) {
     let Some(reference_path) = reference.target_path(store) else {
@@ -379,9 +454,9 @@ fn expand_reference_paths(
     if !visited.insert((dest_root, reference.layer, reference_path)) {
         return;
     }
-    chain.push(reference.layer, reference_path, dest_root);
-
     let remote_stack = LayerStack::gather(store, reference.layer);
+    chain.push(store, &remote_stack, reference_path, dest_root);
+
     let target = store.paths().resolve(reference_path).clone();
     let base = store.paths().resolve(dest_root).clone();
 
@@ -408,8 +483,12 @@ fn expand_reference_paths(
             rel.to_vec()
         };
 
-        let dest_path_id = store.paths_mut().intern(base.join(&rel));
-        if paths.insert(dest_path_id) {
+        let Some((dest_path_id, moved)) = chain.walk().place(store, dest_root, &rel) else {
+            continue;
+        };
+        let new = paths.insert(dest_path_id);
+        chain.relocations.place(dest_path_id, moved, new);
+        if new {
             queue.push(dest_path_id);
         }
         // Referenced content has specs of its own at this path.
@@ -637,7 +716,7 @@ fn expand_ancestral_paths(
     queue: &mut Vec<PathId>,
     visited_refs: &mut HashSet<(PathId, LayerId, PathId)>,
     visited_inherits: &mut HashSet<(PathId, PathId)>,
-    chain: &mut ArcChain,
+    chain: &mut Chain<'_>,
     mapped_from: &mut MappedFrom,
 ) {
     let anchor = layer_stack_root(stack);
@@ -709,6 +788,79 @@ fn expand_ancestral_paths(
                 mapped_from,
             );
         }
+    }
+}
+
+/// The chain of arcs population follows from one prim, with the
+/// relocations of each layer stack on it lifted into the stage namespace
+/// (see [`Walk`]).
+struct Chain<'r> {
+    arcs: ArcChain,
+    relocations: &'r mut Relocations,
+    stage: Rc<LiftedSet>,
+    /// The relocations lifted by each arc on the chain, outermost first.
+    lifted: Vec<Option<Rc<LiftedSet>>>,
+}
+
+impl<'r> Chain<'r> {
+    fn new(layer_stack: LayerId, prim: PathId, relocations: &'r mut Relocations) -> Self {
+        let stage = relocations.stage();
+        Self {
+            arcs: ArcChain::new(layer_stack, prim),
+            relocations,
+            stage,
+            lifted: Vec::new(),
+        }
+    }
+
+    fn closes_cycle(
+        &self,
+        paths: &PathInterner,
+        dest: PathId,
+        layer_stack: LayerId,
+        target: PathId,
+    ) -> bool {
+        self.arcs.closes_cycle(paths, dest, layer_stack, target)
+    }
+
+    /// Follows an arc mapping `target` in `stack` onto the stage path
+    /// `dest`, lifting the relocations of `stack` it reaches.
+    fn push(
+        &mut self,
+        store: &mut dyn LayerStore,
+        stack: &LayerStack,
+        target: PathId,
+        dest: PathId,
+    ) {
+        let layer_stack = layer_stack_root(stack);
+        self.arcs.push(layer_stack, target, dest);
+        let table = self.relocations.table(store, stack);
+        let lifted = if table.is_empty() {
+            None
+        } else {
+            let outer = self.walk().nested();
+            let lifted = LiftedSet::lift(store, &table, layer_stack, target, dest, &outer);
+            (!lifted.is_empty()).then(|| Rc::new(lifted))
+        };
+        self.lifted.push(lifted);
+    }
+
+    fn pop(&mut self) {
+        self.arcs.pop();
+        self.lifted.pop();
+    }
+
+    /// The walk of the arc last pushed: the relocations lifted before it
+    /// are outer, its own are `own`.
+    fn walk(&self) -> Walk<'_> {
+        let (own, outer) = match self.lifted.split_last() {
+            Some((own, outer)) => (own.as_deref(), outer),
+            None => (None, &[][..]),
+        };
+        Walk::new(
+            core::iter::once(&*self.stage).chain(outer.iter().filter_map(|set| set.as_deref())),
+            own,
+        )
     }
 }
 
@@ -923,7 +1075,8 @@ mod tests {
     /// sorted.
     fn populated(store: &mut InMemoryStore, root: LayerId) -> Vec<String> {
         let stack = LayerStack::gather(store, root);
-        let (paths, _) = populate(store, &stack, None);
+        let mut relocations = Relocations::new(store, &stack);
+        let (paths, _) = populate(store, &stack, None, &mut relocations);
         let mut names: Vec<String> = paths
             .into_iter()
             .map(|id| store.paths.display(id, &store.tokens))

@@ -27,7 +27,7 @@
 //! that is skipped, and composition continues). The Core specification does
 //! not define arc cycles itself; this follows OpenUSD's `PcpErrorArcCycle`.
 
-use alloc::vec::Vec;
+use alloc::{rc::Rc, vec::Vec};
 
 use hashbrown::{HashMap, HashSet};
 
@@ -37,6 +37,7 @@ use crate::{
     layer_stack::LayerStack,
     path::{Path, PathId, PathInterner},
     prim_index::ArcKind,
+    relocates::{LiftedSet, RelocationTable, Relocations, Walk},
 };
 
 /// One site on an [`ArcChain`].
@@ -147,6 +148,9 @@ pub(crate) struct CycleDetector {
     arcs: Vec<ArcKind>,
     /// The layers of each layer stack gathered so far, by root layer.
     stack_layers: HashMap<LayerId, HashSet<LayerId>>,
+    /// The relocation tables of the layer stacks reached so far, and the
+    /// stage paths relocations prohibit.
+    relocations: Relocations,
     errors: Vec<CompositionError>,
     seen: HashSet<CompositionError>,
 }
@@ -160,6 +164,7 @@ impl CycleDetector {
             chain: ArcChain { sites: Vec::new() },
             arcs: Vec::new(),
             stack_layers: HashMap::new(),
+            relocations: Relocations::default(),
             errors: Vec::new(),
             seen: HashSet::new(),
         }
@@ -249,6 +254,67 @@ impl CycleDetector {
             .entry(root)
             .or_insert_with(|| stack.layers.iter().copied().collect());
         stack
+    }
+
+    /// Starts composing with the relocations of the stage's layer stack
+    /// (see [`Relocations::new`]).
+    pub(crate) fn set_relocations(&mut self, relocations: Relocations) {
+        self.relocations = relocations;
+    }
+
+    /// The relocation state of the composition.
+    pub(crate) fn relocations(&self) -> &Relocations {
+        &self.relocations
+    }
+
+    /// The relocation state of the composition, for population to extend.
+    pub(crate) fn relocations_mut(&mut self) -> &mut Relocations {
+        &mut self.relocations
+    }
+
+    /// The relocations of the layer stack rooted at `layer_stack`, lifted
+    /// through an arc that maps its `target_root` onto the stage path
+    /// `dest_root` (see [`LiftedSet::lift`]); `None` when that layer stack
+    /// relocates nothing the arc reaches. Lifted sources are prohibited
+    /// stage paths from then on.
+    pub(crate) fn lift_relocations(
+        &mut self,
+        store: &mut dyn LayerStore,
+        layer_stack: LayerId,
+        target_root: PathId,
+        dest_root: PathId,
+        outer: &Walk<'_>,
+    ) -> Option<Rc<LiftedSet>> {
+        let table = self.relocation_table(store, layer_stack);
+        if table.is_empty() {
+            return None;
+        }
+        let lifted = LiftedSet::lift(store, &table, layer_stack, target_root, dest_root, outer);
+        if lifted.is_empty() {
+            return None;
+        }
+        self.relocations.prohibit(&lifted);
+        Some(Rc::new(lifted))
+    }
+
+    /// The relocation table of the layer stack rooted at `layer_stack`,
+    /// computed on first use; its errors are recorded.
+    pub(crate) fn relocation_table(
+        &mut self,
+        store: &dyn LayerStore,
+        layer_stack: LayerId,
+    ) -> Rc<RelocationTable> {
+        let table = match self.relocations.cached_table(layer_stack) {
+            Some(table) => table,
+            None => {
+                let stack = self.gather_layer_stack(store, layer_stack);
+                self.relocations.table(store, &stack)
+            }
+        };
+        for error in self.relocations.take_errors() {
+            self.report(error);
+        }
+        table
     }
 
     /// Records `error` unless it was already recorded.

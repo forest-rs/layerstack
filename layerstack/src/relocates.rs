@@ -23,10 +23,10 @@
 //!
 //! [`Layer::relocates`]: crate::Layer::relocates
 
-use alloc::vec::Vec;
+use alloc::{rc::Rc, vec::Vec};
 use core::cmp::Ordering;
 
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 
 use crate::{
     composition_error::{
@@ -305,11 +305,403 @@ fn cmp_paths(store: &dyn LayerStore, a: PathId, b: PathId) -> Ordering {
         .cmp_with_tokens(paths.resolve(b), store.tokens())
 }
 
+// ── Relocations in the stage namespace ────────────────────────────────────
+//
+// Composition maps an arc's target namespace into the stage namespace one
+// arc at a time. A relocation of a layer stack that an arc reaches applies
+// to the part of the stage namespace that arc maps: its source and target
+// are *lifted* through the arcs from the stage to that layer stack. The
+// lifted relocations of every layer stack on the way to an arc's target
+// then decide where each opinion of the target lands (see [`Walk`]).
+
+/// A relocate of one layer stack, lifted into the stage namespace through
+/// the arcs that reach that layer stack.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct LiftedRelocate {
+    /// Root layer of the relocating layer stack.
+    pub(crate) layer_stack: LayerId,
+    /// The relocation source, in that layer stack's namespace.
+    pub(crate) source: PathId,
+    /// The relocation target there; `None` when the source is removed.
+    pub(crate) target: Option<PathId>,
+    /// Where the source lies in the stage namespace; `None` when the arc
+    /// that lifts it maps only the target.
+    pub(crate) stage_source: Option<PathId>,
+    /// Where the target lies in the stage namespace; `None` when the source
+    /// is removed or moved outside the namespace the arc maps.
+    pub(crate) stage_target: Option<PathId>,
+}
+
+/// The relocations of one layer stack lifted through one arc, indexed by
+/// their stage paths.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct LiftedSet {
+    entries: Vec<LiftedRelocate>,
+    by_stage_source: HashMap<PathId, usize>,
+    by_stage_target: HashMap<PathId, usize>,
+}
+
+impl LiftedSet {
+    fn push(&mut self, relocate: LiftedRelocate) {
+        let at = self.entries.len();
+        if let Some(source) = relocate.stage_source {
+            self.by_stage_source.entry(source).or_insert(at);
+        }
+        if let Some(target) = relocate.stage_target {
+            self.by_stage_target.entry(target).or_insert(at);
+        }
+        self.entries.push(relocate);
+    }
+
+    /// Returns `true` when nothing is lifted.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    fn source(&self, stage_path: PathId) -> Option<&LiftedRelocate> {
+        self.by_stage_source
+            .get(&stage_path)
+            .map(|&at| &self.entries[at])
+    }
+
+    fn target(&self, stage_path: PathId) -> Option<&LiftedRelocate> {
+        self.by_stage_target
+            .get(&stage_path)
+            .map(|&at| &self.entries[at])
+    }
+
+    /// The relocations of `table`, the table of the layer stack rooted at
+    /// `layer_stack`, lifted through an arc that maps `target_root` in that
+    /// layer stack onto the stage path `dest_root`, the stage relocations
+    /// `outer` applying on the way.
+    ///
+    /// A relocation beneath the arc's target is lifted onto the path the
+    /// arc maps it to; one outside the arc's target cannot be reached
+    /// through it and is not lifted, and a target outside maps nowhere.
+    ///
+    /// Spec: AOUSD Core §10.3.2.6.1 (relocates add to the namespace mapping
+    /// of the arcs that reach their layer stack).
+    pub(crate) fn lift(
+        store: &mut dyn LayerStore,
+        table: &RelocationTable,
+        layer_stack: LayerId,
+        target_root: PathId,
+        dest_root: PathId,
+        outer: &Walk<'_>,
+    ) -> Self {
+        let mut lifted = Self::default();
+        if table.is_empty() {
+            return lifted;
+        }
+        let mut relocates: Vec<Relocate> = table.iter().collect();
+        // Deterministic order for the entries with equal stage paths.
+        relocates.sort_by(|a, b| cmp_paths(store, a.source, b.source));
+        for relocate in relocates {
+            let rel_of = |store: &dyn LayerStore, path: PathId| {
+                let paths = store.paths();
+                paths
+                    .resolve(path)
+                    .strip_prefix(paths.resolve(target_root))
+                    .filter(|rel| !rel.is_empty())
+                    .map(<[_]>::to_vec)
+            };
+            let place = |store: &mut dyn LayerStore, rel: Option<Vec<_>>| {
+                rel.and_then(|rel| outer.place(store, dest_root, &rel))
+                    .map(|(path, _)| path)
+            };
+            let source_rel = rel_of(store, relocate.source);
+            let target_rel = relocate.target.and_then(|target| rel_of(store, target));
+            if source_rel.is_none() && target_rel.is_none() {
+                continue;
+            }
+            let stage_source = place(store, source_rel);
+            let stage_target = place(store, target_rel);
+            lifted.push(LiftedRelocate {
+                layer_stack,
+                source: relocate.source,
+                target: relocate.target,
+                stage_source,
+                stage_target,
+            });
+        }
+        lifted
+    }
+
+    /// The relocations of the stage's own layer stack, whose namespace is
+    /// the stage namespace.
+    pub(crate) fn stage(table: &RelocationTable, layer_stack: LayerId) -> Self {
+        let mut lifted = Self::default();
+        for relocate in table.iter() {
+            lifted.push(LiftedRelocate {
+                layer_stack,
+                source: relocate.source,
+                target: relocate.target,
+                stage_source: Some(relocate.source),
+                stage_target: relocate.target,
+            });
+        }
+        lifted
+    }
+}
+
+/// The lifted relocations an arc's opinions pass on their way into the
+/// stage namespace: those of every layer stack on the way to the arc
+/// (`outer`, the stage's own first), and those of the arc's target layer
+/// stack (`own`).
+///
+/// Placing an opinion walks from the stage path of the site authoring the
+/// arc down to the opinion's path, one namespace child at a time:
+///
+/// - Stepping into an `outer` source moves the walk to its target: the arc
+///   is authored on an ancestor of the source, and the source's ancestral
+///   opinions compose at the target. A source removed by its relocation
+///   drops the opinion.
+/// - Stepping into an `outer` target drops the opinion: ancestral opinions
+///   at a relocation target, other than the relocation's own, are ignored.
+/// - Stepping into an `own` source drops the opinion: the target layer
+///   stack authors it at a relocation source. `own` targets are the target
+///   layer stack's own sites and are kept.
+///
+/// Spec: AOUSD Core §10.3.2.6 ("All previously-computed ancestral opinions
+/// except those due to ancestral variant arcs are removed"; opinions at a
+/// relocation source are ignored). OpenUSD: `_EvalNodeRelocations` and
+/// `_ElideRelocatedSubtrees` in `pxr/usd/pcp/primIndex.cpp`.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Walk<'a> {
+    outer: Vec<&'a LiftedSet>,
+    own: Option<&'a LiftedSet>,
+}
+
+impl<'a> Walk<'a> {
+    /// A walk through `outer`, strongest (the stage's) first, then `own`.
+    pub(crate) fn new(
+        outer: impl IntoIterator<Item = &'a LiftedSet>,
+        own: Option<&'a LiftedSet>,
+    ) -> Self {
+        Self {
+            outer: outer.into_iter().filter(|set| !set.is_empty()).collect(),
+            own: own.filter(|set| !set.is_empty()),
+        }
+    }
+
+    /// Returns `true` when no relocation applies, so placing a path only
+    /// joins it onto its destination.
+    pub(crate) fn is_empty(&self) -> bool {
+        self.outer.is_empty() && self.own.is_none()
+    }
+
+    /// The same walk with `own` counted as outer: the walk of an arc nested
+    /// in the target of this one.
+    pub(crate) fn nested(&self) -> Self {
+        let mut outer = self.outer.clone();
+        outer.extend(self.own);
+        Self { outer, own: None }
+    }
+
+    /// Places the path `rel` beneath the stage path `dest_root` (see
+    /// [`Walk`]): the stage path it lands on, and whether a relocation moved
+    /// it; `None` when the walk drops it.
+    pub(crate) fn place(
+        &self,
+        store: &mut dyn LayerStore,
+        dest_root: PathId,
+        rel: &[crate::interner::TokenId],
+    ) -> Option<(PathId, bool)> {
+        let mut current = store.paths().resolve(dest_root).clone();
+        if self.is_empty() {
+            let joined = current.join(rel);
+            return Some((store.paths_mut().intern(joined), false));
+        }
+        let mut moved = false;
+        for &name in rel {
+            let next = current.join(&[name]);
+            let paths = store.paths();
+            if let Some(id) = paths.lookup(&next) {
+                if self.own.is_some_and(|own| own.source(id).is_some()) {
+                    return None;
+                }
+                if let Some(relocate) = self.outer.iter().rev().find_map(|set| set.source(id)) {
+                    let target = relocate.stage_target?;
+                    current = paths.resolve(target).clone();
+                    moved = true;
+                    continue;
+                }
+                if self.outer.iter().any(|set| set.target(id).is_some()) {
+                    return None;
+                }
+            }
+            current = next;
+        }
+        Some((store.paths_mut().intern(current), moved))
+    }
+
+    /// The `outer` relocations a walk from `host` took to reach the stage
+    /// path `dest`, latest first, each with the site the walk passed in the
+    /// relocating layer stack: the relocation's source extended towards
+    /// `dest`. Also returns `dest` mapped back to the stage path the walk
+    /// would have reached without them.
+    ///
+    /// A walk reaches a target only through its source, so every target
+    /// above `dest` that is not above `host` was reached that way: the
+    /// deepest one is the last relocation taken.
+    pub(crate) fn unwind(
+        &self,
+        store: &mut dyn LayerStore,
+        host: PathId,
+        dest: PathId,
+    ) -> (Vec<(LiftedRelocate, PathId)>, PathId) {
+        let mut taken = Vec::new();
+        let mut view = dest;
+        if self.outer.is_empty() {
+            return (taken, view);
+        }
+        // Each relocation is taken at most once on a walk.
+        let limit: usize = self.outer.iter().map(|set| set.entries.len()).sum();
+        while taken.len() < limit {
+            let paths = store.paths();
+            let host_path = paths.resolve(host);
+            let mut cursor = Some(paths.resolve(view).clone());
+            let mut found = None;
+            while let Some(path) = cursor {
+                if path.is_prefix_of(host_path) {
+                    break;
+                }
+                if let Some(relocate) = paths
+                    .lookup(&path)
+                    .and_then(|id| self.outer.iter().rev().find_map(|set| set.target(id)))
+                    && relocate.stage_source.is_some()
+                {
+                    found = Some((*relocate, path));
+                    break;
+                }
+                cursor = path.parent();
+            }
+            let Some((relocate, target_path)) = found else {
+                return (taken, view);
+            };
+            let stage_source = relocate
+                .stage_source
+                .expect("an unwound relocation has a stage source");
+            let rel = paths
+                .resolve(view)
+                .strip_prefix(&target_path)
+                .expect("the target is above the view")
+                .to_vec();
+            let source_view = paths.resolve(stage_source).join(&rel);
+            let site = paths.resolve(relocate.source).join(&rel);
+            let site = store.paths_mut().intern(site);
+            view = store.paths_mut().intern(source_view);
+            taken.push((relocate, site));
+        }
+        (taken, view)
+    }
+}
+
+/// The relocation state of one composition: the relocation table of each
+/// layer stack it reaches, the stage's own relocations, and the stage paths
+/// that relocations prohibit.
+///
+/// Only the relocations of the stage's layer stack and those composition
+/// lifts through the arcs it follows are [prohibited](Self::prohibit).
+/// Population follows the arcs of every variant branch, selected or not,
+/// so the relocations it lifts never remove a path.
+#[derive(Debug, Default)]
+pub(crate) struct Relocations {
+    tables: HashMap<LayerId, Rc<RelocationTable>>,
+    stage: Rc<LiftedSet>,
+    /// Stage paths of lifted relocation sources: prims that do not exist.
+    prohibited: HashSet<PathId>,
+    /// Stage paths that population placed only through a relocation.
+    moved: HashSet<PathId>,
+    /// Errors found computing tables, not yet reported.
+    errors: Vec<CompositionError>,
+}
+
+impl Relocations {
+    /// The relocation state of a stage whose layer stack is `stack`.
+    pub(crate) fn new(store: &dyn LayerStore, stack: &LayerStack) -> Self {
+        let mut relocations = Self::default();
+        let Some(&root) = stack.layers.first() else {
+            return relocations;
+        };
+        let table = relocations.table(store, stack);
+        let stage = LiftedSet::stage(&table, root);
+        relocations.prohibit(&stage);
+        relocations.stage = Rc::new(stage);
+        relocations
+    }
+
+    /// The relocation table of `stack`, computed once per layer stack.
+    pub(crate) fn table(
+        &mut self,
+        store: &dyn LayerStore,
+        stack: &LayerStack,
+    ) -> Rc<RelocationTable> {
+        let Some(&root) = stack.layers.first() else {
+            return Rc::default();
+        };
+        if let Some(table) = self.tables.get(&root) {
+            return Rc::clone(table);
+        }
+        let table = Rc::new(RelocationTable::compute(store, stack, &mut self.errors));
+        self.tables.insert(root, Rc::clone(&table));
+        table
+    }
+
+    /// The table of the layer stack rooted at `root`, if already computed.
+    pub(crate) fn cached_table(&self, root: LayerId) -> Option<Rc<RelocationTable>> {
+        self.tables.get(&root).cloned()
+    }
+
+    /// The relocations of the stage's own layer stack.
+    pub(crate) fn stage(&self) -> Rc<LiftedSet> {
+        Rc::clone(&self.stage)
+    }
+
+    /// Records the lifted sources of `set` as prohibited stage paths.
+    pub(crate) fn prohibit(&mut self, set: &LiftedSet) {
+        self.prohibited.extend(
+            set.entries
+                .iter()
+                .filter_map(|relocate| relocate.stage_source),
+        );
+    }
+
+    /// Records that population placed the stage path `path`, through a
+    /// relocation when `moved`; `new` when the path was not populated yet.
+    pub(crate) fn place(&mut self, path: PathId, moved: bool, new: bool) {
+        if !moved {
+            self.moved.remove(&path);
+        } else if new {
+            self.moved.insert(path);
+        }
+    }
+
+    /// Takes the stage paths population placed only through a relocation.
+    pub(crate) fn take_moved(&mut self) -> HashSet<PathId> {
+        core::mem::take(&mut self.moved)
+    }
+
+    /// Returns `true` when `path` is at or beneath a prohibited stage path.
+    pub(crate) fn is_prohibited(&self, paths: &PathInterner, path: PathId) -> bool {
+        if self.prohibited.is_empty() {
+            return false;
+        }
+        self.prohibited.contains(&path)
+            || proper_ancestors(paths, path).any(|ancestor| self.prohibited.contains(&ancestor))
+    }
+
+    /// Takes the errors found computing tables since the last call.
+    pub(crate) fn take_errors(&mut self) -> Vec<CompositionError> {
+        core::mem::take(&mut self.errors)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::doc::{InMemoryStore, Layer, SublayerEntry};
-    use alloc::vec;
+    use alloc::{string::String, vec};
 
     fn path(store: &mut InMemoryStore, text: &str) -> PathId {
         store.path(text)
@@ -511,5 +903,111 @@ mod tests {
                 }
             )]
         ));
+    }
+
+    /// A table relocating `/A/B` to `/A/C` and removing `/A/D`, lifted
+    /// through an arc from the stage path `/X` to `/A`.
+    fn lifted(store: &mut InMemoryStore) -> LiftedSet {
+        let mut layer = Layer::new(LayerId(2));
+        layer.relocates = vec![relocate(store, "/A/B", "/A/C"), relocate(store, "/A/D", "")];
+        store.insert_layer(layer);
+        let (table, errors) = table(store, 2);
+        assert!(errors.is_empty(), "{errors:?}");
+        let (target_root, dest_root) = (path(store, "/A"), path(store, "/X"));
+        LiftedSet::lift(
+            store,
+            &table,
+            LayerId(2),
+            target_root,
+            dest_root,
+            &Walk::default(),
+        )
+    }
+
+    fn names(store: &mut InMemoryStore, text: &str) -> Vec<crate::interner::TokenId> {
+        text.split('/')
+            .filter(|name| !name.is_empty())
+            .map(|name| store.tokens.intern(name))
+            .collect()
+    }
+
+    fn place(store: &mut InMemoryStore, walk: &Walk<'_>, rel: &str) -> Option<String> {
+        let root = path(store, "/X");
+        let rel = names(store, rel);
+        walk.place(store, root, &rel)
+            .map(|(path, _)| store.paths.display(path, &store.tokens))
+    }
+
+    #[test]
+    fn relocations_lift_through_the_arc_that_reaches_them() {
+        let mut store = InMemoryStore::default();
+        let set = lifted(&mut store);
+        let stage = |store: &InMemoryStore, path: Option<PathId>| {
+            path.map(|path| store.paths.display(path, &store.tokens))
+        };
+        let lifted: Vec<(Option<String>, Option<String>)> = set
+            .entries
+            .iter()
+            .map(|relocate| {
+                (
+                    stage(&store, relocate.stage_source),
+                    stage(&store, relocate.stage_target),
+                )
+            })
+            .collect();
+        assert_eq!(
+            lifted,
+            [
+                (Some("/X/B".into()), Some("/X/C".into())),
+                (Some("/X/D".into()), None),
+            ]
+        );
+    }
+
+    #[test]
+    fn walks_move_ancestral_opinions_and_drop_the_others() {
+        // Spec: AOUSD Core §10.3.2.6. Opinions of an arc authored above
+        // the source move to the target; ancestral opinions at the target
+        // and opinions at a removed source are dropped.
+        let mut store = InMemoryStore::default();
+        let set = lifted(&mut store);
+        let outer = Walk::new([&set], None);
+        assert_eq!(
+            place(&mut store, &outer, "B/Child"),
+            Some("/X/C/Child".into())
+        );
+        assert_eq!(place(&mut store, &outer, "C/Child"), None);
+        assert_eq!(place(&mut store, &outer, "D"), None);
+        assert_eq!(place(&mut store, &outer, "E"), Some("/X/E".into()));
+
+        // The relocating layer stack's own opinions at a source are
+        // ignored; at a target they are its own.
+        let own = Walk::new([], Some(&set));
+        assert_eq!(place(&mut store, &own, "B/Child"), None);
+        assert_eq!(
+            place(&mut store, &own, "C/Child"),
+            Some("/X/C/Child".into())
+        );
+    }
+
+    #[test]
+    fn unwinding_retraces_the_relocations_a_walk_took() {
+        let mut store = InMemoryStore::default();
+        let set = lifted(&mut store);
+        let outer = Walk::new([&set], None);
+        let (host, dest) = (path(&mut store, "/X"), path(&mut store, "/X/C/Child"));
+        let (taken, view) = outer.unwind(&mut store, host, dest);
+        let site = path(&mut store, "/A/B/Child");
+        assert_eq!(
+            taken.iter().map(|(_, site)| *site).collect::<Vec<_>>(),
+            [site]
+        );
+        assert_eq!(view, path(&mut store, "/X/B/Child"));
+
+        // A walk from beneath the target took no relocation.
+        let inside = path(&mut store, "/X/C");
+        let (taken, view) = outer.unwind(&mut store, inside, dest);
+        assert!(taken.is_empty());
+        assert_eq!(view, dest);
     }
 }

@@ -1,0 +1,19 @@
+#usda 1.0
+
+def "Tree" (
+    references = </Trunk>
+)
+{
+}
+
+def "Trunk"
+{
+    int height = 5
+    int width = 3
+    int bark.timeSamples = {
+        0: 0,
+        10: 1,
+        20: 2,
+        30: 3,
+    }
+}

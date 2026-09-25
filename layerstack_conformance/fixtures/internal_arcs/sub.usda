@@ -1,0 +1,60 @@
+#usda 1.0
+(
+    defaultPrim = "Pebble"
+)
+
+def "Pebble"
+{
+    int mass = 1
+}
+
+def "Stone"
+{
+    int mass = 2
+    int size = 6
+    int glow.timeSamples = {
+        0: 0,
+        10: 1,
+        20: 2,
+        30: 3,
+    }
+}
+
+# `<>` names the stack root layer's `defaultPrim`, not this layer's.
+def "Holder" (
+    payload = <>
+)
+{
+}
+
+# An internal payload reads every layer of the root layer stack.
+def "Carrier" (
+    payload = </Stone>
+)
+{
+}
+
+def "Edited" (
+    prepend references = [</Pebble>, </Stone>]
+)
+{
+}
+
+# An internal payload inside the target of an internal reference.
+def "Chain" (
+    references = </Link>
+)
+{
+}
+
+def "Link" (
+    payload = </Anchor>
+)
+{
+    int links = 1
+}
+
+def "Anchor"
+{
+    int weight = 3
+}

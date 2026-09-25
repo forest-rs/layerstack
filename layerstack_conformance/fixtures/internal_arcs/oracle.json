@@ -1,0 +1,235 @@
+{
+ "generator": "layerstack_conformance/scripts/internal_arcs_oracle.py",
+ "openusd_version": "0.26.8",
+ "root": "root.usda",
+ "prims": [
+  {
+   "path": "/Pebble",
+   "prim_stack": [
+    [
+     "sub.usda",
+     "/Pebble"
+    ]
+   ]
+  },
+  {
+   "path": "/Stone",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Stone"
+    ],
+    [
+     "sub.usda",
+     "/Stone"
+    ]
+   ]
+  },
+  {
+   "path": "/Holder",
+   "prim_stack": [
+    [
+     "sub.usda",
+     "/Holder"
+    ],
+    [
+     "root.usda",
+     "/Rock"
+    ]
+   ]
+  },
+  {
+   "path": "/Carrier",
+   "prim_stack": [
+    [
+     "sub.usda",
+     "/Carrier"
+    ],
+    [
+     "root.usda",
+     "/Stone"
+    ],
+    [
+     "sub.usda",
+     "/Stone"
+    ]
+   ]
+  },
+  {
+   "path": "/Edited",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Edited"
+    ],
+    [
+     "sub.usda",
+     "/Edited"
+    ],
+    [
+     "root.usda",
+     "/Stone"
+    ],
+    [
+     "sub.usda",
+     "/Stone"
+    ]
+   ]
+  },
+  {
+   "path": "/Chain",
+   "prim_stack": [
+    [
+     "sub.usda",
+     "/Chain"
+    ],
+    [
+     "root.usda",
+     "/Link"
+    ],
+    [
+     "sub.usda",
+     "/Link"
+    ],
+    [
+     "root.usda",
+     "/Anchor"
+    ],
+    [
+     "sub.usda",
+     "/Anchor"
+    ]
+   ]
+  },
+  {
+   "path": "/Link",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Link"
+    ],
+    [
+     "sub.usda",
+     "/Link"
+    ],
+    [
+     "root.usda",
+     "/Anchor"
+    ],
+    [
+     "sub.usda",
+     "/Anchor"
+    ]
+   ]
+  },
+  {
+   "path": "/Anchor",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Anchor"
+    ],
+    [
+     "sub.usda",
+     "/Anchor"
+    ]
+   ]
+  },
+  {
+   "path": "/InAsset",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/InAsset"
+    ],
+    [
+     "asset_sub.usda",
+     "/Tree"
+    ],
+    [
+     "asset.usda",
+     "/Trunk"
+    ],
+    [
+     "asset_sub.usda",
+     "/Trunk"
+    ]
+   ]
+  },
+  {
+   "path": "/Nested",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Nested"
+    ],
+    [
+     "outer_sub.usda",
+     "/Outer"
+    ],
+    [
+     "inner_sub.usda",
+     "/Inner"
+    ],
+    [
+     "inner.usda",
+     "/Core"
+    ],
+    [
+     "inner_sub.usda",
+     "/Core"
+    ],
+    [
+     "outer.usda",
+     "/Shell"
+    ],
+    [
+     "outer_sub.usda",
+     "/Shell"
+    ]
+   ]
+  },
+  {
+   "path": "/Rock",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Rock"
+    ]
+   ]
+  }
+ ],
+ "values": {
+  "/Pebble.mass": 1,
+  "/Stone.mass": 4,
+  "/Stone.size": 6,
+  "/Holder.mass": 7,
+  "/Carrier.mass": 4,
+  "/Carrier.size": 6,
+  "/Edited.mass": 4,
+  "/Edited.size": 6,
+  "/Chain.links": 2,
+  "/Chain.weight": 5,
+  "/Link.links": 2,
+  "/Link.weight": 5,
+  "/Anchor.weight": 5,
+  "/InAsset.height": 1,
+  "/InAsset.width": 3,
+  "/Nested.density": 9,
+  "/Nested.depth": 1,
+  "/Nested.radius": 1,
+  "/Nested.thickness": 4,
+  "/Rock.mass": 7
+ },
+ "time": 20,
+ "samples": {
+  "/Stone.glow": 1,
+  "/Stone.heat": 2,
+  "/Carrier.glow": 1,
+  "/Carrier.heat": 2,
+  "/Edited.glow": 1,
+  "/Edited.heat": 2,
+  "/InAsset.bark": 1,
+  "/InAsset.grow": 2
+ }
+}

@@ -1,0 +1,17 @@
+#usda 1.0
+(
+    subLayers = [
+        @./asset_sub.usda@ (offset = 10)
+    ]
+)
+
+over "Trunk"
+{
+    int height = 1
+    int grow.timeSamples = {
+        0: 0,
+        10: 1,
+        20: 2,
+        30: 3,
+    }
+}

@@ -1,0 +1,14 @@
+#usda 1.0
+
+def "Outer" (
+    references = @./inner.usda@</Inner>
+    payload = </Shell>
+)
+{
+}
+
+def "Shell"
+{
+    int depth = 2
+    int thickness = 4
+}

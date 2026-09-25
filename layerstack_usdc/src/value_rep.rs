@@ -2495,6 +2495,21 @@ mod tests {
         assert!((f - (-1.0)).abs() < 1e-6);
     }
 
+    /// Every half, including subnormals, infinities and NaN payloads,
+    /// survives decoding through `f64`, except that converting a signaling
+    /// NaN to another float type quiets it.
+    #[test]
+    fn half_bits_round_trip() {
+        for bits in 0..=u16::MAX {
+            let round_trip = f64_to_half_bits(half_to_f64(bits));
+            let is_nan = bits & 0x7C00 == 0x7C00 && bits & 0x03FF != 0;
+            let quieted = if is_nan { bits | 0x0200 } else { bits };
+            assert_eq!(round_trip, quieted, "{bits:#06x}");
+        }
+        // The smallest subnormal is 2⁻²⁴.
+        assert_eq!(half_to_f64(0x0001), 2.0_f64.powi(-24));
+    }
+
     fn inlined(vtype: ValueType, payload: [u8; 4]) -> RawValueRep {
         let mut bytes = [0_u8; 8];
         bytes[..4].copy_from_slice(&payload);

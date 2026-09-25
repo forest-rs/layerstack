@@ -499,7 +499,8 @@ pub struct Metadatum {
     /// metadata syntax requires. A [`Value::TokenListOp`] is written as one
     /// statement per operation (`prepend key = [...]`); it is accepted on
     /// prims, attributes and relationships, not in layer metadata or inside
-    /// dictionaries.
+    /// dictionaries. The `comment` field takes a string or token and is
+    /// written as USDA spells it, a bare quoted string.
     pub value: Value,
 }
 
@@ -758,6 +759,22 @@ pub enum WriteError {
         /// Path of the owning object, with the metadata key after `#`.
         path: String,
     },
+    /// A metadata key USDA spells with dedicated syntax this writer does
+    /// not produce: composition arcs and variant fields (`references`,
+    /// `inherits`, `subLayers`, ...), identifier-valued fields
+    /// (`permission`, `symmetryFunction`) and the substitution maps. A
+    /// quoted `key = value` statement would not parse.
+    ReservedMetadata {
+        /// Path of the owning object.
+        path: String,
+        /// The metadata key.
+        key: String,
+    },
+    /// The `comment` metadata is not a string or token.
+    CommentNotText {
+        /// Path of the owning object.
+        path: String,
+    },
 }
 
 impl fmt::Display for WriteError {
@@ -788,6 +805,13 @@ impl fmt::Display for WriteError {
             Self::MisplacedBlock { path } => {
                 write!(f, "{path}: a value block is only an attribute default")
             }
+            Self::ReservedMetadata { path, key } => {
+                write!(
+                    f,
+                    "{path}: {key:?} needs USDA syntax this writer does not produce"
+                )
+            }
+            Self::CommentNotText { path } => write!(f, "{path}: comment is not text"),
         }
     }
 }
@@ -880,6 +904,26 @@ fn validate_order(
     Ok(())
 }
 
+/// Metadata keys with dedicated USDA syntax that a quoted `key = value`
+/// statement cannot express (OpenUSD `pxr/usd/sdf/textFileFormat.peg`):
+/// composition arcs, variant fields, sublayers and relocates, the
+/// identifier-valued `permission` and `symmetryFunction`, and the
+/// string-to-string substitution maps.
+const RESERVED_METADATA: &[&str] = &[
+    "references",
+    "payload",
+    "inherits",
+    "specializes",
+    "variants",
+    "variantSets",
+    "subLayers",
+    "relocates",
+    "permission",
+    "symmetryFunction",
+    "prefixSubstitutions",
+    "suffixSubstitutions",
+];
+
 /// Validates metadata keys and values; `list_ops` admits
 /// [`Value::TokenListOp`] entries (prim and property metadata only).
 fn validate_metadata<'a>(
@@ -906,6 +950,15 @@ fn validate_metadata<'a>(
                 path: path.into(),
                 name: entry.key.clone(),
             });
+        }
+        if RESERVED_METADATA.contains(&entry.key.as_str()) {
+            return Err(WriteError::ReservedMetadata {
+                path: path.into(),
+                key: entry.key.clone(),
+            });
+        }
+        if entry.key == "comment" && !matches!(entry.value, Value::String(_) | Value::Token(_)) {
+            return Err(WriteError::CommentNotText { path: path.into() });
         }
         if seen.contains(&entry.key.as_str()) {
             return Err(WriteError::Duplicate {
@@ -1185,6 +1238,14 @@ impl Writer<'_> {
                 continue;
             }
             self.indent(depth);
+            // §16.2.15: a bare string is the `comment` field.
+            if let ("comment", Value::String(text) | Value::Token(text)) =
+                (entry.key.as_str(), &entry.value)
+            {
+                self.string(text);
+                self.out.push('\n');
+                continue;
+            }
             self.out.push_str(&entry.key);
             self.out.push_str(" = ");
             self.value(&entry.value, depth);
@@ -2407,5 +2468,61 @@ over "B"
             matches!(doc.to_usda(), Err(WriteError::InvalidName { .. })),
             "reordered properties are property names"
         );
+    }
+
+    #[test]
+    fn comments_are_bare_strings_and_reserved_keys_are_rejected() {
+        let mut prim = Prim::new(Specifier::Over, None, "P");
+        prim.metadata.push(Metadatum::new(
+            "comment",
+            Value::String("say \"hi\"".into()),
+        ));
+        prim.push_property(
+            Attribute::declared("a", "int").with_metadata("comment", Value::String("attr".into())),
+        );
+        let doc = Document {
+            metadata: vec![Metadatum::new("comment", Value::String("layer".into()))],
+            prims: vec![prim],
+            ..Document::new()
+        };
+        let text = doc.to_usda().unwrap();
+        let expected = r#"#usda 1.0
+(
+    "layer"
+)
+
+over "P" (
+    "say \"hi\""
+)
+{
+    int a (
+        "attr"
+    )
+}
+"#;
+        assert_eq!(text, expected, "comments");
+        assert!(parse(&text).diagnostics.is_empty(), "re-parses");
+
+        let mut bad = doc.clone();
+        bad.metadata[0].value = Value::Int(1);
+        assert_eq!(
+            bad.to_usda(),
+            Err(WriteError::CommentNotText { path: "/".into() }),
+            "a comment is text"
+        );
+        for key in ["references", "permission", "symmetryFunction", "variants"] {
+            let mut bad = doc.clone();
+            bad.prims[0]
+                .metadata
+                .push(Metadatum::new(key, Value::Token("x".into())));
+            assert_eq!(
+                bad.to_usda(),
+                Err(WriteError::ReservedMetadata {
+                    path: "/P".into(),
+                    key: key.into()
+                }),
+                "{key} has dedicated syntax"
+            );
+        }
     }
 }

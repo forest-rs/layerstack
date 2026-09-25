@@ -284,6 +284,10 @@ pub enum FieldType {
     Double,
     /// `int`; a USDA `int` only.
     Int,
+    /// `int64`; a USDA `int64` only.
+    Int64,
+    /// `float`; a USDA `float` only.
+    Float,
     /// `bool`.
     Bool,
     /// `VtDictionary`.
@@ -292,6 +296,8 @@ pub enum FieldType {
     Asset,
     /// `VtTokenArray`; a USDA token or string array.
     TokenArray,
+    /// `VtStringArray`; a USDA string or token array.
+    StringArray,
     /// `SdfTokenListOp`; a USDA token list op.
     TokenListOp,
     /// No registered field: a USDA dictionary, stored as the text parser
@@ -311,9 +317,10 @@ pub enum FieldType {
 /// `elementSize`, `unauthoredValuesIndex`, `constraintTargetIdentifier`),
 /// `usdPhysics` (`kilogramsPerUnit`) and `usdShade` (`bindMaterialAs`,
 /// `connectability`, `renderType`, `sdrMetadata`) in their `plugInfo.json`
-/// files, plus `usdUI`'s `uiHints` and the core `limits`,
-/// `symmetryArguments`, `fallbackPrimTypes` and `clips` dictionaries. USDA's
-/// `doc` is the `documentation` field.
+/// files, plus `usdSkel`'s `weight`, `usdRender`'s `renderSettingsPrimPath`,
+/// `usdUI`'s `uiHints` and the core `limits`, `symmetryArguments`,
+/// `fallbackPrimTypes` and `clips` dictionaries. USDA's `doc` is the
+/// `documentation` field, and its bare string the `comment` field.
 ///
 /// `profilesInfo` is the one unregistered key: `UsdProfilesClaimsAPI`
 /// (`pxr/usd/usdProfiles/schema.usda`) documents it as prim metadata, but
@@ -326,6 +333,15 @@ pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldTyp
     use FieldType as F;
     let shared = match key {
         "doc" => Some(("documentation", F::String)),
+        "comment" => Some(("comment", F::String)),
+        _ => None,
+    };
+    // `SdfSchema` registers these for prims and both property forms.
+    let named = match (owner, key) {
+        (Owner::Layer, _) => None,
+        (_, "prefix") => Some(("prefix", F::String)),
+        (_, "suffix") => Some(("suffix", F::String)),
+        (_, "symmetricPeer") => Some(("symmetricPeer", F::String)),
         _ => None,
     };
     let specific = match owner {
@@ -339,6 +355,9 @@ pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldTyp
             "timeCodesPerSecond" => Some(("timeCodesPerSecond", F::Double)),
             "framesPerSecond" => Some(("framesPerSecond", F::Double)),
             "framePrecision" => Some(("framePrecision", F::Int)),
+            "startFrame" => Some(("startFrame", F::Double)),
+            "endFrame" => Some(("endFrame", F::Double)),
+            "renderSettingsPrimPath" => Some(("renderSettingsPrimPath", F::String)),
             "owner" => Some(("owner", F::String)),
             "sessionOwner" => Some(("sessionOwner", F::String)),
             "colorConfiguration" => Some(("colorConfiguration", F::Asset)),
@@ -356,6 +375,7 @@ pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldTyp
             "customData" => Some(("customData", F::Dictionary)),
             "assetInfo" => Some(("assetInfo", F::Dictionary)),
             "displayName" => Some(("displayName", F::String)),
+            "displayGroupOrder" => Some(("displayGroupOrder", F::StringArray)),
             "sdrMetadata" => Some(("sdrMetadata", F::Dictionary)),
             "uiHints" => Some(("uiHints", F::Dictionary)),
             "symmetryArguments" => Some(("symmetryArguments", F::Dictionary)),
@@ -372,6 +392,7 @@ pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldTyp
             "hidden" => Some(("hidden", F::Bool)),
             "noLoadHint" => Some(("noLoadHint", F::Bool)),
             "bindMaterialAs" => Some(("bindMaterialAs", F::Token)),
+            "outputName" => Some(("outputName", F::Token)),
             "renderType" => Some(("renderType", F::Token)),
             "uiHints" => Some(("uiHints", F::Dictionary)),
             "symmetryArguments" => Some(("symmetryArguments", F::Dictionary)),
@@ -387,6 +408,8 @@ pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldTyp
             "allowedTokens" => Some(("allowedTokens", F::TokenArray)),
             "interpolation" => Some(("interpolation", F::Token)),
             "elementSize" => Some(("elementSize", F::Int)),
+            "arraySizeConstraint" => Some(("arraySizeConstraint", F::Int64)),
+            "weight" => Some(("weight", F::Float)),
             "unauthoredValuesIndex" => Some(("unauthoredValuesIndex", F::Int)),
             "constraintTargetIdentifier" => Some(("constraintTargetIdentifier", F::Token)),
             "connectability" => Some(("connectability", F::Token)),
@@ -398,7 +421,7 @@ pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldTyp
             _ => None,
         },
     };
-    shared.or(specific)
+    shared.or(named).or(specific)
 }
 
 /// Converts a metadatum to its typed field. The value must have the
@@ -418,11 +441,16 @@ fn metadatum(owner: Owner, path: &str, entry: &Metadatum) -> Result<super::Field
         (FieldType::String, U::Token(v) | U::String(v)) => Some(Value::String(v.clone())),
         (FieldType::Double, U::Double(v)) => Some(Value::Double(*v)),
         (FieldType::Int, U::Int(v)) => Some(Value::Int(*v)),
+        (FieldType::Int64, U::Int64(v)) => Some(Value::Int64(*v)),
+        (FieldType::Float, U::Float(v)) => Some(Value::Float(*v)),
         (FieldType::Bool, U::Bool(v)) => Some(Value::Bool(*v)),
         (FieldType::Dictionary, v @ U::Dictionary(_)) => Some(natural(v)),
         (FieldType::Asset, U::Asset(v)) => Some(Value::Asset(v.clone())),
         (FieldType::TokenArray, U::TokenArray(v) | U::StringArray(v)) => {
             Some(Value::TokenArray(v.clone()))
+        }
+        (FieldType::StringArray, U::StringArray(v) | U::TokenArray(v)) => {
+            Some(Value::StringArray(v.clone()))
         }
         (FieldType::TokenListOp, U::TokenListOp(op)) => Some(Value::TokenListOp(list_op(op))),
         (FieldType::UnregisteredDictionary, v @ U::Dictionary(_)) => {

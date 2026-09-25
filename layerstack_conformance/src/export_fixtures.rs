@@ -411,6 +411,56 @@ fn list_edits() -> Document {
     doc
 }
 
+/// Bare-string comments on every owner and the remaining registered
+/// scalar metadata: frame range and render settings path on the layer,
+/// display group order and naming hints on prims and properties, an
+/// `int64` array size constraint, a `float` skinning weight and a
+/// relationship output name.
+fn metadata_scalars() -> Document {
+    use layerstack_usda::writer::Relationship;
+    let mut root = Prim::def("Xform", "Root");
+    root.metadata
+        .push(Metadatum::new("comment", Value::String("A prim.".into())));
+    root.metadata.push(Metadatum::new(
+        "displayGroupOrder",
+        Value::StringArray(vec!["Shape".into(), "Look".into()]),
+    ));
+    root.metadata
+        .push(Metadatum::new("prefix", Value::String("L_".into())));
+    root.metadata
+        .push(Metadatum::new("symmetricPeer", Value::String("R".into())));
+    root.push_property(
+        Attribute::new("exedra:sizes", "int[]", Value::IntArray(vec![1, 2]))
+            .custom()
+            .with_metadata("comment", Value::String("An attribute.".into()))
+            .with_metadata("arraySizeConstraint", Value::Int64(5_000_000_000))
+            .with_metadata("weight", Value::Float(0.25))
+            .with_metadata("suffix", Value::String("_x".into())),
+    );
+    let mut rel = Relationship::new("exedra:out", "/Root").custom();
+    rel.metadata.push(Metadatum::new(
+        "comment",
+        Value::String("A relationship.".into()),
+    ));
+    rel.metadata
+        .push(Metadatum::new("outputName", Value::Token("result".into())));
+    root.push_property(rel);
+    let mut doc = Document::new();
+    stage_metadata(&mut doc, "Root");
+    doc.metadata
+        .push(Metadatum::new("comment", Value::String("A layer.".into())));
+    doc.metadata
+        .push(Metadatum::new("startFrame", Value::Double(1.0)));
+    doc.metadata
+        .push(Metadatum::new("endFrame", Value::Double(48.5)));
+    doc.metadata.push(Metadatum::new(
+        "renderSettingsPrimPath",
+        Value::String("/Render/Settings".into()),
+    ));
+    doc.prims.push(root);
+    doc
+}
+
 const QUAD_TRI_POINTS: [[f32; 3]; 5] = [
     [0.0, 0.0, 0.0],
     [1.0, 0.0, 0.0],
@@ -970,6 +1020,10 @@ pub fn minimum_openusd(name: &str) -> Option<(OpenUsdRelease, &'static str)> {
             (25, 11),
             "`uiHints` (usdUI) and `limits` are registered from OpenUSD 25.11",
         )),
+        "metadata_scalars" => Some((
+            (25, 11),
+            "`arraySizeConstraint` is registered from OpenUSD 25.11",
+        )),
         _ => None,
     }
 }
@@ -981,6 +1035,7 @@ pub fn documents() -> Vec<(&'static str, Document)> {
         ("metadata", metadata()),
         ("metadata_dictionaries", metadata_dictionaries()),
         ("list_edits", list_edits()),
+        ("metadata_scalars", metadata_scalars()),
         ("primvars", primvars()),
         ("cube", cube_document()),
         (

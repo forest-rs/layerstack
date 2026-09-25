@@ -22,6 +22,15 @@ pub enum ExportError {
         /// What is wrong.
         problem: MeshProblem,
     },
+    /// A point instancer's prototypes or per-instance arrays are
+    /// inconsistent, or it would author something the export does not
+    /// support.
+    InvalidInstancer {
+        /// Prim path of the instancer (e.g. `/Root/Forest`).
+        path: String,
+        /// What is wrong.
+        problem: InstancerProblem,
+    },
     /// `metersPerUnit` is not finite and positive.
     InvalidStage,
     /// A material's inputs are unusable.
@@ -153,6 +162,67 @@ pub enum MeshProblem {
     },
 }
 
+/// A specific problem with a [`PointInstancer`](crate::PointInstancer).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum InstancerProblem {
+    /// The instancer has no prototypes; `prototypes` is required.
+    NoPrototypes,
+    /// A `protoIndices` entry names a prototype that does not exist.
+    ProtoIndexOutOfRange {
+        /// Instance number.
+        instance: usize,
+        /// The prototype index.
+        index: u32,
+        /// Number of prototypes.
+        prototypes: usize,
+    },
+    /// A per-instance array does not have one element per instance.
+    LengthMismatch {
+        /// Attribute name (e.g. `orientations`).
+        name: &'static str,
+        /// Number of instances (the length of `protoIndices`).
+        expected: usize,
+        /// Elements supplied.
+        actual: usize,
+    },
+    /// Two instances have the same id.
+    DuplicateId {
+        /// The id.
+        id: i64,
+        /// The first instance with it.
+        first: usize,
+        /// The next instance with it.
+        second: usize,
+    },
+    /// A position, orientation or scale has a NaN or infinite component.
+    NonFinite {
+        /// Attribute name (e.g. `positions`).
+        name: &'static str,
+        /// Instance number.
+        instance: usize,
+    },
+    /// An orientation is not a unit quaternion (its squared norm is off by
+    /// more than 1e-3). `UsdGeomPointInstancer` leaves unit length to the
+    /// author, and a scaled quaternion would scale and shear the instance.
+    NonUnitOrientation {
+        /// Instance number.
+        instance: usize,
+    },
+    /// A custom attribute would author a time-varying or masking property
+    /// of the schema (`velocities`, `accelerations`, `angularVelocities`,
+    /// `invisibleIds`), which this static export does not support.
+    UnsupportedProperty {
+        /// The attribute name.
+        name: String,
+    },
+    /// A custom attribute has the name of a schema property that the
+    /// exporter authors itself (e.g. `positions` or `extent`).
+    ReservedProperty {
+        /// The attribute name.
+        name: String,
+    },
+}
+
 /// A specific problem with a material's inputs.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MaterialProblem {
@@ -169,6 +239,7 @@ impl fmt::Display for ExportError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidMesh { path, problem } => write!(f, "{path}: {problem}"),
+            Self::InvalidInstancer { path, problem } => write!(f, "{path}: {problem}"),
             Self::InvalidStage => write!(f, "metersPerUnit must be finite and positive"),
             Self::InvalidMaterial { path, problem } => write!(f, "{path}: {problem}"),
             Self::UnknownMaterial { path, material } => {
@@ -240,6 +311,46 @@ impl fmt::Display for MeshProblem {
             Self::MissingTexCoords { material, uv_set } => write!(
                 f,
                 "material {material:?} reads UV set {uv_set:?}, which the mesh does not author"
+            ),
+        }
+    }
+}
+
+impl fmt::Display for InstancerProblem {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::NoPrototypes => write!(f, "a point instancer needs at least one prototype"),
+            Self::ProtoIndexOutOfRange {
+                instance,
+                index,
+                prototypes,
+            } => write!(
+                f,
+                "instance {instance} uses prototype {index}, but there are {prototypes}"
+            ),
+            Self::LengthMismatch {
+                name,
+                expected,
+                actual,
+            } => write!(f, "{name} has {actual} elements for {expected} instances"),
+            Self::DuplicateId { id, first, second } => {
+                write!(f, "instances {first} and {second} both have id {id}")
+            }
+            Self::NonFinite { name, instance } => {
+                write!(f, "{name} of instance {instance} is not finite")
+            }
+            Self::NonUnitOrientation { instance } => write!(
+                f,
+                "orientation of instance {instance} is not a unit quaternion"
+            ),
+            Self::UnsupportedProperty { name } => write!(
+                f,
+                "{name} is not supported: point instancers are exported static, \
+                 without motion, time samples or masked ids"
+            ),
+            Self::ReservedProperty { name } => write!(
+                f,
+                "{name} is a point instancer property the exporter authors"
             ),
         }
     }

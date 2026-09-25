@@ -294,6 +294,7 @@ dependencies = [
 name = "layerstack_mesh_export"
 version = "0.1.0"
 dependencies = [
+ "layerstack",
  "layerstack_usda",
  "layerstack_usdc",
  "layerstack_usdz",

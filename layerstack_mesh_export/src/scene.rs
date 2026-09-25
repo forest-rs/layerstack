@@ -10,7 +10,7 @@ use layerstack_usda::writer::{Document, Value};
 use layerstack_usdc::writer::write_document;
 use layerstack_usdz::{PackageFile, write_usdz};
 
-use crate::{CustomAttribute, ExportError, Material, Mesh, Transform};
+use crate::{CustomAttribute, ExportError, Material, Mesh, PointInstancer, Transform};
 
 /// The consumers a USDZ package is written for.
 ///
@@ -103,6 +103,8 @@ pub enum Node<'a> {
     Xform(Xform<'a>),
     /// A mesh.
     Mesh(Mesh<'a>),
+    /// Repeated geometry: prototypes placed many times.
+    PointInstancer(PointInstancer<'a>),
 }
 
 /// A transform group, written as an `Xform` prim.
@@ -167,6 +169,13 @@ impl<'a> Xform<'a> {
         self.children.push(Node::Xform(xform));
         self
     }
+
+    /// Appends a point instancer.
+    #[must_use]
+    pub fn with_point_instancer(mut self, instancer: PointInstancer<'a>) -> Self {
+        self.children.push(Node::PointInstancer(instancer));
+        self
+    }
 }
 
 /// A complete export: stage settings, one root prim, which becomes the
@@ -209,6 +218,9 @@ impl<'a> Scene<'a> {
     /// [`ExportError::InvalidMesh`] for inconsistent topology or primvar
     /// sizes, material subsets that do not form their family, or a bound
     /// material whose UV set the mesh lacks;
+    /// [`ExportError::InvalidInstancer`] for point instancer prototypes or
+    /// per-instance arrays that do not agree, or properties the static
+    /// export does not support;
     /// [`ExportError::InvalidStage`] for unusable stage settings;
     /// [`ExportError::InvalidMaterial`] for unusable material inputs;
     /// [`ExportError::UnknownMaterial`] for a binding to an undefined
@@ -297,9 +309,19 @@ impl<'a> Scene<'a> {
 fn collect_xform_assets<'s>(xform: &'s Xform<'_>, out: &mut Vec<&'s str>) {
     collect_attribute_assets(&xform.attributes, out);
     for child in &xform.children {
-        match child {
-            Node::Xform(x) => collect_xform_assets(x, out),
-            Node::Mesh(m) => collect_attribute_assets(&m.attributes, out),
+        collect_node_assets(child, out);
+    }
+}
+
+fn collect_node_assets<'s>(node: &'s Node<'_>, out: &mut Vec<&'s str>) {
+    match node {
+        Node::Xform(x) => collect_xform_assets(x, out),
+        Node::Mesh(m) => collect_attribute_assets(&m.attributes, out),
+        Node::PointInstancer(p) => {
+            collect_attribute_assets(&p.attributes, out);
+            for prototype in &p.prototypes {
+                collect_node_assets(prototype, out);
+            }
         }
     }
 }

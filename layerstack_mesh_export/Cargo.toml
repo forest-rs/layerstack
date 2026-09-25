@@ -11,6 +11,7 @@ keywords = ["usd", "usdz", "mesh", "export", "no-std"]
 categories = ["graphics", "encoding"]
 
 [dependencies]
+layerstack = { path = "../layerstack" }
 layerstack_usda = { path = "../layerstack_usda" }
 layerstack_usdc = { path = "../layerstack_usdc" }
 layerstack_usdz = { path = "../layerstack_usdz" }

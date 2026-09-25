@@ -26,7 +26,9 @@ use crate::error::UsdcError;
 /// - `n > 0` → `n` chunks, each an `i32` compressed size and that many bytes
 ///   of LZ4 block, for outputs larger than one LZ4 block can hold.
 ///
-/// `output_size` is the expected decompressed size (known from the caller).
+/// `output_size` is the largest decompressed size the caller expects. It
+/// comes from the file, so no more is allocated than the compressed bytes
+/// can expand to.
 ///
 /// Spec: AOUSD Core §16.3.4.
 pub fn lz4_decompress(data: &[u8], output_size: usize) -> Result<Vec<u8>, UsdcError> {
@@ -35,6 +37,8 @@ pub fn lz4_decompress(data: &[u8], output_size: usize) -> Result<Vec<u8>, UsdcEr
             context: "empty LZ4 input",
         });
     };
+    let output_size = output_size.min(max_lz4_output(payload.len()));
+
     if num_chunks == 0 {
         // Single-block decompress.
         return lz4_flex::decompress(payload, output_size).map_err(|_| {
@@ -83,15 +87,24 @@ pub fn lz4_decompress(data: &[u8], output_size: usize) -> Result<Vec<u8>, UsdcEr
 /// also the most one chunk decompresses to.
 const LZ4_MAX_INPUT_SIZE: usize = 0x7E00_0000;
 
+/// The most that `compressed` bytes of LZ4 blocks can decompress to.
+///
+/// Each byte of a sequence's match-length extension adds at most 255 output
+/// bytes, so no block expands by more than a factor of 255, plus the fixed
+/// overhead of one sequence.
+fn max_lz4_output(compressed: usize) -> usize {
+    compressed.saturating_mul(255).saturating_add(64)
+}
+
 // ---------------------------------------------------------------------------
 // Integer array decoding (delta + 2-bit codes)
 // ---------------------------------------------------------------------------
 
-/// Two-bit code values for the integer array encoder.
+/// Two-bit code values for the integer array encoder; the fourth code (3)
+/// is a full-width value.
 const CODE_COMMON: u8 = 0;
 const CODE_QUARTER: u8 = 1;
 const CODE_HALF: u8 = 2;
-const CODE_FULL: u8 = 3;
 
 /// Decodes a USDC-compressed integer array from `data`.
 ///
@@ -123,7 +136,7 @@ pub fn decode_integer_array(
     let common_value = read_signed_le(&data[..int_size]);
     let rest = &data[int_size..];
 
-    let num_code_bytes = (count * 2).div_ceil(8);
+    let num_code_bytes = count.div_ceil(4);
     if rest.len() < num_code_bytes {
         return Err(UsdcError::IntegerArrayDecode {
             context: "data too short for code bytes",
@@ -144,6 +157,7 @@ pub fn decode_integer_array(
         let code_byte_idx = i / 4;
         let bit_shift = (i % 4) * 2;
         let code = (code_bytes[code_byte_idx] >> bit_shift) & 3;
+        // Each code selects a width; the value bytes are checked below.
 
         let delta = match code {
             CODE_COMMON => common_value,
@@ -169,7 +183,7 @@ pub fn decode_integer_array(
                 value_offset = end;
                 v
             }
-            CODE_FULL => {
+            _ => {
                 let end = value_offset + int_size;
                 if end > value_bytes.len() {
                     return Err(UsdcError::IntegerArrayDecode {
@@ -180,7 +194,6 @@ pub fn decode_integer_array(
                 value_offset = end;
                 v
             }
-            _ => unreachable!(),
         };
 
         prev = prev.wrapping_add(delta);
@@ -218,37 +231,43 @@ pub fn read_compressed_ints(
         });
     }
 
-    let compressed_size = u64::from_le_bytes(data[..8].try_into().unwrap());
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "compressed blocks are well under 4 GiB"
-    )]
-    let csz = compressed_size as usize;
-    let total = 8 + csz;
-
-    if data.len() < total {
+    let (size, rest) = data.split_at(8);
+    let compressed_size = u64::from_le_bytes([
+        size[0], size[1], size[2], size[3], size[4], size[5], size[6], size[7],
+    ]);
+    let Some(compressed) = usize::try_from(compressed_size)
+        .ok()
+        .and_then(|csz| rest.get(..csz))
+    else {
         return Err(UsdcError::UnexpectedEof {
             section: "compressed int array data",
             offset: 8,
             expected: compressed_size,
         });
-    }
+    };
+    let total = 8 + compressed.len();
 
-    let encoded_size = encoded_int_array_size(count, int_size);
-    let decompressed = lz4_decompress(&data[8..total], encoded_size)?;
+    let encoded_size =
+        encoded_int_array_size(count, int_size).ok_or(UsdcError::IntegerArrayDecode {
+            context: "element count exceeds the address space",
+        })?;
+    let decompressed = lz4_decompress(compressed, encoded_size)?;
     let elements = decode_integer_array(&decompressed, count, int_size)?;
     Ok((elements, total))
 }
 
-/// Computes the expected encoded size of an integer array before LZ4.
+/// Computes the largest encoded size of an integer array before LZ4, or
+/// `None` when it overflows.
 ///
 /// This equals `int_size + num_code_bytes + count * int_size`.
-fn encoded_int_array_size(count: usize, int_size: usize) -> usize {
+fn encoded_int_array_size(count: usize, int_size: usize) -> Option<usize> {
     if count == 0 {
-        return 0;
+        return Some(0);
     }
-    let num_code_bytes = (count * 2).div_ceil(8);
-    int_size + num_code_bytes + count * int_size
+    count
+        .checked_mul(int_size)?
+        .checked_add(count.div_ceil(4))?
+        .checked_add(int_size)
 }
 
 /// Reads a signed little-endian integer of 1–8 bytes, sign-extending to i64.
@@ -344,6 +363,17 @@ mod tests {
     }
 
     #[test]
+    fn lz4_allocation_is_bounded_by_the_input() {
+        let compressed = lz4_flex::compress(&[7_u8; 4096]);
+        let mut framed = vec![0_u8];
+        framed.extend_from_slice(&compressed);
+        // A size the input cannot expand to allocates only what it can.
+        for size in [4096, usize::MAX, compressed.len() * 256 + 64] {
+            assert_eq!(lz4_decompress(&framed, size).unwrap(), [7_u8; 4096]);
+        }
+    }
+
+    #[test]
     fn lz4_chunks_have_i32_sizes() {
         let original = b"hello world hello world hello world";
         let compressed = lz4_flex::compress(original);
@@ -359,6 +389,18 @@ mod tests {
         framed[4] = 0xFF;
         assert!(lz4_decompress(&framed, 2 * original.len()).is_err());
         assert!(lz4_decompress(&framed[..10], 2 * original.len()).is_err());
+    }
+
+    #[test]
+    fn compressed_int_counts_are_checked() {
+        let mut data = 5_u64.to_le_bytes().to_vec();
+        data.extend_from_slice(&[0, 1, 2, 3, 4]);
+        for count in [usize::MAX, usize::MAX / 4, u32::MAX as usize] {
+            assert!(read_compressed_ints(&data, count, 8).is_err());
+        }
+        let mut huge = u64::MAX.to_le_bytes().to_vec();
+        huge.push(0);
+        assert!(read_compressed_ints(&huge, 16, 4).is_err());
     }
 
     #[test]

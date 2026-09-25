@@ -17,7 +17,7 @@ use crate::{
     arcs::{
         SelectionScope, collect_all_variant_branch_payloads, collect_all_variant_branch_references,
         collect_all_variant_child_references, resolve_inherits_for_prim, resolve_payloads_for_prim,
-        resolve_reference_target_path, resolve_references_for_prim, resolve_specializes_for_prim,
+        resolve_references_for_prim, resolve_specializes_for_prim,
     },
     doc::LayerStore,
     doc::{LayerId, Reference},
@@ -313,7 +313,7 @@ fn expand_reference_paths(
     chain: &mut ArcChain,
     mapped_from: &mut MappedFrom,
 ) {
-    let Some(reference_path) = resolve_reference_target_path(store, &reference) else {
+    let Some(reference_path) = reference.target_path(store) else {
         return;
     };
     if chain.closes_cycle(store.paths(), dest_root, reference.layer, reference_path) {

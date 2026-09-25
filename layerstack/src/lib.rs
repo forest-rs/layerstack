@@ -88,7 +88,9 @@ pub mod live_stage;
 
 pub use array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
 pub use asset::{AssetResolveError, AssetResolver, ResolvedAsset};
-pub use composition_error::{ArcCycle, ArcCycleSite, CompositionError, SublayerCycle};
+pub use composition_error::{
+    ArcCycle, ArcCycleSite, CompositionError, SublayerCycle, UnresolvedDefaultPrim,
+};
 pub use dependency_map::ArcDependency;
 pub use doc::{
     FieldEntry, FieldValue, InMemoryStore, InterpolationType, Layer, LayerId, LayerOffset,

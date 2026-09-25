@@ -16,7 +16,7 @@ use crate::{
     interner::TokenId,
     interner::TokenInterner,
     listop::ListOp,
-    path::{PathId, PathInterner, PropertyPath, TargetPath},
+    path::{Path, PathId, PathInterner, PropertyPath, TargetPath},
     prim_index::OpinionValue,
     property::{
         PropertyEntry, PropertySpec, PropertyType, get_property, get_property_mut, remove_property,
@@ -615,10 +615,22 @@ impl From<LayerId> for SublayerEntry {
 pub enum ReferenceTarget {
     /// Target a concrete prim path.
     Prim(PathId),
-    /// Target the referenced layer's `defaultPrim`.
+    /// No authored prim path: target the prim named by the referenced
+    /// layer's `defaultPrim` (see [`Layer::default_prim_path`]).
     ///
-    /// Spec: AOUSD Core §9 (asset resolution) and §10 (references/payloads)
-    /// allow omitted prim targets to resolve through layer metadata.
+    /// For an external arc (`@./asset.usda@`) that is the asset's root
+    /// layer; for an internal arc (`<>`) it is the authoring layer. When the
+    /// layer has no usable `defaultPrim`, or no prim spec exists at the path
+    /// it names, the arc contributes nothing and composition reports
+    /// [`CompositionError::UnresolvedDefaultPrim`].
+    ///
+    /// Spec: AOUSD Core §10.3.2.1 (references: "If no prim path is
+    /// specified, the path to the prim specified by the defaultPrim field in
+    /// the specified layer is assumed"), §10.3.2.2 (payloads are references
+    /// that may be unloaded). OpenUSD: `_EvalRefOrPayloadArcs` in
+    /// `pxr/usd/pcp/primIndex.cpp`.
+    ///
+    /// [`CompositionError::UnresolvedDefaultPrim`]: crate::CompositionError::UnresolvedDefaultPrim
     DefaultPrim,
 }
 
@@ -675,6 +687,32 @@ impl Reference {
             target: ReferenceTarget::DefaultPrim,
             asset: Some(asset.into()),
             layer_offset: LayerOffset::IDENTITY,
+        }
+    }
+
+    /// Returns the prim path this arc targets in the layer stack rooted at
+    /// [`Reference::layer`]: the authored path, or the path named by that
+    /// layer's `defaultPrim` for a [`ReferenceTarget::DefaultPrim`] target.
+    ///
+    /// Returns `None` when the target is `DefaultPrim` and the layer is not
+    /// in `store` or has no usable `defaultPrim` (see
+    /// [`Layer::default_prim_path`]). A returned path need not have a prim
+    /// spec.
+    ///
+    /// Spec: AOUSD Core §10.3.2.1 (an omitted prim path assumes the
+    /// `defaultPrim` of the specified layer).
+    pub fn target_path(&self, store: &mut dyn LayerStore) -> Option<PathId> {
+        match self.target {
+            ReferenceTarget::Prim(path) => Some(path),
+            ReferenceTarget::DefaultPrim => {
+                let default_prim = store.layer(self.layer)?.default_prim?;
+                let value = String::from(store.tokens().resolve(default_prim));
+                let segments: Vec<TokenId> = default_prim_names(&value)?
+                    .into_iter()
+                    .map(|name| store.tokens_mut().intern(name))
+                    .collect();
+                Some(store.paths_mut().intern(Path::root().join(&segments)))
+            }
         }
     }
 }
@@ -1228,6 +1266,32 @@ pub fn get_field_mut<'a>(
         .map(|e| &mut e.value)
 }
 
+/// Splits a `defaultPrim` value into the prim names of the path it names,
+/// or returns `None` when it does not name a prim path (see
+/// [`Layer::default_prim_path`]).
+pub(crate) fn default_prim_names(value: &str) -> Option<Vec<&str>> {
+    let relative = value.strip_prefix('/').unwrap_or(value);
+    if relative.is_empty() {
+        return None;
+    }
+    let names: Vec<&str> = relative.split('/').collect();
+    names.iter().all(|name| is_prim_name(name)).then_some(names)
+}
+
+/// Returns `true` when `name` can be a prim name: non-empty, not starting
+/// with an ASCII digit, and free of whitespace and of ASCII punctuation
+/// other than `_`. A structural check of the identifier grammar (AOUSD Core
+/// §7.3.3) that accepts other non-ASCII characters.
+fn is_prim_name(name: &str) -> bool {
+    let mut chars = name.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    let allowed =
+        |c: char| c == '_' || c.is_ascii_alphanumeric() || (!c.is_ascii() && !c.is_whitespace());
+    !first.is_ascii_digit() && allowed(first) && chars.all(allowed)
+}
+
 /// Inserts a field only if no entry with the same name exists.
 pub fn insert_field_if_absent(fields: &mut Vec<FieldEntry>, name: TokenId, value: FieldValue) {
     if !fields.iter().any(|e| e.name == name) {
@@ -1248,10 +1312,13 @@ pub struct Layer {
     pub id: LayerId,
     /// Ordered sublayer includes. The layer itself is always stronger than its sublayers.
     pub sublayers: Vec<SublayerEntry>,
-    /// Canonical root-prim entry point for omitted reference/payload targets.
+    /// The authored `defaultPrim` token: the prim that references and
+    /// payloads with no authored prim path target in this layer.
     ///
-    /// Spec: AOUSD Core §10 (references/payloads) uses `defaultPrim` to resolve
-    /// asset targets when no explicit prim path is authored.
+    /// The token is kept as authored, so a value that names no prim path is
+    /// still visible; [`Layer::default_prim_path`] converts it.
+    ///
+    /// Spec: AOUSD Core §7.6.1.2.3 (`defaultPrim`), §10.3.2.1 (references).
     pub default_prim: Option<TokenId>,
     /// All other authored layer metadata, in authored order: for example
     /// `upAxis`, `metersPerUnit`, `timeCodesPerSecond`, `framesPerSecond`,
@@ -1316,6 +1383,42 @@ impl Layer {
         }
     }
 
+    /// Returns the absolute prim path named by [`Layer::default_prim`], or
+    /// `None` when `defaultPrim` is not authored or is not a prim path.
+    ///
+    /// The token is a root prim name (`Model`) or a prim path, either
+    /// absolute (`/Model/Geo`) or relative to the pseudo-root (`Model/Geo`).
+    /// Every name must be an identifier, so property paths, variant
+    /// selections, `.` and `..` components and the pseudo-root itself are
+    /// not prim paths. Identifiers are checked structurally: a name may not
+    /// start with an ASCII digit or contain whitespace or ASCII punctuation
+    /// other than `_`; other non-ASCII characters are accepted.
+    ///
+    /// Spec: AOUSD Core §7.6.1.2.3 ("If it starts with /, it is already an
+    /// absolute path. Otherwise, it's a path relative to /"). OpenUSD:
+    /// `SdfLayer::ConvertDefaultPrimTokenToPath` (`pxr/usd/sdf/layer.cpp`).
+    ///
+    /// ```
+    /// use layerstack::{Layer, LayerId, TokenInterner};
+    ///
+    /// let mut tokens = TokenInterner::default();
+    /// let mut layer = Layer::new(LayerId(1));
+    /// layer.default_prim = Some(tokens.intern("Model/Geo"));
+    /// let path = layer.default_prim_path(&mut tokens).unwrap();
+    /// assert_eq!(path.display(&tokens), "/Model/Geo");
+    ///
+    /// layer.default_prim = Some(tokens.intern("Model.attr"));
+    /// assert!(layer.default_prim_path(&mut tokens).is_none());
+    /// ```
+    pub fn default_prim_path(&self, tokens: &mut TokenInterner) -> Option<Path> {
+        let value = String::from(tokens.resolve(self.default_prim?));
+        let segments: Vec<TokenId> = default_prim_names(&value)?
+            .into_iter()
+            .map(|name| tokens.intern(name))
+            .collect();
+        Some(Path::root().join(&segments))
+    }
+
     /// Returns every prim spec this layer authors at `path`: the
     /// [`Layer::prims`] spec, then those of other variant branches.
     pub fn prim_specs(&self, path: PathId) -> impl Iterator<Item = &PrimSpec> {
@@ -1362,8 +1465,7 @@ impl Layer {
                     if segments.len() >= depth {
                         break;
                     }
-                    let Some(host_path) = paths.lookup(&crate::path::Path::root().join(&segments))
-                    else {
+                    let Some(host_path) = paths.lookup(&Path::root().join(&segments)) else {
                         continue;
                     };
                     sites.push(VariantSelectionSite {
@@ -1473,8 +1575,7 @@ impl InMemoryStore {
     ///
     /// Panics if `s` is not a valid absolute path (must start with `/`).
     pub fn path(&mut self, s: &str) -> PathId {
-        let p =
-            crate::path::Path::parse_absolute(s, &mut self.tokens).expect("valid absolute path");
+        let p = Path::parse_absolute(s, &mut self.tokens).expect("valid absolute path");
         self.paths.intern(p)
     }
 
@@ -1815,5 +1916,39 @@ mod tests {
             Value::Vec3f([4.0, 5.0, 6.0]),
         ]);
         assert_eq!(format!("{arr}"), "[(1, 2, 3), (4, 5, 6)]");
+    }
+
+    /// `defaultPrim` tokens and the prim paths they name, as recorded from
+    /// OpenUSD 26.08's `SdfLayer::GetDefaultPrimAsPath` (an empty path there
+    /// is `None` here).
+    #[test]
+    fn default_prim_path_matches_openusd() {
+        let cases: &[(&str, Option<&str>)] = &[
+            ("Model", Some("/Model")),
+            ("Model/Geo", Some("/Model/Geo")),
+            ("/Model/Geo", Some("/Model/Geo")),
+            ("_x", Some("/_x")),
+            ("Mödel", Some("/Mödel")),
+            ("1Bad", None),
+            ("Model.attr", None),
+            ("/", None),
+            ("", None),
+            ("./Model", None),
+            ("../X", None),
+            ("Model{v=a}", None),
+            ("Bad Name", None),
+            ("Model/", None),
+            ("a:b", None),
+        ];
+        let mut tokens = TokenInterner::default();
+        let mut layer = Layer::new(LayerId(1));
+        assert_eq!(layer.default_prim_path(&mut tokens), None, "not authored");
+        for (token, expected) in cases {
+            layer.default_prim = Some(tokens.intern(token));
+            let actual = layer
+                .default_prim_path(&mut tokens)
+                .map(|path| path.display(&tokens));
+            assert_eq!(actual.as_deref(), *expected, "defaultPrim = {token:?}");
+        }
     }
 }

@@ -130,7 +130,8 @@ impl ArcChain {
     }
 }
 
-/// Detects arc cycles during composition and collects cycle errors.
+/// Detects arc cycles during composition and collects the composition
+/// errors found (see [`report`](Self::report)).
 ///
 /// Composition starts a chain for each composed prim with
 /// [`begin`](Self::begin). Each arc from there is checked with
@@ -279,7 +280,11 @@ impl CycleDetector {
     }
 
     /// Records `error` unless it was already recorded.
-    fn report(&mut self, error: CompositionError) {
+    ///
+    /// Composition also reports its other arc errors here (see
+    /// [`CompositionError::UnresolvedDefaultPrim`]), so every error of a
+    /// stage is kept in one list, in the order found.
+    pub(crate) fn report(&mut self, error: CompositionError) {
         if self.seen.insert(error.clone()) {
             self.errors.push(error);
         }

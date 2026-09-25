@@ -232,7 +232,7 @@ pub(crate) fn compose_stage(
         prim.finalize();
     }
 
-    prune_unselected_variant_specs(store, &mut prims);
+    prune_unselected_variant_specs(store, &layer_stack, &mut prims);
 
     apply_child_order(
         store,
@@ -340,10 +340,9 @@ fn strength_ordered_variant_selections(
 
     let mut selections: HashMap<TokenId, TokenId> = HashMap::new();
     for source in &prim_index.sources {
-        let Some(spec) = store
-            .layer(source.layer_id)
-            .and_then(|layer| layer.prims.get(&source.lookup_path))
-        else {
+        let Some(spec) = store.layer(source.layer_id).and_then(|layer| {
+            layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+        }) else {
             continue;
         };
         let authored = match source.spec_path.components().last() {
@@ -380,7 +379,9 @@ fn composed_variant_selections(
         let Some(layer) = store.layer(source.layer_id) else {
             continue;
         };
-        let Some(spec) = layer.prims.get(&source.lookup_path) else {
+        let Some(spec) =
+            layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+        else {
             continue;
         };
         for (set, variant) in &spec.variant_selections {
@@ -395,7 +396,9 @@ fn composed_variant_selections(
             let Some(layer) = store.layer(source.layer_id) else {
                 continue;
             };
-            let Some(spec) = layer.prims.get(&source.lookup_path) else {
+            let Some(spec) =
+                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+            else {
                 continue;
             };
             for (set, selected_variant) in &selections {
@@ -434,17 +437,25 @@ fn composed_variant_selections(
 /// variant set is the ancestor of the destination prim at the same relative
 /// depth as the variant host is to the source spec. The selection is taken
 /// from that composed host's prim index (strongest selection across all
-/// arcs), falling back to the selection authored on the host in the source
-/// layer when the host lies outside the composed namespace. When no selection
-/// is known for a set at all (fallback selections are not modeled yet), the
-/// opinion is kept rather than guessed away.
+/// arcs). A host that this walk does not reach, such as the ancestor of a
+/// subroot arc target, is looked up by its own path: a source layer in the
+/// stage's layer stack takes the stage's composed selection for that host,
+/// since an arc into that layer stack composes the host's ancestral opinions
+/// the same way; any other layer takes the selection authored on the host in
+/// the source layer. When no selection is known for a set at all (fallback
+/// selections are not modeled yet), the opinion is kept rather than guessed
+/// away.
 ///
 /// Spec: AOUSD Core §10.5 (only the selected variant of each variant set
 /// contributes opinions). Where the Core is silent (§4.2), this follows
 /// OpenUSD v26.08: `pxr/usd/pcp/primIndex.cpp:4471` adds a variant arc only
 /// for the selection found by `_ComposeVariantSelection` (`:4130`), which
 /// searches the whole prim index in strength order.
-fn prune_unselected_variant_specs(store: &dyn LayerStore, prims: &mut HashMap<PathId, PrimIndex>) {
+fn prune_unselected_variant_specs(
+    store: &dyn LayerStore,
+    stage_stack: &LayerStack,
+    prims: &mut HashMap<PathId, PrimIndex>,
+) {
     let mut selection_cache: HashMap<PathId, HashMap<TokenId, TokenId>> = HashMap::new();
 
     let prim_paths: Vec<PathId> = prims.keys().copied().collect();
@@ -463,6 +474,7 @@ fn prune_unselected_variant_specs(store: &dyn LayerStore, prims: &mut HashMap<Pa
                 }
                 if !spec_path_branches_selected(
                     store,
+                    stage_stack,
                     prims,
                     &mut selection_cache,
                     prim_path,
@@ -490,6 +502,7 @@ fn prune_unselected_variant_specs(store: &dyn LayerStore, prims: &mut HashMap<Pa
 /// selected for the composed prim `prim_path`.
 fn spec_path_branches_selected(
     store: &dyn LayerStore,
+    stage_stack: &LayerStack,
     prims: &HashMap<PathId, PrimIndex>,
     selection_cache: &mut HashMap<PathId, HashMap<TokenId, TokenId>>,
     prim_path: PathId,
@@ -537,16 +550,28 @@ fn spec_path_branches_selected(
                     .get(&set)
                     .copied()
             });
-        let selection = composed_selection.or_else(|| {
-            let host = paths.lookup(&crate::path::Path::root().join(&host_segments))?;
-            store
-                .layer(layer_id)?
-                .prims
-                .get(&host)?
-                .variant_selections
-                .get(&set)
-                .copied()
-        });
+        let host = paths.lookup(&crate::path::Path::root().join(&host_segments));
+        let selection = composed_selection
+            .or_else(|| {
+                let host = host.filter(|id| prims.contains_key(id))?;
+                if !stage_stack.layers.contains(&layer_id) {
+                    return None;
+                }
+                selection_cache
+                    .entry(host)
+                    .or_insert_with(|| strength_ordered_variant_selections(store, &prims[&host]))
+                    .get(&set)
+                    .copied()
+            })
+            .or_else(|| {
+                store
+                    .layer(layer_id)?
+                    .prims
+                    .get(&host?)?
+                    .variant_selections
+                    .get(&set)
+                    .copied()
+            });
         if selection.is_some_and(|selected| selected != variant) {
             return false;
         }
@@ -587,7 +612,9 @@ fn filter_variant_children(
             let Some(layer) = store.layer(source.layer_id) else {
                 continue;
             };
-            let Some(spec) = layer.prims.get(&source.lookup_path) else {
+            let Some(spec) =
+                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+            else {
                 continue;
             };
             // Use the first non-empty variant_set_order we find.
@@ -602,7 +629,9 @@ fn filter_variant_children(
             let Some(layer) = store.layer(source.layer_id) else {
                 continue;
             };
-            let Some(spec) = layer.prims.get(&source.lookup_path) else {
+            let Some(spec) =
+                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+            else {
                 continue;
             };
 
@@ -668,7 +697,9 @@ fn filter_variant_children(
                 let Some(layer) = store.layer(source.layer_id) else {
                     continue;
                 };
-                let Some(spec) = layer.prims.get(&source.lookup_path) else {
+                let Some(spec) =
+                    layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+                else {
                     continue;
                 };
                 for set_spec in spec.variant_sets.values() {
@@ -693,7 +724,11 @@ fn filter_variant_children(
                     let Some(layer) = store.layer(source.layer_id) else {
                         continue;
                     };
-                    let Some(spec) = layer.prims.get(&source.lookup_path) else {
+                    let Some(spec) = layer.source_prim_spec(
+                        source.lookup_path,
+                        &source.spec_path,
+                        store.paths(),
+                    ) else {
                         continue;
                     };
                     if let Some(set_spec) = spec.variant_sets.get(set_tok)
@@ -777,7 +812,9 @@ fn filter_variant_children(
             let Some(layer) = store.layer(source.layer_id) else {
                 continue;
             };
-            let Some(spec) = layer.prims.get(&source.lookup_path) else {
+            let Some(spec) =
+                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+            else {
                 continue;
             };
             for (set, variant) in &spec.variant_selections {
@@ -791,7 +828,9 @@ fn filter_variant_children(
                 let Some(layer) = store.layer(source.layer_id) else {
                     continue;
                 };
-                let Some(spec) = layer.prims.get(&source.lookup_path) else {
+                let Some(spec) =
+                    layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+                else {
                     continue;
                 };
                 for (set, selected_variant) in &gp_selections {
@@ -821,7 +860,9 @@ fn filter_variant_children(
             let Some(layer) = store.layer(source.layer_id) else {
                 continue;
             };
-            let Some(spec) = layer.prims.get(&source.lookup_path) else {
+            let Some(spec) =
+                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+            else {
                 continue;
             };
             for (set_name, set_spec) in &spec.variant_sets {
@@ -1062,7 +1103,9 @@ fn strip_instance_descendants(
             let Some(layer) = store.layer(source.layer_id) else {
                 continue;
             };
-            let Some(spec) = layer.prims.get(&source.lookup_path) else {
+            let Some(spec) =
+                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+            else {
                 continue;
             };
             if let Some(val) = spec.instanceable {
@@ -1095,7 +1138,9 @@ fn strip_instance_descendants(
             let Some(layer) = store.layer(source.layer_id) else {
                 continue;
             };
-            let Some(spec) = layer.prims.get(&source.lookup_path) else {
+            let Some(spec) =
+                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+            else {
                 continue;
             };
             if spec.instanceable == Some(true) {
@@ -1147,7 +1192,11 @@ fn strip_instance_descendants(
                     let Some(layer) = store.layer(source.layer_id) else {
                         continue;
                     };
-                    let Some(spec) = layer.prims.get(&source.lookup_path) else {
+                    let Some(spec) = layer.source_prim_spec(
+                        source.lookup_path,
+                        &source.spec_path,
+                        store.paths(),
+                    ) else {
                         continue;
                     };
                     for (set, variant) in &spec.variant_selections {
@@ -1161,7 +1210,11 @@ fn strip_instance_descendants(
                     let Some(layer) = store.layer(source.layer_id) else {
                         continue;
                     };
-                    let Some(spec) = layer.prims.get(&source.lookup_path) else {
+                    let Some(spec) = layer.source_prim_spec(
+                        source.lookup_path,
+                        &source.spec_path,
+                        store.paths(),
+                    ) else {
                         continue;
                     };
                     for (set, set_spec) in &spec.variant_sets {
@@ -1303,7 +1356,9 @@ fn collect_non_identity_children(
             let Some(layer) = store.layer(source.layer_id) else {
                 continue;
             };
-            let Some(spec) = layer.prims.get(&source.lookup_path) else {
+            let Some(spec) =
+                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+            else {
                 continue;
             };
             for (set, variant) in &spec.variant_selections {
@@ -1320,7 +1375,9 @@ fn collect_non_identity_children(
             let Some(layer) = store.layer(source.layer_id) else {
                 continue;
             };
-            let Some(spec) = layer.prims.get(&source.lookup_path) else {
+            let Some(spec) =
+                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+            else {
                 continue;
             };
             for (set, set_spec) in &spec.variant_sets {
@@ -1347,7 +1404,9 @@ fn collect_non_identity_children(
             let Some(layer) = store.layer(source.layer_id) else {
                 continue;
             };
-            let Some(spec) = layer.prims.get(&source.lookup_path) else {
+            let Some(spec) =
+                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+            else {
                 continue;
             };
             for (set, set_spec) in &spec.variant_sets {
@@ -1373,7 +1432,9 @@ fn collect_non_identity_children(
             let Some(layer) = store.layer(source.layer_id) else {
                 continue;
             };
-            let Some(spec) = layer.prims.get(&source.lookup_path) else {
+            let Some(spec) =
+                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+            else {
                 continue;
             };
             for child in &spec.authored_children {
@@ -1434,7 +1495,9 @@ fn prune_deactivated(
             let Some(layer) = store.layer(source.layer_id) else {
                 continue;
             };
-            let Some(spec) = layer.prims.get(&source.lookup_path) else {
+            let Some(spec) =
+                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+            else {
                 continue;
             };
             if let Some(val) = spec.active {
@@ -1546,13 +1609,12 @@ fn resolve_full_variant_selections(
             let Some(layer) = store.layer(*layer_id) else {
                 continue;
             };
-            let Some(spec) = layer.prims.get(&path) else {
-                continue;
-            };
-            if !spec_arcs_apply(store, local_stack, path, spec, SelectionScope::Stack) {
-                continue;
+            for spec in layer.prim_specs(path) {
+                if !spec_arcs_apply(store, local_stack, path, spec, SelectionScope::Stack) {
+                    continue;
+                }
+                ops.push(spec.references.clone());
             }
-            ops.push(spec.references.clone());
         }
         crate::listop::resolve_list_chain::<Reference>(&[], ops)
     };
@@ -1609,13 +1671,12 @@ fn resolve_full_variant_selections(
             let Some(layer) = store.layer(*layer_id) else {
                 continue;
             };
-            let Some(spec) = layer.prims.get(&path) else {
-                continue;
-            };
-            if !spec_arcs_apply(store, local_stack, path, spec, SelectionScope::Stack) {
-                continue;
+            for spec in layer.prim_specs(path) {
+                if !spec_arcs_apply(store, local_stack, path, spec, SelectionScope::Stack) {
+                    continue;
+                }
+                ops.push(spec.payloads.clone());
             }
-            ops.push(spec.payloads.clone());
         }
         crate::listop::resolve_list_chain::<Reference>(&[], ops)
     };
@@ -1909,7 +1970,7 @@ fn unselected_branch_prims(
             .layers
             .iter()
             .filter_map(|id| store.layer(*id))
-            .filter_map(|layer| layer.prims.get(&remote_path))
+            .flat_map(|layer| layer.prim_specs(remote_path))
             .collect();
         if specs.is_empty() || specs.iter().any(|spec| spec.outer_variant_sites.is_empty()) {
             continue;
@@ -2000,128 +2061,28 @@ fn add_local_and_variant_opinions(
             let Some(layer) = store.layer(layer_id).cloned() else {
                 continue;
             };
-            let Some(spec) = layer.prims.get(&path) else {
-                continue;
-            };
-
-            if let Some(d) = deps.as_deref_mut() {
-                d.add_layer_opinion(layer_id, path);
-            }
-
-            let accumulated_offset = local_stack.offset_at(layer_strength_idx);
-            let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
-            // A spec reached through variant branches (see
-            // `PrimSpec::outer_variant_sites`) holds variant opinions, which are
-            // weaker than local opinions from every layer of the stack.
-            //
-            // Spec: AOUSD Core §10.4 (LIVERPS: local before variants).
-            let (is_local, arc_kind) = if spec.outer_variant_sites.is_empty() {
-                (true, ArcKind::Local)
-            } else {
-                (false, ArcKind::Variants)
-            };
-            out.get_mut(&path)
-                .expect("path exists")
-                .add_source(OpinionKey {
-                    is_local,
-                    arc_kind,
-                    nested_arc_kind: None,
-                    namespace_depth,
-                    authored: true,
-                    arc_list_index: 0,
-                    layer_strength,
-                    layer_id,
-                    lookup_path: path,
-                    spec_path: prim_spec_path(store, path, &spec.outer_variant_sites),
-                });
-
-            for entry in composed_entries(&spec.fields, &spec.properties) {
-                let key = OpinionKey {
-                    is_local,
-                    arc_kind,
-                    nested_arc_kind: None,
-                    namespace_depth,
-                    authored: true,
-                    arc_list_index: 0,
-                    layer_strength,
-                    layer_id,
-                    lookup_path: path,
-                    spec_path: property_spec_path(
-                        store,
-                        path,
-                        &spec.outer_variant_sites,
-                        entry.name(),
-                    ),
-                };
-                let index = out.get_mut(&path).expect("path exists");
-                if let Some(property_type) = entry.property_type() {
-                    index.add_property_type(entry.name(), key.clone(), property_type.clone());
+            for spec in layer.prim_specs(path) {
+                if let Some(d) = deps.as_deref_mut() {
+                    d.add_layer_opinion(layer_id, path);
                 }
-                index.add_opinion(Opinion {
-                    key,
-                    field: entry.name(),
-                    value: entry.value(),
-                    layer_offset: accumulated_offset,
-                });
-            }
 
-            if !spec.authored_children.is_empty() {
-                authored_children_out.entry(path).or_default().push((
-                    OpinionKey {
-                        is_local,
-                        arc_kind,
-                        nested_arc_kind: None,
-                        namespace_depth,
-                        authored: true,
-                        arc_list_index: 0,
-                        layer_strength,
-                        layer_id,
-                        lookup_path: path,
-                        spec_path: prim_spec_path(store, path, &spec.outer_variant_sites),
-                    },
-                    spec.authored_children.clone(),
-                ));
-            }
-
-            if let Some(order) = &spec.prim_order {
-                prim_order_out.entry(path).or_default().push((
-                    OpinionKey {
-                        is_local,
-                        arc_kind,
-                        nested_arc_kind: None,
-                        namespace_depth,
-                        authored: true,
-                        arc_list_index: 0,
-                        layer_strength,
-                        layer_id,
-                        lookup_path: path,
-                        spec_path: prim_spec_path(store, path, &spec.outer_variant_sites),
-                    },
-                    order.clone(),
-                ));
-            }
-
-            for (set, selected_variant) in &selections {
-                let Some(set_spec) = spec.variant_sets.get(set) else {
-                    continue;
+                let accumulated_offset = local_stack.offset_at(layer_strength_idx);
+                let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
+                // A spec reached through variant branches (see
+                // `PrimSpec::outer_variant_sites`) holds variant opinions, which are
+                // weaker than local opinions from every layer of the stack.
+                //
+                // Spec: AOUSD Core §10.4 (LIVERPS: local before variants).
+                let (is_local, arc_kind) = if spec.outer_variant_sites.is_empty() {
+                    (true, ArcKind::Local)
+                } else {
+                    (false, ArcKind::Variants)
                 };
-                let Some(variant_spec) = set_spec.variants.get(selected_variant) else {
-                    continue;
-                };
-                let branch_selections = combined_variant_sites(
-                    &variant_spec.outer_variant_sites,
-                    VariantSelectionSite {
-                        host_path: path,
-                        set: *set,
-                        variant: *selected_variant,
-                    },
-                );
-
                 out.get_mut(&path)
                     .expect("path exists")
                     .add_source(OpinionKey {
-                        is_local: false,
-                        arc_kind: ArcKind::Variants,
+                        is_local,
+                        arc_kind,
                         nested_arc_kind: None,
                         namespace_depth,
                         authored: true,
@@ -2129,13 +2090,13 @@ fn add_local_and_variant_opinions(
                         layer_strength,
                         layer_id,
                         lookup_path: path,
-                        spec_path: variant_spec_path(store, path, &branch_selections),
+                        spec_path: prim_spec_path(store, path, &spec.outer_variant_sites),
                     });
 
-                for entry in composed_entries(&variant_spec.fields, &variant_spec.properties) {
+                for entry in composed_entries(&spec.fields, &spec.properties) {
                     let key = OpinionKey {
-                        is_local: false,
-                        arc_kind: ArcKind::Variants,
+                        is_local,
+                        arc_kind,
                         nested_arc_kind: None,
                         namespace_depth,
                         authored: true,
@@ -2143,10 +2104,10 @@ fn add_local_and_variant_opinions(
                         layer_strength,
                         layer_id,
                         lookup_path: path,
-                        spec_path: variant_property_spec_path(
+                        spec_path: property_spec_path(
                             store,
                             path,
-                            &branch_selections,
+                            &spec.outer_variant_sites,
                             entry.name(),
                         ),
                     };
@@ -2162,152 +2123,142 @@ fn add_local_and_variant_opinions(
                     });
                 }
 
-                // Forward variant-scoped child prim fields.
-                let path_obj = store.paths().resolve(path).clone();
-                for child_tok in &variant_spec.authored_children {
-                    let child_path = path_obj.join(&[*child_tok]);
-                    if let Some(child_path_id) = store.paths().lookup(&child_path)
-                        && out.contains_key(&child_path_id)
-                    {
-                        let child_ns_depth =
-                            u16::try_from(store.paths().resolve(child_path_id).depth())
-                                .unwrap_or(u16::MAX);
-                        let child_outer = variant_spec
-                            .required_outer_variant_sites
-                            .get(child_tok)
-                            .cloned()
-                            .unwrap_or_else(|| variant_spec.outer_variant_sites.clone());
-                        let child_selections = combined_variant_sites(
-                            &child_outer,
-                            VariantSelectionSite {
-                                host_path: path,
-                                set: *set,
-                                variant: *selected_variant,
-                            },
-                        );
-                        out.get_mut(&child_path_id)
-                            .expect("path exists")
-                            .add_source(OpinionKey {
-                                is_local: false,
-                                arc_kind: ArcKind::Variants,
-                                nested_arc_kind: None,
-                                namespace_depth: child_ns_depth,
-                                authored: true,
-                                arc_list_index: 0,
-                                layer_strength,
-                                layer_id,
-                                lookup_path: child_path_id,
-                                spec_path: variant_spec_path(
-                                    store,
-                                    child_path_id,
-                                    &child_selections,
-                                ),
-                            });
-                    }
-                }
-                for (child_tok, child_fields) in &variant_spec.child_entries() {
-                    let child_path = path_obj.join(&[*child_tok]);
-                    if let Some(child_path_id) = store.paths().lookup(&child_path)
-                        && out.contains_key(&child_path_id)
-                    {
-                        let child_ns_depth =
-                            u16::try_from(store.paths().resolve(child_path_id).depth())
-                                .unwrap_or(u16::MAX);
-                        let child_outer = variant_spec
-                            .required_outer_variant_sites
-                            .get(child_tok)
-                            .cloned()
-                            .unwrap_or_else(|| variant_spec.outer_variant_sites.clone());
-                        let child_selections = combined_variant_sites(
-                            &child_outer,
-                            VariantSelectionSite {
-                                host_path: path,
-                                set: *set,
-                                variant: *selected_variant,
-                            },
-                        );
-                        for entry in child_fields {
-                            let key = OpinionKey {
-                                is_local: false,
-                                arc_kind: ArcKind::Variants,
-                                nested_arc_kind: None,
-                                namespace_depth: child_ns_depth,
-                                authored: true,
-                                arc_list_index: 0,
-                                layer_strength,
-                                layer_id,
-                                lookup_path: child_path_id,
-                                spec_path: variant_property_spec_path(
-                                    store,
-                                    child_path_id,
-                                    &child_selections,
-                                    entry.name(),
-                                ),
-                            };
-                            let index = out.get_mut(&child_path_id).expect("path exists");
-                            if let Some(property_type) = entry.property_type() {
-                                index.add_property_type(
-                                    entry.name(),
-                                    key.clone(),
-                                    property_type.clone(),
-                                );
-                            }
-                            index.add_opinion(Opinion {
-                                key,
-                                field: entry.name(),
-                                value: entry.value(),
-                                layer_offset: accumulated_offset,
-                            });
-                        }
-                        out.get_mut(&child_path_id)
-                            .expect("path exists")
-                            .add_source(OpinionKey {
-                                is_local: false,
-                                arc_kind: ArcKind::Variants,
-                                nested_arc_kind: None,
-                                namespace_depth: child_ns_depth,
-                                authored: true,
-                                arc_list_index: 0,
-                                layer_strength,
-                                layer_id,
-                                lookup_path: child_path_id,
-                                spec_path: variant_spec_path(
-                                    store,
-                                    child_path_id,
-                                    &child_selections,
-                                ),
-                            });
-                    }
+                if !spec.authored_children.is_empty() {
+                    authored_children_out.entry(path).or_default().push((
+                        OpinionKey {
+                            is_local,
+                            arc_kind,
+                            nested_arc_kind: None,
+                            namespace_depth,
+                            authored: true,
+                            arc_list_index: 0,
+                            layer_strength,
+                            layer_id,
+                            lookup_path: path,
+                            spec_path: prim_spec_path(store, path, &spec.outer_variant_sites),
+                        },
+                        spec.authored_children.clone(),
+                    ));
                 }
 
-                // Forward variant-scoped child_authored_children as
-                // authored_children opinions on the child path.
-                for (child_tok, gc_list) in &variant_spec.child_authored_children {
-                    let child_path = path_obj.join(&[*child_tok]);
-                    if let Some(child_path_id) = store.paths().lookup(&child_path)
-                        && out.contains_key(&child_path_id)
-                    {
-                        let child_ns_depth =
-                            u16::try_from(store.paths().resolve(child_path_id).depth())
-                                .unwrap_or(u16::MAX);
-                        let child_outer = variant_spec
-                            .required_outer_variant_sites
-                            .get(child_tok)
-                            .cloned()
-                            .unwrap_or_else(|| variant_spec.outer_variant_sites.clone());
-                        let child_selections = combined_variant_sites(
-                            &child_outer,
-                            VariantSelectionSite {
-                                host_path: path,
-                                set: *set,
-                                variant: *selected_variant,
-                            },
-                        );
-                        authored_children_out
-                            .entry(child_path_id)
-                            .or_default()
-                            .push((
-                                OpinionKey {
+                if let Some(order) = &spec.prim_order {
+                    prim_order_out.entry(path).or_default().push((
+                        OpinionKey {
+                            is_local,
+                            arc_kind,
+                            nested_arc_kind: None,
+                            namespace_depth,
+                            authored: true,
+                            arc_list_index: 0,
+                            layer_strength,
+                            layer_id,
+                            lookup_path: path,
+                            spec_path: prim_spec_path(store, path, &spec.outer_variant_sites),
+                        },
+                        order.clone(),
+                    ));
+                }
+
+                for (set, selected_variant) in &selections {
+                    let Some(set_spec) = spec.variant_sets.get(set) else {
+                        continue;
+                    };
+                    let Some(variant_spec) = set_spec.variants.get(selected_variant) else {
+                        continue;
+                    };
+                    let branch_selections = combined_variant_sites(
+                        &variant_spec.outer_variant_sites,
+                        VariantSelectionSite {
+                            host_path: path,
+                            set: *set,
+                            variant: *selected_variant,
+                        },
+                    );
+
+                    out.get_mut(&path)
+                        .expect("path exists")
+                        .add_source(OpinionKey {
+                            is_local: false,
+                            arc_kind: ArcKind::Variants,
+                            nested_arc_kind: None,
+                            namespace_depth,
+                            authored: true,
+                            arc_list_index: 0,
+                            layer_strength,
+                            layer_id,
+                            lookup_path: path,
+                            spec_path: variant_spec_path(store, path, &branch_selections),
+                        });
+
+                    for entry in composed_entries(&variant_spec.fields, &variant_spec.properties) {
+                        let key = OpinionKey {
+                            is_local: false,
+                            arc_kind: ArcKind::Variants,
+                            nested_arc_kind: None,
+                            namespace_depth,
+                            authored: true,
+                            arc_list_index: 0,
+                            layer_strength,
+                            layer_id,
+                            lookup_path: path,
+                            spec_path: variant_property_spec_path(
+                                store,
+                                path,
+                                &branch_selections,
+                                entry.name(),
+                            ),
+                        };
+                        let index = out.get_mut(&path).expect("path exists");
+                        if let Some(property_type) = entry.property_type() {
+                            index.add_property_type(
+                                entry.name(),
+                                key.clone(),
+                                property_type.clone(),
+                            );
+                        }
+                        index.add_opinion(Opinion {
+                            key,
+                            field: entry.name(),
+                            value: entry.value(),
+                            layer_offset: accumulated_offset,
+                        });
+                    }
+
+                    // Forward variant-scoped child prim fields.
+                    let path_obj = store.paths().resolve(path).clone();
+                    for child_tok in &variant_spec.authored_children {
+                        let child_path = path_obj.join(&[*child_tok]);
+                        if let Some(child_path_id) = store.paths().lookup(&child_path)
+                            && out.contains_key(&child_path_id)
+                        {
+                            let child_ns_depth =
+                                u16::try_from(store.paths().resolve(child_path_id).depth())
+                                    .unwrap_or(u16::MAX);
+                            let child_outer = variant_spec
+                                .required_outer_variant_sites
+                                .get(child_tok)
+                                .cloned()
+                                .unwrap_or_else(|| variant_spec.outer_variant_sites.clone());
+                            let child_selections = combined_variant_sites(
+                                &child_outer,
+                                VariantSelectionSite {
+                                    host_path: path,
+                                    set: *set,
+                                    variant: *selected_variant,
+                                },
+                            );
+                            // A child with its own branch spec in this layer is
+                            // registered, with its opinions, by the `prim_specs`
+                            // pass over that child's path.
+                            if layer
+                                .prim_spec_in(child_path_id, &child_selections)
+                                .is_some()
+                            {
+                                continue;
+                            }
+                            out.get_mut(&child_path_id)
+                                .expect("path exists")
+                                .add_source(OpinionKey {
                                     is_local: false,
                                     arc_kind: ArcKind::Variants,
                                     nested_arc_kind: None,
@@ -2322,9 +2273,139 @@ fn add_local_and_variant_opinions(
                                         child_path_id,
                                         &child_selections,
                                     ),
+                                });
+                        }
+                    }
+                    for (child_tok, child_fields) in &variant_spec.child_entries() {
+                        let child_path = path_obj.join(&[*child_tok]);
+                        if let Some(child_path_id) = store.paths().lookup(&child_path)
+                            && out.contains_key(&child_path_id)
+                        {
+                            let child_ns_depth =
+                                u16::try_from(store.paths().resolve(child_path_id).depth())
+                                    .unwrap_or(u16::MAX);
+                            let child_outer = variant_spec
+                                .required_outer_variant_sites
+                                .get(child_tok)
+                                .cloned()
+                                .unwrap_or_else(|| variant_spec.outer_variant_sites.clone());
+                            let child_selections = combined_variant_sites(
+                                &child_outer,
+                                VariantSelectionSite {
+                                    host_path: path,
+                                    set: *set,
+                                    variant: *selected_variant,
                                 },
-                                gc_list.clone(),
-                            ));
+                            );
+                            // A child with its own branch spec in this layer is
+                            // registered, with its opinions, by the `prim_specs`
+                            // pass over that child's path.
+                            if layer
+                                .prim_spec_in(child_path_id, &child_selections)
+                                .is_some()
+                            {
+                                continue;
+                            }
+                            for entry in child_fields {
+                                let key = OpinionKey {
+                                    is_local: false,
+                                    arc_kind: ArcKind::Variants,
+                                    nested_arc_kind: None,
+                                    namespace_depth: child_ns_depth,
+                                    authored: true,
+                                    arc_list_index: 0,
+                                    layer_strength,
+                                    layer_id,
+                                    lookup_path: child_path_id,
+                                    spec_path: variant_property_spec_path(
+                                        store,
+                                        child_path_id,
+                                        &child_selections,
+                                        entry.name(),
+                                    ),
+                                };
+                                let index = out.get_mut(&child_path_id).expect("path exists");
+                                if let Some(property_type) = entry.property_type() {
+                                    index.add_property_type(
+                                        entry.name(),
+                                        key.clone(),
+                                        property_type.clone(),
+                                    );
+                                }
+                                index.add_opinion(Opinion {
+                                    key,
+                                    field: entry.name(),
+                                    value: entry.value(),
+                                    layer_offset: accumulated_offset,
+                                });
+                            }
+                            out.get_mut(&child_path_id)
+                                .expect("path exists")
+                                .add_source(OpinionKey {
+                                    is_local: false,
+                                    arc_kind: ArcKind::Variants,
+                                    nested_arc_kind: None,
+                                    namespace_depth: child_ns_depth,
+                                    authored: true,
+                                    arc_list_index: 0,
+                                    layer_strength,
+                                    layer_id,
+                                    lookup_path: child_path_id,
+                                    spec_path: variant_spec_path(
+                                        store,
+                                        child_path_id,
+                                        &child_selections,
+                                    ),
+                                });
+                        }
+                    }
+
+                    // Forward variant-scoped child_authored_children as
+                    // authored_children opinions on the child path.
+                    for (child_tok, gc_list) in &variant_spec.child_authored_children {
+                        let child_path = path_obj.join(&[*child_tok]);
+                        if let Some(child_path_id) = store.paths().lookup(&child_path)
+                            && out.contains_key(&child_path_id)
+                        {
+                            let child_ns_depth =
+                                u16::try_from(store.paths().resolve(child_path_id).depth())
+                                    .unwrap_or(u16::MAX);
+                            let child_outer = variant_spec
+                                .required_outer_variant_sites
+                                .get(child_tok)
+                                .cloned()
+                                .unwrap_or_else(|| variant_spec.outer_variant_sites.clone());
+                            let child_selections = combined_variant_sites(
+                                &child_outer,
+                                VariantSelectionSite {
+                                    host_path: path,
+                                    set: *set,
+                                    variant: *selected_variant,
+                                },
+                            );
+                            authored_children_out
+                                .entry(child_path_id)
+                                .or_default()
+                                .push((
+                                    OpinionKey {
+                                        is_local: false,
+                                        arc_kind: ArcKind::Variants,
+                                        nested_arc_kind: None,
+                                        namespace_depth: child_ns_depth,
+                                        authored: true,
+                                        arc_list_index: 0,
+                                        layer_strength,
+                                        layer_id,
+                                        lookup_path: child_path_id,
+                                        spec_path: variant_spec_path(
+                                            store,
+                                            child_path_id,
+                                            &child_selections,
+                                        ),
+                                    },
+                                    gc_list.clone(),
+                                ));
+                        }
                     }
                 }
             }
@@ -2561,40 +2642,12 @@ fn add_inherit_edge_opinions(
             };
 
             for (remote_path_id, dest_path_id) in &mapping {
-                let Some(spec) = layer.prims.get(remote_path_id) else {
-                    continue;
-                };
-                if let Some(d) = deps.as_deref_mut() {
-                    d.add_layer_opinion(layer_id, *dest_path_id);
-                }
-                if let Some(order) = &spec.prim_order {
-                    prim_order_out.entry(*dest_path_id).or_default().push((
-                        OpinionKey {
-                            is_local: false,
-                            arc_kind,
-                            nested_arc_kind,
-                            namespace_depth,
-                            authored: true,
-                            arc_list_index,
-                            layer_strength,
-                            layer_id,
-                            lookup_path: *remote_path_id,
-                            spec_path: normalized_prim_spec_path(
-                                store,
-                                *remote_path_id,
-                                &spec.outer_variant_sites,
-                                provenance_remap,
-                            ),
-                        },
-                        order.clone(),
-                    ));
-                }
-
-                if !spec.authored_children.is_empty() {
-                    authored_children_out
-                        .entry(*dest_path_id)
-                        .or_default()
-                        .push((
+                for spec in layer.prim_specs(*remote_path_id) {
+                    if let Some(d) = deps.as_deref_mut() {
+                        d.add_layer_opinion(layer_id, *dest_path_id);
+                    }
+                    if let Some(order) = &spec.prim_order {
+                        prim_order_out.entry(*dest_path_id).or_default().push((
                             OpinionKey {
                                 is_local: false,
                                 arc_kind,
@@ -2612,146 +2665,123 @@ fn add_inherit_edge_opinions(
                                     provenance_remap,
                                 ),
                             },
-                            spec.authored_children.clone(),
+                            order.clone(),
                         ));
-                }
-
-                pending_sources.push((
-                    *dest_path_id,
-                    OpinionKey {
-                        is_local: false,
-                        arc_kind,
-                        nested_arc_kind,
-                        namespace_depth,
-                        authored: true,
-                        arc_list_index,
-                        layer_strength,
-                        layer_id,
-                        lookup_path: *remote_path_id,
-                        spec_path: normalized_prim_spec_path(
-                            store,
-                            *remote_path_id,
-                            &spec.outer_variant_sites,
-                            provenance_remap,
-                        ),
-                    },
-                ));
-                for entry in composed_entries(&spec.fields, &spec.properties) {
-                    pending.push((
-                        *dest_path_id,
-                        *remote_path_id,
-                        normalized_property_spec_path(
-                            store,
-                            *remote_path_id,
-                            &spec.outer_variant_sites,
-                            entry.name(),
-                            provenance_remap,
-                        ),
-                        entry.name(),
-                        entry.value(),
-                        entry.property_type().cloned(),
-                    ));
-                }
-
-                // Forward variant opinions from selected variants through inherits.
-                let inherits_selections = resolve_forwarded_variant_selections(
-                    store,
-                    local_stack,
-                    *dest_path_id,
-                    local_stack,
-                    *remote_path_id,
-                );
-                for (set, selected) in &inherits_selections {
-                    if let Some(set_spec) = spec.variant_sets.get(set)
-                        && let Some(variant_spec) = set_spec.variants.get(selected)
-                    {
-                        let branch_selections = combined_variant_sites(
-                            &variant_spec.outer_variant_sites,
-                            VariantSelectionSite {
-                                host_path: *remote_path_id,
-                                set: *set,
-                                variant: *selected,
-                            },
-                        );
-                        pending_sources.push((
-                            *dest_path_id,
-                            OpinionKey {
-                                is_local: false,
-                                arc_kind,
-                                nested_arc_kind: nested_arc_kind.or(Some(ArcKind::Variants)),
-                                namespace_depth,
-                                authored: true,
-                                arc_list_index,
-                                layer_strength,
-                                layer_id,
-                                lookup_path: *remote_path_id,
-                                spec_path: normalized_variant_spec_path(
-                                    store,
-                                    *remote_path_id,
-                                    &branch_selections,
-                                    provenance_remap,
-                                ),
-                            },
-                        ));
-                        for entry in
-                            composed_entries(&variant_spec.fields, &variant_spec.properties)
-                        {
-                            pending.push((
-                                *dest_path_id,
-                                *remote_path_id,
-                                normalized_variant_property_spec_path(
-                                    store,
-                                    *remote_path_id,
-                                    &branch_selections,
-                                    entry.name(),
-                                    provenance_remap,
-                                ),
-                                entry.name(),
-                                entry.value(),
-                                entry.property_type().cloned(),
-                            ));
-                        }
                     }
-                }
 
-                // Forward child_fields from the parent's variant specs through
-                // inherits. When the inherited prim is a child whose parent has
-                // variant sets with child_fields targeting this child, those
-                // fields need to propagate through the inherit arc.
-                let remote_path = store.paths().resolve(*remote_path_id).clone();
-                if let Some(remote_leaf) = remote_path.leaf()
-                    && let Some(remote_parent) = remote_path.parent()
-                    && let Some(remote_parent_id) = store.paths().lookup(&remote_parent)
-                    && let Some(parent_spec) = layer.prims.get(&remote_parent_id)
-                {
-                    let parent_selections =
-                        resolve_variant_selections_for_prim(store, local_stack, remote_parent_id);
-                    for (set, selected) in &parent_selections {
-                        if let Some(set_spec) = parent_spec.variant_sets.get(set)
+                    if !spec.authored_children.is_empty() {
+                        authored_children_out
+                            .entry(*dest_path_id)
+                            .or_default()
+                            .push((
+                                OpinionKey {
+                                    is_local: false,
+                                    arc_kind,
+                                    nested_arc_kind,
+                                    namespace_depth,
+                                    authored: true,
+                                    arc_list_index,
+                                    layer_strength,
+                                    layer_id,
+                                    lookup_path: *remote_path_id,
+                                    spec_path: normalized_prim_spec_path(
+                                        store,
+                                        *remote_path_id,
+                                        &spec.outer_variant_sites,
+                                        provenance_remap,
+                                    ),
+                                },
+                                spec.authored_children.clone(),
+                            ));
+                    }
+
+                    pending_sources.push((
+                        *dest_path_id,
+                        OpinionKey {
+                            is_local: false,
+                            arc_kind,
+                            nested_arc_kind,
+                            namespace_depth,
+                            authored: true,
+                            arc_list_index,
+                            layer_strength,
+                            layer_id,
+                            lookup_path: *remote_path_id,
+                            spec_path: normalized_prim_spec_path(
+                                store,
+                                *remote_path_id,
+                                &spec.outer_variant_sites,
+                                provenance_remap,
+                            ),
+                        },
+                    ));
+                    for entry in composed_entries(&spec.fields, &spec.properties) {
+                        pending.push((
+                            *dest_path_id,
+                            *remote_path_id,
+                            normalized_property_spec_path(
+                                store,
+                                *remote_path_id,
+                                &spec.outer_variant_sites,
+                                entry.name(),
+                                provenance_remap,
+                            ),
+                            entry.name(),
+                            entry.value(),
+                            entry.property_type().cloned(),
+                        ));
+                    }
+
+                    // Forward variant opinions from selected variants through inherits.
+                    let inherits_selections = resolve_forwarded_variant_selections(
+                        store,
+                        local_stack,
+                        *dest_path_id,
+                        local_stack,
+                        *remote_path_id,
+                    );
+                    for (set, selected) in &inherits_selections {
+                        if let Some(set_spec) = spec.variant_sets.get(set)
                             && let Some(variant_spec) = set_spec.variants.get(selected)
-                            && let Some(child_fields) = variant_spec.child_entries_for(remote_leaf)
                         {
-                            let child_outer = variant_spec
-                                .required_outer_variant_sites
-                                .get(&remote_leaf)
-                                .cloned()
-                                .unwrap_or_else(|| variant_spec.outer_variant_sites.clone());
-                            let child_selections = combined_variant_sites(
-                                &child_outer,
+                            let branch_selections = combined_variant_sites(
+                                &variant_spec.outer_variant_sites,
                                 VariantSelectionSite {
-                                    host_path: remote_parent_id,
+                                    host_path: *remote_path_id,
                                     set: *set,
                                     variant: *selected,
                                 },
                             );
-                            for entry in child_fields {
+                            pending_sources.push((
+                                *dest_path_id,
+                                OpinionKey {
+                                    is_local: false,
+                                    arc_kind,
+                                    nested_arc_kind: nested_arc_kind.or(Some(ArcKind::Variants)),
+                                    namespace_depth,
+                                    authored: true,
+                                    arc_list_index,
+                                    layer_strength,
+                                    layer_id,
+                                    lookup_path: *remote_path_id,
+                                    spec_path: normalized_variant_spec_path(
+                                        store,
+                                        *remote_path_id,
+                                        &branch_selections,
+                                        provenance_remap,
+                                    ),
+                                },
+                            ));
+                            for entry in
+                                composed_entries(&variant_spec.fields, &variant_spec.properties)
+                            {
                                 pending.push((
                                     *dest_path_id,
                                     *remote_path_id,
                                     normalized_variant_property_spec_path(
                                         store,
                                         *remote_path_id,
-                                        &child_selections,
+                                        &branch_selections,
                                         entry.name(),
                                         provenance_remap,
                                     ),
@@ -2759,6 +2789,60 @@ fn add_inherit_edge_opinions(
                                     entry.value(),
                                     entry.property_type().cloned(),
                                 ));
+                            }
+                        }
+                    }
+
+                    // Forward child_fields from the parent's variant specs through
+                    // inherits. When the inherited prim is a child whose parent has
+                    // variant sets with child_fields targeting this child, those
+                    // fields need to propagate through the inherit arc.
+                    let remote_path = store.paths().resolve(*remote_path_id).clone();
+                    if let Some(remote_leaf) = remote_path.leaf()
+                        && let Some(remote_parent) = remote_path.parent()
+                        && let Some(remote_parent_id) = store.paths().lookup(&remote_parent)
+                        && let Some(parent_spec) = layer.prims.get(&remote_parent_id)
+                    {
+                        let parent_selections = resolve_variant_selections_for_prim(
+                            store,
+                            local_stack,
+                            remote_parent_id,
+                        );
+                        for (set, selected) in &parent_selections {
+                            if let Some(set_spec) = parent_spec.variant_sets.get(set)
+                                && let Some(variant_spec) = set_spec.variants.get(selected)
+                                && let Some(child_fields) =
+                                    variant_spec.child_entries_for(remote_leaf)
+                            {
+                                let child_outer = variant_spec
+                                    .required_outer_variant_sites
+                                    .get(&remote_leaf)
+                                    .cloned()
+                                    .unwrap_or_else(|| variant_spec.outer_variant_sites.clone());
+                                let child_selections = combined_variant_sites(
+                                    &child_outer,
+                                    VariantSelectionSite {
+                                        host_path: remote_parent_id,
+                                        set: *set,
+                                        variant: *selected,
+                                    },
+                                );
+                                for entry in child_fields {
+                                    pending.push((
+                                        *dest_path_id,
+                                        *remote_path_id,
+                                        normalized_variant_property_spec_path(
+                                            store,
+                                            *remote_path_id,
+                                            &child_selections,
+                                            entry.name(),
+                                            provenance_remap,
+                                        ),
+                                        entry.name(),
+                                        entry.value(),
+                                        entry.property_type().cloned(),
+                                    ));
+                                }
                             }
                         }
                     }
@@ -3499,54 +3583,299 @@ fn add_reference_edge_opinions(
             LayerOffset,
         )> = Vec::new();
         for (remote_path_id, dest_path_id) in &mapping {
-            let Some(remote_spec) = remote_layer.prims.get(remote_path_id) else {
-                continue;
-            };
-            if let Some(d) = deps.as_deref_mut() {
-                d.add_layer_opinion(remote_layer_id, *dest_path_id);
-            }
-            let base_key = OpinionKey {
-                is_local: false,
-                arc_kind: edge_arc_kind,
-                nested_arc_kind: edge_direct_nested,
-                namespace_depth,
-                authored: true,
-                arc_list_index,
-                layer_strength,
-                layer_id: remote_layer_id,
-                lookup_path: *remote_path_id,
-                spec_path: normalized_prim_spec_path(
-                    store,
-                    *remote_path_id,
-                    &remote_spec.outer_variant_sites,
-                    provenance_remap,
-                ),
-            };
-            pending_sources.push((*dest_path_id, base_key.clone()));
+            for remote_spec in remote_layer.prim_specs(*remote_path_id) {
+                if let Some(d) = deps.as_deref_mut() {
+                    d.add_layer_opinion(remote_layer_id, *dest_path_id);
+                }
+                let base_key = OpinionKey {
+                    is_local: false,
+                    arc_kind: edge_arc_kind,
+                    nested_arc_kind: edge_direct_nested,
+                    namespace_depth,
+                    authored: true,
+                    arc_list_index,
+                    layer_strength,
+                    layer_id: remote_layer_id,
+                    lookup_path: *remote_path_id,
+                    spec_path: normalized_prim_spec_path(
+                        store,
+                        *remote_path_id,
+                        &remote_spec.outer_variant_sites,
+                        provenance_remap,
+                    ),
+                };
+                pending_sources.push((*dest_path_id, base_key.clone()));
 
-            for entry in composed_entries(&remote_spec.fields, &remote_spec.properties) {
-                pending_fields.push((
-                    *dest_path_id,
-                    entry.name(),
-                    base_key
-                        .clone()
-                        .with_spec_path(normalized_property_spec_path(
-                            store,
-                            *remote_path_id,
-                            &remote_spec.outer_variant_sites,
-                            entry.name(),
-                            provenance_remap,
-                        )),
-                    entry.value(),
-                    entry.property_type().cloned(),
-                    ref_offset,
-                ));
-            }
+                for entry in composed_entries(&remote_spec.fields, &remote_spec.properties) {
+                    pending_fields.push((
+                        *dest_path_id,
+                        entry.name(),
+                        base_key
+                            .clone()
+                            .with_spec_path(normalized_property_spec_path(
+                                store,
+                                *remote_path_id,
+                                &remote_spec.outer_variant_sites,
+                                entry.name(),
+                                provenance_remap,
+                            )),
+                        entry.value(),
+                        entry.property_type().cloned(),
+                        ref_offset,
+                    ));
+                }
 
-            // Forward variant opinions from selected variants.
-            // Variant selections are resolved using the combined stack
-            // (referencing layer selections take precedence).
-            {
+                // Forward variant opinions from selected variants.
+                // Variant selections are resolved using the combined stack
+                // (referencing layer selections take precedence).
+                {
+                    let selections = resolve_forwarded_variant_selections(
+                        store,
+                        stage_stack,
+                        *dest_path_id,
+                        &remote_stack,
+                        *remote_path_id,
+                    );
+                    for (set, selected) in &selections {
+                        if let Some(set_spec) = remote_spec.variant_sets.get(set)
+                            && let Some(variant_spec) = set_spec.variants.get(selected)
+                        {
+                            let branch_selections = combined_variant_sites(
+                                &variant_spec.outer_variant_sites,
+                                VariantSelectionSite {
+                                    host_path: *remote_path_id,
+                                    set: *set,
+                                    variant: *selected,
+                                },
+                            );
+                            pending_sources.push((
+                                *dest_path_id,
+                                OpinionKey {
+                                    is_local: false,
+                                    arc_kind: edge_arc_kind,
+                                    nested_arc_kind: edge_variant_nested,
+                                    namespace_depth,
+                                    authored: true,
+                                    arc_list_index,
+                                    layer_strength,
+                                    layer_id: remote_layer_id,
+                                    lookup_path: *remote_path_id,
+                                    spec_path: normalized_variant_spec_path(
+                                        store,
+                                        *remote_path_id,
+                                        &branch_selections,
+                                        provenance_remap,
+                                    ),
+                                },
+                            ));
+                            for entry in
+                                composed_entries(&variant_spec.fields, &variant_spec.properties)
+                            {
+                                pending_fields.push((
+                                    *dest_path_id,
+                                    entry.name(),
+                                    OpinionKey {
+                                        is_local: false,
+                                        arc_kind: edge_arc_kind,
+                                        nested_arc_kind: edge_variant_nested,
+                                        namespace_depth,
+                                        authored: true,
+                                        arc_list_index,
+                                        layer_strength,
+                                        layer_id: remote_layer_id,
+                                        lookup_path: *remote_path_id,
+                                        spec_path: normalized_variant_property_spec_path(
+                                            store,
+                                            *remote_path_id,
+                                            &branch_selections,
+                                            entry.name(),
+                                            provenance_remap,
+                                        ),
+                                    },
+                                    entry.value(),
+                                    entry.property_type().cloned(),
+                                    ref_offset,
+                                ));
+                            }
+
+                            // Forward child_authored_children as authored_children
+                            // opinions on child paths.
+                            let ref_path_obj = store.paths().resolve(*dest_path_id).clone();
+                            for (child_tok, gc_list) in &variant_spec.child_authored_children {
+                                let child_path = ref_path_obj.join(&[*child_tok]);
+                                if let Some(child_path_id) = store.paths().lookup(&child_path)
+                                    && out.contains_key(&child_path_id)
+                                {
+                                    let child_ns =
+                                        u16::try_from(store.paths().resolve(child_path_id).depth())
+                                            .unwrap_or(u16::MAX);
+                                    let remote_child_source = store
+                                        .paths()
+                                        .lookup(
+                                            &store
+                                                .paths()
+                                                .resolve(*remote_path_id)
+                                                .join(&[*child_tok]),
+                                        )
+                                        .unwrap_or(*remote_path_id);
+                                    authored_children_out
+                                        .entry(child_path_id)
+                                        .or_default()
+                                        .push((
+                                            OpinionKey {
+                                                is_local: false,
+                                                arc_kind: edge_arc_kind,
+                                                nested_arc_kind: edge_variant_nested,
+                                                namespace_depth: child_ns,
+                                                authored: true,
+                                                arc_list_index,
+                                                layer_strength,
+                                                layer_id: remote_layer_id,
+                                                lookup_path: remote_child_source,
+                                                spec_path: normalized_variant_spec_path(
+                                                    store,
+                                                    remote_child_source,
+                                                    &branch_selections,
+                                                    provenance_remap,
+                                                ),
+                                            },
+                                            gc_list.clone(),
+                                        ));
+                                }
+                            }
+
+                            // Forward child_fields to child paths.
+                            for (child_tok, child_fields) in &variant_spec.child_entries() {
+                                let child_path = ref_path_obj.join(&[*child_tok]);
+                                if let Some(child_path_id) = store.paths().lookup(&child_path)
+                                    && out.contains_key(&child_path_id)
+                                {
+                                    let child_ns =
+                                        u16::try_from(store.paths().resolve(child_path_id).depth())
+                                            .unwrap_or(u16::MAX);
+                                    let remote_child_source = store
+                                        .paths()
+                                        .lookup(
+                                            &store
+                                                .paths()
+                                                .resolve(*remote_path_id)
+                                                .join(&[*child_tok]),
+                                        )
+                                        .unwrap_or(*remote_path_id);
+                                    let child_outer = variant_spec
+                                        .required_outer_variant_sites
+                                        .get(child_tok)
+                                        .cloned()
+                                        .unwrap_or_else(|| {
+                                            variant_spec.outer_variant_sites.clone()
+                                        });
+                                    let child_selections = combined_variant_sites(
+                                        &child_outer,
+                                        VariantSelectionSite {
+                                            host_path: *remote_path_id,
+                                            set: *set,
+                                            variant: *selected,
+                                        },
+                                    );
+                                    for entry in child_fields {
+                                        pending_fields.push((
+                                            child_path_id,
+                                            entry.name(),
+                                            OpinionKey {
+                                                is_local: false,
+                                                arc_kind: edge_arc_kind,
+                                                nested_arc_kind: edge_variant_nested,
+                                                namespace_depth: child_ns,
+                                                authored: true,
+                                                arc_list_index,
+                                                layer_strength,
+                                                layer_id: remote_layer_id,
+                                                lookup_path: remote_child_source,
+                                                spec_path: normalized_variant_property_spec_path(
+                                                    store,
+                                                    remote_child_source,
+                                                    &child_selections,
+                                                    entry.name(),
+                                                    provenance_remap,
+                                                ),
+                                            },
+                                            entry.value(),
+                                            entry.property_type().cloned(),
+                                            ref_offset,
+                                        ));
+                                    }
+                                    out.get_mut(&child_path_id)
+                                        .expect("path exists")
+                                        .add_source(OpinionKey {
+                                            is_local: false,
+                                            arc_kind: edge_arc_kind,
+                                            nested_arc_kind: edge_variant_nested,
+                                            namespace_depth: child_ns,
+                                            authored: true,
+                                            arc_list_index,
+                                            layer_strength,
+                                            layer_id: remote_layer_id,
+                                            lookup_path: remote_child_source,
+                                            spec_path: normalized_variant_spec_path(
+                                                store,
+                                                remote_child_source,
+                                                &child_selections,
+                                                provenance_remap,
+                                            ),
+                                        });
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if let Some(order) = &remote_spec.prim_order {
+                    prim_order_out.entry(*dest_path_id).or_default().push((
+                        OpinionKey {
+                            is_local: false,
+                            arc_kind: edge_arc_kind,
+                            nested_arc_kind: edge_direct_nested,
+                            namespace_depth,
+                            authored: true,
+                            arc_list_index,
+                            layer_strength,
+                            layer_id: remote_layer_id,
+                            lookup_path: *remote_path_id,
+                            spec_path: prim_spec_path(
+                                store,
+                                *remote_path_id,
+                                &remote_spec.outer_variant_sites,
+                            ),
+                        },
+                        order.clone(),
+                    ));
+                }
+
+                if !remote_spec.authored_children.is_empty() {
+                    authored_children_out
+                        .entry(*dest_path_id)
+                        .or_default()
+                        .push((
+                            OpinionKey {
+                                is_local: false,
+                                arc_kind: edge_arc_kind,
+                                nested_arc_kind: edge_direct_nested,
+                                namespace_depth,
+                                authored: true,
+                                arc_list_index,
+                                layer_strength,
+                                layer_id: remote_layer_id,
+                                lookup_path: *remote_path_id,
+                                spec_path: prim_spec_path(
+                                    store,
+                                    *remote_path_id,
+                                    &remote_spec.outer_variant_sites,
+                                ),
+                            },
+                            remote_spec.authored_children.clone(),
+                        ));
+                }
+
                 let selections = resolve_forwarded_variant_selections(
                     store,
                     stage_stack,
@@ -3586,41 +3915,47 @@ fn add_reference_edge_opinions(
                                 ),
                             },
                         ));
+
                         for entry in
                             composed_entries(&variant_spec.fields, &variant_spec.properties)
                         {
-                            pending_fields.push((
-                                *dest_path_id,
-                                entry.name(),
-                                OpinionKey {
-                                    is_local: false,
-                                    arc_kind: edge_arc_kind,
-                                    nested_arc_kind: edge_variant_nested,
-                                    namespace_depth,
-                                    authored: true,
-                                    arc_list_index,
-                                    layer_strength,
-                                    layer_id: remote_layer_id,
-                                    lookup_path: *remote_path_id,
-                                    spec_path: normalized_variant_property_spec_path(
-                                        store,
-                                        *remote_path_id,
-                                        &branch_selections,
-                                        entry.name(),
-                                        provenance_remap,
-                                    ),
-                                },
-                                entry.value(),
-                                entry.property_type().cloned(),
-                                ref_offset,
-                            ));
+                            let key = OpinionKey {
+                                is_local: false,
+                                arc_kind: edge_arc_kind,
+                                nested_arc_kind: edge_variant_nested,
+                                namespace_depth,
+                                authored: true,
+                                arc_list_index,
+                                layer_strength,
+                                layer_id: remote_layer_id,
+                                lookup_path: *remote_path_id,
+                                spec_path: normalized_variant_property_spec_path(
+                                    store,
+                                    *remote_path_id,
+                                    &branch_selections,
+                                    entry.name(),
+                                    provenance_remap,
+                                ),
+                            };
+                            let index = out.get_mut(dest_path_id).expect("path exists");
+                            if let Some(property_type) = entry.property_type() {
+                                index.add_property_type(
+                                    entry.name(),
+                                    key.clone(),
+                                    property_type.clone(),
+                                );
+                            }
+                            index.add_opinion(Opinion {
+                                key,
+                                field: entry.name(),
+                                value: entry.value(),
+                                layer_offset: ref_offset,
+                            });
                         }
 
-                        // Forward child_authored_children as authored_children
-                        // opinions on child paths.
-                        let ref_path_obj = store.paths().resolve(*dest_path_id).clone();
+                        let payload_path_obj = store.paths().resolve(*dest_path_id).clone();
                         for (child_tok, gc_list) in &variant_spec.child_authored_children {
-                            let child_path = ref_path_obj.join(&[*child_tok]);
+                            let child_path = payload_path_obj.join(&[*child_tok]);
                             if let Some(child_path_id) = store.paths().lookup(&child_path)
                                 && out.contains_key(&child_path_id)
                             {
@@ -3659,9 +3994,8 @@ fn add_reference_edge_opinions(
                             }
                         }
 
-                        // Forward child_fields to child paths.
                         for (child_tok, child_fields) in &variant_spec.child_entries() {
-                            let child_path = ref_path_obj.join(&[*child_tok]);
+                            let child_path = payload_path_obj.join(&[*child_tok]);
                             if let Some(child_path_id) = store.paths().lookup(&child_path)
                                 && out.contains_key(&child_path_id)
                             {
@@ -3687,33 +4021,6 @@ fn add_reference_edge_opinions(
                                         variant: *selected,
                                     },
                                 );
-                                for entry in child_fields {
-                                    pending_fields.push((
-                                        child_path_id,
-                                        entry.name(),
-                                        OpinionKey {
-                                            is_local: false,
-                                            arc_kind: edge_arc_kind,
-                                            nested_arc_kind: edge_variant_nested,
-                                            namespace_depth: child_ns,
-                                            authored: true,
-                                            arc_list_index,
-                                            layer_strength,
-                                            layer_id: remote_layer_id,
-                                            lookup_path: remote_child_source,
-                                            spec_path: normalized_variant_property_spec_path(
-                                                store,
-                                                remote_child_source,
-                                                &child_selections,
-                                                entry.name(),
-                                                provenance_remap,
-                                            ),
-                                        },
-                                        entry.value(),
-                                        entry.property_type().cloned(),
-                                        ref_offset,
-                                    ));
-                                }
                                 out.get_mut(&child_path_id)
                                     .expect("path exists")
                                     .add_source(OpinionKey {
@@ -3733,152 +4040,8 @@ fn add_reference_edge_opinions(
                                             provenance_remap,
                                         ),
                                     });
-                            }
-                        }
-                    }
-                }
-            }
-
-            if let Some(order) = &remote_spec.prim_order {
-                prim_order_out.entry(*dest_path_id).or_default().push((
-                    OpinionKey {
-                        is_local: false,
-                        arc_kind: edge_arc_kind,
-                        nested_arc_kind: edge_direct_nested,
-                        namespace_depth,
-                        authored: true,
-                        arc_list_index,
-                        layer_strength,
-                        layer_id: remote_layer_id,
-                        lookup_path: *remote_path_id,
-                        spec_path: prim_spec_path(
-                            store,
-                            *remote_path_id,
-                            &remote_spec.outer_variant_sites,
-                        ),
-                    },
-                    order.clone(),
-                ));
-            }
-
-            if !remote_spec.authored_children.is_empty() {
-                authored_children_out
-                    .entry(*dest_path_id)
-                    .or_default()
-                    .push((
-                        OpinionKey {
-                            is_local: false,
-                            arc_kind: edge_arc_kind,
-                            nested_arc_kind: edge_direct_nested,
-                            namespace_depth,
-                            authored: true,
-                            arc_list_index,
-                            layer_strength,
-                            layer_id: remote_layer_id,
-                            lookup_path: *remote_path_id,
-                            spec_path: prim_spec_path(
-                                store,
-                                *remote_path_id,
-                                &remote_spec.outer_variant_sites,
-                            ),
-                        },
-                        remote_spec.authored_children.clone(),
-                    ));
-            }
-
-            let selections = resolve_forwarded_variant_selections(
-                store,
-                stage_stack,
-                *dest_path_id,
-                &remote_stack,
-                *remote_path_id,
-            );
-            for (set, selected) in &selections {
-                if let Some(set_spec) = remote_spec.variant_sets.get(set)
-                    && let Some(variant_spec) = set_spec.variants.get(selected)
-                {
-                    let branch_selections = combined_variant_sites(
-                        &variant_spec.outer_variant_sites,
-                        VariantSelectionSite {
-                            host_path: *remote_path_id,
-                            set: *set,
-                            variant: *selected,
-                        },
-                    );
-                    pending_sources.push((
-                        *dest_path_id,
-                        OpinionKey {
-                            is_local: false,
-                            arc_kind: edge_arc_kind,
-                            nested_arc_kind: edge_variant_nested,
-                            namespace_depth,
-                            authored: true,
-                            arc_list_index,
-                            layer_strength,
-                            layer_id: remote_layer_id,
-                            lookup_path: *remote_path_id,
-                            spec_path: normalized_variant_spec_path(
-                                store,
-                                *remote_path_id,
-                                &branch_selections,
-                                provenance_remap,
-                            ),
-                        },
-                    ));
-
-                    for entry in composed_entries(&variant_spec.fields, &variant_spec.properties) {
-                        let key = OpinionKey {
-                            is_local: false,
-                            arc_kind: edge_arc_kind,
-                            nested_arc_kind: edge_variant_nested,
-                            namespace_depth,
-                            authored: true,
-                            arc_list_index,
-                            layer_strength,
-                            layer_id: remote_layer_id,
-                            lookup_path: *remote_path_id,
-                            spec_path: normalized_variant_property_spec_path(
-                                store,
-                                *remote_path_id,
-                                &branch_selections,
-                                entry.name(),
-                                provenance_remap,
-                            ),
-                        };
-                        let index = out.get_mut(dest_path_id).expect("path exists");
-                        if let Some(property_type) = entry.property_type() {
-                            index.add_property_type(
-                                entry.name(),
-                                key.clone(),
-                                property_type.clone(),
-                            );
-                        }
-                        index.add_opinion(Opinion {
-                            key,
-                            field: entry.name(),
-                            value: entry.value(),
-                            layer_offset: ref_offset,
-                        });
-                    }
-
-                    let payload_path_obj = store.paths().resolve(*dest_path_id).clone();
-                    for (child_tok, gc_list) in &variant_spec.child_authored_children {
-                        let child_path = payload_path_obj.join(&[*child_tok]);
-                        if let Some(child_path_id) = store.paths().lookup(&child_path)
-                            && out.contains_key(&child_path_id)
-                        {
-                            let child_ns =
-                                u16::try_from(store.paths().resolve(child_path_id).depth())
-                                    .unwrap_or(u16::MAX);
-                            let remote_child_source = store
-                                .paths()
-                                .lookup(&store.paths().resolve(*remote_path_id).join(&[*child_tok]))
-                                .unwrap_or(*remote_path_id);
-                            authored_children_out
-                                .entry(child_path_id)
-                                .or_default()
-                                .push((
-                                    OpinionKey {
+                                for entry in child_fields {
+                                    let key = OpinionKey {
                                         is_local: false,
                                         arc_kind: edge_arc_kind,
                                         nested_arc_kind: edge_variant_nested,
@@ -3888,95 +4051,29 @@ fn add_reference_edge_opinions(
                                         layer_strength,
                                         layer_id: remote_layer_id,
                                         lookup_path: remote_child_source,
-                                        spec_path: normalized_variant_spec_path(
+                                        spec_path: normalized_variant_property_spec_path(
                                             store,
                                             remote_child_source,
-                                            &branch_selections,
+                                            &child_selections,
+                                            entry.name(),
                                             provenance_remap,
                                         ),
-                                    },
-                                    gc_list.clone(),
-                                ));
-                        }
-                    }
-
-                    for (child_tok, child_fields) in &variant_spec.child_entries() {
-                        let child_path = payload_path_obj.join(&[*child_tok]);
-                        if let Some(child_path_id) = store.paths().lookup(&child_path)
-                            && out.contains_key(&child_path_id)
-                        {
-                            let child_ns =
-                                u16::try_from(store.paths().resolve(child_path_id).depth())
-                                    .unwrap_or(u16::MAX);
-                            let remote_child_source = store
-                                .paths()
-                                .lookup(&store.paths().resolve(*remote_path_id).join(&[*child_tok]))
-                                .unwrap_or(*remote_path_id);
-                            let child_outer = variant_spec
-                                .required_outer_variant_sites
-                                .get(child_tok)
-                                .cloned()
-                                .unwrap_or_else(|| variant_spec.outer_variant_sites.clone());
-                            let child_selections = combined_variant_sites(
-                                &child_outer,
-                                VariantSelectionSite {
-                                    host_path: *remote_path_id,
-                                    set: *set,
-                                    variant: *selected,
-                                },
-                            );
-                            out.get_mut(&child_path_id)
-                                .expect("path exists")
-                                .add_source(OpinionKey {
-                                    is_local: false,
-                                    arc_kind: edge_arc_kind,
-                                    nested_arc_kind: edge_variant_nested,
-                                    namespace_depth: child_ns,
-                                    authored: true,
-                                    arc_list_index,
-                                    layer_strength,
-                                    layer_id: remote_layer_id,
-                                    lookup_path: remote_child_source,
-                                    spec_path: normalized_variant_spec_path(
-                                        store,
-                                        remote_child_source,
-                                        &child_selections,
-                                        provenance_remap,
-                                    ),
-                                });
-                            for entry in child_fields {
-                                let key = OpinionKey {
-                                    is_local: false,
-                                    arc_kind: edge_arc_kind,
-                                    nested_arc_kind: edge_variant_nested,
-                                    namespace_depth: child_ns,
-                                    authored: true,
-                                    arc_list_index,
-                                    layer_strength,
-                                    layer_id: remote_layer_id,
-                                    lookup_path: remote_child_source,
-                                    spec_path: normalized_variant_property_spec_path(
-                                        store,
-                                        remote_child_source,
-                                        &child_selections,
-                                        entry.name(),
-                                        provenance_remap,
-                                    ),
-                                };
-                                let index = out.get_mut(&child_path_id).expect("path exists");
-                                if let Some(property_type) = entry.property_type() {
-                                    index.add_property_type(
-                                        entry.name(),
-                                        key.clone(),
-                                        property_type.clone(),
-                                    );
+                                    };
+                                    let index = out.get_mut(&child_path_id).expect("path exists");
+                                    if let Some(property_type) = entry.property_type() {
+                                        index.add_property_type(
+                                            entry.name(),
+                                            key.clone(),
+                                            property_type.clone(),
+                                        );
+                                    }
+                                    index.add_opinion(Opinion {
+                                        key,
+                                        field: entry.name(),
+                                        value: entry.value(),
+                                        layer_offset: ref_offset,
+                                    });
                                 }
-                                index.add_opinion(Opinion {
-                                    key,
-                                    field: entry.name(),
-                                    value: entry.value(),
-                                    layer_offset: ref_offset,
-                                });
                             }
                         }
                     }
@@ -4470,66 +4567,12 @@ fn add_payload_edge_opinions(
 
         let mut pending_sources = Vec::new();
         for (remote_path_id, dest_path_id) in &mapping {
-            let Some(remote_spec) = remote_layer.prims.get(remote_path_id) else {
-                continue;
-            };
-            if let Some(d) = deps.as_deref_mut() {
-                d.add_layer_opinion(remote_layer_id, *dest_path_id);
-            }
-            pending_sources.push((
-                *dest_path_id,
-                OpinionKey {
-                    is_local: false,
-                    arc_kind: edge_arc_kind,
-                    nested_arc_kind: edge_direct_nested,
-                    namespace_depth,
-                    authored: true,
-                    arc_list_index,
-                    layer_strength,
-                    layer_id: remote_layer_id,
-                    lookup_path: *remote_path_id,
-                    spec_path: normalized_prim_spec_path(
-                        store,
-                        *remote_path_id,
-                        &remote_spec.outer_variant_sites,
-                        provenance_remap,
-                    ),
-                },
-            ));
-
-            for entry in composed_entries(&remote_spec.fields, &remote_spec.properties) {
-                let key = OpinionKey {
-                    is_local: false,
-                    arc_kind: edge_arc_kind,
-                    nested_arc_kind: edge_direct_nested,
-                    namespace_depth,
-                    authored: true,
-                    arc_list_index,
-                    layer_strength,
-                    layer_id: remote_layer_id,
-                    lookup_path: *remote_path_id,
-                    spec_path: normalized_property_spec_path(
-                        store,
-                        *remote_path_id,
-                        &remote_spec.outer_variant_sites,
-                        entry.name(),
-                        provenance_remap,
-                    ),
-                };
-                let index = out.get_mut(dest_path_id).expect("path exists");
-                if let Some(property_type) = entry.property_type() {
-                    index.add_property_type(entry.name(), key.clone(), property_type.clone());
+            for remote_spec in remote_layer.prim_specs(*remote_path_id) {
+                if let Some(d) = deps.as_deref_mut() {
+                    d.add_layer_opinion(remote_layer_id, *dest_path_id);
                 }
-                index.add_opinion(Opinion {
-                    key,
-                    field: entry.name(),
-                    value: entry.value(),
-                    layer_offset: payload_offset,
-                });
-            }
-
-            if let Some(order) = &remote_spec.prim_order {
-                prim_order_out.entry(*dest_path_id).or_default().push((
+                pending_sources.push((
+                    *dest_path_id,
                     OpinionKey {
                         is_local: false,
                         arc_kind: edge_arc_kind,
@@ -4547,15 +4590,41 @@ fn add_payload_edge_opinions(
                             provenance_remap,
                         ),
                     },
-                    order.clone(),
                 ));
-            }
 
-            if !remote_spec.authored_children.is_empty() {
-                authored_children_out
-                    .entry(*dest_path_id)
-                    .or_default()
-                    .push((
+                for entry in composed_entries(&remote_spec.fields, &remote_spec.properties) {
+                    let key = OpinionKey {
+                        is_local: false,
+                        arc_kind: edge_arc_kind,
+                        nested_arc_kind: edge_direct_nested,
+                        namespace_depth,
+                        authored: true,
+                        arc_list_index,
+                        layer_strength,
+                        layer_id: remote_layer_id,
+                        lookup_path: *remote_path_id,
+                        spec_path: normalized_property_spec_path(
+                            store,
+                            *remote_path_id,
+                            &remote_spec.outer_variant_sites,
+                            entry.name(),
+                            provenance_remap,
+                        ),
+                    };
+                    let index = out.get_mut(dest_path_id).expect("path exists");
+                    if let Some(property_type) = entry.property_type() {
+                        index.add_property_type(entry.name(), key.clone(), property_type.clone());
+                    }
+                    index.add_opinion(Opinion {
+                        key,
+                        field: entry.name(),
+                        value: entry.value(),
+                        layer_offset: payload_offset,
+                    });
+                }
+
+                if let Some(order) = &remote_spec.prim_order {
+                    prim_order_out.entry(*dest_path_id).or_default().push((
                         OpinionKey {
                             is_local: false,
                             arc_kind: edge_arc_kind,
@@ -4573,83 +4642,112 @@ fn add_payload_edge_opinions(
                                 provenance_remap,
                             ),
                         },
-                        remote_spec.authored_children.clone(),
+                        order.clone(),
                     ));
-            }
+                }
 
-            let selections = resolve_forwarded_variant_selections(
-                store,
-                stage_stack,
-                *dest_path_id,
-                &remote_stack,
-                *remote_path_id,
-            );
-            for (set, selected) in &selections {
-                if let Some(set_spec) = remote_spec.variant_sets.get(set)
-                    && let Some(variant_spec) = set_spec.variants.get(selected)
-                {
-                    let branch_selections = combined_variant_sites(
-                        &variant_spec.outer_variant_sites,
-                        VariantSelectionSite {
-                            host_path: *remote_path_id,
-                            set: *set,
-                            variant: *selected,
-                        },
-                    );
-                    pending_sources.push((
-                        *dest_path_id,
-                        OpinionKey {
-                            is_local: false,
-                            arc_kind: edge_arc_kind,
-                            nested_arc_kind: edge_variant_nested,
-                            namespace_depth,
-                            authored: true,
-                            arc_list_index,
-                            layer_strength,
-                            layer_id: remote_layer_id,
-                            lookup_path: *remote_path_id,
-                            spec_path: normalized_variant_spec_path(
-                                store,
-                                *remote_path_id,
-                                &branch_selections,
-                                provenance_remap,
-                            ),
-                        },
-                    ));
+                if !remote_spec.authored_children.is_empty() {
+                    authored_children_out
+                        .entry(*dest_path_id)
+                        .or_default()
+                        .push((
+                            OpinionKey {
+                                is_local: false,
+                                arc_kind: edge_arc_kind,
+                                nested_arc_kind: edge_direct_nested,
+                                namespace_depth,
+                                authored: true,
+                                arc_list_index,
+                                layer_strength,
+                                layer_id: remote_layer_id,
+                                lookup_path: *remote_path_id,
+                                spec_path: normalized_prim_spec_path(
+                                    store,
+                                    *remote_path_id,
+                                    &remote_spec.outer_variant_sites,
+                                    provenance_remap,
+                                ),
+                            },
+                            remote_spec.authored_children.clone(),
+                        ));
+                }
 
-                    for entry in composed_entries(&variant_spec.fields, &variant_spec.properties) {
-                        let key = OpinionKey {
-                            is_local: false,
-                            arc_kind: edge_arc_kind,
-                            nested_arc_kind: edge_variant_nested,
-                            namespace_depth,
-                            authored: true,
-                            arc_list_index,
-                            layer_strength,
-                            layer_id: remote_layer_id,
-                            lookup_path: *remote_path_id,
-                            spec_path: normalized_variant_property_spec_path(
-                                store,
-                                *remote_path_id,
-                                &branch_selections,
-                                entry.name(),
-                                provenance_remap,
-                            ),
-                        };
-                        let index = out.get_mut(dest_path_id).expect("path exists");
-                        if let Some(property_type) = entry.property_type() {
-                            index.add_property_type(
-                                entry.name(),
-                                key.clone(),
-                                property_type.clone(),
-                            );
+                let selections = resolve_forwarded_variant_selections(
+                    store,
+                    stage_stack,
+                    *dest_path_id,
+                    &remote_stack,
+                    *remote_path_id,
+                );
+                for (set, selected) in &selections {
+                    if let Some(set_spec) = remote_spec.variant_sets.get(set)
+                        && let Some(variant_spec) = set_spec.variants.get(selected)
+                    {
+                        let branch_selections = combined_variant_sites(
+                            &variant_spec.outer_variant_sites,
+                            VariantSelectionSite {
+                                host_path: *remote_path_id,
+                                set: *set,
+                                variant: *selected,
+                            },
+                        );
+                        pending_sources.push((
+                            *dest_path_id,
+                            OpinionKey {
+                                is_local: false,
+                                arc_kind: edge_arc_kind,
+                                nested_arc_kind: edge_variant_nested,
+                                namespace_depth,
+                                authored: true,
+                                arc_list_index,
+                                layer_strength,
+                                layer_id: remote_layer_id,
+                                lookup_path: *remote_path_id,
+                                spec_path: normalized_variant_spec_path(
+                                    store,
+                                    *remote_path_id,
+                                    &branch_selections,
+                                    provenance_remap,
+                                ),
+                            },
+                        ));
+
+                        for entry in
+                            composed_entries(&variant_spec.fields, &variant_spec.properties)
+                        {
+                            let key = OpinionKey {
+                                is_local: false,
+                                arc_kind: edge_arc_kind,
+                                nested_arc_kind: edge_variant_nested,
+                                namespace_depth,
+                                authored: true,
+                                arc_list_index,
+                                layer_strength,
+                                layer_id: remote_layer_id,
+                                lookup_path: *remote_path_id,
+                                spec_path: normalized_variant_property_spec_path(
+                                    store,
+                                    *remote_path_id,
+                                    &branch_selections,
+                                    entry.name(),
+                                    provenance_remap,
+                                ),
+                            };
+                            let index = out.get_mut(dest_path_id).expect("path exists");
+                            if let Some(property_type) = entry.property_type() {
+                                index.add_property_type(
+                                    entry.name(),
+                                    key.clone(),
+                                    property_type.clone(),
+                                );
+                            }
+                            index.add_opinion(Opinion {
+                                key,
+                                field: entry.name(),
+                                value: entry.value(),
+                                layer_offset: payload_offset,
+                            });
                         }
-                        index.add_opinion(Opinion {
-                            key,
-                            field: entry.name(),
-                            value: entry.value(),
-                            layer_offset: payload_offset,
-                        });
                     }
                 }
             }
@@ -5014,52 +5112,24 @@ fn add_specializes_edge_opinions(
             };
 
             for (remote_path_id, dest_path_id) in &mapping {
-                let Some(spec) = layer.prims.get(remote_path_id) else {
-                    continue;
-                };
-                let selection_path_id = {
-                    let rel = store
-                        .paths()
-                        .resolve(*remote_path_id)
-                        .strip_prefix(&specialized_path)
-                        .expect("mapping source should stay under specialized root")
-                        .to_vec();
-                    store
-                        .paths()
-                        .lookup(&selection_base_path.join(&rel))
-                        .unwrap_or(selection_root)
-                };
-                if let Some(d) = deps.as_deref_mut() {
-                    d.add_layer_opinion(layer_id, *dest_path_id);
-                }
-                if let Some(order) = &spec.prim_order {
-                    prim_order_out.entry(*dest_path_id).or_default().push((
-                        OpinionKey {
-                            is_local: false,
-                            arc_kind,
-                            nested_arc_kind,
-                            namespace_depth,
-                            authored: true,
-                            arc_list_index,
-                            layer_strength,
-                            layer_id,
-                            lookup_path: *remote_path_id,
-                            spec_path: normalized_prim_spec_path(
-                                store,
-                                *remote_path_id,
-                                &spec.outer_variant_sites,
-                                provenance_remap,
-                            ),
-                        },
-                        order.clone(),
-                    ));
-                }
-
-                if !spec.authored_children.is_empty() {
-                    authored_children_out
-                        .entry(*dest_path_id)
-                        .or_default()
-                        .push((
+                for spec in layer.prim_specs(*remote_path_id) {
+                    let selection_path_id = {
+                        let rel = store
+                            .paths()
+                            .resolve(*remote_path_id)
+                            .strip_prefix(&specialized_path)
+                            .expect("mapping source should stay under specialized root")
+                            .to_vec();
+                        store
+                            .paths()
+                            .lookup(&selection_base_path.join(&rel))
+                            .unwrap_or(selection_root)
+                    };
+                    if let Some(d) = deps.as_deref_mut() {
+                        d.add_layer_opinion(layer_id, *dest_path_id);
+                    }
+                    if let Some(order) = &spec.prim_order {
+                        prim_order_out.entry(*dest_path_id).or_default().push((
                             OpinionKey {
                                 is_local: false,
                                 arc_kind,
@@ -5077,104 +5147,131 @@ fn add_specializes_edge_opinions(
                                     provenance_remap,
                                 ),
                             },
-                            spec.authored_children.clone(),
+                            order.clone(),
                         ));
-                }
+                    }
 
-                pending_sources.push((
-                    *dest_path_id,
-                    OpinionKey {
-                        is_local: false,
-                        arc_kind,
-                        nested_arc_kind,
-                        namespace_depth,
-                        authored: true,
-                        arc_list_index,
-                        layer_strength,
-                        layer_id,
-                        lookup_path: *remote_path_id,
-                        spec_path: normalized_prim_spec_path(
-                            store,
-                            *remote_path_id,
-                            &spec.outer_variant_sites,
-                            provenance_remap,
-                        ),
-                    },
-                ));
-                for entry in composed_entries(&spec.fields, &spec.properties) {
-                    pending.push((
-                        *dest_path_id,
-                        *remote_path_id,
-                        normalized_property_spec_path(
-                            store,
-                            *remote_path_id,
-                            &spec.outer_variant_sites,
-                            entry.name(),
-                            provenance_remap,
-                        ),
-                        entry.name(),
-                        entry.value(),
-                        entry.property_type().cloned(),
-                    ));
-                }
-
-                // Forward variant opinions from selected variants through specializes.
-                let spec_selections = resolve_forwarded_variant_selections(
-                    store,
-                    local_stack,
-                    selection_path_id,
-                    local_stack,
-                    *remote_path_id,
-                );
-                for (set, selected) in &spec_selections {
-                    if let Some(set_spec) = spec.variant_sets.get(set)
-                        && let Some(variant_spec) = set_spec.variants.get(selected)
-                    {
-                        let branch_selections = combined_variant_sites(
-                            &variant_spec.outer_variant_sites,
-                            VariantSelectionSite {
-                                host_path: *remote_path_id,
-                                set: *set,
-                                variant: *selected,
-                            },
-                        );
-                        pending_sources.push((
-                            *dest_path_id,
-                            OpinionKey {
-                                is_local: false,
-                                arc_kind,
-                                nested_arc_kind: nested_arc_kind.or(Some(ArcKind::Variants)),
-                                namespace_depth,
-                                authored: true,
-                                arc_list_index,
-                                layer_strength,
-                                layer_id,
-                                lookup_path: *remote_path_id,
-                                spec_path: normalized_variant_spec_path(
-                                    store,
-                                    *remote_path_id,
-                                    &branch_selections,
-                                    provenance_remap,
-                                ),
-                            },
-                        ));
-                        for entry in
-                            composed_entries(&variant_spec.fields, &variant_spec.properties)
-                        {
-                            pending.push((
-                                *dest_path_id,
-                                *remote_path_id,
-                                normalized_variant_property_spec_path(
-                                    store,
-                                    *remote_path_id,
-                                    &branch_selections,
-                                    entry.name(),
-                                    provenance_remap,
-                                ),
-                                entry.name(),
-                                entry.value(),
-                                entry.property_type().cloned(),
+                    if !spec.authored_children.is_empty() {
+                        authored_children_out
+                            .entry(*dest_path_id)
+                            .or_default()
+                            .push((
+                                OpinionKey {
+                                    is_local: false,
+                                    arc_kind,
+                                    nested_arc_kind,
+                                    namespace_depth,
+                                    authored: true,
+                                    arc_list_index,
+                                    layer_strength,
+                                    layer_id,
+                                    lookup_path: *remote_path_id,
+                                    spec_path: normalized_prim_spec_path(
+                                        store,
+                                        *remote_path_id,
+                                        &spec.outer_variant_sites,
+                                        provenance_remap,
+                                    ),
+                                },
+                                spec.authored_children.clone(),
                             ));
+                    }
+
+                    pending_sources.push((
+                        *dest_path_id,
+                        OpinionKey {
+                            is_local: false,
+                            arc_kind,
+                            nested_arc_kind,
+                            namespace_depth,
+                            authored: true,
+                            arc_list_index,
+                            layer_strength,
+                            layer_id,
+                            lookup_path: *remote_path_id,
+                            spec_path: normalized_prim_spec_path(
+                                store,
+                                *remote_path_id,
+                                &spec.outer_variant_sites,
+                                provenance_remap,
+                            ),
+                        },
+                    ));
+                    for entry in composed_entries(&spec.fields, &spec.properties) {
+                        pending.push((
+                            *dest_path_id,
+                            *remote_path_id,
+                            normalized_property_spec_path(
+                                store,
+                                *remote_path_id,
+                                &spec.outer_variant_sites,
+                                entry.name(),
+                                provenance_remap,
+                            ),
+                            entry.name(),
+                            entry.value(),
+                            entry.property_type().cloned(),
+                        ));
+                    }
+
+                    // Forward variant opinions from selected variants through specializes.
+                    let spec_selections = resolve_forwarded_variant_selections(
+                        store,
+                        local_stack,
+                        selection_path_id,
+                        local_stack,
+                        *remote_path_id,
+                    );
+                    for (set, selected) in &spec_selections {
+                        if let Some(set_spec) = spec.variant_sets.get(set)
+                            && let Some(variant_spec) = set_spec.variants.get(selected)
+                        {
+                            let branch_selections = combined_variant_sites(
+                                &variant_spec.outer_variant_sites,
+                                VariantSelectionSite {
+                                    host_path: *remote_path_id,
+                                    set: *set,
+                                    variant: *selected,
+                                },
+                            );
+                            pending_sources.push((
+                                *dest_path_id,
+                                OpinionKey {
+                                    is_local: false,
+                                    arc_kind,
+                                    nested_arc_kind: nested_arc_kind.or(Some(ArcKind::Variants)),
+                                    namespace_depth,
+                                    authored: true,
+                                    arc_list_index,
+                                    layer_strength,
+                                    layer_id,
+                                    lookup_path: *remote_path_id,
+                                    spec_path: normalized_variant_spec_path(
+                                        store,
+                                        *remote_path_id,
+                                        &branch_selections,
+                                        provenance_remap,
+                                    ),
+                                },
+                            ));
+                            for entry in
+                                composed_entries(&variant_spec.fields, &variant_spec.properties)
+                            {
+                                pending.push((
+                                    *dest_path_id,
+                                    *remote_path_id,
+                                    normalized_variant_property_spec_path(
+                                        store,
+                                        *remote_path_id,
+                                        &branch_selections,
+                                        entry.name(),
+                                        provenance_remap,
+                                    ),
+                                    entry.name(),
+                                    entry.value(),
+                                    entry.property_type().cloned(),
+                                ));
+                            }
                         }
                     }
                 }

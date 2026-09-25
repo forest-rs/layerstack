@@ -624,7 +624,6 @@ fn tricky_inherits_in_variants_root_layer_stack_matches() {
 }
 
 #[test]
-#[ignore = "USDA ingestion keys variant-introduced descendants by namespace path, so the `tidscene` branch's `/Sarah/FaceRig/EyesRig` overwrites the selected `full` branch's spec; needs per-branch spec storage"]
 fn tricky_inherits_in_variants2_root_layer_stack_matches() {
     let (mut loaded, pcp_path) = load_fixture("TrickyInheritsInVariants2_root");
     assert_layer_stack_matches(&loaded, &pcp_path);

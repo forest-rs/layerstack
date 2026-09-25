@@ -1,0 +1,40 @@
+#usda 1.0
+
+def "P" (
+    variants = {
+        string v = "b"
+        string w = "y"
+    }
+    prepend variantSets = "v"
+)
+{
+    variantSet "v" = {
+        "a" {
+            def Mesh "C"
+            {
+                reorder properties = ["a"]
+                double a = 1
+            }
+        }
+        "b" (
+            prepend variantSets = "w"
+        ) {
+            variantSet "w" = {
+                "x" {
+                    def Scope "C"
+                    {
+                        reorder properties = ["x"]
+                        double x = 3
+                    }
+                }
+                "y" {
+                    class Xform "C"
+                    {
+                        reorder properties = ["y"]
+                        double y = 4
+                    }
+                }
+            }
+        }
+    }
+}

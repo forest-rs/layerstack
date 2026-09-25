@@ -803,10 +803,11 @@ impl Stage {
 
         let index = self.prims.get(&prim)?;
         index.sources.iter().find_map(|source| {
-            let spec = store
-                .layer(source.layer_id)?
-                .prims
-                .get(&source.lookup_path)?;
+            let spec = store.layer(source.layer_id)?.source_prim_spec(
+                source.lookup_path,
+                &source.spec_path,
+                store.paths(),
+            )?;
             match source.spec_path.components().last() {
                 Some(SpecComponent::VariantSelection { set, variant }) => spec
                     .variant_sets
@@ -985,7 +986,8 @@ impl Stage {
             let Some(layer) = store.layer(key.layer_id) else {
                 continue;
             };
-            let Some(spec) = layer.prims.get(&key.lookup_path) else {
+            let Some(spec) = layer.source_prim_spec(key.lookup_path, &key.spec_path, store.paths())
+            else {
                 continue;
             };
             match spec.specifier {
@@ -1032,7 +1034,8 @@ impl Stage {
             let Some(layer) = store.layer(key.layer_id) else {
                 continue;
             };
-            let Some(spec) = layer.prims.get(&key.lookup_path) else {
+            let Some(spec) = layer.source_prim_spec(key.lookup_path, &key.spec_path, store.paths())
+            else {
                 continue;
             };
             if let Some(tn) = spec.type_name {

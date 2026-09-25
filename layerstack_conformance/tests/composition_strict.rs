@@ -77,6 +77,7 @@ use std::fmt::Write as _;
 use std::path::PathBuf;
 
 use layerstack::property::get_property;
+use layerstack::spec_path::VariantSelectionSite;
 use layerstack::{
     LayerId, LayerStack, LayerStore, PropertyEntry, PropertyPath, SpecComponent, SpecPath, Stage,
     StageOptions, TokenId, Value,
@@ -250,7 +251,10 @@ fn property_default(properties: &[PropertyEntry], name: TokenId) -> Authored {
 /// ingested layer data (independent of composition).
 ///
 /// Handles plain prim specs, `/Host{set=variant}` and
-/// `/Host{set=variant}Child` specs; other variant shapes are `Unknown`.
+/// `/Host{set=variant}Child` specs; other variant shapes are `Unknown`. A
+/// branch child is read from its own prim spec for that branch
+/// ([`layerstack::Layer::prim_spec_in`]), or from the branch's child maps
+/// when the child is also authored outside the branch.
 fn authored_default(loaded: &LoadedStage, layer: LayerId, spec: &SpecPath) -> Authored {
     let Some(layer) = loaded.store.layer(layer) else {
         return Authored::Unknown;
@@ -280,7 +284,7 @@ fn authored_default(loaded: &LoadedStage, layer: LayerId, spec: &SpecPath) -> Au
             SpecComponent::VariantSelection { .. } => None,
         })
         .collect();
-    let Some(host) = loaded
+    let Some(host_path) = loaded
         .store
         .paths
         .lookup(&layerstack::Path::root().join(&host))
@@ -289,7 +293,7 @@ fn authored_default(loaded: &LoadedStage, layer: LayerId, spec: &SpecPath) -> Au
     };
     let Some(branch) = layer
         .prims
-        .get(&host)
+        .get(&host_path)
         .and_then(|prim| prim.variant_sets.get(&set))
         .and_then(|set| set.variants.get(&variant))
     else {
@@ -297,11 +301,27 @@ fn authored_default(loaded: &LoadedStage, layer: LayerId, spec: &SpecPath) -> Au
     };
     match &components[at + 1..] {
         [] => property_default(&branch.properties, name),
-        [SpecComponent::Prim(child)] => match branch.child_properties.get(child) {
-            Some(properties) => property_default(properties, name),
-            None if branch.child_fields.contains_key(child) => Authored::NoDefault,
-            None => Authored::Unknown,
-        },
+        [SpecComponent::Prim(child)] => {
+            let site = VariantSelectionSite {
+                host_path,
+                set,
+                variant,
+            };
+            let child_path = layerstack::Path::root().join(&host).join(&[*child]);
+            if let Some(spec) = loaded
+                .store
+                .paths
+                .lookup(&child_path)
+                .and_then(|path| layer.prim_spec_in(path, &[site]))
+            {
+                return property_default(&spec.properties, name);
+            }
+            match branch.child_properties.get(child) {
+                Some(properties) => property_default(properties, name),
+                None if branch.child_fields.contains_key(child) => Authored::NoDefault,
+                None => Authored::Unknown,
+            }
+        }
         _ => Authored::Unknown,
     }
 }
@@ -506,9 +526,8 @@ enum Cause {
     /// arc target misses its ancestors' arcs and variant selections, or an
     /// ancestral site is added where OpenUSD has none.
     AncestralArcs,
-    /// Variant branch specs are missing: directly nested variant sets, child
-    /// specs inside a referenced layer's selected branch, or branches that
-    /// USDA ingestion stores by namespace path and overwrites.
+    /// Variant branch specs are missing: directly nested variant sets, and
+    /// variant sets nested inside a branch's child prim.
     VariantSpecs,
     /// An internal arc authored in a sublayer sees only that sublayer, not the
     /// containing layer stack (AOUSD Core §10.3.2.1: "the layer stack
@@ -585,8 +604,8 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "BasicInstancingAndVariants_root",
         causes: &[C::DuplicateSources],
-        prims: 6,
-        props: 1,
+        prims: 2,
+        props: 0,
         values: 0,
         diffs: &[D::ExtraRepeat],
         reason: "`/InstancedModel` repeats `ref.usd /Model{y=a}`",
@@ -638,11 +657,11 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "BasicNestedVariants_root",
-        causes: &[C::VariantSpecs, C::DuplicateSources],
-        prims: 5,
+        causes: &[C::VariantSpecs],
+        prims: 1,
         props: 0,
         values: 0,
-        diffs: &[D::MissingSite, D::ExtraRepeat],
+        diffs: &[D::MissingSite],
         reason: "`/DirectlyNestedVariants` lacks the outer `{standin=anim}` branch of directly nested variant sets",
     },
     Known {
@@ -656,16 +675,11 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "BasicPayload_root",
-        causes: &[
-            C::InternalArcAnchoring,
-            C::AncestralArcs,
-            C::NestedArcDepth,
-            C::DuplicateSources,
-        ],
-        prims: 11,
+        causes: &[C::InternalArcAnchoring, C::AncestralArcs, C::NestedArcDepth],
+        prims: 9,
         props: 0,
         values: 0,
-        diffs: &[D::MissingPrim, D::MissingSite, D::ExtraRepeat, D::Order],
+        diffs: &[D::MissingPrim, D::MissingSite, D::Order],
         reason: "internal arcs authored in `sublayer.usd` see only that sublayer, not the containing root layer stack, and `payload = <>` finds no default prim",
     },
     Known {
@@ -1051,7 +1065,7 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "SubrootInheritsAndVariants_root",
         causes: &[C::AncestralArcs, C::DuplicateSources],
-        prims: 4,
+        prims: 3,
         props: 3,
         values: 1,
         diffs: &[D::MissingSite, D::ExtraSite, D::ExtraRepeat, D::Order],
@@ -1179,12 +1193,12 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "TrickyInheritsInVariants2_root",
-        causes: &[C::VariantSpecs, C::DuplicateSources, C::NestedArcDepth],
+        causes: &[C::NestedArcDepth, C::DuplicateSources],
         prims: 5,
         props: 0,
         values: 0,
-        diffs: &[D::MissingSite, D::ExtraRepeat, D::Order],
-        reason: "USDA ingestion keys variant descendants by namespace path, so the `tidscene` branch's `/Sarah/FaceRig/EyesRig` replaces the selected `full` branch's; `LEyeRig`'s inherit `Sarah_rig.usd /Sarah/FaceRig/EyesRig/SymEyeRig` outranks its own target",
+        diffs: &[D::ExtraRepeat, D::Order],
+        reason: "`/Sarah/FaceRig/EyesRig/LEyeRig`'s inherit `Sarah_rig.usd /Sarah/FaceRig/EyesRig/SymEyeRig` outranks its own target `Sarah_rig.usd /Sarah/FaceRig/EyesRig/LEyeRig`",
     },
     Known {
         fixture: "TrickyInheritsInVariants_root",
@@ -1332,11 +1346,11 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "TrickyRelocatedTargetInVariant_root",
-        causes: &[C::Relocates, C::DuplicateSources],
-        prims: 9,
+        causes: &[C::Relocates],
+        prims: 8,
         props: 1,
         values: 0,
-        diffs: &[D::MissingPrim, D::ExtraPrim, D::MissingSite, D::ExtraRepeat],
+        diffs: &[D::MissingPrim, D::ExtraPrim, D::MissingSite],
         reason: "ignores `</Root/Child>` -> `</Root/Anim/Child>` authored in `root.usd`",
     },
     Known {
@@ -1432,8 +1446,8 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "TrickySpookyVariantSelectionInClass_root",
         causes: &[C::Relocates, C::DuplicateSources],
-        prims: 8,
-        props: 2,
+        prims: 7,
+        props: 1,
         values: 3,
         diffs: &[D::MissingPrim, D::MissingSite, D::ExtraRepeat, D::Order],
         reason: "ignores `</CharRig/Rig/LeftLegRig/Anim>` -> `</CharRig/Anim/LeftLeg>` authored in `CharRig.usd`",
@@ -1495,11 +1509,11 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "TrickyVariantSelectionInVariant2_root",
         causes: &[C::DuplicateSources],
-        prims: 2,
+        prims: 1,
         props: 0,
         values: 0,
         diffs: &[D::ExtraRepeat],
-        reason: "`/Ref/Model` repeats `root.usd /Ref{v2=b}Model`",
+        reason: "`/Root` repeats `root.usd /Ref{v2=b}Model`",
     },
     Known {
         fixture: "TrickyVariantSelectionInVariant_root",
@@ -1522,11 +1536,11 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "TrickyVariantWeakerSelection4_root",
         causes: &[C::DuplicateSources],
-        prims: 2,
+        prims: 1,
         props: 0,
         values: 0,
         diffs: &[D::ExtraRepeat],
-        reason: "`/bob/geom` repeats `root.usd /bob{geotype=cube}geom`",
+        reason: "`/shape` repeats `root.usd /bob{geotype=cube}geom` and `geo.usd /bob_root_cube`",
     },
     Known {
         fixture: "TrickyVariantWeakerSelection_root",
@@ -1548,12 +1562,12 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "TypicalReferenceToChargroup_root",
-        causes: &[C::VariantSpecs, C::DuplicateSources],
+        causes: &[C::DuplicateSources],
         prims: 2,
         props: 2,
         values: 0,
-        diffs: &[D::MissingSite, D::ExtraRepeat],
-        reason: "`/Group/Model` misses `group.usd /Group{standin=sim}Model`, a child spec in the selected branch of a referenced layer",
+        diffs: &[D::ExtraRepeat],
+        reason: "`/Group` repeats `group.usd /Group{standin=sim}`, and `/Group/Model` repeats its referenced sources",
     },
     Known {
         fixture: "TypicalReferenceToRiggedModel_root",

@@ -44,6 +44,12 @@ pub enum CompositionError {
     /// `layerRelocates` entries of one layer stack that move different
     /// sources to one target. Every one of them was ignored.
     InvalidSameTargetRelocations(InvalidSameTargetRelocations),
+    /// Opinions authored at the source of a relocation, in the layer stack
+    /// that relocates it. The opinions were ignored.
+    OpinionAtRelocationSource(OpinionAtRelocationSource),
+    /// An arc whose target is a prim that relocates remove from its layer
+    /// stack's namespace. The arc contributed nothing.
+    ArcToProhibitedChild(ArcToProhibitedChild),
 }
 
 impl CompositionError {
@@ -60,6 +66,8 @@ impl CompositionError {
             Self::ArcCycle(cycle) => Some(cycle.prim),
             Self::UnresolvedDefaultPrim(error) => Some(error.prim),
             Self::UnresolvedAsset(error) => Some(error.prim),
+            Self::OpinionAtRelocationSource(error) => Some(error.prim),
+            Self::ArcToProhibitedChild(error) => Some(error.prim),
         }
     }
 }
@@ -301,4 +309,53 @@ pub struct InvalidSameTargetRelocations {
     /// Each entry moving a prim there: the authoring layer and the source
     /// path, ordered by source path.
     pub sources: Vec<(LayerId, PathId)>,
+}
+
+/// A prim spec authored at the source of a relocation, in a layer of the
+/// layer stack that relocates it, found while composing `prim`, the prim
+/// the source moves to.
+///
+/// Once a prim is relocated, its source path does not exist in that layer
+/// stack: opinions authored there, and beneath it, are ignored. The prim is
+/// composed from the relocation target's own opinions and the source's
+/// ancestral ones. Only the source itself is reported, as OpenUSD does.
+///
+/// Spec: AOUSD Core §10.3.2.6 ("If any opinions are authored in a layer
+/// stack at a source path of a relocates statement in that layer stack, it
+/// is a composition error and those opinions are ignored"). OpenUSD reports
+/// it as `PcpErrorOpinionAtRelocationSource` (`_EvalNodeRelocations` in
+/// `pxr/usd/pcp/primIndex.cpp`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct OpinionAtRelocationSource {
+    /// The composed prim the relocation moves the source to.
+    pub prim: PathId,
+    /// The layer authoring a spec at the source.
+    pub layer: LayerId,
+    /// The relocation source path in that layer.
+    pub path: PathId,
+}
+
+/// An arc whose target is a relocation source, or lies beneath one, in the
+/// target's layer stack, found while composing `prim`.
+///
+/// Relocating a prim removes its source path from the namespace of the
+/// relocating layer stack, so no arc can target it; an arc must target the
+/// relocated path instead. The arc contributes nothing, and the rest of the
+/// prim is composed as normal.
+///
+/// Spec: AOUSD Core §10.3.2.6 (opinions at a relocation source are
+/// ignored). OpenUSD reports it as `PcpErrorArcToProhibitedChild`
+/// (`_ComposeIsProhibitedPrimChild` in `pxr/usd/pcp/primIndex.cpp`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ArcToProhibitedChild {
+    /// The composed prim whose composition reached the arc.
+    pub prim: PathId,
+    /// The kind of the ignored arc.
+    pub arc: ArcKind,
+    /// The root layer of the arc's target layer stack.
+    pub layer_stack: LayerId,
+    /// The arc's target path.
+    pub target: PathId,
+    /// The relocation source at or above the target.
+    pub relocation_source: PathId,
 }

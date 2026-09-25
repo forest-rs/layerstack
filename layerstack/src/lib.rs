@@ -99,9 +99,10 @@ pub mod live_stage;
 pub use array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
 pub use asset::{AssetResolveError, AssetResolver, ResolvedAsset};
 pub use composition_error::{
-    ArcCycle, ArcCycleSite, CompositionError, InvalidAuthoredRelocation,
+    ArcCycle, ArcCycleSite, ArcToProhibitedChild, CompositionError, InvalidAuthoredRelocation,
     InvalidConflictingRelocation, InvalidRelocationReason, InvalidSameTargetRelocations,
-    RelocationConflict, SublayerCycle, UnresolvedAsset, UnresolvedDefaultPrim, UnresolvedSublayer,
+    OpinionAtRelocationSource, RelocationConflict, SublayerCycle, UnresolvedAsset,
+    UnresolvedDefaultPrim, UnresolvedSublayer,
 };
 pub use dependency_map::ArcDependency;
 pub use doc::{

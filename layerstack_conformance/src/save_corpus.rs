@@ -394,6 +394,28 @@ pub fn cases() -> Vec<SaveCase> {
             ]),
         },
         SaveCase {
+            name: "typed_values",
+            covers: "string and `int64` list-op metadata (`clipSets`, `inactiveIds`) and \
+                     `uchar`, `uint64`, `half`, half vector, quaternion and `matrix2d` / \
+                     `matrix3d` values and arrays, with a `matrix4d` array; the edit \
+                     prepends an inactive id",
+            source: TYPED_VALUES,
+            edit: |layer| {
+                let inactive = layer.tokens.intern("inactiveIds");
+                let spec = layer.prim("/Swarm");
+                let Some(FieldValue::Int64ListOp(op)) =
+                    layerstack::doc::get_field_mut(&mut spec.fields, &inactive)
+                else {
+                    panic!("inactiveIds list op");
+                };
+                op.prepend.insert(0, 11);
+            },
+            expected: TYPED_VALUES_EDITED,
+            weaker: None,
+            composition: None,
+            minimum_openusd: None,
+        },
+        SaveCase {
             name: "animated_attribute",
             covers: "time samples next to a default, a blocked sample, sample-only \
                      attributes of scalar, array (an empty one included) and `timecode` \
@@ -453,9 +475,9 @@ pub fn unsupported_cases() -> Vec<(&'static str, &'static str, SaveError)> {
             ),
         ),
         (
-            "half",
-            "#usda 1.0\ndef \"A\"\n{\n    half3 h = (1, 2, 3)\n}\n",
-            unsupported("/A.h", Unsupported::Value("half vector")),
+            "path_expression",
+            "#usda 1.0\ndef \"A\"\n{\n    pathExpression p = \"/A//\"\n}\n",
+            unsupported("/A.p", Unsupported::Value("pathExpression")),
         ),
     ]
 }
@@ -1268,6 +1290,54 @@ def Xform "Site"
     {
         double3 xformOp:translate = (0, 2, 0)
     }
+}
+"#;
+
+const TYPED_VALUES: &str = r#"#usda 1.0
+
+def PointInstancer "Swarm" (
+    prepend clipSets = ["motion"]
+    prepend inactiveIds = [3, 7]
+)
+{
+    custom uniform half exedra:weight = 0.5
+    custom half3 exedra:tint = (1, 0.5, 0.25)
+    custom color3h[] exedra:shades = [(0.25, 0.125, 0.75), (1, 1, 1)]
+    custom half[] exedra:ramp = [0, 0.5, 1]
+    custom uchar exedra:level = 200
+    custom uchar[] exedra:bytes = [0, 255]
+    custom uint64 exedra:serial = 18446744073709551615
+    custom uint64[] exedra:tags = [1, 2]
+    custom quatf exedra:spin = (1, 0, 0, 0)
+    custom quath[] exedra:turns = [(0.5, 0.5, 0.5, 0.5)]
+    custom quatd exedra:pose = (0, 1, 0, 0)
+    custom matrix2d exedra:shear = ( (1, 0.5), (0, 1) )
+    custom matrix3d exedra:basis = ( (0, 1, 0), (1, 0, 0), (0, 0, 1) )
+    custom matrix4d[] exedra:frames = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (2, 3, 4, 1) )]
+}
+"#;
+
+const TYPED_VALUES_EDITED: &str = r#"#usda 1.0
+
+def PointInstancer "Swarm" (
+    prepend clipSets = ["motion"]
+    prepend inactiveIds = [11, 3, 7]
+)
+{
+    custom uniform half exedra:weight = 0.5
+    custom half3 exedra:tint = (1, 0.5, 0.25)
+    custom color3h[] exedra:shades = [(0.25, 0.125, 0.75), (1, 1, 1)]
+    custom half[] exedra:ramp = [0, 0.5, 1]
+    custom uchar exedra:level = 200
+    custom uchar[] exedra:bytes = [0, 255]
+    custom uint64 exedra:serial = 18446744073709551615
+    custom uint64[] exedra:tags = [1, 2]
+    custom quatf exedra:spin = (1, 0, 0, 0)
+    custom quath[] exedra:turns = [(0.5, 0.5, 0.5, 0.5)]
+    custom quatd exedra:pose = (0, 1, 0, 0)
+    custom matrix2d exedra:shear = ( (1, 0.5), (0, 1) )
+    custom matrix3d exedra:basis = ( (0, 1, 0), (1, 0, 0), (0, 0, 1) )
+    custom matrix4d[] exedra:frames = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (2, 3, 4, 1) )]
 }
 "#;
 

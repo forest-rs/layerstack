@@ -439,6 +439,23 @@ impl Packer {
                 let bytes = self.list_op(op, site, text_item(site, Self::path_text))?;
                 self.blob(T::PathListOp, 0, bytes, false)?
             }
+            // Integer list op items are stored as themselves.
+            Value::IntListOp(op) => {
+                let bytes = self.list_op(op, site, le_item(i32::to_le_bytes))?;
+                self.blob(T::IntListOp, 0, bytes, false)?
+            }
+            Value::UIntListOp(op) => {
+                let bytes = self.list_op(op, site, le_item(u32::to_le_bytes))?;
+                self.blob(T::UIntListOp, 0, bytes, false)?
+            }
+            Value::Int64ListOp(op) => {
+                let bytes = self.list_op(op, site, le_item(i64::to_le_bytes))?;
+                self.blob(T::Int64ListOp, 0, bytes, false)?
+            }
+            Value::UInt64ListOp(op) => {
+                let bytes = self.list_op(op, site, le_item(u64::to_le_bytes))?;
+                self.blob(T::UInt64ListOp, 0, bytes, false)?
+            }
             Value::ReferenceListOp(op) => {
                 let bytes = self.list_op(op, site, |packer, item, out| {
                     packer.reference(item, false, site, out)
@@ -991,6 +1008,16 @@ fn text_item<'a>(
     move |packer, text, out| {
         site.check_text(text)?;
         out.extend_from_slice(&add(packer, text)?.to_le_bytes());
+        Ok(())
+    }
+}
+
+/// A list op item stored as its own little-endian bytes.
+fn le_item<T: Copy, const N: usize>(
+    bytes: fn(T) -> [u8; N],
+) -> impl Fn(&mut Packer, &T, &mut Vec<u8>) -> Result<(), UsdcWriteError> {
+    move |_, item, out| {
+        out.extend_from_slice(&bytes(*item));
         Ok(())
     }
 }

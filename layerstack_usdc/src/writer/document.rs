@@ -295,9 +295,12 @@ fn natural(value: &UsdaValue) -> Value {
     use UsdaValue as U;
     match value {
         U::Bool(v) => Value::Bool(*v),
+        U::UChar(v) => Value::UChar(*v),
         U::Int(v) => Value::Int(*v),
         U::UInt(v) => Value::UInt(*v),
         U::Int64(v) => Value::Int64(*v),
+        U::UInt64(v) => Value::UInt64(*v),
+        U::Half(v) => Value::Half(*v),
         U::Float(v) => Value::Float(*v),
         U::Double(v) => Value::Double(*v),
         U::String(v) => Value::String(v.clone()),
@@ -312,11 +315,22 @@ fn natural(value: &UsdaValue) -> Value {
         U::Int2(v) => Value::Vec2i(*v),
         U::Int3(v) => Value::Vec3i(*v),
         U::Int4(v) => Value::Vec4i(*v),
+        U::Half2(v) => Value::Vec2h(*v),
+        U::Half3(v) => Value::Vec3h(*v),
+        U::Half4(v) => Value::Vec4h(*v),
+        U::Quath(v) => Value::Quath(*v),
+        U::Quatf(v) => Value::Quatf(*v),
+        U::Quatd(v) => Value::Quatd(*v),
+        U::Matrix2d(v) => Value::Matrix2d(*v),
+        U::Matrix3d(v) => Value::Matrix3d(*v),
         U::Matrix4d(v) => Value::Matrix4d(*v),
         U::BoolArray(v) => Value::BoolArray(v.clone()),
+        U::UCharArray(v) => Value::UCharArray(v.clone()),
         U::IntArray(v) => Value::IntArray(v.clone()),
         U::UIntArray(v) => Value::UIntArray(v.clone()),
         U::Int64Array(v) => Value::Int64Array(v.clone()),
+        U::UInt64Array(v) => Value::UInt64Array(v.clone()),
+        U::HalfArray(v) => Value::HalfArray(v.clone()),
         U::FloatArray(v) => Value::FloatArray(v.clone()),
         U::DoubleArray(v) => Value::DoubleArray(v.clone()),
         U::StringArray(v) => Value::StringArray(v.clone()),
@@ -331,8 +345,21 @@ fn natural(value: &UsdaValue) -> Value {
         U::Int2Array(v) => Value::Vec2iArray(v.clone()),
         U::Int3Array(v) => Value::Vec3iArray(v.clone()),
         U::Int4Array(v) => Value::Vec4iArray(v.clone()),
+        U::Half2Array(v) => Value::Vec2hArray(v.clone()),
+        U::Half3Array(v) => Value::Vec3hArray(v.clone()),
+        U::Half4Array(v) => Value::Vec4hArray(v.clone()),
         U::QuathArray(v) => Value::QuathArray(v.clone()),
+        U::QuatfArray(v) => Value::QuatfArray(v.clone()),
+        U::QuatdArray(v) => Value::QuatdArray(v.clone()),
+        U::Matrix2dArray(v) => Value::Matrix2dArray(v.clone()),
+        U::Matrix3dArray(v) => Value::Matrix3dArray(v.clone()),
+        U::Matrix4dArray(v) => Value::Matrix4dArray(v.clone()),
         U::TokenListOp(op) => Value::TokenListOp(list_op(op)),
+        U::StringListOp(op) => Value::StringListOp(list_op(op)),
+        U::IntListOp(op) => Value::IntListOp(map_list_op(op, |x| *x)),
+        U::UIntListOp(op) => Value::UIntListOp(map_list_op(op, |x| *x)),
+        U::Int64ListOp(op) => Value::Int64ListOp(map_list_op(op, |x| *x)),
+        U::UInt64ListOp(op) => Value::UInt64ListOp(map_list_op(op, |x| *x)),
         U::Block => Value::Block,
         U::Dictionary(entries) => Value::Dictionary(
             entries
@@ -383,6 +410,10 @@ pub enum FieldType {
     StringArray,
     /// `SdfTokenListOp`; a USDA token list op.
     TokenListOp,
+    /// `SdfStringListOp`; a USDA string list op.
+    StringListOp,
+    /// `SdfInt64ListOp`; a USDA `int64` list op.
+    Int64ListOp,
     /// No registered field: a USDA dictionary, stored as the text parser
     /// stores an unregistered dictionary literal, an `SdfUnregisteredValue`
     /// holding the `VtDictionary`.
@@ -396,8 +427,9 @@ pub enum FieldType {
 /// type (`pxr/usd/sdf/schema.cpp`, `_Define(SdfSpecTypePseudoRoot)`,
 /// `SdfSpecTypePrim`, the property, `SdfSpecTypeAttribute` and
 /// `SdfSpecTypeRelationship` definitions) and the plugin metadata of `usd`
-/// (`apiSchemas`), `usdGeom` (`upAxis`, `metersPerUnit`, `interpolation`,
-/// `elementSize`, `unauthoredValuesIndex`, `constraintTargetIdentifier`),
+/// (`apiSchemas`, `clipSets`), `usdGeom` (`upAxis`, `metersPerUnit`,
+/// `interpolation`, `elementSize`, `unauthoredValuesIndex`,
+/// `constraintTargetIdentifier`, `inactiveIds`),
 /// `usdPhysics` (`kilogramsPerUnit`) and `usdShade` (`bindMaterialAs`,
 /// `connectability`, `renderType`, `sdrMetadata`) in their `plugInfo.json`
 /// files, plus `usdSkel`'s `weight`, `usdRender`'s `renderSettingsPrimPath`,
@@ -465,6 +497,8 @@ pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldTyp
             "clips" => Some(("clips", F::Dictionary)),
             "profilesInfo" => Some(("profilesInfo", F::UnregisteredDictionary)),
             "apiSchemas" => Some(("apiSchemas", F::TokenListOp)),
+            "clipSets" => Some(("clipSets", F::StringListOp)),
+            "inactiveIds" => Some(("inactiveIds", F::Int64ListOp)),
             _ => None,
         },
         Owner::Relationship => match key {
@@ -536,6 +570,10 @@ fn metadatum(owner: Owner, path: &str, entry: &Metadatum) -> Result<super::Field
             Some(Value::StringArray(v.clone()))
         }
         (FieldType::TokenListOp, U::TokenListOp(op)) => Some(Value::TokenListOp(list_op(op))),
+        (FieldType::StringListOp, U::StringListOp(op)) => Some(Value::StringListOp(list_op(op))),
+        (FieldType::Int64ListOp, U::Int64ListOp(op)) => {
+            Some(Value::Int64ListOp(map_list_op(op, |x| *x)))
+        }
         (FieldType::UnregisteredDictionary, v @ U::Dictionary(_)) => {
             Some(Value::UnregisteredValue(Box::new(natural(v))))
         }

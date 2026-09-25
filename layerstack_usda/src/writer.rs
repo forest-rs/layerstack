@@ -22,8 +22,10 @@
 //! default values (including a value block, `= None`), time samples
 //! (including blocked samples) and connection lists; relationships with
 //! target lists; explicit and list-edited (`delete`, `prepend`, `append`)
-//! connections and targets; and metadata, including token list operations
-//! such as `prepend apiSchemas = [...]` ([`Value::TokenListOp`]); and
+//! connections and targets; metadata, including list operations of tokens,
+//! strings and integers such as `prepend apiSchemas = [...]`
+//! ([`Value::TokenListOp`] and its siblings); values of every scalar,
+//! vector, quaternion and matrix type, and arrays of them; and
 //! composition arcs by their authored asset paths: sublayers with layer
 //! offsets ([`Document::sublayers`]), and references, payloads, inherits
 //! and specializes in any list-op form ([`Prim::references`] and its
@@ -686,9 +688,10 @@ pub struct Metadatum {
     /// Metadata field name; must be a plain identifier.
     pub key: String,
     /// Field value. Tokens and strings are both written quoted, as USDA
-    /// metadata syntax requires. A [`Value::TokenListOp`] is written as one
-    /// statement per operation (`prepend key = [...]`); it is accepted on
-    /// prims, attributes and relationships, not in layer metadata or inside
+    /// metadata syntax requires. A list op ([`Value::TokenListOp`] and its
+    /// string and integer siblings) is written as one statement per
+    /// operation (`prepend key = [...]`); it is accepted on prims,
+    /// attributes and relationships, not in layer metadata or inside
     /// dictionaries. The `comment` field takes a string or token and is
     /// written as USDA spells it, a bare quoted string.
     pub value: Value,
@@ -713,12 +716,18 @@ impl Metadatum {
 pub enum Value {
     /// `bool`.
     Bool(bool),
+    /// `uchar`.
+    UChar(u8),
     /// `int`.
     Int(i32),
     /// `uint`.
     UInt(u32),
     /// `int64`.
     Int64(i64),
+    /// `uint64`.
+    UInt64(u64),
+    /// `half`, as its IEEE 754 binary16 bit pattern.
+    Half(u16),
     /// `float`.
     Float(f32),
     /// `double` (also accepted for `timecode`).
@@ -747,17 +756,42 @@ pub enum Value {
     Int3([i32; 3]),
     /// `int4`.
     Int4([i32; 4]),
+    /// `half2` and its semantic aliases, as binary16 bit patterns.
+    Half2([u16; 2]),
+    /// `half3` and its semantic aliases (e.g. `color3h`), as binary16 bit
+    /// patterns.
+    Half3([u16; 3]),
+    /// `half4` and its semantic aliases, as binary16 bit patterns.
+    Half4([u16; 4]),
+    /// `quath`: one quaternion stored as [`Self::QuathArray`] stores each.
+    Quath([u16; 4]),
+    /// `quatf`: stored `[i, j, k, r]` and written `(r, i, j, k)`, like
+    /// [`Self::QuathArray`].
+    Quatf([f32; 4]),
+    /// `quatd`: stored `[i, j, k, r]` and written `(r, i, j, k)`, like
+    /// [`Self::QuathArray`].
+    Quatd([f64; 4]),
+    /// `matrix2d`, row-major.
+    Matrix2d([[f64; 2]; 2]),
+    /// `matrix3d`, row-major.
+    Matrix3d([[f64; 3]; 3]),
     /// `matrix4d` (or `frame4d`), row-major with the translation in the
     /// last row, as USD authors it (row vectors, §6.3).
     Matrix4d([[f64; 4]; 4]),
     /// `bool[]`.
     BoolArray(Vec<bool>),
+    /// `uchar[]`.
+    UCharArray(Vec<u8>),
     /// `int[]`.
     IntArray(Vec<i32>),
     /// `uint[]`.
     UIntArray(Vec<u32>),
     /// `int64[]`.
     Int64Array(Vec<i64>),
+    /// `uint64[]`.
+    UInt64Array(Vec<u64>),
+    /// `half[]`, as binary16 bit patterns.
+    HalfArray(Vec<u16>),
     /// `float[]`.
     FloatArray(Vec<f32>),
     /// `double[]`.
@@ -786,6 +820,12 @@ pub enum Value {
     Int3Array(Vec<[i32; 3]>),
     /// `int4[]`.
     Int4Array(Vec<[i32; 4]>),
+    /// `half2[]` and aliases.
+    Half2Array(Vec<[u16; 2]>),
+    /// `half3[]` and aliases.
+    Half3Array(Vec<[u16; 3]>),
+    /// `half4[]` and aliases.
+    Half4Array(Vec<[u16; 4]>),
     /// `quath[]`: half-precision quaternions as IEEE 754 binary16 bits, each
     /// stored `[i, j, k, r]` (imaginary part first, real part last), the
     /// memory order of OpenUSD's `GfQuath`. USDA writes each one real part
@@ -793,6 +833,16 @@ pub enum Value {
     ///
     /// Spec: AOUSD Core §6.3 (`quath`, dimensioned types).
     QuathArray(Vec<[u16; 4]>),
+    /// `quatf[]`, each as [`Self::Quatf`] stores it.
+    QuatfArray(Vec<[f32; 4]>),
+    /// `quatd[]`, each as [`Self::Quatd`] stores it.
+    QuatdArray(Vec<[f64; 4]>),
+    /// `matrix2d[]`.
+    Matrix2dArray(Vec<[[f64; 2]; 2]>),
+    /// `matrix3d[]`.
+    Matrix3dArray(Vec<[[f64; 3]; 3]>),
+    /// `matrix4d[]` (or `frame4d[]`).
+    Matrix4dArray(Vec<[[f64; 4]; 4]>),
     /// A dictionary: string keys to values, written in order with each
     /// entry's canonical type name (§6.6.2).
     ///
@@ -807,6 +857,18 @@ pub enum Value {
     /// Spec: AOUSD Core §6.6.3 (list operations), §16.2.14 (list-op
     /// syntax).
     TokenListOp(ListOp<String>),
+    /// A string list operation (`SdfStringListOp`), such as `clipSets`;
+    /// written like [`Self::TokenListOp`].
+    StringListOp(ListOp<String>),
+    /// An `int` list operation (`SdfIntListOp`).
+    IntListOp(ListOp<i32>),
+    /// A `uint` list operation (`SdfUIntListOp`).
+    UIntListOp(ListOp<u32>),
+    /// An `int64` list operation (`SdfInt64ListOp`), such as
+    /// `PointInstancer`'s `inactiveIds`.
+    Int64ListOp(ListOp<i64>),
+    /// A `uint64` list operation (`SdfUInt64ListOp`).
+    UInt64ListOp(ListOp<u64>),
     /// A value block (`None`, `SdfValueBlock`): valid only as an
     /// [`Attribute`] default, of any declared type, where it blocks weaker
     /// opinions.
@@ -1233,8 +1295,8 @@ const RESERVED_METADATA: &[&str] = &[
     "suffixSubstitutions",
 ];
 
-/// Validates metadata keys and values; `list_ops` admits
-/// [`Value::TokenListOp`] entries (prim and property metadata only).
+/// Validates metadata keys and values; `list_ops` admits list-op entries
+/// (prim and property metadata only).
 fn validate_metadata<'a>(
     entries: &'a [Metadatum],
     seen: &mut Vec<&'a str>,
@@ -1247,8 +1309,8 @@ fn validate_metadata<'a>(
                 path: alloc::format!("{path}#{}", entry.key),
             });
         }
-        if let Value::TokenListOp(op) = &entry.value
-            && !(list_ops && op.is_valid())
+        if let Some(valid) = entry.value.list_op_is_valid()
+            && !(list_ops && valid)
         {
             return Err(WriteError::InvalidListOp {
                 path: alloc::format!("{path}#{}", entry.key),
@@ -1307,7 +1369,7 @@ fn validate_value(value: &Value, path: &str) -> Result<(), WriteError> {
                 if let Some(error) = bad_text(key) {
                     return Err(error);
                 }
-                if matches!(v, Value::TokenListOp(_)) {
+                if v.list_op_is_valid().is_some() {
                     return Err(WriteError::InvalidListOp {
                         path: alloc::format!("{path}#{key}"),
                     });
@@ -1321,7 +1383,9 @@ fn validate_value(value: &Value, path: &str) -> Result<(), WriteError> {
             }
             Ok(())
         }
-        Value::TokenListOp(op) => op.items().find_map(bad_text).map_or(Ok(()), Err),
+        Value::TokenListOp(op) | Value::StringListOp(op) => {
+            op.items().find_map(bad_text).map_or(Ok(()), Err)
+        }
         _ => Ok(()),
     }
 }
@@ -1332,21 +1396,27 @@ fn validate_value(value: &Value, path: &str) -> Result<(), WriteError> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Elem {
     Bool,
+    UChar,
     Int,
     UInt,
     Int64,
+    UInt64,
+    Half,
     Float,
     Double,
     String,
     Token,
     Asset,
-    Dictionary,
-    ListOp,
     /// A half-precision quaternion (`quath`).
     Quath,
-    /// A known type this writer has no [`Value`] variant for (e.g. `half`,
-    /// quaternions). It can be declared but not given a value.
-    Unsupported,
+    /// A single-precision quaternion (`quatf`).
+    Quatf,
+    /// A double-precision quaternion (`quatd`).
+    Quatd,
+    /// A square `double` matrix; the arity is its dimension.
+    Matrix,
+    Dictionary,
+    ListOp,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1363,9 +1433,7 @@ struct Shape {
 /// `SDF_VALUE_TYPES` plus the role aliases), each optionally with `[]`.
 /// Deliberately excluded: `dictionary` (metadata only, never an attribute
 /// type), `opaque`/`group`/`pathExpression`, and the legacy capitalized
-/// aliases (`Vec3f`, `PointFloat`, ...). Registered types without a
-/// [`Value`] variant (e.g. `half`, quaternions) may be declared without a
-/// default.
+/// aliases (`Vec3f`, `PointFloat`, ...).
 ///
 /// Spec: AOUSD Core §6.2 (scalar types), §6.3 (dimensioned types), §6.5
 /// (semantic aliases).
@@ -1376,9 +1444,12 @@ fn parse_type_name(type_name: &str) -> Option<Shape> {
     };
     let (elem, arity) = match base {
         "bool" => (Elem::Bool, 1),
+        "uchar" => (Elem::UChar, 1),
         "int" => (Elem::Int, 1),
         "uint" => (Elem::UInt, 1),
         "int64" => (Elem::Int64, 1),
+        "uint64" => (Elem::UInt64, 1),
+        "half" => (Elem::Half, 1),
         "float" => (Elem::Float, 1),
         "double" | "timecode" => (Elem::Double, 1),
         "string" => (Elem::String, 1),
@@ -1397,11 +1468,15 @@ fn parse_type_name(type_name: &str) -> Option<Shape> {
             (Elem::Double, 3)
         }
         "double4" | "color4d" => (Elem::Double, 4),
-        "matrix4d" | "frame4d" => (Elem::Double, 16),
+        "half2" | "texCoord2h" => (Elem::Half, 2),
+        "half3" | "point3h" | "normal3h" | "vector3h" | "color3h" | "texCoord3h" => (Elem::Half, 3),
+        "half4" | "color4h" => (Elem::Half, 4),
         "quath" => (Elem::Quath, 1),
-        "uchar" | "uint64" | "half" | "half2" | "half3" | "half4" | "texCoord2h" | "texCoord3h"
-        | "point3h" | "normal3h" | "vector3h" | "color3h" | "color4h" | "matrix2d" | "matrix3d"
-        | "quatf" | "quatd" => (Elem::Unsupported, 0),
+        "quatf" => (Elem::Quatf, 1),
+        "quatd" => (Elem::Quatd, 1),
+        "matrix2d" => (Elem::Matrix, 2),
+        "matrix3d" => (Elem::Matrix, 3),
+        "matrix4d" | "frame4d" => (Elem::Matrix, 4),
         _ => return None,
     };
     Some(Shape { elem, arity, array })
@@ -1415,9 +1490,21 @@ impl Value {
         let shape = parse_type_name(type_name).filter(|shape| shape.array)?;
         Some(match (shape.elem, shape.arity) {
             (Elem::Bool, 1) => Self::BoolArray(Vec::new()),
+            (Elem::UChar, 1) => Self::UCharArray(Vec::new()),
             (Elem::Int, 1) => Self::IntArray(Vec::new()),
             (Elem::UInt, 1) => Self::UIntArray(Vec::new()),
             (Elem::Int64, 1) => Self::Int64Array(Vec::new()),
+            (Elem::UInt64, 1) => Self::UInt64Array(Vec::new()),
+            (Elem::Half, 1) => Self::HalfArray(Vec::new()),
+            (Elem::Half, 2) => Self::Half2Array(Vec::new()),
+            (Elem::Half, 3) => Self::Half3Array(Vec::new()),
+            (Elem::Half, 4) => Self::Half4Array(Vec::new()),
+            (Elem::Quath, 1) => Self::QuathArray(Vec::new()),
+            (Elem::Quatf, 1) => Self::QuatfArray(Vec::new()),
+            (Elem::Quatd, 1) => Self::QuatdArray(Vec::new()),
+            (Elem::Matrix, 2) => Self::Matrix2dArray(Vec::new()),
+            (Elem::Matrix, 3) => Self::Matrix3dArray(Vec::new()),
+            (Elem::Matrix, 4) => Self::Matrix4dArray(Vec::new()),
             (Elem::Float, 1) => Self::FloatArray(Vec::new()),
             (Elem::Double, 1) => Self::DoubleArray(Vec::new()),
             (Elem::String, 1) => Self::StringArray(Vec::new()),
@@ -1436,12 +1523,28 @@ impl Value {
         })
     }
 
+    /// For a list-op value, whether it is well formed (see [`ListOp`]);
+    /// `None` for any other value.
+    fn list_op_is_valid(&self) -> Option<bool> {
+        Some(match self {
+            Self::TokenListOp(op) | Self::StringListOp(op) => op.is_valid(),
+            Self::IntListOp(op) => op.is_valid(),
+            Self::UIntListOp(op) => op.is_valid(),
+            Self::Int64ListOp(op) => op.is_valid(),
+            Self::UInt64ListOp(op) => op.is_valid(),
+            _ => return None,
+        })
+    }
+
     fn shape(&self) -> Option<Shape> {
         let (elem, arity, array) = match self {
             Self::Bool(_) => (Elem::Bool, 1, false),
+            Self::UChar(_) => (Elem::UChar, 1, false),
             Self::Int(_) => (Elem::Int, 1, false),
             Self::UInt(_) => (Elem::UInt, 1, false),
             Self::Int64(_) => (Elem::Int64, 1, false),
+            Self::UInt64(_) => (Elem::UInt64, 1, false),
+            Self::Half(_) => (Elem::Half, 1, false),
             Self::Float(_) => (Elem::Float, 1, false),
             Self::Double(_) => (Elem::Double, 1, false),
             Self::String(_) => (Elem::String, 1, false),
@@ -1456,11 +1559,22 @@ impl Value {
             Self::Int2(_) => (Elem::Int, 2, false),
             Self::Int3(_) => (Elem::Int, 3, false),
             Self::Int4(_) => (Elem::Int, 4, false),
-            Self::Matrix4d(_) => (Elem::Double, 16, false),
+            Self::Half2(_) => (Elem::Half, 2, false),
+            Self::Half3(_) => (Elem::Half, 3, false),
+            Self::Half4(_) => (Elem::Half, 4, false),
+            Self::Quath(_) => (Elem::Quath, 1, false),
+            Self::Quatf(_) => (Elem::Quatf, 1, false),
+            Self::Quatd(_) => (Elem::Quatd, 1, false),
+            Self::Matrix2d(_) => (Elem::Matrix, 2, false),
+            Self::Matrix3d(_) => (Elem::Matrix, 3, false),
+            Self::Matrix4d(_) => (Elem::Matrix, 4, false),
             Self::BoolArray(_) => (Elem::Bool, 1, true),
+            Self::UCharArray(_) => (Elem::UChar, 1, true),
             Self::IntArray(_) => (Elem::Int, 1, true),
             Self::UIntArray(_) => (Elem::UInt, 1, true),
             Self::Int64Array(_) => (Elem::Int64, 1, true),
+            Self::UInt64Array(_) => (Elem::UInt64, 1, true),
+            Self::HalfArray(_) => (Elem::Half, 1, true),
             Self::FloatArray(_) => (Elem::Float, 1, true),
             Self::DoubleArray(_) => (Elem::Double, 1, true),
             Self::StringArray(_) => (Elem::String, 1, true),
@@ -1475,9 +1589,22 @@ impl Value {
             Self::Int2Array(_) => (Elem::Int, 2, true),
             Self::Int3Array(_) => (Elem::Int, 3, true),
             Self::Int4Array(_) => (Elem::Int, 4, true),
+            Self::Half2Array(_) => (Elem::Half, 2, true),
+            Self::Half3Array(_) => (Elem::Half, 3, true),
+            Self::Half4Array(_) => (Elem::Half, 4, true),
             Self::QuathArray(_) => (Elem::Quath, 1, true),
+            Self::QuatfArray(_) => (Elem::Quatf, 1, true),
+            Self::QuatdArray(_) => (Elem::Quatd, 1, true),
+            Self::Matrix2dArray(_) => (Elem::Matrix, 2, true),
+            Self::Matrix3dArray(_) => (Elem::Matrix, 3, true),
+            Self::Matrix4dArray(_) => (Elem::Matrix, 4, true),
             Self::Dictionary(_) => (Elem::Dictionary, 1, false),
-            Self::TokenListOp(_) => (Elem::ListOp, 1, false),
+            Self::TokenListOp(_)
+            | Self::StringListOp(_)
+            | Self::IntListOp(_)
+            | Self::UIntListOp(_)
+            | Self::Int64ListOp(_)
+            | Self::UInt64ListOp(_) => (Elem::ListOp, 1, false),
             Self::Block => return None,
         };
         Some(Shape { elem, arity, array })
@@ -1490,9 +1617,12 @@ impl Value {
     pub fn canonical_type_name(&self) -> &'static str {
         match self {
             Self::Bool(_) => "bool",
+            Self::UChar(_) => "uchar",
             Self::Int(_) => "int",
             Self::UInt(_) => "uint",
             Self::Int64(_) => "int64",
+            Self::UInt64(_) => "uint64",
+            Self::Half(_) => "half",
             Self::Float(_) => "float",
             Self::Double(_) => "double",
             Self::String(_) => "string",
@@ -1507,11 +1637,22 @@ impl Value {
             Self::Int2(_) => "int2",
             Self::Int3(_) => "int3",
             Self::Int4(_) => "int4",
+            Self::Half2(_) => "half2",
+            Self::Half3(_) => "half3",
+            Self::Half4(_) => "half4",
+            Self::Quath(_) => "quath",
+            Self::Quatf(_) => "quatf",
+            Self::Quatd(_) => "quatd",
+            Self::Matrix2d(_) => "matrix2d",
+            Self::Matrix3d(_) => "matrix3d",
             Self::Matrix4d(_) => "matrix4d",
             Self::BoolArray(_) => "bool[]",
+            Self::UCharArray(_) => "uchar[]",
             Self::IntArray(_) => "int[]",
             Self::UIntArray(_) => "uint[]",
             Self::Int64Array(_) => "int64[]",
+            Self::UInt64Array(_) => "uint64[]",
+            Self::HalfArray(_) => "half[]",
             Self::FloatArray(_) => "float[]",
             Self::DoubleArray(_) => "double[]",
             Self::StringArray(_) => "string[]",
@@ -1526,9 +1667,22 @@ impl Value {
             Self::Int2Array(_) => "int2[]",
             Self::Int3Array(_) => "int3[]",
             Self::Int4Array(_) => "int4[]",
+            Self::Half2Array(_) => "half2[]",
+            Self::Half3Array(_) => "half3[]",
+            Self::Half4Array(_) => "half4[]",
             Self::QuathArray(_) => "quath[]",
+            Self::QuatfArray(_) => "quatf[]",
+            Self::QuatdArray(_) => "quatd[]",
+            Self::Matrix2dArray(_) => "matrix2d[]",
+            Self::Matrix3dArray(_) => "matrix3d[]",
+            Self::Matrix4dArray(_) => "matrix4d[]",
             Self::Dictionary(_) => "dictionary",
             Self::TokenListOp(_) => "tokenListOp",
+            Self::StringListOp(_) => "stringListOp",
+            Self::IntListOp(_) => "intListOp",
+            Self::UIntListOp(_) => "uintListOp",
+            Self::Int64ListOp(_) => "int64ListOp",
+            Self::UInt64ListOp(_) => "uint64ListOp",
             Self::Block => "SdfValueBlock",
         }
     }
@@ -1591,9 +1745,29 @@ impl Writer<'_> {
 
     fn metadata_entries(&mut self, entries: &[Metadatum], depth: usize) {
         for entry in entries {
-            if let Value::TokenListOp(op) = &entry.value {
-                self.list_op(&entry.key, op, depth);
-                continue;
+            let key = entry.key.as_str();
+            match &entry.value {
+                Value::TokenListOp(op) | Value::StringListOp(op) => {
+                    self.list_op(key, op, depth, |w, s| w.string(s));
+                    continue;
+                }
+                Value::IntListOp(op) => {
+                    self.list_op(key, op, depth, |w, x| w.display(x));
+                    continue;
+                }
+                Value::UIntListOp(op) => {
+                    self.list_op(key, op, depth, |w, x| w.display(x));
+                    continue;
+                }
+                Value::Int64ListOp(op) => {
+                    self.list_op(key, op, depth, |w, x| w.display(x));
+                    continue;
+                }
+                Value::UInt64ListOp(op) => {
+                    self.list_op(key, op, depth, |w, x| w.display(x));
+                    continue;
+                }
+                _ => {}
             }
             self.indent(depth);
             // §16.2.15: a bare string is the `comment` field.
@@ -1614,12 +1788,18 @@ impl Writer<'_> {
     /// §16.2.14: one `[op] key = [items]` statement per operation, in
     /// OpenUSD's order. Validation guarantees the op is non-empty and not
     /// mixed.
-    fn list_op(&mut self, key: &str, op: &ListOp<String>, depth: usize) {
+    fn list_op<T>(
+        &mut self,
+        key: &str,
+        op: &ListOp<T>,
+        depth: usize,
+        mut item: impl FnMut(&mut Self, &T),
+    ) {
         self.list_op_statements(op, depth, |w, keyword, items| {
             w.out.push_str(keyword);
             w.out.push_str(key);
             w.out.push_str(" = ");
-            w.array(items, |w, s| w.string(s));
+            w.array(items, &mut item);
         });
     }
 
@@ -1915,9 +2095,12 @@ impl Writer<'_> {
     fn value(&mut self, value: &Value, depth: usize) {
         match value {
             Value::Bool(v) => self.out.push_str(if *v { "true" } else { "false" }),
+            Value::UChar(v) => self.display(v),
             Value::Int(v) => self.display(v),
             Value::UInt(v) => self.display(v),
             Value::Int64(v) => self.display(v),
+            Value::UInt64(v) => self.display(v),
+            Value::Half(v) => self.half(*v),
             Value::Float(v) => self.f32(*v),
             Value::Double(v) => self.f64(*v),
             Value::String(v) | Value::Token(v) => self.string(v),
@@ -1931,22 +2114,24 @@ impl Writer<'_> {
             Value::Int2(v) => self.tuple(v, Self::i32),
             Value::Int3(v) => self.tuple(v, Self::i32),
             Value::Int4(v) => self.tuple(v, Self::i32),
-            Value::Matrix4d(rows) => {
-                self.out.push_str("( ");
-                for (i, row) in rows.iter().enumerate() {
-                    if i > 0 {
-                        self.out.push_str(", ");
-                    }
-                    self.tuple(row, Self::f64);
-                }
-                self.out.push_str(" )");
-            }
+            Value::Half2(v) => self.tuple(v, Self::half),
+            Value::Half3(v) => self.tuple(v, Self::half),
+            Value::Half4(v) => self.tuple(v, Self::half),
+            Value::Quath(q) => self.quat(q, Self::half),
+            Value::Quatf(q) => self.quat(q, Self::f32),
+            Value::Quatd(q) => self.quat(q, Self::f64),
+            Value::Matrix2d(rows) => self.matrix(rows),
+            Value::Matrix3d(rows) => self.matrix(rows),
+            Value::Matrix4d(rows) => self.matrix(rows),
             Value::BoolArray(v) => self.array(v, |w, b| {
                 w.out.push_str(if *b { "true" } else { "false" });
             }),
+            Value::UCharArray(v) => self.array(v, |w, x| w.display(x)),
             Value::IntArray(v) => self.array(v, |w, x| w.display(x)),
             Value::UIntArray(v) => self.array(v, |w, x| w.display(x)),
             Value::Int64Array(v) => self.array(v, |w, x| w.display(x)),
+            Value::UInt64Array(v) => self.array(v, |w, x| w.display(x)),
+            Value::HalfArray(v) => self.array(v, |w, x| w.half(*x)),
             Value::FloatArray(v) => self.array(v, |w, x| w.f32(*x)),
             Value::DoubleArray(v) => self.array(v, |w, x| w.f64(*x)),
             Value::StringArray(v) | Value::TokenArray(v) => self.array(v, |w, s| w.string(s)),
@@ -1960,12 +2145,25 @@ impl Writer<'_> {
             Value::Int2Array(v) => self.array(v, |w, t| w.tuple(t, Self::i32)),
             Value::Int3Array(v) => self.array(v, |w, t| w.tuple(t, Self::i32)),
             Value::Int4Array(v) => self.array(v, |w, t| w.tuple(t, Self::i32)),
+            Value::Half2Array(v) => self.array(v, |w, t| w.tuple(t, Self::half)),
+            Value::Half3Array(v) => self.array(v, |w, t| w.tuple(t, Self::half)),
+            Value::Half4Array(v) => self.array(v, |w, t| w.tuple(t, Self::half)),
             Value::QuathArray(v) => self.array(v, |w, &[i, j, k, r]| {
                 w.tuple(&[r, i, j, k], Self::half);
             }),
+            Value::QuatfArray(v) => self.array(v, |w, q| w.quat(q, Self::f32)),
+            Value::QuatdArray(v) => self.array(v, |w, q| w.quat(q, Self::f64)),
+            Value::Matrix2dArray(v) => self.array(v, |w, m| w.matrix(m)),
+            Value::Matrix3dArray(v) => self.array(v, |w, m| w.matrix(m)),
+            Value::Matrix4dArray(v) => self.array(v, |w, m| w.matrix(m)),
             // Written as statements by `metadata_entries`; validation keeps
             // list ops out of attribute values and dictionaries.
-            Value::TokenListOp(_) => unreachable!("list ops are written as statements"),
+            Value::TokenListOp(_)
+            | Value::StringListOp(_)
+            | Value::IntListOp(_)
+            | Value::UIntListOp(_)
+            | Value::Int64ListOp(_)
+            | Value::UInt64ListOp(_) => unreachable!("list ops are written as statements"),
             Value::Block => self.out.push_str("None"),
             Value::Dictionary(entries) => {
                 // §6.6.2, §16.2.15: typed entries with quoted keys.
@@ -2003,7 +2201,8 @@ impl Writer<'_> {
         }
     }
 
-    /// A `half`, widened exactly to `f32` and written as that.
+    /// A `half`, widened exactly to `f32` and written as that: the shortest
+    /// decimal that reads back as the same half.
     fn half(&mut self, bits: u16) {
         self.f32(layerstack::half::to_f32(bits));
     }
@@ -2014,6 +2213,24 @@ impl Writer<'_> {
         } else {
             self.non_finite(v.is_nan(), v.is_sign_negative());
         }
+    }
+
+    /// `(r, i, j, k)`, the USDA order of a quaternion stored as `i, j, k,
+    /// r` (§16.3.10.22).
+    fn quat<T: Copy>(&mut self, &[i, j, k, r]: &[T; 4], item: impl FnMut(&mut Self, T)) {
+        self.tuple(&[r, i, j, k], item);
+    }
+
+    /// `( (a, b), (c, d) )`: one tuple per row.
+    fn matrix<const N: usize>(&mut self, rows: &[[f64; N]; N]) {
+        self.out.push_str("( ");
+        for (i, row) in rows.iter().enumerate() {
+            if i > 0 {
+                self.out.push_str(", ");
+            }
+            self.tuple(row, Self::f64);
+        }
+        self.out.push_str(" )");
     }
 
     fn non_finite(&mut self, nan: bool, negative: bool) {

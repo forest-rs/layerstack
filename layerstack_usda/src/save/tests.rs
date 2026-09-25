@@ -222,19 +222,14 @@ fn rejects_unsupported_features_with_their_source_paths() {
             Unsupported::VariantSets,
         ),
         (
-            "#usda 1.0\ndef \"A\"\n{\n    half h = 1\n}\n",
-            "/A.h",
-            Unsupported::Value("half"),
+            "#usda 1.0\ndef \"A\"\n{\n    pathExpression p = \"/A//\"\n}\n",
+            "/A.p",
+            Unsupported::Value("pathExpression"),
         ),
         (
             "#usda 1.0\ndef \"A\" (\n    customData = {\n        string[] e = []\n    }\n)\n{\n}\n",
             "/A#customData/e",
             Unsupported::Value("untyped empty array"),
-        ),
-        (
-            "#usda 1.0\ndef \"A\" (\n    clipSets = [\"a\"]\n)\n{\n}\n",
-            "/A#clipSets",
-            Unsupported::ListOpMetadata("string list op"),
         ),
         (
             "#usda 1.0\ndef \"A\"\n{\n    int[] a = edit [append 4]\n}\n",
@@ -727,6 +722,67 @@ def "A"
             type_name: "double".into()
         })),
         "a sample of another type"
+    );
+}
+
+/// List-op metadata of every element type and the value types beyond the
+/// common ones are written as authored; a path list op, which USDA
+/// metadata cannot spell, is still rejected.
+///
+/// Spec: AOUSD Core §6.2–§6.3 (value types), §6.6.3 (list operations),
+/// §16.2.14 (list-op syntax).
+#[test]
+fn saves_list_op_metadata_and_every_value_type() {
+    let source = r#"#usda 1.0
+
+def "A" (
+    prepend clipSets = ["motion"]
+    delete inactiveIds = [3, 7]
+)
+{
+    uchar c = 200
+    uint64 u = 18446744073709551615
+    half h = 0.1
+    half3 t = (1, 0.5, -0)
+    quatf q = (1, 0, 0.5, 0)
+    quatd d = (0.5, 0.5, 0.5, 0.5)
+    matrix2d m = ( (1, 0.5), (0, 1) )
+    matrix3d n = ( (1, 0, 0), (0, 1, 0), (0, 0, 1) )
+    uchar[] cs = [0, 255]
+    uint64[] us = [1, 2]
+    half[] hs = [0, 0.5, 1]
+    color3h[] ts = [(0.25, 0.5, 1)]
+    quath[] qs = [(1, 0, 0, 0)]
+    quatf[] fs = []
+    matrix4d[] ms = [( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (2, 3, 4, 1) )]
+}
+"#;
+    let text = Imported::new(source).save().unwrap();
+    // A half is written as the shortest decimal of its exact value, which
+    // reads back as the same half.
+    let expected = source.replace("half h = 0.1", "half h = 0.099975586");
+    assert_eq!(text, expected, "saved text");
+    assert_eq!(Imported::new(&text).save().unwrap(), text, "stable");
+
+    let mut imported = Imported::new(source);
+    let a = Path::parse_absolute("/A", &mut imported.tokens).unwrap();
+    let a = imported.paths.intern(a);
+    let key = imported.tokens.intern("exedraTargets");
+    let target = TargetPath::parse("/A", &mut imported.tokens, &mut imported.paths).unwrap();
+    imported.layer.prims.get_mut(&a).unwrap().set_field(
+        key,
+        FieldValue::PathListOp(LayerListOp {
+            explicit: Some(vec![target]),
+            ..LayerListOp::default()
+        }),
+    );
+    assert_eq!(
+        imported.save(),
+        Err(SaveError::Unsupported {
+            path: "/A#exedraTargets".into(),
+            feature: Unsupported::ListOpMetadata("path list op")
+        }),
+        "a path list op"
     );
 }
 

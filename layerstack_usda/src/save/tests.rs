@@ -212,14 +212,9 @@ over "Other"
 fn rejects_unsupported_features_with_their_source_paths() {
     let cases: &[(&str, &str, Unsupported)] = &[
         (
-            "#usda 1.0\ndef \"A\" (\n    variants = {\n        string v = \"x\"\n    }\n)\n{\n}\n",
-            "/A",
-            Unsupported::VariantSelections,
-        ),
-        (
-            "#usda 1.0\ndef \"A\" (\n    variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"x\" {\n        }\n    }\n}\n",
-            "/A",
-            Unsupported::VariantSets,
+            "#usda 1.0\ndef \"A\"\n{\n    variantSet \"v\" = {\n        \"x\" {\n            pathExpression p = \"/A//\"\n        }\n    }\n}\n",
+            "/A{v=x}.p",
+            Unsupported::Value("pathExpression"),
         ),
         (
             "#usda 1.0\ndef \"A\"\n{\n    pathExpression p = \"/A//\"\n}\n",
@@ -810,5 +805,199 @@ fn keeps_interleaved_property_order() {
     assert!(
         text.contains("    int x = 1\n    rel y = </A.x>\n    int z = 2\n"),
         "{text}"
+    );
+}
+
+const VARIANTS: &str = r#"#usda 1.0
+(
+    defaultPrim = "Forest"
+)
+
+def Xform "Forest" (
+    variants = {
+        string density = "dense"
+    }
+    prepend variantSets = ["density"]
+)
+{
+    def Xform "Tree" (
+        variants = {
+            string season = "summer"
+        }
+        prepend variantSets = ["season", "shape"]
+    )
+    {
+        double height = 1
+
+        variantSet "season" = {
+            "summer" (
+                prepend references = </Library/Leaves>
+                variants = {
+                    string size = "tall"
+                }
+                prepend variantSets = "size"
+            ) {
+                double height = 4
+                float sway.timeSamples = {
+                    0: 0,
+                    24: 1,
+                }
+
+                def Mesh "Canopy"
+                {
+                    color3f[] primvars:displayColor = [(0.1, 0.5, 0.1)]
+                }
+
+                variantSet "size" = {
+                    "short" {
+                        double height = 3
+                    }
+                    "tall" {
+                        double height = 9
+
+                        def Scope "Crown"
+                        {
+                        }
+                    }
+                }
+            }
+            "winter" (
+                kind = "component"
+            ) {
+                double height = 2
+            }
+        }
+    }
+
+    variantSet "density" = {
+        "dense" {
+            over "Tree" (
+                variants = {
+                    string season = "winter"
+                }
+            )
+            {
+            }
+
+            def "Rock" (
+                variants = {
+                    string moss = "covered"
+                }
+                prepend variantSets = "moss"
+            )
+            {
+                int count = 3
+
+                variantSet "moss" = {
+                    "bare" {
+                    }
+                    "covered" {
+                        def Scope "Moss"
+                        {
+                        }
+                    }
+                }
+            }
+        }
+        "sparse" {
+        }
+    }
+}
+
+class "Library"
+{
+    def "Leaves"
+    {
+        token shade = "green"
+    }
+}
+"#;
+
+/// Variant sets and selections are saved with every branch: metadata,
+/// arcs, properties with time samples, child prims (a prim spec kept
+/// apart from the one outside the branch included) and nested sets;
+/// saving the saved layer changes nothing.
+///
+/// Spec: AOUSD Core §7.3.6, §7.6.6–§7.6.7, §10.3.2.5.
+#[test]
+fn saves_variant_sets_and_selections() {
+    let imported = Imported::new(VARIANTS);
+    let text = imported.save().unwrap();
+    // The source as the writer spells it: quoted selection keys and
+    // bracketed `variantSets` lists.
+    let mut expected = String::from(VARIANTS);
+    for set in ["density", "moss", "season", "size"] {
+        expected = expected
+            .replace(&format!("string {set} ="), &format!("string \"{set}\" ="))
+            .replace(
+                &format!("prepend variantSets = \"{set}\""),
+                &format!("prepend variantSets = [\"{set}\"]"),
+            );
+    }
+    assert_eq!(text, expected);
+    assert_eq!(Imported::new(&text).save().unwrap(), text, "stable");
+}
+
+/// A variant whose branch context the layer does not hold, and prim specs
+/// in a branch that the branch does not list or that are missing, are
+/// rejected with their variant-qualified paths.
+#[test]
+fn rejects_misplaced_variant_specs() {
+    let source = "#usda 1.0\ndef \"A\"\n{\n    variantSet \"v\" = {\n        \"x\" {\n            def \"B\"\n            {\n            }\n        }\n    }\n}\n";
+    fn branch(imported: &mut Imported) -> &mut VariantSpec {
+        let a = Path::parse_absolute("/A", &mut imported.tokens).unwrap();
+        let a = imported.paths.intern(a);
+        let v = imported.tokens.intern("v");
+        let x = imported.tokens.intern("x");
+        imported
+            .layer
+            .prims
+            .get_mut(&a)
+            .unwrap()
+            .variant_sets
+            .get_mut(&v)
+            .unwrap()
+            .variants
+            .get_mut(&x)
+            .unwrap()
+    }
+    let invalid = |path: &str, problem| {
+        Err(SaveError::Invalid {
+            path: path.into(),
+            problem,
+        })
+    };
+
+    let mut imported = Imported::new(source);
+    let host_path = imported
+        .paths
+        .intern(Path::parse_absolute("/A", &mut imported.tokens).unwrap());
+    let site = VariantSelectionSite {
+        host_path,
+        set: imported.tokens.intern("w"),
+        variant: imported.tokens.intern("y"),
+    };
+    branch(&mut imported).outer_variant_sites = vec![site];
+    assert_eq!(
+        imported.save(),
+        invalid("/A{v=x}", Invalid::UnplacedVariant),
+        "a variant inside no branch of the layer"
+    );
+
+    let mut imported = Imported::new(source);
+    branch(&mut imported).authored_children.clear();
+    assert_eq!(
+        imported.save(),
+        invalid("/A{v=x}B", Invalid::UnlistedPrim),
+        "a branch prim spec the branch does not list"
+    );
+
+    let mut imported = Imported::new(source);
+    let c = imported.tokens.intern("C");
+    branch(&mut imported).authored_children.push(c);
+    assert_eq!(
+        imported.save(),
+        invalid("/A{v=x}C", Invalid::MissingChildSpec),
+        "a branch child without a prim spec"
     );
 }

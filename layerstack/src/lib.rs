@@ -16,6 +16,12 @@
 //! - **Incremental recomposition** — via [`LiveStage`] and the `invalidation`
 //!   dependency graph
 //! - **Schema fallbacks** — via [`SchemaRegistry`]
+//! - **Value explanations** — [`Stage::explain_property_value`] and its
+//!   siblings say why a value is what it is: every consulted opinion with its
+//!   layer, spec, arc and layer offset, and whether it contributed a value, a
+//!   sparse array edit, dictionary entries or a list edit, or was shadowed,
+//!   cut off by a block or incompatible (compare OpenUSD's
+//!   `UsdAttribute::GetResolveInfo`)
 //!
 //! # Quick start
 //!
@@ -117,8 +123,9 @@ pub use schema::{PropertyDefinition, SchemaDefinition, SchemaRegistry};
 pub use spec_path::{SpecComponent, SpecPath, SpecPathError};
 pub use spline::SplineData;
 pub use stage::{
-    PopulationMask, PropertyDeclaration, Provenance, Resolved, ResolvedValue, Stage, StageOptions,
-    Traverse,
+    Contribution, DictionaryMerge, ExplainedOpinion, IgnoreCause, KeyPath, OpinionRole,
+    PopulationMask, PropertyDeclaration, Provenance, Resolved, ResolvedValue, SampleUse, Stage,
+    StageOptions, Traverse, ValueExplanation, ValueSource,
 };
 
 pub use live_stage::LiveStage;

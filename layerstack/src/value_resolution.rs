@@ -16,7 +16,8 @@
 use alloc::{vec, vec::Vec};
 
 use opinionated::{
-    FamilyMember, FamilyResolution, IgnoreReason, OpinionFamily, OpinionKind, resolve_family_chain,
+    FamilyEvent, FamilyMember, FamilyResolution, IgnoreReason, OpinionFamily, OpinionKind,
+    resolve_family_chain, resolve_family_chain_report,
 };
 
 use crate::{
@@ -55,6 +56,120 @@ pub(crate) enum SparseResolveResult {
     Blocked,
     /// Sparse composition produced a dense resolved value.
     Resolved(Value),
+}
+
+/// Where one member of a folded chain sits: its position among the query's
+/// opinions, and the stage time of the sample it reads (`-inf` for a
+/// default).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct ChainPos {
+    /// Position of the opinion in the opinion slice being resolved.
+    pub(crate) opinion: usize,
+    /// Stage time of the sample the fold reads from the opinion.
+    pub(crate) time: f64,
+}
+
+/// Folds one chain through [`opinionated`]'s family kernel.
+///
+/// Resolution folds through [`Lean`], which calls [`resolve_family_chain`]
+/// and ignores every [`ChainPos`], so it compiles to the plain fold.
+/// Explanation folds the same chains through [`Recording`], which calls
+/// [`resolve_family_chain_report`] and keeps its events.
+trait Folder {
+    /// Folds `chain`, strongest first, for the (composed) sample at stage
+    /// time `sample`.
+    fn fold<'a, Op: 'a, F: OpinionFamily<Op>>(
+        &mut self,
+        family: &F,
+        sample: f64,
+        chain: impl Iterator<Item = (&'a Op, ChainPos)>,
+    ) -> FamilyResolution<F::Value, ()>;
+}
+
+/// The resolution [`Folder`]: records nothing.
+struct Lean;
+
+impl Folder for Lean {
+    #[inline(always)]
+    fn fold<'a, Op: 'a, F: OpinionFamily<Op>>(
+        &mut self,
+        family: &F,
+        _sample: f64,
+        chain: impl Iterator<Item = (&'a Op, ChainPos)>,
+    ) -> FamilyResolution<F::Value, ()> {
+        resolve_family_chain(family, chain.map(|(op, _)| (op, &())))
+    }
+}
+
+/// How one chain folded: the kernel's events, each naming its [`ChainPos`].
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct SampleFold {
+    /// Stage time of the (composed) sample folded; `-inf` for a default.
+    pub(crate) time: f64,
+    /// The kernel's events, strongest first, for the members it visited.
+    pub(crate) events: Vec<FamilyEvent<ChainPos>>,
+}
+
+impl SampleFold {
+    /// Whether this fold's value depends on the query's fallback seed.
+    ///
+    /// With a fallback, a fold uses the seed unless a dense member ended it
+    /// or a block ended it before any edit: accumulated edits materialize
+    /// over the seed, and a fold nothing contributed to is the seed itself.
+    pub(crate) fn uses_seed(&self, has_fallback: bool) -> bool {
+        let dense = self
+            .events
+            .iter()
+            .any(|event| matches!(event, FamilyEvent::ContributedDense { .. }));
+        let blocked = matches!(
+            self.events
+                .iter()
+                .find(|event| !matches!(event, FamilyEvent::Ignored { .. })),
+            Some(FamilyEvent::StoppedByBlock { .. })
+        );
+        has_fallback && !dense && !blocked
+    }
+}
+
+/// The explanation [`Folder`]: keeps every fold's report.
+#[derive(Default)]
+struct Recording {
+    folds: Vec<SampleFold>,
+}
+
+impl Folder for Recording {
+    fn fold<'a, Op: 'a, F: OpinionFamily<Op>>(
+        &mut self,
+        family: &F,
+        sample: f64,
+        chain: impl Iterator<Item = (&'a Op, ChainPos)>,
+    ) -> FamilyResolution<F::Value, ()> {
+        let chain: Vec<(&Op, ChainPos)> = chain.collect();
+        let report = resolve_family_chain_report(family, chain.iter().map(|(op, pos)| (*op, pos)));
+        self.folds.push(SampleFold {
+            time: sample,
+            events: report.events,
+        });
+        match report.resolution {
+            FamilyResolution::Absent => FamilyResolution::Absent,
+            FamilyResolution::Blocked { .. } => FamilyResolution::Blocked { provenance: () },
+            FamilyResolution::Resolved { value, .. } => FamilyResolution::Resolved {
+                value,
+                provenance: (),
+            },
+        }
+    }
+}
+
+/// A sparse-family resolution and the folds that produced it.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct SparseExplanation {
+    /// Exactly what [`resolve_sparse_value`] returns for the same query.
+    pub(crate) result: SparseResolveResult,
+    /// Every fold, in the order resolution ran them: one for a default-time
+    /// query; the composed lower and, when interpolating, upper sample for
+    /// a time query. Empty when the family does not apply.
+    pub(crate) folds: Vec<SampleFold>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -175,7 +290,55 @@ pub(crate) fn resolve_sparse_value(
     let Some(family) = SparseValueFamily::for_query(opinions, query) else {
         return SparseResolveResult::NotApplicable;
     };
-    family.resolve(opinions, query, property_type)
+    family.resolve(opinions, query, property_type, &mut Lean)
+}
+
+/// Resolves exactly as [`resolve_sparse_value`] and reports every fold.
+///
+/// The folds run through [`resolve_family_chain_report`] instead of
+/// [`resolve_family_chain`], over the same chains, so the result is the one
+/// resolution produces. This path allocates and is meant for diagnostics.
+pub(crate) fn explain_sparse_value(
+    opinions: &[Opinion],
+    query: SparseQuery<'_>,
+    property_type: Option<&PropertyType>,
+) -> SparseExplanation {
+    let Some(family) = SparseValueFamily::for_query(opinions, query) else {
+        return SparseExplanation {
+            result: SparseResolveResult::NotApplicable,
+            folds: Vec::new(),
+        };
+    };
+    let mut recording = Recording::default();
+    let result = family.resolve(opinions, query, property_type, &mut recording);
+    SparseExplanation {
+        result,
+        folds: recording.folds,
+    }
+}
+
+/// Returns `true` when every value `opinion` offers a query lies in the
+/// sparse array family (dense arrays, array edits and blocks).
+///
+/// A default-time query reads the default; a time query reads the time
+/// samples, else a spline (never in the family), else the default.
+pub(crate) fn reads_array_family(opinion: &Opinion, at_time: bool) -> bool {
+    let in_family = |value: &Value| {
+        matches!(
+            value,
+            Value::Array(_) | Value::ArrayEdit(_) | Value::Blocked
+        )
+    };
+    if !at_time {
+        return opinion.value.default_value().is_some_and(in_family);
+    }
+    if let Some(samples) = opinion.value.time_samples() {
+        samples.iter().all(|(_, value)| in_family(value))
+    } else if opinion.value.spline().is_some() {
+        false
+    } else {
+        opinion.value.default_value().is_some_and(in_family)
+    }
 }
 
 impl SparseValueFamily {
@@ -213,6 +376,7 @@ impl SparseValueFamily {
         opinions: &[Opinion],
         query: SparseQuery<'_>,
         property_type: Option<&PropertyType>,
+        folder: &mut impl Folder,
     ) -> SparseResolveResult {
         match self {
             Self::Array => match query {
@@ -229,6 +393,7 @@ impl SparseValueFamily {
                         opinions
                             .iter()
                             .take_while(|opinion| !is_foreign_default(&opinion.value)),
+                        folder,
                     )
                 }
                 SparseQuery::AtTime {
@@ -243,6 +408,7 @@ impl SparseValueFamily {
                         property_type,
                         fallback,
                     },
+                    folder,
                 ),
             },
         }
@@ -267,8 +433,13 @@ fn is_foreign_default(value: &OpinionValue) -> bool {
 fn fold_array_chain<'o>(
     family: &ArrayFamily<'_>,
     opinions: impl Iterator<Item = &'o Opinion>,
+    folder: &mut impl Folder,
 ) -> SparseResolveResult {
-    match resolve_family_chain(family, opinions.map(|opinion| (opinion, &()))) {
+    let chain = opinions.enumerate().map(|(opinion, value)| {
+        let time = f64::NEG_INFINITY;
+        (value, ChainPos { opinion, time })
+    });
+    match folder.fold(family, f64::NEG_INFINITY, chain) {
         FamilyResolution::Resolved { value, .. } => {
             SparseResolveResult::Resolved(Value::Array(value))
         }
@@ -341,6 +512,8 @@ enum Pick {
 struct Bracket<'o> {
     /// Position of the opinion among the participating opinions.
     index: usize,
+    /// Position of the opinion among all opinions of the query.
+    opinion: usize,
     lower: (f64, Option<&'o Value>),
     upper: (f64, Option<&'o Value>),
 }
@@ -361,13 +534,14 @@ impl<'o> Bracket<'o> {
     /// samples), §12.5 (interpolation).
     fn of(
         opinion: &'o Opinion,
-        index: usize,
+        (index, position): (usize, usize),
         query: f64,
         interp: InterpolationType,
     ) -> Option<Self> {
         let single = |time, value| {
             Some(Self {
                 index,
+                opinion: position,
                 lower: (time, value),
                 upper: (time, value),
             })
@@ -403,6 +577,7 @@ impl<'o> Bracket<'o> {
                 };
                 Some(Self {
                     index,
+                    opinion: position,
                     lower: to_stage(lower),
                     upper: to_stage(upper),
                 })
@@ -421,6 +596,14 @@ impl<'o> Bracket<'o> {
         match pick {
             Pick::Lower => self.lower.1,
             Pick::Upper => self.upper.1,
+        }
+    }
+
+    /// Stage time of the sample `pick` names.
+    fn time(&self, pick: Pick) -> f64 {
+        match pick {
+            Pick::Lower => self.lower.0,
+            Pick::Upper => self.upper.0,
         }
     }
 
@@ -609,8 +792,8 @@ fn plan_brackets<'o>(
     let mut brackets: Vec<Bracket<'o>> = Vec::new();
     let mut composed: Vec<Entry> = Vec::new();
     let mut query = time;
-    for opinion in opinions {
-        let Some(bracket) = Bracket::of(opinion, brackets.len(), query, interp) else {
+    for (position, opinion) in opinions.into_iter().enumerate() {
+        let Some(bracket) = Bracket::of(opinion, (brackets.len(), position), query, interp) else {
             continue;
         };
         composed = Entry::bracketing(Entry::compose_under(&composed, &bracket.entries()), time);
@@ -680,17 +863,18 @@ fn resolve_array_at_time(
     time: f64,
     interp: InterpolationType,
     array: ArrayFamily<'_>,
+    folder: &mut impl Folder,
 ) -> SparseResolveResult {
     let plan = plan_brackets(opinions, time, interp);
     let (Some(lower_entry), Some(upper_entry)) = (plan.composed.first(), plan.composed.last())
     else {
         return if plan.brackets.is_empty() {
-            fold_array_chain(&array, core::iter::empty())
+            fold_array_chain(&array, core::iter::empty(), folder)
         } else {
             SparseResolveResult::Blocked
         };
     };
-    let lower = match fold_entry(&plan.brackets, array, lower_entry) {
+    let lower = match fold_entry(&plan.brackets, array, lower_entry, folder) {
         SparseResolveResult::Resolved(Value::Array(lower)) => lower,
         other => return other,
     };
@@ -699,7 +883,7 @@ fn resolve_array_at_time(
         return SparseResolveResult::Resolved(Value::Array(lower));
     }
     let alpha = (time - lower_time) / (upper_time - lower_time);
-    let value = match fold_entry(&plan.brackets, array, upper_entry) {
+    let value = match fold_entry(&plan.brackets, array, upper_entry, folder) {
         SparseResolveResult::Resolved(Value::Array(upper)) => {
             lerp_arrays(&lower, &upper, alpha).unwrap_or(lower)
         }
@@ -718,6 +902,7 @@ fn fold_entry(
     brackets: &[Bracket<'_>],
     array: ArrayFamily<'_>,
     entry: &Entry,
+    folder: &mut impl Folder,
 ) -> SparseResolveResult {
     let family = PickedArrayFamily {
         array,
@@ -732,8 +917,13 @@ fn fold_entry(
                 Some(Value::Array(_) | Value::ArrayEdit(_) | Value::Blocked)
             )
         })
-        .map(|bracket| (bracket, &()));
-    match resolve_family_chain(&family, chain) {
+        .map(|bracket| {
+            let pick = entry.picks[bracket.index];
+            let time = bracket.time(pick);
+            let opinion = bracket.opinion;
+            (bracket, ChainPos { opinion, time })
+        });
+    match folder.fold(&family, entry.time, chain) {
         FamilyResolution::Resolved { value, .. } => {
             SparseResolveResult::Resolved(Value::Array(value))
         }
@@ -964,25 +1154,45 @@ pub(crate) fn interpolate_samples(
     time: f64,
     interp: InterpolationType,
 ) -> Option<Value> {
-    if samples.is_empty() {
-        return None;
+    let (lower_index, upper_index) = sample_bracket(samples, time, interp)?;
+    let (lower_time, lower) = &samples[lower_index];
+    if lower_index == upper_index {
+        return Some(lower.clone());
     }
+    let (upper_time, upper) = &samples[upper_index];
+    let alpha = (time - lower_time) / (upper_time - lower_time);
+    Some(lerp_element(lower, upper, alpha).unwrap_or_else(|| lower.clone()))
+}
 
-    match samples
-        .binary_search_by(|(t, _)| t.partial_cmp(&time).unwrap_or(core::cmp::Ordering::Equal))
-    {
-        Ok(idx) => Some(samples[idx].1.clone()),
-        Err(0) => Some(samples[0].1.clone()),
-        Err(idx) if idx >= samples.len() => Some(samples[samples.len() - 1].1.clone()),
-        Err(idx) => {
-            let ((lower_time, lower), (upper_time, upper)) = (&samples[idx - 1], &samples[idx]);
-            if interp == InterpolationType::Held || times_close(*lower_time, *upper_time) {
-                return Some(lower.clone());
+/// The indices of the samples [`interpolate_samples`] reads at layer time
+/// `time`: equal when one sample holds (at or outside the authored range,
+/// under held interpolation, or between samples closer than
+/// [`TIME_EPSILON`]), else the lower and upper samples it interpolates.
+/// `None` when there are no samples.
+pub(crate) fn sample_bracket(
+    samples: &[(f64, Value)],
+    time: f64,
+    interp: InterpolationType,
+) -> Option<(usize, usize)> {
+    let last = samples.len().checked_sub(1)?;
+    Some(
+        match samples
+            .binary_search_by(|(t, _)| t.partial_cmp(&time).unwrap_or(core::cmp::Ordering::Equal))
+        {
+            Ok(idx) => (idx, idx),
+            Err(0) => (0, 0),
+            Err(idx) if idx > last => (last, last),
+            Err(idx) => {
+                if interp == InterpolationType::Held
+                    || times_close(samples[idx - 1].0, samples[idx].0)
+                {
+                    (idx - 1, idx - 1)
+                } else {
+                    (idx - 1, idx)
+                }
             }
-            let alpha = (time - lower_time) / (upper_time - lower_time);
-            Some(lerp_element(lower, upper, alpha).unwrap_or_else(|| lower.clone()))
-        }
-    }
+        },
+    )
 }
 
 #[cfg(test)]
@@ -1292,7 +1502,8 @@ mod tests {
         opinions: &[Opinion],
     ) -> (SparseResolveResult, usize) {
         let mut visited = 0;
-        let resolved = fold_array_chain(family, opinions.iter().inspect(|_| visited += 1));
+        let resolved =
+            fold_array_chain(family, opinions.iter().inspect(|_| visited += 1), &mut Lean);
         (resolved, visited)
     }
 
@@ -2200,12 +2411,82 @@ mod tests {
                             property_type: Some(&ty),
                             fallback: seed_value.as_ref(),
                         },
+                        &mut Lean,
                     );
                     let expected = reference::evaluate(&opinions, time, interp, &ty, seed);
                     assert_eq!(
                         actual, expected,
                         "{spacing:?} case {case} at t={time} ({interp:?}), fallback {seed:?}:\n{opinions:#?}"
                     );
+                }
+            }
+        }
+    }
+
+    /// Explanation folds the same chains through the kernel's report and so
+    /// resolves exactly what resolution does, at the default time and at
+    /// every sample time; its events name opinions of the chain.
+    #[test]
+    fn explanation_resolves_what_resolution_resolves() {
+        let (spec_path, field) = test_ids();
+        let ty = float_array_type();
+        let fallback = Value::Array(vec![Value::Float(100.0)]);
+        let mut rng = Rng(7);
+        let times: Vec<f64> = (0..=16).map(|step| -1.0 + f64::from(step) * 0.25).collect();
+        for _ in 0..300 {
+            let opinions = random_chain(&mut rng, Spacing::Coarse, spec_path, field);
+            let seed = (rng.below(2) == 0).then_some(&fallback);
+            let mut queries = vec![SparseQuery::Default { fallback: seed }];
+            for &time in &times {
+                for interp in [InterpolationType::Held, InterpolationType::Linear] {
+                    queries.push(SparseQuery::AtTime {
+                        time,
+                        interp,
+                        fallback: seed,
+                    });
+                }
+            }
+            for query in queries {
+                let explained = explain_sparse_value(&opinions, query, Some(&ty));
+                assert_eq!(
+                    explained.result,
+                    resolve_sparse_value(&opinions, query, Some(&ty)),
+                    "{query:?}: {opinions:#?}"
+                );
+                // A result no fold drew from the fallback is the same
+                // without it: the explanation never underreports the seed.
+                if !explained
+                    .folds
+                    .iter()
+                    .any(|fold| fold.uses_seed(seed.is_some()))
+                {
+                    let unseeded = match query {
+                        SparseQuery::Default { .. } => SparseQuery::Default { fallback: None },
+                        SparseQuery::AtTime { time, interp, .. } => SparseQuery::AtTime {
+                            time,
+                            interp,
+                            fallback: None,
+                        },
+                    };
+                    let without = resolve_sparse_value(&opinions, unseeded, Some(&ty));
+                    let applies = |result: &SparseResolveResult| {
+                        !matches!(result, SparseResolveResult::NotApplicable)
+                    };
+                    if applies(&explained.result) && applies(&without) {
+                        assert_eq!(
+                            explained.result, without,
+                            "unreported seed at {query:?}: {opinions:#?}"
+                        );
+                    }
+                }
+                for fold in &explained.folds {
+                    for event in &fold.events {
+                        let (FamilyEvent::ContributedDense { provenance }
+                        | FamilyEvent::ContributedSparse { provenance }
+                        | FamilyEvent::StoppedByBlock { provenance }
+                        | FamilyEvent::Ignored { provenance, .. }) = event;
+                        assert!(provenance.opinion < opinions.len());
+                    }
                 }
             }
         }

@@ -248,13 +248,33 @@ value differs from the expected one. Any other difference from OpenUSD fails
   Core §12.3.6 and §16.2.16.2 ("`int x = None` ... only resolve to fallback")
   resolve the fallback.
 
+## Explanations
+
+`Stage::explain_property_value`, `Stage::explain_property_value_at_time` and
+their schema-aware and metadata siblings answer "why does this property have
+this value?". Each mirrors a `resolve_*` query and returns its value, where the
+value comes from (a default, the time samples bracketing the query, a spline,
+the schema fallback, or nothing), and every consulted opinion with its layer,
+spec path, composition node and layer offset, and its part: a dense value, a
+sparse edit, dictionary entries or a list edit; or shadowed, cut off by a
+block, or incompatible.
+
+Explanation runs the same chains as resolution through the kernel's reporting
+entry points (`resolve_family_chain_report`, `combine_dictionary_chain_report`
+and `resolve_ordered_chain_report`), so `opinionated` says how a fold used
+its inputs and `layerstack` only attaches provenance. A time query reports
+one fold per composed bracketing sample, and each opinion lists the samples it
+offered them. Resolution passes a no-op folder and never records anything.
+
+OpenUSD's `UsdAttribute::GetResolveInfo` names only the source and the
+strongest node and layer; for composed sparse values the proposal's
+`UsdResolveInfoSourceComposed` says a chain composed without listing it. The
+explanation lists the whole chain.
+
 ## Open Gaps
 
 - **Value clips.** Not implemented, so clip series do not participate in the
   linearization.
-- **Diagnostics.** `resolve_family_chain_report` is available but unused;
-  `Stage` reports the strongest opinion as provenance rather than the full
-  contributing chain the proposal's `UsdResolveInfoSourceComposed` describes.
 
 ## What Should Not Change
 

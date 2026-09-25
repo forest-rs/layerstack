@@ -2047,6 +2047,39 @@ over "P" (
         assert_eq!(parsed.layer.prims[0].name, combining, "prim name re-parses");
     }
 
+    /// Every character the writer escapes reads back as itself.
+    #[test]
+    fn escaped_strings_read_back() {
+        let tricky = "say \"hi\" it's \\ \n\t\r\x01\x1f\x7f \u{e9} \u{65e5}";
+        let mut prim = Prim::def("Xform", "Root");
+        prim.metadata.push(Metadatum::new(
+            "customData",
+            Value::Dictionary(vec![(tricky.to_string(), Value::String(tricky.into()))]),
+        ));
+        prim.push_property(Attribute::new("s", "string", Value::String(tricky.into())));
+        let text = Document {
+            prims: vec![prim],
+            ..Document::new()
+        }
+        .to_usda()
+        .unwrap();
+        let parsed = parse(&text);
+        assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+        let root = &parsed.layer.prims[0];
+        let ast::PrimChild::Attribute(attribute) = &root.children[0] else {
+            panic!("expected an attribute");
+        };
+        assert!(matches!(&attribute.default, Some(ast::Value::String(s)) if s == tricky));
+        let ast::PrimMeta::Custom(entry) = &root.metadata[0] else {
+            panic!("expected customData");
+        };
+        let ast::MetadataValue::Dictionary(entries) = &entry.value else {
+            panic!("expected a dictionary");
+        };
+        assert_eq!(entries[0].key, tricky);
+        assert!(matches!(&entries[0].value, ast::Value::String(s) if s == tricky));
+    }
+
     #[test]
     fn rejects_nul_in_strings() {
         let nul = Attribute::new("s", "string", Value::String("a\0b".into()));

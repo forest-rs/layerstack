@@ -473,6 +473,74 @@ fn usdc_inlined_values_match_openusd() {
     std::fs::remove_dir_all(&dir).unwrap();
 }
 
+/// Strings the USDA writer escapes read in OpenUSD as written: `usdcat`
+/// converts our USDA to its own USDC, which this workspace's USDC reader
+/// decodes. The escapes involved (AOUSD Core §16.2.5) are read the same by
+/// every OpenUSD release, so no version is required.
+#[test]
+fn escaped_strings_read_in_openusd_as_written() {
+    use layerstack_usda::writer::{Attribute, Document, Metadatum, Prim, Value as UsdaValue};
+
+    if tool("usdcat").is_none() {
+        eprintln!("skipped: usdcat is not on PATH");
+        return;
+    }
+    let tricky: String = (1_u8..32)
+        .map(char::from)
+        .chain("\x7f say \"hi\" it's \\ \u{e9} \u{65e5}".chars())
+        .collect();
+    let mut prim = Prim::def("Xform", "Root");
+    prim.metadata.push(Metadatum::new(
+        "customData",
+        UsdaValue::Dictionary(vec![("key".to_string(), UsdaValue::String(tricky.clone()))]),
+    ));
+    prim.push_property(Attribute::new(
+        "s",
+        "string",
+        UsdaValue::String(tricky.clone()),
+    ));
+    prim.push_property(Attribute::new(
+        "t",
+        "token",
+        UsdaValue::Token(tricky.clone()),
+    ));
+    let text = Document {
+        prims: vec![prim],
+        ..Document::new()
+    }
+    .to_usda()
+    .unwrap();
+
+    let dir = scratch_dir("escaped-strings");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let usda = dir.join("strings.usda");
+    let usdc = dir.join("strings.usdc");
+    std::fs::write(&usda, &text).unwrap();
+    usdcat(&[&usda, Path::new("-o"), &usdc]).expect("usdcat converts our USDA");
+    let theirs = Imported::usdc(&std::fs::read(&usdc).unwrap());
+    let ours = Imported::usda(&text);
+    std::fs::remove_dir_all(&dir).unwrap();
+
+    let names = |i: &Imported| {
+        layerstack_conformance::authored::dump_layer(
+            &i.layer,
+            layerstack_conformance::authored::Names {
+                tokens: &i.tokens,
+                paths: &i.paths,
+            },
+        )
+    };
+    let expected = format!("{:?}", layerstack::Value::String(tricky.as_str().into()));
+    let dumped = names(&theirs);
+    assert!(
+        dumped.iter().any(|line| line.contains(&expected)),
+        "OpenUSD read the string as written:\n{}",
+        dumped.join("\n")
+    );
+    assert_eq!(dumped, names(&ours), "OpenUSD and this workspace agree");
+}
+
 /// The `ARKit`-profile packages hold exactly one USD layer, a USDC root
 /// (checked with this workspace's archive reader; the external gate checks
 /// the same with Python's `zipfile`).

@@ -4,13 +4,15 @@
 //! Abstract syntax tree for USDA files.
 //!
 //! These types represent what was *authored* in a `.usda` file, not what
-//! composition produces. All string data borrows from the source text via
-//! lifetime `'a`, making the AST zero-copy.
+//! composition produces. String data borrows from the source text via
+//! lifetime `'a`; the contents of a string literal are owned only when
+//! evaluating its escape sequences changed them.
 //!
 //! The AST is produced by [`crate::parser::parse`] and consumed by
 //! [`crate::emit`] to create layerstack [`Layer`](layerstack::Layer) /
 //! [`PrimSpec`](layerstack::PrimSpec) values.
 
+use alloc::borrow::Cow;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -42,8 +44,8 @@ pub enum LayerMeta<'a> {
     SubLayers(Vec<SubLayerItem<'a>>),
     /// `relocates = { <src>: <dst>, ... }`
     Relocates(Vec<RelocateEntry<'a>>),
-    /// `doc = "..."`
-    Doc(&'a str),
+    /// `doc = "..."`, with escape sequences evaluated.
+    Doc(Cow<'a, str>),
     /// Generic `key = value` metadata.
     Custom(MetadataEntry<'a>),
 }
@@ -134,10 +136,10 @@ pub enum PrimMeta<'a> {
     Variants(Vec<VariantSelection<'a>>),
     /// `variantSets = [...]` / `prepend variantSets = [...]`
     VariantSets(ListOp<&'a str>),
-    /// `kind = "..."`
-    Kind(&'a str),
-    /// `doc = "..."`
-    Doc(&'a str),
+    /// `kind = "..."`, with escape sequences evaluated.
+    Kind(Cow<'a, str>),
+    /// `doc = "..."`, with escape sequences evaluated.
+    Doc(Cow<'a, str>),
     /// Generic key-value metadata.
     Custom(MetadataEntry<'a>),
 }
@@ -249,8 +251,9 @@ pub enum Value<'a> {
     Number(f64),
     /// An integer value.
     Int(i64),
-    /// A string literal (contents only, quotes stripped).
-    String(&'a str),
+    /// A string literal: its contents without the quotes, with escape
+    /// sequences evaluated.
+    String(Cow<'a, str>),
     /// An identifier used as a token value.
     Identifier(&'a str),
     /// An asset reference (contents only, `@` stripped).
@@ -331,8 +334,8 @@ pub enum ArrayEditIndex {
 pub struct DictionaryEntry<'a> {
     /// Optional type annotation (e.g., `double`, `string`).
     pub type_name: Option<&'a str>,
-    /// Key name.
-    pub key: &'a str,
+    /// Key name, with escape sequences evaluated when it is quoted.
+    pub key: Cow<'a, str>,
     /// Value.
     pub value: Value<'a>,
 }

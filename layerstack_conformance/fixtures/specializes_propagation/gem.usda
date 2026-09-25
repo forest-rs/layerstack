@@ -1,0 +1,20 @@
+#usda 1.0
+
+def "Gem" (
+    specializes = </_Cut>
+)
+{
+}
+
+class "_Cut" (
+    references = @./facet.usda@</Facet>
+)
+{
+    int sheen = 1
+}
+
+over "_Facet"
+{
+    int edge = 1
+    int point = 1
+}

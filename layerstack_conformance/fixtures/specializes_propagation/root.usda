@@ -1,0 +1,106 @@
+#usda 1.0
+
+# A specializes inside the first reference's target ranks after the second
+# reference: `base.usda /Base` outranks `column.usda /_Stone`.
+def "Pillar" (
+    references = [@./column.usda@</Column>, @./base.usda@</Base>]
+)
+{
+}
+
+# `tile.usda /Tile` specializes `/_Tint`, which inherits `/_Glaze`. The
+# specializes is implied into this layer stack as `root.usda /_Tint`, with
+# the inherit beneath it: both outrank the referenced classes, and both are
+# weaker than `tile.usda /Tile`.
+def "Tile" (
+    references = @./tile.usda@</Tile>
+)
+{
+}
+
+over "_Tint"
+{
+    int shade = 0
+}
+
+over "_Glaze"
+{
+    int gloss = 0
+}
+
+# A prim that inherits and specializes the same class, directly and
+# through a reference whose target specializes it too.
+def "Leaf" (
+    inherits = </_Green>
+    specializes = </_Green>
+)
+{
+}
+
+def "Frond" (
+    inherits = </_Green>
+    references = @./leaf.usda@</Leaf>
+)
+{
+}
+
+class "_Green"
+{
+    int hue = 0
+}
+
+# A specializes authored in the selected branch of a variant set, and one
+# authored in a referenced target's selected branch.
+def "Lamp" (
+    variants = {
+        string glow = "bright"
+    }
+    prepend variantSets = "glow"
+    references = @./lamp.usda@</Lamp>
+)
+{
+    variantSet "glow" = {
+        "bright" (
+            specializes = </_Warm>
+        ) {
+        }
+        "dim" (
+            specializes = </_Cool>
+        ) {
+        }
+    }
+}
+
+class "_Warm"
+{
+    int heat = 0
+}
+
+class "_Cool"
+{
+    int heat = 9
+}
+
+over "_Soft"
+{
+    int glare = 0
+}
+
+# `gem.usda /Gem` specializes `/_Cut`, which references `facet.usda
+# /Facet`, which specializes `/_Facet`: a chain of two specializes across
+# three layer stacks, each implied into the stronger ones.
+def "Gem" (
+    references = @./gem.usda@</Gem>
+)
+{
+}
+
+over "_Cut"
+{
+    int sheen = 0
+}
+
+over "_Facet"
+{
+    int edge = 0
+}

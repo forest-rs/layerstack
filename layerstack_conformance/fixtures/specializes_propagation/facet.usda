@@ -1,0 +1,15 @@
+#usda 1.0
+
+def "Facet" (
+    specializes = </_Facet>
+)
+{
+    int sheen = 2
+}
+
+class "_Facet"
+{
+    int edge = 2
+    int point = 2
+    int shard = 2
+}

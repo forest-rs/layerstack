@@ -1,0 +1,257 @@
+{
+ "generator": "layerstack_conformance/scripts/specializes_propagation_oracle.py",
+ "openusd_version": "0.26.8",
+ "root": "root.usda",
+ "prims": [
+  {
+   "path": "/Pillar",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Pillar"
+    ],
+    [
+     "column.usda",
+     "/Column"
+    ],
+    [
+     "base.usda",
+     "/Base"
+    ],
+    [
+     "column.usda",
+     "/_Stone"
+    ]
+   ]
+  },
+  {
+   "path": "/Tile",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Tile"
+    ],
+    [
+     "tile.usda",
+     "/Tile"
+    ],
+    [
+     "root.usda",
+     "/_Tint"
+    ],
+    [
+     "root.usda",
+     "/_Glaze"
+    ],
+    [
+     "tile.usda",
+     "/_Tint"
+    ],
+    [
+     "tile.usda",
+     "/_Glaze"
+    ]
+   ]
+  },
+  {
+   "path": "/_Tint",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_Tint"
+    ]
+   ]
+  },
+  {
+   "path": "/_Glaze",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_Glaze"
+    ]
+   ]
+  },
+  {
+   "path": "/Leaf",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Leaf"
+    ],
+    [
+     "root.usda",
+     "/_Green"
+    ]
+   ]
+  },
+  {
+   "path": "/Frond",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Frond"
+    ],
+    [
+     "root.usda",
+     "/_Green"
+    ],
+    [
+     "leaf.usda",
+     "/Leaf"
+    ],
+    [
+     "leaf.usda",
+     "/_Green"
+    ]
+   ]
+  },
+  {
+   "path": "/_Green",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_Green"
+    ]
+   ]
+  },
+  {
+   "path": "/Lamp",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Lamp"
+    ],
+    [
+     "root.usda",
+     "/Lamp{glow=bright}"
+    ],
+    [
+     "lamp.usda",
+     "/Lamp"
+    ],
+    [
+     "lamp.usda",
+     "/Lamp{shade=soft}"
+    ],
+    [
+     "root.usda",
+     "/_Warm"
+    ],
+    [
+     "root.usda",
+     "/_Soft"
+    ],
+    [
+     "lamp.usda",
+     "/_Soft"
+    ]
+   ]
+  },
+  {
+   "path": "/_Warm",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_Warm"
+    ]
+   ]
+  },
+  {
+   "path": "/_Cool",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_Cool"
+    ]
+   ]
+  },
+  {
+   "path": "/_Soft",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_Soft"
+    ]
+   ]
+  },
+  {
+   "path": "/Gem",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Gem"
+    ],
+    [
+     "gem.usda",
+     "/Gem"
+    ],
+    [
+     "root.usda",
+     "/_Cut"
+    ],
+    [
+     "gem.usda",
+     "/_Cut"
+    ],
+    [
+     "facet.usda",
+     "/Facet"
+    ],
+    [
+     "root.usda",
+     "/_Facet"
+    ],
+    [
+     "gem.usda",
+     "/_Facet"
+    ],
+    [
+     "facet.usda",
+     "/_Facet"
+    ]
+   ]
+  },
+  {
+   "path": "/_Cut",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_Cut"
+    ]
+   ]
+  },
+  {
+   "path": "/_Facet",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_Facet"
+    ]
+   ]
+  }
+ ],
+ "values": {
+  "/Pillar.grain": 1,
+  "/Pillar.hue": 2,
+  "/Tile.gloss": 0,
+  "/Tile.grit": 3,
+  "/Tile.shade": 1,
+  "/_Tint.shade": 0,
+  "/_Glaze.gloss": 0,
+  "/Leaf.hue": 0,
+  "/Frond.hue": 0,
+  "/Frond.vein": 1,
+  "/_Green.hue": 0,
+  "/Lamp.glare": 0,
+  "/Lamp.heat": 1,
+  "/_Warm.heat": 0,
+  "/_Cool.heat": 9,
+  "/_Soft.glare": 0,
+  "/Gem.edge": 0,
+  "/Gem.point": 1,
+  "/Gem.shard": 2,
+  "/Gem.sheen": 0,
+  "/_Cut.sheen": 0,
+  "/_Facet.edge": 0
+ }
+}

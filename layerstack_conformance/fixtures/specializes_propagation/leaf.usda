@@ -1,0 +1,13 @@
+#usda 1.0
+
+def "Leaf" (
+    specializes = </_Green>
+)
+{
+}
+
+class "_Green"
+{
+    int hue = 1
+    int vein = 1
+}

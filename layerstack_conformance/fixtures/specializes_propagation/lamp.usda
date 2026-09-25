@@ -1,0 +1,23 @@
+#usda 1.0
+
+def "Lamp" (
+    variants = {
+        string shade = "soft"
+    }
+    prepend variantSets = "shade"
+)
+{
+    variantSet "shade" = {
+        "soft" (
+            specializes = </_Soft>
+        ) {
+            int heat = 1
+        }
+    }
+}
+
+class "_Soft"
+{
+    int glare = 1
+    int heat = 2
+}

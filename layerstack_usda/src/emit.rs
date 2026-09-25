@@ -1299,7 +1299,10 @@ impl EmitCtx<'_> {
             // Matrices — f64
             "matrix2d" => Some(Value::Matrix2d(Box::new(extract_matrix_f64::<4>(items)))),
             "matrix3d" => Some(Value::Matrix3d(Box::new(extract_matrix_f64::<9>(items)))),
-            "matrix4d" => Some(Value::Matrix4d(Box::new(extract_matrix_f64::<16>(items)))),
+            // `frame4d` is the frame role of `matrix4d` (AOUSD Core §6.5).
+            "matrix4d" | "frame4d" => {
+                Some(Value::Matrix4d(Box::new(extract_matrix_f64::<16>(items))))
+            }
             // Quaternions — stored as (i, j, k, r) but authored as (r, i, j, k)
             // in USDA text per §16.3.10.22.
             "quatd" => {
@@ -1684,9 +1687,8 @@ fn bool_from_string(s: &str) -> Option<bool> {
 fn component_type(base: &str) -> Option<&'static str> {
     match base {
         "int2" | "int3" | "int4" => Some("int"),
-        "double2" | "double3" | "double4" | "matrix2d" | "matrix3d" | "matrix4d" | "quatd" => {
-            Some("double")
-        }
+        "double2" | "double3" | "double4" | "matrix2d" | "matrix3d" | "matrix4d" | "frame4d"
+        | "quatd" => Some("double"),
         "float2" | "float3" | "float4" | "quatf" => Some("float"),
         "half2" | "half3" | "half4" | "quath" => Some("half"),
         _ if is_semantic_vec_alias(base, 'd') => Some("double"),
@@ -1808,7 +1810,7 @@ fn ast_to_i32(v: &ast::Value<'_>) -> i32 {
 /// precision suffix `p` ('f', 'd', or 'h').
 ///
 /// Semantic aliases: `color3f`, `color4f`, `normal3f`, `point3f`,
-/// `vector3f`, `texCoord2f`, `texCoord3f`, `frame4d`, etc.
+/// `vector3f`, `texCoord2f`, `texCoord3f`, etc. (`frame4d` is a matrix.)
 fn is_semantic_vec_alias(name: &str, precision: char) -> bool {
     if !name.ends_with(precision) {
         return false;
@@ -1818,12 +1820,11 @@ fn is_semantic_vec_alias(name: &str, precision: char) -> bool {
         || name.starts_with("point")
         || name.starts_with("vector")
         || name.starts_with("texCoord")
-        || name.starts_with("frame")
 }
 
 /// Extracts the component count from a semantic alias name.
 ///
-/// E.g., `"color3f"` → 3, `"texCoord2f"` → 2, `"frame4d"` → 4.
+/// E.g., `"color3f"` → 3, `"texCoord2f"` → 2.
 fn semantic_component_count(name: &str) -> usize {
     // The digit is always the second-to-last character.
     name.chars()
@@ -1890,7 +1891,7 @@ fn default_scalar_for_type(type_hint: &str, tokens: &mut TokenInterner) -> Value
         "int4" => Value::Vec4i([0; 4]),
         "matrix2d" => Value::Matrix2d(Box::new([0.0; 4])),
         "matrix3d" => Value::Matrix3d(Box::new([0.0; 9])),
-        "matrix4d" => Value::Matrix4d(Box::new([0.0; 16])),
+        "matrix4d" | "frame4d" => Value::Matrix4d(Box::new([0.0; 16])),
         "quatd" => Value::Quatd([0.0; 4]),
         "quatf" => Value::Quatf([0.0; 4]),
         "quath" => Value::Quath([0; 4]),

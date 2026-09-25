@@ -20,6 +20,8 @@ to read each `.usda` as the USDC reader reads its `.usdc`.
 - `asset_paths`: asset paths holding `@` (which OpenUSD writes between
   `@@@` delimiters), `//`, `#`, spaces and quotes, in attribute values, a
   sublayer and a reference.
+- `value_types`: a value of each scalar, vector, matrix (`frame4d`
+  included) and quaternion type, and arrays of some.
 
 A source fixture is the other way round: its `.usda` is text given here,
 which OpenUSD reads but would not write in that form, and its `.usdc` is
@@ -147,10 +149,48 @@ def author_asset_paths(layer):
     )
 
 
+def author_value_types(layer):
+    prim = Sdf.PrimSpec(layer, "Values", Sdf.SpecifierDef)
+    T = Sdf.ValueTypeNames
+    for name, type_name, value in [
+        ("bool", T.Bool, True),
+        ("int", T.Int, -7),
+        ("uint", T.UInt, 4000000000),
+        ("int64", T.Int64, -9000000000),
+        ("uint64", T.UInt64, 9000000000000000000),
+        ("half", T.Half, 0.5),
+        ("float", T.Float, 0.1),
+        ("double", T.Double, 1e-300),
+        ("timecode", T.TimeCode, Sdf.TimeCode(3.5)),
+        ("matrix2d", T.Matrix2d, Gf.Matrix2d(1, 2, 3, 4)),
+        ("matrix3d", T.Matrix3d, Gf.Matrix3d(1)),
+        ("matrix4d", T.Matrix4d, Gf.Matrix4d(2)),
+        ("frame4d", T.Frame4d, Gf.Matrix4d(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)),
+        ("frame4dArray", T.Frame4dArray, [Gf.Matrix4d(3)]),
+        ("quath", T.Quath, Gf.Quath(1, 0, 0, 0)),
+        ("quatf", T.Quatf, Gf.Quatf(0.5, 0.5, 0.5, 0.5)),
+        ("quatd", T.Quatd, Gf.Quatd(0, 1, 0, 0)),
+        ("int3", T.Int3, Gf.Vec3i(1, 2, 3)),
+        ("half4", T.Half4, Gf.Vec4h(1, 2, 3, 4)),
+        ("point3f", T.Point3f, Gf.Vec3f(1, 2, 3)),
+        ("normal3d", T.Normal3d, Gf.Vec3d(0, 0, 1)),
+        ("color4f", T.Color4f, Gf.Vec4f(1, 0, 0, 1)),
+        ("texCoord3h", T.TexCoord3h, Gf.Vec3h(0, 1, 0)),
+        ("boolArray", T.BoolArray, [True, False]),
+        ("uintArray", T.UIntArray, [1, 4000000000]),
+        ("int64Array", T.Int64Array, [-1, 9000000000]),
+        ("timecodeArray", T.TimeCodeArray, [1, 2.5]),
+        ("tokenArray", T.TokenArray, ["x", "y"]),
+        ("pathExpression", T.PathExpression, Sdf.PathExpression("/a/b //c")),
+    ]:
+        attribute(prim, name, type_name, value)
+
+
 FIXTURES = {
     "strings": author_strings,
     "array_edits": author_array_edits,
     "asset_paths": author_asset_paths,
+    "value_types": author_value_types,
 }
 
 # Text that OpenUSD reads but would not write in this form: the `.usda` is

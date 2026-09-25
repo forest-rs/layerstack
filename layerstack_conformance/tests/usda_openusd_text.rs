@@ -114,6 +114,19 @@ fn asset_paths_read_as_openusd_wrote_them() {
     }
 }
 
+/// A value of each type reads as its USDC does; `frame4d` is a matrix.
+///
+/// Spec: AOUSD Core §6.3–§6.5 (value types and their roles).
+#[test]
+fn value_types_read_as_openusd_wrote_them() {
+    let mut layer = read_alike("value_types");
+    let frame: [f64; 16] = core::array::from_fn(|i| (i + 1) as f64);
+    assert_eq!(
+        default_value(&mut layer, "/Values.frame4d"),
+        Value::Matrix4d(Box::new(frame))
+    );
+}
+
 /// `half` literals round to nearest even through `float` and keep
 /// subnormals, as OpenUSD's reading of the same text does.
 ///

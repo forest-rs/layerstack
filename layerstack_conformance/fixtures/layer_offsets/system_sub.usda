@@ -1,0 +1,9 @@
+#usda 1.0
+
+# The parent of `/Probe`'s target references `/Orbit`, so `/System/Planet`
+# reaches `/Orbit/Planet` through this ancestral arc.
+over "System" (
+    references = @./orbit_system.usda@</Orbit> (offset = 1)
+)
+{
+}

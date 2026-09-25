@@ -1,0 +1,26 @@
+#usda 1.0
+
+# A reference authored in a sublayer with offset 10: 10 + (5 + t), for the
+# target and its namespace descendants.
+def "Comet" (
+    references = @./orbit.usda@</Orbit> (offset = 5)
+)
+{
+}
+
+# An internal reference authored in the same sublayer: its target is read
+# in this layer stack, where `timing.usda` has offset 4 and scale 2, so
+# this layer's offset does not apply.
+def "Echo" (
+    references = </Beacon>
+)
+{
+}
+
+# A class arc authored in the same sublayer reads `/_class_Flare` in this
+# layer stack too.
+def "Flare" (
+    inherits = </_class_Flare>
+)
+{
+}

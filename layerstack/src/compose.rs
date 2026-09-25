@@ -3031,6 +3031,13 @@ struct ArcStep {
     ///
     /// Spec: AOUSD Core §10.3.2.6.1.
     relocates: Option<Rc<LiftedSet>>,
+    /// For an arc authored on an ancestor of another arc's target (see
+    /// [`AncestralArcs`]), the arc as authored: the ancestor, in the
+    /// namespace of the site authoring the arc, and the arc's authored
+    /// target. The step reaches the authored target extended towards the
+    /// other target, but maps the paths outside that extension, such as a
+    /// class the target inherits, as the authored arc does.
+    ancestral: Option<(PathId, PathId)>,
 }
 
 /// Where interning an arc path has reached in a composed prim's graph: the
@@ -3232,6 +3239,15 @@ fn relocate_nodes(
 
 /// The relocations of the stage's layer stack and of the layer stacks the
 /// arcs `steps` reach, lifted into the stage namespace, strongest first.
+/// The authored target of `arc`, an arc of a target's ancestor retargeted
+/// `depth` names beneath it (see [`AncestralArcs`]).
+fn authored_target(store: &mut dyn LayerStore, arc: &Reference, depth: usize) -> Option<PathId> {
+    let target = arc.target_path(store)?;
+    let segments = store.paths().resolve(target).segments();
+    let authored = crate::path::Path::root().join(&segments[..segments.len().checked_sub(depth)?]);
+    Some(store.paths_mut().intern(authored))
+}
+
 fn outer_relocates<'a>(
     stage: &'a LiftedSet,
     steps: &'a [ArcStep],
@@ -3340,6 +3356,7 @@ fn local_variant_steps(layer_stack: LayerId, sites: &[VariantSelectionSite]) -> 
             offset_layers: Rc::from([]),
             skips_duplicates: false,
             relocates: None,
+            ancestral: None,
         })
         .collect()
 }
@@ -3356,6 +3373,9 @@ struct ArcParent<'a> {
     /// `true` when the arc, and every arc beneath it, skips a node that
     /// duplicates a site of the graph (see [`NodeArc::skips_duplicates`]).
     skips_duplicates: bool,
+    /// For an arc of a target's ancestor, the arc as authored (see
+    /// [`ArcStep::ancestral`]).
+    ancestral: Option<(PathId, PathId)>,
 }
 
 impl<'a> ArcParent<'a> {
@@ -3366,6 +3386,16 @@ impl<'a> ArcParent<'a> {
             implied: false,
             origin: None,
             skips_duplicates: false,
+            ancestral: None,
+        }
+    }
+
+    /// The same arc, authored on `ancestor` towards `target` (see
+    /// [`ArcStep::ancestral`]).
+    fn authored_on(self, ancestor: PathId, target: PathId) -> Self {
+        Self {
+            ancestral: Some((ancestor, target)),
+            ..self
         }
     }
 
@@ -3425,6 +3455,7 @@ impl<'a> ArcParent<'a> {
             implied: true,
             origin: Some(origin),
             skips_duplicates: false,
+            ancestral: None,
         }
     }
 }
@@ -3450,6 +3481,9 @@ struct Transfer {
     /// The relocations the arc maps the path through, and those above the
     /// site authoring it (see [`TransferRelocates`]).
     relocates: TransferRelocates,
+    /// The arc as authored, for an arc of a target's ancestor (see
+    /// [`ArcStep::ancestral`]).
+    ancestral: Option<(PathId, PathId)>,
 }
 
 /// The relocations lifted into the stage namespace that a class path
@@ -3589,7 +3623,15 @@ fn implied_classes(
     if !in_hierarchy {
         let outer = outer_namespace(parent);
         let relocates = TransferRelocates::new(stage_relocates, parent);
-        let mapped = map_across(store, outer, arc_dest, arc_target, &relocates, path);
+        let mapped = map_across(
+            store,
+            outer,
+            arc_dest,
+            arc_target,
+            &relocates,
+            step.ancestral,
+            path,
+        );
         let level = parent
             .iter()
             .rev()
@@ -3615,6 +3657,7 @@ fn implied_classes(
                     arc_dest,
                     arc_target,
                     relocates,
+                    ancestral: step.ancestral,
                 }],
             });
         }
@@ -3628,6 +3671,7 @@ fn implied_classes(
                     transfer.arc_dest,
                     transfer.arc_target,
                     &transfer.relocates,
+                    transfer.ancestral,
                     path,
                 )
             });
@@ -3703,6 +3747,7 @@ fn implied_step(
         offset_layers: host.offset_layers.clone(),
         skips_duplicates: false,
         relocates: None,
+        ancestral: None,
     }
 }
 
@@ -3741,8 +3786,23 @@ fn map_across(
     arc_dest: PathId,
     arc_target: PathId,
     relocates: &TransferRelocates,
+    ancestral: Option<(PathId, PathId)>,
     path: PathId,
 ) -> PathId {
+    // An arc of a target's ancestor maps as authored, from its authored
+    // target onto the ancestor, in the authoring site's namespace.
+    if let Some((ancestor, authored)) = ancestral {
+        let paths = store.paths();
+        let Some(rel) = paths
+            .resolve(path)
+            .strip_prefix(paths.resolve(authored))
+            .map(<[_]>::to_vec)
+        else {
+            return path;
+        };
+        let joined = paths.resolve(ancestor).join(&rel);
+        return store.paths_mut().intern(joined);
+    }
     let paths = store.paths();
     let Some(rel) = paths
         .resolve(path)
@@ -3798,6 +3858,7 @@ impl ArcNodes {
             implied: parent.implied,
             origin: parent.origin,
             skips_duplicates,
+            ancestral: parent.ancestral,
             ..step
         };
         Self {
@@ -3872,6 +3933,7 @@ impl ArcNodes {
             offset_layers: offset_layers.clone(),
             skips_duplicates,
             relocates: None,
+            ancestral: None,
         })
     }
 
@@ -4280,6 +4342,9 @@ impl AncestralArcs<'_> {
                 ) else {
                     continue;
                 };
+                let Some(authored) = authored_target(store, &reference.reference, rel.len()) else {
+                    continue;
+                };
                 let branch = nodes.branch_path(&sites);
                 add_reference_edge_opinions(
                     store,
@@ -4288,7 +4353,7 @@ impl AncestralArcs<'_> {
                     reference,
                     namespace_depth,
                     u16::try_from(index).unwrap_or(u16::MAX),
-                    self.parent(&branch),
+                    self.parent(&branch).authored_on(ancestor, authored),
                     out,
                     visited_refs,
                     visited_inherits,
@@ -4312,6 +4377,9 @@ impl AncestralArcs<'_> {
                 ) else {
                     continue;
                 };
+                let Some(authored) = authored_target(store, &payload.reference, rel.len()) else {
+                    continue;
+                };
                 let branch = nodes.branch_path(&sites);
                 add_payload_edge_opinions(
                     store,
@@ -4320,7 +4388,7 @@ impl AncestralArcs<'_> {
                     payload,
                     namespace_depth,
                     u16::try_from(index).unwrap_or(u16::MAX),
-                    self.parent(&branch),
+                    self.parent(&branch).authored_on(ancestor, authored),
                     out,
                     visited_refs,
                     visited_inherits,
@@ -4333,7 +4401,7 @@ impl AncestralArcs<'_> {
                 );
             }
             for (index, (class, sites)) in arcs.inherits.into_iter().enumerate() {
-                let class = mapped(store, class);
+                let (authored, class) = (class, mapped(store, class));
                 if used.contains(&(self.arc_stack, class)) {
                     continue;
                 }
@@ -4347,7 +4415,7 @@ impl AncestralArcs<'_> {
                     self.arc_stack,
                     namespace_depth,
                     u16::try_from(index).unwrap_or(u16::MAX),
-                    self.parent(&branch),
+                    self.parent(&branch).authored_on(ancestor, authored),
                     out,
                     visited_inherits,
                     visited_specializes,
@@ -4362,7 +4430,7 @@ impl AncestralArcs<'_> {
                 );
             }
             for (index, (specialized, sites)) in arcs.specializes.into_iter().enumerate() {
-                let specialized = mapped(store, specialized);
+                let (authored, specialized) = (specialized, mapped(store, specialized));
                 if used.contains(&(self.arc_stack, specialized)) {
                     continue;
                 }
@@ -4377,7 +4445,7 @@ impl AncestralArcs<'_> {
                     self.arc_stack,
                     namespace_depth,
                     index,
-                    self.parent(&branch),
+                    self.parent(&branch).authored_on(ancestor, authored),
                     out,
                     visited_specializes,
                     prim_order_out,
@@ -4416,6 +4484,7 @@ impl AncestralArcs<'_> {
             offset_layers: arc.offset_layers.clone(),
             skips_duplicates: arc.skips_duplicates,
             relocates: None,
+            ancestral: None,
         };
         let relocate_nodes = ArcNodes::new(
             ArcParent::nested(&nodes.path),
@@ -4648,6 +4717,7 @@ fn add_inherit_edge_opinions(
         offset_layers: parent.offset_layers(),
         skips_duplicates: false,
         relocates: None,
+        ancestral: None,
     };
     let stage_relocates = cycles.relocations().stage();
     let implied = implied_classes(
@@ -5423,6 +5493,7 @@ fn add_reference_edge_opinions(
             offset_layers,
             skips_duplicates: false,
             relocates,
+            ancestral: None,
         },
         cycles.relocations().stage(),
     );
@@ -6051,6 +6122,7 @@ fn add_payload_edge_opinions(
             offset_layers,
             skips_duplicates: false,
             relocates,
+            ancestral: None,
         },
         cycles.relocations().stage(),
     );
@@ -6576,6 +6648,7 @@ fn add_specializes_edge_opinions(
         offset_layers: parent.offset_layers(),
         skips_duplicates: false,
         relocates: None,
+        ancestral: None,
     };
     // The specializes implied into the next stronger layer stacks or
     // namespaces, with the node this arc is authored as (its placeholder,

@@ -1034,3 +1034,162 @@ fn variant_arc_matrix() {
         failed_cells.join("\n")
     );
 }
+
+/// A resolver for layers that author no external arcs.
+struct NoAssets;
+
+impl AssetResolver for NoAssets {
+    fn resolve(
+        &mut self,
+        _: &str,
+        _: Option<LayerId>,
+        _: &mut TokenInterner,
+        _: &mut PathInterner,
+    ) -> Result<ResolvedAsset, AssetResolveError> {
+        Err(AssetResolveError::NotFound)
+    }
+
+    fn resolved_path(&self, _: LayerId) -> Option<&str> {
+        None
+    }
+}
+
+/// Reads one nested-variant fixture file into a store.
+fn load_nested_variant_case(path: &std::path::Path) -> InMemoryStore {
+    let mut store = InMemoryStore::default();
+    let source = std::fs::read_to_string(path).expect("fixture");
+    let cst = parse_cst(&source);
+    assert!(cst.diagnostics.is_empty(), "{:?}", cst.diagnostics);
+    let ast = lower::lower(&cst.tree, &source);
+    assert!(ast.diagnostics.is_empty(), "{:?}", ast.diagnostics);
+    let layer = emit::emit(
+        &ast.layer,
+        LayerId(1),
+        &mut store.tokens,
+        &mut store.paths,
+        &mut NoAssets,
+    )
+    .layer;
+    store.insert_layer(layer);
+    store
+}
+
+/// Compares `/P/C` of one nested-variant fixture file with OpenUSD's result.
+fn nested_variant_case_failures(
+    path: &std::path::Path,
+    expected: &serde_json::Value,
+    attributes: &[String],
+) -> Vec<String> {
+    let mut store = load_nested_variant_case(path);
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let prim = {
+        let p = layerstack::Path::parse_absolute("/P/C", &mut store.tokens).expect("path");
+        store.paths.intern(p)
+    };
+    let mut failures = Vec::new();
+    let exists = expected["exists"].as_bool().expect("exists");
+    if stage.has_prim(prim) != exists {
+        failures.push(format!(
+            "exists: {}, expected {exists}",
+            stage.has_prim(prim)
+        ));
+    }
+    if !exists {
+        return failures;
+    }
+
+    let children: Vec<String> = stage
+        .children_of(prim)
+        .unwrap_or(&[])
+        .iter()
+        .map(|child| {
+            let leaf = store.paths.resolve(*child).leaf().expect("child name");
+            store.tokens.resolve(leaf).to_owned()
+        })
+        .collect();
+    let expected_children: Vec<String> = expected["children"]
+        .as_array()
+        .expect("children")
+        .iter()
+        .map(|name| name.as_str().expect("name").to_owned())
+        .collect();
+    if children != expected_children {
+        failures.push(format!(
+            "children {children:?}, expected {expected_children:?}"
+        ));
+    }
+
+    for name in attributes {
+        let property =
+            PropertyPath::parse(&format!("/P/C.{name}"), &mut store.tokens, &mut store.paths)
+                .expect("property path");
+        let actual = stage
+            .resolve_field_path(property)
+            .map(|resolved| resolved.value);
+        let wanted = match &expected["attributes"][name.as_str()] {
+            serde_json::Value::Null => None,
+            serde_json::Value::String(s) => Some(Value::string(s.as_str())),
+            serde_json::Value::Number(n) => Some(Value::Int(
+                i32::try_from(n.as_i64().expect("int")).expect("i32"),
+            )),
+            other => panic!("unexpected oracle value {other}"),
+        };
+        if actual != wanted {
+            failures.push(format!("{name} = {actual:?}, expected {wanted:?}"));
+        }
+    }
+    failures
+}
+
+/// Variant sets nested two and three levels deep in `/P`'s own branches,
+/// where different outer branches reuse the same inner branch names, read
+/// from the USDA fixtures.
+///
+/// Each innermost branch authors `/P/C` with one arc (reference, payload,
+/// inherit or specialize), an attribute and a child. Only the branch whose
+/// every enclosing selection is selected contributes: its arc, opinions and
+/// children, never those of a same-named inner branch under an unselected
+/// outer branch. The fixtures and OpenUSD 26.08's results come from
+/// `fixtures/nested_variants/generate.py`.
+///
+/// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set specs),
+/// §10.3.2.5 (only the selected variant contributes). OpenUSD adds a
+/// variant's arcs only beneath its variant node
+/// (`pxr/usd/pcp/primIndex.cpp`, `_AddVariantArc`).
+#[test]
+fn nested_variant_branches_sharing_inner_names_compose_like_openusd() {
+    let dir = layerstack_conformance::workspace_root()
+        .join("layerstack_conformance")
+        .join("fixtures")
+        .join("nested_variants");
+    let text = std::fs::read_to_string(dir.join("expected.json")).expect("expected.json");
+    let oracle: serde_json::Value = serde_json::from_str(&text).expect("expected.json parses");
+    let cases = oracle["cases"].as_object().expect("cases");
+    assert_eq!(cases.len(), 24, "two- and three-level cases for four arcs");
+
+    // Every attribute any case composes; each case must compose exactly its
+    // own and none of the others.
+    let mut attributes: Vec<String> = cases
+        .values()
+        .filter_map(|case| case["attributes"].as_object())
+        .flat_map(|attrs| attrs.keys().cloned())
+        .collect();
+    attributes.sort();
+    attributes.dedup();
+
+    let mut failures = Vec::new();
+    for (case, expected) in cases {
+        let path = dir.join(format!("{case}.usda"));
+        let case_failures = nested_variant_case_failures(&path, expected, &attributes);
+        if !case_failures.is_empty() {
+            failures.push(format!("{case}.usda: {}", case_failures.join("; ")));
+        }
+    }
+    assert!(
+        failures.is_empty(),
+        "{} of {} files differ from OpenUSD:\n{}",
+        failures.len(),
+        cases.len(),
+        failures.join("\n")
+    );
+}

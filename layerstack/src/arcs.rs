@@ -13,7 +13,9 @@ use alloc::vec::Vec;
 use hashbrown::HashMap;
 
 use crate::{
-    doc::{LayerStore, PrimSpec, Reference, ReferenceTarget, VariantSpec, default_prim_names},
+    doc::{
+        Layer, LayerStore, PrimSpec, Reference, ReferenceTarget, VariantSpec, default_prim_names,
+    },
     interner::TokenId,
     layer_stack::LayerStack,
     listop::{ListOp, resolve_list_chain},
@@ -70,16 +72,12 @@ pub(crate) enum SelectionScope<'a> {
 /// Returns `true` when the composition arcs and variant selections authored
 /// on `spec` (the spec stored at `prim` in a layer of `stack`) apply.
 ///
-/// USDA ingestion stores a prim introduced inside a variant branch under its
-/// namespace path, tagged with [`PrimSpec::outer_variant_sites`], and keeps a
-/// single branch's spec per path. For a direct child of the variant host,
-/// every branch's arcs and selections for that child are also recorded in the
-/// host's `VariantSpec::child_*` maps, which are resolved for the selected
-/// branch only; the namespace-keyed spec is just a copy of one branch and is
-/// ignored here, otherwise that branch's arcs would be followed whether or not
-/// it is selected. Deeper descendants have no such copy, so their arcs apply
-/// unless a different branch is selected at one of their hosts, as decided
-/// by `scope`.
+/// A prim authored inside a variant branch is stored under its namespace
+/// path, tagged with [`PrimSpec::outer_variant_sites`]. The specs of a direct
+/// child of the variant host (every site hosted on its parent) are resolved
+/// by [`push_branch_ops`] against the parent selections the caller passes in,
+/// so they are skipped here. Deeper descendants apply unless a different
+/// branch is selected at one of their hosts, as decided by `scope`.
 ///
 /// Spec: AOUSD Core §10.5 (only the selected variant contributes, including
 /// the arcs authored inside it); OpenUSD adds arcs only beneath the selected
@@ -122,11 +120,66 @@ pub(crate) fn spec_arcs_apply(
     })
 }
 
+/// Returns the parent of `prim`, if it has been interned.
+fn parent_of(store: &dyn LayerStore, prim: PathId) -> Option<PathId> {
+    store
+        .paths()
+        .resolve(prim)
+        .parent()
+        .and_then(|parent| store.paths().lookup(&parent))
+}
+
+/// Returns the path of `host`'s child named like `prim`, if it has been
+/// interned (a path never interned has no spec).
+fn child_of(store: &dyn LayerStore, host: PathId, prim: PathId) -> Option<PathId> {
+    let leaf = store.paths().resolve(prim).leaf()?;
+    store
+        .paths()
+        .lookup(&store.paths().resolve(host).join(&[leaf]))
+}
+
+/// Pushes the arcs (`arcs`) authored in `layer` for `child` inside the
+/// branches of `host` selected by `selections`: those of the prim specs at
+/// `/host{set=variant}child`, including those of variant sets nested in
+/// other branches of `host` (`/host{a=x}{b=y}child`).
+///
+/// Every branch enclosing a spec must be selected, not only its innermost
+/// one: outer branches may author the same inner branch name, and only the
+/// one under the selected outer branch contributes (see
+/// [`Layer::selected_branch_prim_specs`]). Specs that also lie in a branch
+/// hosted on another prim are resolved by [`spec_arcs_apply`], which checks
+/// every enclosing branch.
+///
+/// Spec: AOUSD Core §7.3.6 (variant specs contain prim specs), §10.3.2.5
+/// (only the selected variant contributes). OpenUSD composes the prim specs
+/// beneath the selected variant node only (`pxr/usd/pcp/primIndex.cpp`,
+/// `_AddVariantArc`).
+fn push_branch_ops<T: Clone>(
+    layer: &Layer,
+    host: PathId,
+    child: PathId,
+    selections: &HashMap<TokenId, TokenId>,
+    arcs: fn(&PrimSpec) -> &ListOp<T>,
+    ops: &mut Vec<ListOp<T>>,
+) {
+    ops.extend(
+        layer
+            .selected_branch_prim_specs(child, host, selections)
+            .filter(|spec| {
+                spec.outer_variant_sites
+                    .iter()
+                    .all(|site| site.host_path == host)
+            })
+            .map(|spec| arcs(spec).clone()),
+    );
+}
+
 /// Finishes an arc list for `scope`.
 ///
 /// For [`SelectionScope::Discover`], `ops` additionally receives the arcs of
-/// every variant branch of `prim` (`own`) and every branch of its parent that
-/// authors arcs for `prim` (`child`), and each list op is resolved on its own
+/// every variant branch of `prim` (`own`) and of every prim spec of `prim`
+/// inside a branch of its parent (`branch`), and each list op is resolved on
+/// its own
 /// and unioned: discovery must not let one branch's `explicit` list hide
 /// another branch's targets. Otherwise the ops are chained strongest-first.
 fn finish_arc_list<T: Clone + Eq>(
@@ -136,33 +189,29 @@ fn finish_arc_list<T: Clone + Eq>(
     mut ops: Vec<ListOp<T>>,
     scope: SelectionScope<'_>,
     own: fn(&VariantSpec) -> &ListOp<T>,
-    child: fn(&VariantSpec, TokenId) -> Option<&ListOp<T>>,
+    branch: fn(&PrimSpec) -> &ListOp<T>,
 ) -> Vec<T> {
     if !matches!(scope, SelectionScope::Discover) {
         return resolve_list_chain::<T>(&[], ops);
     }
-    let path = store.paths().resolve(prim);
-    let parent = path
-        .parent()
-        .and_then(|parent| store.paths().lookup(&parent));
-    let leaf = path.leaf();
+    let parent = parent_of(store, prim);
     for layer in stack.layers.iter().filter_map(|id| store.layer(*id)) {
         if let Some(spec) = layer.prims.get(&prim) {
             for set_spec in spec.variant_sets.values() {
                 ops.extend(set_spec.variants.values().map(|v| own(v).clone()));
             }
         }
-        if let (Some(parent), Some(leaf)) = (parent, leaf)
-            && let Some(parent_spec) = layer.prims.get(&parent)
-        {
-            for set_spec in parent_spec.variant_sets.values() {
-                ops.extend(
-                    set_spec
-                        .variants
-                        .values()
-                        .filter_map(|v| child(v, leaf).cloned()),
-                );
-            }
+        if let Some(parent) = parent {
+            ops.extend(
+                layer
+                    .prim_specs(prim)
+                    .filter(|spec| {
+                        spec.outer_variant_sites
+                            .last()
+                            .is_some_and(|site| site.host_path == parent)
+                    })
+                    .map(|spec| branch(spec).clone()),
+            );
         }
     }
     let mut all = Vec::new();
@@ -258,26 +307,16 @@ pub(crate) fn resolve_inherits_for_prim_in(
         }
     }
 
-    let leaf = store.paths().resolve(prim).leaf();
-    let parent = store.paths().resolve(prim).parent();
-    if let (Some(leaf), Some(parent)) = (leaf, parent)
-        && let Some(parent_id) = store.paths().lookup(&parent)
-    {
-        for layer_id in &local_stack.layers {
-            let Some(layer) = store.layer(*layer_id) else {
-                continue;
-            };
-            let Some(parent_spec) = layer.prims.get(&parent_id) else {
-                continue;
-            };
-            for (set_tok, selected_variant) in parent_selections {
-                if let Some(set_spec) = parent_spec.variant_sets.get(set_tok)
-                    && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                    && let Some(child_inherits) = variant_spec.child_inherits.get(&leaf)
-                {
-                    ops.push(child_inherits.clone());
-                }
-            }
+    if let Some(parent_id) = parent_of(store, prim) {
+        for layer in local_stack.layers.iter().filter_map(|id| store.layer(*id)) {
+            push_branch_ops(
+                layer,
+                parent_id,
+                prim,
+                parent_selections,
+                |spec| &spec.inherits,
+                &mut ops,
+            );
         }
     }
 
@@ -288,7 +327,7 @@ pub(crate) fn resolve_inherits_for_prim_in(
         ops,
         scope,
         |v| &v.inherits,
-        |v, leaf| v.child_inherits.get(&leaf),
+        |spec| &spec.inherits,
     )
 }
 
@@ -383,28 +422,18 @@ pub(crate) fn resolve_references_for_prim(
         }
     }
 
-    // Also check parent's variant specs for child references.
-    let leaf = store.paths().resolve(prim).leaf();
-    let parent = store.paths().resolve(prim).parent();
-    if let (Some(leaf), Some(parent)) = (leaf, parent)
-        && let Some(parent_id) = store.paths().lookup(&parent)
-    {
+    // Also check the prim's specs inside its parent's selected branches.
+    if let Some(parent_id) = parent_of(store, prim) {
         let parent_selections = resolve_variant_selections_for_prim(store, local_stack, parent_id);
-        for layer_id in &local_stack.layers {
-            let Some(layer) = store.layer(*layer_id) else {
-                continue;
-            };
-            let Some(parent_spec) = layer.prims.get(&parent_id) else {
-                continue;
-            };
-            for (set_tok, selected_variant) in &parent_selections {
-                if let Some(set_spec) = parent_spec.variant_sets.get(set_tok)
-                    && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                    && let Some(child_refs) = variant_spec.child_references.get(&leaf)
-                {
-                    ops.push(child_refs.clone());
-                }
-            }
+        for layer in local_stack.layers.iter().filter_map(|id| store.layer(*id)) {
+            push_branch_ops(
+                layer,
+                parent_id,
+                prim,
+                &parent_selections,
+                |spec| &spec.references,
+                &mut ops,
+            );
         }
     }
 
@@ -415,12 +444,12 @@ pub(crate) fn resolve_references_for_prim(
         ops,
         scope,
         |v| &v.references,
-        |v, leaf| v.child_references.get(&leaf),
+        |spec| &spec.references,
     )
 }
 
 /// Resolves the references authored for `prim` inside its parent's variant
-/// branches (`VariantSpec::child_references`) and on `prim`'s own variant
+/// branches (the prim specs at `/parent{set=variant}prim`) and on `prim`'s own variant
 /// branch headers, for the given selections of the parent's and `prim`'s
 /// variant sets. Specs come from `data_stack` (and, for child references,
 /// also from the parent's inherit targets).
@@ -438,28 +467,22 @@ pub(crate) fn resolve_variant_references_in(
     parent_selections: &HashMap<TokenId, TokenId>,
 ) -> Vec<Reference> {
     let mut ops = Vec::new();
-    let path = store.paths().resolve(prim);
-    if let (Some(leaf), Some(parent)) = (path.leaf(), path.parent())
-        && let Some(parent_id) = store.paths().lookup(&parent)
-    {
+    if let Some(parent_id) = parent_of(store, prim) {
         let inherits =
             resolve_inherits_for_prim(store, data_stack, parent_id, SelectionScope::Stack);
         for check_path in core::iter::once(parent_id).chain(inherits) {
-            for layer_id in &data_stack.layers {
-                let Some(spec) = store
-                    .layer(*layer_id)
-                    .and_then(|layer| layer.prims.get(&check_path))
-                else {
-                    continue;
-                };
-                for (set_tok, selected_variant) in parent_selections {
-                    if let Some(set_spec) = spec.variant_sets.get(set_tok)
-                        && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                        && let Some(child_refs) = variant_spec.child_references.get(&leaf)
-                    {
-                        ops.push(child_refs.clone());
-                    }
-                }
+            let Some(child) = child_of(store, check_path, prim) else {
+                continue;
+            };
+            for layer in data_stack.layers.iter().filter_map(|id| store.layer(*id)) {
+                push_branch_ops(
+                    layer,
+                    check_path,
+                    child,
+                    parent_selections,
+                    |spec| &spec.references,
+                    &mut ops,
+                );
             }
         }
     }
@@ -527,12 +550,7 @@ pub(crate) fn resolve_variant_child_references(
     selections_stack: &LayerStack,
     prim: PathId,
 ) -> Vec<Reference> {
-    let leaf = store.paths().resolve(prim).leaf();
-    let parent = store.paths().resolve(prim).parent();
-    let (Some(leaf), Some(parent)) = (leaf, parent) else {
-        return Vec::new();
-    };
-    let Some(parent_id) = store.paths().lookup(&parent) else {
+    let Some(parent_id) = parent_of(store, prim) else {
         return Vec::new();
     };
 
@@ -592,23 +610,20 @@ pub(crate) fn resolve_variant_child_references(
     }
 
     let mut ops = Vec::new();
-    // Check variant sets from parent and its inherit targets.
+    // Check the branches of the parent and of its inherit targets.
     for &check_path in &check_paths {
-        for layer_id in &data_stack.layers {
-            let Some(layer) = store.layer(*layer_id) else {
-                continue;
-            };
-            let Some(spec) = layer.prims.get(&check_path) else {
-                continue;
-            };
-            for (set_tok, selected_variant) in &parent_selections {
-                if let Some(set_spec) = spec.variant_sets.get(set_tok)
-                    && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                    && let Some(child_refs) = variant_spec.child_references.get(&leaf)
-                {
-                    ops.push(child_refs.clone());
-                }
-            }
+        let Some(child) = child_of(store, check_path, prim) else {
+            continue;
+        };
+        for layer in data_stack.layers.iter().filter_map(|id| store.layer(*id)) {
+            push_branch_ops(
+                layer,
+                check_path,
+                child,
+                &parent_selections,
+                |spec| &spec.references,
+                &mut ops,
+            );
         }
     }
 
@@ -626,29 +641,22 @@ pub(crate) fn collect_all_variant_child_references(
     local_stack: &LayerStack,
     prim: PathId,
 ) -> Vec<Reference> {
-    let leaf = store.paths().resolve(prim).leaf();
-    let parent = store.paths().resolve(prim).parent();
-    let (Some(leaf), Some(parent)) = (leaf, parent) else {
-        return Vec::new();
-    };
-    let Some(parent_id) = store.paths().lookup(&parent) else {
+    let Some(parent_id) = parent_of(store, prim) else {
         return Vec::new();
     };
 
     let mut all_refs = Vec::new();
-    for layer_id in &local_stack.layers {
-        let Some(layer) = store.layer(*layer_id) else {
-            continue;
-        };
-        let Some(parent_spec) = layer.prims.get(&parent_id) else {
-            continue;
-        };
-        for (_set_tok, set_spec) in &parent_spec.variant_sets {
-            for (_variant_tok, variant_spec) in &set_spec.variants {
-                if let Some(child_refs) = variant_spec.child_references.get(&leaf) {
-                    let refs = resolve_list_chain::<Reference>(&[], [child_refs.clone()]);
-                    all_refs.extend(refs);
-                }
+    for layer in local_stack.layers.iter().filter_map(|id| store.layer(*id)) {
+        for spec in layer.prim_specs(prim) {
+            if spec
+                .outer_variant_sites
+                .last()
+                .is_some_and(|site| site.host_path == parent_id)
+            {
+                all_refs.extend(resolve_list_chain::<Reference>(
+                    &[],
+                    [spec.references.clone()],
+                ));
             }
         }
     }
@@ -863,26 +871,16 @@ pub(crate) fn resolve_specializes_for_prim_in(
         }
     }
 
-    let leaf = store.paths().resolve(prim).leaf();
-    let parent = store.paths().resolve(prim).parent();
-    if let (Some(leaf), Some(parent)) = (leaf, parent)
-        && let Some(parent_id) = store.paths().lookup(&parent)
-    {
-        for layer_id in &local_stack.layers {
-            let Some(layer) = store.layer(*layer_id) else {
-                continue;
-            };
-            let Some(parent_spec) = layer.prims.get(&parent_id) else {
-                continue;
-            };
-            for (set_tok, selected_variant) in parent_selections {
-                if let Some(set_spec) = parent_spec.variant_sets.get(set_tok)
-                    && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                    && let Some(child_specializes) = variant_spec.child_specializes.get(&leaf)
-                {
-                    ops.push(child_specializes.clone());
-                }
-            }
+    if let Some(parent_id) = parent_of(store, prim) {
+        for layer in local_stack.layers.iter().filter_map(|id| store.layer(*id)) {
+            push_branch_ops(
+                layer,
+                parent_id,
+                prim,
+                parent_selections,
+                |spec| &spec.specializes,
+                &mut ops,
+            );
         }
     }
 
@@ -893,7 +891,7 @@ pub(crate) fn resolve_specializes_for_prim_in(
         ops,
         scope,
         |v| &v.specializes,
-        |v, leaf| v.child_specializes.get(&leaf),
+        |spec| &spec.specializes,
     )
 }
 
@@ -933,26 +931,16 @@ pub(crate) fn resolve_payloads_for_prim_in(
         ops.push(spec.payloads.clone());
     }
 
-    let leaf = store.paths().resolve(prim).leaf();
-    let parent = store.paths().resolve(prim).parent();
-    if let (Some(leaf), Some(parent)) = (leaf, parent)
-        && let Some(parent_id) = store.paths().lookup(&parent)
-    {
-        for layer_id in &local_stack.layers {
-            let Some(layer) = store.layer(*layer_id) else {
-                continue;
-            };
-            let Some(parent_spec) = layer.prims.get(&parent_id) else {
-                continue;
-            };
-            for (set_tok, selected_variant) in parent_selections {
-                if let Some(set_spec) = parent_spec.variant_sets.get(set_tok)
-                    && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                    && let Some(child_payloads) = variant_spec.child_payloads.get(&leaf)
-                {
-                    ops.push(child_payloads.clone());
-                }
-            }
+    if let Some(parent_id) = parent_of(store, prim) {
+        for layer in local_stack.layers.iter().filter_map(|id| store.layer(*id)) {
+            push_branch_ops(
+                layer,
+                parent_id,
+                prim,
+                parent_selections,
+                |spec| &spec.payloads,
+                &mut ops,
+            );
         }
     }
 
@@ -963,6 +951,6 @@ pub(crate) fn resolve_payloads_for_prim_in(
         ops,
         scope,
         |v| &v.payloads,
-        |v, leaf| v.child_payloads.get(&leaf),
+        |spec| &spec.payloads,
     )
 }

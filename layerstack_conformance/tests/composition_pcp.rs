@@ -1039,23 +1039,15 @@ fn composes(load: fn(&str) -> (LoadedStage, PathBuf), name: &str) -> Result<(), 
 }
 
 /// Fixtures that compose differently from their crate files, because the
-/// USDC assembler places prims authored inside variants
-/// (`/Prim{set=variant}Child`) as prim specs of their variant branch, but
-/// does not also fill the variant's `child_*` opinion maps (the references,
-/// inherits, children, fields and variant selections of those prims) that
-/// the USDA emitter fills and composition still reads.
-const VARIANT_CHILD_OPINIONS_NOT_ASSEMBLED: &[&str] = &[
-    "BasicNestedVariantsWithSameName_root",
-    "BasicNestedVariants_root",
-    "BasicVariantWithReference_root",
-    "TrickyInheritsInVariants_root",
-    "TrickyVariantWeakerSelection4_root",
-    "TypicalReferenceToChargroup_root",
-];
+/// USDC assembler does not read variant set and variant specs nested in a
+/// variant branch (`/Prim{a=x}{b=}`, `/Prim{a=x}Child{b=y}`), which the USDA
+/// emitter reads.
+const NESTED_VARIANTS_NOT_ASSEMBLED: &[&str] =
+    &["BasicNestedVariants_root", "TrickyNestedVariants_root"];
 
 /// Every fixture whose layers are all crate files composes from them as it
 /// does from its `usda` copies, except for those listed in
-/// [`VARIANT_CHILD_OPINIONS_NOT_ASSEMBLED`]. The list must stay exact, so a fix
+/// [`NESTED_VARIANTS_NOT_ASSEMBLED`]. The list must stay exact, so a fix
 /// removes its fixtures from it.
 ///
 /// Composition reports a mismatch by panicking, so the test catches panics
@@ -1096,7 +1088,7 @@ fn crate_fixtures_compose_like_their_usda_copies() {
     let differing: Vec<&str> = differences.iter().map(|(name, _)| *name).collect();
     assert_eq!(
         differing,
-        VARIANT_CHILD_OPINIONS_NOT_ASSEMBLED,
+        NESTED_VARIANTS_NOT_ASSEMBLED,
         "fixtures composing differently from crate files:\n{}",
         differences
             .iter()

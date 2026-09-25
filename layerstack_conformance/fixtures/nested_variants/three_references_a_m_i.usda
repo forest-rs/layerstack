@@ -1,0 +1,109 @@
+#usda 1.0
+def "T_a_m_i"
+{
+    int x_a_m_i = 1
+}
+def "T_a_n_i"
+{
+    int x_a_n_i = 1
+}
+def "T_b_m_i"
+{
+    int x_b_m_i = 1
+}
+def "T_b_n_i"
+{
+    int x_b_n_i = 1
+}
+def "P" (
+    prepend variantSets = "outer"
+    variants = {
+        string outer = "a"
+        string mid = "m"
+        string inner = "i"
+    }
+)
+{
+    variantSet "outer" = {
+        "a" (
+            prepend variantSets = "mid"
+        ) {
+            variantSet "mid" = {
+                "m" (
+                    prepend variantSets = "inner"
+                ) {
+                    variantSet "inner" = {
+                        "i" {
+                            def "C" (
+                                references = </T_a_m_i>
+                            )
+                            {
+                                string from = "a_m_i"
+                                def "G_a_m_i"
+                                {
+                                }
+                            }
+                        }
+                    }
+                }
+                "n" (
+                    prepend variantSets = "inner"
+                ) {
+                    variantSet "inner" = {
+                        "i" {
+                            def "C" (
+                                references = </T_a_n_i>
+                            )
+                            {
+                                string from = "a_n_i"
+                                def "G_a_n_i"
+                                {
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        "b" (
+            prepend variantSets = "mid"
+        ) {
+            variantSet "mid" = {
+                "m" (
+                    prepend variantSets = "inner"
+                ) {
+                    variantSet "inner" = {
+                        "i" {
+                            def "C" (
+                                references = </T_b_m_i>
+                            )
+                            {
+                                string from = "b_m_i"
+                                def "G_b_m_i"
+                                {
+                                }
+                            }
+                        }
+                    }
+                }
+                "n" (
+                    prepend variantSets = "inner"
+                ) {
+                    variantSet "inner" = {
+                        "i" {
+                            def "C" (
+                                references = </T_b_n_i>
+                            )
+                            {
+                                string from = "b_n_i"
+                                def "G_b_n_i"
+                                {
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

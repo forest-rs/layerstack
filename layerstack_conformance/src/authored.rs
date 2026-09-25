@@ -252,25 +252,6 @@ fn render_variant(out: &mut Vec<String>, indent: &str, variant: &VariantSpec, na
         [&variant.inherits, &variant.specializes],
         names,
     );
-    let mut children: Vec<_> = variant.child_fields.keys().collect();
-    children.extend(variant.child_properties.keys());
-    children.sort_by_key(|t| names.token(**t));
-    children.dedup();
-    for child in children {
-        out.push(format!("{indent}child {}", names.token(*child)));
-        let inner = format!("{indent}    ");
-        render_prim_like(
-            out,
-            &inner,
-            variant.child_fields.get(child).map_or(&[], Vec::as_slice),
-            variant
-                .child_properties
-                .get(child)
-                .map_or(&[], Vec::as_slice),
-            None,
-            names,
-        );
-    }
 }
 
 fn render_prim(out: &mut Vec<String>, path: PathId, spec: &PrimSpec, names: Names<'_>) {

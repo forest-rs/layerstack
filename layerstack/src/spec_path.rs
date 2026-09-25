@@ -256,6 +256,15 @@ impl SpecPath {
         &self.components
     }
 
+    /// Returns a copy of this path without its property suffix: the prim
+    /// spec that authors the property.
+    #[must_use]
+    pub(crate) fn prim_spec(&self) -> Self {
+        let mut out = self.clone();
+        out.property = None;
+        out
+    }
+
     /// Returns a copy of this path with a property suffix attached.
     #[must_use]
     pub fn with_property(&self, property: TokenId) -> Self {

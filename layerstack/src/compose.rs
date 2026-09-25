@@ -180,6 +180,7 @@ pub(crate) fn compose_stage(
                 namespace_depth,
                 sibling_index: 0,
                 implied: false,
+                copied: false,
                 strength: NodeStrength::local(namespace_depth),
             };
             (path, PrimIndex::new(PrimIndexGraph::new(root_node)))
@@ -247,6 +248,7 @@ pub(crate) fn compose_stage(
     );
 
     for prim in prims.values_mut() {
+        drop_reached_copies(prim);
         prim.finalize();
     }
 
@@ -288,6 +290,64 @@ pub(crate) fn compose_stage(
         .collect();
     Stage::from_parts(prims, children, options.with_provenance, dependencies)
         .with_composition_errors(errors)
+}
+
+/// Drops the registrations the late copy (see `Forwarding`) made of sites
+/// the prim already registers, wherever that leaves the order of its sites
+/// unchanged: a copy ranked after a kept registration of its site, and a
+/// copy the next registration of its site follows directly. A copy that
+/// ranks its site above the expansion's own registration, with other sites
+/// between them, stays.
+fn drop_reached_copies(prim: &mut PrimIndex) {
+    let registration = |key: &OpinionKey| OpinionKey {
+        spec_path: key.spec_path.prim_spec(),
+        ..key.clone()
+    };
+    let dropped: HashSet<OpinionKey> = {
+        let graph = &prim.graph;
+        let copied = |node: NodeId| graph.node(node).is_some_and(|node| node.arc.copied);
+        let mut sources: Vec<&OpinionKey> = prim.sources.iter().collect();
+        sources.sort_by(|a, b| graph.cmp_keys(a, b));
+        sources.dedup();
+        let same_site =
+            |a: &OpinionKey, b: &OpinionKey| a.layer_id == b.layer_id && a.spec_path == b.spec_path;
+        let mut kept: HashSet<(LayerId, &SpecPath)> = HashSet::new();
+        let mut dropped = HashSet::new();
+        for (index, key) in sources.iter().enumerate() {
+            let site = (key.layer_id, &key.spec_path);
+            if !copied(key.node) {
+                kept.insert(site);
+                continue;
+            }
+            // A copy weaker than a kept registration of its site, or one
+            // the next registration of its site follows with no other site
+            // between, does not change the order of the prim's sites.
+            let adjacent = sources
+                .get(index + 1)
+                .is_some_and(|next| same_site(key, next));
+            if kept.contains(&site) || adjacent {
+                dropped.insert((*key).clone());
+            } else {
+                kept.insert(site);
+            }
+        }
+        dropped
+    };
+    let graph = &prim.graph;
+    let copied = |node: NodeId| graph.node(node).is_some_and(|node| node.arc.copied);
+    let mut seen = HashSet::new();
+    prim.sources
+        .retain(|key| !copied(key.node) || (!dropped.contains(key) && seen.insert(key.clone())));
+    for opinions in prim.opinions_by_field.values_mut() {
+        let mut seen = HashSet::new();
+        opinions.retain(|opinion| {
+            !copied(opinion.key.node)
+                || (!dropped.contains(&registration(&opinion.key))
+                    && seen.insert(opinion.key.clone()))
+        });
+    }
+    prim.opinions_by_field
+        .retain(|_, opinions| !opinions.is_empty());
 }
 
 /// Removes populated prims whose prim index holds no spec, together with
@@ -2776,6 +2836,7 @@ impl ArcStep {
             namespace_depth,
             sibling_index: self.sibling_index,
             implied: self.implied,
+            copied: false,
             strength,
         })
     }
@@ -3065,14 +3126,23 @@ type PendingOpinion = (
     NodeId,
 );
 
-/// How an arc forwards the opinions already composed for its target prim
-/// to its destination prim.
+/// How an arc copies the opinions already composed for the stage prim at
+/// its target path to its destination prim.
 ///
-// TODO(graph): DuplicateSources. This late copy grafts the whole graph of
-// the stage prim at the arc's target path beneath the arc's node, so sites
-// the arc's own expansion already added are registered again under a
-// different strength. OpenUSD builds an arc's target subgraph once, with the
-// arc's node as its root (`_AddArc` in `pxr/usd/pcp/primIndex.cpp`).
+/// The arc's own expansion reads its target's specs and follows the arcs
+/// authored there, which builds the target's subgraph once beneath the
+/// arc's node, as OpenUSD does (`_AddArc` in `pxr/usd/pcp/primIndex.cpp`).
+/// The copy grafts that stage prim's graph beneath the arc's node as well,
+/// and [`drop_reached_copies`] drops every copied registration of a site the
+/// expansion reaches, so the copy keeps only what the expansion misses.
+///
+// TODO(graph): AncestralArcs, ImpliedClasses, NestedArcDepth. The expansion
+// misses the arcs authored on a subroot target's namespace ancestors and the
+// classes implied into the layer stacks between a class arc and the root,
+// which the copy supplies from the stage prim's index; and where a flat
+// strength key ranks a nested arc's target above its own node, a copied
+// registration that ranks a site more strongly keeps the resolved order.
+// Retire the copy once the graph covers these.
 struct Forwarding<'a> {
     /// Specializes nodes the forwarding arc is expanded in.
     specializes: &'a [SpecializesOrigin],
@@ -3131,6 +3201,75 @@ impl Forwarding<'_> {
         }
     }
 
+    /// Copies into each destination of `mapping` the sources and opinions
+    /// already composed for the stage prim at its source path, beneath the
+    /// forwarding arc's node. [`drop_reached_copies`] later drops the copies
+    /// of sites the arc's own expansion reaches.
+    fn copy_composed(
+        &self,
+        store: &mut dyn LayerStore,
+        out: &mut HashMap<PathId, PrimIndex>,
+        cycles: &CycleDetector,
+        nodes: &mut ArcNodes,
+        mapping: &[(PathId, PathId)],
+        provenance_remap: Option<(PathId, PathId)>,
+    ) {
+        for &(remote, dest) in mapping {
+            let Some(src_index) = out.get(&remote).cloned() else {
+                continue;
+            };
+            // Local opinions of the target are the expansion's own, and a
+            // copy must not carry `dest` back into its own namespace.
+            let copies = |key: &OpinionKey, store: &dyn LayerStore| {
+                src_index.graph.strength(key.node).arc_kind != ArcKind::Local
+                    && !cycles.copies_cycle(
+                        store.paths(),
+                        dest,
+                        key.layer_id,
+                        key.spec_path.prim_path(),
+                    )
+            };
+            let mut graft = self.graft(&src_index.graph, remote, dest);
+            for source in &src_index.sources {
+                if !copies(source, store) {
+                    continue;
+                }
+                let key = OpinionKey {
+                    node: graft.node(store, out, nodes, source.node),
+                    spec_path: normalize_forwarded_spec_path(
+                        store,
+                        &source.spec_path,
+                        provenance_remap,
+                    ),
+                    ..source.clone()
+                };
+                out.get_mut(&dest).expect("path exists").add_source(key);
+            }
+            for opinion in src_index.opinions_by_field.values().flatten() {
+                if !copies(&opinion.key, store) {
+                    continue;
+                }
+                let key = OpinionKey {
+                    node: graft.node(store, out, nodes, opinion.key.node),
+                    spec_path: normalize_forwarded_spec_path(
+                        store,
+                        &opinion.key.spec_path,
+                        provenance_remap,
+                    ),
+                    ..opinion.key.clone()
+                };
+                out.get_mut(&dest)
+                    .expect("path exists")
+                    .add_opinion(Opinion {
+                        key,
+                        field: opinion.field,
+                        value: opinion.value.clone(),
+                        layer_offset: opinion.layer_offset,
+                    });
+            }
+        }
+    }
+
     /// Grafts the target prim `remote`'s graph `source` beneath the
     /// forwarding arc's node in the graph of `dest`.
     fn graft<'g>(&'g self, source: &'g PrimIndexGraph, remote: PathId, dest: PathId) -> Graft<'g> {
@@ -3185,6 +3324,7 @@ impl Graft<'_> {
             Some(parent) => self.node(store, out, nodes, parent),
         };
         let arc = NodeArc {
+            copied: true,
             strength: self
                 .forwarding
                 .strength(store, &source.arc.strength, self.remote, self.dest),
@@ -3524,81 +3664,6 @@ fn add_inherit_edge_opinions(
         }
     }
 
-    // Propagate already-accumulated PrimIndex sources from mapped source
-    // paths to dest paths. This handles cases where the source path has
-    // opinions from other composition arcs (e.g., references) that were
-    // added by earlier processing. Without this, opinions from layers using
-    // different namespace roots (as in reference contexts) would be missed.
-    let forwarding = Forwarding {
-        specializes,
-        arc_kind,
-        nested_arc_kind: None,
-        namespace_depth,
-        arc_list_index,
-    };
-    for &(remote_path_id, dest_path_id) in &mapping {
-        let src_index = out.get(&remote_path_id).cloned();
-        if let Some(src_index) = src_index {
-            let mut graft = forwarding.graft(&src_index.graph, remote_path_id, dest_path_id);
-            for source in &src_index.sources {
-                if cycles.copies_cycle(
-                    store.paths(),
-                    dest_path_id,
-                    source.layer_id,
-                    source.spec_path.prim_path(),
-                ) {
-                    continue;
-                }
-                if src_index.graph.strength(source.node).arc_kind == ArcKind::Local {
-                    continue;
-                }
-                let spec_path =
-                    normalize_forwarded_spec_path(store, &source.spec_path, provenance_remap);
-                let key = OpinionKey {
-                    node: graft.node(store, out, &mut nodes, source.node),
-                    spec_path,
-                    ..source.clone()
-                };
-                out.get_mut(&dest_path_id)
-                    .expect("path exists")
-                    .add_source(key);
-            }
-            for opinions in src_index.opinions_by_field.values() {
-                for opinion in opinions {
-                    if cycles.copies_cycle(
-                        store.paths(),
-                        dest_path_id,
-                        opinion.key.layer_id,
-                        opinion.key.spec_path.prim_path(),
-                    ) {
-                        continue;
-                    }
-                    if src_index.graph.strength(opinion.key.node).arc_kind == ArcKind::Local {
-                        continue;
-                    }
-                    let spec_path = normalize_forwarded_spec_path(
-                        store,
-                        &opinion.key.spec_path,
-                        provenance_remap,
-                    );
-                    let node = graft.node(store, out, &mut nodes, opinion.key.node);
-                    out.get_mut(&dest_path_id)
-                        .expect("path exists")
-                        .add_opinion(Opinion {
-                            key: OpinionKey {
-                                node,
-                                spec_path,
-                                ..opinion.key.clone()
-                            },
-                            field: opinion.field,
-                            value: opinion.value.clone(),
-                            layer_offset: opinion.layer_offset,
-                        });
-                }
-            }
-        }
-    }
-
     for &(remote_path_id, dest_path_id) in &mapping {
         let AdmittedArcs {
             inherits: nested_inherits,
@@ -3895,83 +3960,17 @@ fn add_inherit_edge_opinions(
         }
     }
 
-    // Propagate opinions for paths that exist in the PrimIndex (from reference
-    // expansion) but not in any layer's PrimSpec. These are reference-introduced
-    // children of the inherited source that need to be mapped to the destination.
-    let mapping_set: HashSet<PathId> = mapping.iter().map(|(r, _)| *r).collect();
-    let all_out_paths: Vec<PathId> = out.keys().copied().collect();
-    for src_path_id in all_out_paths {
-        if mapping_set.contains(&src_path_id) || is_at_or_under(store, src_path_id, &unselected) {
-            continue;
-        }
-        let rel: Vec<_> = {
-            let src_path = store.paths().resolve(src_path_id);
-            let Some(rel) = src_path.strip_prefix(&inherited_path) else {
-                continue;
-            };
-            if rel.is_empty() {
-                continue;
-            }
-            rel.to_vec()
-        };
-        let dest_path_id = store.paths_mut().intern(base_path.join(&rel));
-        if !out.contains_key(&dest_path_id) {
-            continue;
-        }
+    // What the class's composed index holds beyond this expansion (see
+    // `Forwarding`).
+    let forwarding = Forwarding {
+        specializes,
+        arc_kind,
+        nested_arc_kind: None,
+        namespace_depth,
+        arc_list_index,
+    };
+    forwarding.copy_composed(store, out, cycles, &mut nodes, &mapping, provenance_remap);
 
-        // Copy sources and opinions from the source PrimIndex entry.
-        let src_index = out.get(&src_path_id).cloned();
-        if let Some(src_index) = src_index {
-            let mut graft = forwarding.graft(&src_index.graph, src_path_id, dest_path_id);
-            for source in &src_index.sources {
-                if cycles.copies_cycle(
-                    store.paths(),
-                    dest_path_id,
-                    source.layer_id,
-                    source.spec_path.prim_path(),
-                ) {
-                    continue;
-                }
-                let spec_path =
-                    remap_spec_path(store, &source.spec_path, &base_path, &inherited_path);
-                let key = OpinionKey {
-                    node: graft.node(store, out, &mut nodes, source.node),
-                    spec_path,
-                    ..source.clone()
-                };
-                out.get_mut(&dest_path_id)
-                    .expect("path exists")
-                    .add_source(key);
-            }
-            for opinions in src_index.opinions_by_field.values() {
-                for opinion in opinions {
-                    if cycles.copies_cycle(
-                        store.paths(),
-                        dest_path_id,
-                        opinion.key.layer_id,
-                        opinion.key.spec_path.prim_path(),
-                    ) {
-                        continue;
-                    }
-                    let spec_path =
-                        remap_spec_path(store, &opinion.key.spec_path, &base_path, &inherited_path);
-                    let node = graft.node(store, out, &mut nodes, opinion.key.node);
-                    out.get_mut(&dest_path_id)
-                        .expect("path exists")
-                        .add_opinion(Opinion {
-                            key: OpinionKey {
-                                node,
-                                spec_path,
-                                ..opinion.key.clone()
-                            },
-                            field: opinion.field,
-                            value: opinion.value.clone(),
-                            layer_offset: opinion.layer_offset,
-                        });
-                }
-            }
-        }
-    }
     cycles.exit();
 }
 
@@ -4669,9 +4668,8 @@ fn add_reference_edge_opinions(
         }
     }
 
-    // Late-copy accumulated sources after nested arc expansion. This lets
-    // descendant paths pick up weaker opinions introduced while composing the
-    // referenced namespace itself.
+    // What the target's composed index holds beyond this expansion (see
+    // `Forwarding`).
     let forwarding = Forwarding {
         specializes,
         arc_kind: edge_arc_kind,
@@ -4679,68 +4677,7 @@ fn add_reference_edge_opinions(
         namespace_depth,
         arc_list_index,
     };
-    for &(remote_path_id, dest_path_id) in &mapping {
-        let src_index = out.get(&remote_path_id).cloned();
-        if let Some(src_index) = src_index {
-            let mut graft = forwarding.graft(&src_index.graph, remote_path_id, dest_path_id);
-            for source in &src_index.sources {
-                if cycles.copies_cycle(
-                    store.paths(),
-                    dest_path_id,
-                    source.layer_id,
-                    source.spec_path.prim_path(),
-                ) {
-                    continue;
-                }
-                if src_index.graph.strength(source.node).arc_kind == ArcKind::Local {
-                    continue;
-                }
-                let spec_path =
-                    normalize_forwarded_spec_path(store, &source.spec_path, provenance_remap);
-                let key = OpinionKey {
-                    node: graft.node(store, out, &mut nodes, source.node),
-                    spec_path,
-                    ..source.clone()
-                };
-                out.get_mut(&dest_path_id)
-                    .expect("path exists")
-                    .add_source(key);
-            }
-            for opinions in src_index.opinions_by_field.values() {
-                for opinion in opinions {
-                    if cycles.copies_cycle(
-                        store.paths(),
-                        dest_path_id,
-                        opinion.key.layer_id,
-                        opinion.key.spec_path.prim_path(),
-                    ) {
-                        continue;
-                    }
-                    if src_index.graph.strength(opinion.key.node).arc_kind == ArcKind::Local {
-                        continue;
-                    }
-                    let spec_path = normalize_forwarded_spec_path(
-                        store,
-                        &opinion.key.spec_path,
-                        provenance_remap,
-                    );
-                    let node = graft.node(store, out, &mut nodes, opinion.key.node);
-                    out.get_mut(&dest_path_id)
-                        .expect("path exists")
-                        .add_opinion(Opinion {
-                            key: OpinionKey {
-                                node,
-                                spec_path,
-                                ..opinion.key.clone()
-                            },
-                            field: opinion.field,
-                            value: opinion.value.clone(),
-                            layer_offset: opinion.layer_offset,
-                        });
-                }
-            }
-        }
-    }
+    forwarding.copy_composed(store, out, cycles, &mut nodes, &mapping, provenance_remap);
 
     // Post-process: remap any PathListOp values in opinions on mapped
     // dest prims that still reference the source namespace. This covers
@@ -5824,71 +5761,6 @@ fn add_specializes_edge_opinions(
         }
     }
 
-    // Propagate already-accumulated PrimIndex sources from mapped source
-    // paths to dest paths — mirrors the same logic in add_inherit_edge_opinions.
-    for &(remote_path_id, dest_path_id) in &mapping {
-        let src_index = out.get(&remote_path_id).cloned();
-        if let Some(src_index) = src_index {
-            let mut graft = forwarding.graft(&src_index.graph, remote_path_id, dest_path_id);
-            for source in &src_index.sources {
-                if cycles.copies_cycle(
-                    store.paths(),
-                    dest_path_id,
-                    source.layer_id,
-                    source.spec_path.prim_path(),
-                ) {
-                    continue;
-                }
-                if src_index.graph.strength(source.node).arc_kind == ArcKind::Local {
-                    continue;
-                }
-                let spec_path =
-                    normalize_forwarded_spec_path(store, &source.spec_path, provenance_remap);
-                let key = OpinionKey {
-                    node: graft.node(store, out, &mut nodes, source.node),
-                    spec_path,
-                    ..source.clone()
-                };
-                out.get_mut(&dest_path_id)
-                    .expect("path exists")
-                    .add_source(key);
-            }
-            for opinions in src_index.opinions_by_field.values() {
-                for opinion in opinions {
-                    if cycles.copies_cycle(
-                        store.paths(),
-                        dest_path_id,
-                        opinion.key.layer_id,
-                        opinion.key.spec_path.prim_path(),
-                    ) {
-                        continue;
-                    }
-                    if src_index.graph.strength(opinion.key.node).arc_kind == ArcKind::Local {
-                        continue;
-                    }
-                    let spec_path = normalize_forwarded_spec_path(
-                        store,
-                        &opinion.key.spec_path,
-                        provenance_remap,
-                    );
-                    let node = graft.node(store, out, &mut nodes, opinion.key.node);
-                    out.get_mut(&dest_path_id)
-                        .expect("path exists")
-                        .add_opinion(Opinion {
-                            key: OpinionKey {
-                                node,
-                                spec_path,
-                                ..opinion.key.clone()
-                            },
-                            field: opinion.field,
-                            value: opinion.value.clone(),
-                            layer_offset: opinion.layer_offset,
-                        });
-                }
-            }
-        }
-    }
-
     // Handle nested specializes arcs.
     for &(remote_path_id, dest_path_id) in &mapping {
         let selection_path_id = {
@@ -6205,70 +6077,9 @@ fn add_specializes_edge_opinions(
         }
     }
 
-    // Late-copy accumulated sources after nested arc propagation so specializes
-    // can inherit weaker referenced opinions authored on the specialized prim.
-    for &(remote_path_id, dest_path_id) in &mapping {
-        let src_index = out.get(&remote_path_id).cloned();
-        if let Some(src_index) = src_index {
-            let mut graft = forwarding.graft(&src_index.graph, remote_path_id, dest_path_id);
-            for source in &src_index.sources {
-                if cycles.copies_cycle(
-                    store.paths(),
-                    dest_path_id,
-                    source.layer_id,
-                    source.spec_path.prim_path(),
-                ) {
-                    continue;
-                }
-                if src_index.graph.strength(source.node).arc_kind == ArcKind::Local {
-                    continue;
-                }
-                let spec_path =
-                    normalize_forwarded_spec_path(store, &source.spec_path, provenance_remap);
-                let key = OpinionKey {
-                    node: graft.node(store, out, &mut nodes, source.node),
-                    spec_path,
-                    ..source.clone()
-                };
-                out.get_mut(&dest_path_id)
-                    .expect("path exists")
-                    .add_source(key);
-            }
-            for opinions in src_index.opinions_by_field.values() {
-                for opinion in opinions {
-                    if cycles.copies_cycle(
-                        store.paths(),
-                        dest_path_id,
-                        opinion.key.layer_id,
-                        opinion.key.spec_path.prim_path(),
-                    ) {
-                        continue;
-                    }
-                    if src_index.graph.strength(opinion.key.node).arc_kind == ArcKind::Local {
-                        continue;
-                    }
-                    let spec_path = normalize_forwarded_spec_path(
-                        store,
-                        &opinion.key.spec_path,
-                        provenance_remap,
-                    );
-                    let node = graft.node(store, out, &mut nodes, opinion.key.node);
-                    out.get_mut(&dest_path_id)
-                        .expect("path exists")
-                        .add_opinion(Opinion {
-                            key: OpinionKey {
-                                node,
-                                spec_path,
-                                ..opinion.key.clone()
-                            },
-                            field: opinion.field,
-                            value: opinion.value.clone(),
-                            layer_offset: opinion.layer_offset,
-                        });
-                }
-            }
-        }
-    }
+    // What the specialized prim's composed index holds beyond this expansion
+    // (see `Forwarding`).
+    forwarding.copy_composed(store, out, cycles, &mut nodes, &mapping, provenance_remap);
     cycles.exit();
 }
 

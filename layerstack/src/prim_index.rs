@@ -68,7 +68,7 @@ impl ArcKind {
 /// equally strong nodes.
 ///
 /// Spec: AOUSD Core §10.4 (strength ordering and tie-breakers).
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct OpinionKey {
     /// The node of the prim's [`PrimIndexGraph`] this opinion belongs to
     /// (see [`crate::Stage::explain_prim_graph`]).

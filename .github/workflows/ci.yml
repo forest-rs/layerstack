@@ -228,6 +228,7 @@ jobs:
             core-spec-supplemental-release_dec2025/file_formats/tests/assets/text/usda/geometryattributes.usda core-spec-supplemental-release_dec2025/file_formats/tests/assets/text/usda/simple.usda
           cargo run --locked --all-features -p layerstack_examples --example mesh_to_usdz -- "$RUNNER_TEMP/cube.usdz"
           cargo run --locked --all-features -p layerstack_examples --example mesh_materials_to_usdz -- "$RUNNER_TEMP/materials.usdz"
+          cargo run --locked --all-features -p layerstack_examples --example scatter_to_usdz -- "$RUNNER_TEMP/field.usdz"
 
   test-stable-wasm:
     name: cargo test (wasm32)

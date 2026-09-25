@@ -261,14 +261,6 @@ impl CycleDetector {
         })
     }
 
-    /// Returns `true` when `layer` is a layer of the layer stack rooted at
-    /// `stack`, as gathered so far; `true` for a stack not gathered yet.
-    pub(crate) fn stack_contains(&self, stack: LayerId, layer: LayerId) -> bool {
-        self.stack_layers
-            .get(&stack)
-            .is_none_or(|layers| layers.contains(&layer))
-    }
-
     /// Gathers the layer stack rooted at `root`, recording each sublayer it
     /// ignores (a cycle or an unresolved asset path).
     pub(crate) fn gather_layer_stack(

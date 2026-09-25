@@ -8,7 +8,7 @@
 //!
 //! Spec: AOUSD Core §9–§12 (layer stacks, arcs/strength ordering, population, and resolution).
 
-use alloc::{borrow::Cow, boxed::Box, collections::BTreeSet, vec::Vec};
+use alloc::{borrow::Cow, boxed::Box, collections::BTreeSet, rc::Rc, vec::Vec};
 
 use core::cmp::Ordering;
 
@@ -2050,8 +2050,10 @@ fn resolve_variant_child_selections_for_prim(
 /// prim's index as composed so far, which already holds every stronger site
 /// (the referencing prim and any layers referenced in between), and fall
 /// back to the selections forwarded from the stage and target stacks. Hosts
-/// above `arc_target` lie outside the arc, so only the target layer stack
-/// selects their variants.
+/// above `arc_target` lie outside the arc, so only `ancestor_stack` selects
+/// their variants: the target layer stack, or for a class arc, which maps
+/// every path outside the class to itself, the layers of the stronger layer
+/// stacks the class is implied into as well.
 ///
 /// `cache` memoizes hosts within one arc expansion: every host maps to one
 /// destination there.
@@ -2064,6 +2066,7 @@ fn enclosing_variant_selections(
     out: &HashMap<PathId, PrimIndex>,
     stage_stack: &LayerStack,
     remote_stack: &LayerStack,
+    ancestor_stack: &LayerStack,
     arc_target: PathId,
     remote_path: PathId,
     dest_path: PathId,
@@ -2107,7 +2110,7 @@ fn enclosing_variant_selections(
                     }
                     selections
                 }
-                None => resolve_full_variant_selections(store, remote_stack, host),
+                None => resolve_full_variant_selections(store, ancestor_stack, host),
             })
             .clone();
         enclosing.insert(host, selections);
@@ -2156,6 +2159,9 @@ fn admitted_arcs(
     out: &HashMap<PathId, PrimIndex>,
     stage_stack: &LayerStack,
     data_stack: &LayerStack,
+    // Selects the variants of hosts above `arc_target` (see
+    // `enclosing_variant_selections`).
+    ancestor_stack: &LayerStack,
     arc_target: PathId,
     remote_path: PathId,
     dest_path: PathId,
@@ -2167,6 +2173,7 @@ fn admitted_arcs(
         out,
         stage_stack,
         data_stack,
+        ancestor_stack,
         arc_target,
         remote_path,
         dest_path,
@@ -2294,6 +2301,9 @@ fn unselected_branch_prims(
     out: &HashMap<PathId, PrimIndex>,
     stage_stack: &LayerStack,
     data_stack: &LayerStack,
+    // Selects the variants of hosts above `arc_target` (see
+    // `enclosing_variant_selections`).
+    ancestor_stack: &LayerStack,
     arc_target: PathId,
     pairs: &[(PathId, PathId)],
     cache: &mut HashMap<PathId, HashMap<TokenId, TokenId>>,
@@ -2314,6 +2324,7 @@ fn unselected_branch_prims(
             out,
             stage_stack,
             data_stack,
+            ancestor_stack,
             arc_target,
             remote_path,
             dest_path,
@@ -2646,7 +2657,7 @@ fn add_reference_opinions(
     // Spec: AOUSD Core §10 (references arcs). For v0.1 we expand references
     // recursively so that nested references contribute opinions.
     let mut visited: HashSet<(PathId, LayerId, PathId)> = HashSet::new();
-    let mut visited_inherits: HashSet<(PathId, PathId)> = HashSet::new();
+    let mut visited_inherits: VisitedClasses = VisitedClasses::new();
     let mut visited_specializes: HashSet<(PathId, PathId)> = HashSet::new();
     for dest_root in paths.iter().copied() {
         cycles.begin(dest_root);
@@ -2728,7 +2739,7 @@ fn add_inherit_opinions(
     mut deps: Option<&mut DependencyBuilder>,
 ) {
     // Spec: AOUSD Core §10 (inherits arc).
-    let mut visited: HashSet<(PathId, PathId)> = HashSet::new();
+    let mut visited: VisitedClasses = VisitedClasses::new();
     let mut visited_specializes: HashSet<(PathId, PathId)> = HashSet::new();
     let mut visited_refs: HashSet<(PathId, LayerId, PathId)> = HashSet::new();
     for dest_root in paths.iter().copied() {
@@ -2763,6 +2774,7 @@ fn add_inherit_opinions(
             let branch = local_variant_steps(root_layer_stack(out, dest_root), &sites);
             add_inherit_edge_opinions(
                 store,
+                local_stack,
                 local_stack,
                 dest_root,
                 inherited_root,
@@ -2838,6 +2850,12 @@ struct ArcStep {
     /// The specializes arcs above the arc's node (see
     /// [`NodeArc::specializes`]).
     specializes: Box<[SpecializesOrigin]>,
+    /// For an implied class arc, the arc path of the node it is implied
+    /// from (see [`PrimNode::origin`]).
+    origin: Option<Rc<[Self]>>,
+    /// The offset the layers of the step's layer stack are read with,
+    /// before their sublayer offsets.
+    layer_offset: LayerOffset,
 }
 
 /// Where interning an arc path has reached in a composed prim's graph: the
@@ -2956,6 +2974,15 @@ fn intern_steps(
         };
         let graph = &mut out.get_mut(&dest).expect("path exists").graph;
         cursor.node = graph.intern_child(cursor.node, arc);
+        if let Some(origin) = &step.origin {
+            let node = cursor.node;
+            if graph.node(node).and_then(PrimNode::origin).is_none() {
+                let mut origin_cursor = PathCursor::root(dest);
+                intern_steps(store, out, dest, origin, &mut origin_cursor);
+                let graph = &mut out.get_mut(&dest).expect("path exists").graph;
+                graph.set_origin(node, origin_cursor.node);
+            }
+        }
     }
 }
 
@@ -2972,16 +2999,21 @@ fn local_variant_steps(layer_stack: LayerId, sites: &[VariantSelectionSite]) -> 
             sibling_index: 0,
             implied: false,
             specializes: Box::default(),
+            origin: None,
+            layer_offset: LayerOffset::IDENTITY,
         })
         .collect()
 }
 
 /// The arcs an arc expansion is nested in, outermost first, and whether the
 /// expansion is a class arc implied into a stronger layer stack.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct ArcParent<'a> {
     steps: &'a [ArcStep],
     implied: bool,
+    /// For an implied class arc, the arc path of the node it is implied
+    /// from.
+    origin: Option<Rc<[ArcStep]>>,
 }
 
 impl<'a> ArcParent<'a> {
@@ -2990,37 +3022,282 @@ impl<'a> ArcParent<'a> {
         Self {
             steps,
             implied: false,
+            origin: None,
         }
     }
 
-    /// The same arc implied one reference or payload up: into the layer
-    /// stack of the site that authors the innermost reference or payload of
-    /// `steps`; `None` when no reference or payload encloses the arc.
-    fn hoisted(self) -> Option<Self> {
-        let enclosing = self.steps.iter().rposition(|step| {
-            matches!(step.arc_kind, ArcKind::References | ArcKind::Payloads)
-                && matches!(step.target, StepTarget::Namespace { .. })
-        })?;
-        Some(Self {
-            steps: &self.steps[..enclosing],
+    /// A class arc implied beneath the node `steps` reach from the class
+    /// node at the arc path `origin` (see [`implied_classes`]).
+    fn implied_from(steps: &'a [ArcStep], origin: Rc<[ArcStep]>) -> Self {
+        Self {
+            steps,
             implied: true,
-        })
+            origin: Some(origin),
+        }
     }
 
     /// The same arc, implied into a stronger layer stack.
     ///
-    // TODO(graph): ImpliedClasses. OpenUSD adds an implied class node under
-    // the node of the stronger layer stack the class is implied into, with
-    // the class node it is implied from as its origin
-    // (`pxr/usd/pcp/primIndex.cpp`, `_EvalImpliedClasses`); an implied
-    // inherit is placed one reference or payload up (see [`Self::hoisted`]),
-    // and an implied specializes beside the specializes node it is implied
-    // from.
+    // TODO(graph): SpecializesPlacement. OpenUSD adds an implied
+    // specializes node beneath the node of the stronger layer stack, with
+    // the node it is implied from as its origin, and propagates it to the
+    // root (`_EvalImpliedClasses` and `_EvalImpliedSpecializes` in
+    // `pxr/usd/pcp/primIndex.cpp`); this places it beside the specializes
+    // node it is implied from.
     fn implied(self) -> Self {
         Self {
             implied: true,
             ..self
         }
+    }
+}
+
+/// An inherits arc implied into a stronger layer stack: the arc path of the
+/// node it is implied beneath, and the implied arc.
+struct ImpliedClass {
+    parent: Vec<ArcStep>,
+    step: ArcStep,
+    /// The namespace mappings that carry the class path into the implied
+    /// arc's layer stack, innermost first: the arcs at these positions of
+    /// the arc path, with their destination and target roots.
+    transfers: Vec<(usize, PathId, PathId)>,
+}
+
+/// Where the inherits arc `class`, authored at the site the arcs `steps`
+/// reach, is implied: beneath the nearest nodes above it whose layer stack
+/// or namespace differs, with its class path mapped there; empty when no
+/// such node exists.
+///
+/// A reference or payload maps its target to the site that authors it, and
+/// maps every path outside the target to itself, so a root class maps to
+/// the same path in the stronger layer stack. A class nested in another
+/// class's namespace maps across that class arc into the inheriting prim's
+/// namespace. Either way, the class hierarchy beneath a class arc is
+/// implied with it: a class authored at a class arc's site is also implied
+/// beneath each node that class arc is implied as. Variant branches keep
+/// the layer stack and namespace; OpenUSD adds an implied class beneath them
+/// that contributes no opinions, so this looks past them. Each implied arc
+/// is implied further by its own expansion, so the class reaches every
+/// stronger layer stack on the way to the root.
+///
+/// Spec: AOUSD Core §10.4.2.4 (implied class arcs). OpenUSD:
+/// `_EvalImpliedClasses`, `_EvalImpliedClassTree`,
+/// `_FindStartingNodeForImpliedClasses` and `_DetermineInheritPath` in
+/// `pxr/usd/pcp/primIndex.cpp`.
+// TODO(graph): SpecializesPlacement. A class beneath a specializes node is
+// implied by `add_specializes_edge_opinions`; implied specializes nodes are
+// not modeled here.
+fn implied_classes(
+    store: &mut dyn LayerStore,
+    stage_layer_stack: LayerId,
+    steps: &[ArcStep],
+    class: &ArcStep,
+) -> Vec<ImpliedClass> {
+    let StepTarget::Namespace {
+        dest_root,
+        target_root: path,
+    } = class.target
+    else {
+        return Vec::new();
+    };
+    // The arc that brings the class's site into the prim, past variant
+    // branches.
+    let Some(len) = steps
+        .iter()
+        .rposition(|step| matches!(step.target, StepTarget::Namespace { .. }))
+        .map(|at| at + 1)
+    else {
+        return Vec::new();
+    };
+    let step = &steps[len - 1];
+    let StepTarget::Namespace {
+        dest_root: arc_dest,
+        target_root: arc_target,
+    } = step.target
+    else {
+        unreachable!("found a namespace step");
+    };
+    let parent = &steps[..len - 1];
+    let mut implied = Vec::new();
+    match step.arc_kind {
+        ArcKind::References | ArcKind::Payloads | ArcKind::Inherits => {
+            // A class authored on the class prim itself belongs to the
+            // hierarchy that class arc starts, and so does a class outside
+            // the inherited class's namespace; OpenUSD implies them only
+            // beneath that class arc's implied nodes
+            // (`_FindStartingNodeForImpliedClasses`).
+            let in_hierarchy = step.arc_kind == ArcKind::Inherits
+                && (step.namespace_depth == class.namespace_depth || {
+                    let paths = store.paths();
+                    paths
+                        .resolve(path)
+                        .strip_prefix(paths.resolve(arc_target))
+                        .is_none()
+                });
+            if !in_hierarchy {
+                let mapped = map_across(store, parent, arc_dest, arc_target, path);
+                let level = parent
+                    .iter()
+                    .rev()
+                    .find(|step| matches!(step.target, StepTarget::Namespace { .. }));
+                let layer_stack = level.map_or(stage_layer_stack, |level| level.layer_stack);
+                if mapped == path
+                    && layer_stack == step.layer_stack
+                    && !walks_combined_stack(parent)
+                {
+                    // The same site: OpenUSD adds a node that contributes no
+                    // opinions and only carries the class further up.
+                    implied = implied_classes(store, stage_layer_stack, parent, class);
+                } else {
+                    let host = ArcStep {
+                        layer_stack,
+                        layer_offset: level
+                            .map_or(LayerOffset::IDENTITY, |level| level.layer_offset),
+                        specializes: level
+                            .map(|level| level.specializes.clone())
+                            .unwrap_or_default(),
+                        ..step.clone()
+                    };
+                    implied.push(ImpliedClass {
+                        parent: parent.to_vec(),
+                        step: implied_step(class, &host, dest_root, mapped),
+                        transfers: alloc::vec![(len - 1, arc_dest, arc_target)],
+                    });
+                }
+            }
+            if step.arc_kind == ArcKind::Inherits {
+                for hierarchy in implied_classes(store, stage_layer_stack, parent, step) {
+                    let mapped = hierarchy.transfers.iter().fold(
+                        path,
+                        |path, &(at, arc_dest, arc_target)| {
+                            map_across(store, &steps[..at], arc_dest, arc_target, path)
+                        },
+                    );
+                    let ImpliedClass {
+                        mut parent,
+                        step: host,
+                        transfers,
+                    } = hierarchy;
+                    let step = implied_step(class, &host, dest_root, mapped);
+                    parent.push(host);
+                    implied.push(ImpliedClass {
+                        parent,
+                        step,
+                        transfers,
+                    });
+                }
+            }
+        }
+        _ => {}
+    }
+    implied
+}
+
+/// `true` when the node the arcs `parent` reach walks the layer stacks of
+/// every reference and payload above it as one combined stack: a
+/// specializes node, or a class arc authored inside one.
+// TODO(graph): SpecializesPlacement. Retire this with the combined walk.
+fn walks_combined_stack(parent: &[ArcStep]) -> bool {
+    parent
+        .iter()
+        .rev()
+        .filter(|step| matches!(step.target, StepTarget::Namespace { .. }))
+        .take_while(|step| !matches!(step.arc_kind, ArcKind::References | ArcKind::Payloads))
+        .any(|step| step.arc_kind == ArcKind::Specializes)
+}
+
+/// The layers a class arc implied beneath the node the arcs `parent` reach
+/// reads: that node's layer stack.
+///
+/// A specializes node, and the class arcs authored inside it, walk the
+/// layer stacks of every reference and payload above them as one combined
+/// stack (see [`walks_combined_stack`]), so a class implied beneath them
+/// walks that combined stack too.
+// TODO(graph): SpecializesPlacement. Implied specializes nodes of their own
+// read one layer stack each; then this is the node's layer stack.
+fn implied_layers(
+    store: &dyn LayerStore,
+    cycles: &mut CycleDetector,
+    parent: &[ArcStep],
+) -> LayerStack {
+    let namespace = |step: &&ArcStep| matches!(step.target, StepTarget::Namespace { .. });
+    let introduces_stack =
+        |step: &&ArcStep| matches!(step.arc_kind, ArcKind::References | ArcKind::Payloads);
+    if !walks_combined_stack(parent) {
+        let host = parent
+            .iter()
+            .rev()
+            .find(namespace)
+            .map_or(cycles.stage_layer_stack(), |step| step.layer_stack);
+        return cycles.gather_layer_stack(store, host);
+    }
+    let mut combined = cycles.gather_layer_stack(store, cycles.stage_layer_stack());
+    for step in parent.iter().filter(namespace).filter(introduces_stack) {
+        let stack = cycles.gather_layer_stack(store, step.layer_stack);
+        combined.layers.extend(stack.layers);
+        combined.offsets.extend(stack.offsets);
+    }
+    combined
+}
+
+/// The implied copy of the class arc `class`, targeting `target_root` in the
+/// layer stack of `host`.
+fn implied_step(
+    class: &ArcStep,
+    host: &ArcStep,
+    dest_root: PathId,
+    target_root: PathId,
+) -> ArcStep {
+    ArcStep {
+        arc_kind: class.arc_kind,
+        layer_stack: host.layer_stack,
+        target: StepTarget::Namespace {
+            dest_root,
+            target_root,
+        },
+        namespace_depth: class.namespace_depth,
+        sibling_index: class.sibling_index,
+        implied: true,
+        specializes: host.specializes.clone(),
+        origin: None,
+        layer_offset: host.layer_offset,
+    }
+}
+
+/// Maps `path` across the arc from `arc_dest` to `arc_target` authored at
+/// the site the arcs `parent` reach, into that site's namespace; a path
+/// outside `arc_target` maps to itself.
+///
+/// OpenUSD: the arc's `PcpNodeRef::GetMapToParent` with
+/// `PcpMapExpression::AddRootIdentity`, as `_EvalImpliedClasses` applies it.
+fn map_across(
+    store: &mut dyn LayerStore,
+    parent: &[ArcStep],
+    arc_dest: PathId,
+    arc_target: PathId,
+    path: PathId,
+) -> PathId {
+    let paths = store.paths();
+    let Some(rel) = paths
+        .resolve(path)
+        .strip_prefix(paths.resolve(arc_target))
+        .map(<[_]>::to_vec)
+    else {
+        return path;
+    };
+    let joined = paths.resolve(arc_dest).join(&rel);
+    let stage_path = store.paths_mut().intern(joined);
+    // Arc steps map from the composed prim's namespace; the last namespace
+    // step of `parent` maps into the namespace of the authoring site.
+    match parent.iter().rev().find_map(|step| match step.target {
+        StepTarget::Namespace {
+            dest_root,
+            target_root,
+        } => Some((dest_root, target_root)),
+        _ => None,
+    }) {
+        Some((dest_root, target_root)) => map_namespace(store, stage_path, dest_root, target_root),
+        None => stage_path,
     }
 }
 
@@ -3044,6 +3321,7 @@ impl ArcNodes {
         path.extend_from_slice(parent.steps);
         path.push(ArcStep {
             implied: parent.implied,
+            origin: parent.origin,
             ..step
         });
         Self {
@@ -3103,7 +3381,8 @@ impl ArcNodes {
     fn variant_steps(&self, sites: &[VariantSelectionSite]) -> impl Iterator<Item = ArcStep> {
         let step = self.step();
         let specializes = step.specializes.clone();
-        let (layer_stack, namespace_depth) = (step.layer_stack, step.namespace_depth);
+        let (layer_stack, namespace_depth, layer_offset) =
+            (step.layer_stack, step.namespace_depth, step.layer_offset);
         sites.iter().map(move |site| ArcStep {
             arc_kind: ArcKind::Variants,
             layer_stack,
@@ -3112,6 +3391,8 @@ impl ArcNodes {
             sibling_index: 0,
             implied: false,
             specializes: specializes.clone(),
+            origin: None,
+            layer_offset,
         })
     }
 
@@ -3150,6 +3431,14 @@ impl ArcNodes {
     }
 }
 
+/// The inherits arcs already expanded: `(destination, first layer read,
+/// class path, implied)`.
+///
+/// An implied class and an authored one at the same site are expanded
+/// separately, whichever comes first; [`retain_new_class_sites`] keeps the
+/// stronger registration of each site.
+type VisitedClasses = HashSet<(PathId, LayerId, PathId, bool)>;
+
 /// An opinion of a class arc's target, held until the sources of its layer
 /// are added: the destination prim, the source prim, the spec path, the
 /// field, the value, the declared property type and the node.
@@ -3173,11 +3462,11 @@ type PendingOpinion = (
 /// and [`drop_reached_copies`] drops every copied registration of a site the
 /// expansion reaches, so the copy keeps only what the expansion misses.
 ///
-// TODO(graph): AncestralArcs, ImpliedClasses. The expansion misses the arcs
-// authored on a subroot target's namespace ancestors and the classes implied
-// into the layer stacks between a class arc and the root, which the copy
-// supplies from the stage prim's index. Retire the copy once the graph
-// covers these.
+// TODO(graph): AncestralArcs, SpecializesPlacement. The expansion misses
+// the arcs authored on a subroot target's namespace ancestors and the
+// specializes implied into the stage's layer stack, which the copy supplies
+// from the stage prim's index, as far as the stage prim has been composed
+// when the arc is expanded. Retire the copy once the graph covers these.
 struct Forwarding<'a> {
     /// Specializes nodes the forwarding arc is expanded in.
     specializes: &'a [SpecializesOrigin],
@@ -3266,8 +3555,11 @@ impl Forwarding<'_> {
                 if !copies(source, store) {
                     continue;
                 }
+                let Some(node) = graft.copied_node(store, out, nodes, source.node) else {
+                    continue;
+                };
                 let key = OpinionKey {
-                    node: graft.node(store, out, nodes, source.node),
+                    node,
                     spec_path: normalize_forwarded_spec_path(
                         store,
                         &source.spec_path,
@@ -3281,8 +3573,11 @@ impl Forwarding<'_> {
                 if !copies(&opinion.key, store) {
                     continue;
                 }
+                let Some(node) = graft.copied_node(store, out, nodes, opinion.key.node) else {
+                    continue;
+                };
                 let key = OpinionKey {
-                    node: graft.node(store, out, nodes, opinion.key.node),
+                    node,
                     spec_path: normalize_forwarded_spec_path(
                         store,
                         &opinion.key.spec_path,
@@ -3329,6 +3624,24 @@ struct Graft<'a> {
 }
 
 impl Graft<'_> {
+    /// The copy of the source node `node` in `out[dest]`'s graph (see
+    /// [`Self::node`]); `None` when the node is the origin of an implied
+    /// forwarding arc's node, whose opinions the origin holds already.
+    fn copied_node(
+        &mut self,
+        store: &mut dyn LayerStore,
+        out: &mut HashMap<PathId, PrimIndex>,
+        nodes: &mut ArcNodes,
+        node: NodeId,
+    ) -> Option<NodeId> {
+        let copy = self.node(store, out, nodes, node);
+        out[&self.dest]
+            .graph
+            .node(copy)
+            .is_some_and(|node| node.arc.copied)
+            .then_some(copy)
+    }
+
     /// The copy of the source node `node` in `out[dest]`'s graph, grafted
     /// with its ancestors below the source root beneath the forwarding arc's
     /// node (`nodes`); the source root's own copy is a child of that node.
@@ -3344,15 +3657,30 @@ impl Graft<'_> {
         }
         let graph = self.source;
         let source = graph.node(node).expect("source node exists");
+        let under = match self.under {
+            Some(under) => under,
+            None => {
+                let under = nodes.node(store, out, self.dest);
+                self.under = Some(under);
+                under
+            }
+        };
+        // An implied class's composed index reaches the site of the class
+        // node it is implied from through the arcs above the class (a
+        // subroot class inside a reference target reaches it through that
+        // reference); that site is the origin node, and what the copy finds
+        // beneath it belongs beneath the origin.
+        let dest_graph = &out[&self.dest].graph;
+        if let Some(origin) = dest_graph.node(under).and_then(PrimNode::origin)
+            && let Some(origin_node) = dest_graph.node(origin)
+            && origin_node.layer_stack() == source.arc.layer_stack
+            && *origin_node.site() == source.arc.site
+        {
+            self.copies.insert(node, origin);
+            return origin;
+        }
         let parent = match source.parent() {
-            Some(NodeId::ROOT) | None => match self.under {
-                Some(under) => under,
-                None => {
-                    let under = nodes.node(store, out, self.dest);
-                    self.under = Some(under);
-                    under
-                }
-            },
+            Some(NodeId::ROOT) | None => under,
             Some(parent) => self.node(store, out, nodes, parent),
         };
         // Namespace depths are measured in the composed prim's namespace:
@@ -3422,6 +3750,11 @@ fn retain_new_class_sites(
             if known.layer_id != key.layer_id || known.spec_path != key.spec_path {
                 continue;
             }
+            // The late copy's registrations give way to the expansion's
+            // (see `drop_reached_copies`).
+            if graph.node(known.node).is_some_and(|node| node.arc.copied) {
+                continue;
+            }
             let class_based = graph.node(known.node).is_some_and(|node| {
                 matches!(node.arc_kind(), ArcKind::Inherits | ArcKind::Specializes)
             });
@@ -3478,7 +3811,11 @@ fn retain_new_class_sites(
 
 fn add_inherit_edge_opinions(
     store: &mut dyn LayerStore,
+    // The layer stack of the class: the layers the arc reads.
     local_stack: &LayerStack,
+    // The layers whose variant selections apply to the destination, strongest
+    // first.
+    selection_stack: &LayerStack,
     dest_root: PathId,
     inherited_root: PathId,
     // Root layer of the layer stack the inherit is authored in.
@@ -3491,7 +3828,7 @@ fn add_inherit_edge_opinions(
     // The arcs this arc is authored inside, and whether it is implied.
     parent: ArcParent<'_>,
     out: &mut HashMap<PathId, PrimIndex>,
-    visited: &mut HashSet<(PathId, PathId)>,
+    visited: &mut VisitedClasses,
     visited_specializes: &mut HashSet<(PathId, PathId)>,
     visited_refs: &mut HashSet<(PathId, LayerId, PathId)>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
@@ -3517,9 +3854,86 @@ fn add_inherit_edge_opinions(
     ) {
         return;
     }
-    if !visited.insert((dest_root, inherited_root)) {
+    // One expansion per class site and layers read: an implied class
+    // beneath a node that walks a combined stack reads more layers than the
+    // class's own layer stack.
+    let layers_read = local_stack.layers.first().copied().unwrap_or(arc_stack);
+    if !visited.insert((dest_root, layers_read, inherited_root, parent.implied)) {
         return;
     }
+    let (arc_kind, nested_arc_kind) = match outer_arc_kind {
+        Some(outer) => (outer, Some(ArcKind::Inherits)),
+        None => (ArcKind::Inherits, None),
+    };
+    let step = ArcStep {
+        arc_kind: ArcKind::Inherits,
+        layer_stack: arc_stack,
+        target: StepTarget::Namespace {
+            dest_root,
+            target_root: inherited_root,
+        },
+        namespace_depth,
+        sibling_index: arc_list_index,
+        implied: false,
+        specializes: specializes.into(),
+        origin: None,
+        layer_offset: base_offset,
+    };
+    let implied = implied_classes(store, cycles.stage_layer_stack(), parent.steps, &step);
+    // The class implied into the next stronger layer stacks or namespaces,
+    // with this arc's node as its origin; its own expansion implies it
+    // further (AOUSD Core §10.4.2.4; `_EvalImpliedClasses`). They are
+    // expanded first, so an arc nested in this class that copies another
+    // prim's composed sources sees them (see `Forwarding`).
+    let origin: Rc<[ArcStep]> = {
+        let mut path = parent.steps.to_vec();
+        path.push(ArcStep {
+            implied: parent.implied,
+            origin: parent.origin.clone(),
+            ..step.clone()
+        });
+        path.into()
+    };
+    for implied in implied {
+        let StepTarget::Namespace {
+            target_root: implied_root,
+            ..
+        } = implied.step.target
+        else {
+            unreachable!("an implied class maps a namespace");
+        };
+        let implied_stack = implied_layers(store, cycles, &implied.parent);
+        let outer = implied
+            .parent
+            .iter()
+            .find(|step| !matches!(step.target, StepTarget::LocalVariant(_)))
+            .map(|step| step.arc_kind);
+        add_inherit_edge_opinions(
+            store,
+            &implied_stack,
+            selection_stack,
+            dest_root,
+            implied_root,
+            implied.step.layer_stack,
+            outer,
+            &implied.step.specializes,
+            namespace_depth,
+            arc_list_index,
+            ArcParent::implied_from(&implied.parent, origin.clone()),
+            out,
+            visited,
+            visited_specializes,
+            visited_refs,
+            prim_order_out,
+            authored_children_out,
+            None,
+            None,
+            implied.step.layer_offset,
+            cycles,
+            deps.as_deref_mut(),
+        );
+    }
+
     cycles.enter(arc_stack, inherited_root, dest_root, ArcKind::Inherits);
 
     let base_path = store.paths().resolve(dest_root).clone();
@@ -3562,8 +3976,9 @@ fn add_inherit_edge_opinions(
         unselected_branch_prims(
             store,
             out,
+            selection_stack,
             local_stack,
-            local_stack,
+            selection_stack,
             inherited_root,
             &pairs,
             &mut host_selection_cache,
@@ -3571,36 +3986,8 @@ fn add_inherit_edge_opinions(
     };
     mapping.retain(|(remote, _)| !is_at_or_under(store, *remote, &unselected));
 
-    let (arc_kind, nested_arc_kind) = match outer_arc_kind {
-        Some(outer) => (outer, Some(ArcKind::Inherits)),
-        None => (ArcKind::Inherits, None),
-    };
-    let step = ArcStep {
-        arc_kind: ArcKind::Inherits,
-        layer_stack: arc_stack,
-        target: StepTarget::Namespace {
-            dest_root,
-            target_root: inherited_root,
-        },
-        namespace_depth,
-        sibling_index: arc_list_index,
-        implied: false,
-        specializes: specializes.into(),
-    };
-    let mut nodes = ArcNodes::new(parent, step.clone());
-    // The class sites of layer stacks stronger than the arc's own: those of
-    // an implied arc, and those an arc authored in a reference or payload
-    // target reaches by walking the combined stack.
-    //
-    // TODO(graph): ImpliedClasses. OpenUSD implies the class arc into each
-    // stronger layer stack on the way to the root, as a node beneath the
-    // node of that layer stack (`_EvalImpliedClasses` in
-    // `pxr/usd/pcp/primIndex.cpp`; AOUSD Core §10.4.2.4). This implies it
-    // one arc up only, beside the reference or payload whose target
-    // authors it, for every stronger layer.
-    let mut implied_nodes = parent.hoisted().map(|hoisted| ArcNodes::new(hoisted, step));
-    let implied_layer =
-        |cycles: &CycleDetector, layer| parent.implied || !cycles.stack_contains(arc_stack, layer);
+    let mut nodes = ArcNodes::new(parent, step);
+    let in_specializes = walks_combined_stack(&nodes.path);
 
     for (layer_strength_idx, layer_id) in local_stack.layers.iter().copied().enumerate() {
         let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
@@ -3617,12 +4004,8 @@ fn add_inherit_edge_opinions(
                     if let Some(d) = deps.as_deref_mut() {
                         d.add_layer_opinion(layer_id, *dest_path_id);
                     }
-                    let node = match implied_nodes.as_mut() {
-                        Some(implied) if implied_layer(cycles, layer_id) => {
-                            implied.spec_node(store, out, *dest_path_id, &spec.outer_variant_sites)
-                        }
-                        _ => nodes.spec_node(store, out, *dest_path_id, &spec.outer_variant_sites),
-                    };
+                    let node =
+                        nodes.spec_node(store, out, *dest_path_id, &spec.outer_variant_sites);
                     if let Some(order) = &spec.prim_order {
                         prim_order_out.entry(*dest_path_id).or_default().push((
                             OpinionKey {
@@ -3698,7 +4081,7 @@ fn add_inherit_edge_opinions(
                     // Forward variant opinions from selected variants through inherits.
                     let inherits_selections = resolve_forwarded_variant_selections(
                         store,
-                        local_stack,
+                        selection_stack,
                         *dest_path_id,
                         local_stack,
                         *remote_path_id,
@@ -3721,16 +4104,8 @@ fn add_inherit_edge_opinions(
                                 &branch_selections,
                                 provenance_remap,
                             );
-                            let variant_node = match implied_nodes.as_mut() {
-                                Some(implied) if implied_layer(cycles, layer_id) => implied
-                                    .variant_node(store, out, *dest_path_id, &branch_selections),
-                                _ => nodes.variant_node(
-                                    store,
-                                    out,
-                                    *dest_path_id,
-                                    &branch_selections,
-                                ),
-                            };
+                            let variant_node =
+                                nodes.variant_node(store, out, *dest_path_id, &branch_selections);
                             pending_sources.push((
                                 *dest_path_id,
                                 OpinionKey {
@@ -3813,8 +4188,9 @@ fn add_inherit_edge_opinions(
         } = admitted_arcs(
             store,
             out,
+            selection_stack,
             local_stack,
-            local_stack,
+            selection_stack,
             inherited_root,
             remote_path_id,
             dest_path_id,
@@ -3827,66 +4203,39 @@ fn add_inherit_edge_opinions(
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
 
-            // Inherit arcs authored inside inherited namespace may refer to
-            // paths within that same namespace. When those specs are mapped
-            // onto the destination prim, the inherit targets participate in
-            // the destination namespace as well.
+            // A class nested in the inherited class's namespace is implied
+            // into the destination's namespace by its own expansion (see
+            // `implied_classes`), except inside a specializes node, where
+            // the class is mapped into the destination's namespace, and into
+            // its parent's for a sibling of the inherited class
+            // (`/Looks/Metal` inheriting `/Looks/Material`), beside the
+            // authored arc.
             //
-            // We apply both:
-            // - the translated target (to pick up local opinions at the
-            //   destination path), and
-            // - the original target (to pick up the class opinions authored
-            //   at the source path).
-            //
-            // Spec: AOUSD Core §10 (inherits arc), including namespace mapping
-            // behavior for inherited class namespaces.
-            let translated = remap_path_id(store, &base_path, &inherited_path, nested);
-            if translated != nested {
-                add_inherit_edge_opinions(
-                    store,
-                    local_stack,
-                    dest_path_id,
-                    translated,
-                    arc_stack,
-                    outer_arc_kind,
-                    specializes,
-                    namespace_depth,
-                    nested_index,
-                    ArcParent::nested(&branch).implied(),
-                    out,
-                    visited,
-                    visited_specializes,
-                    visited_refs,
-                    prim_order_out,
-                    authored_children_out,
-                    ref_remap,
-                    None,
-                    base_offset,
-                    cycles,
-                    deps.as_deref_mut(),
-                );
-            }
-
-            // Also allow translation relative to the parent mapping site.
-            // This handles cases where the inherited class’s own inherits
-            // target is a sibling rather than a descendant (e.g. /Looks/Metal
-            // inherits /Looks/Material which inherits /Looks/BaseMaterial —
-            // the parent remap /Looks → /Model/Looks correctly translates
-            // /Looks/BaseMaterial → /Model/Looks/BaseMaterial).
-            //
-            // Spec: AOUSD Core §10 (inherits arc) and supplemental fixtures
-            // involving nested classes (e.g. `BasicLocalAndGlobalClassCombination_root`).
-            if let (Some(base_parent), Some(inherited_parent)) =
-                (base_path.parent(), inherited_path.parent())
-            {
-                let parent_translated =
-                    remap_path_id(store, &base_parent, &inherited_parent, nested);
+            // TODO(graph): SpecializesPlacement. Imply the class hierarchy
+            // beneath a specializes node into the specializes nodes implied
+            // from it, then drop these targets.
+            if in_specializes {
+                let translated = remap_path_id(store, &base_path, &inherited_path, nested);
+                let parent_translated = match (base_path.parent(), inherited_path.parent()) {
+                    (Some(base_parent), Some(inherited_parent)) => {
+                        remap_path_id(store, &base_parent, &inherited_parent, nested)
+                    }
+                    _ => nested,
+                };
+                let mut targets = Vec::with_capacity(2);
+                if translated != nested {
+                    targets.push(translated);
+                }
                 if parent_translated != translated && parent_translated != nested {
+                    targets.push(parent_translated);
+                }
+                for target in targets {
                     add_inherit_edge_opinions(
                         store,
                         local_stack,
+                        selection_stack,
                         dest_path_id,
-                        parent_translated,
+                        target,
                         arc_stack,
                         outer_arc_kind,
                         specializes,
@@ -3910,6 +4259,7 @@ fn add_inherit_edge_opinions(
             add_inherit_edge_opinions(
                 store,
                 local_stack,
+                selection_stack,
                 dest_path_id,
                 nested,
                 arc_stack,
@@ -3964,7 +4314,7 @@ fn add_inherit_edge_opinions(
             if translated != specialized {
                 add_specializes_edge_opinions(
                     store,
-                    local_stack,
+                    selection_stack,
                     dest_path_id,
                     dest_path_id,
                     translated,
@@ -3992,7 +4342,7 @@ fn add_inherit_edge_opinions(
                 if parent_translated != translated && parent_translated != specialized {
                     add_specializes_edge_opinions(
                         store,
-                        local_stack,
+                        selection_stack,
                         dest_path_id,
                         dest_path_id,
                         parent_translated,
@@ -4015,7 +4365,7 @@ fn add_inherit_edge_opinions(
 
             add_specializes_edge_opinions(
                 store,
-                local_stack,
+                selection_stack,
                 dest_path_id,
                 dest_path_id,
                 specialized,
@@ -4049,7 +4399,7 @@ fn add_inherit_edge_opinions(
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
             add_reference_edge_opinions(
                 store,
-                local_stack,
+                selection_stack,
                 dest_path_id,
                 nested_ref,
                 Some(arc_kind),
@@ -4079,7 +4429,7 @@ fn add_inherit_edge_opinions(
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
             add_payload_edge_opinions(
                 store,
-                local_stack,
+                selection_stack,
                 dest_path_id,
                 nested_payload,
                 Some(arc_kind),
@@ -4253,7 +4603,7 @@ fn add_reference_edge_opinions(
     parent: ArcParent<'_>,
     out: &mut HashMap<PathId, PrimIndex>,
     visited: &mut HashSet<(PathId, LayerId, PathId)>,
-    visited_inherits: &mut HashSet<(PathId, PathId)>,
+    visited_inherits: &mut VisitedClasses,
     visited_specializes: &mut HashSet<(PathId, PathId)>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
@@ -4349,6 +4699,8 @@ fn add_reference_edge_opinions(
             sibling_index: arc_list_index,
             implied: false,
             specializes: specializes.into(),
+            origin: None,
+            layer_offset: reference.layer_offset,
         },
     );
 
@@ -4588,6 +4940,7 @@ fn add_reference_edge_opinions(
             out,
             stage_stack,
             &remote_stack,
+            &remote_stack,
             reference_path,
             remote_path_id,
             dest_path_id,
@@ -4601,42 +4954,12 @@ fn add_reference_edge_opinions(
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
 
-            // Inherit paths authored inside referenced content are translated
-            // into the destination namespace (so local opinions on the
-            // destination path participate).
-            //
-            // Spec: AOUSD Core §10 (references/inherits), via path translation
-            // into the referencing namespace.
-            let translated = remap_path_id(store, &dest_root_path, &target_root, inherited_root);
+            // The class is implied into each stronger layer stack by its own
+            // expansion (see `implied_classes`).
             let ref_remap = Some((&dest_root_path, &target_root));
-            if translated != inherited_root {
-                add_inherit_edge_opinions(
-                    store,
-                    stage_stack,
-                    dest_path_id,
-                    translated,
-                    cycles.stage_layer_stack(),
-                    Some(edge_arc_kind),
-                    specializes,
-                    namespace_depth,
-                    inherit_index,
-                    ArcParent::nested(&branch).implied(),
-                    out,
-                    visited_inherits,
-                    visited_specializes,
-                    visited,
-                    prim_order_out,
-                    authored_children_out,
-                    ref_remap,
-                    None,
-                    reference.layer_offset,
-                    cycles,
-                    deps.as_deref_mut(),
-                );
-            }
-
             add_inherit_edge_opinions(
                 store,
+                &remote_stack,
                 &combined_stack,
                 dest_path_id,
                 inherited_root,
@@ -4840,7 +5163,7 @@ fn add_payload_opinions(
     // identical to references for composition purposes but sit at a weaker
     // position in LIVERPS (between References and Specializes).
     let mut visited: HashSet<(PathId, LayerId, PathId)> = HashSet::new();
-    let mut visited_inherits: HashSet<(PathId, PathId)> = HashSet::new();
+    let mut visited_inherits: VisitedClasses = VisitedClasses::new();
     let mut visited_specializes: HashSet<(PathId, PathId)> = HashSet::new();
     for dest_root in paths.iter().copied() {
         cycles.begin(dest_root);
@@ -4920,7 +5243,7 @@ fn add_payload_edge_opinions(
     parent: ArcParent<'_>,
     out: &mut HashMap<PathId, PrimIndex>,
     visited: &mut HashSet<(PathId, LayerId, PathId)>,
-    visited_inherits: &mut HashSet<(PathId, PathId)>,
+    visited_inherits: &mut VisitedClasses,
     visited_specializes: &mut HashSet<(PathId, PathId)>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
@@ -5017,6 +5340,8 @@ fn add_payload_edge_opinions(
             sibling_index: arc_list_index,
             implied: false,
             specializes: specializes.into(),
+            origin: None,
+            layer_offset: reference.layer_offset,
         },
     );
 
@@ -5241,6 +5566,7 @@ fn add_payload_edge_opinions(
             out,
             stage_stack,
             &remote_stack,
+            &remote_stack,
             reference_path,
             remote_path_id,
             dest_path_id,
@@ -5254,36 +5580,12 @@ fn add_payload_edge_opinions(
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
 
-            let translated = remap_path_id(store, &dest_root_path, &target_root, inherited_root);
+            // The class is implied into each stronger layer stack by its own
+            // expansion (see `implied_classes`).
             let ref_remap = Some((&dest_root_path, &target_root));
-            if translated != inherited_root {
-                add_inherit_edge_opinions(
-                    store,
-                    stage_stack,
-                    dest_path_id,
-                    translated,
-                    cycles.stage_layer_stack(),
-                    Some(edge_arc_kind),
-                    specializes,
-                    namespace_depth,
-                    inherit_index,
-                    ArcParent::nested(&branch).implied(),
-                    out,
-                    visited_inherits,
-                    visited_specializes,
-                    visited,
-                    prim_order_out,
-                    authored_children_out,
-                    ref_remap,
-                    None,
-                    reference.layer_offset,
-                    cycles,
-                    deps.as_deref_mut(),
-                );
-            }
-
             add_inherit_edge_opinions(
                 store,
+                &remote_stack,
                 &combined_stack,
                 dest_path_id,
                 inherited_root,
@@ -5616,6 +5918,7 @@ fn add_specializes_edge_opinions(
             out,
             local_stack,
             local_stack,
+            local_stack,
             specialized_root,
             &pairs,
             &mut host_selection_cache,
@@ -5646,6 +5949,8 @@ fn add_specializes_edge_opinions(
             sibling_index: arc_list_index,
             implied: false,
             specializes: specializes.into(),
+            origin: None,
+            layer_offset: base_offset,
         },
     );
     let forwarding = Forwarding {
@@ -5872,6 +6177,7 @@ fn add_specializes_edge_opinions(
             out,
             local_stack,
             local_stack,
+            local_stack,
             specialized_root,
             remote_path_id,
             selection_path_id,
@@ -5988,7 +6294,7 @@ fn add_specializes_edge_opinions(
     // Spec: AOUSD Core §10.4.1 ("opinions from composition arcs that are
     // introduced by prim B").
     let mut visited_refs: HashSet<(PathId, LayerId, PathId)> = HashSet::new();
-    let mut visited_inherits: HashSet<(PathId, PathId)> = HashSet::new();
+    let mut visited_inherits: VisitedClasses = VisitedClasses::new();
     for &(remote_path_id, dest_path_id) in &mapping {
         let selection_path_id = {
             let rel = store
@@ -6005,6 +6311,7 @@ fn add_specializes_edge_opinions(
         let arcs = admitted_arcs(
             store,
             out,
+            local_stack,
             local_stack,
             local_stack,
             specialized_root,
@@ -6050,6 +6357,7 @@ fn add_specializes_edge_opinions(
             for (target, implied) in targets {
                 add_inherit_edge_opinions(
                     store,
+                    local_stack,
                     local_stack,
                     dest_path_id,
                     target,
@@ -6103,6 +6411,7 @@ fn add_specializes_edge_opinions(
         let arcs = admitted_arcs(
             store,
             out,
+            local_stack,
             local_stack,
             local_stack,
             specialized_root,
@@ -6204,94 +6513,21 @@ fn apply_authored_children_base_order(
     children: &mut Vec<PathId>,
     opinions: &[(OpinionKey, Vec<TokenId>)],
 ) {
-    // Builds child ordering by processing opinions weakest-first (the weakest
-    // source establishes the baseline child order; stronger sources append
-    // unique children).
+    // Builds child ordering by processing opinions weakest-first: the
+    // weakest source establishes the baseline child order, and stronger
+    // sources append the children it lacks.
     //
-    // The ordering groups opinions by layer, using the combined-stack position
-    // derived from inherit/specializes opinions (which walk the full combined
-    // stack and carry the correct `layer_strength`). Within each layer group,
-    // local opinions come first, then direct opinions, then nested (inherit)
-    // opinions.
-    //
-    // Spec: AOUSD Core §11 (stage population) and supplemental suite composition
-    // fixtures that rely on authoring order in referenced layers.
+    // Spec: AOUSD Core §11 (stage population). OpenUSD:
+    // `PcpPrimIndex::ComputePrimChildNames`, which walks the prim index's
+    // nodes from weakest to strongest.
     let mut by_name = HashMap::<TokenId, PathId>::new();
     for child in children.iter().copied() {
         if let Some(name) = store.paths().resolve(child).leaf() {
             by_name.insert(name, child);
         }
     }
-
-    // Build a layer ordering map from inherit/specializes opinions. These
-    // opinions walk the combined stack and their `layer_strength` reflects the
-    // correct position of each layer in the unified composition order.
-    //
-    // References and payloads nested inside another arc do not walk the
-    // combined stack and so are not a reliable layer position source; treat
-    // them like direct opinions here.
-    let walks_combined_stack = |key: &OpinionKey| {
-        matches!(
-            introducing_arcs(graph, key.node).get(1).map(|node| node.arc_kind()),
-            Some(kind) if !matches!(kind, ArcKind::References | ArcKind::Payloads)
-        )
-    };
-    let mut layer_position: HashMap<LayerId, u16> = HashMap::new();
-    for (key, _) in opinions {
-        if walks_combined_stack(key) {
-            layer_position
-                .entry(key.layer_id)
-                .and_modify(|pos| *pos = (*pos).min(key.layer_strength))
-                .or_insert(key.layer_strength);
-        }
-    }
-
-    // For layers not seen in inherit opinions, assign a position based on
-    // namespace_depth (deeper introduction site = more deeply nested reference
-    // = weaker, i.e. higher position number).
-    let max_inherit_pos = layer_position.values().copied().max().unwrap_or(0);
-    for (key, _) in opinions {
-        layer_position.entry(key.layer_id).or_insert_with(|| {
-            if key.node == NodeId::ROOT {
-                0
-            } else {
-                // Place after all inherit-discovered layers, offset by
-                // namespace_depth to preserve relative ordering among
-                // layers that only have direct reference opinions.
-                max_inherit_pos + 1 + graph.node(key.node).map_or(0, PrimNode::namespace_depth)
-            }
-        });
-    }
-
-    // Sort opinions strongest-first: by layer position (lower = stronger),
-    // then local > direct > nested within the same layer.
     let mut sorted: Vec<_> = opinions.iter().collect();
-    sorted.sort_by(|a, b| {
-        let pos_a = layer_position
-            .get(&a.0.layer_id)
-            .copied()
-            .unwrap_or(u16::MAX);
-        let pos_b = layer_position
-            .get(&b.0.layer_id)
-            .copied()
-            .unwrap_or(u16::MAX);
-        let pos = pos_a.cmp(&pos_b);
-        if pos != Ordering::Equal {
-            return pos;
-        }
-        // Within the same layer: local first, then direct, then nested.
-        match (a.0.node == NodeId::ROOT, b.0.node == NodeId::ROOT) {
-            (true, false) => return Ordering::Less,
-            (false, true) => return Ordering::Greater,
-            _ => {}
-        }
-        match (walks_combined_stack(&a.0), walks_combined_stack(&b.0)) {
-            (false, true) => return Ordering::Less,
-            (true, false) => return Ordering::Greater,
-            _ => {}
-        }
-        a.0.layer_strength.cmp(&b.0.layer_strength)
-    });
+    sorted.sort_by(|a, b| graph.cmp_keys(&a.0, &b.0));
 
     let mut out = Vec::new();
     let mut seen = HashSet::<PathId>::new();
@@ -6411,7 +6647,7 @@ mod child_order_tests {
     use alloc::vec;
 
     #[test]
-    fn test_layer_grouped_sort() {
+    fn authored_children_compose_weakest_node_first() {
         let mut store = InMemoryStore::default();
         let root_layer = LayerId(1);
         let set_layer = LayerId(2);
@@ -6452,68 +6688,41 @@ mod child_order_tests {
             .paths
             .intern(Path::parse_absolute("/_C", &mut store.tokens).unwrap());
 
-        // The prim's local node, a reference at `/P` and one at `/P/I`, and
-        // an inherit inside the reference at `/P/I`.
-        let graph = PrimIndexGraph::from_arcs(
+        // The prim's local node; a reference at `/P` to `/S`, whose `/S/I`
+        // references `/Prop` and inherits `/_C`; and that inherit implied
+        // into the root layer stack beneath the root node, with the
+        // authored inherit as its origin.
+        let mut graph = PrimIndexGraph::from_arcs(
             &prim_spec_path(&store, sp_local, &[]),
             2,
             [
                 (NodeId::ROOT, ArcKind::References, 1),
-                (NodeId::ROOT, ArcKind::References, 2),
-                (NodeId::from_raw(2), ArcKind::Inherits, 2),
+                (NodeId::from_raw(1), ArcKind::References, 2),
+                (NodeId::from_raw(1), ArcKind::Inherits, 2),
+                (NodeId::ROOT, ArcKind::Inherits, 2),
             ],
         );
+        graph.set_origin(NodeId::from_raw(4), NodeId::from_raw(3));
+        graph.rank();
         let ids: Vec<NodeId> = graph.nodes().map(|(id, _)| id).collect();
+        let key = |node: NodeId, layer_id: LayerId, path: PathId| OpinionKey {
+            node,
+            layer_strength: 0,
+            layer_id,
+            lookup_path: path,
+            spec_path: prim_spec_path(&store, path, &[]),
+        };
         let opinions: Vec<(OpinionKey, Vec<TokenId>)> = vec![
+            (key(ids[0], root_layer, sp_local), vec![from_root, geom_tok]),
+            (key(ids[1], set_layer, sp_set), vec![from_set, geom_tok]),
+            (key(ids[2], prop_layer, sp_prop), vec![geom_tok]),
             (
-                OpinionKey {
-                    node: ids[0],
-                    layer_strength: 0,
-                    layer_id: root_layer,
-                    lookup_path: sp_local,
-                    spec_path: prim_spec_path(&store, sp_local, &[]),
-                },
-                vec![from_root, geom_tok],
-            ),
-            (
-                OpinionKey {
-                    node: ids[1],
-                    layer_strength: 0,
-                    layer_id: set_layer,
-                    lookup_path: sp_set,
-                    spec_path: prim_spec_path(&store, sp_set, &[]),
-                },
-                vec![from_set, geom_tok],
-            ),
-            (
-                OpinionKey {
-                    node: ids[2],
-                    layer_strength: 0,
-                    layer_id: prop_layer,
-                    lookup_path: sp_prop,
-                    spec_path: prim_spec_path(&store, sp_prop, &[]),
-                },
-                vec![geom_tok],
-            ),
-            (
-                OpinionKey {
-                    node: ids[3],
-                    layer_strength: 0,
-                    layer_id: root_layer,
-                    lookup_path: sp_class,
-                    spec_path: prim_spec_path(&store, sp_class, &[]),
-                },
-                vec![from_class_root, geom_tok],
-            ),
-            (
-                OpinionKey {
-                    node: ids[3],
-                    layer_strength: 1,
-                    layer_id: set_layer,
-                    lookup_path: sp_class,
-                    spec_path: prim_spec_path(&store, sp_class, &[]),
-                },
+                key(ids[3], set_layer, sp_class),
                 vec![from_class_set, geom_tok],
+            ),
+            (
+                key(ids[4], root_layer, sp_class),
+                vec![from_class_root, geom_tok],
             ),
         ];
 

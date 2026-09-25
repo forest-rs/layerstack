@@ -474,8 +474,7 @@ impl AssembleCtx<'_> {
                 }
                 // Spec: AOUSD Core §7.6.2.3.2 (`payload`).
                 "payload" => {
-                    if let CrateValue::ListOp(listop) = value {
-                        let converted = self.convert_ref_listop(listop)?;
+                    if let Some(converted) = self.convert_payload_value(value)? {
                         merge_ref_listop(&mut spec.payloads, converted);
                     }
                 }
@@ -660,9 +659,7 @@ impl AssembleCtx<'_> {
                                 }
                             }
                             "payload" => {
-                                if let CrateValue::ListOp(listop) = value
-                                    && let Ok(converted) = self.convert_ref_listop(listop)
-                                {
+                                if let Ok(Some(converted)) = self.convert_payload_value(value) {
                                     merge_ref_listop(&mut variant.payloads, converted);
                                 }
                             }
@@ -1283,6 +1280,27 @@ impl AssembleCtx<'_> {
         result.delete = convert_items(&listop.deleted_items, self.tokens, self.paths);
 
         Ok(result)
+    }
+
+    /// Converts a `payload` field value to a list op.
+    ///
+    /// The field holds a payload list op from crate 0.8. Earlier files hold
+    /// a single `SdfPayload`, which is an explicit list of that payload, or
+    /// no payload when empty (`pxr/usd/sdf/crateFile.cpp:393`).
+    ///
+    /// Spec: AOUSD Core §7.6.2.3.2 (`payload`).
+    fn convert_payload_value(
+        &mut self,
+        value: &CrateValue,
+    ) -> Result<Option<ListOp<Reference>>, UsdcError> {
+        match value {
+            CrateValue::ListOp(listop) => self.convert_ref_listop(listop).map(Some),
+            CrateValue::Dictionary(_) => Ok(Some(ListOp {
+                explicit: Some(self.convert_crate_to_reference(value).into_iter().collect()),
+                ..ListOp::default()
+            })),
+            _ => Ok(None),
+        }
     }
 
     /// Converts a USDC reference-encoded dictionary to a [`Reference`].

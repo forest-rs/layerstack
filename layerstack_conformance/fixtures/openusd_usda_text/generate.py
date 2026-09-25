@@ -12,7 +12,9 @@ to read each `.usda` as the USDC reader reads its `.usdc`.
 - `strings`: string, token and dictionary-key values holding every
   character OpenUSD's writer escapes (`Sdf_FileIOUtility::Quote`): both
   quotes, backslash, control characters written as `\\n`, `\\t`, `\\r` and
-  `\\xNN`, DEL, and multi-line text written triple-quoted.
+  `\\xNN`, DEL, and multi-line text written triple-quoted; and the string
+  dictionaries of `prefixSubstitutions` and `suffixSubstitutions`, written
+  `{"key": "value"}`.
 - `array_edits`: sparse array edits (`VtArrayEdit`, USDA 1.2) as defaults
   and time samples, written `edit [op; op]`: every instruction, with
   literal and `[index]` operands, the `fill` forms of `minsize` and
@@ -79,6 +81,8 @@ def author_strings(layer):
     attribute(prim, "token", Sdf.ValueTypeNames.Token, "tab\there")
     attribute(prim, "array", Sdf.ValueTypeNames.StringArray, [TRICKY, "", "plain"])
     prim.SetInfo("customData", {TRICKY: TRICKY, "multi\nline": "v\nw"})
+    prim.SetInfo("prefixSubstitutions", {"/a": "/b", 'say "hi"': "x\ty"})
+    prim.SetInfo("suffixSubstitutions", {"_v1": "_v2"})
 
 
 def edit(builder_type, fn):

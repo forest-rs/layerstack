@@ -15,6 +15,13 @@ line""" = """v
 w"""
     }
     doc = "a\\b\tc"
+    prefixSubstitutions = {
+        "/a": "/b", 
+        'say "hi"': "x\ty"
+    }
+    suffixSubstitutions = {
+        "_v1": "_v2"
+    }
 )
 {
     string[] array = ["""\x01\x02\x03\x04\x05\x06\x07\x08\t

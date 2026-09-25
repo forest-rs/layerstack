@@ -95,9 +95,17 @@ impl LiveStage {
 
     /// Notifies that opinions in `layer` have been edited.
     ///
-    /// Marks all prims that receive opinions from this layer as invalidation
-    /// roots. Propagation to transitive dependents is deferred to
+    /// Marks all prims that receive opinions from this layer, or that a
+    /// reference or payload authored in it reaches, as invalidation roots.
+    /// Propagation to transitive dependents is deferred to
     /// [`recompose`](Self::recompose).
+    ///
+    /// An edit to the offset or scale a layer stack reads the layer with
+    /// (its entry in a parent's sublayers) retimes those same prims; notify
+    /// it here for the layer and for each of its own sublayers.
+    ///
+    /// Spec: AOUSD Core §12.3.2.1 (sublayer offsets apply to the arcs the
+    /// layer authors).
     pub fn notify_layer_edit(&mut self, layer: LayerId) {
         if let Some(prims) = self.layer_to_prims.get(&layer) {
             for &prim in prims {
@@ -2270,5 +2278,217 @@ mod tests {
         assert_eq!(live.stage().composition_errors().len(), 2);
         assert_errors_match_fresh(&live, &mut store);
         assert_matches_fresh(&live, &mut store, &[field_x]);
+    }
+
+    /// `/A` references a library prim from a sublayer with an offset, so
+    /// its samples, and those of its namespace child, are read on that
+    /// sublayer's timeline. Editing the sublayer's offset and scale and
+    /// notifying the sublayer's layer recomposes both prims to match a
+    /// fresh composition, at the default time and at every probed time.
+    ///
+    /// Spec: AOUSD Core §12.3.2.1 (layer offsets on sublayers and
+    /// references). OpenUSD: `_EvalRefOrPayloadArcs` in
+    /// `pxr/usd/pcp/primIndex.cpp`.
+    #[test]
+    fn sublayer_offset_edit_retimes_arcs_it_authors() {
+        use crate::{InterpolationType, LayerOffset};
+
+        let mut store = InMemoryStore::default();
+        let field_x = store.tokens.intern("x");
+        let a = p(&mut store, "/A");
+        let a_child = p(&mut store, "/A/Child");
+        let source = p(&mut store, "/Source");
+        let source_child = p(&mut store, "/Source/Child");
+        let sampled = |samples: [(f64, f64); 2]| {
+            PropertySpec::attribute()
+                .with_time_samples(samples.map(|(t, v)| (t, Value::Double(v))).to_vec())
+        };
+
+        let mut root = Layer::new(LayerId(1));
+        root.sublayers = vec![SublayerEntry::with_offset(
+            LayerId(2),
+            LayerOffset {
+                offset: 10.0,
+                scale: 1.0,
+            },
+        )];
+        store.insert_layer(root);
+
+        let mut sub = Layer::new(LayerId(2));
+        let mut reference = Reference::with_asset(LayerId(3), source, "library.usda");
+        reference.layer_offset = LayerOffset {
+            offset: 5.0,
+            scale: 1.0,
+        };
+        sub.insert_prim(a, PrimSpec::def().with_reference(reference));
+        store.insert_layer(sub);
+
+        let mut library = Layer::new(LayerId(3));
+        library.insert_prim(
+            source,
+            PrimSpec::def().with_property(field_x, sampled([(0.0, 0.0), (10.0, 100.0)])),
+        );
+        library.insert_prim(
+            source_child,
+            PrimSpec::def().with_property(field_x, sampled([(0.0, 0.0), (4.0, 8.0)])),
+        );
+        store.insert_layer(library);
+
+        let options = StageOptions {
+            with_provenance: true,
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+        let x_at = |stage: &Stage, prim: PathId, time: f64| {
+            stage
+                .resolve_property_path_at_time(
+                    PropertyPath::new(prim, field_x),
+                    time,
+                    InterpolationType::Linear,
+                )
+                .map(|resolved| resolved.value)
+        };
+        // 10 (the sublayer) + 5 (the reference).
+        assert_eq!(x_at(live.stage(), a, 20.0), Some(Value::Double(50.0)));
+        assert_eq!(x_at(live.stage(), a_child, 17.0), Some(Value::Double(4.0)));
+
+        store.layers.get_mut(&LayerId(1)).unwrap().sublayers[0].offset = LayerOffset {
+            offset: 4.0,
+            scale: 2.0,
+        };
+        live.notify_layer_edit(LayerId(2));
+        let updated = live.recompose(&mut store);
+        assert!(updated.contains(&a), "`/A` authors its arc in the sublayer");
+        assert!(updated.contains(&a_child), "`/A/Child` reads the arc");
+        // 4 + 2 * (5 + t).
+        assert_eq!(x_at(live.stage(), a, 19.0), Some(Value::Double(25.0)));
+        assert_eq!(x_at(live.stage(), a_child, 18.0), Some(Value::Double(4.0)));
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+
+        let fresh = Stage::compose(&mut store, LayerId(1), live.options.clone());
+        for prim in [a, a_child] {
+            for time in [0.0, 13.0, 14.0, 18.0, 22.0, 24.0, 34.0, 40.0] {
+                assert_eq!(
+                    x_at(live.stage(), prim, time),
+                    x_at(&fresh, prim, time),
+                    "{prim:?} at {time}"
+                );
+            }
+        }
+    }
+
+    /// Regression: `/A` references `/Source` from a sublayer with an
+    /// offset; `/Source` references `/Other`, which supplies `Child` and has
+    /// a payload to `/Extra`, which supplies `Deep`. Neither child has a
+    /// spec in the library `/A` references, only in the layers its nested
+    /// arcs reach, and both are read on the sublayer's timeline. Editing
+    /// the sublayer's offset recomposes them, as a fresh composition does.
+    ///
+    /// Spec: AOUSD Core §12.3.2.1 (offsets compose along a chain of arcs).
+    #[test]
+    fn sublayer_offset_edit_retimes_prims_of_nested_arcs() {
+        use crate::{InterpolationType, LayerOffset};
+
+        let mut store = InMemoryStore::default();
+        let field_x = store.tokens.intern("x");
+        let a = p(&mut store, "/A");
+        let a_child = p(&mut store, "/A/Child");
+        let a_deep = p(&mut store, "/A/Deep");
+        let source = p(&mut store, "/Source");
+        let other = p(&mut store, "/Other");
+        let other_child = p(&mut store, "/Other/Child");
+        let extra = p(&mut store, "/Extra");
+        let extra_deep = p(&mut store, "/Extra/Deep");
+        let sampled = |samples: [(f64, f64); 2]| {
+            PropertySpec::attribute()
+                .with_time_samples(samples.map(|(t, v)| (t, Value::Double(v))).to_vec())
+        };
+
+        let mut root = Layer::new(LayerId(1));
+        root.sublayers = vec![SublayerEntry::with_offset(
+            LayerId(2),
+            LayerOffset {
+                offset: 10.0,
+                scale: 1.0,
+            },
+        )];
+        store.insert_layer(root);
+
+        let mut sub = Layer::new(LayerId(2));
+        let mut reference = Reference::with_asset(LayerId(3), source, "library.usda");
+        reference.layer_offset = LayerOffset {
+            offset: 5.0,
+            scale: 1.0,
+        };
+        sub.insert_prim(a, PrimSpec::def().with_reference(reference));
+        store.insert_layer(sub);
+
+        let mut library = Layer::new(LayerId(3));
+        library.insert_prim(
+            source,
+            PrimSpec::def().with_reference(Reference::with_asset(LayerId(4), other, "other.usda")),
+        );
+        store.insert_layer(library);
+
+        let mut asset = Layer::new(LayerId(4));
+        asset.insert_prim(
+            other,
+            PrimSpec::def().with_payload(Reference::with_asset(LayerId(5), extra, "extra.usda")),
+        );
+        asset.insert_prim(
+            other_child,
+            PrimSpec::def().with_property(field_x, sampled([(0.0, 0.0), (10.0, 100.0)])),
+        );
+        store.insert_layer(asset);
+
+        let mut payload = Layer::new(LayerId(5));
+        payload.insert_prim(extra, PrimSpec::def());
+        payload.insert_prim(
+            extra_deep,
+            PrimSpec::def().with_property(field_x, sampled([(0.0, 0.0), (4.0, 8.0)])),
+        );
+        store.insert_layer(payload);
+
+        let options = StageOptions {
+            with_provenance: true,
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+        let x_at = |stage: &Stage, prim: PathId, time: f64| {
+            stage
+                .resolve_property_path_at_time(
+                    PropertyPath::new(prim, field_x),
+                    time,
+                    InterpolationType::Linear,
+                )
+                .map(|resolved| resolved.value)
+        };
+        // 10 (the sublayer) + 5 (the reference).
+        assert_eq!(x_at(live.stage(), a_child, 20.0), Some(Value::Double(50.0)));
+        assert_eq!(x_at(live.stage(), a_deep, 17.0), Some(Value::Double(4.0)));
+
+        store.layers.get_mut(&LayerId(1)).unwrap().sublayers[0].offset = LayerOffset {
+            offset: 4.0,
+            scale: 2.0,
+        };
+        live.notify_layer_edit(LayerId(2));
+        let updated = live.recompose(&mut store);
+        assert!(updated.contains(&a_child), "a nested reference supplies it");
+        assert!(updated.contains(&a_deep), "a nested payload supplies it");
+        // 4 + 2 * (5 + t).
+        assert_eq!(x_at(live.stage(), a_child, 20.0), Some(Value::Double(30.0)));
+        assert_eq!(x_at(live.stage(), a_deep, 20.0), Some(Value::Double(6.0)));
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+
+        let fresh = Stage::compose(&mut store, LayerId(1), live.options.clone());
+        for prim in [a_child, a_deep] {
+            for time in [0.0, 13.0, 14.0, 15.0, 18.0, 20.0, 22.0, 34.0, 40.0] {
+                assert_eq!(
+                    x_at(live.stage(), prim, time),
+                    x_at(&fresh, prim, time),
+                    "{prim:?} at {time}"
+                );
+            }
+        }
     }
 }

@@ -17,8 +17,9 @@ use hashbrown::{HashMap, HashSet};
 use crate::{
     arc_cycle::CycleDetector,
     arcs::{
-        ArcAuthoring, SelectionScope, anchor_internal_arcs, lookup_reference_target_path,
-        resolve_branch_payloads_in, resolve_direct_references_for_prim, resolve_inherits_for_prim,
+        ArcAuthoring, AuthoredReference, SelectionScope, anchor_internal_arcs,
+        lookup_reference_target_path, resolve_branch_payloads_in,
+        resolve_direct_references_for_prim, resolve_inherits_for_prim,
         resolve_inherits_for_prim_in, resolve_payloads_for_prim, resolve_payloads_for_prim_in,
         resolve_references_for_prim, resolve_specializes_for_prim, resolve_specializes_for_prim_in,
         resolve_variant_branch_payloads, resolve_variant_child_references,
@@ -2249,8 +2250,8 @@ fn enclosing_variant_selections(
 struct AdmittedArcs {
     inherits: Vec<(PathId, Vec<VariantSelectionSite>)>,
     specializes: Vec<(PathId, Vec<VariantSelectionSite>)>,
-    references: Vec<(Reference, Vec<VariantSelectionSite>)>,
-    payloads: Vec<(Reference, Vec<VariantSelectionSite>)>,
+    references: Vec<(AuthoredReference, Vec<VariantSelectionSite>)>,
+    payloads: Vec<(AuthoredReference, Vec<VariantSelectionSite>)>,
 }
 
 /// Resolves the arcs authored for `remote_path` in `data_stack` that apply
@@ -2957,6 +2958,11 @@ struct ArcStep {
     /// The offset the layers of the step's layer stack are read with,
     /// before their sublayer offsets.
     layer_offset: LayerOffset,
+    /// The layers whose offsets `layer_offset` includes: the layer that
+    /// authors each reference or payload on the way to the step, outermost
+    /// first. Every prim the step reaches depends on them (see
+    /// [`record_offset_layers`]).
+    offset_layers: Rc<[LayerId]>,
     /// `true` for a step added beneath an ancestral arc of a class arc's
     /// target, where a node duplicating a site of the graph is skipped (see
     /// [`NodeArc::skips_duplicates`]).
@@ -3105,6 +3111,7 @@ fn local_variant_steps(layer_stack: LayerId, sites: &[VariantSelectionSite]) -> 
             implied: false,
             origin: None,
             layer_offset: LayerOffset::IDENTITY,
+            offset_layers: Rc::from([]),
             skips_duplicates: false,
         })
         .collect()
@@ -3153,6 +3160,25 @@ impl<'a> ArcParent<'a> {
         Reference {
             layer_offset: outer.compose(arc.layer_offset),
             ..arc
+        }
+    }
+
+    /// The layers whose offsets the site the arcs `steps` reach is read
+    /// with (see [`ArcStep::offset_layers`]).
+    fn offset_layers(&self) -> Rc<[LayerId]> {
+        self.steps
+            .last()
+            .map_or_else(|| Rc::from([]), |step| step.offset_layers.clone())
+    }
+
+    /// [`Self::offset_layers`], then `authored_in`, the layer that authors
+    /// a reference or payload at that site: the layers whose offsets the
+    /// arc's target is read with.
+    fn offset_layers_within(&self, authored_in: Option<LayerId>) -> Rc<[LayerId]> {
+        let outer = self.offset_layers();
+        match authored_in {
+            Some(layer) => outer.iter().copied().chain([layer]).collect(),
+            None => outer,
         }
     }
 
@@ -3291,6 +3317,8 @@ fn implied_classes(
             let host = ArcStep {
                 layer_stack,
                 layer_offset: level.map_or(LayerOffset::IDENTITY, |level| level.layer_offset),
+                offset_layers: level
+                    .map_or_else(|| Rc::from([]), |level| level.offset_layers.clone()),
                 ..step.clone()
             };
             implied.push(ImpliedClass {
@@ -3384,6 +3412,7 @@ fn implied_step(
         implied: true,
         origin: None,
         layer_offset: host.layer_offset,
+        offset_layers: host.offset_layers.clone(),
         skips_duplicates: false,
     }
 }
@@ -3511,6 +3540,7 @@ impl ArcNodes {
             step.layer_offset,
             step.skips_duplicates,
         );
+        let offset_layers = step.offset_layers.clone();
         sites.iter().map(move |site| ArcStep {
             arc_kind: ArcKind::Variants,
             layer_stack,
@@ -3520,6 +3550,7 @@ impl ArcNodes {
             implied: false,
             origin: None,
             layer_offset,
+            offset_layers: offset_layers.clone(),
             skips_duplicates,
         })
     }
@@ -3792,22 +3823,26 @@ impl AncestralArcs<'_> {
     fn retarget(
         &self,
         store: &mut dyn LayerStore,
-        arc: &Reference,
+        arc: AuthoredReference,
         rel: &[TokenId],
         used: &HashSet<(LayerId, PathId)>,
         kind: ArcKind,
         cycles: &mut CycleDetector,
         deps: Option<&mut DependencyBuilder>,
-    ) -> Option<Reference> {
-        let path = resolve_arc_target(store, arc, self.dest_root, kind, cycles, deps)?;
+    ) -> Option<AuthoredReference> {
+        let reference = &arc.reference;
+        let path = resolve_arc_target(store, reference, self.dest_root, kind, cycles, deps)?;
         let joined = store.paths().resolve(path).join(rel);
         let path = store.paths_mut().intern(joined);
-        if used.contains(&(arc.layer, path)) {
+        if used.contains(&(reference.layer, path)) {
             return None;
         }
-        Some(Reference {
-            target: ReferenceTarget::Prim(path),
-            ..arc.clone()
+        Some(AuthoredReference {
+            reference: Reference {
+                target: ReferenceTarget::Prim(path),
+                ..arc.reference
+            },
+            ..arc
         })
     }
 
@@ -3866,7 +3901,7 @@ impl AncestralArcs<'_> {
             for (index, (reference, sites)) in arcs.references.into_iter().enumerate() {
                 let Some(reference) = self.retarget(
                     store,
-                    &reference,
+                    reference,
                     &rel,
                     &used,
                     ArcKind::References,
@@ -3898,7 +3933,7 @@ impl AncestralArcs<'_> {
             for (index, (payload, sites)) in arcs.payloads.into_iter().enumerate() {
                 let Some(payload) = self.retarget(
                     store,
-                    &payload,
+                    payload,
                     &rel,
                     &used,
                     ArcKind::Payloads,
@@ -4148,6 +4183,7 @@ fn add_inherit_edge_opinions(
         implied: false,
         origin: None,
         layer_offset: base_offset,
+        offset_layers: parent.offset_layers(),
         skips_duplicates: false,
     };
     let implied = implied_classes(store, cycles.stage_layer_stack(), parent.steps, &step);
@@ -4249,6 +4285,7 @@ fn add_inherit_edge_opinions(
     mapping.retain(|(remote, _)| !is_at_or_under(store, *remote, &unselected));
 
     let mut nodes = ArcNodes::new(parent, step);
+    record_offset_layers(deps.as_deref_mut(), &nodes.step().offset_layers, &mapping);
 
     for (layer_strength_idx, layer_id) in local_stack.layers.iter().copied().enumerate() {
         let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
@@ -4738,11 +4775,40 @@ fn remap_spec_path(
     out
 }
 
+/// Records that each destination prim of `mapping`, which an arc's node
+/// composes, depends on `layers`, the layers that author the references
+/// and payloads on the way to that node ([`ArcStep::offset_layers`]).
+///
+/// A layer's offset in its layer stack retimes the opinions of every arc
+/// it authors, and of every arc nested beneath one: every prim that such
+/// an arc's subtree reaches depends on it, not only the one whose spec
+/// authors it, including prims only a nested arc, an ancestral arc or a
+/// class arc beneath it supplies.
+///
+/// Spec: AOUSD Core §12.3.2.1. OpenUSD folds the layer's offset into the
+/// map functions of the arcs it authors, and resyncs every prim index that
+/// depends on a layer whose sublayer offsets change (`PcpChanges::DidChange`
+/// in `pxr/usd/pcp/changes.cpp`).
+fn record_offset_layers(
+    deps: Option<&mut DependencyBuilder>,
+    layers: &[LayerId],
+    mapping: &[(PathId, PathId)],
+) {
+    let Some(deps) = deps else {
+        return;
+    };
+    for &layer in layers {
+        for &(_, dest) in mapping {
+            deps.add_layer_opinion(layer, dest);
+        }
+    }
+}
+
 fn add_reference_edge_opinions(
     store: &mut dyn LayerStore,
     stage_stack: &LayerStack,
     dest_root: PathId,
-    reference: Reference,
+    arc: AuthoredReference,
     namespace_depth: u16,
     arc_list_index: u16,
     // The arcs this arc is authored inside, and whether it is implied.
@@ -4768,7 +4834,7 @@ fn add_reference_edge_opinions(
     if !out.contains_key(&dest_root) {
         return;
     }
-    let reference = parent.within_offset(reference);
+    let reference = parent.within_offset(arc.reference);
     let Some(reference_path) = resolve_arc_target(
         store,
         &reference,
@@ -4825,6 +4891,7 @@ fn add_reference_edge_opinions(
     };
     let target_root = store.paths().resolve(reference_path).clone();
     let dest_root_path = store.paths().resolve(dest_root).clone();
+    let offset_layers = parent.offset_layers_within(arc.layer);
     let mut nodes = ArcNodes::new(
         parent,
         ArcStep {
@@ -4839,6 +4906,7 @@ fn add_reference_edge_opinions(
             implied: false,
             origin: None,
             layer_offset: reference.layer_offset,
+            offset_layers,
             skips_duplicates: false,
         },
     );
@@ -4873,6 +4941,7 @@ fn add_reference_edge_opinions(
             mapping.push((remote_path_id, dest_path_id));
         }
     }
+    record_offset_layers(deps.as_deref_mut(), &nodes.step().offset_layers, &mapping);
 
     // Compose the reference's own offset with each remote layer's sublayer offset.
     // This gives the total time remapping for opinions from each layer in the
@@ -5337,7 +5406,7 @@ fn add_payload_edge_opinions(
     store: &mut dyn LayerStore,
     stage_stack: &LayerStack,
     dest_root: PathId,
-    reference: Reference,
+    arc: AuthoredReference,
     namespace_depth: u16,
     arc_list_index: u16,
     // The arcs this arc is authored inside, and whether it is implied.
@@ -5364,7 +5433,7 @@ fn add_payload_edge_opinions(
     if !out.contains_key(&dest_root) {
         return;
     }
-    let reference = parent.within_offset(reference);
+    let reference = parent.within_offset(arc.reference);
     let Some(reference_path) = resolve_arc_target(
         store,
         &reference,
@@ -5421,6 +5490,7 @@ fn add_payload_edge_opinions(
     };
     let target_root = store.paths().resolve(reference_path).clone();
     let dest_root_path = store.paths().resolve(dest_root).clone();
+    let offset_layers = parent.offset_layers_within(arc.layer);
     let mut nodes = ArcNodes::new(
         parent,
         ArcStep {
@@ -5435,6 +5505,7 @@ fn add_payload_edge_opinions(
             implied: false,
             origin: None,
             layer_offset: reference.layer_offset,
+            offset_layers,
             skips_duplicates: false,
         },
     );
@@ -5469,6 +5540,7 @@ fn add_payload_edge_opinions(
             mapping.push((remote_path_id, dest_path_id));
         }
     }
+    record_offset_layers(deps.as_deref_mut(), &nodes.step().offset_layers, &mapping);
 
     let mut host_selection_cache = HashMap::new();
     for (layer_strength_idx, remote_layer_id) in remote_stack.layers.iter().copied().enumerate() {
@@ -5939,6 +6011,7 @@ fn add_specializes_edge_opinions(
         implied: false,
         origin: None,
         layer_offset: base_offset,
+        offset_layers: parent.offset_layers(),
         skips_duplicates: false,
     };
     // The specializes implied into the next stronger layer stacks or
@@ -6054,6 +6127,7 @@ fn add_specializes_edge_opinions(
     // The specialized prim's own opinions are the specializes node's; arcs
     // authored inside it nest under that node.
     let mut nodes = ArcNodes::new(parent, step);
+    record_offset_layers(deps.as_deref_mut(), &nodes.step().offset_layers, &mapping);
 
     for (layer_strength_idx, layer_id) in local_stack.layers.iter().copied().enumerate() {
         let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);

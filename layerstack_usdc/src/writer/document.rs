@@ -44,6 +44,10 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 
+use layerstack::doc::Layer;
+use layerstack::interner::TokenInterner;
+use layerstack::path::PathInterner;
+use layerstack_usda::save::layer_document;
 use layerstack_usda::writer::{
     Attribute, Document, ListOp as UsdaListOp, Metadatum, Prim, Property, Relationship,
     Specifier as UsdaSpecifier, Value as UsdaValue, Variability as UsdaVariability,
@@ -66,6 +70,29 @@ use super::{ListOp, Spec, SpecForm, Specifier, Value, Variability, write_crate};
 /// type; otherwise the errors of [`write_crate`].
 pub fn write_document(doc: &Document) -> Result<Vec<u8>, UsdcWriteError> {
     write_crate(&document_specs(doc)?)
+}
+
+/// Saves an authored layer as a USDC file.
+///
+/// The layer goes through the same lowering as its USDA
+/// ([`layerstack_usda::save::layer_document`]), so both formats read the
+/// same source fields; the resulting document is then written with
+/// [`write_document`]. `tokens` and `paths` are the interners the layer's
+/// identifiers belong to.
+///
+/// # Errors
+///
+/// [`UsdcWriteError::Save`] for what the lowering rejects, before any
+/// output; otherwise the errors of [`write_document`] (notably
+/// [`UsdcWriteError::UnknownMetadata`] for metadata OpenUSD does not
+/// register).
+pub fn save_layer(
+    layer: &Layer,
+    tokens: &TokenInterner,
+    paths: &PathInterner,
+) -> Result<Vec<u8>, UsdcWriteError> {
+    let doc = layer_document(layer, tokens, paths).map_err(UsdcWriteError::Save)?;
+    write_document(&doc)
 }
 
 /// Lowers `doc` to the crate specs [`write_document`] writes.
@@ -1077,6 +1104,132 @@ mod tests {
                 ),
             ],
             "blocked default and deleted connection"
+        );
+    }
+
+    /// Imports USDA text into a layer with its own interners.
+    fn import_usda(source: &str) -> (Layer, TokenInterner, PathInterner) {
+        let parsed = layerstack_usda::parser::parse(source);
+        assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let result = layerstack_usda::emit::emit(
+            &parsed.layer,
+            layerstack::LayerId(1),
+            &mut tokens,
+            &mut paths,
+            &mut NoAssets,
+        );
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        (result.layer, tokens, paths)
+    }
+
+    struct NoAssets;
+
+    impl layerstack::AssetResolver for NoAssets {
+        fn resolve(
+            &mut self,
+            _: &str,
+            _: Option<layerstack::LayerId>,
+            _: &mut TokenInterner,
+            _: &mut PathInterner,
+        ) -> Result<layerstack::ResolvedAsset, layerstack::AssetResolveError> {
+            Err(layerstack::AssetResolveError::NotFound)
+        }
+
+        fn resolved_path(&self, _: layerstack::LayerId) -> Option<&str> {
+            None
+        }
+    }
+
+    /// A layer saved as USDC reads back as the layer it was saved from:
+    /// saving the read-back layer as USDA gives the same text as saving
+    /// the original, so both formats carried the same authored slots.
+    #[test]
+    fn saved_layer_reads_back_as_the_same_layer() {
+        let source = r#"#usda 1.0
+(
+    "A layer."
+    defaultPrim = "A"
+    upAxis = "Z"
+)
+
+reorder rootPrims = ["A"]
+
+def Xform "A" (
+    prepend apiSchemas = ["ClaimsAPI", "exedra:Tagged:one"]
+    profilesInfo = {
+        dictionary capabilityUsages = {
+            string "usd.geom.mesh" = "hard"
+        }
+    }
+)
+{
+    reorder properties = ["y", "x"]
+    uniform token exedra:mode = "a"
+    rel r = </A.x>
+    float x = 1 (
+        limits = {
+            dictionary soft = {
+                float min = 0
+            }
+        }
+    )
+    delete float y.connect = </A.x>
+    custom double z = None
+    timecode t = 24
+    asset[] files = [@./a.png@, @b/c.exr@]
+
+    def Scope "C"
+    {
+    }
+}
+"#;
+        let (layer, tokens, paths) = import_usda(source);
+        let usda = layerstack_usda::save::save_usda(&layer, &tokens, &paths).unwrap();
+        let bytes = save_layer(&layer, &tokens, &paths).unwrap();
+
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let read = crate::read_usdc(
+            &bytes,
+            layerstack::LayerId(1),
+            &mut tokens,
+            &mut paths,
+            &mut NoAssets,
+        )
+        .unwrap();
+        assert!(read.diagnostics.is_empty(), "{:?}", read.diagnostics);
+        let again = layerstack_usda::save::save_usda(&read.layer, &tokens, &paths).unwrap();
+        assert_eq!(again, usda, "USDC and USDA carry the same layer");
+    }
+
+    #[test]
+    fn save_layer_rejects_before_writing() {
+        let (layer, tokens, paths) = import_usda(
+            "#usda 1.0\ndef \"A\"\n{\n    float a.timeSamples = {\n        0: 1,\n    }\n}\n",
+        );
+        assert_eq!(
+            save_layer(&layer, &tokens, &paths),
+            Err(UsdcWriteError::Save(
+                layerstack_usda::save::SaveError::Unsupported {
+                    path: "/A.a".into(),
+                    feature: layerstack_usda::save::Unsupported::TimeSamples,
+                }
+            )),
+            "the USDA save's error, before any output"
+        );
+        // Unregistered metadata is saved as USDA but has no crate form.
+        let (layer, tokens, paths) =
+            import_usda("#usda 1.0\ndef \"A\" (\n    exedraNote = \"n\"\n)\n{\n}\n");
+        assert!(layerstack_usda::save::save_usda(&layer, &tokens, &paths).is_ok());
+        assert_eq!(
+            save_layer(&layer, &tokens, &paths),
+            Err(UsdcWriteError::UnknownMetadata {
+                path: "/A".into(),
+                key: "exedraNote".into()
+            }),
+            "unregistered metadata"
         );
     }
 

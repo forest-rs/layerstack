@@ -6,6 +6,7 @@
 use alloc::string::String;
 use core::fmt;
 
+use layerstack_usda::save::SaveError;
 use layerstack_usda::writer::WriteError;
 
 use super::document::FieldType;
@@ -98,6 +99,8 @@ pub enum UsdcWriteError {
     },
     /// The authored document is invalid; the USDA writer rejects it too.
     Document(WriteError),
+    /// The authored layer cannot be saved; its USDA save fails the same way.
+    Save(SaveError),
     /// A document's metadata key is not registered for its owner (see
     /// [`super::document::metadata_field`]).
     UnknownMetadata {
@@ -147,6 +150,7 @@ impl fmt::Display for UsdcWriteError {
                 reason,
             } => write!(f, "{path}: {field}: {reason}"),
             Self::Document(e) => write!(f, "{e}"),
+            Self::Save(e) => write!(f, "{e}"),
             Self::UnknownMetadata { path, key } => {
                 write!(f, "{path}: {key:?} is not registered metadata here")
             }
@@ -164,6 +168,7 @@ impl core::error::Error for UsdcWriteError {
     fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             Self::Document(e) => Some(e),
+            Self::Save(e) => Some(e),
             _ => None,
         }
     }

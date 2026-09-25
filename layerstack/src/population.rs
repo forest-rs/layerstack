@@ -114,7 +114,8 @@ fn add_moved_paths(store: &dyn LayerStore, paths: &mut BTreeSet<PathId>, mut pla
 /// Adds each relocation target whose parent is populated: a relocation
 /// that moves a prim to a new parent adds a child to that parent whatever
 /// the source's opinions, and one that renames a child within its parent
-/// replaces a child that exists.
+/// replaces a child that the arcs above the source bring. The relocating
+/// layer stack's own specs at the source do not count: they are ignored.
 ///
 /// Spec: AOUSD Core §11.3.1 (relocates that "extend" add children; those
 /// that "rename" replace them). OpenUSD: `_ComposePrimChildNamesAtNode` in
@@ -145,7 +146,7 @@ fn add_relocation_targets(
                 continue;
             };
             let renames = target_parent == source_parent;
-            if paths.contains(&parent) && (!renames || paths.contains(&source)) {
+            if paths.contains(&parent) && (!renames || relocations.is_reached(target)) {
                 added.push(target);
             }
         }

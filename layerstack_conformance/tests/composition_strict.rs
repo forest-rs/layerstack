@@ -672,8 +672,8 @@ const KNOWN: &[Known] = &[
         prims: 6,
         props: 0,
         values: 0,
-        diffs: &[D::MissingPrim, D::MissingSite, D::MissingRepeat],
-        reason: "`base.usd /Base/Child`, reached through both `/Ref1` and `/Ref2`, is expanded once, so `Child_2` is missing, and under `/ChainedReferences` neither relocated child is composed",
+        diffs: &[D::MissingPrim, D::MissingRepeat],
+        reason: "`base.usd /Base/Child`, reached through both `/Ref1` and `/Ref2`, is expanded once, so `Child_2` is missing; under `/ChainedReferences`, where `root.usd` relocates `Child` and the internal references relocate it too, neither relocated child is composed",
     },
     Known {
         fixture: "SpecializesAndVariants3_root",

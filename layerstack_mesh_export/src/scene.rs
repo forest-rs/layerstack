@@ -11,7 +11,7 @@ use layerstack_usda::writer::{Document, Value};
 use layerstack_usdc::writer::write_document;
 use layerstack_usdz::{PackageFile, write_usdz};
 
-use crate::{CustomAttribute, ExportError, Material, Mesh, PointInstancer, Transform};
+use crate::{CustomAttribute, ExportError, Instance, Material, Mesh, PointInstancer, Transform};
 
 /// The consumers a USDZ package is written for.
 ///
@@ -106,6 +106,8 @@ pub enum Node<'a> {
     Mesh(Mesh<'a>),
     /// Repeated geometry: prototypes placed many times.
     PointInstancer(PointInstancer<'a>),
+    /// One placement of a shared prototype, as an instanceable reference.
+    Instance(Instance<'a>),
 }
 
 /// A transform group, written as an `Xform` prim.
@@ -177,10 +179,18 @@ impl<'a> Xform<'a> {
         self.children.push(Node::PointInstancer(instancer));
         self
     }
+
+    /// Appends an instance of a shared prototype.
+    #[must_use]
+    pub fn with_instance(mut self, instance: Instance<'a>) -> Self {
+        self.children.push(Node::Instance(instance));
+        self
+    }
 }
 
 /// A complete export: stage settings, one root prim, which becomes the
-/// layer's `defaultPrim`, and the materials meshes bind by name.
+/// layer's `defaultPrim`, the materials meshes bind by name, and the
+/// shared prototypes instances place by name.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Scene<'a> {
     /// Stage metadata.
@@ -191,6 +201,13 @@ pub struct Scene<'a> {
     /// `/<root>/`[`Materials`](crate::MATERIALS_SCOPE), inside the root
     /// prim so that a reference to the file brings its materials along.
     pub materials: Vec<Material<'a>>,
+    /// Shared prototypes, written once, in order, under the `class` prim
+    /// `/<root>/`[`Prototypes`](crate::PROTOTYPES_SCOPE) and placed by
+    /// [`Instance`]s (directly, or as a [`PointInstancer`] prototype). A
+    /// `class` prim and its descendants are abstract, so the prototypes
+    /// are not drawn where they are defined (AOUSD Core §7.6, §12.2.1).
+    /// Their names must be unique.
+    pub prototypes: Vec<Node<'a>>,
 }
 
 impl<'a> Scene<'a> {
@@ -200,7 +217,15 @@ impl<'a> Scene<'a> {
             stage,
             root,
             materials: Vec::new(),
+            prototypes: Vec::new(),
         }
+    }
+
+    /// Adds a shared prototype, which [`Instance`]s name by its prim name.
+    #[must_use]
+    pub fn with_prototype(mut self, prototype: impl Into<Node<'a>>) -> Self {
+        self.prototypes.push(prototype.into());
+        self
     }
 
     /// Adds a material.
@@ -279,6 +304,9 @@ impl<'a> Scene<'a> {
     ) -> Result<Vec<u8>, ExportError> {
         let mut authored = Vec::new();
         collect_xform_assets(&self.root, &mut authored);
+        for prototype in &self.prototypes {
+            collect_node_assets(prototype, &mut authored);
+        }
         for material in &self.materials {
             authored.extend(material.textures().map(|t| t.file));
         }
@@ -324,6 +352,7 @@ fn collect_node_assets<'s>(node: &'s Node<'_>, out: &mut Vec<&'s str>) {
                 collect_node_assets(prototype, out);
             }
         }
+        Node::Instance(i) => collect_attribute_assets(&i.attributes, out),
     }
 }
 

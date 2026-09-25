@@ -119,6 +119,14 @@
 //! (`velocities`, `accelerations`, `angularVelocities`) and no masking
 //! (`invisibleIds`, `inactiveIds`).
 //!
+//! A prototype used in several places is a *shared prototype*
+//! ([`Scene::with_prototype`]): it is written once, under the `class` prim
+//! `/<root>/Prototypes`, and placed by [`Instance`]s, typeless
+//! `instanceable` prims with an internal reference to it (AOUSD Core
+//! §10.3.2.1, §11). An `Instance` can stand anywhere in the tree, or be a
+//! prototype of any number of instancers, so their geometry is not copied
+//! per instancer.
+//!
 //! ```
 //! use layerstack_mesh_export::{
 //!     Faces, Mesh, PointInstancer, Scene, StageSettings, UpAxis, Xform,
@@ -228,6 +236,7 @@ extern crate alloc;
 
 mod build;
 mod error;
+mod instance;
 mod instancer;
 mod material;
 mod mesh;
@@ -237,6 +246,7 @@ mod shading;
 mod transform;
 
 pub use error::{ExportError, InstancerProblem, MaterialProblem, MeshProblem};
+pub use instance::Instance;
 pub use instancer::{INSTANCE_NAMES, OrientationPrecision, PROTOTYPES_SCOPE, PointInstancer};
 pub use layerstack_usda::writer::Value;
 pub use layerstack_usdz::PackageFile;

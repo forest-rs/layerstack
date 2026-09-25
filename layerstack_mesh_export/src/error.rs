@@ -31,6 +31,20 @@ pub enum ExportError {
         /// What is wrong.
         problem: InstancerProblem,
     },
+    /// An [`Instance`](crate::Instance) names a shared prototype the scene
+    /// does not define.
+    UnknownPrototype {
+        /// Prim path of the instance.
+        path: String,
+        /// The prototype name.
+        prototype: String,
+    },
+    /// A shared prototype places itself, directly or through other shared
+    /// prototypes, so its references would form a cycle.
+    PrototypeCycle {
+        /// The first prototype found on the cycle.
+        prototype: String,
+    },
     /// `metersPerUnit` is not finite and positive.
     InvalidStage,
     /// A material's inputs are unusable.
@@ -285,6 +299,12 @@ impl fmt::Display for ExportError {
         match self {
             Self::InvalidMesh { path, problem } => write!(f, "{path}: {problem}"),
             Self::InvalidInstancer { path, problem } => write!(f, "{path}: {problem}"),
+            Self::UnknownPrototype { path, prototype } => {
+                write!(f, "{path}: places undefined shared prototype {prototype:?}")
+            }
+            Self::PrototypeCycle { prototype } => {
+                write!(f, "shared prototype {prototype:?} places itself")
+            }
             Self::InvalidStage => write!(f, "metersPerUnit must be finite and positive"),
             Self::InvalidMaterial { path, problem } => write!(f, "{path}: {problem}"),
             Self::UnknownMaterial { path, material } => {

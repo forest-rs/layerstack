@@ -14,8 +14,8 @@ use alloc::string::ToString;
 use layerstack_usda::writer::is_identifier;
 
 use crate::{
-    CustomAttribute, CustomPrimvar, InstancerProblem, Interpolation, Mesh, Node, NotRigid, Primvar,
-    PrimvarData, Transform, Xform,
+    CustomAttribute, CustomPrimvar, Instance, InstancerProblem, Interpolation, Mesh, Node,
+    NotRigid, Primvar, PrimvarData, Transform, Xform,
 };
 
 /// The unit quaternion of no rotation, `[x, y, z, w]`.
@@ -337,6 +337,12 @@ impl<'a> From<PointInstancer<'a>> for Node<'a> {
     }
 }
 
+impl<'a> From<Instance<'a>> for Node<'a> {
+    fn from(instance: Instance<'a>) -> Self {
+        Self::Instance(instance)
+    }
+}
+
 impl<'a> Node<'a> {
     /// The node's prim name.
     pub(crate) fn name(&self) -> &str {
@@ -344,15 +350,17 @@ impl<'a> Node<'a> {
             Self::Xform(x) => &x.name,
             Self::Mesh(m) => &m.name,
             Self::PointInstancer(p) => &p.name,
+            Self::Instance(i) => &i.name,
         }
     }
 
     /// The node's local transform.
-    fn transform(&self) -> Option<Transform> {
+    pub(crate) fn transform(&self) -> Option<Transform> {
         match self {
             Self::Xform(x) => x.transform,
             Self::Mesh(m) => m.transform,
             Self::PointInstancer(p) => p.transform,
+            Self::Instance(i) => i.transform,
         }
     }
 }
@@ -530,7 +538,10 @@ fn check_names(names: &[Cow<'_, str>]) -> Result<(), InstancerProblem> {
 /// A primvar of the instances has one value (or index) per instance, or
 /// one for all (`pxr/usd/usdGeom/pointInstancer.h`, "Primvars on
 /// `PointInstancer`"), and its indices are in range.
-fn check_primvar(custom: &CustomPrimvar<'_>, instances: usize) -> Result<(), InstancerProblem> {
+pub(crate) fn check_primvar(
+    custom: &CustomPrimvar<'_>,
+    instances: usize,
+) -> Result<(), InstancerProblem> {
     let primvar = &custom.primvar;
     let name = || alloc::format!("primvars:{}", custom.name);
     let expected = match primvar.interpolation {
@@ -606,6 +617,29 @@ fn matrix(transform: Option<Transform>) -> Matrix {
     transform.unwrap_or(Transform::IDENTITY).usd_rows()
 }
 
+/// The shared prototype named `name`.
+pub(crate) fn find<'s, 'a>(shared: &'s [Node<'a>], name: &str) -> Option<&'s Node<'a>> {
+    shared.iter().find(|p| p.name() == name)
+}
+
+/// The transform `node` applies to its content: its own, and for an
+/// [`Instance`], the shared prototype root's followed by the instance's.
+pub(crate) fn local_transform(node: &Node<'_>, shared: &[Node<'_>]) -> Option<Transform> {
+    match node {
+        Node::Instance(instance) => {
+            let root = find(shared, &instance.prototype).and_then(Node::transform);
+            match (root, instance.transform) {
+                (Some(root), Some(own)) => Some(Transform::from_usd_rows(mul(
+                    &root.usd_rows(),
+                    &own.usd_rows(),
+                ))),
+                (root, own) => own.or(root),
+            }
+        }
+        _ => node.transform(),
+    }
+}
+
 /// A box of a prototype's geometry and the matrix from its space to the
 /// prototype root's.
 struct Leaf {
@@ -616,18 +650,27 @@ struct Leaf {
 /// The boxes of `node`'s geometry, each with the matrix from its space to
 /// the prototype root's: each mesh's `points` bounds, and each nested
 /// instancer's extent.
-fn leaves(node: &Node<'_>, to_root: Matrix, out: &mut Vec<Leaf>) {
+fn leaves(node: &Node<'_>, to_root: Matrix, shared: &[Node<'_>], out: &mut Vec<Leaf>) {
     let bounds = match node {
         Node::Xform(xform) => {
             for child in &xform.children {
-                leaves(child, mul(&matrix(child.transform()), &to_root), out);
+                let local = matrix(local_transform(child, shared));
+                leaves(child, mul(&local, &to_root), shared, out);
             }
             return;
         }
         Node::Mesh(mesh) => points_bounds(&mesh.points),
         Node::PointInstancer(instancer) => check(instancer)
             .ok()
-            .and_then(|checked| extent(instancer, &checked)),
+            .and_then(|checked| extent(instancer, &checked, shared)),
+        // The prototype's content, in the instance's own space: its root
+        // transform is part of the instance's (`local_transform`).
+        Node::Instance(instance) => {
+            if let Some(prototype) = find(shared, &instance.prototype) {
+                leaves(prototype, to_root, shared, out);
+            }
+            return;
+        }
     };
     if let Some(bounds) = bounds {
         out.push(Leaf { bounds, to_root });
@@ -717,14 +760,18 @@ pub(crate) fn instance_matrix(
 /// Spec: `pxr/usd/usdGeom/boundable.h` (`extent` is in local space,
 /// without the prim's own transform); `pxr/usd/usdGeom/pointInstancer.h`,
 /// `ComputeExtentAtTime`.
-pub(crate) fn extent(instancer: &PointInstancer<'_>, checked: &Checked) -> Option<Aabb> {
+pub(crate) fn extent(
+    instancer: &PointInstancer<'_>,
+    checked: &Checked,
+    shared: &[Node<'_>],
+) -> Option<Aabb> {
     let prototypes: Vec<(Matrix, Vec<Leaf>)> = instancer
         .prototypes
         .iter()
         .map(|prototype| {
             let mut out = Vec::new();
-            leaves(prototype, Transform::IDENTITY.usd_rows(), &mut out);
-            (matrix(prototype.transform()), out)
+            leaves(prototype, Transform::IDENTITY.usd_rows(), shared, &mut out);
+            (matrix(local_transform(prototype, shared)), out)
         })
         .collect();
     let mut bounds: Option<Aabb> = None;

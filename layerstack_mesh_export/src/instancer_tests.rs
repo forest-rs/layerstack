@@ -612,3 +612,114 @@ fn rejects_unusable_names_and_primvars() {
         }
     );
 }
+
+/// A scene whose `Tri` prototype (lifted by 1 along Z by its own
+/// transform) is shared by two instancers and one direct instance.
+fn shared_scene() -> Scene<'static> {
+    let lifted = tri().with_transform(Transform::from_translation([0.0, 0.0, 1.0]));
+    let a = PointInstancer::new("A", vec![0, 0], vec![[0.0; 3], [10.0, 0.0, 0.0]])
+        .with_prototype(crate::Instance::new("Tri", "Tri"));
+    let b = PointInstancer::new("B", vec![0], vec![[0.0, 5.0, 0.0]])
+        .with_prototype(crate::Instance::new("Shared", "Tri"));
+    Scene::new(
+        StageSettings::new(UpAxis::Z, 1.0),
+        Xform::new("Root")
+            .with_point_instancer(a)
+            .with_point_instancer(b)
+            .with_instance(
+                crate::Instance::new("Single", "Tri")
+                    .with_transform(Transform::from_translation([0.0, 0.0, 7.0]))
+                    .with_primvar(
+                        "displayColor",
+                        Primvar::constant(PrimvarData::color3(vec![[1.0, 0.5, 0.0]])),
+                    ),
+            ),
+    )
+    .with_prototype(lifted.with_material("Bark"))
+    .with_material(Material::new("Bark"))
+}
+
+#[test]
+fn shared_prototypes_are_written_once() {
+    let text = shared_scene().to_usda().unwrap();
+    assert_eq!(text.matches("def Mesh").count(), 1, "{text}");
+    let expected = r#"
+    class "Prototypes"
+    {
+        def Mesh "Tri" ("#;
+    assert!(text.contains(expected), "{text}");
+    let expected = r#"
+        def Scope "Prototypes"
+        {
+            def "Tri" (
+                instanceable = true
+                prepend references = </Root/Prototypes/Tri>
+            )
+            {
+            }
+        }"#;
+    assert!(text.contains(expected), "{text}");
+    assert!(
+        text.contains("rel prototypes = </Root/B/Prototypes/Shared>"),
+        "{text}"
+    );
+    // Both instancers bound the shared triangle, lifted by its own
+    // transform.
+    let extents: vec::Vec<&str> = text.lines().filter(|l| l.contains("extent =")).collect();
+    assert!(
+        extents[0].contains("[(0, 0, 1), (11, 1, 1)]"),
+        "{extents:?}"
+    );
+    assert!(extents[1].contains("[(0, 5, 1), (1, 6, 1)]"), "{extents:?}");
+    // The direct instance's transform follows the prototype root's.
+    let expected = r#"
+    def "Single" (
+        instanceable = true
+        prepend references = </Root/Prototypes/Tri>
+    )
+    {
+        color3f[] primvars:displayColor = [(1, 0.5, 0)] (
+            interpolation = "constant"
+        )
+        matrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 8, 1) )"#;
+    assert!(text.contains(expected), "{text}");
+}
+
+#[test]
+fn instances_need_a_defined_acyclic_prototype() {
+    let unknown = Scene::new(
+        StageSettings::new(UpAxis::Z, 1.0),
+        Xform::new("Root").with_instance(crate::Instance::new("I", "Missing")),
+    );
+    assert_eq!(
+        unknown.to_usda(),
+        Err(ExportError::UnknownPrototype {
+            path: "/Root/I".into(),
+            prototype: "Missing".into()
+        })
+    );
+    let cycle = Scene::new(StageSettings::new(UpAxis::Z, 1.0), Xform::new("Root"))
+        .with_prototype(Xform::new("A").with_instance(crate::Instance::new("ToB", "B")))
+        .with_prototype(Xform::new("B").with_instance(crate::Instance::new("ToA", "A")));
+    assert_eq!(
+        cycle.to_usda(),
+        Err(ExportError::PrototypeCycle {
+            prototype: "A".into()
+        })
+    );
+    let varying = Scene::new(
+        StageSettings::new(UpAxis::Z, 1.0),
+        Xform::new("Root").with_instance(crate::Instance::new("I", "Tri").with_primvar(
+            "displayColor",
+            Primvar::per_instance(PrimvarData::color3(vec![[1.0; 3]])),
+        )),
+    )
+    .with_prototype(tri());
+    assert!(matches!(
+        varying.to_usda(),
+        Err(ExportError::InvalidInstancer {
+            problem: InstancerProblem::PrimvarInterpolation { .. },
+            ..
+        })
+    ));
+}

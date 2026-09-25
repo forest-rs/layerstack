@@ -1,0 +1,11 @@
+uint a = -1
+int a = inf
+int a = nan
+int a = 4294967296
+int64 a = 1e30
+uint64 a = -1
+float a = true
+int a = "3"
+int[] a = [1, 1.5e10]
+float3 a = (1, true, 2)
+int a.timeSamples = {\n        1: 1e20,\n    }

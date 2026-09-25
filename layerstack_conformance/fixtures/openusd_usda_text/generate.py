@@ -23,9 +23,14 @@ which OpenUSD reads but would not write in that form, and its `.usdc` is
 OpenUSD's reading of it.
 
 - `half_literals`: `half` literals that are not exact halves, rounded to
-  nearest even through `float` (`GfHalf`), subnormal, overflowing,
-  infinite and NaN, in scalars, vectors, a quaternion, an array and
+  nearest even through `float` (`GfHalf`), subnormal, overflowing, signed
+  zero, infinite and NaN, in scalars, vectors, a quaternion, an array and
   time samples.
+- `numeric_literals`: numbers given for `bool` (true when nonzero), for
+  integer types (truncated toward zero) and for floating-point types
+  (signed zero kept), in scalars, arrays, a vector and time samples.
+- `numeric_rejected.txt`: attribute statements whose value OpenUSD rejects
+  for the declared type; the script checks that it does.
 
 Pinned oracle: `usd-core` 26.8 from PyPI (OpenUSD v26.08), as for the
 `usdc_versions` fixtures:
@@ -140,7 +145,9 @@ def "Halves"
     half largest = 65519
     half overflow = 65520
     half negativeOverflow = -1e9
+    half negativeZero = -0
     half infinity = inf
+    half negativeInfinity = -inf
     half notANumber = nan
     half2 pair = (0.1, -0.333)
     half3 triple = (1e-7, 65519, 0.2)
@@ -153,7 +160,57 @@ def "Halves"
     }
 }
 """,
+    "numeric_literals": """#usda 1.0
+
+def "Numbers"
+{
+    bool negativeZero = -0
+    bool zero = 0
+    bool two = 2
+    bool fraction = 1.5
+    bool negativeInfinity = -inf
+    bool notANumber = nan
+    bool word = true
+    bool[] array = [-0, 2, 0.0, -1, false]
+    bool sampled.timeSamples = {
+        1: -0,
+        2: 1.5,
+        3: 0,
+    }
+    int truncated = 1.5
+    int negativeTruncated = -1.5
+    uint unsignedTruncated = 1.5
+    int64 wide = 4294967296
+    uint64 exponent = 1e3
+    float floatNegativeZero = -0
+    double doubleFromInt = 2
+    timecode timecodeNegativeZero = -0
+    int[] ints = [1, 2.9, -2.9]
+    float[] floats = [1, -0, 1.5]
+    int3 vector = (1.5, -2, 3)
+    int intSampled.timeSamples = {
+        1: 2.5,
+    }
 }
+""",
+}
+
+# Values OpenUSD refuses for their declared type: each makes the whole layer
+# fail to read. `numeric_rejected.txt` lists those checked here, one
+# attribute statement per line.
+REJECTED = [
+    "uint a = -1",
+    "int a = inf",
+    "int a = nan",
+    "int a = 4294967296",
+    "int64 a = 1e30",
+    "uint64 a = -1",
+    "float a = true",
+    'int a = "3"',
+    "int[] a = [1, 1.5e10]",
+    "float3 a = (1, true, 2)",
+    "int a.timeSamples = {\\n        1: 1e20,\\n    }",
+]
 
 
 def main():
@@ -173,6 +230,16 @@ def main():
         layer = Sdf.Layer.FindOrOpen(source)
         if not layer or not layer.Export(os.path.join(HERE, name + ".usdc")):
             sys.exit("failed to convert " + source)
+    for statement in REJECTED:
+        text = '#usda 1.0\ndef "P"\n{\n    %s\n}\n' % statement.replace("\\n", "\n")
+        try:
+            accepted = Sdf.Layer.CreateAnonymous(".usda").ImportFromString(text)
+        except Exception:
+            accepted = False
+        if accepted:
+            sys.exit("OpenUSD accepts " + statement)
+    with open(os.path.join(HERE, "numeric_rejected.txt"), "w") as f:
+        f.write("".join(statement + "\n" for statement in REJECTED))
 
 
 if __name__ == "__main__":

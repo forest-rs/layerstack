@@ -1,0 +1,32 @@
+#usda 1.0
+
+def "Numbers"
+{
+    bool negativeZero = -0
+    bool zero = 0
+    bool two = 2
+    bool fraction = 1.5
+    bool negativeInfinity = -inf
+    bool notANumber = nan
+    bool word = true
+    bool[] array = [-0, 2, 0.0, -1, false]
+    bool sampled.timeSamples = {
+        1: -0,
+        2: 1.5,
+        3: 0,
+    }
+    int truncated = 1.5
+    int negativeTruncated = -1.5
+    uint unsignedTruncated = 1.5
+    int64 wide = 4294967296
+    uint64 exponent = 1e3
+    float floatNegativeZero = -0
+    double doubleFromInt = 2
+    timecode timecodeNegativeZero = -0
+    int[] ints = [1, 2.9, -2.9]
+    float[] floats = [1, -0, 1.5]
+    int3 vector = (1.5, -2, 3)
+    int intSampled.timeSamples = {
+        1: 2.5,
+    }
+}

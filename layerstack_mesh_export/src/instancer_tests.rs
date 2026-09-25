@@ -84,7 +84,7 @@ fn golden_instancer() {
         .with_orientations(&orientations)
         .with_scales(&scales)
         .with_ids(&ids)
-        .with_attribute("exedra:set", Value::String("stones".into()));
+        .with_attribute("site:set", Value::String("stones".into()));
     let text = scene(instancer).to_usda().unwrap();
     // Extent: the triangle at the origin and scaled ×2 at (0, 5, 1); the
     // quad, lifted by its prototype's transform to z = 2, turned 90° about
@@ -101,7 +101,7 @@ fn golden_instancer() {
         point3f[] positions = [(0, 0, 0), (10, 0, 0), (0, 5, 1)]
         int[] protoIndices = [0, 1, 0]
         float3[] scales = [(1, 1, 1), (1, 1, 1), (2, 2, 1)]
-        custom string exedra:set = "stones"
+        custom string site:set = "stones"
         rel prototypes = [</Root/Field/Prototypes/Tri>, </Root/Field/Prototypes/Pair>]
 
         def Scope "Prototypes"
@@ -326,7 +326,7 @@ fn prototypes_are_checked_like_any_mesh() {
         Err(ExportError::UnknownMaterial { path, .. }) if path == "/Root/Field/Prototypes/Tri"
     ));
     let instancer = PointInstancer::new("Field", &one, &origin)
-        .with_prototype(tri().with_attribute("exedra:tex", Value::Asset("t.png".into())));
+        .with_prototype(tri().with_attribute("site:tex", Value::Asset("t.png".into())));
     assert_eq!(
         scene(instancer).to_usdz(UsdzProfile::Generic, &[]),
         Err(ExportError::UnpackagedAsset {

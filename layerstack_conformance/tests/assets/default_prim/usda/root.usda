@@ -1,0 +1,116 @@
+#usda 1.0
+(
+    defaultPrim = "Local"
+)
+
+def Scope "Local"
+{
+    double value = 7
+
+    def Scope "LocalChild"
+    {
+    }
+}
+
+def "PlacementA" (
+    references = @./asset.usda@
+)
+{
+}
+
+def "PlacementB" (
+    payload = @./asset.usda@
+)
+{
+    double size = 3
+}
+
+def "Explicit" (
+    references = @./asset.usda@</Other>
+)
+{
+}
+
+def "Internal" (
+    references = </Local>
+)
+{
+}
+
+def "InternalDefault" (
+    references = <>
+)
+{
+}
+
+def "NoDefault" (
+    references = @./nodefault.usda@
+)
+{
+}
+
+def "MissingDefault" (
+    references = @./missing.usda@
+)
+{
+}
+
+def "InvalidDefault" (
+    payload = @./invalid.usda@
+)
+{
+}
+
+def "Subroot" (
+    references = @./subroot.usda@
+)
+{
+}
+
+def "Stacked" (
+    references = @./stacked.usda@
+)
+{
+}
+
+def "SubOnly" (
+    references = @./subonly.usda@
+)
+{
+}
+
+def "Nested" (
+    references = @./wrapper.usda@
+)
+{
+}
+
+def "NestedUnresolved" (
+    references = @./wrapper.usda@</Broken>
+)
+{
+}
+
+def "MissingAssetRef" (
+    references = @./absent.usda@
+)
+{
+}
+
+def "MissingAssetPayload" (
+    payload = @./absent.usda@
+)
+{
+}
+
+def "MissingAssetExplicitRef" (
+    references = @./absent.usda@</Local>
+)
+{
+}
+
+def "MissingAssetExplicitPayload" (
+    payload = @./absent.usda@</Local>
+)
+{
+}

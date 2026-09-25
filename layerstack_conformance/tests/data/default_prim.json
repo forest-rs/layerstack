@@ -1,0 +1,546 @@
+{
+ "generator": "layerstack_conformance/scripts/default_prim_oracle.py",
+ "openusd_version": "0.26.8",
+ "formats": [
+  "usda",
+  "usdc"
+ ],
+ "root": "root",
+ "prims": [
+  {
+   "path": "/Local",
+   "children": [
+    "LocalChild"
+   ],
+   "prim_stack": [
+    [
+     "root",
+     "/Local"
+    ]
+   ]
+  },
+  {
+   "path": "/Local/LocalChild",
+   "children": [],
+   "prim_stack": [
+    [
+     "root",
+     "/Local/LocalChild"
+    ]
+   ]
+  },
+  {
+   "path": "/PlacementA",
+   "children": [
+    "Geo"
+   ],
+   "prim_stack": [
+    [
+     "root",
+     "/PlacementA"
+    ],
+    [
+     "asset",
+     "/Model"
+    ]
+   ]
+  },
+  {
+   "path": "/PlacementA/Geo",
+   "children": [
+    "Mesh"
+   ],
+   "prim_stack": [
+    [
+     "asset",
+     "/Model/Geo"
+    ]
+   ]
+  },
+  {
+   "path": "/PlacementA/Geo/Mesh",
+   "children": [],
+   "prim_stack": [
+    [
+     "asset",
+     "/Model/Geo/Mesh"
+    ]
+   ]
+  },
+  {
+   "path": "/PlacementB",
+   "children": [
+    "Geo"
+   ],
+   "prim_stack": [
+    [
+     "root",
+     "/PlacementB"
+    ],
+    [
+     "asset",
+     "/Model"
+    ]
+   ]
+  },
+  {
+   "path": "/PlacementB/Geo",
+   "children": [
+    "Mesh"
+   ],
+   "prim_stack": [
+    [
+     "asset",
+     "/Model/Geo"
+    ]
+   ]
+  },
+  {
+   "path": "/PlacementB/Geo/Mesh",
+   "children": [],
+   "prim_stack": [
+    [
+     "asset",
+     "/Model/Geo/Mesh"
+    ]
+   ]
+  },
+  {
+   "path": "/Explicit",
+   "children": [
+    "OtherChild"
+   ],
+   "prim_stack": [
+    [
+     "root",
+     "/Explicit"
+    ],
+    [
+     "asset",
+     "/Other"
+    ]
+   ]
+  },
+  {
+   "path": "/Explicit/OtherChild",
+   "children": [],
+   "prim_stack": [
+    [
+     "asset",
+     "/Other/OtherChild"
+    ]
+   ]
+  },
+  {
+   "path": "/Internal",
+   "children": [
+    "LocalChild"
+   ],
+   "prim_stack": [
+    [
+     "root",
+     "/Internal"
+    ],
+    [
+     "root",
+     "/Local"
+    ]
+   ]
+  },
+  {
+   "path": "/Internal/LocalChild",
+   "children": [],
+   "prim_stack": [
+    [
+     "root",
+     "/Local/LocalChild"
+    ]
+   ]
+  },
+  {
+   "path": "/InternalDefault",
+   "children": [
+    "LocalChild"
+   ],
+   "prim_stack": [
+    [
+     "root",
+     "/InternalDefault"
+    ],
+    [
+     "root",
+     "/Local"
+    ]
+   ]
+  },
+  {
+   "path": "/InternalDefault/LocalChild",
+   "children": [],
+   "prim_stack": [
+    [
+     "root",
+     "/Local/LocalChild"
+    ]
+   ]
+  },
+  {
+   "path": "/NoDefault",
+   "children": [],
+   "prim_stack": [
+    [
+     "root",
+     "/NoDefault"
+    ]
+   ]
+  },
+  {
+   "path": "/MissingDefault",
+   "children": [],
+   "prim_stack": [
+    [
+     "root",
+     "/MissingDefault"
+    ]
+   ]
+  },
+  {
+   "path": "/InvalidDefault",
+   "children": [],
+   "prim_stack": [
+    [
+     "root",
+     "/InvalidDefault"
+    ]
+   ]
+  },
+  {
+   "path": "/Subroot",
+   "children": [
+    "Mesh"
+   ],
+   "prim_stack": [
+    [
+     "root",
+     "/Subroot"
+    ],
+    [
+     "subroot",
+     "/Model/Geo"
+    ]
+   ]
+  },
+  {
+   "path": "/Subroot/Mesh",
+   "children": [],
+   "prim_stack": [
+    [
+     "subroot",
+     "/Model/Geo/Mesh"
+    ]
+   ]
+  },
+  {
+   "path": "/Stacked",
+   "children": [
+    "SubChild"
+   ],
+   "prim_stack": [
+    [
+     "root",
+     "/Stacked"
+    ],
+    [
+     "stacked_sub",
+     "/Model"
+    ]
+   ]
+  },
+  {
+   "path": "/Stacked/SubChild",
+   "children": [],
+   "prim_stack": [
+    [
+     "stacked_sub",
+     "/Model/SubChild"
+    ]
+   ]
+  },
+  {
+   "path": "/SubOnly",
+   "children": [],
+   "prim_stack": [
+    [
+     "root",
+     "/SubOnly"
+    ]
+   ]
+  },
+  {
+   "path": "/Nested",
+   "children": [
+    "Geo"
+   ],
+   "prim_stack": [
+    [
+     "root",
+     "/Nested"
+    ],
+    [
+     "wrapper",
+     "/Wrapper"
+    ],
+    [
+     "asset",
+     "/Model"
+    ]
+   ]
+  },
+  {
+   "path": "/Nested/Geo",
+   "children": [
+    "Mesh"
+   ],
+   "prim_stack": [
+    [
+     "asset",
+     "/Model/Geo"
+    ]
+   ]
+  },
+  {
+   "path": "/Nested/Geo/Mesh",
+   "children": [],
+   "prim_stack": [
+    [
+     "asset",
+     "/Model/Geo/Mesh"
+    ]
+   ]
+  },
+  {
+   "path": "/NestedUnresolved",
+   "children": [],
+   "prim_stack": [
+    [
+     "root",
+     "/NestedUnresolved"
+    ],
+    [
+     "wrapper",
+     "/Broken"
+    ]
+   ]
+  },
+  {
+   "path": "/MissingAssetRef",
+   "children": [],
+   "prim_stack": [
+    [
+     "root",
+     "/MissingAssetRef"
+    ]
+   ]
+  },
+  {
+   "path": "/MissingAssetPayload",
+   "children": [],
+   "prim_stack": [
+    [
+     "root",
+     "/MissingAssetPayload"
+    ]
+   ]
+  },
+  {
+   "path": "/MissingAssetExplicitRef",
+   "children": [],
+   "prim_stack": [
+    [
+     "root",
+     "/MissingAssetExplicitRef"
+    ]
+   ]
+  },
+  {
+   "path": "/MissingAssetExplicitPayload",
+   "children": [],
+   "prim_stack": [
+    [
+     "root",
+     "/MissingAssetExplicitPayload"
+    ]
+   ]
+  }
+ ],
+ "values": {
+  "/PlacementA.size": 2.0,
+  "/PlacementB.size": 3.0,
+  "/Explicit.size": 7.0,
+  "/Nested.size": 2.0,
+  "/Local.value": 7.0,
+  "/InternalDefault.value": 7.0,
+  "/MissingAssetRef.value": null,
+  "/MissingAssetPayload.value": null,
+  "/MissingAssetExplicitRef.value": null,
+  "/MissingAssetExplicitPayload.value": null
+ },
+ "errors": [
+  {
+   "type": "PcpErrorType_UnresolvedPrimPath",
+   "prim": "/InvalidDefault",
+   "arc": "payload",
+   "layer": "invalid",
+   "unresolved": "<defaultPrim>",
+   "introduced_by": [
+    "root",
+    "/InvalidDefault"
+   ]
+  },
+  {
+   "type": "PcpErrorType_InvalidAssetPath",
+   "prim": "/MissingAssetExplicitPayload",
+   "arc": "payload",
+   "asset": "absent",
+   "introduced_by": [
+    "root",
+    "/MissingAssetExplicitPayload"
+   ]
+  },
+  {
+   "type": "PcpErrorType_InvalidAssetPath",
+   "prim": "/MissingAssetExplicitRef",
+   "arc": "reference",
+   "asset": "absent",
+   "introduced_by": [
+    "root",
+    "/MissingAssetExplicitRef"
+   ]
+  },
+  {
+   "type": "PcpErrorType_InvalidAssetPath",
+   "prim": "/MissingAssetPayload",
+   "arc": "payload",
+   "asset": "absent",
+   "introduced_by": [
+    "root",
+    "/MissingAssetPayload"
+   ]
+  },
+  {
+   "type": "PcpErrorType_InvalidAssetPath",
+   "prim": "/MissingAssetRef",
+   "arc": "reference",
+   "asset": "absent",
+   "introduced_by": [
+    "root",
+    "/MissingAssetRef"
+   ]
+  },
+  {
+   "type": "PcpErrorType_UnresolvedPrimPath",
+   "prim": "/MissingDefault",
+   "arc": "reference",
+   "layer": "missing",
+   "unresolved": "</Missing>",
+   "introduced_by": [
+    "root",
+    "/MissingDefault"
+   ]
+  },
+  {
+   "type": "PcpErrorType_UnresolvedPrimPath",
+   "prim": "/NestedUnresolved",
+   "arc": "payload",
+   "layer": "nodefault",
+   "unresolved": "<defaultPrim>",
+   "introduced_by": [
+    "wrapper",
+    "/Broken"
+   ]
+  },
+  {
+   "type": "PcpErrorType_UnresolvedPrimPath",
+   "prim": "/NoDefault",
+   "arc": "reference",
+   "layer": "nodefault",
+   "unresolved": "<defaultPrim>",
+   "introduced_by": [
+    "root",
+    "/NoDefault"
+   ]
+  },
+  {
+   "type": "PcpErrorType_UnresolvedPrimPath",
+   "prim": "/SubOnly",
+   "arc": "reference",
+   "layer": "subonly",
+   "unresolved": "<defaultPrim>",
+   "introduced_by": [
+    "root",
+    "/SubOnly"
+   ]
+  }
+ ],
+ "default_prim_paths": [
+  [
+   "Model",
+   "/Model"
+  ],
+  [
+   "Model/Geo",
+   "/Model/Geo"
+  ],
+  [
+   "/Model/Geo",
+   "/Model/Geo"
+  ],
+  [
+   "_x",
+   "/_x"
+  ],
+  [
+   "Mödel",
+   "/Mödel"
+  ],
+  [
+   "1Bad",
+   null
+  ],
+  [
+   "Model.attr",
+   null
+  ],
+  [
+   "/",
+   null
+  ],
+  [
+   "",
+   null
+  ],
+  [
+   "./Model",
+   null
+  ],
+  [
+   "../X",
+   null
+  ],
+  [
+   "Model{v=a}",
+   null
+  ],
+  [
+   "Bad Name",
+   null
+  ],
+  [
+   "Model/",
+   null
+  ],
+  [
+   "a:b",
+   null
+  ]
+ ]
+}

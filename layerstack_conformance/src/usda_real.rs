@@ -173,6 +173,12 @@ impl AssetResolver for FileResolver {
             });
         }
 
+        // A missing file is not found every time it is asked for; it is
+        // never given a layer ID.
+        if !resolved_path.is_file() {
+            return Err(AssetResolveError::NotFound);
+        }
+
         let layer_id = LayerId(self.next_layer_id);
         self.next_layer_id += 1;
         self.by_path.insert(resolved_path.clone(), layer_id);

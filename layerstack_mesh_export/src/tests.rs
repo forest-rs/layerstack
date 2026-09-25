@@ -34,7 +34,7 @@ fn golden_triangle() {
             Primvar::constant(PrimvarData::color3(&colors)),
         )
         .with_transform(Transform::from_translation([1.0, 2.0, 3.0]))
-        .with_attribute("exedra:path", Value::String("part/tri".into()));
+        .with_attribute("site:path", Value::String("part/tri".into()));
     let text = tri_scene(mesh).to_usda().unwrap();
     let expected = r#"#usda 1.0
 (
@@ -66,7 +66,7 @@ def Xform "Root" (
         uniform token subdivisionScheme = "none"
         matrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (1, 2, 3, 1) )
         uniform token[] xformOpOrder = ["xformOp:transform"]
-        custom string exedra:path = "part/tri"
+        custom string site:path = "part/tri"
     }
 }
 "#;
@@ -80,14 +80,14 @@ def Xform "Root" (
 #[test]
 fn custom_attributes_must_be_attribute_types() {
     let mesh = Mesh::new("Tri", &TRI_POINTS, Faces::triangles(&[0, 1, 2])).with_attribute(
-        "exedra:data",
+        "site:data",
         Value::Dictionary(alloc::vec![("k".into(), Value::Int(1))]),
     );
     assert_eq!(
         tri_scene(mesh).to_usda(),
         Err(ExportError::Usda(
             layerstack_usda::writer::WriteError::UnknownType {
-                path: "/Root/Tri.exedra:data".into(),
+                path: "/Root/Tri.site:data".into(),
                 type_name: "dictionary".into()
             }
         )),
@@ -138,15 +138,12 @@ fn polygon_topology_and_custom_primvars() {
         &points,
         Faces::polygons(&[4, 3], &[0, 1, 2, 3, 1, 4, 2]),
     )
-    .with_primvar(
-        "exedra:region",
-        Primvar::uniform(PrimvarData::uint(&region)),
-    );
+    .with_primvar("site:region", Primvar::uniform(PrimvarData::uint(&region)));
     let text = tri_scene(mesh).to_usda().unwrap();
     assert!(text.contains("int[] faceVertexCounts = [4, 3]"), "{text}");
     assert!(
         text.contains(
-            "uint[] primvars:exedra:region = [7, 9] (\n            interpolation = \"uniform\""
+            "uint[] primvars:site:region = [7, 9] (\n            interpolation = \"uniform\""
         ),
         "{text}"
     );
@@ -247,7 +244,7 @@ fn rejects_inconsistent_meshes() {
 fn usdz_requires_authored_assets_to_be_packaged() {
     let png = b"png";
     let mesh = Mesh::new("Tri", &TRI_POINTS, Faces::triangles(&[0, 1, 2]))
-        .with_attribute("exedra:albedo", Value::Asset("./textures/a.png".into()));
+        .with_attribute("site:albedo", Value::Asset("./textures/a.png".into()));
     let scene = tri_scene(mesh);
     for profile in [UsdzProfile::Generic, UsdzProfile::Arkit] {
         assert_eq!(

@@ -22,6 +22,15 @@
 //! - stage metadata `upAxis` and `metersPerUnit` are always authored, and
 //!   the root prim is the layer's `defaultPrim`.
 //!
+//! Names, geometry buffers and per-instance arrays are [`Cow`]s, and every
+//! constructor takes `impl Into<Cow<..>>`: pass `&[T]` (or `&[T; N]`,
+//! `&Vec<T>`, `&str`) to borrow a kernel's data without copying, or `Vec<T>`
+//! and `String` for data built only for the export, so a function can
+//! return a `Scene<'static>` it assembled at runtime. Texture paths
+//! ([`Texture::file`]) stay borrowed, like the [`PackageFile`]s they name.
+//!
+//! [`Cow`]: alloc::borrow::Cow
+//!
 //! Prim names must be USD identifiers and unique among siblings; the
 //! exporter checks them but never rewrites them. Kernels whose keys are
 //! arbitrary strings can derive names with [`sanitize_name`] and keep
@@ -120,7 +129,7 @@
 //! // `[x, y, z, w]`: none, a quarter turn about Z, none.
 //! let orientations = [[0.0, 0.0, 0.0, 1.0], [0.0, 0.0, turned, turned], [0.0, 0.0, 0.0, 1.0]];
 //! let field = PointInstancer::new("Stones", &proto_indices, &positions)
-//!     .with_prototype(Mesh::new("Stone", &stone, Faces::Triangles(&[0, 1, 2])))
+//!     .with_prototype(Mesh::new("Stone", &stone, Faces::triangles(&[0, 1, 2])))
 //!     .with_orientations(&orientations)
 //!     .with_ids(&[10, 11, 12]);
 //! let scene = Scene::new(
@@ -144,7 +153,7 @@
 //! let points = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0], [0.0, 1.0, 0.0]];
 //! let normals = [[0.0, 0.0, 1.0]; 4];
 //! let uvs = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
-//! let quad = Mesh::new("Quad", &points, Faces::Polygons { counts: &[4], indices: &[0, 1, 2, 3] })
+//! let quad = Mesh::new("Quad", &points, Faces::polygons(&[4], &[0, 1, 2, 3]))
 //!     .with_normals(Primvar::vertex(&normals))
 //!     .with_uvs(Primvar::vertex(&uvs))
 //!     .with_material("Painted");

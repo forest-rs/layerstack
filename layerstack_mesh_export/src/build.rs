@@ -4,7 +4,7 @@
 //! Mapping from the mesh description to an authored USDA document.
 
 use alloc::format;
-use alloc::string::String;
+use alloc::string::{String, ToString};
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -56,7 +56,7 @@ pub(crate) fn document(scene: &Scene<'_>) -> Result<Document, ExportError> {
         root.children.push(scope);
     }
     Ok(Document {
-        default_prim: Some(scene.root.name.into()),
+        default_prim: Some(scene.root.name.to_string()),
         metadata: vec![
             Metadatum::new("metersPerUnit", Value::Double(stage.meters_per_unit)),
             Metadatum::new("upAxis", Value::Token(up_axis.into())),
@@ -73,10 +73,10 @@ fn xform_prim(
     materials: &Materials<'_, '_>,
 ) -> Result<Prim, ExportError> {
     let path = format!("{parent}/{}", xform.name);
-    let mut prim = Prim::def("Xform", xform.name);
-    if let Some(kind) = xform.kind {
+    let mut prim = Prim::def("Xform", &*xform.name);
+    if let Some(kind) = &xform.kind {
         prim.metadata
-            .push(Metadatum::new("kind", Value::Token(kind.into())));
+            .push(Metadatum::new("kind", Value::Token(kind.to_string())));
     }
     let mut attrs = Vec::new();
     push_transform(&mut attrs, xform.transform);
@@ -139,7 +139,7 @@ fn instancer_prim(
             Value::Float3Array(extent),
         ));
     }
-    if let Some(ids) = instancer.ids {
+    if let Some(ids) = &instancer.ids {
         attrs.push(Attribute::new(
             "ids",
             "int64[]",
@@ -163,7 +163,7 @@ fn instancer_prim(
         "int[]",
         Value::IntArray(checked.proto_indices),
     ));
-    if let Some(scales) = instancer.scales {
+    if let Some(scales) = &instancer.scales {
         attrs.push(Attribute::new(
             "scales",
             "float3[]",
@@ -173,7 +173,7 @@ fn instancer_prim(
     push_transform(&mut attrs, instancer.transform);
     push_custom(&mut attrs, &instancer.attributes);
 
-    let mut prim = Prim::def("PointInstancer", instancer.name);
+    let mut prim = Prim::def("PointInstancer", &*instancer.name);
     prim.properties
         .extend(attrs.into_iter().map(Property::Attribute));
     // `prototypes` is an ordered target list: a prototype's position in it
@@ -221,7 +221,7 @@ fn mesh_prim(
         problem,
     };
 
-    let (counts, indices) = topology(mesh.faces, mesh.points.len()).map_err(fail)?;
+    let (counts, indices) = topology(&mesh.faces, mesh.points.len()).map_err(fail)?;
     let sites = Sites {
         points: mesh.points.len(),
         faces: counts.len(),
@@ -233,7 +233,7 @@ fn mesh_prim(
     // bounds; it is the local-space AABB of `points`, before this prim's
     // own transform (`pxr/usd/usdGeom/boundable.h:42`). Empty meshes have
     // no extent.
-    if let Some(extent) = extent(mesh.points).map_err(fail)? {
+    if let Some(extent) = extent(&mesh.points).map_err(fail)? {
         attrs.push(Attribute::new(
             "extent",
             "float3[]",
@@ -251,13 +251,13 @@ fn mesh_prim(
         Value::IntArray(indices),
     ));
 
-    if let Some(normals) = mesh.normals {
+    if let Some(normals) = &mesh.normals {
         let values = Value::Float3Array(normals.values.to_vec());
         match normals.indices {
             // `normals` is a plain attribute with an `interpolation`, not a
             // primvar, so it cannot be indexed (`pxr/usd/usdGeom/pointBased.h`).
             None => {
-                check_primvar("normals", normals.values.len(), &normals, sites).map_err(fail)?;
+                check_primvar("normals", normals.values.len(), normals, sites).map_err(fail)?;
                 attrs.push(
                     Attribute::new("normals", "normal3f[]", values).with_metadata(
                         "interpolation",
@@ -273,7 +273,7 @@ fn mesh_prim(
                 "normal3f[]",
                 values,
                 normals.values.len(),
-                &normals,
+                normals,
                 sites,
             )
             .map_err(fail)?,
@@ -297,7 +297,7 @@ fn mesh_prim(
         Value::Float3Array(mesh.points.to_vec()),
     ));
 
-    if let Some(uvs) = mesh.uvs {
+    if let Some(uvs) = &mesh.uvs {
         // The conventional primary UV set is the `st` primvar of role
         // `texCoord2f` (`pxr/usd/usdGeom/primvar.h`).
         push_primvar(
@@ -306,13 +306,13 @@ fn mesh_prim(
             "texCoord2f[]",
             Value::Float2Array(uvs.values.to_vec()),
             uvs.values.len(),
-            &uvs,
+            uvs,
             sites,
         )
         .map_err(fail)?;
     }
     for custom in &mesh.primvars {
-        let data = custom.primvar.values;
+        let data = &custom.primvar.values;
         push_primvar(
             &mut attrs,
             &format!("primvars:{}", custom.name),
@@ -331,11 +331,12 @@ fn mesh_prim(
     push_transform(&mut attrs, mesh.transform);
     push_custom(&mut attrs, &mesh.attributes);
 
-    let mut prim = Prim::def("Mesh", mesh.name);
+    let mut prim = Prim::def("Mesh", &*mesh.name);
     prim.properties
         .extend(attrs.into_iter().map(Property::Attribute));
     let binding = mesh
         .material
+        .as_deref()
         .map(|name| material_binding(mesh, &path, &path, name, materials))
         .transpose()?;
     if !mesh.material_subsets.is_empty() {
@@ -352,7 +353,7 @@ fn mesh_prim(
         );
         for subset in &mesh.material_subsets {
             let subset_path = format!("{path}/{}", subset.name);
-            let binding = material_binding(mesh, &path, &subset_path, subset.material, materials)?;
+            let binding = material_binding(mesh, &path, &subset_path, &subset.material, materials)?;
             prim.children
                 .push(subset_prim(subset, binding).map_err(fail)?);
         }
@@ -375,17 +376,17 @@ fn check_family(
 ) -> Result<(), MeshProblem> {
     let mut covered = vec![false; faces];
     for subset in subsets {
-        for &face in subset.faces {
+        for &face in subset.faces.iter() {
             let Some(seen) = covered.get_mut(face as usize) else {
                 return Err(MeshProblem::SubsetFaceOutOfRange {
-                    subset: subset.name.into(),
+                    subset: subset.name.to_string(),
                     face,
                     faces,
                 });
             };
             if core::mem::replace(seen, true) {
                 return Err(MeshProblem::OverlappingSubsets {
-                    subset: subset.name.into(),
+                    subset: subset.name.to_string(),
                     face,
                 });
             }
@@ -408,7 +409,7 @@ fn subset_prim(subset: &MaterialSubset<'_>, material: String) -> Result<Prim, Me
         .iter()
         .map(|&face| to_int(face))
         .collect::<Result<Vec<_>, _>>()?;
-    let mut prim = Prim::def("GeomSubset", subset.name);
+    let mut prim = Prim::def("GeomSubset", &*subset.name);
     prim.push_property(
         Attribute::new("elementType", "token", Value::Token("face".into())).uniform(),
     );
@@ -477,13 +478,13 @@ fn apply_binding(prim: &mut Prim, material: String) {
 /// Converts topology to USD's `int[]` counts and indices, checking counts,
 /// index ranges and the 32-bit signed limit, as `UsdGeomMesh::ValidateTopology`
 /// does (`pxr/usd/usdGeom/mesh.h:575`).
-fn topology(faces: Faces<'_>, points: usize) -> Result<(Vec<i32>, Vec<i32>), MeshProblem> {
+fn topology(faces: &Faces<'_>, points: usize) -> Result<(Vec<i32>, Vec<i32>), MeshProblem> {
     let (counts, raw) = match faces {
         Faces::Triangles(indices) => {
             if indices.len() % 3 != 0 {
                 return Err(MeshProblem::PartialTriangle { len: indices.len() });
             }
-            (vec![3; indices.len() / 3], indices)
+            (vec![3; indices.len() / 3], &**indices)
         }
         Faces::Polygons { counts, indices } => {
             let mut out = Vec::with_capacity(counts.len());
@@ -501,7 +502,7 @@ fn topology(faces: Faces<'_>, points: usize) -> Result<(Vec<i32>, Vec<i32>), Mes
                     actual: indices.len(),
                 });
             }
-            (out, indices)
+            (out, &**indices)
         }
     };
     let mut indices = Vec::with_capacity(raw.len());
@@ -546,7 +547,7 @@ fn check_primvar<V>(
     sites: Sites,
 ) -> Result<(), MeshProblem> {
     let expected = sites.count(primvar.interpolation);
-    let Some(indices) = primvar.indices else {
+    let Some(indices) = &primvar.indices else {
         if value_count != expected {
             return Err(MeshProblem::PrimvarLength {
                 name: name.into(),
@@ -591,7 +592,7 @@ fn push_primvar<V>(
         "interpolation",
         Value::Token(primvar.interpolation.token().into()),
     ));
-    if let Some(indices) = primvar.indices {
+    if let Some(indices) = &primvar.indices {
         let indices = indices
             .iter()
             .map(|&i| to_int(i))
@@ -631,7 +632,7 @@ fn push_custom(attrs: &mut Vec<Attribute>, custom: &[CustomAttribute<'_>]) {
     for attribute in custom {
         attrs.push(
             Attribute::new(
-                attribute.name,
+                &*attribute.name,
                 attribute.value.canonical_type_name(),
                 attribute.value.clone(),
             )

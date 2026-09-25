@@ -495,37 +495,34 @@ fn primvars_scene<'a>(
     let mesh = Mesh::new(
         "Panel",
         &QUAD_TRI_POINTS,
-        Faces::Polygons {
-            counts: &QUAD_TRI_COUNTS,
-            indices: &QUAD_TRI_INDICES,
-        },
+        Faces::polygons(&QUAD_TRI_COUNTS, &QUAD_TRI_INDICES),
     )
     .with_normals(Primvar::face_varying(normal).with_indices(normal_idx))
     .with_uvs(Primvar::face_varying(st).with_indices(st_idx))
     .with_primvar(
         "displayColor",
-        Primvar::uniform(PrimvarData::Color3(colors)),
+        Primvar::uniform(PrimvarData::color3(colors)),
     )
     .with_primvar(
         "displayOpacity",
-        Primvar::constant(PrimvarData::Float(opacity)),
+        Primvar::constant(PrimvarData::float(opacity)),
     )
     .with_primvar(
         "exedra:weight",
-        Primvar::vertex(PrimvarData::Float(weights)),
+        Primvar::vertex(PrimvarData::float(weights)),
     )
     .with_primvar(
         "exedra:id",
         Primvar::new(
-            PrimvarData::Int(ids),
+            PrimvarData::int(ids),
             layerstack_mesh_export::Interpolation::Varying,
         ),
     )
     .with_primvar(
         "exedra:region",
-        Primvar::uniform(PrimvarData::UInt(regions)),
+        Primvar::uniform(PrimvarData::uint(regions)),
     )
-    .with_primvar("exedra:tint", Primvar::constant(PrimvarData::Color4(tint)))
+    .with_primvar("exedra:tint", Primvar::constant(PrimvarData::color4(tint)))
     .with_transform(Transform::from_affine_3x4([
         [-1.0, 0.0, 0.0, 1.0],
         [0.0, 1.0, 0.0, 0.0],
@@ -593,10 +590,7 @@ fn cube() -> Mesh<'static> {
     Mesh::new(
         "Cube",
         &CUBE_POINTS,
-        Faces::Polygons {
-            counts: &CUBE_COUNTS,
-            indices: &CUBE_INDICES,
-        },
+        Faces::polygons(&CUBE_COUNTS, &CUBE_INDICES),
     )
     .with_normals(Primvar::uniform(&CUBE_NORMALS[..]))
     .with_uvs(Primvar::face_varying(&CUBE_UVS[..]))
@@ -857,16 +851,9 @@ fn cube_document() -> Document {
         .flat_map(|n| std::iter::repeat_n(*n, 4))
         .collect();
     let uvs: Vec<[f32; 2]> = (0..6).flat_map(|_| square).collect();
-    let cube = Mesh::new(
-        "Cube",
-        &POINTS,
-        Faces::Polygons {
-            counts: &[4; 6],
-            indices: &indices,
-        },
-    )
-    .with_normals(Primvar::face_varying(&normals[..]))
-    .with_uvs(Primvar::face_varying(&uvs[..]));
+    let cube = Mesh::new("Cube", &POINTS, Faces::polygons(&[4; 6], &indices))
+        .with_normals(Primvar::face_varying(&normals[..]))
+        .with_uvs(Primvar::face_varying(&uvs[..]));
     let root = Xform::new("Root")
         .with_kind("component")
         .with_transform(Transform::from_translation([0.0, 0.0, 0.5]))
@@ -881,10 +868,7 @@ fn quad_triangle() -> Document {
     let mesh = Mesh::new(
         "Panel",
         &QUAD_TRI_POINTS,
-        Faces::Polygons {
-            counts: &QUAD_TRI_COUNTS,
-            indices: &QUAD_TRI_INDICES,
-        },
+        Faces::polygons(&QUAD_TRI_COUNTS, &QUAD_TRI_INDICES),
     );
     Scene::new(
         StageSettings::new(UpAxis::Z, 1.0),
@@ -928,10 +912,7 @@ fn uv_seam() -> Document {
     let mesh = Mesh::new(
         "Fold",
         &points,
-        Faces::Polygons {
-            counts: &[4, 4],
-            indices: &[0, 1, 2, 3, 1, 4, 5, 2],
-        },
+        Faces::polygons(&[4, 4], &[0, 1, 2, 3, 1, 4, 5, 2]),
     )
     .with_normals(Primvar::face_varying(&normals[..]))
     .with_uvs(Primvar::face_varying(&uvs[..]).with_indices(&[0, 1, 2, 3, 4, 6, 7, 5]));
@@ -957,10 +938,10 @@ fn nested_transforms() -> Document {
     let wedge = Mesh::new(
         "Wedge",
         &points,
-        Faces::Polygons {
-            counts: &[4, 4, 3, 3, 4],
-            indices: &[0, 3, 2, 1, 0, 1, 4, 3, 4, 5, 3, 0, 4, 1, 1, 2, 5, 4],
-        },
+        Faces::polygons(
+            &[4, 4, 3, 3, 4],
+            &[0, 3, 2, 1, 0, 1, 4, 3, 4, 5, 3, 0, 4, 1, 1, 2, 5, 4],
+        ),
     );
     let rotate = Transform::from_affine_3x4([
         [0.0, -1.0, 0.0, 0.0],
@@ -1151,10 +1132,7 @@ pub fn write_all(dir: &Path) -> Vec<Fixture> {
     let mesh = Mesh::new(
         "Panel",
         &QUAD_TRI_POINTS,
-        Faces::Polygons {
-            counts: &QUAD_TRI_COUNTS,
-            indices: &QUAD_TRI_INDICES,
-        },
+        Faces::polygons(&QUAD_TRI_COUNTS, &QUAD_TRI_INDICES),
     )
     .with_attribute(
         "exedra:albedo",

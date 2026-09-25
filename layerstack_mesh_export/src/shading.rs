@@ -239,7 +239,7 @@ pub(crate) fn material_prim(material: &Material<'_>, scope: &str) -> Result<Prim
         .properties
         .extend(shader_attrs.into_iter().map(Property::Attribute));
 
-    let mut prim = Prim::def("Material", material.name);
+    let mut prim = Prim::def("Material", &*material.name);
     // `UsdShadeMaterial` `outputs:surface` (material.h:206), connected to
     // the shader's output as in the specification's sample.
     prim.push_property(

@@ -72,16 +72,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Each face maps its corners to the unit square (its own UV island).
     let uvs: Vec<[f32; 2]> = (0..6).flat_map(|_| UVS).collect();
 
-    let cube = Mesh::new(
-        "Cube",
-        &POINTS,
-        Faces::Polygons {
-            counts: &counts,
-            indices: &indices,
-        },
-    )
-    .with_normals(Primvar::face_varying(&normals[..]))
-    .with_uvs(Primvar::face_varying(&uvs[..]));
+    let cube = Mesh::new("Cube", &POINTS, Faces::polygons(&counts, &indices))
+        .with_normals(Primvar::face_varying(&normals[..]))
+        .with_uvs(Primvar::face_varying(&uvs[..]));
 
     // Lift the cube so it rests on the ground plane (Z up, meters).
     let root = Xform::new("Root")

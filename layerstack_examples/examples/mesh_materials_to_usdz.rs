@@ -80,19 +80,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let indices: Vec<u32> = FACES.iter().flatten().copied().collect();
     let uvs: Vec<[f32; 2]> = (0..6).flat_map(|_| UVS).collect();
 
-    let cube = Mesh::new(
-        "Cube",
-        &POINTS,
-        Faces::Polygons {
-            counts: &counts,
-            indices: &indices,
-        },
-    )
-    .with_normals(Primvar::uniform(&FACE_NORMALS[..]))
-    .with_uvs(Primvar::face_varying(&uvs[..]))
-    .with_material_subset("CheckerFaces", &CHECKER_FACES, "Checker")
-    .with_material_subset("PaintFaces", &PAINT_FACES, "Paint")
-    .with_subset_family(FamilyType::Partition);
+    let cube = Mesh::new("Cube", &POINTS, Faces::polygons(&counts, &indices))
+        .with_normals(Primvar::uniform(&FACE_NORMALS[..]))
+        .with_uvs(Primvar::face_varying(&uvs[..]))
+        .with_material_subset("CheckerFaces", &CHECKER_FACES, "Checker")
+        .with_material_subset("PaintFaces", &PAINT_FACES, "Paint")
+        .with_subset_family(FamilyType::Partition);
 
     // A 4x4 orange and teal checker for the base color, and a data image
     // whose green channel varies the roughness per cell.

@@ -1,6 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
+use alloc::borrow::Cow;
 use alloc::string::ToString;
 use alloc::vec;
 
@@ -10,7 +11,7 @@ use crate::{
 };
 
 const TRI_POINTS: [[f32; 3]; 3] = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
-const TRI: Faces<'static> = Faces::Triangles(&[0, 1, 2]);
+const TRI: Faces<'static> = Faces::Triangles(Cow::Borrowed(&[0, 1, 2]));
 const QUAD_POINTS: [[f32; 3]; 4] = [
     [-0.5, -0.5, 0.0],
     [0.5, -0.5, 0.0],
@@ -18,8 +19,8 @@ const QUAD_POINTS: [[f32; 3]; 4] = [
     [-0.5, 0.5, 0.0],
 ];
 const QUAD: Faces<'static> = Faces::Polygons {
-    counts: &[4],
-    indices: &[0, 1, 2, 3],
+    counts: Cow::Borrowed(&[4]),
+    indices: Cow::Borrowed(&[0, 1, 2, 3]),
 };
 
 /// A 90° turn about +Z, `[x, y, z, w]`.

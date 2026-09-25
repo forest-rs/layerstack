@@ -1,7 +1,9 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Borrowed material description (`UsdPreviewSurface` inputs).
+//! Material description (`UsdPreviewSurface` inputs).
+
+use alloc::borrow::Cow;
 
 /// Name of the `Scope` under the root prim that holds every material; a
 /// material `M` is written at `/<root>/Materials/M`.
@@ -274,7 +276,7 @@ pub struct Material<'a> {
     /// Prim name under [`MATERIALS_SCOPE`]; must be a USD identifier and
     /// unique among the scene's materials. Meshes bind the material by this
     /// name.
-    pub name: &'a str,
+    pub name: Cow<'a, str>,
     /// Albedo (`inputs:diffuseColor`).
     pub diffuse_color: Option<ColorInput<'a>>,
     /// Emitted color (`inputs:emissiveColor`).
@@ -303,9 +305,9 @@ pub struct Material<'a> {
 
 impl<'a> Material<'a> {
     /// A material with every input at the shader's fallback.
-    pub fn new(name: &'a str) -> Self {
+    pub fn new(name: impl Into<Cow<'a, str>>) -> Self {
         Self {
-            name,
+            name: name.into(),
             diffuse_color: None,
             emissive_color: None,
             metallic: None,

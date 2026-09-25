@@ -1,8 +1,9 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Borrowed mesh description.
+//! Mesh description.
 
+use alloc::borrow::Cow;
 use alloc::vec::Vec;
 
 use layerstack_usda::writer::Value;
@@ -13,21 +14,34 @@ use crate::Transform;
 ///
 /// Spec: `UsdGeomMesh` `faceVertexCounts` / `faceVertexIndices`
 /// (<https://openusd.org/dev/api/class_usd_geom_mesh.html>).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Faces<'a> {
     /// A flat triangle index list; every three indices form one face.
-    Triangles(&'a [u32]),
+    Triangles(Cow<'a, [u32]>),
     /// General polygons: `counts[f]` corners per face, whose point indices
     /// follow each other in `indices`. Every face needs at least 3 corners.
     Polygons {
         /// Number of corners of each face.
-        counts: &'a [u32],
+        counts: Cow<'a, [u32]>,
         /// Point index of each face corner, face after face.
-        indices: &'a [u32],
+        indices: Cow<'a, [u32]>,
     },
 }
 
-impl Faces<'_> {
+impl<'a> Faces<'a> {
+    /// Triangles from a flat index list.
+    pub fn triangles(indices: impl Into<Cow<'a, [u32]>>) -> Self {
+        Self::Triangles(indices.into())
+    }
+
+    /// General polygons from corner counts and point indices.
+    pub fn polygons(counts: impl Into<Cow<'a, [u32]>>, indices: impl Into<Cow<'a, [u32]>>) -> Self {
+        Self::Polygons {
+            counts: counts.into(),
+            indices: indices.into(),
+        }
+    }
+
     /// Number of faces (`uniform` element count).
     pub fn face_count(&self) -> usize {
         match self {
@@ -89,43 +103,43 @@ impl Interpolation {
 /// corners with distinct indices are split (a UV seam or hard normal edge)
 /// even when their values are equal (`pxr/usd/usdGeom/primvar.h:497`).
 /// Indices are written exactly as given.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Primvar<'a, V> {
     /// The element values.
     pub values: V,
     /// Where the values (or indices) apply.
     pub interpolation: Interpolation,
     /// Optional per-site indices into `values`.
-    pub indices: Option<&'a [u32]>,
+    pub indices: Option<Cow<'a, [u32]>>,
 }
 
 impl<V> Primvar<'_, V> {
     /// Values with the given interpolation, unindexed.
-    pub fn new(values: V, interpolation: Interpolation) -> Self {
+    pub fn new(values: impl Into<V>, interpolation: Interpolation) -> Self {
         Self {
-            values,
+            values: values.into(),
             interpolation,
             indices: None,
         }
     }
 
     /// One value for the whole mesh.
-    pub fn constant(values: V) -> Self {
+    pub fn constant(values: impl Into<V>) -> Self {
         Self::new(values, Interpolation::Constant)
     }
 
     /// One value per face.
-    pub fn uniform(values: V) -> Self {
+    pub fn uniform(values: impl Into<V>) -> Self {
         Self::new(values, Interpolation::Uniform)
     }
 
     /// One value per point.
-    pub fn vertex(values: V) -> Self {
+    pub fn vertex(values: impl Into<V>) -> Self {
         Self::new(values, Interpolation::Vertex)
     }
 
     /// One value per face corner.
-    pub fn face_varying(values: V) -> Self {
+    pub fn face_varying(values: impl Into<V>) -> Self {
         Self::new(values, Interpolation::FaceVarying)
     }
 }
@@ -133,36 +147,88 @@ impl<V> Primvar<'_, V> {
 impl<'a, V> Primvar<'a, V> {
     /// Adds per-site indices into the values.
     #[must_use]
-    pub fn with_indices(mut self, indices: &'a [u32]) -> Self {
-        self.indices = Some(indices);
+    pub fn with_indices(mut self, indices: impl Into<Cow<'a, [u32]>>) -> Self {
+        self.indices = Some(indices.into());
         self
     }
 }
 
 /// Element data of an additional primvar. The variant fixes the USD value
 /// type written for it.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum PrimvarData<'a> {
     /// `float[]`.
-    Float(&'a [f32]),
+    Float(Cow<'a, [f32]>),
     /// `float2[]`.
-    Float2(&'a [[f32; 2]]),
+    Float2(Cow<'a, [[f32; 2]]>),
     /// `float3[]`.
-    Float3(&'a [[f32; 3]]),
+    Float3(Cow<'a, [[f32; 3]]>),
     /// `float4[]`.
-    Float4(&'a [[f32; 4]]),
+    Float4(Cow<'a, [[f32; 4]]>),
     /// `int[]`.
-    Int(&'a [i32]),
+    Int(Cow<'a, [i32]>),
     /// `uint[]`.
-    UInt(&'a [u32]),
+    UInt(Cow<'a, [u32]>),
     /// `color3f[]` (e.g. `primvars:displayColor`).
-    Color3(&'a [[f32; 3]]),
+    Color3(Cow<'a, [[f32; 3]]>),
     /// `color4f[]`.
-    Color4(&'a [[f32; 4]]),
+    Color4(Cow<'a, [[f32; 4]]>),
     /// `vector3f[]` (directions, e.g. tangents).
-    Vector3(&'a [[f32; 3]]),
+    Vector3(Cow<'a, [[f32; 3]]>),
     /// `texCoord2f[]` (an additional UV set).
-    TexCoord2(&'a [[f32; 2]]),
+    TexCoord2(Cow<'a, [[f32; 2]]>),
+}
+
+impl<'a> PrimvarData<'a> {
+    /// `float[]` values.
+    pub fn float(values: impl Into<Cow<'a, [f32]>>) -> Self {
+        Self::Float(values.into())
+    }
+
+    /// `float2[]` values.
+    pub fn float2(values: impl Into<Cow<'a, [[f32; 2]]>>) -> Self {
+        Self::Float2(values.into())
+    }
+
+    /// `float3[]` values.
+    pub fn float3(values: impl Into<Cow<'a, [[f32; 3]]>>) -> Self {
+        Self::Float3(values.into())
+    }
+
+    /// `float4[]` values.
+    pub fn float4(values: impl Into<Cow<'a, [[f32; 4]]>>) -> Self {
+        Self::Float4(values.into())
+    }
+
+    /// `int[]` values.
+    pub fn int(values: impl Into<Cow<'a, [i32]>>) -> Self {
+        Self::Int(values.into())
+    }
+
+    /// `uint[]` values.
+    pub fn uint(values: impl Into<Cow<'a, [u32]>>) -> Self {
+        Self::UInt(values.into())
+    }
+
+    /// `color3f[]` values.
+    pub fn color3(values: impl Into<Cow<'a, [[f32; 3]]>>) -> Self {
+        Self::Color3(values.into())
+    }
+
+    /// `color4f[]` values.
+    pub fn color4(values: impl Into<Cow<'a, [[f32; 4]]>>) -> Self {
+        Self::Color4(values.into())
+    }
+
+    /// `vector3f[]` values.
+    pub fn vector3(values: impl Into<Cow<'a, [[f32; 3]]>>) -> Self {
+        Self::Vector3(values.into())
+    }
+
+    /// `texCoord2f[]` values.
+    pub fn tex_coord2(values: impl Into<Cow<'a, [[f32; 2]]>>) -> Self {
+        Self::TexCoord2(values.into())
+    }
 }
 
 impl PrimvarData<'_> {
@@ -198,7 +264,7 @@ impl PrimvarData<'_> {
         }
     }
 
-    pub(crate) fn to_value(self) -> Value {
+    pub(crate) fn to_value(&self) -> Value {
         match self {
             Self::Float(v) => Value::FloatArray(v.to_vec()),
             Self::Float2(v) | Self::TexCoord2(v) => Value::Float2Array(v.to_vec()),
@@ -211,11 +277,11 @@ impl PrimvarData<'_> {
 }
 
 /// An additional primvar, written as `primvars:<name>`.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct CustomPrimvar<'a> {
     /// Name after the `primvars:` namespace (may itself be namespaced,
-    /// e.g. `exedra:region`).
-    pub name: &'a str,
+    /// e.g. `scan:region`).
+    pub name: Cow<'a, str>,
     /// Values, interpolation and optional indices.
     pub primvar: Primvar<'a, PrimvarData<'a>>,
 }
@@ -223,9 +289,9 @@ pub struct CustomPrimvar<'a> {
 /// A custom (non-schema) attribute, written with the `custom` qualifier.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CustomAttribute<'a> {
-    /// Namespaced attribute name (e.g. `exedra:sourcePath`). Use a
+    /// Namespaced attribute name (e.g. `scan:sourcePath`). Use a
     /// namespace so it cannot collide with schema attributes.
-    pub name: &'a str,
+    pub name: Cow<'a, str>,
     /// The value; its canonical USD type is declared (e.g. `string`).
     /// [`Value::Dictionary`] is metadata-only in USD and is rejected at
     /// export ([`ExportError::Usda`](crate::ExportError::Usda)).
@@ -234,8 +300,11 @@ pub struct CustomAttribute<'a> {
 
 impl<'a> CustomAttribute<'a> {
     /// Creates a custom attribute.
-    pub fn new(name: &'a str, value: Value) -> Self {
-        Self { name, value }
+    pub fn new(name: impl Into<Cow<'a, str>>, value: Value) -> Self {
+        Self {
+            name: name.into(),
+            value,
+        }
     }
 }
 
@@ -287,35 +356,36 @@ impl FamilyType {
 ///
 /// Spec: `pxr/usd/usdGeom/subset.h` (`GeomSubset`),
 /// `pxr/usd/usdShade/materialBindingAPI.h:867` (per-face bindings).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MaterialSubset<'a> {
     /// Prim name; must be a USD identifier, unique among the mesh's
     /// subsets.
-    pub name: &'a str,
+    pub name: Cow<'a, str>,
     /// Face indices (`indices`), written in the given order.
-    pub faces: &'a [u32],
+    pub faces: Cow<'a, [u32]>,
     /// Name of the scene material bound to these faces.
-    pub material: &'a str,
+    pub material: Cow<'a, str>,
 }
 
 /// One polygon mesh, written as a `Mesh` prim.
 ///
-/// All buffers are borrowed; nothing is copied until the scene is
-/// serialized.
+/// Names and buffers are [`Cow`]s: borrow a kernel's buffers where they
+/// outlive the scene, or hand over owned ones built for the export.
+/// Borrowed data is not copied until the scene is serialized.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Mesh<'a> {
     /// Prim name; must be a USD identifier.
-    pub name: &'a str,
+    pub name: Cow<'a, str>,
     /// Local transform relative to the parent prim.
     pub transform: Option<Transform>,
     /// Point positions in the mesh's local space.
-    pub points: &'a [[f32; 3]],
+    pub points: Cow<'a, [[f32; 3]]>,
     /// Face topology.
     pub faces: Faces<'a>,
     /// Surface normals.
-    pub normals: Option<Primvar<'a, &'a [[f32; 3]]>>,
+    pub normals: Option<Primvar<'a, Cow<'a, [[f32; 3]]>>>,
     /// Primary texture coordinates, written as `primvars:st`.
-    pub uvs: Option<Primvar<'a, &'a [[f32; 2]]>>,
+    pub uvs: Option<Primvar<'a, Cow<'a, [[f32; 2]]>>>,
     /// Additional primvars.
     pub primvars: Vec<CustomPrimvar<'a>>,
     /// Custom attributes.
@@ -328,7 +398,7 @@ pub struct Mesh<'a> {
     /// mesh, written as a direct `material:binding` with the
     /// `MaterialBindingAPI` applied. With [`Self::material_subsets`], it
     /// covers the faces outside every subset.
-    pub material: Option<&'a str>,
+    pub material: Option<Cow<'a, str>>,
     /// Per-face material bindings.
     pub material_subsets: Vec<MaterialSubset<'a>>,
     /// How [`Self::material_subsets`] divide the faces; authored whenever
@@ -338,11 +408,15 @@ pub struct Mesh<'a> {
 
 impl<'a> Mesh<'a> {
     /// A mesh with only points and topology.
-    pub fn new(name: &'a str, points: &'a [[f32; 3]], faces: Faces<'a>) -> Self {
+    pub fn new(
+        name: impl Into<Cow<'a, str>>,
+        points: impl Into<Cow<'a, [[f32; 3]]>>,
+        faces: Faces<'a>,
+    ) -> Self {
         Self {
-            name,
+            name: name.into(),
             transform: None,
-            points,
+            points: points.into(),
             faces,
             normals: None,
             uvs: None,
@@ -365,36 +439,43 @@ impl<'a> Mesh<'a> {
 
     /// Sets the normals.
     #[must_use]
-    pub fn with_normals(mut self, normals: Primvar<'a, &'a [[f32; 3]]>) -> Self {
+    pub fn with_normals(mut self, normals: Primvar<'a, Cow<'a, [[f32; 3]]>>) -> Self {
         self.normals = Some(normals);
         self
     }
 
     /// Sets the primary UV set (`primvars:st`).
     #[must_use]
-    pub fn with_uvs(mut self, uvs: Primvar<'a, &'a [[f32; 2]]>) -> Self {
+    pub fn with_uvs(mut self, uvs: Primvar<'a, Cow<'a, [[f32; 2]]>>) -> Self {
         self.uvs = Some(uvs);
         self
     }
 
     /// Adds a primvar written as `primvars:<name>`.
     #[must_use]
-    pub fn with_primvar(mut self, name: &'a str, primvar: Primvar<'a, PrimvarData<'a>>) -> Self {
-        self.primvars.push(CustomPrimvar { name, primvar });
+    pub fn with_primvar(
+        mut self,
+        name: impl Into<Cow<'a, str>>,
+        primvar: Primvar<'a, PrimvarData<'a>>,
+    ) -> Self {
+        self.primvars.push(CustomPrimvar {
+            name: name.into(),
+            primvar,
+        });
         self
     }
 
     /// Adds a custom attribute.
     #[must_use]
-    pub fn with_attribute(mut self, name: &'a str, value: Value) -> Self {
+    pub fn with_attribute(mut self, name: impl Into<Cow<'a, str>>, value: Value) -> Self {
         self.attributes.push(CustomAttribute::new(name, value));
         self
     }
 
     /// Binds a scene material to the whole mesh, by name.
     #[must_use]
-    pub fn with_material(mut self, material: &'a str) -> Self {
-        self.material = Some(material);
+    pub fn with_material(mut self, material: impl Into<Cow<'a, str>>) -> Self {
+        self.material = Some(material.into());
         self
     }
 
@@ -403,14 +484,14 @@ impl<'a> Mesh<'a> {
     #[must_use]
     pub fn with_material_subset(
         mut self,
-        name: &'a str,
-        faces: &'a [u32],
-        material: &'a str,
+        name: impl Into<Cow<'a, str>>,
+        faces: impl Into<Cow<'a, [u32]>>,
+        material: impl Into<Cow<'a, str>>,
     ) -> Self {
         self.material_subsets.push(MaterialSubset {
-            name,
-            faces,
-            material,
+            name: name.into(),
+            faces: faces.into(),
+            material: material.into(),
         });
         self
     }

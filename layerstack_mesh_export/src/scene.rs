@@ -3,6 +3,7 @@
 
 //! Scene hierarchy and stage settings.
 
+use alloc::borrow::Cow;
 use alloc::string::String;
 use alloc::vec::Vec;
 
@@ -111,12 +112,12 @@ pub enum Node<'a> {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Xform<'a> {
     /// Prim name; must be a USD identifier.
-    pub name: &'a str,
+    pub name: Cow<'a, str>,
     /// Local transform relative to the parent prim.
     pub transform: Option<Transform>,
     /// Model kind (e.g. `component`, `assembly`, `group`), written as the
     /// `kind` prim metadata when set.
-    pub kind: Option<&'a str>,
+    pub kind: Option<Cow<'a, str>>,
     /// Custom attributes.
     pub attributes: Vec<CustomAttribute<'a>>,
     /// Children, in order.
@@ -125,9 +126,9 @@ pub struct Xform<'a> {
 
 impl<'a> Xform<'a> {
     /// An empty group without a transform.
-    pub fn new(name: &'a str) -> Self {
+    pub fn new(name: impl Into<Cow<'a, str>>) -> Self {
         Self {
-            name,
+            name: name.into(),
             transform: None,
             kind: None,
             attributes: Vec::new(),
@@ -144,14 +145,14 @@ impl<'a> Xform<'a> {
 
     /// Sets the model kind.
     #[must_use]
-    pub fn with_kind(mut self, kind: &'a str) -> Self {
-        self.kind = Some(kind);
+    pub fn with_kind(mut self, kind: impl Into<Cow<'a, str>>) -> Self {
+        self.kind = Some(kind.into());
         self
     }
 
     /// Adds a custom attribute.
     #[must_use]
-    pub fn with_attribute(mut self, name: &'a str, value: Value) -> Self {
+    pub fn with_attribute(mut self, name: impl Into<Cow<'a, str>>, value: Value) -> Self {
         self.attributes.push(CustomAttribute::new(name, value));
         self
     }

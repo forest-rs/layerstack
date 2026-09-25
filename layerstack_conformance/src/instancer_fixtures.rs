@@ -11,6 +11,7 @@
 //! the transform each instance should get, computed from the inputs, for
 //! comparison with `UsdGeomPointInstancer::ComputeInstanceTransformsAtTime`.
 
+use std::borrow::Cow;
 use std::f64::consts::PI;
 
 use layerstack_mesh_export::{
@@ -36,8 +37,8 @@ const BOX_INDICES: [u32; 24] = [
     0, 3, 2, 1, 4, 5, 6, 7, 0, 1, 5, 4, 1, 2, 6, 5, 2, 3, 7, 6, 3, 0, 4, 7,
 ];
 const BOX: Faces<'static> = Faces::Polygons {
-    counts: &BOX_COUNTS,
-    indices: &BOX_INDICES,
+    counts: Cow::Borrowed(&BOX_COUNTS),
+    indices: Cow::Borrowed(&BOX_INDICES),
 };
 
 /// A square pyramid: base at z = 0.8, apex at z = 2.6.
@@ -113,10 +114,7 @@ pub fn prototypes() -> Vec<Node<'static>> {
             Mesh::new(
                 "Crown",
                 &CROWN_POINTS,
-                Faces::Polygons {
-                    counts: &CROWN_COUNTS,
-                    indices: &CROWN_INDICES,
-                },
+                Faces::polygons(&CROWN_COUNTS, &CROWN_INDICES),
             )
             .with_material_subset("Sides", &CROWN_SIDES, "Needles")
             .with_material_subset("Base", &CROWN_BASE, "Shade")
@@ -125,7 +123,7 @@ pub fn prototypes() -> Vec<Node<'static>> {
     let boulder = Mesh::new(
         "Boulder",
         &BOULDER_POINTS,
-        Faces::Triangles(&BOULDER_INDICES),
+        Faces::triangles(&BOULDER_INDICES),
     );
     let shrub = Xform::new("Shrub")
         .with_transform(shrub_transform())

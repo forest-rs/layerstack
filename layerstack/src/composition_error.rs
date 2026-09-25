@@ -29,6 +29,9 @@ pub enum CompositionError {
     /// layer's `defaultPrim` does not name a prim. The arc contributed
     /// nothing.
     UnresolvedDefaultPrim(UnresolvedDefaultPrim),
+    /// A reference or payload to a prim path that has no specs in the
+    /// target layer stack. The arc contributed nothing.
+    UnresolvedPrimPath(UnresolvedPrimPath),
     /// A reference or payload whose asset path could not be resolved. The
     /// arc contributed nothing.
     UnresolvedAsset(UnresolvedAsset),
@@ -65,6 +68,7 @@ impl CompositionError {
             | Self::InvalidSameTargetRelocations(_) => None,
             Self::ArcCycle(cycle) => Some(cycle.prim),
             Self::UnresolvedDefaultPrim(error) => Some(error.prim),
+            Self::UnresolvedPrimPath(error) => Some(error.prim),
             Self::UnresolvedAsset(error) => Some(error.prim),
             Self::OpinionAtRelocationSource(error) => Some(error.prim),
             Self::ArcToProhibitedChild(error) => Some(error.prim),
@@ -106,6 +110,39 @@ pub struct UnresolvedDefaultPrim {
     /// The prim path `defaultPrim` names when no prim spec exists there, or
     /// `None` when `layer` has no `defaultPrim` or it is not a prim path.
     pub path: Option<PathId>,
+}
+
+/// A reference or payload whose authored prim path names no prim in the
+/// target layer stack, found while composing `prim`.
+///
+/// The arc is followed: it targets `path` in the layer stack whose root
+/// layer is `layer`, but composing that site brings in no prim spec,
+/// neither from a layer of that stack nor through the arcs authored on
+/// `path` and its ancestors there (a site reached only across a cycle has
+/// none). It contributes no opinions and the rest of the prim is composed
+/// as normal. An arc with no authored prim path reports
+/// [`UnresolvedDefaultPrim`] instead.
+///
+/// Spec: AOUSD Core §10.3.2.1 ("If there are no specs in any of the layers
+/// of the referenced layer stack for the reference prim path, it is a
+/// composition error and that reference is ignored"), §10.3.2.2 (payloads
+/// behave as references), §10.6. OpenUSD reports it as
+/// `PcpErrorUnresolvedPrimPath` (`_EvalUnresolvedPrimPathError` in
+/// `pxr/usd/pcp/primIndex.cpp`), once for each composed prim whose
+/// composition reaches the arc, including arcs nested in other arcs'
+/// targets. An arc is checked for the prim it is authored on, not for the
+/// descendants it reaches ancestrally.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct UnresolvedPrimPath {
+    /// The composed prim whose composition reached the arc.
+    pub prim: PathId,
+    /// The arc: [`ArcKind::References`] or [`ArcKind::Payloads`].
+    pub arc: ArcKind,
+    /// The root layer of the target layer stack: the referenced asset, or
+    /// the root of the authoring layer stack for an internal arc.
+    pub layer: LayerId,
+    /// The prim path the arc names.
+    pub path: PathId,
 }
 
 /// A composition arc that would form a cycle, found while composing `prim`.

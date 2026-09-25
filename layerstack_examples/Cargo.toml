@@ -1,6 +1,6 @@
 [package]
 name = "layerstack_examples"
-description = "Runnable examples for the layerstack composition kernel."
+description = "Runnable examples for the layerstack composition kernel and opinionated."
 readme = "README.md"
 version.workspace = true
 edition.workspace = true
@@ -18,3 +18,4 @@ layerstack = { path = "../layerstack" }
 layerstack_mesh_export = { path = "../layerstack_mesh_export" }
 layerstack_usda = { path = "../layerstack_usda" }
 layerstack_usdz = { path = "../layerstack_usdz" }
+opinionated = { workspace = true }

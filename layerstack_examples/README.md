@@ -1,12 +1,16 @@
 # layerstack_examples
 
-Small runnable programs that demonstrate how to use the `layerstack` API.
+Small runnable programs that demonstrate how to use the `layerstack` API, and the
+`opinionated` kernels on their own.
 
 ## Run
 
 - `cargo run -p layerstack_examples`
 - `cargo run -p layerstack_examples --example minimal`
 - `cargo run -p layerstack_examples --example sparse_array_edits`
+- `cargo run -p layerstack_examples --example light_rig_slots`
+  (sparse edits to a typed `Vec` of light rig slots with `opinionated` alone: insert a light,
+  duplicate the last slot, and resize with an unlit light as the host-supplied fill)
 - `cargo run -p layerstack_examples --example mesh_to_usdz -- cube.usdz [arkit|generic]`
   (writes a cube with normals and UVs as a USDZ package; the default ARKit / AR Quick Look
   profile uses a USDC root layer, `generic` a USDA one)

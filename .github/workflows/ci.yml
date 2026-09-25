@@ -221,7 +221,7 @@ jobs:
       - name: run examples
         if: runner.os == 'Linux'
         run: |
-          for example in asset_resolution instancing live_editing minimal sparse_array_edits timeline typed_schema; do
+          for example in asset_resolution instancing live_editing minimal sparse_array_edits light_rig_slots timeline typed_schema; do
             cargo run --locked --all-features -p layerstack_examples --example "$example"
           done
           cargo run --locked --all-features -p layerstack_examples --example validate_usda -- \

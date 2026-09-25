@@ -57,6 +57,75 @@ impl ArcKind {
     }
 }
 
+/// Where one specializes arc on an opinion's arc path is authored.
+///
+/// Opinions introduced by specializes arcs are globally weaker than every
+/// other opinion of the prim, including opinions of other references and
+/// payloads, and include the opinions of arcs authored inside the
+/// specialized prim (AOUSD Core §10.4.1). OpenUSD implements this by leaving
+/// an inert placeholder where the arc is authored and propagating the
+/// specializes node to the root of the prim index, where it ranks after
+/// every other arc (`pxr/usd/pcp/primIndex.cpp`, `_EvalImpliedSpecializes`;
+/// `pxr/usd/pcp/strengthOrdering.cpp`, `PcpCompareSiblingNodeStrength`).
+///
+/// An origin identifies one such propagated node by the position of its
+/// placeholder, ranked the way an [`OpinionKey`] of the placeholder would
+/// be, and by the specializes arc's own index in its site's list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SpecializesOrigin {
+    /// Namespace depth of the prim the specializes node is propagated at.
+    ///
+    /// Deeper is stronger, as for [`OpinionKey::namespace_depth`].
+    pub namespace_depth: u16,
+    /// Arc kind the placeholder ranks under: the outermost arc that brings
+    /// the authoring site into the prim index, or [`ArcKind::Specializes`]
+    /// for a specializes authored in the composed prim's own layer stack.
+    pub arc_kind: ArcKind,
+    /// Nested arc kind the placeholder ranks under, as in
+    /// [`OpinionKey::nested_arc_kind`]. A placeholder directly under an arc
+    /// target is nested as [`ArcKind::Specializes`], so it ranks after the
+    /// other arcs of that target, as OpenUSD orders a node's children.
+    pub nested_arc_kind: Option<ArcKind>,
+    /// Index of the outermost arc in its arc list.
+    pub arc_list_index: u16,
+    /// Index of the specializes arc in the authoring site's specializes list.
+    pub specializes_index: u16,
+    /// `true` when the specialized path is mapped into the namespace of the
+    /// arc that introduces the authoring site (an implied specializes), as
+    /// opposed to the propagated arc itself. OpenUSD ranks the implied node
+    /// first (`PcpCompareSiblingNodeStrength`).
+    pub implied: bool,
+}
+
+impl SpecializesOrigin {
+    /// Compares origins with "strongest first" ordering.
+    #[must_use]
+    pub fn cmp_strongest_first(&self, other: &Self) -> Ordering {
+        other
+            .namespace_depth
+            .cmp(&self.namespace_depth)
+            .then_with(|| {
+                self.arc_kind
+                    .strength_rank()
+                    .cmp(&other.arc_kind.strength_rank())
+            })
+            .then_with(|| cmp_nested_arc_kind(self.nested_arc_kind, other.nested_arc_kind))
+            .then_with(|| self.arc_list_index.cmp(&other.arc_list_index))
+            .then_with(|| self.specializes_index.cmp(&other.specializes_index))
+            .then_with(|| other.implied.cmp(&self.implied))
+    }
+}
+
+/// Orders nested arc kinds: no nesting is strongest, then LIVERPS order.
+fn cmp_nested_arc_kind(a: Option<ArcKind>, b: Option<ArcKind>) -> Ordering {
+    match (a, b) {
+        (None, Some(_)) => Ordering::Less,
+        (Some(_), None) => Ordering::Greater,
+        (Some(a), Some(b)) => a.strength_rank().cmp(&b.strength_rank()),
+        (None, None) => Ordering::Equal,
+    }
+}
+
 /// A comparable strength key for a single authored opinion.
 ///
 /// Spec: AOUSD Core §10.4 (strength ordering and tie-breakers).
@@ -64,6 +133,22 @@ impl ArcKind {
 pub struct OpinionKey {
     /// `true` for local opinions (layer stack), `false` for opinions introduced by arcs.
     pub is_local: bool,
+    /// The specializes arcs on this opinion's arc path, outermost first.
+    ///
+    /// Empty for opinions that no specializes arc introduces. Otherwise the
+    /// opinion belongs to the specializes node the last origin names, and
+    /// the remaining fields rank it within that node: [`Self::arc_kind`] is
+    /// [`ArcKind::Specializes`] and [`Self::nested_arc_kind`] is the arc
+    /// inside the specialized prim that introduces it, if any.
+    ///
+    /// Chains are ordered by their first differing origin (see
+    /// [`SpecializesOrigin`]); a chain that extends another ranks right after
+    /// it, so an opinion that no specializes introduces outranks every
+    /// specializes node, and a nested node follows only its own enclosing
+    /// node.
+    ///
+    /// Spec: AOUSD Core §10.4.1.
+    pub specializes: Vec<SpecializesOrigin>,
     /// Arc kind of this opinion (for non-local opinions).
     pub arc_kind: ArcKind,
     /// Optional nested arc kind for opinions introduced inside another arc.
@@ -118,6 +203,25 @@ impl OpinionKey {
             _ => {}
         }
 
+        // Specializes nodes rank after every other node. Two chains are
+        // ordered by their first differing origin, outermost first, as
+        // OpenUSD orders sibling specializes nodes by their originating nodes
+        // (`PcpCompareSiblingNodeStrength` in
+        // `pxr/usd/pcp/strengthOrdering.cpp`). A chain that extends another
+        // is a node nested in that node's specialized prim and ranks right
+        // after it, before the enclosing node's weaker siblings
+        // (AOUSD Core §10.4.1).
+        let specializes = self
+            .specializes
+            .iter()
+            .zip(&other.specializes)
+            .map(|(a, b)| a.cmp_strongest_first(b))
+            .find(|ordering| ordering.is_ne())
+            .unwrap_or_else(|| self.specializes.len().cmp(&other.specializes.len()));
+        if specializes != Ordering::Equal {
+            return specializes;
+        }
+
         let arc = self
             .arc_kind
             .strength_rank()
@@ -126,16 +230,9 @@ impl OpinionKey {
             return arc;
         }
 
-        match (self.nested_arc_kind, other.nested_arc_kind) {
-            (None, Some(_)) => return Ordering::Less,
-            (Some(_), None) => return Ordering::Greater,
-            (Some(a), Some(b)) => {
-                let nested = a.strength_rank().cmp(&b.strength_rank());
-                if nested != Ordering::Equal {
-                    return nested;
-                }
-            }
-            (None, None) => {}
+        let nested = cmp_nested_arc_kind(self.nested_arc_kind, other.nested_arc_kind);
+        if nested != Ordering::Equal {
+            return nested;
         }
 
         let depth = other.namespace_depth.cmp(&self.namespace_depth);
@@ -402,7 +499,7 @@ mod tests {
         spec_path::SpecPath,
     };
     use alloc::format;
-    use alloc::vec::Vec;
+    use alloc::{vec, vec::Vec};
 
     fn key(
         is_local: bool,
@@ -421,6 +518,7 @@ mod tests {
         let path_id = paths.intern(Path::parse_absolute(&path_str, &mut tokens).expect("path"));
         OpinionKey {
             is_local,
+            specializes: Vec::new(),
             arc_kind,
             nested_arc_kind,
             namespace_depth,
@@ -577,6 +675,7 @@ mod tests {
         let path_d = paths.intern(Path::parse_absolute("/B", &mut tokens).expect("path"));
         let c = OpinionKey {
             is_local: true,
+            specializes: Vec::new(),
             arc_kind: ArcKind::Local,
             nested_arc_kind: None,
             namespace_depth: 1,
@@ -614,6 +713,102 @@ mod tests {
 
         assert_eq!(keys[2].arc_kind, ArcKind::Variants);
         assert_eq!(keys[3].arc_kind, ArcKind::Specializes);
+    }
+
+    fn origin(arc_kind: ArcKind, nested_arc_kind: Option<ArcKind>) -> SpecializesOrigin {
+        SpecializesOrigin {
+            namespace_depth: 1,
+            arc_kind,
+            nested_arc_kind,
+            arc_list_index: 0,
+            specializes_index: 0,
+            implied: false,
+        }
+    }
+
+    fn specialized(specializes: Vec<SpecializesOrigin>) -> OpinionKey {
+        OpinionKey {
+            specializes,
+            ..key(false, ArcKind::Specializes, None, 1, true, 0, 0, 1, 1)
+        }
+    }
+
+    #[test]
+    fn specializes_reached_through_a_reference_are_weaker_than_payloads() {
+        // Spec: AOUSD Core §10.4.1: a specializes is weaker than every other
+        // arc, not only than the arc it is reached through.
+        let payload = key(
+            false,
+            ArcKind::Payloads,
+            Some(ArcKind::References),
+            1,
+            true,
+            3,
+            0,
+            1,
+            1,
+        );
+        let class = specialized(vec![origin(
+            ArcKind::References,
+            Some(ArcKind::Specializes),
+        )]);
+        assert_stronger(&payload, &class);
+    }
+
+    #[test]
+    fn nested_specializes_nodes_are_weaker_than_their_enclosing_node() {
+        let outer = origin(ArcKind::Specializes, None);
+        let inner = SpecializesOrigin {
+            namespace_depth: 2,
+            ..origin(ArcKind::Specializes, Some(ArcKind::Specializes))
+        };
+        let enclosing = OpinionKey {
+            nested_arc_kind: Some(ArcKind::References),
+            ..specialized(vec![outer])
+        };
+        assert_stronger(&enclosing, &specialized(vec![outer, inner]));
+    }
+
+    #[test]
+    fn nested_specializes_nodes_rank_before_weaker_siblings_of_their_node() {
+        // `P` specializes `[A, B]` and `A` specializes `C`: `C` follows `A`,
+        // before `B` (`PcpCompareSiblingNodeStrength`).
+        let a = origin(ArcKind::Specializes, None);
+        let b = SpecializesOrigin {
+            arc_list_index: 1,
+            specializes_index: 1,
+            ..a
+        };
+        let c = SpecializesOrigin {
+            namespace_depth: 1,
+            ..origin(ArcKind::Specializes, Some(ArcKind::Specializes))
+        };
+        assert_stronger(&specialized(vec![a]), &specialized(vec![a, c]));
+        assert_stronger(&specialized(vec![a, c]), &specialized(vec![b]));
+        assert_stronger(&specialized(vec![a, c]), &specialized(vec![b, c]));
+    }
+
+    #[test]
+    fn specializes_nodes_follow_their_placeholders() {
+        // A deeper node is stronger; then the placeholder's own rank, so a
+        // specializes under a nested reference outranks one authored beside
+        // that reference; then the implied node outranks the propagated one
+        // (`PcpCompareSiblingNodeStrength`).
+        let deep = SpecializesOrigin {
+            namespace_depth: 2,
+            ..origin(ArcKind::Specializes, None)
+        };
+        let beside = origin(ArcKind::References, Some(ArcKind::Specializes));
+        let nested = origin(ArcKind::References, Some(ArcKind::References));
+        let direct = origin(ArcKind::Specializes, None);
+        let implied = SpecializesOrigin {
+            implied: true,
+            ..direct
+        };
+        let order = [deep, nested, beside, implied, direct];
+        for pair in order.windows(2) {
+            assert_stronger(&specialized(vec![pair[0]]), &specialized(vec![pair[1]]));
+        }
     }
 
     #[test]

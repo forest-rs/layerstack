@@ -107,7 +107,7 @@ pub use path::{
     Path, PathError, PathId, PathInterner, PropertyPath, PropertyPathError, TargetPath,
     TargetPathError,
 };
-pub use prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue};
+pub use prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue, SpecializesOrigin};
 pub use property::{
     PropertyEntry, PropertyKind, PropertySpec, PropertyType, TimeSample, Variability,
 };

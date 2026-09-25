@@ -1449,6 +1449,7 @@ mod tests {
         let spec_path = SpecPath::parse("/A", &mut tokens, &mut paths).expect("spec path");
         OpinionKey {
             is_local: true,
+            specializes: Vec::new(),
             arc_kind: crate::prim_index::ArcKind::Local,
             nested_arc_kind: None,
             namespace_depth: 1,

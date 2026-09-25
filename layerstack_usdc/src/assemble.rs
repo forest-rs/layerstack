@@ -22,7 +22,7 @@ use layerstack::{HashMap, HashSet};
 
 use layerstack::doc::{
     FieldValue, Layer, LayerId, LayerOffset, PrimSpec, Reference, Specifier, SublayerEntry, Value,
-    VariantSetSpec, VariantSpec, set_field_vec,
+    VariantSpec, set_field_vec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp;
@@ -307,23 +307,7 @@ impl<'a> AssembleCtx<'a> {
         for (path_str, mut prim) in prim_specs {
             let namespace = match split_branch_path(&path_str) {
                 Some((namespace, sites)) => {
-                    // Each selection's host path is parsed and interned, so
-                    // a path with many selections is charged for each.
-                    let mut outer_sites = Vec::with_capacity(sites.len());
-                    for (host_len, set, variant) in sites {
-                        self.budget.charge(1)?;
-                        self.budget.charge_text(host_len)?;
-                        let Ok(host) = Path::parse_absolute(&namespace[..host_len], self.tokens)
-                        else {
-                            continue;
-                        };
-                        outer_sites.push(VariantSelectionSite {
-                            host_path: self.paths.intern(host),
-                            set: self.tokens.intern(set),
-                            variant: self.tokens.intern(variant),
-                        });
-                    }
-                    prim.outer_variant_sites = outer_sites;
+                    prim.outer_variant_sites = self.branch_sites(&namespace, &sites)?;
                     namespace
                 }
                 None => path_str,
@@ -335,6 +319,32 @@ impl<'a> AssembleCtx<'a> {
         }
 
         Ok(layer)
+    }
+
+    /// Converts the variant selections of a crate path, as split by
+    /// [`split_branch_path`], into sites whose host paths lie in `namespace`.
+    ///
+    /// Each selection's host path is parsed and interned, so a path with many
+    /// selections is charged for each.
+    fn branch_sites(
+        &mut self,
+        namespace: &str,
+        sites: &[BranchSite<'_>],
+    ) -> Result<Vec<VariantSelectionSite>, UsdcError> {
+        let mut out = Vec::with_capacity(sites.len());
+        for &(host_len, set, variant) in sites {
+            self.budget.charge(1)?;
+            self.budget.charge_text(host_len)?;
+            let Ok(host) = Path::parse_absolute(&namespace[..host_len], self.tokens) else {
+                continue;
+            };
+            out.push(VariantSelectionSite {
+                host_path: self.paths.intern(host),
+                set: self.tokens.intern(set),
+                variant: self.tokens.intern(variant),
+            });
+        }
+        Ok(out)
     }
 
     /// Collects decoded fields for a spec from the fieldsets/fields tables.
@@ -630,171 +640,184 @@ impl<'a> AssembleCtx<'a> {
     }
 
     /// Processes `VariantSet` and `Variant` specs.
+    ///
+    /// A variant set spec (`/P{v=}`) and a variant spec (`/P{v=x}`) belong to
+    /// the prim spec owning the set: `/P` for a variant set on a prim, also
+    /// when it is nested in another branch of that prim (`/P{a=y}{v=x}`),
+    /// and `/P{a=y}C` for one on a prim inside a branch (`/P{a=y}C{v=x}`).
+    /// Each [`VariantSpec`] records the branches enclosing it in its
+    /// `outer_variant_sites`. A variant nested in a branch of the same set
+    /// and name (`/P{v=x}{w=z}{v=x}`) is merged into the outer one, as the
+    /// USDA reader does.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
+    /// specs), §7.6.7 (variant specs), §16.3 (crate paths).
     fn process_variant_specs(
         &mut self,
         spec_fields: &[Fields<'_>],
         prim_specs: &mut HashMap<String, PrimSpec>,
     ) -> Result<(), UsdcError> {
-        // Collect variant set info: path → variant set name → variant branches.
-        // USDC stores variant set paths as `/Prim{varSet=}`
-        // and variant paths as `/Prim{varSet=branchName}`.
-        let mut variant_sets: HashMap<String, Vec<TokenId>> = HashMap::new();
+        // Collect variant set names per owning prim spec.
+        let mut variant_sets: Vec<(&str, TokenId)> = Vec::new();
         for spec in &self.sections.specs {
             if spec.form == SpecForm::VariantSet {
                 let path_str = self.lookup_path(spec.path_index)?;
-                // Path like: /Prim{varSetName=}
-                if let Some((prim_path, vset_name)) = parse_variant_set_path(path_str)
-                    && let Some(prim) = prim_specs.get_mut(&prim_path)
-                {
-                    let vset_tok = self.tokens.intern(&vset_name);
-                    prim.variant_sets
-                        .entry(vset_tok)
-                        .or_insert_with(VariantSetSpec::default);
-                    variant_sets.entry(prim_path).or_default().push(vset_tok);
+                match parse_variant_set_path(path_str) {
+                    Some((owner, vset_name)) if prim_specs.contains_key(owner) => {
+                        let vset_tok = self.tokens.intern(vset_name);
+                        variant_sets.push((owner, vset_tok));
+                    }
+                    _ => self.report(path_str, None, "variant set spec has no owning prim spec")?,
                 }
             }
         }
-        for (prim_path, names) in variant_sets {
-            if let Some(prim) = prim_specs.get_mut(&prim_path) {
-                append_unique(&mut prim.variant_set_order, names);
+        for (owner, vset_tok) in variant_sets {
+            if let Some(prim) = prim_specs.get_mut(owner) {
+                prim.variant_sets.entry(vset_tok).or_default();
+                append_unique(&mut prim.variant_set_order, [vset_tok]);
             }
         }
 
-        let mut variant_property_children = Vec::new();
+        // Properties directly on a variant (`/P{v=x}.b`), by variant path.
+        let mut variant_properties: HashMap<&str, Vec<PropertyEntry>> = HashMap::new();
+        for (i, spec) in self.sections.specs.iter().enumerate() {
+            if spec.form != SpecForm::Attribute && spec.form != SpecForm::Relationship {
+                continue;
+            }
+            let path_str = self.lookup_path(spec.path_index)?;
+            // Properties of prims inside a branch are attached with their
+            // prim.
+            let Some((variant_path, prop_name)) = path_str
+                .rsplit_once('.')
+                .filter(|(prim, _)| prim.ends_with('}'))
+            else {
+                continue;
+            };
+            let property = if spec.form == SpecForm::Attribute {
+                self.build_attribute_spec(path_str, &spec_fields[i])?
+            } else {
+                self.build_relationship_spec(path_str, &spec_fields[i])?
+            };
+            let prop_tok = self.tokens.intern(prop_name);
+            set_property_vec(
+                variant_properties.entry(variant_path).or_default(),
+                prop_tok,
+                property,
+            );
+        }
+
+        // Variant specs, outer branches before those nested in them, so a
+        // nested variant of the same set and name merges into the outer one.
+        let mut variants: Vec<(usize, &str)> = Vec::new();
         for (i, spec) in self.sections.specs.iter().enumerate() {
             if spec.form == SpecForm::Variant {
-                let path_str = self.lookup_path(spec.path_index)?;
-                // Path like: /Prim{varSetName=branchName}
-                if let Some((prim_path, vset_name, branch_name)) = parse_variant_path(path_str)
-                    && let Some(prim) = prim_specs.get_mut(&prim_path)
-                {
-                    let vset_tok = self.tokens.intern(&vset_name);
-                    let branch_tok = self.tokens.intern(&branch_name);
-                    let mut variant = VariantSpec::default();
-                    let mut property_children = None;
+                variants.push((i, self.lookup_path(spec.path_index)?));
+            }
+        }
+        variants.sort_by(|(_, a), (_, b)| {
+            let depth = |path: &str| path.matches('{').count();
+            depth(a).cmp(&depth(b)).then_with(|| a.cmp(b))
+        });
 
-                    // Process variant fields.
-                    for (name, value) in &spec_fields[i] {
-                        match *name {
-                            "primChildren" => {
-                                variant.authored_children = self.extract_token_names(value);
-                            }
-                            "properties" => {
-                                property_children = Some(self.extract_token_names(value));
-                            }
-                            "propertyOrder" => {
-                                variant.property_order = Some(self.extract_token_names(value));
-                            }
-                            "variantSetChildren" => {}
-                            "variantSelection" => {
-                                if let CrateValue::VariantSelectionMap(pairs) = value {
-                                    for (sn, bn) in pairs {
-                                        let st = self.tokens.intern(sn);
-                                        let bt = self.tokens.intern(bn);
-                                        variant.variant_selections.insert(st, bt);
-                                    }
-                                }
-                            }
-                            "references" => {
-                                if let CrateValue::ListOp(listop) = value
-                                    && let Ok(converted) = self.convert_ref_listop(listop)
-                                {
-                                    merge_ref_listop(&mut variant.references, converted);
-                                }
-                            }
-                            "payload" => {
-                                if let Ok(Some(converted)) = self.convert_payload_value(value) {
-                                    merge_ref_listop(&mut variant.payloads, converted);
-                                }
-                            }
-                            "inheritPaths" => {
-                                if let CrateValue::ListOp(listop) = value
-                                    && let Ok(converted) = self.convert_path_listop(listop)
-                                {
-                                    merge_path_listop(&mut variant.inherits, converted);
-                                }
-                            }
-                            "specializes" => {
-                                if let CrateValue::ListOp(listop) = value
-                                    && let Ok(converted) = self.convert_path_listop(listop)
-                                {
-                                    merge_path_listop(&mut variant.specializes, converted);
-                                }
-                            }
-                            _ => {
-                                // Generic variant field.
-                                if let Some(fv) = self.convert_metadata(path_str, name, value)? {
-                                    let key = self.tokens.intern(name);
-                                    set_field_vec(&mut variant.fields, key, fv);
-                                }
+        for (i, path_str) in variants {
+            let Some((owner, vset_name, branch_name)) = parse_variant_path(path_str)
+                .filter(|(owner, _, _)| prim_specs.contains_key(*owner))
+            else {
+                self.report(path_str, None, "variant spec has no owning prim spec")?;
+                continue;
+            };
+            let vset_tok = self.tokens.intern(vset_name);
+            let branch_tok = self.tokens.intern(branch_name);
+            let mut variant = VariantSpec::default();
+            if let Some((namespace, sites)) = split_branch_path(path_str) {
+                // Every selection but the variant's own.
+                let outer = &sites[..sites.len() - 1];
+                variant.outer_variant_sites = self.branch_sites(&namespace, outer)?;
+            }
+            let mut property_children = None;
+
+            // Process variant fields.
+            for (name, value) in &spec_fields[i] {
+                match *name {
+                    "primChildren" => {
+                        variant.authored_children = self.extract_token_names(value);
+                    }
+                    "properties" => {
+                        property_children = Some(self.extract_token_names(value));
+                    }
+                    "propertyOrder" => {
+                        variant.property_order = Some(self.extract_token_names(value));
+                    }
+                    // Nested variant sets are read from their own specs.
+                    "variantSetChildren" | "variantSetNames" => {}
+                    "variantSelection" => {
+                        if let CrateValue::VariantSelectionMap(pairs) = value {
+                            for (sn, bn) in pairs {
+                                let st = self.tokens.intern(sn);
+                                let bt = self.tokens.intern(bn);
+                                variant.variant_selections.insert(st, bt);
                             }
                         }
                     }
-
-                    let vset = prim
-                        .variant_sets
-                        .entry(vset_tok)
-                        .or_insert_with(VariantSetSpec::default);
-                    if let Some(order) = property_children {
-                        variant_property_children.push((prim_path, vset_tok, branch_tok, order));
+                    "references" => {
+                        if let CrateValue::ListOp(listop) = value
+                            && let Ok(converted) = self.convert_ref_listop(listop)
+                        {
+                            merge_ref_listop(&mut variant.references, converted);
+                        }
                     }
-                    vset.variants.insert(branch_tok, variant);
-                } else {
-                    self.report(
-                        path_str,
-                        None,
-                        "unsupported: variant specs below a variant branch are not read",
-                    )?;
+                    "payload" => {
+                        if let Ok(Some(converted)) = self.convert_payload_value(value) {
+                            merge_ref_listop(&mut variant.payloads, converted);
+                        }
+                    }
+                    "inheritPaths" => {
+                        if let CrateValue::ListOp(listop) = value
+                            && let Ok(converted) = self.convert_path_listop(listop)
+                        {
+                            merge_path_listop(&mut variant.inherits, converted);
+                        }
+                    }
+                    "specializes" => {
+                        if let CrateValue::ListOp(listop) = value
+                            && let Ok(converted) = self.convert_path_listop(listop)
+                        {
+                            merge_path_listop(&mut variant.specializes, converted);
+                        }
+                    }
+                    _ => {
+                        // Generic variant field.
+                        if let Some(fv) = self.convert_metadata(path_str, name, value)? {
+                            let key = self.tokens.intern(name);
+                            set_field_vec(&mut variant.fields, key, fv);
+                        }
+                    }
                 }
             }
-        }
 
-        // Process attribute/relationship specs that live under variant paths.
-        // These have paths like /Prim{varSet=branch}.attrName or
-        // /Prim{varSet=branch}/Child.
-        for (i, spec) in self.sections.specs.iter().enumerate() {
-            if spec.form == SpecForm::Attribute || spec.form == SpecForm::Relationship {
-                let path_str = self.lookup_path(spec.path_index)?;
-                // Only properties directly on a variant (`/A{v=x}.b`); those of
-                // prims inside a branch are attached with their prim.
-                if !path_str
-                    .rsplit_once('.')
-                    .is_some_and(|(prim, _)| prim.ends_with('}'))
-                {
-                    continue;
-                }
-                // Check if this is under a variant context.
-                if let Some((prim_path, vset_name, branch_name, prop_name)) =
-                    parse_variant_property_path(path_str)
-                    && let Some(prim) = prim_specs.get_mut(&prim_path)
-                    && let Some(vset) = prim.variant_sets.get_mut(&self.tokens.intern(&vset_name))
-                    && let Some(variant) = vset.variants.get_mut(&self.tokens.intern(&branch_name))
-                {
-                    let prop_tok = self.tokens.intern(&prop_name);
-                    let property = if spec.form == SpecForm::Attribute {
-                        self.build_attribute_spec(path_str, &spec_fields[i])?
-                    } else {
-                        self.build_relationship_spec(path_str, &spec_fields[i])?
-                    };
-                    set_property_vec(&mut variant.properties, prop_tok, property);
-                } else {
-                    self.report(
-                        path_str,
-                        None,
-                        "unsupported: properties of nested variants are not read",
-                    )?;
-                }
+            if let Some(properties) = variant_properties.remove(path_str) {
+                variant.properties = properties;
             }
-        }
-
-        for (prim_path, vset_tok, branch_tok, order) in variant_property_children {
-            if let Some(variant) = prim_specs
-                .get_mut(&prim_path)
-                .and_then(|prim| prim.variant_sets.get_mut(&vset_tok))
-                .and_then(|vset| vset.variants.get_mut(&branch_tok))
-            {
+            if let Some(order) = property_children {
                 sort_by_children(&mut variant.properties, &order);
             }
+
+            let prim = prim_specs.get_mut(owner).expect("owner checked above");
+            let vset = prim.variant_sets.entry(vset_tok).or_default();
+            match vset.variants.get_mut(&branch_tok) {
+                Some(existing) => existing.merge(variant),
+                None => {
+                    vset.variants.insert(branch_tok, variant);
+                }
+            }
+            append_unique(&mut prim.variant_set_order, [vset_tok]);
+        }
+
+        // Properties of variants that have no variant spec.
+        let mut orphans: Vec<&str> = variant_properties.into_keys().collect();
+        orphans.sort_unstable();
+        for path in orphans {
+            self.report(path, None, "variant property has no variant spec")?;
         }
 
         Ok(())
@@ -1595,80 +1618,48 @@ fn split_branch_path(path: &str) -> Option<(String, Vec<BranchSite<'_>>)> {
         .then_some((namespace, sites))
 }
 
-/// Parses a variant set path like `/Prim{varSetName=}` → `("/Prim", "varSetName")`.
-fn parse_variant_set_path(path: &str) -> Option<(String, String)> {
-    let open = path.find('{')?;
-    let close = path.find('}')?;
-    if close <= open + 1 {
+/// Strips the variant selections ending a crate path, returning the path of
+/// the prim spec they belong to: `/A{v=x}{w=y}` → `/A`, `/A{v=x}B` →
+/// `/A{v=x}B`.
+///
+/// Returns `None` for a malformed path or one naming no prim.
+fn owning_prim_path(path: &str) -> Option<&str> {
+    let mut rest = path;
+    while let Some(body) = rest.strip_suffix('}') {
+        rest = &body[..body.rfind('{')?];
+    }
+    (rest.len() > 1 && rest.starts_with('/') && !rest.ends_with('/')).then_some(rest)
+}
+
+/// Splits the crate path of a variant set spec or a variant spec at its last
+/// selection: `/A{v=x}{w=y}` → `("/A", "w", "y")`, and `/A{w=}` →
+/// `("/A", "w", "")`. The first element is the owning prim spec's path (see
+/// [`owning_prim_path`]).
+fn split_last_selection(path: &str) -> Option<(&str, &str, &str)> {
+    let body = path.strip_suffix('}')?;
+    let open = body.rfind('{')?;
+    let (set, variant) = body[open + 1..].split_once('=')?;
+    if set.is_empty() {
         return None;
     }
-    let prim_path = &path[..open];
-    let inner = &path[open + 1..close];
-    // Inner is "varSetName=" for variant sets.
-    let vset_name = inner.strip_suffix('=')?;
-    if vset_name.is_empty() {
-        return None;
+    Some((owning_prim_path(&body[..open])?, set, variant))
+}
+
+/// Parses a variant set path like `/Prim{varSetName=}` → `("/Prim",
+/// "varSetName")`, also when nested in other branches (see
+/// [`split_last_selection`]).
+fn parse_variant_set_path(path: &str) -> Option<(&str, &str)> {
+    match split_last_selection(path)? {
+        (owner, set, "") => Some((owner, set)),
+        _ => None,
     }
-    Some((String::from(prim_path), String::from(vset_name)))
 }
 
 /// Parses a variant path like `/Prim{varSetName=branchName}` →
-/// `("/Prim", "varSetName", "branchName")`.
-///
-/// Returns `None` for variants nested below another variant branch, such as
-/// `/Prim{a=x}{b=y}` or `/Prim{a=x}Child{b=y}`.
-fn parse_variant_path(path: &str) -> Option<(String, String, String)> {
-    let open = path.find('{')?;
-    let close = path.find('}')?;
-    if close <= open + 1 || close + 1 != path.len() {
-        return None;
-    }
-    let prim_path = &path[..open];
-    let inner = &path[open + 1..close];
-    let eq = inner.find('=')?;
-    let vset_name = &inner[..eq];
-    let branch_name = &inner[eq + 1..];
-    if vset_name.is_empty() || branch_name.is_empty() {
-        return None;
-    }
-    Some((
-        String::from(prim_path),
-        String::from(vset_name),
-        String::from(branch_name),
-    ))
-}
-
-/// Parses a variant property path like `/Prim{varSet=branch}.attrName` →
-/// `("/Prim", "varSet", "branch", "attrName")`.
-fn parse_variant_property_path(path: &str) -> Option<(String, String, String, String)> {
-    let open = path.find('{')?;
-    let close = path.find('}')?;
-    if close <= open + 1 {
-        return None;
-    }
-
-    // Only properties directly on the variant: `/Prim{set=branch}.name`,
-    // not `/Prim{set=branch}Child.name`.
-    let prop_name = path[close + 1..].strip_prefix('.')?;
-    if prop_name.is_empty() || prop_name.contains('{') {
-        return None;
-    }
-
-    let prim_path = &path[..open];
-    let inner = &path[open + 1..close];
-    let eq = inner.find('=')?;
-    let vset_name = &inner[..eq];
-    let branch_name = &inner[eq + 1..];
-    if vset_name.is_empty() || branch_name.is_empty() {
-        return None;
-    }
-
-    Some((
-        String::from(prim_path),
-        String::from(vset_name),
-        String::from(branch_name),
-        String::from(prop_name),
-    ))
+/// `("/Prim", "varSetName", "branchName")`, also when nested in other
+/// branches (see [`split_last_selection`]).
+fn parse_variant_path(path: &str) -> Option<(&str, &str, &str)> {
+    split_last_selection(path).filter(|(_, _, variant)| !variant.is_empty())
 }
 
 /// Converts a list op whose items are plain scalars, or returns `None` when
@@ -2128,43 +2119,55 @@ mod tests {
 
     #[test]
     fn parse_variant_set_path_ok() {
-        let (prim, vset) = parse_variant_set_path("/Prim{shadingVariant=}").unwrap();
-        assert_eq!(prim, "/Prim");
-        assert_eq!(vset, "shadingVariant");
+        assert_eq!(
+            parse_variant_set_path("/Prim{shadingVariant=}"),
+            Some(("/Prim", "shadingVariant"))
+        );
+        // Nested in another branch of the same prim, or on a prim inside a
+        // branch.
+        assert_eq!(
+            parse_variant_set_path("/Prim{set=red}{inner=}"),
+            Some(("/Prim", "inner"))
+        );
+        assert_eq!(
+            parse_variant_set_path("/Prim{set=red}Child{inner=}"),
+            Some(("/Prim{set=red}Child", "inner"))
+        );
     }
 
     #[test]
     fn parse_variant_path_ok() {
-        let (prim, vset, branch) = parse_variant_path("/Prim{shadingVariant=red}").unwrap();
-        assert_eq!(prim, "/Prim");
-        assert_eq!(vset, "shadingVariant");
-        assert_eq!(branch, "red");
+        assert_eq!(
+            parse_variant_path("/Prim{shadingVariant=red}"),
+            Some(("/Prim", "shadingVariant", "red"))
+        );
+        assert_eq!(
+            parse_variant_path("/Prim{set=red}{inner=x}"),
+            Some(("/Prim", "inner", "x"))
+        );
+        assert_eq!(
+            parse_variant_path("/A/Prim{set=red}Child{inner=x}"),
+            Some(("/A/Prim{set=red}Child", "inner", "x"))
+        );
     }
 
     #[test]
-    fn parse_variant_property_path_ok() {
-        let (prim, vset, branch, prop) =
-            parse_variant_property_path("/Prim{shadingVariant=red}.color").unwrap();
-        assert_eq!(prim, "/Prim");
-        assert_eq!(vset, "shadingVariant");
-        assert_eq!(branch, "red");
-        assert_eq!(prop, "color");
-    }
-
-    #[test]
-    fn variant_paths_below_variant_children_are_not_the_variant() {
-        // A child prim of a variant, its property, and a nested selection.
+    fn variant_paths_below_variant_children_are_not_a_variant() {
+        // A child prim of a variant, its property, a variant set, and paths
+        // naming no prim.
         for path in [
             "/Prim{set=red}Child",
             "/Prim{set=red}Child.color",
-            "/Prim{set=red}{inner=}",
-            "/Prim{set=red}{inner=x}",
-            "/Prim{set=red}{inner=x}.color",
+            "/Prim{set=red}.color",
+            "/Prim",
+            "/{set=red}",
+            "{set=red}",
+            "/Prim{=red}",
         ] {
-            assert_eq!(parse_variant_set_path(path), None, "{path}");
             assert_eq!(parse_variant_path(path), None, "{path}");
-            assert_eq!(parse_variant_property_path(path), None, "{path}");
         }
+        assert_eq!(parse_variant_path("/Prim{set=}"), None);
+        assert_eq!(parse_variant_set_path("/Prim{set=red}"), None);
     }
 
     #[test]

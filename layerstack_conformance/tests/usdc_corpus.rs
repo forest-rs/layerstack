@@ -7,7 +7,9 @@
 //! written by OpenUSD and by the supplemental writer, under `.usd` and
 //! `.usdc` names. Each one found by its `PXR-USDC` magic must read into a
 //! layer; the only failures allowed are the features this reader reports as
-//! unsupported. A panic or an unexpected error is a decoding bug.
+//! unsupported. A panic or an unexpected error is a decoding bug. Every
+//! variant set, variant and variant property spec must also find its prim
+//! spec, however deeply variants nest.
 //!
 //! Spec: AOUSD Core §16.3.
 
@@ -106,7 +108,17 @@ fn every_crate_file_in_the_repository_reads() {
                 &mut PathInterner::default(),
                 &mut NoAssets,
             )
-            .map(|_| ())
+            .map(|result| {
+                // Every variant set, variant and variant property spec,
+                // nested ones included, belongs to a prim spec of the
+                // layer.
+                result
+                    .diagnostics
+                    .into_iter()
+                    .filter(|diagnostic| diagnostic.message.contains("variant"))
+                    .map(|diagnostic| format!("{}: {}", diagnostic.spec_path, diagnostic.message))
+                    .collect::<Vec<_>>()
+            })
         }));
         let expected = EXPECTED_ERRORS
             .iter()
@@ -114,7 +126,7 @@ fn every_crate_file_in_the_repository_reads() {
             .map(|(_, error)| error);
         match (result, expected) {
             (Err(_), _) => failures.push(format!("{name}: panicked")),
-            (Ok(Ok(())), None) => {}
+            (Ok(Ok(unplaced)), None) if unplaced.is_empty() => {}
             (Ok(Err(error)), Some(expected)) if error == *expected => {}
             (Ok(result), expected) => {
                 failures.push(format!("{name}: {result:?}, expected {expected:?}"));

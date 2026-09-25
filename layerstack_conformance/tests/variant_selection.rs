@@ -1054,22 +1054,36 @@ impl AssetResolver for NoAssets {
     }
 }
 
-/// Reads one nested-variant fixture file into a store.
+/// Reads one nested-variant fixture file, `.usda` or `.usdc`, into a store.
 fn load_nested_variant_case(path: &std::path::Path) -> InMemoryStore {
     let mut store = InMemoryStore::default();
-    let source = std::fs::read_to_string(path).expect("fixture");
-    let cst = parse_cst(&source);
-    assert!(cst.diagnostics.is_empty(), "{:?}", cst.diagnostics);
-    let ast = lower::lower(&cst.tree, &source);
-    assert!(ast.diagnostics.is_empty(), "{:?}", ast.diagnostics);
-    let layer = emit::emit(
-        &ast.layer,
-        LayerId(1),
-        &mut store.tokens,
-        &mut store.paths,
-        &mut NoAssets,
-    )
-    .layer;
+    let layer = if path.extension().is_some_and(|ext| ext == "usdc") {
+        let data = std::fs::read(path).expect("fixture");
+        let result = layerstack_usdc::read_usdc(
+            &data,
+            LayerId(1),
+            &mut store.tokens,
+            &mut store.paths,
+            &mut NoAssets,
+        )
+        .expect("crate file reads");
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        result.layer
+    } else {
+        let source = std::fs::read_to_string(path).expect("fixture");
+        let cst = parse_cst(&source);
+        assert!(cst.diagnostics.is_empty(), "{:?}", cst.diagnostics);
+        let ast = lower::lower(&cst.tree, &source);
+        assert!(ast.diagnostics.is_empty(), "{:?}", ast.diagnostics);
+        emit::emit(
+            &ast.layer,
+            LayerId(1),
+            &mut store.tokens,
+            &mut store.paths,
+            &mut NoAssets,
+        )
+        .layer
+    };
     store.insert_layer(layer);
     store
 }
@@ -1143,7 +1157,7 @@ fn nested_variant_case_failures(
 
 /// Variant sets nested two and three levels deep in `/P`'s own branches,
 /// where different outer branches reuse the same inner branch names, read
-/// from the USDA fixtures.
+/// from USDA and from crate files written by OpenUSD.
 ///
 /// Each innermost branch authors `/P/C` with one arc (reference, payload,
 /// inherit or specialize), an attribute and a child. Only the branch whose
@@ -1179,17 +1193,19 @@ fn nested_variant_branches_sharing_inner_names_compose_like_openusd() {
 
     let mut failures = Vec::new();
     for (case, expected) in cases {
-        let path = dir.join(format!("{case}.usda"));
-        let case_failures = nested_variant_case_failures(&path, expected, &attributes);
-        if !case_failures.is_empty() {
-            failures.push(format!("{case}.usda: {}", case_failures.join("; ")));
+        for ext in ["usda", "usdc"] {
+            let path = dir.join(format!("{case}.{ext}"));
+            let case_failures = nested_variant_case_failures(&path, expected, &attributes);
+            if !case_failures.is_empty() {
+                failures.push(format!("{case}.{ext}: {}", case_failures.join("; ")));
+            }
         }
     }
     assert!(
         failures.is_empty(),
         "{} of {} files differ from OpenUSD:\n{}",
         failures.len(),
-        cases.len(),
+        cases.len() * 2,
         failures.join("\n")
     );
 }

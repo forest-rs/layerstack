@@ -129,6 +129,10 @@ fn value_types_read_as_openusd_wrote_them() {
         default_value(&mut layer, "/Values.uchar"),
         Value::UChar(200)
     );
+    assert_eq!(
+        default_value(&mut layer, "/Values.uint64Max"),
+        Value::UInt64(u64::MAX)
+    );
 }
 
 /// `half` literals round to nearest even through `float` and keep
@@ -185,6 +189,9 @@ fn numbers_take_the_declared_type_as_openusd_reads_them() {
             Value::Array([false, true, false, true, false].map(Value::Bool).to_vec()),
         ),
         ("byte", Value::UChar(255)),
+        ("largest", Value::UInt64(u64::MAX)),
+        ("unsigned", Value::Bool(true)),
+        ("fromUnsigned", Value::Double(18_446_744_073_709_551_615.0)),
         ("truncated", Value::Int(1)),
         ("negativeTruncated", Value::Int(-1)),
         ("unsignedTruncated", Value::UInt(1)),

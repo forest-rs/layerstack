@@ -160,6 +160,8 @@ def author_value_types(layer):
         ("uint", T.UInt, 4000000000),
         ("int64", T.Int64, -9000000000),
         ("uint64", T.UInt64, 9000000000000000000),
+        ("uint64Max", T.UInt64, 18446744073709551615),
+        ("uint64Array", T.UInt64Array, [1, 18446744073709551615]),
         ("half", T.Half, 0.5),
         ("float", T.Float, 0.1),
         ("double", T.Double, 1e-300),
@@ -253,6 +255,9 @@ def "Numbers"
     uint unsignedTruncated = 1.5
     int64 wide = 4294967296
     uint64 exponent = 1e3
+    uint64 largest = 18446744073709551615
+    bool unsigned = 18446744073709551615
+    double fromUnsigned = 18446744073709551615
     float floatNegativeZero = -0
     double doubleFromInt = 2
     timecode timecodeNegativeZero = -0
@@ -296,6 +301,8 @@ REJECTED = [
     "int a = 4294967296",
     "int64 a = 1e30",
     "uint64 a = -1",
+    "int64 a = 9223372036854775808",
+    "uint64 a = 18446744073709551616",
     "float a = true",
     'int a = "3"',
     "int[] a = [1, 1.5e10]",

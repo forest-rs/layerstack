@@ -5721,6 +5721,610 @@
    "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    double[] d.timeSamples = {\n        0: [0, 0],\n        2: [2, 4],\n    }\n    float[] f.timeSamples = {\n        0: [0, 0],\n        2: [2, 4],\n    }\n    int[] i.timeSamples = {\n        0: [0, 0],\n        2: [2, 4],\n    }\n    float[] sized.timeSamples = {\n        0: [0, 0],\n        2: [2, 4, 6],\n    }\n    float3[] v.timeSamples = {\n        0: [(0, 0, 0)],\n        2: [(2, 4, 6)],\n    }\n}\n\n"
   },
   {
+   "name": "half_arrays_interpolate",
+   "description": "Half-precision arrays and half vector arrays interpolate element by element, rounding each result to half precision; a sparse edit composes first, and arrays of different sizes hold. The values are exact halves.",
+   "layers": {
+    "root.usda": "#usda 1.0\n(\n    subLayers = [\n        @strong.usda@,\n        @weak.usda@\n    ]\n)\n",
+    "strong.usda": "#usda 1.0\nover \"A\"\n{\n    half[] e.timeSamples = { 1: edit (write 8 to [1]) }\n}\n",
+    "weak.usda": "#usda 1.0\ndef \"A\"\n{\n    half[] h.timeSamples = { 0: [0, 1, -2, 0.0999755859375], 2: [1, 3, 0.5, 1000] }\n    half3[] v.timeSamples = { 0: [(0, 0, 0), (1, 1, 1)], 2: [(1, 2, 3), (0.5, 0.25, 2)] }\n    half[] sized.timeSamples = { 0: [0, 0], 2: [2, 4, 6] }\n    half[] e.timeSamples = { 0: [0, 0], 2: [2, 4] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.h",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      1.0,
+      -2.0,
+      0.0999755859375
+     ],
+     "flattened": [
+      0.0,
+      1.0,
+      -2.0,
+      0.0999755859375
+     ]
+    },
+    {
+     "attr": "/A.h",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      1.0,
+      -2.0,
+      0.0999755859375
+     ],
+     "flattened": [
+      0.0,
+      1.0,
+      -2.0,
+      0.0999755859375
+     ]
+    },
+    {
+     "attr": "/A.h",
+     "time": 0.3,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      1.0,
+      -2.0,
+      0.0999755859375
+     ],
+     "flattened": [
+      0.0,
+      1.0,
+      -2.0,
+      0.0999755859375
+     ]
+    },
+    {
+     "attr": "/A.h",
+     "time": 0.3,
+     "interp": "linear",
+     "openusd": [
+      0.1500244140625,
+      1.2998046875,
+      -1.625,
+      150.125
+     ],
+     "flattened": [
+      0.1500244140625,
+      1.2998046875,
+      -1.625,
+      150.125
+     ]
+    },
+    {
+     "attr": "/A.h",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      1.0,
+      -2.0,
+      0.0999755859375
+     ],
+     "flattened": [
+      0.0,
+      1.0,
+      -2.0,
+      0.0999755859375
+     ]
+    },
+    {
+     "attr": "/A.h",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": [
+      0.25,
+      1.5,
+      -1.375,
+      250.125
+     ],
+     "flattened": [
+      0.25,
+      1.5,
+      -1.375,
+      250.125
+     ]
+    },
+    {
+     "attr": "/A.h",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      1.0,
+      -2.0,
+      0.0999755859375
+     ],
+     "flattened": [
+      0.0,
+      1.0,
+      -2.0,
+      0.0999755859375
+     ]
+    },
+    {
+     "attr": "/A.h",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      0.5,
+      2.0,
+      -0.75,
+      500.0
+     ],
+     "flattened": [
+      0.5,
+      2.0,
+      -0.75,
+      500.0
+     ]
+    },
+    {
+     "attr": "/A.h",
+     "time": 1.7,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      1.0,
+      -2.0,
+      0.0999755859375
+     ],
+     "flattened": [
+      0.0,
+      1.0,
+      -2.0,
+      0.0999755859375
+     ]
+    },
+    {
+     "attr": "/A.h",
+     "time": 1.7,
+     "interp": "linear",
+     "openusd": [
+      0.85009765625,
+      2.69921875,
+      0.125,
+      850.0
+     ],
+     "flattened": [
+      0.85009765625,
+      2.69921875,
+      0.125,
+      850.0
+     ]
+    },
+    {
+     "attr": "/A.h",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      1.0,
+      3.0,
+      0.5,
+      1000.0
+     ],
+     "flattened": [
+      1.0,
+      3.0,
+      0.5,
+      1000.0
+     ]
+    },
+    {
+     "attr": "/A.h",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      3.0,
+      0.5,
+      1000.0
+     ],
+     "flattened": [
+      1.0,
+      3.0,
+      0.5,
+      1000.0
+     ]
+    },
+    {
+     "attr": "/A.v",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ],
+     "flattened": [
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.v",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ],
+     "flattened": [
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.v",
+     "time": 0.3,
+     "interp": "held",
+     "openusd": [
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ],
+     "flattened": [
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.v",
+     "time": 0.3,
+     "interp": "linear",
+     "openusd": [
+      [
+       0.1500244140625,
+       0.300048828125,
+       0.449951171875
+      ],
+      [
+       0.92529296875,
+       0.8876953125,
+       1.150390625
+      ]
+     ],
+     "flattened": [
+      [
+       0.1500244140625,
+       0.300048828125,
+       0.449951171875
+      ],
+      [
+       0.92529296875,
+       0.8876953125,
+       1.150390625
+      ]
+     ]
+    },
+    {
+     "attr": "/A.v",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ],
+     "flattened": [
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.v",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      [
+       0.5,
+       1.0,
+       1.5
+      ],
+      [
+       0.75,
+       0.625,
+       1.5
+      ]
+     ],
+     "flattened": [
+      [
+       0.5,
+       1.0,
+       1.5
+      ],
+      [
+       0.75,
+       0.625,
+       1.5
+      ]
+     ]
+    },
+    {
+     "attr": "/A.v",
+     "time": 1.9,
+     "interp": "held",
+     "openusd": [
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ],
+     "flattened": [
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.v",
+     "time": 1.9,
+     "interp": "linear",
+     "openusd": [
+      [
+       0.9501953125,
+       1.900390625,
+       2.849609375
+      ],
+      [
+       0.52490234375,
+       0.28759765625,
+       1.9501953125
+      ]
+     ],
+     "flattened": [
+      [
+       0.9501953125,
+       1.900390625,
+       2.849609375
+      ],
+      [
+       0.52490234375,
+       0.28759765625,
+       1.9501953125
+      ]
+     ]
+    },
+    {
+     "attr": "/A.sized",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.sized",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      0.0
+     ],
+     "flattened": [
+      0.0,
+      0.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 0,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      8.0
+     ],
+     "flattened": [
+      0.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 0,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      8.0
+     ],
+     "flattened": [
+      0.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      8.0
+     ],
+     "flattened": [
+      0.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      8.0
+     ],
+     "flattened": [
+      0.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      8.0
+     ],
+     "flattened": [
+      0.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 1,
+     "interp": "linear",
+     "openusd": [
+      0.0,
+      8.0
+     ],
+     "flattened": [
+      0.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 1.5,
+     "interp": "held",
+     "openusd": [
+      0.0,
+      8.0
+     ],
+     "flattened": [
+      0.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 1.5,
+     "interp": "linear",
+     "openusd": [
+      1.0,
+      8.0
+     ],
+     "flattened": [
+      1.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 2,
+     "interp": "held",
+     "openusd": [
+      2.0,
+      8.0
+     ],
+     "flattened": [
+      2.0,
+      8.0
+     ]
+    },
+    {
+     "attr": "/A.e",
+     "time": 2,
+     "interp": "linear",
+     "openusd": [
+      2.0,
+      8.0
+     ],
+     "flattened": [
+      2.0,
+      8.0
+     ]
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    half[] e.timeSamples = {\n        0: [0, 8],\n        1: [0, 8],\n        2: [2, 8],\n    }\n    half[] h.timeSamples = {\n        0: [0, 1, -2, 0.0999756],\n        2: [1, 3, 0.5, 1000],\n    }\n    half[] sized.timeSamples = {\n        0: [0, 0],\n        2: [2, 4, 6],\n    }\n    half3[] v.timeSamples = {\n        0: [(0, 0, 0), (1, 1, 1)],\n        2: [(1, 2, 3), (0.5, 0.25, 2)],\n    }\n}\n\n"
+  },
+  {
    "name": "vector_sparse_over_dense_linear",
    "description": "A sparse vector edit composes over both bracketing dense samples before interpolating.",
    "layers": {
@@ -7307,6 +7911,656 @@
     }
    ],
    "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    double d.timeSamples = {\n        0: 0,\n        2: 1,\n    }\n    double3 dv.timeSamples = {\n        0: (0, 0, 0),\n        2: (1, 2, 3),\n    }\n    float f.timeSamples = {\n        0: 0,\n        2: 1,\n    }\n    int i.timeSamples = {\n        0: 0,\n        2: 4,\n    }\n    int64 i64.timeSamples = {\n        0: 0,\n        2: 4,\n    }\n    matrix2d m.timeSamples = {\n        0: ( (0, 0), (0, 0) ),\n        2: ( (2, 4), (6, 8) ),\n    }\n    float3 v.timeSamples = {\n        0: (0, 0, 0),\n        2: (1, 2, 3),\n    }\n}\n\n"
+  },
+  {
+   "name": "half_scalars_interpolate",
+   "description": "Half-precision scalars and vectors interpolate, rounding to half precision. The values are exact halves.",
+   "layers": {
+    "root.usda": "#usda 1.0\ndef \"A\"\n{\n    half h.timeSamples = { 0: 0.0999755859375, 2: 1 }\n    half2 v2.timeSamples = { 0: (0, 1), 2: (1, 0.5) }\n    half3 v3.timeSamples = { 0: (0, 0, 0), 2: (1, 2, 3) }\n    half4 v4.timeSamples = { 0: (0, 0, 0, 0), 2: (1, -1, 1000, 0.25) }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.h",
+     "time": 0,
+     "interp": "held",
+     "openusd": 0.0999755859375,
+     "flattened": 0.0999755859375
+    },
+    {
+     "attr": "/A.h",
+     "time": 0,
+     "interp": "linear",
+     "openusd": 0.0999755859375,
+     "flattened": 0.0999755859375
+    },
+    {
+     "attr": "/A.h",
+     "time": 0.3,
+     "interp": "held",
+     "openusd": 0.0999755859375,
+     "flattened": 0.0999755859375
+    },
+    {
+     "attr": "/A.h",
+     "time": 0.3,
+     "interp": "linear",
+     "openusd": 0.2349853515625,
+     "flattened": 0.2349853515625
+    },
+    {
+     "attr": "/A.h",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": 0.0999755859375,
+     "flattened": 0.0999755859375
+    },
+    {
+     "attr": "/A.h",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": 0.324951171875,
+     "flattened": 0.324951171875
+    },
+    {
+     "attr": "/A.h",
+     "time": 1,
+     "interp": "held",
+     "openusd": 0.0999755859375,
+     "flattened": 0.0999755859375
+    },
+    {
+     "attr": "/A.h",
+     "time": 1,
+     "interp": "linear",
+     "openusd": 0.5498046875,
+     "flattened": 0.5498046875
+    },
+    {
+     "attr": "/A.h",
+     "time": 1.7,
+     "interp": "held",
+     "openusd": 0.0999755859375,
+     "flattened": 0.0999755859375
+    },
+    {
+     "attr": "/A.h",
+     "time": 1.7,
+     "interp": "linear",
+     "openusd": 0.865234375,
+     "flattened": 0.865234375
+    },
+    {
+     "attr": "/A.v2",
+     "time": 0,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.0,
+       1.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       1.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.v2",
+     "time": 0,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.0,
+       1.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       1.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.v2",
+     "time": 0.3,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.0,
+       1.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       1.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.v2",
+     "time": 0.3,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.1500244140625,
+       0.92529296875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.1500244140625,
+       0.92529296875
+      ]
+     }
+    },
+    {
+     "attr": "/A.v2",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.0,
+       1.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       1.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.v2",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.25,
+       0.875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.25,
+       0.875
+      ]
+     }
+    },
+    {
+     "attr": "/A.v2",
+     "time": 1,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.0,
+       1.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       1.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.v2",
+     "time": 1,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.5,
+       0.75
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.5,
+       0.75
+      ]
+     }
+    },
+    {
+     "attr": "/A.v2",
+     "time": 1.7,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.0,
+       1.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       1.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.v2",
+     "time": 1.7,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.85009765625,
+       0.5751953125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.85009765625,
+       0.5751953125
+      ]
+     }
+    },
+    {
+     "attr": "/A.v3",
+     "time": 0,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.v3",
+     "time": 0,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.v3",
+     "time": 0.3,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.v3",
+     "time": 0.3,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.1500244140625,
+       0.300048828125,
+       0.449951171875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.1500244140625,
+       0.300048828125,
+       0.449951171875
+      ]
+     }
+    },
+    {
+     "attr": "/A.v3",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.v3",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.25,
+       0.5,
+       0.75
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.25,
+       0.5,
+       0.75
+      ]
+     }
+    },
+    {
+     "attr": "/A.v3",
+     "time": 1,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.v3",
+     "time": 1,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.5,
+       1.0,
+       1.5
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.5,
+       1.0,
+       1.5
+      ]
+     }
+    },
+    {
+     "attr": "/A.v3",
+     "time": 1.7,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.v3",
+     "time": 1.7,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.85009765625,
+       1.7001953125,
+       2.55078125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.85009765625,
+       1.7001953125,
+       2.55078125
+      ]
+     }
+    },
+    {
+     "attr": "/A.v4",
+     "time": 0,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.v4",
+     "time": 0,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.v4",
+     "time": 0.3,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.v4",
+     "time": 0.3,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.1500244140625,
+       -0.1500244140625,
+       150.0,
+       0.037506103515625
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.1500244140625,
+       -0.1500244140625,
+       150.0,
+       0.037506103515625
+      ]
+     }
+    },
+    {
+     "attr": "/A.v4",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.v4",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.25,
+       -0.25,
+       250.0,
+       0.0625
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.25,
+       -0.25,
+       250.0,
+       0.0625
+      ]
+     }
+    },
+    {
+     "attr": "/A.v4",
+     "time": 1,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.v4",
+     "time": 1,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.5,
+       -0.5,
+       500.0,
+       0.125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.5,
+       -0.5,
+       500.0,
+       0.125
+      ]
+     }
+    },
+    {
+     "attr": "/A.v4",
+     "time": 1.7,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.v4",
+     "time": 1.7,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.85009765625,
+       -0.85009765625,
+       850.0,
+       0.2125244140625
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.85009765625,
+       -0.85009765625,
+       850.0,
+       0.2125244140625
+      ]
+     }
+    }
+   ],
+   "flattened_layer": "#usda 1.0\n\ndef \"A\"\n{\n    half h.timeSamples = {\n        0: 0.0999756,\n        2: 1,\n    }\n    half2 v2.timeSamples = {\n        0: (0, 1),\n        2: (1, 0.5),\n    }\n    half3 v3.timeSamples = {\n        0: (0, 0, 0),\n        2: (1, 2, 3),\n    }\n    half4 v4.timeSamples = {\n        0: (0, 0, 0, 0),\n        2: (1, -1, 1000, 0.25),\n    }\n}\n\n"
   },
   {
    "name": "scalar_samples_close_together",
@@ -23538,6 +24792,4557 @@
        -2905003776.0,
        -2905003776.0,
        -2905003776.0
+      ]
+     ]
+    }
+   ],
+   "exact": true,
+   "flatten_note": "The case checks interpolation arithmetic; flattening rewrites the sample text."
+  },
+  {
+   "name": "half_vectors_interpolate_bit_exact",
+   "description": "Half scalars and half vectors interpolate bit for bit as OpenUSD does: a half scalar in double precision, narrowed once; a half vector scaling by the alpha narrowed to float, narrowing each term to half and adding in half.",
+   "layers": {
+    "root.usda": "#usda 1.0\ndef \"A\"\n{\n    half half_s0.timeSamples = { 0: -0.455078125, 1: -0.45556640625 }\n    half half_s1.timeSamples = { 0: -5960.0, 1: -5956.0 }\n    half half_s2.timeSamples = { 0: 0.00499725341796875, 1: -1.8544921875 }\n    half[] half_array.timeSamples = { 0: [-0.01165771484375, -1.251953125, -200.0, -0.0021762847900390625, -0.2025146484375, -4.890625], 1: [1.373046875, 1.251953125, -199.875, -68.9375, -15.640625, -4.890625] }\n    half2 half2_s0.timeSamples = { 0: (-42.0625, 0.01123809814453125), 1: (2.5390625, -1.4716796875) }\n    half2 half2_s1.timeSamples = { 0: (-637.0, 0.05548095703125), 1: (-8736.0, -1.5224609375) }\n    half2 half2_s2.timeSamples = { 0: (33.125, -0.0684814453125), 1: (-20.265625, 3.19140625) }\n    half2[] half2_array.timeSamples = { 0: [(0.0017614364624023438, 0.01007080078125), (-0.23388671875, 0.01160430908203125), (-0.8056640625, 8.734375), (0.00991058349609375, -0.01153564453125), (35.625, 14.4140625), (-0.1268310546875, -10.125)], 1: [(-0.0017614364624023438, -0.01007080078125), (0.302490234375, 2056.0), (0.48876953125, -3.486328125), (-0.00991058349609375, 0.01153564453125), (-0.02813720703125, -0.0018367767333984375), (-0.1268310546875, -10.125)] }\n    half3 half3_s0.timeSamples = { 0: (-15.625, 0.0014886856079101562, -6.96875), 1: (15.625, -0.0014886856079101562, 6.96875) }\n    half3 half3_s1.timeSamples = { 0: (-17.921875, 2.30859375, -45.25), 1: (17.921875, -2.30859375, 45.25) }\n    half3 half3_s2.timeSamples = { 0: (0.00323486328125, 32.0, 835.0), 1: (8784.0, 1.85546875, -152.125) }\n    half3[] half3_array.timeSamples = { 0: [(-0.0192718505859375, 216.375, 219.125), (-53.71875, 1.572265625, 0.050628662109375), (-0.004505157470703125, 13.171875, 3.71875), (-3910.0, -84.0, 0.058563232421875), (0.1290283203125, -1.076171875, 0.0041351318359375), (-0.82275390625, -2.798828125, -383.25)], 1: [(1.162109375, 1.8564453125, -206.625), (-53.6875, 1.57421875, 0.05059814453125), (19.46875, -7292.0, -0.0936279296875), (3910.0, 84.0, -0.058563232421875), (0.1290283203125, -1.0751953125, 0.004138946533203125), (-0.82275390625, -2.796875, -383.0)] }\n    half4 half4_s0.timeSamples = { 0: (-0.00240325927734375, 0.003551483154296875, -1.4716796875, 219.625), 1: (-0.0024051666259765625, 0.0035495758056640625, -1.4716796875, 219.75) }\n    half4 half4_s1.timeSamples = { 0: (25.703125, 29.265625, -0.01499176025390625, 0.00612640380859375), 1: (-25.703125, -29.265625, 0.01499176025390625, -0.00612640380859375) }\n    half4 half4_s2.timeSamples = { 0: (1.79296875, -169.5, 0.0197296142578125, -6.62109375), 1: (-10.84375, -0.0013580322265625, -1931.0, 41.96875) }\n    half4[] half4_array.timeSamples = { 0: [(-183.875, 7.8125, 2.91015625, 4284.0), (-6472.0, 1.6513671875, 0.2266845703125, -6.54296875), (0.00504302978515625, -0.0154571533203125, 1.32421875, 0.0010862350463867188), (-0.0254974365234375, -2.05859375, -0.006256103515625, -0.1722412109375), (249.125, -0.045623779296875, -186.625, 0.0024776458740234375), (1.51953125, -355.25, 1.197265625, -24.984375)], 1: [(1.0654296875, 863.0, 0.0257720947265625, -0.03179931640625), (6472.0, -1.6513671875, -0.2266845703125, 6.54296875), (0.005046844482421875, -0.0154571533203125, 1.32421875, 0.0010852813720703125), (-0.0255126953125, -2.05859375, -0.006259918212890625, -0.17236328125), (-0.7431640625, -0.005107879638671875, -0.4892578125, -0.0038852691650390625), (1.5205078125, -355.5, 1.197265625, -24.984375)] }\n    half2 half2_probe0.timeSamples = { 0: (-1.3857421875, -1.3857421875), 1: (41.375, 41.375) }\n    half2[] half2_probe0_array.timeSamples = { 0: [(-1.3857421875, -1.3857421875)], 1: [(41.375, 41.375)] }\n}\n"
+   },
+   "queries": [
+    {
+     "attr": "/A.half_s0",
+     "time": 0.31410496844772895,
+     "interp": "held",
+     "openusd": -0.455078125,
+     "flattened": -0.455078125
+    },
+    {
+     "attr": "/A.half_s0",
+     "time": 0.31410496844772895,
+     "interp": "linear",
+     "openusd": -0.455322265625,
+     "flattened": -0.455322265625
+    },
+    {
+     "attr": "/A.half_s0",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": -0.455078125,
+     "flattened": -0.455078125
+    },
+    {
+     "attr": "/A.half_s0",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": -0.455322265625,
+     "flattened": -0.455322265625
+    },
+    {
+     "attr": "/A.half_s0",
+     "time": 0.500000001,
+     "interp": "held",
+     "openusd": -0.455078125,
+     "flattened": -0.455078125
+    },
+    {
+     "attr": "/A.half_s0",
+     "time": 0.500000001,
+     "interp": "linear",
+     "openusd": -0.455322265625,
+     "flattened": -0.455322265625
+    },
+    {
+     "attr": "/A.half_s0",
+     "time": 0.7333200817990535,
+     "interp": "held",
+     "openusd": -0.455078125,
+     "flattened": -0.455078125
+    },
+    {
+     "attr": "/A.half_s0",
+     "time": 0.7333200817990535,
+     "interp": "linear",
+     "openusd": -0.455322265625,
+     "flattened": -0.455322265625
+    },
+    {
+     "attr": "/A.half_s0",
+     "time": 0.92071480921514,
+     "interp": "held",
+     "openusd": -0.455078125,
+     "flattened": -0.455078125
+    },
+    {
+     "attr": "/A.half_s0",
+     "time": 0.92071480921514,
+     "interp": "linear",
+     "openusd": -0.45556640625,
+     "flattened": -0.45556640625
+    },
+    {
+     "attr": "/A.half_s1",
+     "time": 0.31410496844772895,
+     "interp": "held",
+     "openusd": -5960.0,
+     "flattened": -5960.0
+    },
+    {
+     "attr": "/A.half_s1",
+     "time": 0.31410496844772895,
+     "interp": "linear",
+     "openusd": -5960.0,
+     "flattened": -5960.0
+    },
+    {
+     "attr": "/A.half_s1",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": -5960.0,
+     "flattened": -5960.0
+    },
+    {
+     "attr": "/A.half_s1",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": -5960.0,
+     "flattened": -5960.0
+    },
+    {
+     "attr": "/A.half_s1",
+     "time": 0.500000001,
+     "interp": "held",
+     "openusd": -5960.0,
+     "flattened": -5960.0
+    },
+    {
+     "attr": "/A.half_s1",
+     "time": 0.500000001,
+     "interp": "linear",
+     "openusd": -5960.0,
+     "flattened": -5960.0
+    },
+    {
+     "attr": "/A.half_s1",
+     "time": 0.7333200817990535,
+     "interp": "held",
+     "openusd": -5960.0,
+     "flattened": -5960.0
+    },
+    {
+     "attr": "/A.half_s1",
+     "time": 0.7333200817990535,
+     "interp": "linear",
+     "openusd": -5956.0,
+     "flattened": -5956.0
+    },
+    {
+     "attr": "/A.half_s1",
+     "time": 0.92071480921514,
+     "interp": "held",
+     "openusd": -5960.0,
+     "flattened": -5960.0
+    },
+    {
+     "attr": "/A.half_s1",
+     "time": 0.92071480921514,
+     "interp": "linear",
+     "openusd": -5956.0,
+     "flattened": -5956.0
+    },
+    {
+     "attr": "/A.half_s2",
+     "time": 0.31410496844772895,
+     "interp": "held",
+     "openusd": 0.00499725341796875,
+     "flattened": 0.00499725341796875
+    },
+    {
+     "attr": "/A.half_s2",
+     "time": 0.31410496844772895,
+     "interp": "linear",
+     "openusd": -0.5791015625,
+     "flattened": -0.5791015625
+    },
+    {
+     "attr": "/A.half_s2",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": 0.00499725341796875,
+     "flattened": 0.00499725341796875
+    },
+    {
+     "attr": "/A.half_s2",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": -0.9248046875,
+     "flattened": -0.9248046875
+    },
+    {
+     "attr": "/A.half_s2",
+     "time": 0.500000001,
+     "interp": "held",
+     "openusd": 0.00499725341796875,
+     "flattened": 0.00499725341796875
+    },
+    {
+     "attr": "/A.half_s2",
+     "time": 0.500000001,
+     "interp": "linear",
+     "openusd": -0.9248046875,
+     "flattened": -0.9248046875
+    },
+    {
+     "attr": "/A.half_s2",
+     "time": 0.7333200817990535,
+     "interp": "held",
+     "openusd": 0.00499725341796875,
+     "flattened": 0.00499725341796875
+    },
+    {
+     "attr": "/A.half_s2",
+     "time": 0.7333200817990535,
+     "interp": "linear",
+     "openusd": -1.3583984375,
+     "flattened": -1.3583984375
+    },
+    {
+     "attr": "/A.half_s2",
+     "time": 0.92071480921514,
+     "interp": "held",
+     "openusd": 0.00499725341796875,
+     "flattened": 0.00499725341796875
+    },
+    {
+     "attr": "/A.half_s2",
+     "time": 0.92071480921514,
+     "interp": "linear",
+     "openusd": -1.70703125,
+     "flattened": -1.70703125
+    },
+    {
+     "attr": "/A.half_array",
+     "time": 0.31410496844772895,
+     "interp": "held",
+     "openusd": [
+      -0.01165771484375,
+      -1.251953125,
+      -200.0,
+      -0.0021762847900390625,
+      -0.2025146484375,
+      -4.890625
+     ],
+     "flattened": [
+      -0.01165771484375,
+      -1.251953125,
+      -200.0,
+      -0.0021762847900390625,
+      -0.2025146484375,
+      -4.890625
+     ]
+    },
+    {
+     "attr": "/A.half_array",
+     "time": 0.31410496844772895,
+     "interp": "linear",
+     "openusd": [
+      0.42333984375,
+      -0.465576171875,
+      -200.0,
+      -21.65625,
+      -5.05078125,
+      -4.890625
+     ],
+     "flattened": [
+      0.42333984375,
+      -0.465576171875,
+      -200.0,
+      -21.65625,
+      -5.05078125,
+      -4.890625
+     ]
+    },
+    {
+     "attr": "/A.half_array",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": [
+      -0.01165771484375,
+      -1.251953125,
+      -200.0,
+      -0.0021762847900390625,
+      -0.2025146484375,
+      -4.890625
+     ],
+     "flattened": [
+      -0.01165771484375,
+      -1.251953125,
+      -200.0,
+      -0.0021762847900390625,
+      -0.2025146484375,
+      -4.890625
+     ]
+    },
+    {
+     "attr": "/A.half_array",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": [
+      0.6806640625,
+      0.0,
+      -200.0,
+      -34.46875,
+      -7.921875,
+      -4.890625
+     ],
+     "flattened": [
+      0.6806640625,
+      0.0,
+      -200.0,
+      -34.46875,
+      -7.921875,
+      -4.890625
+     ]
+    },
+    {
+     "attr": "/A.half_array",
+     "time": 0.500000001,
+     "interp": "held",
+     "openusd": [
+      -0.01165771484375,
+      -1.251953125,
+      -200.0,
+      -0.0021762847900390625,
+      -0.2025146484375,
+      -4.890625
+     ],
+     "flattened": [
+      -0.01165771484375,
+      -1.251953125,
+      -200.0,
+      -0.0021762847900390625,
+      -0.2025146484375,
+      -4.890625
+     ]
+    },
+    {
+     "attr": "/A.half_array",
+     "time": 0.500000001,
+     "interp": "linear",
+     "openusd": [
+      0.6806640625,
+      0.0,
+      -200.0,
+      -34.46875,
+      -7.921875,
+      -4.890625
+     ],
+     "flattened": [
+      0.6806640625,
+      0.0,
+      -200.0,
+      -34.46875,
+      -7.921875,
+      -4.890625
+     ]
+    },
+    {
+     "attr": "/A.half_array",
+     "time": 0.7333200817990535,
+     "interp": "held",
+     "openusd": [
+      -0.01165771484375,
+      -1.251953125,
+      -200.0,
+      -0.0021762847900390625,
+      -0.2025146484375,
+      -4.890625
+     ],
+     "flattened": [
+      -0.01165771484375,
+      -1.251953125,
+      -200.0,
+      -0.0021762847900390625,
+      -0.2025146484375,
+      -4.890625
+     ]
+    },
+    {
+     "attr": "/A.half_array",
+     "time": 0.7333200817990535,
+     "interp": "linear",
+     "openusd": [
+      1.00390625,
+      0.583984375,
+      -199.875,
+      -50.5625,
+      -11.5234375,
+      -4.890625
+     ],
+     "flattened": [
+      1.00390625,
+      0.583984375,
+      -199.875,
+      -50.5625,
+      -11.5234375,
+      -4.890625
+     ]
+    },
+    {
+     "attr": "/A.half_array",
+     "time": 0.92071480921514,
+     "interp": "held",
+     "openusd": [
+      -0.01165771484375,
+      -1.251953125,
+      -200.0,
+      -0.0021762847900390625,
+      -0.2025146484375,
+      -4.890625
+     ],
+     "flattened": [
+      -0.01165771484375,
+      -1.251953125,
+      -200.0,
+      -0.0021762847900390625,
+      -0.2025146484375,
+      -4.890625
+     ]
+    },
+    {
+     "attr": "/A.half_array",
+     "time": 0.92071480921514,
+     "interp": "linear",
+     "openusd": [
+      1.263671875,
+      1.0537109375,
+      -199.875,
+      -63.46875,
+      -14.4140625,
+      -4.890625
+     ],
+     "flattened": [
+      1.263671875,
+      1.0537109375,
+      -199.875,
+      -63.46875,
+      -14.4140625,
+      -4.890625
+     ]
+    },
+    {
+     "attr": "/A.half2_s0",
+     "time": 0.31410496844772895,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -42.0625,
+       0.01123809814453125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -42.0625,
+       0.01123809814453125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s0",
+     "time": 0.31410496844772895,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -28.046875,
+       -0.454345703125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -28.046875,
+       -0.454345703125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s0",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -42.0625,
+       0.01123809814453125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -42.0625,
+       0.01123809814453125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s0",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -19.765625,
+       -0.72998046875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -19.765625,
+       -0.72998046875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s0",
+     "time": 0.500000001,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -42.0625,
+       0.01123809814453125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -42.0625,
+       0.01123809814453125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s0",
+     "time": 0.500000001,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -19.765625,
+       -0.72998046875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -19.765625,
+       -0.72998046875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s0",
+     "time": 0.7333200817990535,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -42.0625,
+       0.01123809814453125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -42.0625,
+       0.01123809814453125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s0",
+     "time": 0.7333200817990535,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -9.359375,
+       -1.076171875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -9.359375,
+       -1.076171875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s0",
+     "time": 0.92071480921514,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -42.0625,
+       0.01123809814453125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -42.0625,
+       0.01123809814453125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s0",
+     "time": 0.92071480921514,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -0.99609375,
+       -1.3544921875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -0.99609375,
+       -1.3544921875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s1",
+     "time": 0.31410496844772895,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -637.0,
+       0.05548095703125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -637.0,
+       0.05548095703125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s1",
+     "time": 0.31410496844772895,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -3180.0,
+       -0.440185546875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -3180.0,
+       -0.440185546875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s1",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -637.0,
+       0.05548095703125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -637.0,
+       0.05548095703125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s1",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -4688.0,
+       -0.7333984375
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -4688.0,
+       -0.7333984375
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s1",
+     "time": 0.500000001,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -637.0,
+       0.05548095703125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -637.0,
+       0.05548095703125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s1",
+     "time": 0.500000001,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -4688.0,
+       -0.7333984375
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -4688.0,
+       -0.7333984375
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s1",
+     "time": 0.7333200817990535,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -637.0,
+       0.05548095703125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -637.0,
+       0.05548095703125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s1",
+     "time": 0.7333200817990535,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -6576.0,
+       -1.1015625
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -6576.0,
+       -1.1015625
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s1",
+     "time": 0.92071480921514,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -637.0,
+       0.05548095703125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -637.0,
+       0.05548095703125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s1",
+     "time": 0.92071480921514,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -8096.0,
+       -1.396484375
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -8096.0,
+       -1.396484375
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s2",
+     "time": 0.31410496844772895,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       33.125,
+       -0.0684814453125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       33.125,
+       -0.0684814453125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s2",
+     "time": 0.31410496844772895,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       16.34375,
+       0.955078125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       16.34375,
+       0.955078125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s2",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       33.125,
+       -0.0684814453125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       33.125,
+       -0.0684814453125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s2",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       6.4296875,
+       1.5615234375
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       6.4296875,
+       1.5615234375
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s2",
+     "time": 0.500000001,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       33.125,
+       -0.0684814453125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       33.125,
+       -0.0684814453125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s2",
+     "time": 0.500000001,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       6.4296875,
+       1.5615234375
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       6.4296875,
+       1.5615234375
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s2",
+     "time": 0.7333200817990535,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       33.125,
+       -0.0684814453125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       33.125,
+       -0.0684814453125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s2",
+     "time": 0.7333200817990535,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -6.0234375,
+       2.322265625
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -6.0234375,
+       2.322265625
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s2",
+     "time": 0.92071480921514,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       33.125,
+       -0.0684814453125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       33.125,
+       -0.0684814453125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_s2",
+     "time": 0.92071480921514,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -16.03125,
+       2.931640625
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -16.03125,
+       2.931640625
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_array",
+     "time": 0.31410496844772895,
+     "interp": "held",
+     "openusd": [
+      [
+       0.0017614364624023438,
+       0.01007080078125
+      ],
+      [
+       -0.23388671875,
+       0.01160430908203125
+      ],
+      [
+       -0.8056640625,
+       8.734375
+      ],
+      [
+       0.00991058349609375,
+       -0.01153564453125
+      ],
+      [
+       35.625,
+       14.4140625
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ],
+     "flattened": [
+      [
+       0.0017614364624023438,
+       0.01007080078125
+      ],
+      [
+       -0.23388671875,
+       0.01160430908203125
+      ],
+      [
+       -0.8056640625,
+       8.734375
+      ],
+      [
+       0.00991058349609375,
+       -0.01153564453125
+      ],
+      [
+       35.625,
+       14.4140625
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_array",
+     "time": 0.31410496844772895,
+     "interp": "linear",
+     "openusd": [
+      [
+       0.0006551742553710938,
+       0.00374603271484375
+      ],
+      [
+       -0.06536865234375,
+       646.0
+      ],
+      [
+       -0.399169921875,
+       4.8984375
+      ],
+      [
+       0.00368499755859375,
+       -0.0042877197265625
+      ],
+      [
+       24.421875,
+       9.8828125
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ],
+     "flattened": [
+      [
+       0.0006551742553710938,
+       0.00374603271484375
+      ],
+      [
+       -0.06536865234375,
+       646.0
+      ],
+      [
+       -0.399169921875,
+       4.8984375
+      ],
+      [
+       0.00368499755859375,
+       -0.0042877197265625
+      ],
+      [
+       24.421875,
+       9.8828125
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_array",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": [
+      [
+       0.0017614364624023438,
+       0.01007080078125
+      ],
+      [
+       -0.23388671875,
+       0.01160430908203125
+      ],
+      [
+       -0.8056640625,
+       8.734375
+      ],
+      [
+       0.00991058349609375,
+       -0.01153564453125
+      ],
+      [
+       35.625,
+       14.4140625
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ],
+     "flattened": [
+      [
+       0.0017614364624023438,
+       0.01007080078125
+      ],
+      [
+       -0.23388671875,
+       0.01160430908203125
+      ],
+      [
+       -0.8056640625,
+       8.734375
+      ],
+      [
+       0.00991058349609375,
+       -0.01153564453125
+      ],
+      [
+       35.625,
+       14.4140625
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_array",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": [
+      [
+       0.0,
+       0.0
+      ],
+      [
+       0.0343017578125,
+       1028.0
+      ],
+      [
+       -0.158447265625,
+       2.625
+      ],
+      [
+       0.0,
+       0.0
+      ],
+      [
+       17.796875,
+       7.20703125
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ],
+     "flattened": [
+      [
+       0.0,
+       0.0
+      ],
+      [
+       0.0343017578125,
+       1028.0
+      ],
+      [
+       -0.158447265625,
+       2.625
+      ],
+      [
+       0.0,
+       0.0
+      ],
+      [
+       17.796875,
+       7.20703125
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_array",
+     "time": 0.500000001,
+     "interp": "held",
+     "openusd": [
+      [
+       0.0017614364624023438,
+       0.01007080078125
+      ],
+      [
+       -0.23388671875,
+       0.01160430908203125
+      ],
+      [
+       -0.8056640625,
+       8.734375
+      ],
+      [
+       0.00991058349609375,
+       -0.01153564453125
+      ],
+      [
+       35.625,
+       14.4140625
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ],
+     "flattened": [
+      [
+       0.0017614364624023438,
+       0.01007080078125
+      ],
+      [
+       -0.23388671875,
+       0.01160430908203125
+      ],
+      [
+       -0.8056640625,
+       8.734375
+      ],
+      [
+       0.00991058349609375,
+       -0.01153564453125
+      ],
+      [
+       35.625,
+       14.4140625
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_array",
+     "time": 0.500000001,
+     "interp": "linear",
+     "openusd": [
+      [
+       0.0,
+       0.0
+      ],
+      [
+       0.0343017578125,
+       1028.0
+      ],
+      [
+       -0.158447265625,
+       2.625
+      ],
+      [
+       0.0,
+       0.0
+      ],
+      [
+       17.796875,
+       7.20703125
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ],
+     "flattened": [
+      [
+       0.0,
+       0.0
+      ],
+      [
+       0.0343017578125,
+       1028.0
+      ],
+      [
+       -0.158447265625,
+       2.625
+      ],
+      [
+       0.0,
+       0.0
+      ],
+      [
+       17.796875,
+       7.20703125
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_array",
+     "time": 0.7333200817990535,
+     "interp": "held",
+     "openusd": [
+      [
+       0.0017614364624023438,
+       0.01007080078125
+      ],
+      [
+       -0.23388671875,
+       0.01160430908203125
+      ],
+      [
+       -0.8056640625,
+       8.734375
+      ],
+      [
+       0.00991058349609375,
+       -0.01153564453125
+      ],
+      [
+       35.625,
+       14.4140625
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ],
+     "flattened": [
+      [
+       0.0017614364624023438,
+       0.01007080078125
+      ],
+      [
+       -0.23388671875,
+       0.01160430908203125
+      ],
+      [
+       -0.8056640625,
+       8.734375
+      ],
+      [
+       0.00991058349609375,
+       -0.01153564453125
+      ],
+      [
+       35.625,
+       14.4140625
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_array",
+     "time": 0.7333200817990535,
+     "interp": "linear",
+     "openusd": [
+      [
+       -0.0008215904235839844,
+       -0.00469970703125
+      ],
+      [
+       0.159423828125,
+       1508.0
+      ],
+      [
+       0.1435546875,
+       -0.2265625
+      ],
+      [
+       -0.0046234130859375,
+       0.0053863525390625
+      ],
+      [
+       9.4765625,
+       3.841796875
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ],
+     "flattened": [
+      [
+       -0.0008215904235839844,
+       -0.00469970703125
+      ],
+      [
+       0.159423828125,
+       1508.0
+      ],
+      [
+       0.1435546875,
+       -0.2265625
+      ],
+      [
+       -0.0046234130859375,
+       0.0053863525390625
+      ],
+      [
+       9.4765625,
+       3.841796875
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_array",
+     "time": 0.92071480921514,
+     "interp": "held",
+     "openusd": [
+      [
+       0.0017614364624023438,
+       0.01007080078125
+      ],
+      [
+       -0.23388671875,
+       0.01160430908203125
+      ],
+      [
+       -0.8056640625,
+       8.734375
+      ],
+      [
+       0.00991058349609375,
+       -0.01153564453125
+      ],
+      [
+       35.625,
+       14.4140625
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ],
+     "flattened": [
+      [
+       0.0017614364624023438,
+       0.01007080078125
+      ],
+      [
+       -0.23388671875,
+       0.01160430908203125
+      ],
+      [
+       -0.8056640625,
+       8.734375
+      ],
+      [
+       0.00991058349609375,
+       -0.01153564453125
+      ],
+      [
+       35.625,
+       14.4140625
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_array",
+     "time": 0.92071480921514,
+     "interp": "linear",
+     "openusd": [
+      [
+       -0.0014820098876953125,
+       -0.0084686279296875
+      ],
+      [
+       0.260009765625,
+       1893.0
+      ],
+      [
+       0.385986328125,
+       -2.515625
+      ],
+      [
+       -0.00833892822265625,
+       0.00970458984375
+      ],
+      [
+       2.798828125,
+       1.140625
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ],
+     "flattened": [
+      [
+       -0.0014820098876953125,
+       -0.0084686279296875
+      ],
+      [
+       0.260009765625,
+       1893.0
+      ],
+      [
+       0.385986328125,
+       -2.515625
+      ],
+      [
+       -0.00833892822265625,
+       0.00970458984375
+      ],
+      [
+       2.798828125,
+       1.140625
+      ],
+      [
+       -0.1268310546875,
+       -10.125
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half3_s0",
+     "time": 0.31410496844772895,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -15.625,
+       0.0014886856079101562,
+       -6.96875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -15.625,
+       0.0014886856079101562,
+       -6.96875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s0",
+     "time": 0.31410496844772895,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -5.8125,
+       0.0005540847778320312,
+       -2.591796875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -5.8125,
+       0.0005540847778320312,
+       -2.591796875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s0",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -15.625,
+       0.0014886856079101562,
+       -6.96875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -15.625,
+       0.0014886856079101562,
+       -6.96875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s0",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s0",
+     "time": 0.500000001,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -15.625,
+       0.0014886856079101562,
+       -6.96875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -15.625,
+       0.0014886856079101562,
+       -6.96875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s0",
+     "time": 0.500000001,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s0",
+     "time": 0.7333200817990535,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -15.625,
+       0.0014886856079101562,
+       -6.96875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -15.625,
+       0.0014886856079101562,
+       -6.96875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s0",
+     "time": 0.7333200817990535,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       7.29296875,
+       -0.0006952285766601562,
+       3.25
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       7.29296875,
+       -0.0006952285766601562,
+       3.25
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s0",
+     "time": 0.92071480921514,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -15.625,
+       0.0014886856079101562,
+       -6.96875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -15.625,
+       0.0014886856079101562,
+       -6.96875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s0",
+     "time": 0.92071480921514,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       13.140625,
+       -0.0012521743774414062,
+       5.8671875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       13.140625,
+       -0.0012521743774414062,
+       5.8671875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s1",
+     "time": 0.31410496844772895,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -17.921875,
+       2.30859375,
+       -45.25
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -17.921875,
+       2.30859375,
+       -45.25
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s1",
+     "time": 0.31410496844772895,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -6.66015625,
+       0.85791015625,
+       -16.8125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -6.66015625,
+       0.85791015625,
+       -16.8125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s1",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -17.921875,
+       2.30859375,
+       -45.25
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -17.921875,
+       2.30859375,
+       -45.25
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s1",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s1",
+     "time": 0.500000001,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -17.921875,
+       2.30859375,
+       -45.25
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -17.921875,
+       2.30859375,
+       -45.25
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s1",
+     "time": 0.500000001,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s1",
+     "time": 0.7333200817990535,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -17.921875,
+       2.30859375,
+       -45.25
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -17.921875,
+       2.30859375,
+       -45.25
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s1",
+     "time": 0.7333200817990535,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       8.359375,
+       -1.078125,
+       21.125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       8.359375,
+       -1.078125,
+       21.125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s1",
+     "time": 0.92071480921514,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -17.921875,
+       2.30859375,
+       -45.25
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -17.921875,
+       2.30859375,
+       -45.25
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s1",
+     "time": 0.92071480921514,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       15.078125,
+       -1.9423828125,
+       38.0625
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       15.078125,
+       -1.9423828125,
+       38.0625
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s2",
+     "time": 0.31410496844772895,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.00323486328125,
+       32.0,
+       835.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.00323486328125,
+       32.0,
+       835.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s2",
+     "time": 0.31410496844772895,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       2760.0,
+       22.53125,
+       524.5
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       2760.0,
+       22.53125,
+       524.5
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s2",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.00323486328125,
+       32.0,
+       835.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.00323486328125,
+       32.0,
+       835.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s2",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       4392.0,
+       16.921875,
+       341.5
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       4392.0,
+       16.921875,
+       341.5
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s2",
+     "time": 0.500000001,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.00323486328125,
+       32.0,
+       835.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.00323486328125,
+       32.0,
+       835.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s2",
+     "time": 0.500000001,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       4392.0,
+       16.921875,
+       341.5
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       4392.0,
+       16.921875,
+       341.5
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s2",
+     "time": 0.7333200817990535,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.00323486328125,
+       32.0,
+       835.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.00323486328125,
+       32.0,
+       835.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s2",
+     "time": 0.7333200817990535,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       6440.0,
+       9.890625,
+       111.0625
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       6440.0,
+       9.890625,
+       111.0625
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s2",
+     "time": 0.92071480921514,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       0.00323486328125,
+       32.0,
+       835.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.00323486328125,
+       32.0,
+       835.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_s2",
+     "time": 0.92071480921514,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       8088.0,
+       4.24609375,
+       -73.9375
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       8088.0,
+       4.24609375,
+       -73.9375
+      ]
+     }
+    },
+    {
+     "attr": "/A.half3_array",
+     "time": 0.31410496844772895,
+     "interp": "held",
+     "openusd": [
+      [
+       -0.0192718505859375,
+       216.375,
+       219.125
+      ],
+      [
+       -53.71875,
+       1.572265625,
+       0.050628662109375
+      ],
+      [
+       -0.004505157470703125,
+       13.171875,
+       3.71875
+      ],
+      [
+       -3910.0,
+       -84.0,
+       0.058563232421875
+      ],
+      [
+       0.1290283203125,
+       -1.076171875,
+       0.0041351318359375
+      ],
+      [
+       -0.82275390625,
+       -2.798828125,
+       -383.25
+      ]
+     ],
+     "flattened": [
+      [
+       -0.0192718505859375,
+       216.375,
+       219.125
+      ],
+      [
+       -53.71875,
+       1.572265625,
+       0.050628662109375
+      ],
+      [
+       -0.004505157470703125,
+       13.171875,
+       3.71875
+      ],
+      [
+       -3910.0,
+       -84.0,
+       0.058563232421875
+      ],
+      [
+       0.1290283203125,
+       -1.076171875,
+       0.0041351318359375
+      ],
+      [
+       -0.82275390625,
+       -2.798828125,
+       -383.25
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half3_array",
+     "time": 0.31410496844772895,
+     "interp": "linear",
+     "openusd": [
+      [
+       0.351806640625,
+       149.0,
+       85.375
+      ],
+      [
+       -53.6875,
+       1.572265625,
+       0.050628662109375
+      ],
+      [
+       6.109375,
+       -2280.0,
+       2.521484375
+      ],
+      [
+       -1454.0,
+       -31.234375,
+       0.021759033203125
+      ],
+      [
+       0.1290283203125,
+       -1.076171875,
+       0.0041351318359375
+      ],
+      [
+       -0.8232421875,
+       -2.798828125,
+       -383.0
+      ]
+     ],
+     "flattened": [
+      [
+       0.351806640625,
+       149.0,
+       85.375
+      ],
+      [
+       -53.6875,
+       1.572265625,
+       0.050628662109375
+      ],
+      [
+       6.109375,
+       -2280.0,
+       2.521484375
+      ],
+      [
+       -1454.0,
+       -31.234375,
+       0.021759033203125
+      ],
+      [
+       0.1290283203125,
+       -1.076171875,
+       0.0041351318359375
+      ],
+      [
+       -0.8232421875,
+       -2.798828125,
+       -383.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half3_array",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": [
+      [
+       -0.0192718505859375,
+       216.375,
+       219.125
+      ],
+      [
+       -53.71875,
+       1.572265625,
+       0.050628662109375
+      ],
+      [
+       -0.004505157470703125,
+       13.171875,
+       3.71875
+      ],
+      [
+       -3910.0,
+       -84.0,
+       0.058563232421875
+      ],
+      [
+       0.1290283203125,
+       -1.076171875,
+       0.0041351318359375
+      ],
+      [
+       -0.82275390625,
+       -2.798828125,
+       -383.25
+      ]
+     ],
+     "flattened": [
+      [
+       -0.0192718505859375,
+       216.375,
+       219.125
+      ],
+      [
+       -53.71875,
+       1.572265625,
+       0.050628662109375
+      ],
+      [
+       -0.004505157470703125,
+       13.171875,
+       3.71875
+      ],
+      [
+       -3910.0,
+       -84.0,
+       0.058563232421875
+      ],
+      [
+       0.1290283203125,
+       -1.076171875,
+       0.0041351318359375
+      ],
+      [
+       -0.82275390625,
+       -2.798828125,
+       -383.25
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half3_array",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": [
+      [
+       0.5712890625,
+       109.125,
+       6.25
+      ],
+      [
+       -53.6875,
+       1.5732421875,
+       0.05059814453125
+      ],
+      [
+       9.734375,
+       -3640.0,
+       1.8125
+      ],
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.1290283203125,
+       -1.076171875,
+       0.0041351318359375
+      ],
+      [
+       -0.82275390625,
+       -2.796875,
+       -383.0
+      ]
+     ],
+     "flattened": [
+      [
+       0.5712890625,
+       109.125,
+       6.25
+      ],
+      [
+       -53.6875,
+       1.5732421875,
+       0.05059814453125
+      ],
+      [
+       9.734375,
+       -3640.0,
+       1.8125
+      ],
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.1290283203125,
+       -1.076171875,
+       0.0041351318359375
+      ],
+      [
+       -0.82275390625,
+       -2.796875,
+       -383.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half3_array",
+     "time": 0.500000001,
+     "interp": "held",
+     "openusd": [
+      [
+       -0.0192718505859375,
+       216.375,
+       219.125
+      ],
+      [
+       -53.71875,
+       1.572265625,
+       0.050628662109375
+      ],
+      [
+       -0.004505157470703125,
+       13.171875,
+       3.71875
+      ],
+      [
+       -3910.0,
+       -84.0,
+       0.058563232421875
+      ],
+      [
+       0.1290283203125,
+       -1.076171875,
+       0.0041351318359375
+      ],
+      [
+       -0.82275390625,
+       -2.798828125,
+       -383.25
+      ]
+     ],
+     "flattened": [
+      [
+       -0.0192718505859375,
+       216.375,
+       219.125
+      ],
+      [
+       -53.71875,
+       1.572265625,
+       0.050628662109375
+      ],
+      [
+       -0.004505157470703125,
+       13.171875,
+       3.71875
+      ],
+      [
+       -3910.0,
+       -84.0,
+       0.058563232421875
+      ],
+      [
+       0.1290283203125,
+       -1.076171875,
+       0.0041351318359375
+      ],
+      [
+       -0.82275390625,
+       -2.798828125,
+       -383.25
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half3_array",
+     "time": 0.500000001,
+     "interp": "linear",
+     "openusd": [
+      [
+       0.5712890625,
+       109.125,
+       6.25
+      ],
+      [
+       -53.6875,
+       1.5732421875,
+       0.05059814453125
+      ],
+      [
+       9.734375,
+       -3640.0,
+       1.8125
+      ],
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.1290283203125,
+       -1.076171875,
+       0.0041351318359375
+      ],
+      [
+       -0.82275390625,
+       -2.796875,
+       -383.0
+      ]
+     ],
+     "flattened": [
+      [
+       0.5712890625,
+       109.125,
+       6.25
+      ],
+      [
+       -53.6875,
+       1.5732421875,
+       0.05059814453125
+      ],
+      [
+       9.734375,
+       -3640.0,
+       1.8125
+      ],
+      [
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.1290283203125,
+       -1.076171875,
+       0.0041351318359375
+      ],
+      [
+       -0.82275390625,
+       -2.796875,
+       -383.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half3_array",
+     "time": 0.7333200817990535,
+     "interp": "held",
+     "openusd": [
+      [
+       -0.0192718505859375,
+       216.375,
+       219.125
+      ],
+      [
+       -53.71875,
+       1.572265625,
+       0.050628662109375
+      ],
+      [
+       -0.004505157470703125,
+       13.171875,
+       3.71875
+      ],
+      [
+       -3910.0,
+       -84.0,
+       0.058563232421875
+      ],
+      [
+       0.1290283203125,
+       -1.076171875,
+       0.0041351318359375
+      ],
+      [
+       -0.82275390625,
+       -2.798828125,
+       -383.25
+      ]
+     ],
+     "flattened": [
+      [
+       -0.0192718505859375,
+       216.375,
+       219.125
+      ],
+      [
+       -53.71875,
+       1.572265625,
+       0.050628662109375
+      ],
+      [
+       -0.004505157470703125,
+       13.171875,
+       3.71875
+      ],
+      [
+       -3910.0,
+       -84.0,
+       0.058563232421875
+      ],
+      [
+       0.1290283203125,
+       -1.076171875,
+       0.0041351318359375
+      ],
+      [
+       -0.82275390625,
+       -2.798828125,
+       -383.25
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half3_array",
+     "time": 0.7333200817990535,
+     "interp": "linear",
+     "openusd": [
+      [
+       0.8466796875,
+       59.0625,
+       -93.0625
+      ],
+      [
+       -53.6875,
+       1.5732421875,
+       0.05059814453125
+      ],
+      [
+       14.2734375,
+       -5344.0,
+       0.9228515625
+      ],
+      [
+       1825.0,
+       39.1875,
+       -0.027313232421875
+      ],
+      [
+       0.1290283203125,
+       -1.076171875,
+       0.0041351318359375
+      ],
+      [
+       -0.82275390625,
+       -2.796875,
+       -383.0
+      ]
+     ],
+     "flattened": [
+      [
+       0.8466796875,
+       59.0625,
+       -93.0625
+      ],
+      [
+       -53.6875,
+       1.5732421875,
+       0.05059814453125
+      ],
+      [
+       14.2734375,
+       -5344.0,
+       0.9228515625
+      ],
+      [
+       1825.0,
+       39.1875,
+       -0.027313232421875
+      ],
+      [
+       0.1290283203125,
+       -1.076171875,
+       0.0041351318359375
+      ],
+      [
+       -0.82275390625,
+       -2.796875,
+       -383.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half3_array",
+     "time": 0.92071480921514,
+     "interp": "held",
+     "openusd": [
+      [
+       -0.0192718505859375,
+       216.375,
+       219.125
+      ],
+      [
+       -53.71875,
+       1.572265625,
+       0.050628662109375
+      ],
+      [
+       -0.004505157470703125,
+       13.171875,
+       3.71875
+      ],
+      [
+       -3910.0,
+       -84.0,
+       0.058563232421875
+      ],
+      [
+       0.1290283203125,
+       -1.076171875,
+       0.0041351318359375
+      ],
+      [
+       -0.82275390625,
+       -2.798828125,
+       -383.25
+      ]
+     ],
+     "flattened": [
+      [
+       -0.0192718505859375,
+       216.375,
+       219.125
+      ],
+      [
+       -53.71875,
+       1.572265625,
+       0.050628662109375
+      ],
+      [
+       -0.004505157470703125,
+       13.171875,
+       3.71875
+      ],
+      [
+       -3910.0,
+       -84.0,
+       0.058563232421875
+      ],
+      [
+       0.1290283203125,
+       -1.076171875,
+       0.0041351318359375
+      ],
+      [
+       -0.82275390625,
+       -2.798828125,
+       -383.25
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half3_array",
+     "time": 0.92071480921514,
+     "interp": "linear",
+     "openusd": [
+      [
+       1.068359375,
+       18.859375,
+       -172.875
+      ],
+      [
+       -53.6875,
+       1.57421875,
+       0.05059814453125
+      ],
+      [
+       17.921875,
+       -6712.0,
+       0.208740234375
+      ],
+      [
+       3290.0,
+       70.625,
+       -0.049285888671875
+      ],
+      [
+       0.1290283203125,
+       -1.0751953125,
+       0.004138946533203125
+      ],
+      [
+       -0.82275390625,
+       -2.796875,
+       -383.25
+      ]
+     ],
+     "flattened": [
+      [
+       1.068359375,
+       18.859375,
+       -172.875
+      ],
+      [
+       -53.6875,
+       1.57421875,
+       0.05059814453125
+      ],
+      [
+       17.921875,
+       -6712.0,
+       0.208740234375
+      ],
+      [
+       3290.0,
+       70.625,
+       -0.049285888671875
+      ],
+      [
+       0.1290283203125,
+       -1.0751953125,
+       0.004138946533203125
+      ],
+      [
+       -0.82275390625,
+       -2.796875,
+       -383.25
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half4_s0",
+     "time": 0.31410496844772895,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -0.00240325927734375,
+       0.003551483154296875,
+       -1.4716796875,
+       219.625
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -0.00240325927734375,
+       0.003551483154296875,
+       -1.4716796875,
+       219.625
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s0",
+     "time": 0.31410496844772895,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -0.00240325927734375,
+       0.003551483154296875,
+       -1.4716796875,
+       219.625
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -0.00240325927734375,
+       0.003551483154296875,
+       -1.4716796875,
+       219.625
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s0",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -0.00240325927734375,
+       0.003551483154296875,
+       -1.4716796875,
+       219.625
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -0.00240325927734375,
+       0.003551483154296875,
+       -1.4716796875,
+       219.625
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s0",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -0.00240325927734375,
+       0.003551483154296875,
+       -1.4716796875,
+       219.75
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -0.00240325927734375,
+       0.003551483154296875,
+       -1.4716796875,
+       219.75
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s0",
+     "time": 0.500000001,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -0.00240325927734375,
+       0.003551483154296875,
+       -1.4716796875,
+       219.625
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -0.00240325927734375,
+       0.003551483154296875,
+       -1.4716796875,
+       219.625
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s0",
+     "time": 0.500000001,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -0.00240325927734375,
+       0.003551483154296875,
+       -1.4716796875,
+       219.75
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -0.00240325927734375,
+       0.003551483154296875,
+       -1.4716796875,
+       219.75
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s0",
+     "time": 0.7333200817990535,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -0.00240325927734375,
+       0.003551483154296875,
+       -1.4716796875,
+       219.625
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -0.00240325927734375,
+       0.003551483154296875,
+       -1.4716796875,
+       219.625
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s0",
+     "time": 0.7333200817990535,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -0.00240325927734375,
+       0.003551483154296875,
+       -1.4716796875,
+       219.75
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -0.00240325927734375,
+       0.003551483154296875,
+       -1.4716796875,
+       219.75
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s0",
+     "time": 0.92071480921514,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -0.00240325927734375,
+       0.003551483154296875,
+       -1.4716796875,
+       219.625
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -0.00240325927734375,
+       0.003551483154296875,
+       -1.4716796875,
+       219.625
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s0",
+     "time": 0.92071480921514,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -0.0024051666259765625,
+       0.0035495758056640625,
+       -1.47265625,
+       219.75
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -0.0024051666259765625,
+       0.0035495758056640625,
+       -1.47265625,
+       219.75
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s1",
+     "time": 0.31410496844772895,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       25.703125,
+       29.265625,
+       -0.01499176025390625,
+       0.00612640380859375
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       25.703125,
+       29.265625,
+       -0.01499176025390625,
+       0.00612640380859375
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s1",
+     "time": 0.31410496844772895,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       9.5546875,
+       10.8828125,
+       -0.00557708740234375,
+       0.0022792816162109375
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       9.5546875,
+       10.8828125,
+       -0.00557708740234375,
+       0.0022792816162109375
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s1",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       25.703125,
+       29.265625,
+       -0.01499176025390625,
+       0.00612640380859375
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       25.703125,
+       29.265625,
+       -0.01499176025390625,
+       0.00612640380859375
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s1",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s1",
+     "time": 0.500000001,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       25.703125,
+       29.265625,
+       -0.01499176025390625,
+       0.00612640380859375
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       25.703125,
+       29.265625,
+       -0.01499176025390625,
+       0.00612640380859375
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s1",
+     "time": 0.500000001,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s1",
+     "time": 0.7333200817990535,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       25.703125,
+       29.265625,
+       -0.01499176025390625,
+       0.00612640380859375
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       25.703125,
+       29.265625,
+       -0.01499176025390625,
+       0.00612640380859375
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s1",
+     "time": 0.7333200817990535,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -11.984375,
+       -13.6640625,
+       0.00699615478515625,
+       -0.00286102294921875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -11.984375,
+       -13.6640625,
+       0.00699615478515625,
+       -0.00286102294921875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s1",
+     "time": 0.92071480921514,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       25.703125,
+       29.265625,
+       -0.01499176025390625,
+       0.00612640380859375
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       25.703125,
+       29.265625,
+       -0.01499176025390625,
+       0.00612640380859375
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s1",
+     "time": 0.92071480921514,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -21.640625,
+       -24.625,
+       0.01261138916015625,
+       -0.005157470703125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -21.640625,
+       -24.625,
+       0.01261138916015625,
+       -0.005157470703125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s2",
+     "time": 0.31410496844772895,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       1.79296875,
+       -169.5,
+       0.0197296142578125,
+       -6.62109375
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       1.79296875,
+       -169.5,
+       0.0197296142578125,
+       -6.62109375
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s2",
+     "time": 0.31410496844772895,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -2.17578125,
+       -116.25,
+       -606.5,
+       8.640625
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -2.17578125,
+       -116.25,
+       -606.5,
+       8.640625
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s2",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       1.79296875,
+       -169.5,
+       0.0197296142578125,
+       -6.62109375
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       1.79296875,
+       -169.5,
+       0.0197296142578125,
+       -6.62109375
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s2",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -4.5234375,
+       -84.75,
+       -965.5,
+       17.671875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -4.5234375,
+       -84.75,
+       -965.5,
+       17.671875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s2",
+     "time": 0.500000001,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       1.79296875,
+       -169.5,
+       0.0197296142578125,
+       -6.62109375
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       1.79296875,
+       -169.5,
+       0.0197296142578125,
+       -6.62109375
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s2",
+     "time": 0.500000001,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -4.5234375,
+       -84.75,
+       -965.5,
+       17.671875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -4.5234375,
+       -84.75,
+       -965.5,
+       17.671875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s2",
+     "time": 0.7333200817990535,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       1.79296875,
+       -169.5,
+       0.0197296142578125,
+       -6.62109375
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       1.79296875,
+       -169.5,
+       0.0197296142578125,
+       -6.62109375
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s2",
+     "time": 0.7333200817990535,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -7.4765625,
+       -45.1875,
+       -1416.0,
+       29.015625
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -7.4765625,
+       -45.1875,
+       -1416.0,
+       29.015625
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s2",
+     "time": 0.92071480921514,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       1.79296875,
+       -169.5,
+       0.0197296142578125,
+       -6.62109375
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       1.79296875,
+       -169.5,
+       0.0197296142578125,
+       -6.62109375
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_s2",
+     "time": 0.92071480921514,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       -9.84375,
+       -13.4375,
+       -1778.0,
+       38.125
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -9.84375,
+       -13.4375,
+       -1778.0,
+       38.125
+      ]
+     }
+    },
+    {
+     "attr": "/A.half4_array",
+     "time": 0.31410496844772895,
+     "interp": "held",
+     "openusd": [
+      [
+       -183.875,
+       7.8125,
+       2.91015625,
+       4284.0
+      ],
+      [
+       -6472.0,
+       1.6513671875,
+       0.2266845703125,
+       -6.54296875
+      ],
+      [
+       0.00504302978515625,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010862350463867188
+      ],
+      [
+       -0.0254974365234375,
+       -2.05859375,
+       -0.006256103515625,
+       -0.1722412109375
+      ],
+      [
+       249.125,
+       -0.045623779296875,
+       -186.625,
+       0.0024776458740234375
+      ],
+      [
+       1.51953125,
+       -355.25,
+       1.197265625,
+       -24.984375
+      ]
+     ],
+     "flattened": [
+      [
+       -183.875,
+       7.8125,
+       2.91015625,
+       4284.0
+      ],
+      [
+       -6472.0,
+       1.6513671875,
+       0.2266845703125,
+       -6.54296875
+      ],
+      [
+       0.00504302978515625,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010862350463867188
+      ],
+      [
+       -0.0254974365234375,
+       -2.05859375,
+       -0.006256103515625,
+       -0.1722412109375
+      ],
+      [
+       249.125,
+       -0.045623779296875,
+       -186.625,
+       0.0024776458740234375
+      ],
+      [
+       1.51953125,
+       -355.25,
+       1.197265625,
+       -24.984375
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half4_array",
+     "time": 0.31410496844772895,
+     "interp": "linear",
+     "openusd": [
+      [
+       -125.8125,
+       276.25,
+       2.00390625,
+       2938.0
+      ],
+      [
+       -2408.0,
+       0.6142578125,
+       0.08428955078125,
+       -2.43359375
+      ],
+      [
+       0.00504302978515625,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010852813720703125
+      ],
+      [
+       -0.0254974365234375,
+       -2.05859375,
+       -0.006256103515625,
+       -0.17236328125
+      ],
+      [
+       170.625,
+       -0.03289794921875,
+       -128.125,
+       0.0004787445068359375
+      ],
+      [
+       1.51953125,
+       -355.25,
+       1.197265625,
+       -24.984375
+      ]
+     ],
+     "flattened": [
+      [
+       -125.8125,
+       276.25,
+       2.00390625,
+       2938.0
+      ],
+      [
+       -2408.0,
+       0.6142578125,
+       0.08428955078125,
+       -2.43359375
+      ],
+      [
+       0.00504302978515625,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010852813720703125
+      ],
+      [
+       -0.0254974365234375,
+       -2.05859375,
+       -0.006256103515625,
+       -0.17236328125
+      ],
+      [
+       170.625,
+       -0.03289794921875,
+       -128.125,
+       0.0004787445068359375
+      ],
+      [
+       1.51953125,
+       -355.25,
+       1.197265625,
+       -24.984375
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half4_array",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": [
+      [
+       -183.875,
+       7.8125,
+       2.91015625,
+       4284.0
+      ],
+      [
+       -6472.0,
+       1.6513671875,
+       0.2266845703125,
+       -6.54296875
+      ],
+      [
+       0.00504302978515625,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010862350463867188
+      ],
+      [
+       -0.0254974365234375,
+       -2.05859375,
+       -0.006256103515625,
+       -0.1722412109375
+      ],
+      [
+       249.125,
+       -0.045623779296875,
+       -186.625,
+       0.0024776458740234375
+      ],
+      [
+       1.51953125,
+       -355.25,
+       1.197265625,
+       -24.984375
+      ]
+     ],
+     "flattened": [
+      [
+       -183.875,
+       7.8125,
+       2.91015625,
+       4284.0
+      ],
+      [
+       -6472.0,
+       1.6513671875,
+       0.2266845703125,
+       -6.54296875
+      ],
+      [
+       0.00504302978515625,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010862350463867188
+      ],
+      [
+       -0.0254974365234375,
+       -2.05859375,
+       -0.006256103515625,
+       -0.1722412109375
+      ],
+      [
+       249.125,
+       -0.045623779296875,
+       -186.625,
+       0.0024776458740234375
+      ],
+      [
+       1.51953125,
+       -355.25,
+       1.197265625,
+       -24.984375
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half4_array",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": [
+      [
+       -91.375,
+       435.5,
+       1.4677734375,
+       2142.0
+      ],
+      [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.00504302978515625,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010852813720703125
+      ],
+      [
+       -0.0255126953125,
+       -2.05859375,
+       -0.006256103515625,
+       -0.17236328125
+      ],
+      [
+       124.1875,
+       -0.025360107421875,
+       -93.5625,
+       -0.0007038116455078125
+      ],
+      [
+       1.51953125,
+       -355.5,
+       1.197265625,
+       -24.984375
+      ]
+     ],
+     "flattened": [
+      [
+       -91.375,
+       435.5,
+       1.4677734375,
+       2142.0
+      ],
+      [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.00504302978515625,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010852813720703125
+      ],
+      [
+       -0.0255126953125,
+       -2.05859375,
+       -0.006256103515625,
+       -0.17236328125
+      ],
+      [
+       124.1875,
+       -0.025360107421875,
+       -93.5625,
+       -0.0007038116455078125
+      ],
+      [
+       1.51953125,
+       -355.5,
+       1.197265625,
+       -24.984375
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half4_array",
+     "time": 0.500000001,
+     "interp": "held",
+     "openusd": [
+      [
+       -183.875,
+       7.8125,
+       2.91015625,
+       4284.0
+      ],
+      [
+       -6472.0,
+       1.6513671875,
+       0.2266845703125,
+       -6.54296875
+      ],
+      [
+       0.00504302978515625,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010862350463867188
+      ],
+      [
+       -0.0254974365234375,
+       -2.05859375,
+       -0.006256103515625,
+       -0.1722412109375
+      ],
+      [
+       249.125,
+       -0.045623779296875,
+       -186.625,
+       0.0024776458740234375
+      ],
+      [
+       1.51953125,
+       -355.25,
+       1.197265625,
+       -24.984375
+      ]
+     ],
+     "flattened": [
+      [
+       -183.875,
+       7.8125,
+       2.91015625,
+       4284.0
+      ],
+      [
+       -6472.0,
+       1.6513671875,
+       0.2266845703125,
+       -6.54296875
+      ],
+      [
+       0.00504302978515625,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010862350463867188
+      ],
+      [
+       -0.0254974365234375,
+       -2.05859375,
+       -0.006256103515625,
+       -0.1722412109375
+      ],
+      [
+       249.125,
+       -0.045623779296875,
+       -186.625,
+       0.0024776458740234375
+      ],
+      [
+       1.51953125,
+       -355.25,
+       1.197265625,
+       -24.984375
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half4_array",
+     "time": 0.500000001,
+     "interp": "linear",
+     "openusd": [
+      [
+       -91.375,
+       435.5,
+       1.4677734375,
+       2142.0
+      ],
+      [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.00504302978515625,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010852813720703125
+      ],
+      [
+       -0.0255126953125,
+       -2.05859375,
+       -0.006256103515625,
+       -0.17236328125
+      ],
+      [
+       124.1875,
+       -0.025360107421875,
+       -93.5625,
+       -0.0007038116455078125
+      ],
+      [
+       1.51953125,
+       -355.5,
+       1.197265625,
+       -24.984375
+      ]
+     ],
+     "flattened": [
+      [
+       -91.375,
+       435.5,
+       1.4677734375,
+       2142.0
+      ],
+      [
+       0.0,
+       0.0,
+       0.0,
+       0.0
+      ],
+      [
+       0.00504302978515625,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010852813720703125
+      ],
+      [
+       -0.0255126953125,
+       -2.05859375,
+       -0.006256103515625,
+       -0.17236328125
+      ],
+      [
+       124.1875,
+       -0.025360107421875,
+       -93.5625,
+       -0.0007038116455078125
+      ],
+      [
+       1.51953125,
+       -355.5,
+       1.197265625,
+       -24.984375
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half4_array",
+     "time": 0.7333200817990535,
+     "interp": "held",
+     "openusd": [
+      [
+       -183.875,
+       7.8125,
+       2.91015625,
+       4284.0
+      ],
+      [
+       -6472.0,
+       1.6513671875,
+       0.2266845703125,
+       -6.54296875
+      ],
+      [
+       0.00504302978515625,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010862350463867188
+      ],
+      [
+       -0.0254974365234375,
+       -2.05859375,
+       -0.006256103515625,
+       -0.1722412109375
+      ],
+      [
+       249.125,
+       -0.045623779296875,
+       -186.625,
+       0.0024776458740234375
+      ],
+      [
+       1.51953125,
+       -355.25,
+       1.197265625,
+       -24.984375
+      ]
+     ],
+     "flattened": [
+      [
+       -183.875,
+       7.8125,
+       2.91015625,
+       4284.0
+      ],
+      [
+       -6472.0,
+       1.6513671875,
+       0.2266845703125,
+       -6.54296875
+      ],
+      [
+       0.00504302978515625,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010862350463867188
+      ],
+      [
+       -0.0254974365234375,
+       -2.05859375,
+       -0.006256103515625,
+       -0.1722412109375
+      ],
+      [
+       249.125,
+       -0.045623779296875,
+       -186.625,
+       0.0024776458740234375
+      ],
+      [
+       1.51953125,
+       -355.25,
+       1.197265625,
+       -24.984375
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half4_array",
+     "time": 0.7333200817990535,
+     "interp": "linear",
+     "openusd": [
+      [
+       -48.25,
+       635.0,
+       0.794921875,
+       1142.0
+      ],
+      [
+       3022.0,
+       -0.7705078125,
+       -0.1058349609375,
+       3.05078125
+      ],
+      [
+       0.00504302978515625,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010852813720703125
+      ],
+      [
+       -0.0255126953125,
+       -2.05859375,
+       -0.006256103515625,
+       -0.1722412109375
+      ],
+      [
+       65.875,
+       -0.0159149169921875,
+       -50.125,
+       -0.00218963623046875
+      ],
+      [
+       1.5205078125,
+       -355.5,
+       1.197265625,
+       -25.0
+      ]
+     ],
+     "flattened": [
+      [
+       -48.25,
+       635.0,
+       0.794921875,
+       1142.0
+      ],
+      [
+       3022.0,
+       -0.7705078125,
+       -0.1058349609375,
+       3.05078125
+      ],
+      [
+       0.00504302978515625,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010852813720703125
+      ],
+      [
+       -0.0255126953125,
+       -2.05859375,
+       -0.006256103515625,
+       -0.1722412109375
+      ],
+      [
+       65.875,
+       -0.0159149169921875,
+       -50.125,
+       -0.00218963623046875
+      ],
+      [
+       1.5205078125,
+       -355.5,
+       1.197265625,
+       -25.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half4_array",
+     "time": 0.92071480921514,
+     "interp": "held",
+     "openusd": [
+      [
+       -183.875,
+       7.8125,
+       2.91015625,
+       4284.0
+      ],
+      [
+       -6472.0,
+       1.6513671875,
+       0.2266845703125,
+       -6.54296875
+      ],
+      [
+       0.00504302978515625,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010862350463867188
+      ],
+      [
+       -0.0254974365234375,
+       -2.05859375,
+       -0.006256103515625,
+       -0.1722412109375
+      ],
+      [
+       249.125,
+       -0.045623779296875,
+       -186.625,
+       0.0024776458740234375
+      ],
+      [
+       1.51953125,
+       -355.25,
+       1.197265625,
+       -24.984375
+      ]
+     ],
+     "flattened": [
+      [
+       -183.875,
+       7.8125,
+       2.91015625,
+       4284.0
+      ],
+      [
+       -6472.0,
+       1.6513671875,
+       0.2266845703125,
+       -6.54296875
+      ],
+      [
+       0.00504302978515625,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010862350463867188
+      ],
+      [
+       -0.0254974365234375,
+       -2.05859375,
+       -0.006256103515625,
+       -0.1722412109375
+      ],
+      [
+       249.125,
+       -0.045623779296875,
+       -186.625,
+       0.0024776458740234375
+      ],
+      [
+       1.51953125,
+       -355.25,
+       1.197265625,
+       -24.984375
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half4_array",
+     "time": 0.92071480921514,
+     "interp": "linear",
+     "openusd": [
+      [
+       -13.59375,
+       795.0,
+       0.25439453125,
+       339.75
+      ],
+      [
+       5448.0,
+       -1.3896484375,
+       -0.1907958984375,
+       5.50390625
+      ],
+      [
+       0.005046844482421875,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010852813720703125
+      ],
+      [
+       -0.0255126953125,
+       -2.05859375,
+       -0.006259918212890625,
+       -0.17236328125
+      ],
+      [
+       19.0625,
+       -0.00832366943359375,
+       -15.25,
+       -0.00337982177734375
+      ],
+      [
+       1.5205078125,
+       -355.5,
+       1.197265625,
+       -24.984375
+      ]
+     ],
+     "flattened": [
+      [
+       -13.59375,
+       795.0,
+       0.25439453125,
+       339.75
+      ],
+      [
+       5448.0,
+       -1.3896484375,
+       -0.1907958984375,
+       5.50390625
+      ],
+      [
+       0.005046844482421875,
+       -0.0154571533203125,
+       1.32421875,
+       0.0010852813720703125
+      ],
+      [
+       -0.0255126953125,
+       -2.05859375,
+       -0.006259918212890625,
+       -0.17236328125
+      ],
+      [
+       19.0625,
+       -0.00832366943359375,
+       -15.25,
+       -0.00337982177734375
+      ],
+      [
+       1.5205078125,
+       -355.5,
+       1.197265625,
+       -24.984375
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_probe0",
+     "time": 0.31410496844772895,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_probe0",
+     "time": 0.31410496844772895,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       12.046875,
+       12.046875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       12.046875,
+       12.046875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_probe0",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_probe0",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       20.0,
+       20.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       20.0,
+       20.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_probe0",
+     "time": 0.500000001,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_probe0",
+     "time": 0.500000001,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       20.0,
+       20.0
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       20.0,
+       20.0
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_probe0",
+     "time": 0.7333200817990535,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_probe0",
+     "time": 0.7333200817990535,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       29.96875,
+       29.96875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       29.96875,
+       29.96875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_probe0",
+     "time": 0.92071480921514,
+     "interp": "held",
+     "openusd": {
+      "tuple": [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_probe0",
+     "time": 0.92071480921514,
+     "interp": "linear",
+     "openusd": {
+      "tuple": [
+       37.96875,
+       37.96875
+      ]
+     },
+     "flattened": {
+      "tuple": [
+       37.96875,
+       37.96875
+      ]
+     }
+    },
+    {
+     "attr": "/A.half2_probe0_array",
+     "time": 0.31410496844772895,
+     "interp": "held",
+     "openusd": [
+      [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     ],
+     "flattened": [
+      [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_probe0_array",
+     "time": 0.31410496844772895,
+     "interp": "linear",
+     "openusd": [
+      [
+       12.046875,
+       12.046875
+      ]
+     ],
+     "flattened": [
+      [
+       12.046875,
+       12.046875
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_probe0_array",
+     "time": 0.5,
+     "interp": "held",
+     "openusd": [
+      [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     ],
+     "flattened": [
+      [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_probe0_array",
+     "time": 0.5,
+     "interp": "linear",
+     "openusd": [
+      [
+       20.0,
+       20.0
+      ]
+     ],
+     "flattened": [
+      [
+       20.0,
+       20.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_probe0_array",
+     "time": 0.500000001,
+     "interp": "held",
+     "openusd": [
+      [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     ],
+     "flattened": [
+      [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_probe0_array",
+     "time": 0.500000001,
+     "interp": "linear",
+     "openusd": [
+      [
+       20.0,
+       20.0
+      ]
+     ],
+     "flattened": [
+      [
+       20.0,
+       20.0
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_probe0_array",
+     "time": 0.7333200817990535,
+     "interp": "held",
+     "openusd": [
+      [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     ],
+     "flattened": [
+      [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_probe0_array",
+     "time": 0.7333200817990535,
+     "interp": "linear",
+     "openusd": [
+      [
+       29.96875,
+       29.96875
+      ]
+     ],
+     "flattened": [
+      [
+       29.96875,
+       29.96875
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_probe0_array",
+     "time": 0.92071480921514,
+     "interp": "held",
+     "openusd": [
+      [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     ],
+     "flattened": [
+      [
+       -1.3857421875,
+       -1.3857421875
+      ]
+     ]
+    },
+    {
+     "attr": "/A.half2_probe0_array",
+     "time": 0.92071480921514,
+     "interp": "linear",
+     "openusd": [
+      [
+       37.96875,
+       37.96875
+      ]
+     ],
+     "flattened": [
+      [
+       37.96875,
+       37.96875
       ]
      ]
     }

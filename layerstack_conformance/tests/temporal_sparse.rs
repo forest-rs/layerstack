@@ -123,12 +123,17 @@ impl Element {
     /// first, as the vectors do.
     fn from_value(value: &Value) -> Self {
         let floats = |v: &[f32]| v.iter().copied().map(f64::from).collect();
+        let halves = |v: &[u16]| v.iter().copied().map(half_to_f64).collect();
         Self(match value {
             Value::Int(v) => vec![f64::from(*v)],
             #[allow(clippy::cast_precision_loss, reason = "test values are small")]
             Value::Int64(v) => vec![*v as f64],
+            Value::Half(v) => vec![half_to_f64(*v)],
             Value::Float(v) => vec![f64::from(*v)],
             Value::Double(v) => vec![*v],
+            Value::Vec2h(v) => halves(v),
+            Value::Vec3h(v) => halves(v),
+            Value::Vec4h(v) => halves(v),
             Value::Vec2f(v) => floats(v),
             Value::Vec3f(v) => floats(v),
             Value::Vec4f(v) => floats(v),
@@ -153,6 +158,19 @@ impl Element {
                     (a - b).abs() <= 1e-5 * a.abs().max(1.0)
                 }
             })
+    }
+}
+
+/// Widens IEEE 754 binary16 bits exactly.
+fn half_to_f64(bits: u16) -> f64 {
+    let sign = if bits & 0x8000 == 0 { 1.0 } else { -1.0 };
+    let exponent = i32::from((bits >> 10) & 0x1f);
+    let mantissa = f64::from(bits & 0x3ff);
+    sign * match exponent {
+        0 => mantissa * 2_f64.powi(-24),
+        0x1f if mantissa == 0.0 => f64::INFINITY,
+        0x1f => f64::NAN,
+        _ => (1024.0 + mantissa) * 2_f64.powi(exponent - 25),
     }
 }
 

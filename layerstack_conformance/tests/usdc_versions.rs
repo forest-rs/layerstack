@@ -297,11 +297,6 @@ fn sublayers_match_openusd() {
 }
 
 #[test]
-#[ignore = "OpenUSD's `SdfLayerOffset` maps sublayer time to stage time as \
-            `offset + scale * time`, so a stage query reads the sublayer at \
-            `(time - offset) / scale`; Layerstack's `LayerOffset::map_time` reads it \
-            at `time * scale + offset`. The USDC and USDA readers both store the \
-            authored offset; the mapping belongs to core value resolution."]
 fn sublayer_offset_time_mapping_matches_openusd() {
     let known: Vec<_> = compare_with_openusd("sublayers_root.usdc")
         .into_iter()
@@ -616,10 +611,6 @@ fn array_edit_default_beside_samples_matches_openusd() {
 }
 
 #[test]
-#[ignore = "OpenUSD composes the bracketing sparse samples before interpolating \
-            (`pxr/usd/usd/stage.cpp:7864`); Layerstack interpolates each opinion \
-            first and holds across a sparse sample. Belongs to the temporal \
-            sparse-resolution work."]
 fn array_edit_sample_interpolation_matches_openusd() {
     let (_, known) = array_edit_mismatches(KnownDifference::SparseSampleInterpolation);
     assert!(known.is_empty(), "{known:#?}");
@@ -738,9 +729,6 @@ fn test_usd_attribute_array_edits_default_beside_samples() {
 }
 
 #[test]
-#[ignore = "OpenUSD composes the bracketing sparse samples before interpolating \
-            (`pxr/usd/usd/stage.cpp:7864`); Layerstack interpolates each opinion \
-            first. Belongs to the temporal sparse-resolution work."]
 fn test_usd_attribute_array_edits_interpolation() {
     let failing = failing_vectors(TEST_INTERPOLATION_BETWEEN_SAMPLES);
     assert!(failing.is_empty(), "{failing:#?}");

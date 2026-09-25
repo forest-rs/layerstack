@@ -105,11 +105,32 @@ same `1e-6` tolerance.
 
 ### Block semantics
 
-A block discards every weaker authored opinion (AOUSD Core §12.3.6). If
-nothing stronger contributed, the result is blocked and the caller falls back
-to the schema fallback. Sparse edits stronger than the block compose over the
+A block discards every weaker authored opinion (AOUSD Core §12.3.6), and a
+blocked time sample does so wherever it is the held sample (§16.2.16.3: "the
+same semantics as when blocking the default attribute value"). If nothing
+stronger contributed, the result is blocked and a schema-aware query resolves
+the schema fallback. Sparse edits stronger than the block compose over the
 weakest dense value that survives it: the fallback seed, or the empty array,
 since the proposal requires a resolved array to always be dense.
+
+### Schema fallbacks
+
+`Stage::resolve_value_with_schema` (default time) and
+`Stage::resolve_value_at_time_with_schema` (numeric times) share one
+fallback contract (AOUSD Core §12.3.5, §13.3.2.4):
+
+- with nothing authored at the query time, a spec without a value included,
+  the fallback resolves;
+- an array fallback is the weakest dense seed of sparse edits, whether they
+  compose over no weaker opinion or over a block;
+- a block in effect, default or sampled, resolves the fallback (Core
+  §12.3.6);
+- otherwise authored values resolve as without a schema, and opinions hidden
+  behind a dense value or block are never evaluated.
+
+`Stage::resolve_value_at_time` and `Stage::resolve_property_path_at_time` take
+no schema: they compose edits over the empty array and resolve a block to no
+value.
 
 ## Relation To The Proposal
 
@@ -147,8 +168,10 @@ capability, not for uniformity alone.
 from OpenUSD 26.08 (`scripts/temporal_sparse_oracle.py`, including ports of
 `testUsdAttributeArrayEdits.cpp`): mixed dense and sparse samples at differing
 times, held and linear interpolation, sublayer and reference offsets, sampled
-and default blocks, defaults under and over samples, and element types of
-arrays and scalars. It also checks that resolving the composed stage equals
+and default blocks, defaults under and over samples, element types of arrays
+and scalars, and schema fallbacks (`Cube`'s `extent` and `size`, recorded from
+OpenUSD's schema registry) under sparse samples, blocks and layer offsets. It
+also checks that resolving the composed stage equals
 resolving OpenUSD's flattened layer.
 
 Every recorded value must match OpenUSD, except for the named divergences
@@ -178,6 +201,8 @@ value differs from the expected one. Any other difference from OpenUSD fails
 | `nan-before-first-sample` | 26.08 | NaN for interpolating types before the first composed sample | holds the first composed sample, as OpenUSD's flattened stage does | Core §12.5.1 |
 | `override-early-stop` | 26.08 | drops weaker opinions from the interpolated upper sample after the query moves to it | keeps composing weaker series at the upper sample's time | proposal's `Evaluate`; Core §12.3.2 |
 | `transparent-sampled-block` | 26.08 | a held sampled block in a weaker series lets opinions weaker than it show through | the block ends the fold | Core §12.3.6 |
+| `sampled-block-drops-fallback` | 26.08 | a held sampled block resolves no value despite a schema fallback, and edits over it compose over `[]` | the fallback resolves, and edits compose over it, as for a default block | Core §12.3.6, §16.2.16.3 |
+| `default-time-block-hides-fallback` | 26.08 | at the default time a default block resolves no value despite a schema fallback | the fallback resolves, as at numeric times | Core §12.3.6, §16.2.16.2 |
 
 - **`nan-before-first-sample`.** A default or fallback under time samples is a
   sample at `-inf` (`pxr/usd/usd/stage.cpp:8029` and `:8054`,
@@ -201,14 +226,24 @@ value differs from the expected one. Any other difference from OpenUSD fails
   opinions weaker than the block show through. A block discards weaker
   opinions, sampled ones included (Core §12.3.6), so Layerstack lets it end
   the fold.
+- **`sampled-block-drops-fallback`.** OpenUSD sends a default block on to the
+  schema fallback (`pxr/usd/usd/stage.cpp:9094`, `ProcessLayerAtTime`), but a
+  time-sample source never reaches it: edits stronger than a held sampled
+  block compose over `VtBackground`, the empty array (`:8066`), and a
+  strongest held sampled block resolves no value (`:8078`,
+  `Usd_ClearValueIfBlocked`). Core §12.3.6 resolves a blocked attribute to its
+  fallback "at any time", and §16.2.16.3 gives blocked samples the semantics of
+  a blocked default, so Layerstack treats both blocks alike.
+- **`default-time-block-hides-fallback`.** At the default time OpenUSD reads
+  the strongest `default` field and clears a block without consulting the
+  fallback (`pxr/usd/usd/stage.cpp:7262` and `:7272`,
+  `Usd_AttrGetValueHelper::GetValue`), although its resolve info names the
+  fallback as the source (`:9173`) and numeric times resolve the fallback.
+  Core §12.3.6 and §16.2.16.2 ("`int x = None` ... only resolve to fallback")
+  resolve the fallback.
 
 ## Open Gaps
 
-- **Schema fallback at a time.** The resolver seeds time queries with a schema
-  fallback, but `Stage` has no schema-aware time query, so
-  `Stage::resolve_value_at_time` materializes edits over `[]`. OpenUSD seeds
-  the fallback after a default block but uses the empty array after a sampled
-  block; `layerstack` seeds the fallback after either.
 - **Value clips.** Not implemented, so clip series do not participate in the
   linearization.
 - **Diagnostics.** `resolve_family_chain_report` is available but unused;

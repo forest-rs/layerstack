@@ -12,6 +12,12 @@
 //! [`DIVERGENCES`]: there it must produce the query's `expected` value, which
 //! OpenUSD does not. Any other difference is a failure.
 //!
+//! Cases with a `schema` rely on a prim type's attribute fallbacks, recorded
+//! from OpenUSD's schema registry. Layerstack resolves them through its
+//! schema-aware queries, `Stage::resolve_value_at_time_with_schema` and, at
+//! the default time, `Stage::resolve_field_with_schema`, over the same
+//! fallbacks ([`schema_fallbacks`]).
+//!
 //! Where OpenUSD defines it, resolving the composed stage must also equal
 //! resolving OpenUSD's flattened layer of that stage.
 
@@ -23,7 +29,8 @@ use std::sync::Arc;
 
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, InterpolationType, Layer, LayerId,
-    PathInterner, PropertyPath, ResolvedAsset, Stage, StageOptions, TokenInterner, Value,
+    PathInterner, PropertyPath, ResolvedAsset, SchemaDefinition, SchemaRegistry, Stage,
+    StageOptions, TokenInterner, Value,
 };
 use layerstack_usda::{emit, lower, parser::parse_cst};
 use serde::Deserialize;
@@ -43,7 +50,31 @@ const DIVERGENCES: &[(&str, &str)] = &[
     ("override-early-stop", "0.26.8"),
     // A held sampled block ends the fold (AOUSD Core 12.3.6).
     ("transparent-sampled-block", "0.26.8"),
+    // A held sampled block resolves the schema fallback, and edits over it
+    // compose over the fallback, as for a default block (AOUSD Core 12.3.6,
+    // 16.2.16.3).
+    ("sampled-block-drops-fallback", "0.26.8"),
+    // A default block resolves the schema fallback at the default time too
+    // (AOUSD Core 12.3.6, 16.2.16.2).
+    ("default-time-block-hides-fallback", "0.26.8"),
 ];
+
+/// The attribute fallbacks of the schemas the cases use, as `layerstack`
+/// values: `UsdGeomCube`'s `extent` and `size`
+/// (`pxr/usd/usdGeom/schema.usda`). `schema_fallbacks_match_openusd` checks
+/// them against the fallbacks the oracle recorded from OpenUSD.
+fn schema_fallbacks(type_name: &str) -> Vec<(&'static str, Value)> {
+    match type_name {
+        "Cube" => vec![
+            (
+                "extent",
+                Value::Array(vec![Value::Vec3f([-1.0; 3]), Value::Vec3f([1.0; 3])]),
+            ),
+            ("size", Value::Double(2.0)),
+        ],
+        other => panic!("no fallbacks for schema `{other}`"),
+    }
+}
 
 #[derive(Deserialize)]
 struct Vectors {
@@ -70,6 +101,16 @@ struct Case {
     /// go through the C library's `acos` and `sin`).
     #[serde(default)]
     ulps: u64,
+    schema: Option<Schema>,
+}
+
+/// A prim type whose attribute fallbacks a case relies on, with the
+/// fallbacks OpenUSD's schema registry reports.
+#[derive(Deserialize)]
+struct Schema {
+    #[serde(rename = "type")]
+    type_name: String,
+    fallbacks: BTreeMap<String, serde_json::Value>,
 }
 
 /// How closely a case's values must match.
@@ -318,14 +359,16 @@ fn emit_layer(
     result.layer
 }
 
-/// A composed stage over one case's layers, rooted at `root`.
+/// A composed stage over one case's layers, rooted at `root`, with the
+/// case's schema fallbacks when it has any.
 struct Composed {
     store: InMemoryStore,
     stage: Stage,
+    registry: Option<SchemaRegistry>,
 }
 
 impl Composed {
-    fn new(sources: &BTreeMap<String, String>, root: &str) -> Self {
+    fn new(sources: &BTreeMap<String, String>, root: &str, schema: Option<&Schema>) -> Self {
         let mut store = InMemoryStore::default();
         let mut resolver = MemoryResolver {
             sources,
@@ -345,19 +388,51 @@ impl Composed {
             store.insert_layer(layer);
         }
         let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-        Self { store, stage }
+        let registry = schema.map(|schema| {
+            let mut definition = SchemaDefinition::typed(store.tokens.intern(&schema.type_name));
+            for (name, fallback) in schema_fallbacks(&schema.type_name) {
+                definition = definition.with_property(store.tokens.intern(name), fallback);
+            }
+            let mut registry = SchemaRegistry::new();
+            registry.register(definition);
+            registry
+        });
+        Self {
+            store,
+            stage,
+            registry,
+        }
     }
 
     fn resolve(&mut self, query: &Query) -> Option<Resolved> {
         let path = PropertyPath::parse(&query.attr, &mut self.store.tokens, &mut self.store.paths)
             .expect("attribute path");
-        let value = match query.time {
-            Some(time) => {
+        let (prim, property) = (path.prim_path(), path.property());
+        let value = match (query.time, &self.registry) {
+            (Some(time), None) => {
                 self.stage
                     .resolve_property_path_at_time(path, time, query.interpolation())?
                     .value
             }
-            None => self.stage.resolve_field_path(path)?.value,
+            (None, None) => self.stage.resolve_field_path(path)?.value,
+            (Some(time), Some(registry)) => {
+                self.stage
+                    .resolve_value_at_time_with_schema(
+                        prim,
+                        property,
+                        time,
+                        query.interpolation(),
+                        &self.store,
+                        registry,
+                        None,
+                    )?
+                    .value
+            }
+            (None, Some(registry)) => {
+                self.stage
+                    .resolve_field_with_schema(prim, property, &self.store, registry, None)?
+                    .value
+            }
         };
         Some(Resolved::from_value(&value))
     }
@@ -380,7 +455,7 @@ fn composed_resolution_matches_openusd() {
     let mut failures = String::new();
     let mut checked = 0;
     for case in &vectors.cases {
-        let mut composed = Composed::new(&case.layers, "root.usda");
+        let mut composed = Composed::new(&case.layers, "root.usda", case.schema.as_ref());
         for query in &case.queries {
             checked += 1;
             let expected = query.expected();
@@ -407,6 +482,37 @@ fn composed_resolution_matches_openusd() {
         "differential mismatches against OpenUSD {}:\n{failures}",
         vectors.openusd_version
     );
+}
+
+/// Layerstack's schema fallbacks are the ones OpenUSD's schema registry
+/// reports.
+#[test]
+fn schema_fallbacks_match_openusd() {
+    let vectors = vectors();
+    let mut checked = 0;
+    for case in &vectors.cases {
+        let Some(schema) = &case.schema else {
+            continue;
+        };
+        let ours = schema_fallbacks(&schema.type_name);
+        for (name, recorded) in &schema.fallbacks {
+            let (_, value) = ours
+                .iter()
+                .find(|(ours, _)| ours == name)
+                .unwrap_or_else(|| panic!("{}: no fallback for `{name}`", case.name));
+            assert!(
+                same(
+                    Some(&Resolved::from_value(value)),
+                    decode(Some(recorded)).as_ref()
+                ),
+                "{}: `{}.{name}` fallback {value:?} != OpenUSD's {recorded}",
+                case.name,
+                schema.type_name
+            );
+            checked += 1;
+        }
+    }
+    assert!(checked > 0, "no schema cases");
 }
 
 /// The vectors pin exactly the named divergences, each confirmed against
@@ -460,9 +566,9 @@ fn composed_resolution_matches_flattened_resolution() {
         let Some(flattened) = &case.flattened_layer else {
             continue;
         };
-        let mut composed = Composed::new(&case.layers, "root.usda");
+        let mut composed = Composed::new(&case.layers, "root.usda", case.schema.as_ref());
         let flat_sources = BTreeMap::from([("flat.usda".to_string(), flattened.clone())]);
-        let mut flat = Composed::new(&flat_sources, "flat.usda");
+        let mut flat = Composed::new(&flat_sources, "flat.usda", case.schema.as_ref());
         for query in &case.queries {
             checked += 1;
             let from_composed = composed.resolve(query);

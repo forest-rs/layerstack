@@ -676,11 +676,11 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "BasicPayload_root",
         causes: &[C::InternalArcAnchoring, C::AncestralArcs, C::NestedArcDepth],
-        prims: 9,
+        prims: 7,
         props: 0,
         values: 0,
-        diffs: &[D::MissingPrim, D::MissingSite, D::Order],
-        reason: "internal arcs authored in `sublayer.usd` see only that sublayer, not the containing root layer stack, and `payload = <>` finds no default prim",
+        diffs: &[D::MissingSite, D::Order],
+        reason: "internal arcs authored in `sublayer.usd` see only that sublayer, not the containing root layer stack; subroot targets under `ref.usd` `/RefPrimA` and `/PayloadPrimA` miss their ancestors' `ref2.usd /PrimC`; `/PrimWithPayloads` ranks `ref2.usd /PrimB` before the nested `/PrimC`",
     },
     Known {
         fixture: "BasicReferenceAndClassDiamond_root",

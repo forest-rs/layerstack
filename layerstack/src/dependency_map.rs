@@ -57,6 +57,8 @@ pub(crate) struct CompositionDeps {
     /// Layer → prims whose composition follows (or fails to resolve) a
     /// reference or payload targeting that layer's `defaultPrim`.
     pub default_prim_dependents: HashMap<LayerId, HashSet<PathId>>,
+    /// Layers whose `layerRelocates` composition consulted.
+    pub relocation_layers: HashSet<LayerId>,
 }
 
 /// Builder for composition dependency data, used during composition.
@@ -69,6 +71,7 @@ pub(crate) struct DependencyBuilder {
     layer_to_prims: HashMap<LayerId, HashSet<PathId>>,
     prim_to_layers: HashMap<PathId, HashSet<LayerId>>,
     default_prim_dependents: HashMap<LayerId, HashSet<PathId>>,
+    relocation_layers: HashSet<LayerId>,
 }
 
 impl DependencyBuilder {
@@ -79,7 +82,16 @@ impl DependencyBuilder {
             layer_to_prims: HashMap::new(),
             prim_to_layers: HashMap::new(),
             default_prim_dependents: HashMap::new(),
+            relocation_layers: HashSet::new(),
         }
+    }
+
+    /// Records that composition consulted the `layerRelocates` of `layers`.
+    ///
+    /// Editing them moves prims of every layer stack holding them
+    /// (AOUSD Core §10.3.2.6).
+    pub(crate) fn add_relocation_layers(&mut self, layers: impl IntoIterator<Item = LayerId>) {
+        self.relocation_layers.extend(layers);
     }
 
     /// Records an arc dependency edge.
@@ -159,6 +171,7 @@ impl DependencyBuilder {
             layer_to_prims: self.layer_to_prims,
             prim_to_layers: self.prim_to_layers,
             default_prim_dependents: self.default_prim_dependents,
+            relocation_layers: self.relocation_layers,
         }
     }
 }

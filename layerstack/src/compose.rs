@@ -553,7 +553,7 @@ fn remove_relocation_sources(
 ///
 /// Spec: AOUSD Core §10.5 (the strongest variant selection opinion in the
 /// prim index wins, independent of which arc introduced the variant set).
-fn strength_ordered_variant_selections(
+pub(crate) fn strength_ordered_variant_selections(
     store: &dyn LayerStore,
     prim_index: &PrimIndex,
 ) -> HashMap<TokenId, TokenId> {

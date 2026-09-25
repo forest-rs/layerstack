@@ -219,3 +219,35 @@ fn opinion_order_follows_the_graphs_strength_order() {
         assert_eq!(visited.len(), graph.len(), "depth-first visits every node");
     }
 }
+
+/// The selection authored on the referenced tree governs the grove until
+/// the grove's own layer authors a stronger one, which then wins even for
+/// a variant that no layer defines.
+///
+/// Spec: AOUSD Core §10.5. OpenUSD: `UsdVariantSets::GetAllVariantSelections`.
+#[test]
+fn variant_selections_report_the_strongest_opinion() {
+    let (mut store, stage) = grove();
+    let grove = store.path("/Grove");
+    let season = store.tokens.intern("season");
+    let summer = store.tokens.intern("summer");
+    let winter = store.tokens.intern("winter");
+    let selections = stage.variant_selections(grove, &store);
+    assert_eq!(selections.get(&season), Some(&summer));
+    assert_eq!(selections.len(), 1, "one variant set is selected");
+    let absent = store.path("/Absent");
+    assert!(stage.variant_selections(absent, &store).is_empty());
+
+    store
+        .layers
+        .get_mut(&LayerId(1))
+        .and_then(|layer| layer.prims.get_mut(&grove))
+        .expect("grove spec")
+        .variant_selections
+        .insert(season, winter);
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    assert_eq!(
+        stage.variant_selections(grove, &store).get(&season),
+        Some(&winter)
+    );
+}

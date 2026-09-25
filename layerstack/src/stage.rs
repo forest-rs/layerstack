@@ -1104,6 +1104,31 @@ impl Stage {
         Some(out)
     }
 
+    /// Returns the variant selections that govern the composed prim
+    /// `prim`, keyed by variant set: for each set, the strongest selection
+    /// authored on any site of the prim's index, including selections
+    /// authored inside selected variants. Empty when `prim` is not on the
+    /// stage or selects nothing.
+    ///
+    /// A selection is reported whether or not the variant it names exists.
+    ///
+    /// OpenUSD: `UsdVariantSets::GetAllVariantSelections`
+    /// (`pxr/usd/usd/variantSets.h`), which reads the same strongest
+    /// opinion from the prim index.
+    ///
+    /// Spec: AOUSD Core §10.5 (variant selection).
+    #[must_use]
+    pub fn variant_selections(
+        &self,
+        prim: PathId,
+        store: &dyn LayerStore,
+    ) -> HashMap<TokenId, TokenId> {
+        self.prims
+            .get(&prim)
+            .map(|index| crate::compose::strength_ordered_variant_selections(store, index))
+            .unwrap_or_default()
+    }
+
     /// Returns `true` if the stage contains a prim at `path`.
     #[must_use]
     pub fn has_prim(&self, path: PathId) -> bool {

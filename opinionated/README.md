@@ -88,6 +88,13 @@ silent on chain order, so OpenUSD governs (AOUSD Core §4.2), and OpenUSD folds
 strongest-first. The weakest-first `OpinionFamily` kernel is therefore not
 used for recursive dictionaries.
 
+`combine_dictionary_chain_report` combines the same chain and records, for
+each dictionary, the key paths it supplied, the nested dictionaries it merged
+with stronger ones, and the entries a stronger value overrode. Hosts attach
+their own provenance to each dictionary, so a diagnostic can say which
+opinion a combined entry came from. The lean `combine_dictionary_chain` shares
+the fold and records nothing.
+
 `ShallowOverlay` is an explicitly distinct policy: values are opaque and the
 stronger value wins a collision outright, even between nested dictionaries.
 The `OpinionOp::Dictionary` enum API uses it because its `V` exposes no

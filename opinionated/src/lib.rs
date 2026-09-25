@@ -77,7 +77,8 @@ mod family;
 
 pub use array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayFill, ArrayIndex, FillWith};
 pub use dictionary::{
-    DictionaryAdapter, ShallowOverlay, combine_dictionaries, combine_dictionary_chain,
+    DictionaryAdapter, DictionaryEvent, DictionaryReport, ShallowOverlay, combine_dictionaries,
+    combine_dictionary_chain, combine_dictionary_chain_report,
 };
 pub use family::{
     DictionaryFamily, FamilyEvent, FamilyMember, FamilyReport, FamilyResolution, ListFamily,

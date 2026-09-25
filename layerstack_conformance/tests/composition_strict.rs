@@ -253,8 +253,7 @@ fn property_default(properties: &[PropertyEntry], name: TokenId) -> Authored {
 /// Handles plain prim specs, `/Host{set=variant}` and
 /// `/Host{set=variant}Child` specs; other variant shapes are `Unknown`. A
 /// branch child is read from its own prim spec for that branch
-/// ([`layerstack::Layer::prim_spec_in`]), or from the branch's child maps
-/// when the child is also authored outside the branch.
+/// ([`layerstack::Layer::prim_spec_in`]).
 fn authored_default(loaded: &LoadedStage, layer: LayerId, spec: &SpecPath) -> Authored {
     let Some(layer) = loaded.store.layer(layer) else {
         return Authored::Unknown;
@@ -308,19 +307,14 @@ fn authored_default(loaded: &LoadedStage, layer: LayerId, spec: &SpecPath) -> Au
                 variant,
             };
             let child_path = layerstack::Path::root().join(&host).join(&[*child]);
-            if let Some(spec) = loaded
+            loaded
                 .store
                 .paths
                 .lookup(&child_path)
                 .and_then(|path| layer.prim_spec_in(path, &[site]))
-            {
-                return property_default(&spec.properties, name);
-            }
-            match branch.child_properties.get(child) {
-                Some(properties) => property_default(properties, name),
-                None if branch.child_fields.contains_key(child) => Authored::NoDefault,
-                None => Authored::Unknown,
-            }
+                .map_or(Authored::Unknown, |spec| {
+                    property_default(&spec.properties, name)
+                })
         }
         _ => Authored::Unknown,
     }
@@ -645,15 +639,6 @@ const KNOWN: &[Known] = &[
         values: 1,
         diffs: &[D::ExtraRepeat, D::MissingRepeat, D::Order],
         reason: "`/Set2/Prop/PropScope.x` resolves from `set_payload.usd`, not the stronger nested `prop_payload.usd`: payloads nested in payloads share one strength bucket",
-    },
-    Known {
-        fixture: "BasicNestedVariantsWithSameName_root",
-        causes: &[C::DuplicateSources],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::ExtraRepeat],
-        reason: "`/foo/bar` repeats `root.usd /foo{commonName=c}bar`",
     },
     Known {
         fixture: "BasicNestedVariants_root",
@@ -1491,11 +1476,11 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "TrickyVariantOverrideOfLocalClass_root",
         causes: &[C::DuplicateSources],
-        prims: 2,
+        prims: 1,
         props: 1,
         values: 0,
         diffs: &[D::ExtraRepeat],
-        reason: "`/HandRig/_Class_FingerRig` repeats its variant site",
+        reason: "`/HandRig/IndexRig` repeats the variant site of the `/HandRig/_Class_FingerRig` it inherits",
     },
     Known {
         fixture: "TrickyVariantOverrideOfRelocatedPrim_root",

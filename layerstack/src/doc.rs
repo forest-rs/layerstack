@@ -768,6 +768,16 @@ impl Reference {
 }
 
 /// Opinions for a variant branch.
+///
+/// A variant spec holds the opinions the branch authors for the prim hosting
+/// its variant set. Prims authored inside the branch are not held here: like
+/// OpenUSD's `SdfVariantSpec`, whose prim spec owns the branch's namespace
+/// children (`pxr/usd/sdf/variantSpec.h`), each of them is a [`PrimSpec`] of
+/// its own, stored in the [`Layer`] with the branch recorded in its
+/// [`PrimSpec::outer_variant_sites`].
+///
+/// Spec: AOUSD Core §7.3.6 (variant specs may contain any spec a prim spec
+/// contains), §7.6.7 (variant specs), §10.3.2.5 (variants arc).
 #[derive(Clone, Debug, Default)]
 pub struct VariantSpec {
     /// Authored metadata fields on the prim hosting the variant set, within
@@ -778,52 +788,16 @@ pub struct VariantSpec {
     ///
     /// Spec: AOUSD Core §7.6.7 (variant specs contribute prim spec fields).
     pub properties: Vec<PropertyEntry>,
-    /// Child prim names introduced by this variant branch.
+    /// Child prim names introduced by this variant branch
+    /// (`primChildren`).
     ///
+    /// Each child's prim spec is stored in the [`Layer`] at its namespace
+    /// path, with this branch as the innermost of its
+    /// [`PrimSpec::outer_variant_sites`] (see [`Layer::branch_prim_specs`]).
     /// These children are only populated when this variant is selected.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs contain prim specs).
     pub authored_children: Vec<TokenId>,
-    /// For children that exist within nested variant branches, this records the
-    /// additional outer variant selections required for the child to be visible.
-    /// Only populated for children from deeply nested variant contexts.
-    ///
-    /// E.g., a child from `standin=render > shadingVariant=spooky` registered
-    /// under `shadingVariant=spooky` would carry the `standin=render` site so
-    /// composed provenance can recover both the selection and its host path.
-    pub required_outer_variant_sites: HashMap<TokenId, Vec<VariantSelectionSite>>,
-    /// Composition arcs for child prims within this variant branch.
-    ///
-    /// When a child prim (e.g. `over "Child" (add references = ...)`) appears
-    /// inside a variant branch, its composition arcs are stored here keyed by
-    /// the child prim name. These arcs apply only when this variant is selected.
-    ///
-    /// Spec: AOUSD Core §10.5 (variant arcs on child prims).
-    pub child_references: HashMap<TokenId, ListOp<Reference>>,
-    /// Inherits arcs for child prims within this variant branch.
-    pub child_inherits: HashMap<TokenId, ListOp<PathId>>,
-    /// Payloads for child prims within this variant branch.
-    pub child_payloads: HashMap<TokenId, ListOp<Reference>>,
-    /// Specializes arcs for child prims within this variant branch.
-    pub child_specializes: HashMap<TokenId, ListOp<PathId>>,
-    /// Authored children for child prims within this variant branch.
-    ///
-    /// When a child prim (e.g. `over "Child" { def "Grandchild" {} }`) inside
-    /// a variant branch introduces grandchild prims, they are recorded here
-    /// keyed by the child prim name. These grandchildren are only visible when
-    /// this variant is selected.
-    pub child_authored_children: HashMap<TokenId, Vec<TokenId>>,
-    /// Metadata field opinions for child prims within this variant branch.
-    ///
-    /// When a child prim (e.g. `over "Child" (kind = "group")`) inside a
-    /// variant branch authors metadata, it is recorded here keyed by the child
-    /// prim name. These opinions apply only when this variant is selected.
-    pub child_fields: HashMap<TokenId, Vec<FieldEntry>>,
-    /// Property opinions for child prims within this variant branch.
-    ///
-    /// When a child prim (e.g. `class "Child" { bool attr = 0 }`) inside a
-    /// variant branch authors properties, they are recorded here keyed by the
-    /// child prim name. These opinions apply only when this variant is
-    /// selected.
-    pub child_properties: HashMap<TokenId, Vec<PropertyEntry>>,
     /// References arcs on this variant branch itself.
     ///
     /// When a variant branch header includes composition arcs
@@ -843,17 +817,14 @@ pub struct VariantSpec {
     /// When a variant branch header includes `variants = { string v2 = "b" }`,
     /// those selections apply to the owning prim when this variant is selected.
     pub variant_selections: HashMap<TokenId, TokenId>,
-    /// Variant selections authored on child prims within this variant branch.
+    /// Outer selections enclosing this variant branch: the
+    /// [`PrimSpec::outer_variant_sites`] of the prim hosting the variant set,
+    /// followed, for a variant set nested in another branch of the same prim
+    /// (`/P{a=x}{b=y}`), by those enclosing branches.
     ///
-    /// This captures cases like `over "Child" (variants = { ... }) {}` inside
-    /// a selected branch, so the child prim resolves those selections only when
-    /// the parent branch is active.
-    pub child_variant_selections: HashMap<TokenId, HashMap<TokenId, TokenId>>,
-    /// Outer selections required to reach this nested variant branch.
-    ///
-    /// Top-level branches leave this empty. Nested branches record the
-    /// selection chain leading to the branch so composed provenance can retain
-    /// the full variant-qualified source identity.
+    /// Branches on a prim outside any variant branch that are not nested
+    /// leave this empty. Composed provenance uses it to keep the full
+    /// variant-qualified source identity.
     pub outer_variant_sites: Vec<VariantSelectionSite>,
     /// Property ordering authored inside this branch (`reorder properties`).
     ///
@@ -863,7 +834,7 @@ pub struct VariantSpec {
 
 impl VariantSpec {
     /// Merges another [`VariantSpec`] into this one, combining authored
-    /// children, required outer selections, and other fields.
+    /// children and other fields.
     ///
     /// Used when the same variant branch name appears at multiple nesting
     /// levels (e.g., an outer `standin=anim` and a deeply nested
@@ -873,11 +844,6 @@ impl VariantSpec {
             if !self.authored_children.contains(&child) {
                 self.authored_children.push(child);
             }
-        }
-        for (child, reqs) in other.required_outer_variant_sites {
-            self.required_outer_variant_sites
-                .entry(child)
-                .or_insert(reqs);
         }
         for entry in other.fields {
             if !self.fields.iter().any(|e| e.name == entry.name) {
@@ -889,48 +855,6 @@ impl VariantSpec {
                 self.properties.push(entry);
             }
         }
-        for (k, v) in other.child_references {
-            self.child_references.entry(k).or_insert(v);
-        }
-        for (k, v) in other.child_inherits {
-            self.child_inherits.entry(k).or_insert(v);
-        }
-        for (k, v) in other.child_payloads {
-            self.child_payloads.entry(k).or_insert(v);
-        }
-        for (k, v) in other.child_specializes {
-            self.child_specializes.entry(k).or_insert(v);
-        }
-        for (k, v) in other.child_authored_children {
-            let existing = self.child_authored_children.entry(k).or_default();
-            for child in v {
-                if !existing.contains(&child) {
-                    existing.push(child);
-                }
-            }
-        }
-        for (k, v) in other.child_fields {
-            let existing = self.child_fields.entry(k).or_default();
-            for entry in v {
-                if !existing.iter().any(|e| e.name == entry.name) {
-                    existing.push(entry);
-                }
-            }
-        }
-        for (k, v) in other.child_properties {
-            let existing = self.child_properties.entry(k).or_default();
-            for entry in v {
-                if get_property(existing, entry.name).is_none() {
-                    existing.push(entry);
-                }
-            }
-        }
-        for (child, selections) in other.child_variant_selections {
-            let existing = self.child_variant_selections.entry(child).or_default();
-            for (set, variant) in selections {
-                existing.entry(set).or_insert(variant);
-            }
-        }
         for (k, v) in other.variant_selections {
             self.variant_selections.entry(k).or_insert(v);
         }
@@ -940,42 +864,6 @@ impl VariantSpec {
         if self.property_order.is_none() {
             self.property_order = other.property_order;
         }
-    }
-}
-
-impl VariantSpec {
-    /// Returns the metadata and property opinions authored for child prims
-    /// in this branch, grouped by child name.
-    pub(crate) fn child_entries(&self) -> Vec<(TokenId, Vec<ComposedEntry<'_>>)> {
-        let mut out: Vec<(TokenId, Vec<ComposedEntry<'_>>)> = Vec::new();
-        for (child, fields) in &self.child_fields {
-            out.push((*child, composed_entries(fields, &[]).collect()));
-        }
-        for (child, properties) in &self.child_properties {
-            let entries = composed_entries(&[], properties);
-            match out.iter_mut().find(|(name, _)| name == child) {
-                Some((_, existing)) => existing.extend(entries),
-                None => out.push((*child, entries.collect())),
-            }
-        }
-        out
-    }
-
-    /// Returns the metadata and property opinions authored for the child
-    /// prim `child` in this branch, or `None` when the branch authors none.
-    pub(crate) fn child_entries_for(&self, child: TokenId) -> Option<Vec<ComposedEntry<'_>>> {
-        let fields = self.child_fields.get(&child);
-        let properties = self.child_properties.get(&child);
-        if fields.is_none() && properties.is_none() {
-            return None;
-        }
-        Some(
-            composed_entries(
-                fields.map_or(&[][..], Vec::as_slice),
-                properties.map_or(&[][..], Vec::as_slice),
-            )
-            .collect(),
-        )
     }
 }
 
@@ -1484,6 +1372,60 @@ impl Layer {
     pub fn prim_spec_in(&self, path: PathId, sites: &[VariantSelectionSite]) -> Option<&PrimSpec> {
         self.prim_specs(path)
             .find(|spec| spec.outer_variant_sites == sites)
+    }
+
+    /// Returns the prim specs at `path` authored directly inside the
+    /// variant branch `branch`: those whose innermost enclosing selection
+    /// ([`PrimSpec::outer_variant_sites`]) is `branch`, whatever branches
+    /// enclose it in turn.
+    ///
+    /// For a child `C` of the prim hosting `branch` this is the spec at
+    /// `/P{v=x}C` (and, for a variant set nested in another branch of `P`,
+    /// at `/P{a=y}{v=x}C`); for a deeper descendant it is the spec at
+    /// `/P{v=x}C/G`.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs contain prim specs).
+    pub fn branch_prim_specs(
+        &self,
+        path: PathId,
+        branch: VariantSelectionSite,
+    ) -> impl Iterator<Item = &PrimSpec> {
+        self.prim_specs(path)
+            .filter(move |spec| spec.outer_variant_sites.last() == Some(&branch))
+    }
+
+    /// Returns the prim specs at `path` authored directly in a branch of
+    /// `host`'s variant sets (the innermost of their
+    /// [`PrimSpec::outer_variant_sites`] is hosted on `host`) whose every
+    /// enclosing branch hosted on `host` `selections` (set → variant, for
+    /// `host`) selects.
+    ///
+    /// A variant set nested in another branch of `host` may reuse its branch
+    /// names under several outer branches (`/P{a=x}{b=y}C` and
+    /// `/P{a=z}{b=y}C`); only the spec whose outer branches are selected
+    /// too is returned, never one selected by its innermost branch alone.
+    /// Branches hosted on other prims (`/A{v=x}P{a=y}C` has one on `/A`) are
+    /// not checked here; callers check them against those hosts'
+    /// selections.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
+    /// specs), §10.3.2.5 (only the selected variant contributes).
+    pub fn selected_branch_prim_specs<'a>(
+        &'a self,
+        path: PathId,
+        host: PathId,
+        selections: &'a HashMap<TokenId, TokenId>,
+    ) -> impl Iterator<Item = &'a PrimSpec> {
+        self.prim_specs(path).filter(move |spec| {
+            spec.outer_variant_sites
+                .last()
+                .is_some_and(|site| site.host_path == host)
+                && spec
+                    .outer_variant_sites
+                    .iter()
+                    .filter(|site| site.host_path == host)
+                    .all(|site| selections.get(&site.set) == Some(&site.variant))
+        })
     }
 
     /// Returns the prim spec a composed opinion source names: the spec at

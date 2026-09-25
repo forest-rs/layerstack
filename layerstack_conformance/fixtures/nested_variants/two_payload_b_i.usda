@@ -1,0 +1,54 @@
+#usda 1.0
+def "T_a_i"
+{
+    int x_a_i = 1
+}
+def "T_b_i"
+{
+    int x_b_i = 1
+}
+def "P" (
+    prepend variantSets = "outer"
+    variants = {
+        string outer = "b"
+        string inner = "i"
+    }
+)
+{
+    variantSet "outer" = {
+        "a" (
+            prepend variantSets = "inner"
+        ) {
+            variantSet "inner" = {
+                "i" {
+                    def "C" (
+                        payload = </T_a_i>
+                    )
+                    {
+                        string from = "a_i"
+                        def "G_a_i"
+                        {
+                        }
+                    }
+                }
+            }
+        }
+        "b" (
+            prepend variantSets = "inner"
+        ) {
+            variantSet "inner" = {
+                "i" {
+                    def "C" (
+                        payload = </T_b_i>
+                    )
+                    {
+                        string from = "b_i"
+                        def "G_b_i"
+                        {
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

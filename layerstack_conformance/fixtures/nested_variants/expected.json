@@ -1,0 +1,245 @@
+{
+  "cases": {
+    "three_inherits_a_m_i": {
+      "attributes": {
+        "from": "a_m_i",
+        "x_a_m_i": 1
+      },
+      "children": [
+        "G_a_m_i"
+      ],
+      "exists": true
+    },
+    "three_inherits_a_n_i": {
+      "attributes": {
+        "from": "a_n_i",
+        "x_a_n_i": 1
+      },
+      "children": [
+        "G_a_n_i"
+      ],
+      "exists": true
+    },
+    "three_inherits_b_m_i": {
+      "attributes": {
+        "from": "b_m_i",
+        "x_b_m_i": 1
+      },
+      "children": [
+        "G_b_m_i"
+      ],
+      "exists": true
+    },
+    "three_inherits_b_n_i": {
+      "attributes": {
+        "from": "b_n_i",
+        "x_b_n_i": 1
+      },
+      "children": [
+        "G_b_n_i"
+      ],
+      "exists": true
+    },
+    "three_payload_a_m_i": {
+      "attributes": {
+        "from": "a_m_i",
+        "x_a_m_i": 1
+      },
+      "children": [
+        "G_a_m_i"
+      ],
+      "exists": true
+    },
+    "three_payload_a_n_i": {
+      "attributes": {
+        "from": "a_n_i",
+        "x_a_n_i": 1
+      },
+      "children": [
+        "G_a_n_i"
+      ],
+      "exists": true
+    },
+    "three_payload_b_m_i": {
+      "attributes": {
+        "from": "b_m_i",
+        "x_b_m_i": 1
+      },
+      "children": [
+        "G_b_m_i"
+      ],
+      "exists": true
+    },
+    "three_payload_b_n_i": {
+      "attributes": {
+        "from": "b_n_i",
+        "x_b_n_i": 1
+      },
+      "children": [
+        "G_b_n_i"
+      ],
+      "exists": true
+    },
+    "three_references_a_m_i": {
+      "attributes": {
+        "from": "a_m_i",
+        "x_a_m_i": 1
+      },
+      "children": [
+        "G_a_m_i"
+      ],
+      "exists": true
+    },
+    "three_references_a_n_i": {
+      "attributes": {
+        "from": "a_n_i",
+        "x_a_n_i": 1
+      },
+      "children": [
+        "G_a_n_i"
+      ],
+      "exists": true
+    },
+    "three_references_b_m_i": {
+      "attributes": {
+        "from": "b_m_i",
+        "x_b_m_i": 1
+      },
+      "children": [
+        "G_b_m_i"
+      ],
+      "exists": true
+    },
+    "three_references_b_n_i": {
+      "attributes": {
+        "from": "b_n_i",
+        "x_b_n_i": 1
+      },
+      "children": [
+        "G_b_n_i"
+      ],
+      "exists": true
+    },
+    "three_specializes_a_m_i": {
+      "attributes": {
+        "from": "a_m_i",
+        "x_a_m_i": 1
+      },
+      "children": [
+        "G_a_m_i"
+      ],
+      "exists": true
+    },
+    "three_specializes_a_n_i": {
+      "attributes": {
+        "from": "a_n_i",
+        "x_a_n_i": 1
+      },
+      "children": [
+        "G_a_n_i"
+      ],
+      "exists": true
+    },
+    "three_specializes_b_m_i": {
+      "attributes": {
+        "from": "b_m_i",
+        "x_b_m_i": 1
+      },
+      "children": [
+        "G_b_m_i"
+      ],
+      "exists": true
+    },
+    "three_specializes_b_n_i": {
+      "attributes": {
+        "from": "b_n_i",
+        "x_b_n_i": 1
+      },
+      "children": [
+        "G_b_n_i"
+      ],
+      "exists": true
+    },
+    "two_inherits_a_i": {
+      "attributes": {
+        "from": "a_i",
+        "x_a_i": 1
+      },
+      "children": [
+        "G_a_i"
+      ],
+      "exists": true
+    },
+    "two_inherits_b_i": {
+      "attributes": {
+        "from": "b_i",
+        "x_b_i": 1
+      },
+      "children": [
+        "G_b_i"
+      ],
+      "exists": true
+    },
+    "two_payload_a_i": {
+      "attributes": {
+        "from": "a_i",
+        "x_a_i": 1
+      },
+      "children": [
+        "G_a_i"
+      ],
+      "exists": true
+    },
+    "two_payload_b_i": {
+      "attributes": {
+        "from": "b_i",
+        "x_b_i": 1
+      },
+      "children": [
+        "G_b_i"
+      ],
+      "exists": true
+    },
+    "two_references_a_i": {
+      "attributes": {
+        "from": "a_i",
+        "x_a_i": 1
+      },
+      "children": [
+        "G_a_i"
+      ],
+      "exists": true
+    },
+    "two_references_b_i": {
+      "attributes": {
+        "from": "b_i",
+        "x_b_i": 1
+      },
+      "children": [
+        "G_b_i"
+      ],
+      "exists": true
+    },
+    "two_specializes_a_i": {
+      "attributes": {
+        "from": "a_i",
+        "x_a_i": 1
+      },
+      "children": [
+        "G_a_i"
+      ],
+      "exists": true
+    },
+    "two_specializes_b_i": {
+      "attributes": {
+        "from": "b_i",
+        "x_b_i": 1
+      },
+      "children": [
+        "G_b_i"
+      ],
+      "exists": true
+    }
+  },
+  "generator": "usd-core 26.8 (OpenUSD v26.08)"
+}

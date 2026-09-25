@@ -685,67 +685,23 @@ impl EmitCtx<'_> {
                         if !variant_spec.authored_children.contains(&child_tok) {
                             variant_spec.authored_children.push(child_tok);
                         }
-
-                        // Check if this child prim also exists as a non-variant
-                        // prim in the layer. If so, route arcs and fields to the
-                        // variant spec's child_* maps.
+                        // The branch owns the child's prim spec (`/P{v=x}C`),
+                        // which `Layer::insert_prim` keeps apart from the
+                        // specs at the same path outside this branch.
+                        //
+                        // Spec: AOUSD Core §7.3.6 (variant specs contain prim
+                        // specs).
                         let child_path = format!("{}/{}", prim_path, child_prim.name);
-                        let child_path_parsed =
-                            Path::parse_absolute(&child_path, self.tokens).expect("valid path");
-                        let child_path_id = self.paths.intern(child_path_parsed);
-
-                        // A child already authored outside any variant branch
-                        // gets this branch's opinions through the child maps;
-                        // otherwise the branch authors its own prim spec,
-                        // which `Layer::insert_prim` keeps apart from other
-                        // branches' specs at the same path.
-                        if layer.prim_spec_in(child_path_id, &[]).is_some() {
-                            // Route to variant child maps.
-                            self.emit_variant_child_prim(
-                                child_prim,
-                                &child_path,
-                                child_tok,
-                                &branch_context,
-                                &mut variant_spec,
-                                layer,
-                            );
-                        } else {
-                            // New child introduced by variant — create full PrimSpec.
-                            self.emit_prim(child_prim, &child_path, &branch_context, layer);
-
-                            // Also route arcs to variant spec for proper
-                            // variant-selection-aware resolution.
-                            self.emit_variant_child_arcs(
-                                child_prim,
-                                &child_path,
-                                child_tok,
-                                &mut variant_spec,
-                            );
-
-                            // Route grandchild names and fields to the
-                            // variant spec so composition can find them
-                            // under variant selection.
-                            for gc in &child_prim.children {
-                                if let ast::PrimChild::Prim(grandchild) = gc {
-                                    let gc_tok = self.tokens.intern(grandchild.name);
-                                    let gc_list = variant_spec
-                                        .child_authored_children
-                                        .entry(child_tok)
-                                        .or_default();
-                                    if !gc_list.contains(&gc_tok) {
-                                        gc_list.push(gc_tok);
-                                    }
-                                }
-                            }
-                        }
+                        self.emit_prim(child_prim, &child_path, &branch_context, layer);
                     }
                     ast::PrimChild::VariantSet(nested_vs) => {
                         // Process nested variant sets within variant branches.
                         // These variant sets belong to the same owning prim;
-                        // children introduced by nested branches are gated by
-                        // required_outer_variant_sites.
+                        // the prim specs of children introduced by nested
+                        // branches record every enclosing branch.
                         //
-                        // Spec: AOUSD Core §10.5 (variant nesting).
+                        // Spec: AOUSD Core §7.3.6 (variant specs may contain
+                        // variant set specs).
                         self.emit_nested_variant_set(
                             nested_vs,
                             prim_path_id,
@@ -785,13 +741,12 @@ impl EmitCtx<'_> {
     /// Recursively emit a variant set nested inside a variant branch.
     ///
     /// Nested variant sets are syntactically defined inside an outer variant
-    /// branch but semantically belong to the same owning prim. Children
-    /// introduced by nested branches are registered with
-    /// [`VariantSpec::required_outer_variant_sites`] so that
-    /// `filter_variant_children` can gate them on the
-    /// correct combination of outer variant selections.
+    /// branch but semantically belong to the same owning prim. The prim spec
+    /// of a child introduced by a nested branch records the outer branches in
+    /// its [`PrimSpec::outer_variant_sites`], so composition only populates
+    /// it under the full combination of selections.
     ///
-    /// Spec: AOUSD Core §10.5 (variant nesting).
+    /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set specs).
     fn emit_nested_variant_set(
         &mut self,
         vs: &ast::VariantSet<'_>,
@@ -845,38 +800,11 @@ impl EmitCtx<'_> {
                             variant_spec.authored_children.push(child_tok);
                         }
 
-                        // Record required outer selections for this child.
-                        variant_spec
-                            .required_outer_variant_sites
-                            .entry(child_tok)
-                            .or_insert_with(|| outer_context.to_vec());
-
-                        // Emit the child prim as a full PrimSpec.
+                        // The branch owns the child's prim spec
+                        // (`/P{a=x}{b=y}C`); `Layer::insert_prim` keeps each
+                        // branch's spec.
                         let child_path = format!("{}/{}", prim_path, child_prim.name);
-                        // `Layer::insert_prim` keeps each branch's spec.
                         self.emit_prim(child_prim, &child_path, &branch_context, layer);
-
-                        // Route composition arcs to the nested variant spec.
-                        self.emit_variant_child_arcs(
-                            child_prim,
-                            &child_path,
-                            child_tok,
-                            variant_spec,
-                        );
-
-                        // Route grandchild names.
-                        for gc in &child_prim.children {
-                            if let ast::PrimChild::Prim(grandchild) = gc {
-                                let gc_tok = self.tokens.intern(grandchild.name);
-                                let gc_list = variant_spec
-                                    .child_authored_children
-                                    .entry(child_tok)
-                                    .or_default();
-                                if !gc_list.contains(&gc_tok) {
-                                    gc_list.push(gc_tok);
-                                }
-                            }
-                        }
                     }
                     ast::PrimChild::VariantSet(_) => {
                         // Defer recursive processing until after variant_spec
@@ -969,116 +897,6 @@ impl EmitCtx<'_> {
                     self.emit_plain_prim_meta(meta, &mut variant_spec.fields);
                 }
                 ast::PrimMeta::VariantSets(_) => {}
-            }
-        }
-    }
-
-    /// Route a child prim's arcs and fields to the parent variant spec's
-    /// child_* maps (when the child already has a non-variant definition).
-    fn emit_variant_child_prim(
-        &mut self,
-        child_prim: &ast::Prim<'_>,
-        child_path: &str,
-        child_tok: TokenId,
-        outer_variant_sites: &[VariantSelectionSite],
-        variant_spec: &mut VariantSpec,
-        layer: &mut Layer,
-    ) {
-        // Route composition arcs to variant child maps.
-        self.emit_variant_child_arcs(child_prim, child_path, child_tok, variant_spec);
-
-        // Record the child's presence in this branch even when it authors no
-        // fields: composition adds the branch as a source of the child.
-        let mut child_fields = variant_spec
-            .child_fields
-            .remove(&child_tok)
-            .unwrap_or_default();
-        for meta in &child_prim.metadata {
-            self.emit_plain_prim_meta(meta, &mut child_fields);
-        }
-        variant_spec.child_fields.insert(child_tok, child_fields);
-
-        // Route properties.
-        for child_child in &child_prim.children {
-            match child_child {
-                ast::PrimChild::Attribute(attr) => {
-                    let properties = variant_spec.child_properties.entry(child_tok).or_default();
-                    self.emit_attribute(attr, properties, child_path);
-                }
-                ast::PrimChild::Relationship(rel) => {
-                    let properties = variant_spec.child_properties.entry(child_tok).or_default();
-                    self.emit_relationship(rel, properties, child_path);
-                }
-                ast::PrimChild::Prim(grandchild) => {
-                    // Grandchild prims: record in child_authored_children.
-                    let gc_tok = self.tokens.intern(grandchild.name);
-                    let gc_list = variant_spec
-                        .child_authored_children
-                        .entry(child_tok)
-                        .or_default();
-                    if !gc_list.contains(&gc_tok) {
-                        gc_list.push(gc_tok);
-                    }
-                    // Also emit the grandchild as a full prim.
-                    let gc_path = format!("{}/{}", child_path, grandchild.name);
-                    self.emit_prim(grandchild, &gc_path, outer_variant_sites, layer);
-                }
-                _ => {}
-            }
-        }
-    }
-
-    /// Route a child prim's composition arcs to the variant spec's child_* maps.
-    fn emit_variant_child_arcs(
-        &mut self,
-        child_prim: &ast::Prim<'_>,
-        child_path: &str,
-        child_tok: TokenId,
-        variant_spec: &mut VariantSpec,
-    ) {
-        for meta in &child_prim.metadata {
-            match meta {
-                ast::PrimMeta::References(arc) => {
-                    let listop = self.emit_arc_listop(arc, child_path);
-                    if has_ref_content(&listop) {
-                        let entry = variant_spec.child_references.entry(child_tok).or_default();
-                        merge_ref_listop(entry, listop);
-                    }
-                }
-                ast::PrimMeta::Payload(arc) => {
-                    let listop = self.emit_arc_listop(arc, child_path);
-                    if has_ref_content(&listop) {
-                        let entry = variant_spec.child_payloads.entry(child_tok).or_default();
-                        merge_ref_listop(entry, listop);
-                    }
-                }
-                ast::PrimMeta::Inherits(paths) => {
-                    let listop = self.emit_path_listop(paths, child_path);
-                    if has_path_content(&listop) {
-                        let entry = variant_spec.child_inherits.entry(child_tok).or_default();
-                        merge_path_listop(entry, listop);
-                    }
-                }
-                ast::PrimMeta::Specializes(paths) => {
-                    let listop = self.emit_path_listop(paths, child_path);
-                    if has_path_content(&listop) {
-                        let entry = variant_spec.child_specializes.entry(child_tok).or_default();
-                        merge_path_listop(entry, listop);
-                    }
-                }
-                ast::PrimMeta::Variants(selections) => {
-                    let entry = variant_spec
-                        .child_variant_selections
-                        .entry(child_tok)
-                        .or_default();
-                    for selection in selections {
-                        entry.insert(
-                            self.tokens.intern(selection.set_name),
-                            self.tokens.intern(selection.branch_name),
-                        );
-                    }
-                }
-                _ => {}
             }
         }
     }
@@ -1886,14 +1704,6 @@ fn merge_path_listop<T>(target: &mut ListOp<T>, source: ListOp<T>) {
     target.delete.extend(source.delete);
 }
 
-fn has_ref_content(listop: &ListOp<Reference>) -> bool {
-    listop.explicit.is_some() || !listop.prepend.is_empty() || !listop.append.is_empty()
-}
-
-fn has_path_content<T>(listop: &ListOp<T>) -> bool {
-    listop.explicit.is_some() || !listop.prepend.is_empty() || !listop.append.is_empty()
-}
-
 fn convert_array_edit_index(index: ast::ArrayEditIndex) -> ArrayIndex {
     match index {
         ast::ArrayEditIndex::Position(value) => ArrayIndex::Position(value),
@@ -2456,40 +2266,42 @@ def Scope "D" (
         let spooky_variant = shading_vs.variants.get(&spooky_tok).unwrap();
         assert!(spooky_variant.authored_children.contains(&sphere_tok));
 
-        // Both children should have required outer variant sites
-        // pointing to standin=anim (since they're nested inside it).
-        let cone_reqs = default_variant.required_outer_variant_sites.get(&cone_tok);
-        assert!(
-            cone_reqs.is_some(),
-            "anim_default_cone should have required outer variant sites"
+        // Each child's prim spec records both branches enclosing it:
+        // standin=anim, then its own shadingVariant branch.
+        let site = |set, variant| VariantSelectionSite {
+            host_path: d_id,
+            set,
+            variant,
+        };
+        let branch_sites = |name: &str, tokens: &mut TokenInterner| {
+            let path = Path::parse_absolute(&format!("/D/{name}"), tokens).unwrap();
+            let specs: Vec<_> = result
+                .layer
+                .prim_specs(paths.lookup(&path).unwrap())
+                .map(|spec| spec.outer_variant_sites.clone())
+                .collect();
+            specs
+        };
+        assert_eq!(
+            branch_sites("anim_default_cone", &mut tokens),
+            [vec![
+                site(standin_tok, anim_tok),
+                site(shading_tok, default_tok)
+            ]]
         );
         assert_eq!(
-            cone_reqs.unwrap(),
-            &[VariantSelectionSite {
-                host_path: d_id,
-                set: standin_tok,
-                variant: anim_tok,
-            }]
-        );
-
-        let sphere_reqs = spooky_variant.required_outer_variant_sites.get(&sphere_tok);
-        assert!(
-            sphere_reqs.is_some(),
-            "anim_spooky_sphere should have required outer variant sites"
-        );
-        assert_eq!(
-            sphere_reqs.unwrap(),
-            &[VariantSelectionSite {
-                host_path: d_id,
-                set: standin_tok,
-                variant: anim_tok,
-            }]
+            branch_sites("anim_spooky_sphere", &mut tokens),
+            [vec![
+                site(standin_tok, anim_tok),
+                site(shading_tok, spooky_tok)
+            ]]
         );
 
         // Nested children should NOT be in the outer variant's
         // authored_children — they are gated by the inner variant set.
         // The composition engine discovers them through the inner variant
-        // set's VariantSpec and filters via required outer variant sites.
+        // set's VariantSpec and filters them by the outer branches their
+        // prim specs record.
         assert!(
             !anim_variant.authored_children.contains(&cone_tok),
             "anim variant should NOT list nested child anim_default_cone"
@@ -2611,26 +2423,28 @@ def Scope "D" (
                 .map(|t| tokens.resolve(*t))
                 .collect::<Vec<_>>()
         );
-        let sphere3_reqs = anim_branch.required_outer_variant_sites.get(&sphere3_tok);
-        assert!(
-            sphere3_reqs.is_some(),
-            "anim_spooky_anim_sphere should have required outer variant sites"
-        );
+        let site = |set, variant| VariantSelectionSite {
+            host_path: d_id,
+            set,
+            variant,
+        };
+        let branch_sites = |name: &str, tokens: &mut TokenInterner| {
+            let path = Path::parse_absolute(&format!("/D/{name}"), tokens).unwrap();
+            let specs: Vec<_> = result
+                .layer
+                .prim_specs(paths.lookup(&path).unwrap())
+                .map(|spec| spec.outer_variant_sites.clone())
+                .collect();
+            specs
+        };
         assert_eq!(
-            sphere3_reqs.unwrap(),
-            &[
-                VariantSelectionSite {
-                    host_path: d_id,
-                    set: standin_tok,
-                    variant: anim_tok,
-                },
-                VariantSelectionSite {
-                    host_path: d_id,
-                    set: shading_tok,
-                    variant: spooky_tok,
-                }
-            ],
-            "required outer variant sites for anim_spooky_anim_sphere"
+            branch_sites("anim_spooky_anim_sphere", &mut tokens),
+            [vec![
+                site(standin_tok, anim_tok),
+                site(shading_tok, spooky_tok),
+                site(standin_tok, anim_tok),
+            ]],
+            "branches enclosing anim_spooky_anim_sphere"
         );
 
         // anim_spooky_sphere: lives in shadingVariant=spooky branch, with one
@@ -2646,19 +2460,13 @@ def Scope "D" (
                 .map(|t| tokens.resolve(*t))
                 .collect::<Vec<_>>()
         );
-        let sphere2_reqs = spooky_branch.required_outer_variant_sites.get(&sphere2_tok);
-        assert!(
-            sphere2_reqs.is_some(),
-            "anim_spooky_sphere should have required outer variant sites"
-        );
         assert_eq!(
-            sphere2_reqs.unwrap(),
-            &[VariantSelectionSite {
-                host_path: d_id,
-                set: standin_tok,
-                variant: anim_tok,
-            }],
-            "required outer variant sites for anim_spooky_sphere"
+            branch_sites("anim_spooky_sphere", &mut tokens),
+            [vec![
+                site(standin_tok, anim_tok),
+                site(shading_tok, spooky_tok)
+            ]],
+            "branches enclosing anim_spooky_sphere"
         );
     }
 

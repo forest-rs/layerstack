@@ -146,14 +146,14 @@ impl EmitCtx<'_> {
                     set_field_vec(
                         &mut layer.metadata,
                         key,
-                        FieldValue::Value(Value::String(Arc::from(*doc))),
+                        FieldValue::Value(Value::String(Arc::from(&**doc))),
                     );
                 }
                 ast::LayerMeta::Custom(entry) if entry.key == "defaultPrim" => {
                     // Spec: AOUSD Core §7.6.1.2.3 (`defaultPrim: token`),
                     // authored as a quoted string in USDA layer metadata.
                     let name = match &entry.value {
-                        ast::MetadataValue::Value(ast::Value::String(name)) => Some(*name),
+                        ast::MetadataValue::Value(ast::Value::String(name)) => Some(&**name),
                         ast::MetadataValue::String(name) => Some(name.as_str()),
                         _ => None,
                     };
@@ -351,7 +351,7 @@ impl EmitCtx<'_> {
                 set_field_vec(
                     fields,
                     key,
-                    FieldValue::Value(Value::String(Arc::from(*doc))),
+                    FieldValue::Value(Value::String(Arc::from(&**doc))),
                 );
             }
             ast::PrimMeta::Custom(entry) => self.emit_metadata_entry(entry, fields),
@@ -464,9 +464,8 @@ impl EmitCtx<'_> {
                 let mut tokens = Vec::with_capacity(items.len());
                 for item in items {
                     match item {
-                        ast::Value::String(s) | ast::Value::Identifier(s) => {
-                            tokens.push(self.tokens.intern(s));
-                        }
+                        ast::Value::String(s) => tokens.push(self.tokens.intern(s)),
+                        ast::Value::Identifier(s) => tokens.push(self.tokens.intern(s)),
                         _ => return None,
                     }
                 }
@@ -476,7 +475,7 @@ impl EmitCtx<'_> {
                 let strings = items
                     .iter()
                     .map(|v| match v {
-                        ast::Value::String(s) => Some(Arc::from(*s)),
+                        ast::Value::String(s) => Some(Arc::from(&**s)),
                         _ => None,
                     })
                     .collect::<Option<Vec<_>>>()?;
@@ -1096,9 +1095,9 @@ impl EmitCtx<'_> {
             ast::Value::Number(n) => convert_float(*n, type_hint),
             ast::Value::String(s) => match type_hint {
                 "token" => Value::Token(self.tokens.intern(s)),
-                "asset" => Value::Asset(Arc::from(*s)),
-                "pathExpression" => Value::PathExpression(Arc::from(*s)),
-                _ => Value::String(Arc::from(*s)),
+                "asset" => Value::Asset(Arc::from(&**s)),
+                "pathExpression" => Value::PathExpression(Arc::from(&**s)),
+                _ => Value::String(Arc::from(&**s)),
             },
             ast::Value::Identifier(s) => Value::Token(self.tokens.intern(s)),
             ast::Value::Asset(s) => Value::Asset(Arc::from(*s)),
@@ -1108,7 +1107,7 @@ impl EmitCtx<'_> {
                 let dict_entries: Vec<(Arc<str>, Value)> = entries
                     .iter()
                     .map(|e| {
-                        let key = Arc::from(e.key);
+                        let key = Arc::from(&*e.key);
                         let val = self.convert_value(&e.value, e.type_name.unwrap_or(""));
                         (key, val)
                     })
@@ -1199,7 +1198,7 @@ impl EmitCtx<'_> {
                 let dict_entries: Vec<(Arc<str>, Value)> = entries
                     .iter()
                     .map(|e| {
-                        let key = Arc::from(e.key);
+                        let key = Arc::from(&*e.key);
                         let val = self.convert_value(&e.value, e.type_name.unwrap_or(""));
                         (key, val)
                     })

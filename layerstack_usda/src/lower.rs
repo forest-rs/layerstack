@@ -7,6 +7,7 @@
 //! types. Semantic logic (quote stripping, number parsing, keyword dispatch)
 //! lives here rather than in the parser.
 
+use alloc::borrow::Cow;
 use alloc::string::String;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -35,7 +36,6 @@ struct LowerCtx<'a> {
 }
 
 impl<'a> LowerCtx<'a> {
-    #[expect(dead_code, reason = "reserved for lowering diagnostics")]
     fn error(&mut self, span: Span, message: impl Into<String>) {
         self.diagnostics.push(Diagnostic::error(span, message));
     }
@@ -251,7 +251,7 @@ impl<'a> LowerCtx<'a> {
 
         // Prim name (string).
         if idx < sig.len() && is_string_kind(sig[idx].0) {
-            name = strip_quotes(self.text(self.node_from(tree, sig[idx].1)));
+            name = self.name_literal(self.node_from(tree, sig[idx].1));
             idx += 1;
         }
 
@@ -679,7 +679,7 @@ impl<'a> LowerCtx<'a> {
         for (kind, id) in &sig {
             match *kind {
                 k if is_string_kind(k) => {
-                    name = strip_quotes(self.text(self.node_from(tree, *id)));
+                    name = self.name_literal(self.node_from(tree, *id));
                 }
                 SyntaxKind::VariantBranch => {
                     branches.push(self.lower_variant_branch(self.node_from(tree, *id)));
@@ -709,7 +709,7 @@ impl<'a> LowerCtx<'a> {
         for (kind, id) in &sig {
             match *kind {
                 k if is_string_kind(k) => {
-                    name = strip_quotes(self.text(self.node_from(tree, *id)));
+                    name = self.name_literal(self.node_from(tree, *id));
                 }
                 SyntaxKind::PrimMetadata => {
                     metadata = self.lower_prim_metadata(self.node_from(tree, *id));
@@ -889,7 +889,7 @@ impl<'a> LowerCtx<'a> {
     fn lower_name_list(&mut self, node: SyntaxNode<'_>) -> Vec<&'a str> {
         node.children_no_trivia()
             .filter(|c| is_string_kind(c.kind()))
-            .map(|c| strip_quotes(self.text(c)))
+            .map(|c| self.name_literal(c))
             .collect()
     }
 
@@ -928,9 +928,8 @@ impl<'a> LowerCtx<'a> {
         let idents: Vec<_> = sig.iter().filter(|s| s.0 == SyntaxKind::Ident).collect();
 
         if strings.len() >= 2 {
-            set_name = strip_quotes(self.text(self.node_from(tree, strings[0].1)));
-            branch_name =
-                strip_quotes(self.text(self.node_from(tree, strings[strings.len() - 1].1)));
+            set_name = self.name_literal(self.node_from(tree, strings[0].1));
+            branch_name = self.name_literal(self.node_from(tree, strings[strings.len() - 1].1));
         } else if !idents.is_empty() && !strings.is_empty() {
             for ident in &idents {
                 let t = self.text(self.node_from(tree, ident.1));
@@ -939,8 +938,7 @@ impl<'a> LowerCtx<'a> {
                     break;
                 }
             }
-            branch_name =
-                strip_quotes(self.text(self.node_from(tree, strings[strings.len() - 1].1)));
+            branch_name = self.name_literal(self.node_from(tree, strings[strings.len() - 1].1));
         }
 
         VariantSelection {
@@ -978,9 +976,7 @@ impl<'a> LowerCtx<'a> {
                 let text = self.text(self.node_from(tree, id));
                 parse_number_value(text)
             }
-            k if is_string_kind(k) => {
-                Value::String(strip_quotes(self.text(self.node_from(tree, id))))
-            }
+            k if is_string_kind(k) => Value::String(self.string_literal(self.node_from(tree, id))),
             SyntaxKind::AssetRef => Value::Asset(self.lower_asset_ref(self.node_from(tree, id))),
             SyntaxKind::PathRef => Value::Path(self.lower_path_ref(self.node_from(tree, id))),
             SyntaxKind::TupleValue => Value::Tuple(self.lower_tuple(self.node_from(tree, id))),
@@ -1187,7 +1183,7 @@ impl<'a> LowerCtx<'a> {
             .collect();
 
         let mut type_name = None;
-        let mut key = "";
+        let mut key = Cow::Borrowed("");
         let mut value = Value::Blocked;
         let mut idx = 0;
 
@@ -1212,10 +1208,10 @@ impl<'a> LowerCtx<'a> {
         // Key.
         if idx < sig.len() {
             if is_string_kind(sig[idx].0) {
-                key = strip_quotes(self.text(self.node_from(tree, sig[idx].1)));
+                key = self.string_literal(self.node_from(tree, sig[idx].1));
                 idx += 1;
             } else if sig[idx].0 == SyntaxKind::Ident {
-                key = self.text(self.node_from(tree, sig[idx].1));
+                key = Cow::Borrowed(self.text(self.node_from(tree, sig[idx].1)));
                 idx += 1;
             }
         }
@@ -1366,13 +1362,44 @@ impl<'a> LowerCtx<'a> {
         ""
     }
 
-    fn find_string_value(&self, node: SyntaxNode<'_>) -> &'a str {
+    fn find_string_value(&mut self, node: SyntaxNode<'_>) -> Cow<'a, str> {
         for child in node.children_no_trivia() {
             if is_string_kind(child.kind()) {
-                return strip_quotes(self.text(child));
+                return self.string_literal(child);
             }
         }
-        ""
+        Cow::Borrowed("")
+    }
+
+    /// The value of a string literal, with its escape sequences evaluated
+    /// (see [`evaluate_escapes`]).
+    fn string_literal(&mut self, node: SyntaxNode<'_>) -> Cow<'a, str> {
+        match evaluate_escapes(strip_quotes(self.text(node))) {
+            Ok(text) => text,
+            Err(lossy) => {
+                self.error(
+                    node.span(),
+                    "string escape sequences produce bytes that are not UTF-8",
+                );
+                Cow::Owned(lossy)
+            }
+        }
+    }
+
+    /// A quoted name: a prim, variant set or variant name.
+    ///
+    /// Names are identifiers or variant names (AOUSD Core §16.2.8), which
+    /// OpenUSD's writer never escapes, so a name is taken from the source
+    /// as written, and one spelled with an escape sequence is reported.
+    fn name_literal(&mut self, node: SyntaxNode<'_>) -> &'a str {
+        let name = strip_quotes(self.text(node));
+        if name.contains('\\') {
+            self.error(
+                node.span(),
+                "unsupported: escape sequences in a quoted name are not evaluated",
+            );
+        }
+        name
     }
 
     fn find_layer_offset_params(&self, node: SyntaxNode<'_>) -> (Option<f64>, Option<f64>) {
@@ -1432,7 +1459,7 @@ impl<'a> LowerCtx<'a> {
     /// Spec: AOUSD Core §7.6.1.6.1, §7.6.2.6.3, §7.6.3.3.3 (`comment`).
     /// OpenUSD's text parser stores a bare metadata string as
     /// `SdfFieldKeys->Comment` (`pxr/usd/sdf/textFileFormatParser.cpp`).
-    fn bare_comment(&self, node: SyntaxNode<'_>) -> Option<MetadataEntry<'a>> {
+    fn bare_comment(&mut self, node: SyntaxNode<'_>) -> Option<MetadataEntry<'a>> {
         let mut children = node.children_no_trivia();
         let first = children.next()?;
         if !is_string_kind(first.kind()) || children.next().is_some() {
@@ -1442,7 +1469,7 @@ impl<'a> LowerCtx<'a> {
             span: node.span(),
             key: "comment",
             op: ListOpKind::Explicit,
-            value: MetadataValue::Value(Value::String(strip_quotes(self.text(first)))),
+            value: MetadataValue::Value(Value::String(self.string_literal(first))),
         })
     }
 
@@ -1534,6 +1561,81 @@ fn is_string_kind(kind: SyntaxKind) -> bool {
             | SyntaxKind::MultilineDoubleQuoteString
             | SyntaxKind::MultilineSingleQuoteString
     )
+}
+
+/// Evaluates the escape sequences in the contents of a string literal (its
+/// text between the quotes).
+///
+/// Spec: AOUSD Core §16.2.5 (`Escaped`). The rules are those of OpenUSD's
+/// text parser (`Sdf_EvalQuotedString`, `pxr/usd/sdf/parserHelpers.cpp`, and
+/// `TfEscapeStringReplaceChar`, `pxr/base/tf/stringUtils.cpp`), a superset
+/// of the grammar: `\\` is a backslash, `\a \b \f \n \r \t \v` are the C
+/// control characters, `\x` takes up to two hex digits (with none it is a
+/// NUL byte), a digit `0`-`7` starts up to three octal digits, and any other
+/// escaped character stands for itself (so `\"` and `\'` are quotes). Hex
+/// and octal escapes produce bytes; `Err` carries the lossy text when the
+/// result is not UTF-8.
+fn evaluate_escapes(content: &str) -> Result<Cow<'_, str>, String> {
+    if !content.contains('\\') {
+        return Ok(Cow::Borrowed(content));
+    }
+    let bytes = content.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let b = bytes[i];
+        i += 1;
+        if b != b'\\' {
+            out.push(b);
+            continue;
+        }
+        // A lexed literal never ends in a lone backslash: it escapes the
+        // character after it, which is then part of the contents.
+        let Some(&escaped) = bytes.get(i) else {
+            out.push(b);
+            break;
+        };
+        i += 1;
+        match escaped {
+            b'a' => out.push(0x07),
+            b'b' => out.push(0x08),
+            b'f' => out.push(0x0c),
+            b'n' => out.push(b'\n'),
+            b'r' => out.push(b'\r'),
+            b't' => out.push(b'\t'),
+            b'v' => out.push(0x0b),
+            b'x' => {
+                let mut n: u8 = 0;
+                for _ in 0..2 {
+                    let Some(digit) = bytes.get(i).and_then(|d| char::from(*d).to_digit(16)) else {
+                        break;
+                    };
+                    n = (n << 4) | digit as u8;
+                    i += 1;
+                }
+                out.push(n);
+            }
+            b'0'..=b'7' => {
+                let mut n = escaped - b'0';
+                for _ in 0..2 {
+                    match bytes.get(i) {
+                        Some(d @ b'0'..=b'7') => {
+                            // Three octal digits can exceed a byte; like
+                            // OpenUSD's `unsigned char`, keep the low bits.
+                            n = n.wrapping_mul(8).wrapping_add(d - b'0');
+                            i += 1;
+                        }
+                        _ => break,
+                    }
+                }
+                out.push(n);
+            }
+            other => out.push(other),
+        }
+    }
+    String::from_utf8(out)
+        .map(Cow::Owned)
+        .map_err(|e| String::from_utf8_lossy(e.as_bytes()).into_owned())
 }
 
 fn strip_quotes(s: &str) -> &str {
@@ -1699,7 +1801,7 @@ def Scope \"root\" {
             other => panic!("expected Attribute, got {other:?}"),
         };
         assert_eq!(attr.type_name, "string");
-        assert!(matches!(attr.default, Some(Value::String("hello"))));
+        assert!(matches!(&attr.default, Some(Value::String(s)) if s == "hello"));
     }
 
     #[test]
@@ -1885,7 +1987,7 @@ def \"A\" {
         let src = "#usda 1.0\n(\n    doc = \"my layer\"\n)\n";
         let r = parse(src);
         assert_eq!(r.layer.metadata.len(), 1);
-        assert!(matches!(r.layer.metadata[0], LayerMeta::Doc("my layer")));
+        assert!(matches!(&r.layer.metadata[0], LayerMeta::Doc(d) if d == "my layer"));
     }
 
     #[test]
@@ -1935,8 +2037,8 @@ def \"A\" {
         let src = "#usda 1.0\ndef \"A\" (\n    doc = \"hello\"\n) {\n}\n";
         let r = parse(src);
         assert!(matches!(
-            r.layer.prims[0].metadata[0],
-            PrimMeta::Doc("hello")
+            &r.layer.prims[0].metadata[0],
+            PrimMeta::Doc(d) if d == "hello"
         ));
     }
 
@@ -1945,8 +2047,8 @@ def \"A\" {
         let src = "#usda 1.0\ndef \"A\" (\n    kind = \"component\"\n) {\n}\n";
         let r = parse(src);
         assert!(matches!(
-            r.layer.prims[0].metadata[0],
-            PrimMeta::Kind("component")
+            &r.layer.prims[0].metadata[0],
+            PrimMeta::Kind(k) if k == "component"
         ));
     }
 
@@ -2100,7 +2202,7 @@ def \"A\" (
                 assert_eq!(dict.len(), 2);
                 assert_eq!(dict[0].key, "foo");
                 assert_eq!(dict[0].type_name, Some("string"));
-                assert!(matches!(dict[0].value, Value::String("bar")));
+                assert!(matches!(&dict[0].value, Value::String(s) if s == "bar"));
                 assert_eq!(dict[1].key, "count");
                 assert!(matches!(dict[1].value, Value::Int(42)));
             } else {
@@ -2207,5 +2309,79 @@ def Scope \"root\" {
             "unexpected diagnostics: {:?}",
             r.diagnostics
         );
+    }
+
+    // ── String literals ───────────────────────────────────────────
+
+    fn string_default(literal: &str) -> (alloc::string::String, usize) {
+        let src = alloc::format!("#usda 1.0\ndef \"P\" {{\n    string s = {literal}\n}}\n");
+        let r = parse(&src);
+        let PrimChild::Attribute(attr) = &r.layer.prims[0].children[0] else {
+            panic!("expected an attribute");
+        };
+        let Some(Value::String(s)) = &attr.default else {
+            panic!("expected a string default");
+        };
+        (alloc::string::String::from(&**s), r.diagnostics.len())
+    }
+
+    /// Each literal reads, in OpenUSD 26.08 (`Sdf.Layer.ImportFromString`),
+    /// as the string beside it.
+    #[test]
+    fn string_escapes_evaluate_as_openusd_does() {
+        let cases = [
+            (r#""a\"b""#, "a\"b"),
+            (r"'it\'s'", "it's"),
+            (r#""\\""#, "\\"),
+            (r#""\n\t\r\a\b\f\v""#, "\n\t\r\x07\x08\x0c\x0b"),
+            (r#""\x5C\x41""#, "\\A"),
+            (r#""\x""#, "\0"),
+            (r#""\xZ""#, "\0Z"),
+            (r#""\x4g""#, "\x04g"),
+            (r#""\101\0""#, "A\0"),
+            (r#""\1012""#, "A2"),
+            (r#""\400""#, "\0"),
+            (r#""\q\?\'""#, "q?'"),
+            (r#""\8""#, "8"),
+            (r#""\xc3\xa9""#, "\u{e9}"),
+            ("\"\u{e9}\\t\"", "\u{e9}\t"),
+            (
+                "\"\"\"line1\nline2 \"q\" \\\"\"\"\"",
+                "line1\nline2 \"q\" \"",
+            ),
+            (r"'''a\''''", "a'"),
+        ];
+        for (literal, expected) in cases {
+            assert_eq!(string_default(literal), (expected.into(), 0), "{literal}");
+        }
+    }
+
+    /// OpenUSD keeps the bytes of `"\777"` (0xFF); a Rust string cannot.
+    #[test]
+    fn string_escapes_that_are_not_utf8_are_reported() {
+        assert_eq!(string_default(r#""\777""#), ("\u{fffd}".into(), 1));
+    }
+
+    #[test]
+    fn escapes_evaluate_in_docs_and_dictionary_keys() {
+        let src = "#usda 1.0\n(\n    doc = '''a\\'b'''\n    customLayerData = {\n        \
+                   string \"k\\x41\" = \"v\\n\"\n    }\n)\n";
+        let r = parse(src);
+        assert!(r.diagnostics.is_empty(), "{:?}", r.diagnostics);
+        assert!(matches!(&r.layer.metadata[0], LayerMeta::Doc(d) if d == "a'b"));
+        let LayerMeta::Custom(entry) = &r.layer.metadata[1] else {
+            panic!("expected customLayerData");
+        };
+        let MetadataValue::Dictionary(dict) = &entry.value else {
+            panic!("expected a dictionary");
+        };
+        assert_eq!(dict[0].key, "kA");
+        assert!(matches!(&dict[0].value, Value::String(s) if s == "v\n"));
+    }
+
+    #[test]
+    fn escaped_names_are_reported() {
+        let r = parse("#usda 1.0\ndef \"a\\x62\" {\n}\n");
+        assert_eq!(r.diagnostics.len(), 1, "{:?}", r.diagnostics);
     }
 }

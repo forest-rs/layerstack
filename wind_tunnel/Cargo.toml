@@ -20,6 +20,10 @@ layerstack = { path = "../layerstack" }
 criterion = { features = ["html_reports"], version = "0.8" }
 
 [[bench]]
+name = "arcs"
+harness = false
+
+[[bench]]
 name = "instancing"
 harness = false
 

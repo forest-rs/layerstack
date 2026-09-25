@@ -146,11 +146,25 @@ fn instancer_prim(
             Value::Int64Array(ids.to_vec()),
         ));
     }
-    if let Some(orientations) = checked.orientations {
+    // `orientationsf` wins over `orientations` wherever it is known
+    // (`UsdGeomPointInstancer::UsesOrientationsf`); see
+    // `OrientationPrecision` for which are written.
+    if let Some(orientations) = checked.half_orientations {
         attrs.push(Attribute::new(
             "orientations",
             "quath[]",
             Value::QuathArray(orientations),
+        ));
+    }
+    if let Some(orientations) = instancer
+        .orientations
+        .as_deref()
+        .filter(|_| instancer.orientation_precision.writes_float())
+    {
+        attrs.push(Attribute::new(
+            "orientationsf",
+            "quatf[]",
+            Value::QuatfArray(orientations.to_vec()),
         ));
     }
     attrs.push(Attribute::new(

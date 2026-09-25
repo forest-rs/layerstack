@@ -283,11 +283,11 @@ impl Field {
         scene
     }
 
-    /// Instance `i`'s scale, rotation (at the half precision `quath`
-    /// stores) and translation, `S · R · T` in USD's row-vector form.
+    /// Instance `i`'s scale, rotation (the `float` quaternion
+    /// `orientationsf` stores) and translation, `S · R · T` in USD's
+    /// row-vector form.
     fn srt(&self, i: usize) -> [[f64; 4]; 4] {
-        let [x, y, z, r] = self.orientations[i]
-            .map(|c| f64::from(layerstack::half::to_f32(layerstack::half::from_f32(c))));
+        let [x, y, z, r] = self.orientations[i].map(f64::from);
         // The rotation matrix of a unit quaternion, row-vector form.
         let rotation = [
             [

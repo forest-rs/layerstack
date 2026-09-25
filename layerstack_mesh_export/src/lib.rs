@@ -106,7 +106,9 @@
 //! prototypes are written under a `Prototypes` scope below the
 //! `PointInstancer` prim, in the order of its `prototypes` relationship;
 //! the per-instance arrays become `protoIndices`, `positions`,
-//! `orientations` (`quath[]`), `scales` and `ids`, and the instancer's
+//! `orientationsf` (`quatf[]`; the half-precision `orientations` is
+//! written instead or as well on request, see [`OrientationPrecision`]),
+//! `scales` and `ids`, and the instancer's
 //! `extent` is computed from the prototypes' points and the instance
 //! transforms. Both layer formats, and therefore both USDZ profiles, carry
 //! it.
@@ -235,7 +237,7 @@ mod shading;
 mod transform;
 
 pub use error::{ExportError, InstancerProblem, MaterialProblem, MeshProblem};
-pub use instancer::{PROTOTYPES_SCOPE, PointInstancer};
+pub use instancer::{OrientationPrecision, PROTOTYPES_SCOPE, PointInstancer};
 pub use layerstack_usda::writer::Value;
 pub use layerstack_usdz::PackageFile;
 pub use material::{Channel, ColorInput, FloatInput, MATERIALS_SCOPE, Material, Texture, Wrap};

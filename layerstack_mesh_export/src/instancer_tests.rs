@@ -6,8 +6,8 @@ use alloc::string::ToString;
 use alloc::vec;
 
 use crate::{
-    ExportError, Faces, InstancerProblem, Material, Mesh, PointInstancer, Scene, StageSettings,
-    Transform, UpAxis, UsdzProfile, Value, Xform,
+    ExportError, Faces, InstancerProblem, Material, Mesh, OrientationPrecision, PointInstancer,
+    Scene, StageSettings, Transform, UpAxis, UsdzProfile, Value, Xform,
 };
 
 const TRI_POINTS: [[f32; 3]; 3] = [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
@@ -84,13 +84,14 @@ fn golden_instancer() {
         .with_orientations(&orientations)
         .with_scales(&scales)
         .with_ids(&ids)
+        .with_orientation_precision(OrientationPrecision::FloatAndHalf)
         .with_attribute("site:set", Value::String("stones".into()));
     let text = scene(instancer).to_usda().unwrap();
     // Extent: the triangle at the origin and scaled ×2 at (0, 5, 1); the
     // quad, lifted by its prototype's transform to z = 2, turned 90° about
-    // Z at (10, 0, 0). The half-precision quarter turn is slightly short of
-    // unit length, so the quad's corners move by a rounding error.
-    assert_near(&extent(&text), &[0.0, -0.5, 0.0, 10.5, 7.0, 2.0], 1e-3);
+    // Z at (10, 0, 0). The extent follows `orientationsf`, which readers
+    // prefer when both are authored.
+    assert_near(&extent(&text), &[0.0, -0.5, 0.0, 10.5, 7.0, 2.0], 1e-6);
     let expected = r#"def PointInstancer "Field"
     {
         float3[] extent = "#;
@@ -98,6 +99,7 @@ fn golden_instancer() {
     let expected = r#"
         int64[] ids = [7, 3, -1]
         quath[] orientations = [(1, 0, 0, 0), (0.70703125, 0, 0, 0.70703125), (1, 0, 0, 0)]
+        quatf[] orientationsf = [(1, 0, 0, 0), (0.70710677, 0, 0, 0.70710677), (1, 0, 0, 0)]
         point3f[] positions = [(0, 0, 0), (10, 0, 0), (0, 5, 1)]
         int[] protoIndices = [0, 1, 0]
         float3[] scales = [(1, 1, 1), (1, 1, 1), (2, 2, 1)]
@@ -161,11 +163,75 @@ fn extent_follows_rotation_scale_and_the_instancer_transform() {
         .with_orientations(&orientations)
         .with_scales(&scales)
         .with_transform(Transform::from_translation([100.0, 0.0, 0.0]));
-    let text = scene(instancer).to_usda().unwrap();
+    let text = scene(instancer.clone()).to_usda().unwrap();
     // Scaled: x in [0, 2], y in [0, 3]; turned: x in [-3, 0], y in [0, 2];
-    // moved by (1, 2, 3). The half-precision quaternion is not exactly a
-    // quarter turn, so the bounds are off by a rounding error.
-    assert_near(&extent(&text), &[-2.0, 2.0, 3.0, 1.0, 4.0, 3.0], 2e-3);
+    // moved by (1, 2, 3).
+    let want = [-2.0, 2.0, 3.0, 1.0, 4.0, 3.0];
+    assert_near(&extent(&text), &want, 1e-6);
+    // Stored at half precision, the quaternion is not exactly a quarter
+    // turn, and the extent follows the rotation readers will apply.
+    let half = instancer.with_orientation_precision(OrientationPrecision::Half);
+    let got = extent(&scene(half).to_usda().unwrap());
+    assert_near(&got, &want, 2e-3);
+    assert!(
+        got.iter().zip(&want).any(|(g, w)| (g - w).abs() > 1e-5),
+        "{got:?}"
+    );
+}
+
+#[test]
+fn orientation_precision_picks_the_authored_attributes() {
+    let one = [0];
+    let origin = [[0.0; 3]];
+    let turned = [QUARTER_TURN_Z];
+    let base = PointInstancer::new("Field", &one, &origin)
+        .with_prototype(tri())
+        .with_orientations(&turned);
+    for (precision, float, half) in [
+        (OrientationPrecision::default(), true, false),
+        (OrientationPrecision::Float, true, false),
+        (OrientationPrecision::Half, false, true),
+        (OrientationPrecision::FloatAndHalf, true, true),
+    ] {
+        let text = scene(base.clone().with_orientation_precision(precision))
+            .to_usda()
+            .unwrap();
+        assert_eq!(
+            text.contains("quatf[] orientationsf = [(0.70710677, 0, 0, 0.70710677)]"),
+            float,
+            "{precision:?}: {text}"
+        );
+        assert_eq!(
+            text.contains("quath[] orientations = [(0.70703125, 0, 0, 0.70703125)]"),
+            half,
+            "{precision:?}: {text}"
+        );
+    }
+}
+
+#[test]
+fn half_orientation_error_bounds_the_rounding() {
+    let one = [0];
+    let origin = [[0.0; 3]];
+    let identity = [[0.0, 0.0, 0.0, 1.0]];
+    let unturned = PointInstancer::new("Field", &one, &origin).with_orientations(&identity);
+    assert_eq!(unturned.half_orientation_error(), 0.0, "identity is exact");
+    assert_eq!(
+        PointInstancer::new("Field", &one, &origin).half_orientation_error(),
+        0.0,
+        "no orientations"
+    );
+
+    // A quarter turn about Z: the half quaternion (0.70703125 twice)
+    // scales the rotation by 2 * 0.70703125^2, so +X lands at
+    // (0, 0.99975586, 0) instead of (0, 1, 0).
+    let turned = [QUARTER_TURN_Z];
+    let error = PointInstancer::new("Field", &one, &origin)
+        .with_orientations(&turned)
+        .half_orientation_error();
+    let moved = 1.0 - 2.0 * 0.707_031_25_f64 * 0.707_031_25;
+    assert!(error >= moved, "{error} bounds the displacement {moved}");
+    assert!(error < 1e-3, "{error}");
 }
 
 #[test]

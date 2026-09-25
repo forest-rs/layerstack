@@ -535,6 +535,40 @@ impl<'a> Walk<'a> {
         Some((store.paths_mut().intern(current), moved))
     }
 
+    /// Maps the path `rel` beneath the stage path `dest_root` through every
+    /// relocation, as a namespace mapping: each source moves to its target,
+    /// and nothing is dropped but what a relocation removes.
+    ///
+    /// This is how an arc maps target paths and class paths authored in its
+    /// target (AOUSD Core §10.3.2.6.1).
+    pub(crate) fn map(
+        &self,
+        store: &mut dyn LayerStore,
+        dest_root: PathId,
+        rel: &[crate::interner::TokenId],
+    ) -> Option<PathId> {
+        let mut current = store.paths().resolve(dest_root).clone();
+        if self.is_empty() {
+            let joined = current.join(rel);
+            return Some(store.paths_mut().intern(joined));
+        }
+        for &name in rel {
+            let next = current.join(&[name]);
+            let paths = store.paths();
+            let relocate = paths.lookup(&next).and_then(|id| {
+                self.own
+                    .into_iter()
+                    .chain(self.outer.iter().rev().copied())
+                    .find_map(|set| set.source(id))
+            });
+            current = match relocate {
+                Some(relocate) => paths.resolve(relocate.stage_target?).clone(),
+                None => next,
+            };
+        }
+        Some(store.paths_mut().intern(current))
+    }
+
     /// The `outer` relocations a walk from `host` took to reach the stage
     /// path `dest`, latest first, each with the site the walk passed in the
     /// relocating layer stack: the relocation's source extended towards

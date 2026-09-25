@@ -189,7 +189,8 @@ pub struct Relationship<'a> {
     pub op: ListOpKind,
     /// Relationship name (may be namespaced).
     pub name: &'a str,
-    /// Target paths.
+    /// Target paths: `None` for a bare declaration (`rel r`), an empty
+    /// list for an explicitly empty one (`rel r = None` or `rel r = []`).
     pub targets: Option<Vec<&'a str>>,
     /// Relationship metadata block.
     pub metadata: Vec<MetadataEntry<'a>>,

@@ -1451,6 +1451,87 @@ mod tests {
         assert_matches_fresh(&live, &mut store, &[field_x]);
     }
 
+    /// `/A` references a library prim that specializes `/Class`, and has a
+    /// payload that also authors `x`. The specialized class is weaker than
+    /// the payload although the specializes arc is reached through the
+    /// stronger reference. Editing the class, then removing the payload's
+    /// opinion, recomposes `/A` to match a fresh composition each time.
+    ///
+    /// Spec: AOUSD Core §10.4.1 (specializes are globally weaker).
+    #[test]
+    fn specialized_class_edit_recomposes_prims_reaching_it_through_a_reference() {
+        let mut store = InMemoryStore::default();
+        let field_x = store.tokens.intern("x");
+        let a = p(&mut store, "/A");
+        let other = p(&mut store, "/Other");
+        let reference = p(&mut store, "/Ref");
+        let class = p(&mut store, "/Class");
+        let payload = p(&mut store, "/Payload");
+
+        let mut root = Layer::new(LayerId(1));
+        root.insert_prim(
+            a,
+            PrimSpec::def()
+                .with_reference(Reference::new(LayerId(2), reference))
+                .with_payload(Reference::new(LayerId(2), payload)),
+        );
+        root.insert_prim(other, PrimSpec::def().with_property(field_x, attr(5)));
+        store.insert_layer(root);
+
+        let mut library = Layer::new(LayerId(2));
+        library.insert_prim(reference, PrimSpec::over().with_specialize(class));
+        library.insert_prim(class, PrimSpec::class().with_property(field_x, attr(1)));
+        library.insert_prim(payload, PrimSpec::over().with_property(field_x, attr(2)));
+        store.insert_layer(library);
+
+        let options = StageOptions {
+            with_provenance: true,
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+        let x_of = |live: &LiveStage| {
+            live.stage()
+                .resolve_field_path(PropertyPath::new(a, field_x))
+                .unwrap()
+                .value
+        };
+        assert_eq!(
+            x_of(&live),
+            Value::Int64(2),
+            "the payload outranks `/Class`"
+        );
+
+        let edit = |store: &mut InMemoryStore, prim: PathId, value: Option<i64>| {
+            let spec = store
+                .layers
+                .get_mut(&LayerId(2))
+                .unwrap()
+                .prims
+                .get_mut(&prim)
+                .unwrap();
+            match value {
+                Some(value) => {
+                    spec.set_property(field_x, attr(value));
+                }
+                None => {
+                    spec.remove_property(field_x);
+                }
+            }
+        };
+
+        edit(&mut store, class, Some(3));
+        live.notify_layer_prim_edits(LayerId(2), &[class]);
+        assert_eq!(live.recompose(&mut store), [a]);
+        assert_eq!(x_of(&live), Value::Int64(2));
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+
+        edit(&mut store, payload, None);
+        live.notify_layer_prim_edits(LayerId(2), &[payload]);
+        assert_eq!(live.recompose(&mut store), [a]);
+        assert_eq!(x_of(&live), Value::Int64(3), "now from `/Class`");
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+    }
+
     /// Regression: recomposing one sibling used to replace the root's child
     /// list with the masked composition's partial list, dropping `/B` from
     /// traversal while `has_prim(/B)` stayed true.

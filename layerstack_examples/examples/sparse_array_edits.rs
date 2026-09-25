@@ -136,11 +136,12 @@ over "Mesh" {
 
     let stage = Stage::compose(&mut store, LayerId(4), StageOptions::default());
 
-    let mesh = store.path("/Mesh");
-    let points = store.tokens.intern("points");
-    let animated = store.tokens.intern("animated");
+    // `points` and `animated` are properties, so they are queried by property
+    // path; name-based queries read prim metadata.
+    let points = store.property_path("/Mesh.points");
+    let animated = store.property_path("/Mesh.animated");
 
-    let resolved_points = stage.resolve_field(mesh, points).expect("points field");
+    let resolved_points = stage.resolve_field_path(points).expect("points field");
     println!("Sparse override over dense array:");
     println!("  resolved points = {}", resolved_points.value);
     assert_eq!(
@@ -150,10 +151,10 @@ over "Mesh" {
     );
 
     let animated_mid = stage
-        .resolve_value_at_time(mesh, animated, 2.5, InterpolationType::Held)
+        .resolve_property_path_at_time(animated, 2.5, InterpolationType::Held)
         .expect("held sparse sample at t=2.5");
     let animated_reset = stage
-        .resolve_value_at_time(mesh, animated, 3.5, InterpolationType::Held)
+        .resolve_property_path_at_time(animated, 3.5, InterpolationType::Held)
         .expect("held sparse sample at t=3.5");
 
     println!("Held time-sampled sparse edits over the same dense base:");

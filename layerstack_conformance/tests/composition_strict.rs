@@ -46,27 +46,22 @@
 //!
 //! Exact prim stacks, property stacks and values for sublayer stacks
 //! (including duplicate sublayers, cycles and time offsets), local opinions,
-//! single-level references, payloads and inherits, internal references and
-//! payloads authored anywhere in a layer stack, list-edited arcs and
-//! target paths, specializes ranked after every other arc wherever they are
-//! authored, and variant selections that do not depend on the features
-//! below. Where only [`Cause::DuplicateSources`] is listed, composed values
-//! are unaffected: the repeated sites carry identical opinions.
+//! references, payloads and inherits nested to any depth, ranked by walking
+//! each prim's composition graph ([`Stage::explain_prim_graph`]), internal
+//! references and payloads authored anywhere in a layer stack, list-edited
+//! arcs and target paths, specializes ranked after every other arc wherever
+//! they are authored, and variant selections that do not depend on the
+//! features below.
 //!
 //! # Not supported
 //!
 //! - Relocates ([`Cause::Relocates`]): diagnosed and ignored.
-//! - OpenUSD's node-graph strength order: implied class arcs
-//!   ([`Cause::ImpliedClasses`]), arcs nested two or more deep
-//!   ([`Cause::NestedArcDepth`]) and implied specializes as nodes of their
-//!   own ([`Cause::SpecializesPlacement`]). These change resolved values in
-//!   several fixtures. Each prim's composition graph
-//!   ([`Stage::explain_prim_graph`]) records the arc path of every source;
-//!   fixing them means ranking sources by walking that graph instead of by
-//!   each node's flat strength key, which holds one nested arc kind.
-//! - One site per arc path ([`Cause::CollapsedNodes`]) and one registration
-//!   per arc path ([`Cause::DuplicateSources`]); the same node model would
-//!   remove both.
+//! - Nodes placed where OpenUSD's graph does not place them: implied class
+//!   arcs ([`Cause::ImpliedClasses`]) and implied specializes as nodes of
+//!   their own ([`Cause::SpecializesPlacement`]). These change resolved
+//!   values in several fixtures. Variant branches of different sets at one
+//!   site are not ordered by their sets ([`Cause::VariantSetOrder`]).
+//! - One site per arc path ([`Cause::CollapsedNodes`]).
 //! - Ancestral arcs of subroot arc targets ([`Cause::AncestralArcs`]),
 //!   some nested variant specs ([`Cause::VariantSpecs`]), conflicting
 //!   property spec types ([`Cause::PropertyTypeConflict`]), asset-path
@@ -486,14 +481,6 @@ fn observe(name: &str) -> Observed {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Cause {
     // Presentation: the same sites, counted differently.
-    /// Layerstack registers a site more than once for one arc path: a late
-    /// copy of a target's composed sources ranks a site above the arc's own
-    /// registration of it and is kept because the flat strength key needs
-    /// it (`Forwarding` in `compose`), or two expansions reach one site
-    /// through different namespace mappings of the same class or
-    /// reference. The duplicate opinions carry the same value, so
-    /// resolution is unaffected.
-    DuplicateSources,
     /// OpenUSD keeps one node per arc path, so a site reached twice (a
     /// reference or payload diamond, a reference listed repeatedly with
     /// different offsets) appears twice; Layerstack visits each
@@ -505,15 +492,15 @@ enum Cause {
     /// are implied onto each stronger layer stack and ranked with that
     /// stack's node (AOUSD Core §10.4.2.4; `pxr/usd/pcp/primIndex.cpp`,
     /// `_EvalImpliedClasses`).
-    /// Layerstack ranks every implied copy inside the nested arc's bucket, so
-    /// `root.usd /Class` sorts after the reference target.
+    /// Layerstack implies a class one reference or payload up only, beside
+    /// the arc whose target authors it, so an implied class sorts after the
+    /// sites between that arc and the layer stack it belongs to.
     ImpliedClasses,
-    /// A graph node's strength key holds one nested arc kind, while OpenUSD
-    /// orders arcs per introducing layer stack (AOUSD Core §10.4;
-    /// `pxr/usd/pcp/strengthOrdering.cpp`),
-    /// so arcs nested two or more deep, and the arcs of a nested target,
-    /// interleave or outrank their own target.
-    NestedArcDepth,
+    /// Variant branches of different variant sets hosted at one site rank
+    /// as one node, their opinions interleaving by layer and spec path,
+    /// while OpenUSD ranks them in the order of the site's variant sets
+    /// (`PcpCompareSiblingNodeStrength` compares `GetSiblingNumAtOrigin`).
+    VariantSetOrder,
     /// A specializes implied into a stronger layer stack is a node of its own
     /// in OpenUSD, ranked with the arcs beneath it before the specializes
     /// node it is implied from (AOUSD Core §10.4.1;
@@ -611,12 +598,12 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "BasicNestedPayload_root",
-        causes: &[C::NestedArcDepth, C::DuplicateSources, C::CollapsedNodes],
-        prims: 6,
-        props: 3,
+        causes: &[C::CollapsedNodes],
+        prims: 2,
+        props: 1,
         values: 1,
-        diffs: &[D::ExtraRepeat, D::MissingRepeat, D::Order],
-        reason: "`/Set2/Prop/PropScope.x` resolves from `set_payload.usd`, not the stronger nested `prop_payload.usd`: payloads nested in payloads share one strength bucket",
+        diffs: &[D::MissingRepeat, D::Order],
+        reason: "`/Set2/Prop`'s own payload of `prop_payload.usd /Prop` collapses into the weaker one nested in `set_payload.usd`, so `PropScope.x` resolves from `set_payload.usd`",
     },
     Known {
         fixture: "BasicNestedVariants_root",
@@ -629,48 +616,30 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "BasicPayloadDiamond_root",
-        causes: &[C::CollapsedNodes, C::NestedArcDepth],
+        causes: &[C::CollapsedNodes],
         prims: 2,
         props: 2,
         values: 0,
-        diffs: &[D::MissingRepeat, D::Order],
-        reason: "`C.usd /C` is reached through `A` and `B` but listed once, after both",
+        diffs: &[D::MissingRepeat],
+        reason: "`C.usd /C` is reached through `A` and `B` but listed once",
     },
     Known {
         fixture: "BasicPayload_root",
-        causes: &[C::AncestralArcs, C::NestedArcDepth],
-        prims: 5,
+        causes: &[C::AncestralArcs],
+        prims: 4,
         props: 0,
         values: 0,
-        diffs: &[D::MissingSite, D::Order],
-        reason: "subroot targets under `ref.usd` `/RefPrimA` and `/PayloadPrimA` miss their ancestors' `ref2.usd /PrimC`; `/PrimWithPayloads` ranks `ref2.usd /PrimB` before the nested `/PrimC`",
-    },
-    Known {
-        fixture: "BasicReferenceAndClassDiamond_root",
-        causes: &[C::ImpliedClasses],
-        prims: 1,
-        props: 1,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "implied `root.usd /Model_1/LocalClass` ranks after `model.usd /Model/Instance`",
-    },
-    Known {
-        fixture: "BasicReferenceAndClass_root",
-        causes: &[C::ImpliedClasses],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "implied `root.usd /Class` ranks after the reference target `model.usd /Model`",
+        diffs: &[D::MissingSite],
+        reason: "subroot targets under `ref.usd` `/RefPrimA` and `/PayloadPrimA` miss their ancestors' `ref2.usd /PrimC`",
     },
     Known {
         fixture: "BasicReferenceDiamond_root",
-        causes: &[C::CollapsedNodes, C::NestedArcDepth],
+        causes: &[C::CollapsedNodes],
         prims: 1,
         props: 1,
         values: 0,
-        diffs: &[D::MissingRepeat, D::Order],
-        reason: "`C.usd /C` is reached through `A` and `B` but listed once, after both",
+        diffs: &[D::MissingRepeat],
+        reason: "`C.usd /C` is reached through `A` and `B` but listed once",
     },
     Known {
         fixture: "BasicRelocateToAnimInterfaceAsNewRootPrim_root",
@@ -693,20 +662,11 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "BasicSpecializesAndInherits_root",
         causes: &[C::SpecializesPlacement],
-        prims: 4,
+        prims: 3,
         props: 0,
         values: 0,
         diffs: &[D::Order],
-        reason: "`/Instance_2` ranks `ref.usd /Specializes_2` before `root.usd /Inherits_2`, the class implied under the implied specializes `root.usd /Specializes_2`",
-    },
-    Known {
-        fixture: "BasicVariantWithConnections_root",
-        causes: &[C::NestedArcDepth],
-        prims: 2,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "classes inherited inside `camera_perspective.usd`, referenced from a variant, outrank the variant and the reference target",
+        reason: "`/Instance_2` ranks the implied `root.usd /Inherits_2` before `root.usd /Specializes_2`, the implied specializes it is implied under",
     },
     Known {
         fixture: "ElidedAncestralRelocates_root",
@@ -736,21 +696,12 @@ const KNOWN: &[Known] = &[
         reason: "the relationship `ref.usd /InconsistentPropType.x` stays in the stack of the attribute `x`",
     },
     Known {
-        fixture: "ErrorInvalidAuthoredRelocates_root",
-        causes: &[C::Relocates],
-        prims: 4,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "ignores `</Model_1/Instance/Test>` -> `</Model_1/Instance/Test>` authored in `root.usd`",
-    },
-    Known {
         fixture: "ErrorInvalidConflictingRelocates_root",
         causes: &[C::Relocates],
-        prims: 33,
+        prims: 28,
         props: 0,
         values: 0,
-        diffs: &[D::MissingPrim, D::ExtraPrim, D::Order],
+        diffs: &[D::MissingPrim, D::ExtraPrim],
         reason: "ignores `</Model_1/Instance/ClassChild>` -> `</Model_1/Instance/Test>` authored in `root.usd`",
     },
     Known {
@@ -808,30 +759,12 @@ const KNOWN: &[Known] = &[
         reason: "reference asset paths such as `` @`\"./${REF}.usd\"`@ `` are variable expressions",
     },
     Known {
-        fixture: "ImpliedAndAncestralInherits_ComplexEvaluation_root",
-        causes: &[C::NestedArcDepth, C::DuplicateSources],
-        prims: 12,
-        props: 5,
-        values: 3,
-        diffs: &[D::ExtraRepeat, D::Order],
-        reason: "the inherits of a nested arc target outrank the target: `ref.usd /Ref/C/_Z` sorts before `ref.usd /Ref/C/D`, so `D.prop` resolves to `ref:weak`",
-    },
-    Known {
-        fixture: "ImpliedAndAncestralInherits_root",
-        causes: &[C::NestedArcDepth],
-        prims: 4,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "`CharGroupRig.usd /_class_CharGroupRig` outranks `/CHARGROUP`, the nested reference target that inherits it",
-    },
-    Known {
         fixture: "PayloadsAndAncestralArcs2_root",
         causes: &[C::Relocates],
-        prims: 3,
+        prims: 2,
         props: 0,
         values: 0,
-        diffs: &[D::ExtraPrim, D::MissingSite, D::Order],
+        diffs: &[D::ExtraPrim, D::MissingSite],
         reason: "ignores `</Ref/PayloadChild>` -> `</Ref/Child>` authored in `relocates.usd`",
     },
     Known {
@@ -858,7 +791,7 @@ const KNOWN: &[Known] = &[
         prims: 19,
         props: 0,
         values: 0,
-        diffs: &[D::MissingPrim, D::ExtraPrim, D::MissingRepeat, D::Order],
+        diffs: &[D::MissingPrim, D::ExtraPrim, D::MissingRepeat],
         reason: "ignores `</Ref1/Child>` -> `</Ref1/Child_1>` authored in `ref_2.usd`",
     },
     Known {
@@ -872,12 +805,12 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "SpecializesAndAncestralArcs2_root",
-        causes: &[C::SpecializesPlacement, C::DuplicateSources],
-        prims: 7,
+        causes: &[C::SpecializesPlacement],
+        prims: 1,
         props: 0,
         values: 0,
-        diffs: &[D::ExtraRepeat, D::Order],
-        reason: "`/HumanMaleStdHair/Hair_Chiang_Head_Chiang_Hair/Inner` interleaves the `Class` sites implied through `Hair_Chiang_Head_Chiang_Hair` with those of `Hair_Chiang`, and repeats the `_shared_HumanHair` sites",
+        diffs: &[D::Order],
+        reason: "`/HumanMaleStdHair/Hair_Chiang_Head_Chiang_Hair/Inner` ranks the `Class` sites implied through `Hair_Chiang` before those implied through `Hair_Chiang_Head_Chiang_Hair`",
     },
     Known {
         fixture: "SpecializesAndAncestralArcs3_root",
@@ -907,30 +840,21 @@ const KNOWN: &[Known] = &[
         reason: "`/AncestralReference/Child` ranks `ref.usd /Specializes/Child` before `root.usd /Class`, the class implied under the implied specializes `root.usd /Specializes/Child`",
     },
     Known {
-        fixture: "SpecializesAndVariants2_root",
-        causes: &[C::DuplicateSources],
-        prims: 0,
-        props: 2,
-        values: 0,
-        diffs: &[D::ExtraRepeat],
-        reason: "`/element.variantAttr` lists `root.usd /implementation{testVariantSet=testVariant}` twice",
-    },
-    Known {
         fixture: "SpecializesAndVariants3_root",
-        causes: &[C::VariantSpecs, C::DuplicateSources],
+        causes: &[C::VariantSpecs],
         prims: 3,
-        props: 5,
+        props: 3,
         values: 3,
-        diffs: &[D::MissingSite, D::ExtraRepeat],
+        diffs: &[D::MissingSite],
         reason: "`/implementation` misses its own `{testVariantSet=testVariant}` branch, selected by the specialized class, so `variantAttr` has no value",
     },
     Known {
         fixture: "SubrootInheritsAndVariants_root",
         causes: &[C::AncestralArcs],
-        prims: 2,
+        prims: 1,
         props: 1,
         values: 1,
-        diffs: &[D::MissingSite, D::ExtraSite, D::Order],
+        diffs: &[D::MissingSite, D::ExtraSite],
         reason: "the subroot inherit of `/Root/Child` uses `{v=x}`, not the `{v=z}` selected on its ancestor `/Group`, so `a` is `v_x`",
     },
     Known {
@@ -970,21 +894,12 @@ const KNOWN: &[Known] = &[
         reason: "`/ImplNoCycle/A/D` misses `/ImplNoCycle/A/B`, reached through a subroot reference to an ancestor",
     },
     Known {
-        fixture: "TrickyClassHierarchy_root",
-        causes: &[C::ImpliedClasses],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "the implied class chain `root.usd /_Class_Sullivan` ranks after `Sullivan.usd /Sullivan`",
-    },
-    Known {
         fixture: "TrickyConnectionToRelocatedAttribute_root",
         causes: &[C::Relocates],
-        prims: 10,
+        prims: 8,
         props: 0,
         values: 4,
-        diffs: &[D::MissingPrim, D::ExtraPrim, D::Order],
+        diffs: &[D::MissingPrim, D::ExtraPrim],
         reason: "ignores `</FaceRig/rig/LEyeRig/Anim>` -> `</FaceRig/Anim/LEye>` authored in `root.usd`",
     },
     Known {
@@ -1008,19 +923,19 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "TrickyInheritsAndRelocates4_root",
         causes: &[C::Relocates],
-        prims: 7,
+        prims: 4,
         props: 0,
         values: 0,
-        diffs: &[D::MissingPrim, D::ExtraPrim, D::Order],
+        diffs: &[D::MissingPrim, D::ExtraPrim],
         reason: "ignores `</CurveTrackRig/rig/ConstRig/Anim/Const>` -> `</CurveTrackRig/Anim/Curve/Const>` authored in `CurveTrackRig.usd`",
     },
     Known {
         fixture: "TrickyInheritsAndRelocates5_root",
         causes: &[C::Relocates],
-        prims: 19,
+        prims: 16,
         props: 0,
         values: 5,
-        diffs: &[D::MissingPrim, D::ExtraPrim, D::Order],
+        diffs: &[D::MissingPrim, D::ExtraPrim],
         reason: "ignores `</TentacleRig/TentacleInterface/Knot03Rig/Anim>` -> `</TentacleRig/Tentacle/Knot03>` authored in `root.usd`",
     },
     Known {
@@ -1042,30 +957,12 @@ const KNOWN: &[Known] = &[
         reason: "ignores `</Group/Model>` -> `</Group/Model_Renamed>` authored in `root.usd`",
     },
     Known {
-        fixture: "TrickyInheritsInVariants2_root",
-        causes: &[C::NestedArcDepth],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "`/Sarah/FaceRig/EyesRig/LEyeRig`'s inherit `Sarah_rig.usd /Sarah/FaceRig/EyesRig/SymEyeRig` outranks its own target `Sarah_rig.usd /Sarah/FaceRig/EyesRig/LEyeRig`",
-    },
-    Known {
-        fixture: "TrickyInheritsInVariants_root",
-        causes: &[C::NestedArcDepth],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "`/Model/Scope` interleaves its class and variant sites",
-    },
-    Known {
         fixture: "TrickyLocalClassHierarchyWithRelocates_root",
         causes: &[C::Relocates],
         prims: 8,
         props: 0,
         values: 0,
-        diffs: &[D::MissingPrim, D::MissingSite, D::Order],
+        diffs: &[D::MissingPrim, D::MissingSite],
         reason: "ignores `</C/ArmsRig/LArmRig/ArmRegion/Region>` -> `</C/CollisionRig/Body/CollBody/SimRegions/LArm>` authored in `Sullivan_masterrig.usd`",
     },
     Known {
@@ -1107,19 +1004,19 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "TrickyMultipleRelocationsAndClasses2_root",
         causes: &[C::Relocates],
-        prims: 7,
+        prims: 6,
         props: 0,
         values: 1,
-        diffs: &[D::MissingPrim, D::ExtraPrim, D::Order],
+        diffs: &[D::MissingPrim, D::ExtraPrim],
         reason: "ignores `</LegsRig/LLegRig/TentacleRig/Tentacle>` -> `</LegsRig/Legs/LHip>` authored in `LegsRig.usd`",
     },
     Known {
         fixture: "TrickyMultipleRelocationsAndClasses_root",
         causes: &[C::Relocates],
-        prims: 20,
+        prims: 16,
         props: 0,
         values: 4,
-        diffs: &[D::MissingPrim, D::ExtraPrim, D::Order],
+        diffs: &[D::MissingPrim, D::ExtraPrim],
         reason: "ignores `</HumanRig/rig/Face/Anim/Face>` -> `</HumanRig/Face>` authored in `root.usd`",
     },
     Known {
@@ -1133,48 +1030,39 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "TrickyNestedClasses2_root",
-        causes: &[C::ImpliedClasses, C::NestedArcDepth],
-        prims: 4,
+        causes: &[C::ImpliedClasses],
+        prims: 1,
         props: 0,
         values: 0,
         diffs: &[D::Order],
-        reason: "implied `root.usd /_class_ClothRig` ranks after `rig.usd /KiltRig`",
+        reason: "`.../SimPatchWeights/Patch0` ranks the implied `root.usd .../PatchWeightsClass/PatchClass` before `root.usd .../SimPatchWeights/PatchClass`",
     },
     Known {
         fixture: "TrickyNestedClasses3_root",
         causes: &[C::ImpliedClasses],
-        prims: 8,
+        prims: 4,
         props: 0,
         values: 0,
         diffs: &[D::Order],
-        reason: "implied `root.usd /Rig/_class_SubRig` ranks after `rig.usd /Rig/SymRig/SubRig1`",
+        reason: "implied `root.usd /Rig/_class_SubRig` ranks before `root.usd /Rig/SymRig/SubRig1`, the site it is implied for",
     },
     Known {
         fixture: "TrickyNestedClasses4_root",
         causes: &[C::AncestralArcs, C::ImpliedClasses],
-        prims: 6,
+        prims: 3,
         props: 0,
         values: 0,
-        diffs: &[D::MissingPrim, D::MissingSite, D::Order],
+        diffs: &[D::MissingPrim, D::MissingSite],
         reason: "local classes nested inside inherited classes miss their ancestral class sites",
     },
     Known {
         fixture: "TrickyNestedClasses_root",
         causes: &[C::ImpliedClasses],
-        prims: 7,
+        prims: 3,
         props: 0,
         values: 0,
         diffs: &[D::Order],
         reason: "implied `root.usd .../_Class_FingerRig` ranks after `HandsRig.usd .../IndexRig`",
-    },
-    Known {
-        fixture: "TrickyNestedVariants_root",
-        causes: &[C::AncestralArcs],
-        prims: 2,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "`/A/B` ranks its own `ref.usd /RB` before the ancestral `ref.usd /RAx/B` of `/A{v1=x}`",
     },
     Known {
         fixture: "TrickyRelocatedTargetInVariant_root",
@@ -1188,10 +1076,10 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "TrickyRelocationOfPrimFromPayload_root",
         causes: &[C::Relocates],
-        prims: 13,
+        prims: 8,
         props: 0,
         values: 2,
-        diffs: &[D::MissingPrim, D::ExtraPrim, D::Order],
+        diffs: &[D::MissingPrim, D::ExtraPrim],
         reason: "ignores `</Model/Rig/LRig/Anim>` -> `</Model/Anim/LRig>` authored in `model_payload.usd`",
     },
     Known {
@@ -1222,18 +1110,9 @@ const KNOWN: &[Known] = &[
         reason: "`/Root/Nested` ranks `ref.usd /Specializes/Nested` before `root.usd /NestedClass`, the class implied under the implied specializes `root.usd /Specializes/Nested`",
     },
     Known {
-        fixture: "TrickySpecializesAndInherits3_root",
-        causes: &[C::ImpliedClasses],
-        prims: 3,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "implied `root.usd /SetClass` ranks after `package.usd /SetPackage`",
-    },
-    Known {
         fixture: "TrickySpecializesAndInherits_root",
         causes: &[C::SpecializesPlacement],
-        prims: 2,
+        prims: 1,
         props: 0,
         values: 0,
         diffs: &[D::Order],
@@ -1260,28 +1139,28 @@ const KNOWN: &[Known] = &[
     Known {
         fixture: "TrickySpookyInheritsInSymmetricBrowRig_root",
         causes: &[C::Relocates],
-        prims: 6,
+        prims: 4,
         props: 0,
         values: 0,
-        diffs: &[D::ExtraPrim, D::MissingSite, D::Order],
+        diffs: &[D::ExtraPrim, D::MissingSite],
         reason: "ignores `</BrowRig/LBrow/Anim/Brow>` -> `</BrowRig/Anim/LBrow>` authored in `BrowRig.usd`",
     },
     Known {
         fixture: "TrickySpookyInherits_root",
         causes: &[C::Relocates],
-        prims: 5,
+        prims: 2,
         props: 0,
         values: 0,
-        diffs: &[D::ExtraPrim, D::MissingSite, D::ExtraSite, D::Order],
+        diffs: &[D::ExtraPrim, D::MissingSite, D::ExtraSite],
         reason: "ignores `</Model/Rig/LRig>` -> `</Model/Anim/LAnim>` authored in `model.usd`",
     },
     Known {
         fixture: "TrickySpookyVariantSelectionInClass_root",
         causes: &[C::Relocates],
-        prims: 6,
+        prims: 5,
         props: 1,
         values: 3,
-        diffs: &[D::MissingPrim, D::MissingSite, D::Order],
+        diffs: &[D::MissingPrim, D::MissingSite],
         reason: "ignores `</CharRig/Rig/LeftLegRig/Anim>` -> `</CharRig/Anim/LeftLeg>` authored in `CharRig.usd`",
     },
     Known {
@@ -1295,30 +1174,21 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "TrickyVariantAncestralSelection_root",
-        causes: &[C::ImpliedClasses, C::AncestralArcs],
-        prims: 3,
+        causes: &[C::AncestralArcs, C::VariantSetOrder],
+        prims: 1,
         props: 0,
         values: 0,
         diffs: &[D::MissingSite, D::Order],
-        reason: "implied `root.usd /_class_A1` ranks after `ref.usd /A1`; `/Root/B/C` misses variants of ancestral sites",
-    },
-    Known {
-        fixture: "TrickyVariantInPayload_root",
-        causes: &[C::NestedArcDepth],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "`model.usd /A/B` ranks before `model.usd /B{v=v2}`: the variant of a payload target sorts after the payload's ancestral site",
+        reason: "`/Root/B/C` misses the variants of its ancestral sites, and ranks `ref2.usd /C{v2=Z}` before `{v1=C}`",
     },
     Known {
         fixture: "TrickyVariantIndependentSelection_root",
-        causes: &[C::NestedArcDepth, C::VariantSpecs, C::DuplicateSources],
+        causes: &[C::VariantSpecs, C::VariantSetOrder],
         prims: 1,
         props: 0,
         values: 0,
-        diffs: &[D::MissingSite, D::ExtraRepeat, D::Order],
-        reason: "variant branches of three references to `ref.usd` interleave and repeat",
+        diffs: &[D::MissingSite, D::Order],
+        reason: "`/Model` misses the `transformVariant` branches of the weaker references to `ref.usd`, and ranks `{pin=test}` before `{transformVariant=a}`",
     },
     Known {
         fixture: "TrickyVariantOverrideOfRelocatedPrim_root",
@@ -1328,15 +1198,6 @@ const KNOWN: &[Known] = &[
         values: 0,
         diffs: &[D::ExtraPrim, D::MissingSite],
         reason: "ignores `</Model/UnrelocatedSphere>` -> `</Model/RelocatedSphere>` authored in `root.usd`",
-    },
-    Known {
-        fixture: "TrickyVariantSelectionInVariant_root",
-        causes: &[C::NestedArcDepth],
-        prims: 3,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "`/SlugJ` ranks the variant branches of `SlugJ_shaderDisplayDefs.usd /ShaderBindingVariants` before that layer's `/SlugJ`",
     },
     Known {
         fixture: "TypicalReferenceToChargroupWithRename_root",
@@ -1353,17 +1214,17 @@ const KNOWN: &[Known] = &[
         prims: 2,
         props: 2,
         values: 1,
-        diffs: &[D::MissingPrim, D::MissingSite, D::ExtraSite, D::Order],
+        diffs: &[D::MissingPrim, D::MissingSite, D::ExtraSite],
         reason: "implied `root.usd /Class` selects `pin=latest` in OpenUSD; here `mcat.usd`'s `pin=stable` wins",
     },
     Known {
         fixture: "VariantSpecializesAndReferenceSurprisingBehavior_root",
         causes: &[C::SpecializesPlacement],
-        prims: 3,
-        props: 2,
-        values: 2,
-        diffs: &[D::MissingSite, D::Order],
-        reason: "`/Model` ranks `/Model_defaultShadingVariant` before `/New_Shading_Variant`, so `Material.myInt` is 0, not 1",
+        prims: 1,
+        props: 1,
+        values: 1,
+        diffs: &[D::MissingSite],
+        reason: "`/Model/Material_Child` misses the specializes site `root.usd /Model_defaultShadingVariant/Material`, so `myInt` is 1, not 0",
     },
     Known {
         fixture: "VariantSpecializesAndReference_root",

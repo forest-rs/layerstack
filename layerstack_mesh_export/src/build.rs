@@ -9,20 +9,33 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use layerstack_usda::writer::{
-    Attribute, Document, ListOp, Metadatum, Prim, Property, Relationship, Value,
+    Attribute, Document, LayerOffset, ListOp, Metadatum, Prim, Property, Reference, Relationship,
+    Specifier, Value,
 };
 
 use crate::{
-    CustomAttribute, ExportError, Faces, FamilyType, INSTANCE_NAMES, Interpolation,
-    MATERIALS_SCOPE, Material, MaterialSubset, Mesh, MeshProblem, Node, Orientation,
+    CustomAttribute, ExportError, Faces, FamilyType, INSTANCE_NAMES, Instance, InstancerProblem,
+    Interpolation, MATERIALS_SCOPE, Material, MaterialSubset, Mesh, MeshProblem, Node, Orientation,
     PROTOTYPES_SCOPE, PointInstancer, Primvar, PrimvarData, Scene, Transform, UpAxis, Xform,
 };
 
-/// What mesh prims need to know about the scene's materials.
-struct Materials<'s, 'a> {
-    defined: &'s [Material<'a>],
+/// What prims need to know about the rest of the scene.
+struct Context<'s, 'a> {
+    /// The scene's materials, which meshes bind by name.
+    materials: &'s [Material<'a>],
     /// Prim path of the materials scope.
-    scope: String,
+    materials_scope: String,
+    /// The scene's shared prototypes, which instances place by name.
+    prototypes: &'s [Node<'a>],
+    /// Prim path of the shared prototypes' `class` prim.
+    prototypes_scope: String,
+}
+
+impl Context<'_, '_> {
+    /// The shared prototype named `name`, if the scene defines one.
+    fn prototype(&self, name: &str) -> Option<&Node<'_>> {
+        self.prototypes.iter().find(|p| p.name() == name)
+    }
 }
 
 pub(crate) fn document(scene: &Scene<'_>) -> Result<Document, ExportError> {
@@ -38,20 +51,36 @@ pub(crate) fn document(scene: &Scene<'_>) -> Result<Document, ExportError> {
         UpAxis::Y => "Y",
         UpAxis::Z => "Z",
     };
-    let materials = Materials {
-        defined: &scene.materials,
-        scope: format!("/{}/{MATERIALS_SCOPE}", scene.root.name),
+    let cx = Context {
+        materials: &scene.materials,
+        materials_scope: format!("/{}/{MATERIALS_SCOPE}", scene.root.name),
+        prototypes: &scene.prototypes,
+        prototypes_scope: format!("/{}/{PROTOTYPES_SCOPE}", scene.root.name),
     };
+    check_prototype_cycles(&cx)?;
     // Materials live inside the root prim, so the `defaultPrim` carries
     // them into any referencing stage and bindings never point outside
     // the asset.
     let mut scope = Prim::def("Scope", MATERIALS_SCOPE);
     for material in &scene.materials {
-        scope
-            .children
-            .push(crate::shading::material_prim(material, &materials.scope)?);
+        scope.children.push(crate::shading::material_prim(
+            material,
+            &cx.materials_scope,
+        )?);
     }
-    let mut root = xform_prim(&scene.root, "", &materials)?;
+    let mut root = xform_prim(&scene.root, "", &cx)?;
+    // Shared prototypes live in one `class` prim inside the root, for the
+    // same reason; being abstract, they are not drawn there (AOUSD Core
+    // §7.6, §12.2.1), only through the instances that reference them.
+    if !scene.prototypes.is_empty() {
+        let mut class = Prim::new(Specifier::Class, None, PROTOTYPES_SCOPE);
+        for prototype in &scene.prototypes {
+            class
+                .children
+                .push(node_prim(prototype, &cx.prototypes_scope, &cx)?);
+        }
+        root.children.push(class);
+    }
     if !scope.children.is_empty() {
         root.children.push(scope);
     }
@@ -67,11 +96,46 @@ pub(crate) fn document(scene: &Scene<'_>) -> Result<Document, ExportError> {
     })
 }
 
-fn xform_prim(
-    xform: &Xform<'_>,
-    parent: &str,
-    materials: &Materials<'_, '_>,
-) -> Result<Prim, ExportError> {
+/// Rejects shared prototypes that place themselves, directly or through
+/// other shared prototypes: the references would form a cycle, which
+/// composition rejects (AOUSD Core §10.3.2.1).
+fn check_prototype_cycles(cx: &Context<'_, '_>) -> Result<(), ExportError> {
+    fn visit<'n>(
+        node: &'n Node<'_>,
+        cx: &'n Context<'_, '_>,
+        stack: &mut Vec<&'n str>,
+    ) -> Result<(), ExportError> {
+        let children: &[Node<'_>] = match node {
+            Node::Xform(x) => &x.children,
+            Node::PointInstancer(p) => &p.prototypes,
+            Node::Mesh(_) => &[],
+            Node::Instance(instance) => {
+                let name = &*instance.prototype;
+                if stack.contains(&name) {
+                    return Err(ExportError::PrototypeCycle {
+                        prototype: name.into(),
+                    });
+                }
+                // Unknown names are reported where the instance is written.
+                if let Some(prototype) = cx.prototype(name) {
+                    stack.push(name);
+                    visit(prototype, cx, stack)?;
+                    stack.pop();
+                }
+                return Ok(());
+            }
+        };
+        children
+            .iter()
+            .try_for_each(|child| visit(child, cx, stack))
+    }
+    for prototype in cx.prototypes {
+        visit(prototype, cx, &mut vec![prototype.name()])?;
+    }
+    Ok(())
+}
+
+fn xform_prim(xform: &Xform<'_>, parent: &str, cx: &Context<'_, '_>) -> Result<Prim, ExportError> {
     let path = format!("{parent}/{}", xform.name);
     let mut prim = Prim::def("Xform", &*xform.name);
     if let Some(kind) = &xform.kind {
@@ -84,20 +148,99 @@ fn xform_prim(
     prim.properties
         .extend(attrs.into_iter().map(Property::Attribute));
     for child in &xform.children {
-        prim.children.push(node_prim(child, &path, materials)?);
+        prim.children.push(node_prim(child, &path, cx)?);
     }
     Ok(prim)
 }
 
-fn node_prim(
-    node: &Node<'_>,
-    parent: &str,
-    materials: &Materials<'_, '_>,
-) -> Result<Prim, ExportError> {
+fn node_prim(node: &Node<'_>, parent: &str, cx: &Context<'_, '_>) -> Result<Prim, ExportError> {
     match node {
-        Node::Xform(x) => xform_prim(x, parent, materials),
-        Node::Mesh(m) => mesh_prim(m, parent, materials),
-        Node::PointInstancer(p) => instancer_prim(p, parent, materials),
+        Node::Xform(x) => xform_prim(x, parent, cx),
+        Node::Mesh(m) => mesh_prim(m, parent, cx),
+        Node::PointInstancer(p) => instancer_prim(p, parent, cx),
+        Node::Instance(i) => instance_prim(i, parent, cx),
+    }
+}
+
+/// An [`Instance`]: a typeless, instanceable prim with an internal
+/// reference to a shared prototype (AOUSD Core §10.3.2.1, §11.3.3). Its
+/// transform, when given, is authored after the prototype root's own.
+fn instance_prim(
+    instance: &Instance<'_>,
+    parent: &str,
+    cx: &Context<'_, '_>,
+) -> Result<Prim, ExportError> {
+    let path = format!("{parent}/{}", instance.name);
+    let prototype =
+        cx.prototype(&instance.prototype)
+            .ok_or_else(|| ExportError::UnknownPrototype {
+                path: path.clone(),
+                prototype: instance.prototype.to_string(),
+            })?;
+    for primvar in &instance.primvars {
+        crate::instancer::check_primvar(primvar, 1)
+            .and_then(|()| {
+                if primvar.primvar.interpolation == Interpolation::Constant {
+                    Ok(())
+                } else {
+                    Err(InstancerProblem::PrimvarInterpolation {
+                        name: format!("primvars:{}", primvar.name),
+                        interpolation: primvar.primvar.interpolation,
+                    })
+                }
+            })
+            .map_err(|problem| ExportError::InvalidInstancer {
+                path: path.clone(),
+                problem,
+            })?;
+    }
+    let transform = instance.transform.map(|t| then(prototype.transform(), t));
+    let mut attrs = Vec::new();
+    for custom in &instance.primvars {
+        push_primvar_unchecked(
+            &mut attrs,
+            &format!("primvars:{}", custom.name),
+            &custom.primvar,
+        );
+    }
+    push_transform(&mut attrs, transform);
+    push_custom(&mut attrs, &instance.attributes);
+    Ok(reference_prim(
+        &instance.name,
+        format!("{}/{}", cx.prototypes_scope, instance.prototype),
+        attrs,
+    ))
+}
+
+/// A typeless `def` prim named `name`, marked `instanceable`, with one
+/// internal reference to `target` and the attributes `attrs`. Its type
+/// comes through the reference: a type of its own (such as `Xform`) would
+/// be stronger than the prototype's `Mesh` and hide its geometry.
+fn reference_prim(name: &str, target: String, attrs: Vec<Attribute>) -> Prim {
+    let mut prim = Prim::new(Specifier::Def, None, name);
+    prim.metadata
+        .push(Metadatum::new("instanceable", Value::Bool(true)));
+    prim.references = Some(ListOp::prepend(vec![Reference {
+        asset: None,
+        prim_path: Some(target),
+        offset: LayerOffset::default(),
+    }]));
+    prim.properties
+        .extend(attrs.into_iter().map(Property::Attribute));
+    prim
+}
+
+/// `first` followed by `second` (row vectors: `first · second`), where
+/// `first` may be absent.
+fn then(first: Option<Transform>, second: Transform) -> Transform {
+    match first {
+        None => second,
+        Some(first) => {
+            let (a, b) = (first.usd_rows(), second.usd_rows());
+            Transform::from_usd_rows(core::array::from_fn(|i| {
+                core::array::from_fn(|j| (0..4).map(|k| a[i][k] * b[k][j]).sum())
+            }))
+        }
     }
 }
 
@@ -107,7 +250,7 @@ fn node_prim(
 fn instancer_prim(
     instancer: &PointInstancer<'_>,
     parent: &str,
-    materials: &Materials<'_, '_>,
+    cx: &Context<'_, '_>,
 ) -> Result<Prim, ExportError> {
     let path = format!("{parent}/{}", instancer.name);
     let checked =
@@ -119,15 +262,13 @@ fn instancer_prim(
     let mut scope = Prim::def("Scope", PROTOTYPES_SCOPE);
     let mut targets = Vec::with_capacity(instancer.prototypes.len());
     for prototype in &instancer.prototypes {
-        scope
-            .children
-            .push(node_prim(prototype, &scope_path, materials)?);
+        scope.children.push(node_prim(prototype, &scope_path, cx)?);
         targets.push(format!("{scope_path}/{}", prototype.name()));
     }
 
     let mut attrs = Vec::new();
     // Prototype bounds come from the validated meshes built above.
-    if let Some([lo, hi]) = crate::instancer::extent(instancer, &checked) {
+    if let Some([lo, hi]) = crate::instancer::extent(instancer, &checked, cx.prototypes) {
         #[allow(
             clippy::cast_possible_truncation,
             reason = "`extent` is `float3[]`; OpenUSD rounds its double range the same way"
@@ -244,11 +385,7 @@ impl Sites {
     }
 }
 
-fn mesh_prim(
-    mesh: &Mesh<'_>,
-    parent: &str,
-    materials: &Materials<'_, '_>,
-) -> Result<Prim, ExportError> {
+fn mesh_prim(mesh: &Mesh<'_>, parent: &str, cx: &Context<'_, '_>) -> Result<Prim, ExportError> {
     let path = format!("{parent}/{}", mesh.name);
     let fail = |problem| ExportError::InvalidMesh {
         path: path.clone(),
@@ -371,7 +508,7 @@ fn mesh_prim(
     let binding = mesh
         .material
         .as_deref()
-        .map(|name| material_binding(mesh, &path, &path, name, materials))
+        .map(|name| material_binding(mesh, &path, &path, name, cx))
         .transpose()?;
     if !mesh.material_subsets.is_empty() {
         check_family(&mesh.material_subsets, mesh.subset_family, sites.faces).map_err(fail)?;
@@ -387,7 +524,7 @@ fn mesh_prim(
         );
         for subset in &mesh.material_subsets {
             let subset_path = format!("{path}/{}", subset.name);
-            let binding = material_binding(mesh, &path, &subset_path, &subset.material, materials)?;
+            let binding = material_binding(mesh, &path, &subset_path, &subset.material, cx)?;
             prim.children
                 .push(subset_prim(subset, binding).map_err(fail)?);
         }
@@ -463,10 +600,10 @@ fn material_binding(
     mesh_path: &str,
     binding_path: &str,
     name: &str,
-    materials: &Materials<'_, '_>,
+    cx: &Context<'_, '_>,
 ) -> Result<String, ExportError> {
-    let material = materials
-        .defined
+    let material = cx
+        .materials
         .iter()
         .find(|m| m.name == name)
         .ok_or_else(|| ExportError::UnknownMaterial {
@@ -492,7 +629,7 @@ fn material_binding(
             },
         });
     }
-    Ok(format!("{}/{name}", materials.scope))
+    Ok(format!("{}/{name}", cx.materials_scope))
 }
 
 /// A direct, all-purpose binding at the default strength: the

@@ -1,0 +1,35 @@
+#usda 1.0
+
+def "Values"
+{
+    bool bool = 1
+    bool[] boolArray = [1, 0]
+    color4f color4f = (1, 0, 0, 1)
+    double double = 1e-300
+    float float = 0.1
+    frame4d frame4d = ( (1, 2, 3, 4), (5, 6, 7, 8), (9, 10, 11, 12), (13, 14, 15, 16) )
+    frame4d[] frame4dArray = [( (3, 0, 0, 0), (0, 3, 0, 0), (0, 0, 3, 0), (0, 0, 0, 3) )]
+    half half = 0.5
+    half4 half4 = (1, 2, 3, 4)
+    int int = -7
+    int3 int3 = (1, 2, 3)
+    int64 int64 = -9000000000
+    int64[] int64Array = [-1, 9000000000]
+    matrix2d matrix2d = ( (1, 2), (3, 4) )
+    matrix3d matrix3d = ( (1, 0, 0), (0, 1, 0), (0, 0, 1) )
+    matrix4d matrix4d = ( (2, 0, 0, 0), (0, 2, 0, 0), (0, 0, 2, 0), (0, 0, 0, 2) )
+    normal3d normal3d = (0, 0, 1)
+    pathExpression pathExpression = "/a/b //c"
+    point3f point3f = (1, 2, 3)
+    quatd quatd = (0, 1, 0, 0)
+    quatf quatf = (0.5, 0.5, 0.5, 0.5)
+    quath quath = (1, 0, 0, 0)
+    texCoord3h texCoord3h = (0, 1, 0)
+    timecode timecode = 3.5
+    timecode[] timecodeArray = [1, 2.5]
+    token[] tokenArray = ["x", "y"]
+    uint uint = 4000000000
+    uint64 uint64 = 9000000000000000000
+    uint[] uintArray = [1, 4000000000]
+}
+

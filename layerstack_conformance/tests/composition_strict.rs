@@ -67,8 +67,7 @@
 //! - One site per arc path ([`Cause::CollapsedNodes`]).
 //! - Variant selections of the sites ancestral arcs reach, made before the
 //!   prim's index is complete ([`Cause::AncestralArcs`]),
-//!   some nested variant specs ([`Cause::VariantSpecs`]), conflicting
-//!   property spec types ([`Cause::PropertyTypeConflict`]), asset-path
+//!   some nested variant specs ([`Cause::VariantSpecs`]), asset-path
 //!   expressions ([`Cause::ExpressionVariables`]) and variant fallbacks
 //!   ([`Cause::FallbackVariants`]).
 //!
@@ -518,9 +517,6 @@ enum Cause {
     /// [`layerstack::VariantSpec`]s, and a branch selected only through
     /// another arc is not composed at every site hosting it.
     VariantSpecs,
-    /// A property spec whose type conflicts with the defining spec is kept;
-    /// OpenUSD ignores it.
-    PropertyTypeConflict,
 
     // Unsupported features.
     /// Relocates (AOUSD Core §10.3.2.6) move a prim's ancestral opinions
@@ -611,15 +607,6 @@ const KNOWN: &[Known] = &[
         values: 0,
         diffs: &[D::MissingRepeat],
         reason: "`C.usd /C` is reached through `A` and `B` but listed once",
-    },
-    Known {
-        fixture: "ErrorInconsistentProperties_root",
-        causes: &[C::PropertyTypeConflict],
-        prims: 0,
-        props: 1,
-        values: 0,
-        diffs: &[D::ExtraSite],
-        reason: "the relationship `ref.usd /InconsistentPropType.x` stays in the stack of the attribute `x`",
     },
     Known {
         fixture: "ErrorInvalidReferenceToRelocationSource_root",

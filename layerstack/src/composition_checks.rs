@@ -11,14 +11,16 @@
 //!
 //! Spec: AOUSD Core §10.6 (composition errors).
 
+use alloc::vec::Vec;
+
 use hashbrown::HashMap;
 
 use crate::{
     arc_cycle::CycleDetector,
-    composition_error::{CompositionError, UnresolvedPrimPath},
+    composition_error::{CompositionError, InconsistentPropertyType, UnresolvedPrimPath},
     doc::{LayerStore, Reference, ReferenceTarget},
     path::PathId,
-    prim_index::{ArcKind, PrimIndex},
+    prim_index::{ArcKind, FieldKey, OpinionKey, PrimIndex},
 };
 
 /// Checks that a reference or payload followed while composing `prim`
@@ -85,15 +87,77 @@ impl TargetSpecsCheck {
     }
 }
 
+/// Drops each property spec of `prim`'s index whose kind differs from the
+/// kind of the property's strongest spec, reporting
+/// [`InconsistentPropertyType`] for each. `index` must be ranked
+/// ([`PrimIndex::finalize`]).
+///
+/// Spec: AOUSD Core §7.6.3, §10.6. OpenUSD: `_GetPrimProperty` in
+/// `pxr/usd/pcp/propertyIndex.cpp` ignores a spec whose `SdfSpecType`
+/// differs from the first spec's. Attribute type and variability mismatches
+/// are not checked: OpenUSD ignores them in USD mode.
+pub(crate) fn drop_inconsistent_property_kinds(
+    prim: PathId,
+    index: &mut PrimIndex,
+    cycles: &mut CycleDetector,
+) {
+    for (field, opinions) in &mut index.opinions_by_field {
+        let FieldKey::Property(property) = *field else {
+            continue;
+        };
+        let mut specs = opinions.iter().filter_map(|opinion| {
+            opinion
+                .value
+                .as_property()
+                .map(|spec| (&opinion.key, spec.kind))
+        });
+        let Some((defining, defining_kind)) = specs.next() else {
+            continue;
+        };
+        let conflicting: Vec<OpinionKey> = specs
+            .filter(|(_, kind)| *kind != defining_kind)
+            .map(|(key, _)| key.clone())
+            .collect();
+        for key in &conflicting {
+            cycles.report(CompositionError::InconsistentPropertyType(
+                InconsistentPropertyType {
+                    prim,
+                    property,
+                    defining_layer: defining.layer_id,
+                    defining_spec: defining.spec_path.clone(),
+                    defining_kind,
+                    conflicting_layer: key.layer_id,
+                    conflicting_spec: key.spec_path.clone(),
+                },
+            ));
+        }
+        if conflicting.is_empty() {
+            continue;
+        }
+        opinions.retain(|opinion| {
+            opinion.value.as_property().is_none() || !conflicting.contains(&opinion.key)
+        });
+        if let Some(declarations) = index.property_types_by_field.get_mut(&property) {
+            declarations.retain(|(key, _)| !conflicting.contains(key));
+        }
+    }
+    index
+        .property_types_by_field
+        .retain(|_, declarations| !declarations.is_empty());
+}
+
 #[cfg(test)]
 mod tests {
     use alloc::{vec, vec::Vec};
 
     use crate::{
-        composition_error::{CompositionError, UnresolvedPrimPath},
-        doc::{InMemoryStore, Layer, LayerId, PrimSpec, Reference},
+        composition_error::{CompositionError, InconsistentPropertyType, UnresolvedPrimPath},
+        doc::{InMemoryStore, Layer, LayerId, PrimSpec, Reference, Value},
         listop::ListOp,
+        path::{PropertyPath, TargetPath},
         prim_index::ArcKind,
+        property::{PropertyKind, PropertySpec},
+        spec_path::SpecPath,
         stage::{Stage, StageOptions},
     };
 
@@ -164,5 +228,94 @@ mod tests {
             .map(|key| key.lookup_path)
             .collect();
         assert_eq!(sites, [stone, pebble]);
+    }
+
+    /// Spec: AOUSD Core §7.6.3, §10.6; OpenUSD ignores a weaker spec of the
+    /// other kind and reports `PcpErrorInconsistentPropertyType`.
+    #[test]
+    fn weaker_spec_of_the_other_kind_is_dropped() {
+        let mut store = InMemoryStore::default();
+        let (lantern, lamp) = (store.path("/Lantern"), store.path("/Lamp"));
+        let (glow, wick) = (store.tokens.intern("glow"), store.tokens.intern("wick"));
+        let mut root = Layer::new(ROOT);
+        let mut lantern_spec = PrimSpec::def()
+            .with_property(glow, PropertySpec::attribute().with_default(Value::Int(1)))
+            .with_property(
+                wick,
+                PropertySpec::relationship().with_targets(ListOp {
+                    explicit: Some(vec![TargetPath::Prim(lamp)]),
+                    ..ListOp::default()
+                }),
+            );
+        lantern_spec.references = ListOp {
+            explicit: Some(vec![Reference::with_asset(ASSET, lamp, "lamp.usda")]),
+            ..ListOp::default()
+        };
+        root.insert_prim(lantern, lantern_spec);
+        store.insert_layer(root);
+        let mut asset = Layer::new(ASSET);
+        asset.insert_prim(
+            lamp,
+            PrimSpec::def()
+                .with_property(glow, PropertySpec::relationship())
+                .with_property(wick, PropertySpec::attribute().with_default(Value::Int(4))),
+        );
+        store.insert_layer(asset);
+
+        let stage = Stage::compose(
+            &mut store,
+            ROOT,
+            StageOptions {
+                with_provenance: true,
+                ..StageOptions::default()
+            },
+        );
+        let stack = |name| -> Vec<_> {
+            stage
+                .explain_property_path(PropertyPath::new(lantern, name))
+                .expect("composed property")
+                .iter()
+                .map(|opinion| opinion.key.layer_id)
+                .collect()
+        };
+        assert_eq!(stack(glow), [ROOT]);
+        assert_eq!(stack(wick), [ROOT]);
+        assert_eq!(
+            stage
+                .resolve_property_declaration(lantern, wick)
+                .map(|d| d.kind),
+            Some(PropertyKind::Relationship)
+        );
+        let lantern_spec =
+            |name| SpecPath::from_prim_path(lantern, &store.paths).with_property(name);
+        let lamp_spec = |name| SpecPath::from_prim_path(lamp, &store.paths).with_property(name);
+        let mut errors = stage.composition_errors().to_vec();
+        errors.sort_by_key(|error| match error {
+            CompositionError::InconsistentPropertyType(error) => error.defining_kind as u8,
+            _ => u8::MAX,
+        });
+        assert_eq!(
+            errors,
+            [
+                CompositionError::InconsistentPropertyType(InconsistentPropertyType {
+                    prim: lantern,
+                    property: glow,
+                    defining_layer: ROOT,
+                    defining_spec: lantern_spec(glow),
+                    defining_kind: PropertyKind::Attribute,
+                    conflicting_layer: ASSET,
+                    conflicting_spec: lamp_spec(glow),
+                }),
+                CompositionError::InconsistentPropertyType(InconsistentPropertyType {
+                    prim: lantern,
+                    property: wick,
+                    defining_layer: ROOT,
+                    defining_spec: lantern_spec(wick),
+                    defining_kind: PropertyKind::Relationship,
+                    conflicting_layer: ASSET,
+                    conflicting_spec: lamp_spec(wick),
+                }),
+            ]
+        );
     }
 }

@@ -316,6 +316,9 @@ impl<'a> Parser<'a> {
                 break;
             }
 
+            if self.eat_statement_separator() {
+                continue;
+            }
             if self.peek() == Some(TokenKind::Ident) && self.current_text() == "subLayers" {
                 self.parse_sublayers_metadata();
             } else if self.peek() == Some(TokenKind::Ident) && self.current_text() == "relocates" {
@@ -516,6 +519,9 @@ impl<'a> Parser<'a> {
                 break;
             }
 
+            if self.eat_statement_separator() {
+                continue;
+            }
             self.parse_prim_meta_entry();
         }
 
@@ -808,6 +814,9 @@ impl<'a> Parser<'a> {
                 break;
             }
 
+            if self.eat_statement_separator() {
+                continue;
+            }
             if self.peek() == Some(TokenKind::Ident)
                 && matches!(self.current_text(), "def" | "over" | "class")
             {
@@ -1128,6 +1137,9 @@ impl<'a> Parser<'a> {
             if self.peek() == Some(TokenKind::RightParen) || self.current().is_none() {
                 break;
             }
+            if self.eat_statement_separator() {
+                continue;
+            }
             let entry_start = self.current_span().start;
             self.builder
                 .start_node(SyntaxKind::MetadataEntry, entry_start);
@@ -1417,6 +1429,17 @@ impl<'a> Parser<'a> {
         self.expect(TokenKind::RightBracket);
         let end = self.current_span().start;
         self.builder.finish_node(end);
+    }
+
+    /// Consumes a `;` statement separator, which may stand in for a line
+    /// break between metadata entries and prim body statements (AOUSD Core
+    /// §16.2.10; OpenUSD's `StatementSeparator`).
+    fn eat_statement_separator(&mut self) -> bool {
+        let semicolon = self.peek() == Some(TokenKind::Semicolon);
+        if semicolon {
+            self.bump();
+        }
+        semicolon
     }
 
     /// Consumes trivia, returning whether it included a line break.
@@ -1835,6 +1858,26 @@ mod tests {
         ] {
             assert_ne!(array_edit_diagnostics(rejected), 0, "{rejected}");
         }
+    }
+
+    /// `;` separates statements as a line break does (AOUSD Core §16.2.10),
+    /// as in the supplemental corpus's `primmetadata.usda` and `BasicOwner`.
+    /// OpenUSD 26.08 reads this text to the same specs.
+    #[test]
+    fn semicolons_separate_statements() {
+        let src = "#usda 1.0\n(\n    owner = \"foo\"; startTimeCode = 1\n)\n\nover \"Sphere\" (\n    \
+                   kind = \"component\"; displayName = \"d\";\n)\n{\n    double radius = 999; \
+                   double b = 1 (hidden = true; doc = \"x\")\n}\n";
+        let result = parse(src);
+        assert!(result.diagnostics.is_empty(), "{:?}", result.diagnostics);
+        assert_eq!(result.layer.metadata.len(), 2);
+        assert_eq!(result.layer.prims[0].metadata.len(), 2);
+        let children = &result.layer.prims[0].children;
+        assert_eq!(children.len(), 2, "{children:?}");
+        let PrimChild::Attribute(b) = &children[1] else {
+            panic!("expected an attribute");
+        };
+        assert_eq!(b.metadata.len(), 2);
     }
 
     #[test]

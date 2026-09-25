@@ -127,6 +127,52 @@ DIVERGENCES = {
             "time samples can be blocked)"
         ),
     },
+    "sampled-block-drops-fallback": {
+        "openusd": "0.26.8",
+        "openusd_behavior": (
+            "A held sampled block resolves to no value, even where the "
+            "attribute has a schema fallback, and sparse edits stronger than "
+            "it compose over the empty array. A default block continues to "
+            "the fallback instead, for both."
+        ),
+        "openusd_source": (
+            "pxr/usd/usd/stage.cpp:9094 (`ProcessLayerAtTime` sends a default "
+            "block to `ProcessFallback`; time samples never reach it), :8066 "
+            "(edits compose over `VtBackground`) and :8078 "
+            "(`Usd_ClearValueIfBlocked`)"
+        ),
+        "layerstack": (
+            "Treats a sampled block like a default block: the schema-aware "
+            "query resolves the fallback, and stronger edits compose over it."
+        ),
+        "authority": (
+            "AOUSD Core 12.3.6 (a blocked strongest opinion resolves to the "
+            "fallback, at any time) and 16.2.16.3 (blocked time samples have "
+            "the same semantics as a blocked default)"
+        ),
+    },
+    "default-time-block-hides-fallback": {
+        "openusd": "0.26.8",
+        "openusd_behavior": (
+            "At the default time, a strongest default block resolves to no "
+            "value even where the attribute has a schema fallback, although "
+            "the resolve info names the fallback as its source and every "
+            "numeric time resolves the fallback."
+        ),
+        "openusd_source": (
+            "pxr/usd/usd/stage.cpp:7262 and :7272 "
+            "(`Usd_AttrGetValueHelper::GetValue` reads the strongest `default` "
+            "field and clears a block without consulting the fallback), while "
+            ":9173 (`ProcessLayerAtDefault`) resolves to the fallback source"
+        ),
+        "layerstack": "Resolves the schema fallback, as at numeric times.",
+        "authority": (
+            "AOUSD Core 12.3.6 (if the strongest opinion is blocked and a "
+            "fallback is available, the fallback is returned) and 16.2.16.2 "
+            "(`None` skips authored weaker opinions and resolves only to the "
+            "fallback)"
+        ),
+    },
 }
 
 HEADER = "#usda 1.0\n"
@@ -152,12 +198,17 @@ CASES = []
 
 
 def case(name, description, layers, queries, divergences=None,
-         flatten_equivalent=True, flatten_note=None):
+         flatten_equivalent=True, flatten_note=None, schema=None):
     """Registers a case.
 
     `queries` maps an attribute path to its query times (None is the default
     time). `divergences` maps (attribute, time, interp) to
     (expected value, DIVERGENCES key); interp None covers both modes.
+
+    `schema` names a concrete prim type whose attribute fallbacks the case
+    relies on, as `(type name, attribute names)`. The case then records the
+    fallbacks from OpenUSD's schema registry, and layerstack resolves its
+    queries with the same fallbacks through its schema-aware queries.
     """
     CASES.append({
         "name": name,
@@ -167,6 +218,7 @@ def case(name, description, layers, queries, divergences=None,
         "divergences": divergences or {},
         "flatten_equivalent": flatten_equivalent,
         "flatten_note": flatten_note,
+        "schema": schema,
     })
 
 
@@ -915,6 +967,132 @@ exact_case(
     ulps=4,
 )
 
+# -- Schema fallbacks at a time -------------------------------------------------------
+#
+# `Cube` declares `float3[] extent = [(-1, -1, -1), (1, 1, 1)]` and
+# `double size = 2`. Layerstack resolves these cases through
+# `Stage::resolve_value_at_time_with_schema` (and `resolve_field_with_schema`
+# at the default time).
+
+CUBE = ("Cube", ("extent", "size"))
+FALLBACK_EXTENT = [[-1.0, -1.0, -1.0], [1.0, 1.0, 1.0]]
+
+case(
+    "schema_fallback_only",
+    "Nothing authored, or a spec without a value, resolves the schema "
+    "fallback at every time.",
+    {
+        "root.usda": layer(
+            prim("def Cube", "A"),
+            prim("def Cube", "B",
+                 'double size (\n        customData = { string note = "no value" }\n    )',
+                 'float3[] extent (\n        customData = { string note = "no value" }\n    )'),
+        ),
+    },
+    {attr: [None, -1, 0, 1] for attr in ("/A.extent", "/A.size", "/B.extent", "/B.size")},
+    schema=CUBE,
+)
+
+case(
+    "schema_sparse_samples_over_fallback",
+    "Time-sampled sparse edits compose over the schema fallback; arrays of "
+    "different sizes hold.",
+    {
+        "root.usda": layer(prim(
+            "def Cube", "A",
+            "float3[] extent.timeSamples = { 1: edit (write (0, 0, 0) to [0]), "
+            "3: edit (append (5, 5, 5)) }")),
+    },
+    {"/A.extent": [None, 0, 1, 2, 3, 4]},
+    divergences={
+        ("/A.extent", 0, None): ([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]],
+                                 "nan-before-first-sample"),
+    },
+    schema=CUBE,
+)
+
+case(
+    "schema_default_block",
+    "A default block discards weaker opinions; stronger sampled edits compose "
+    "over the schema fallback, and with nothing stronger the fallback "
+    "resolves.",
+    {
+        "root.usda": sublayers("@strong.usda@", "@mid.usda@", "@weak.usda@"),
+        "strong.usda": layer(prim("over", "A",
+                                  "float3[] extent.timeSamples = { 1: edit (append (5, 5, 5)) }")),
+        "mid.usda": layer(prim("over", "A", "float3[] extent = None", "double size = None")),
+        "weak.usda": layer(prim("def Cube", "A",
+                                "float3[] extent = [(2, 2, 2)]", "double size = 5")),
+    },
+    {"/A.extent": [None, 0, 1, 2], "/A.size": [None, 0, 1]},
+    divergences={
+        ("/A.extent", None, None): (FALLBACK_EXTENT, "default-time-block-hides-fallback"),
+        ("/A.extent", 0, None): (FALLBACK_EXTENT + [[5.0, 5.0, 5.0]],
+                                 "nan-before-first-sample"),
+        ("/A.size", None, None): (2.0, "default-time-block-hides-fallback"),
+    },
+    flatten_equivalent=False,
+    flatten_note="Flattening writes the block as the default next to the "
+                 "samples; layerstack's layer model keeps one of the two.",
+    schema=CUBE,
+)
+
+case(
+    "schema_sampled_block",
+    "A held sampled block resolves the schema fallback, and stronger sparse "
+    "edits compose over the fallback, as over a default block.",
+    {
+        "root.usda": sublayers("@strong.usda@", "@mid.usda@", "@weak.usda@"),
+        "strong.usda": layer(prim("over", "A",
+                                  "float3[] extent.timeSamples = { 1: edit (append (5, 5, 5)) }")),
+        "mid.usda": layer(prim("over", "A",
+                               "float3[] extent.timeSamples = { 0: None, 2: [(3, 3, 3)] }")),
+        "weak.usda": layer(
+            prim("def Cube", "A", "float3[] extent = [(2, 2, 2)]"),
+            prim("def Cube", "B",
+                 "float3[] extent.timeSamples = { 0: [(1, 2, 3)], 2: None, 4: [(4, 4, 4)] }",
+                 "double size.timeSamples = { 0: 1, 2: None, 4: 4 }"),
+        ),
+    },
+    {"/A.extent": [None, 0, 1, 1.5, 2, 3],
+     "/B.extent": [None, 0, 1, 2, 3, 4],
+     "/B.size": [None, 0, 1, 2, 3, 4]},
+    divergences={
+        **{("/A.extent", t, None): (FALLBACK_EXTENT + [[5.0, 5.0, 5.0]],
+                                    "sampled-block-drops-fallback")
+           for t in (0, 1, 1.5)},
+        **{("/B.extent", t, None): (FALLBACK_EXTENT, "sampled-block-drops-fallback")
+           for t in (2, 3)},
+        **{("/B.size", t, None): (2.0, "sampled-block-drops-fallback")
+           for t in (2, 3)},
+    },
+    flatten_equivalent=False,
+    flatten_note="Flattening composes the edit over the sampled block into a "
+                 "dense sample, which no longer sees the fallback.",
+    schema=CUBE,
+)
+
+case(
+    "schema_samples_behind_layer_offset",
+    "Sparse edits over the schema fallback and scalar samples behind a "
+    "sublayer offset and scale.",
+    {
+        "root.usda": sublayers("@anim.usda@ (offset = 10; scale = 2)")
+        + "\n" + prim("def Cube", "A"),
+        "anim.usda": layer(prim(
+            "over", "A",
+            "float3[] extent.timeSamples = { 0: edit (write (0, 0, 0) to [0]), "
+            "1: edit (write (4, 4, 4) to [0]) }",
+            "double size.timeSamples = { 0: 1, 1: 3 }")),
+    },
+    {"/A.extent": [None, 9, 10, 11, 12, 13], "/A.size": [None, 9, 10, 11, 12, 13]},
+    divergences={
+        ("/A.extent", 9, None): ([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]],
+                                 "nan-before-first-sample"),
+    },
+    schema=CUBE,
+)
+
 
 # -- Driver ------------------------------------------------------------------------
 
@@ -1087,6 +1265,14 @@ def run_case(tmp, spec, version):
         out["exact"] = True
         if spec["ulps"]:
             out["ulps"] = spec["ulps"]
+    if spec["schema"]:
+        type_name, names = spec["schema"]
+        definition = Usd.SchemaRegistry().FindConcretePrimDefinition(type_name)
+        out["schema"] = {
+            "type": type_name,
+            "fallbacks": {name: encode(definition.GetAttributeFallbackValue(name))
+                          for name in names},
+        }
     if spec["flatten_equivalent"]:
         out["flattened_layer"] = flattened_text(stage)
     else:

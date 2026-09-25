@@ -699,9 +699,13 @@ impl Stage {
         time: f64,
         interp: InterpolationType,
     ) -> Option<Resolved<Value>> {
-        self.resolve_value_at_time_by(prim, field, time, interp, Lookup::Metadata)
+        self.resolve_value_at_time_by(prim, field, time, interp, Lookup::Metadata, None)
     }
 
+    /// Resolves the authored value of `field` at numeric `time`, with
+    /// `fallback` seeding sparse array edits. Returns `None` when nothing is
+    /// authored at `time` or a block is in effect; callers with a schema
+    /// fallback then use it.
     fn resolve_value_at_time_by(
         &self,
         prim: PathId,
@@ -709,6 +713,7 @@ impl Stage {
         time: f64,
         interp: InterpolationType,
         lookup: Lookup,
+        fallback: Option<&Value>,
     ) -> Option<Resolved<Value>> {
         let (index, opinions) = self.opinions(prim, field, lookup)?;
 
@@ -717,7 +722,7 @@ impl Stage {
             SparseQuery::AtTime {
                 time,
                 interp,
-                fallback: None,
+                fallback,
             },
             index.property_type_for(&field),
         ) {
@@ -942,6 +947,7 @@ impl Stage {
             time,
             interp,
             Lookup::Property,
+            None,
         )
     }
 
@@ -1118,6 +1124,12 @@ impl Stage {
     /// prim metadata field `apiSchemas`, never from a property that happens
     /// to share its name.
     ///
+    /// A strongest default block resolves the fallback (Core §12.3.6), as it
+    /// does at numeric times ([`Stage::resolve_value_at_time_with_schema`]).
+    /// OpenUSD 26.08 resolves no value at the default time there: the named
+    /// divergence `default-time-block-hides-fallback`
+    /// (`docs/generic-sparse-composition.md`, "Divergences From OpenUSD").
+    ///
     /// Spec: AOUSD Core §13.3.2.4 (fallback value resolution).
     #[must_use]
     pub fn resolve_value_with_schema(
@@ -1130,13 +1142,7 @@ impl Stage {
     ) -> Option<Resolved<ResolvedValue>> {
         let index = self.prims.get(&prim);
         let authored = index.and_then(|index| index.property_opinions(field));
-
-        let type_name = self.resolve_type_name(prim, store);
-        let applied = api_schemas_token
-            .and_then(|tok| self.resolve_token_list(prim, tok))
-            .map(|r| r.value)
-            .unwrap_or_default();
-        let fallback = registry.resolve_fallback(type_name, &applied, field);
+        let fallback = self.schema_fallback(prim, field, store, registry, api_schemas_token);
 
         if let (Some(index), Some(opinions)) = (index, authored) {
             let is_value_field = matches!(
@@ -1216,6 +1222,87 @@ impl Stage {
             | ResolvedValue::PathList(_)
             | ResolvedValue::ValueList(_) => None,
         }
+    }
+
+    /// Resolves a property on a prim at a numeric time with schema fallback.
+    ///
+    /// Like [`Stage::resolve_property_path_at_time`], with the default-time
+    /// fallback contract of [`Stage::resolve_value_with_schema`]:
+    ///
+    /// - When nothing is authored at `time`, or a block is in effect there,
+    ///   the schema fallback resolves. A sampled block counts like a default
+    ///   block: Core §12.3.6 resolves a block to the fallback, and §16.2.16.3
+    ///   gives blocked time samples "the same semantics as when blocking the
+    ///   default attribute value".
+    /// - An array fallback is the weakest dense seed that sparse array edits
+    ///   compose over, whether their samples compose over no weaker opinion or
+    ///   over a block, sampled or default.
+    /// - Otherwise authored samples, splines and defaults resolve exactly as
+    ///   in [`Stage::resolve_property_path_at_time`]; opinions hidden behind a
+    ///   dense value or block are never evaluated.
+    ///
+    /// OpenUSD 26.08 agrees except after a sampled block, where it resolves
+    /// no value and composes stronger edits over the empty array: the named
+    /// divergence `sampled-block-drops-fallback`
+    /// (`docs/generic-sparse-composition.md`, "Divergences From OpenUSD").
+    ///
+    /// `api_schemas_token` is as for [`Stage::resolve_value_with_schema`].
+    ///
+    /// Spec: AOUSD Core §12.3.2 (time-based resolution), §12.3.5 (fallback
+    /// values), §12.3.6 (blocked attributes), §13.3.2.4 (fallback value
+    /// resolution), §16.2.16.3 (blocked time samples).
+    #[must_use]
+    pub fn resolve_value_at_time_with_schema(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        time: f64,
+        interp: InterpolationType,
+        store: &dyn LayerStore,
+        registry: &SchemaRegistry,
+        api_schemas_token: Option<TokenId>,
+    ) -> Option<Resolved<Value>> {
+        let fallback = self.schema_fallback(prim, field, store, registry, api_schemas_token);
+        let seed = match &fallback {
+            Some(FieldValue::Value(value)) => Some(value),
+            _ => None,
+        };
+        if let Some(resolved) =
+            self.resolve_value_at_time_by(prim, field, time, interp, Lookup::Property, seed)
+        {
+            return Some(resolved);
+        }
+        let value = match fallback? {
+            FieldValue::Value(Value::Dictionary(entries)) => {
+                Value::Dictionary(combine_dictionary_chain([entries.as_slice()]))
+            }
+            FieldValue::Value(value) => value,
+            _ => return None,
+        };
+        Some(Resolved {
+            value,
+            provenance: None,
+        })
+    }
+
+    /// The schema fallback for `field` on `prim`: from its resolved type name
+    /// and, when `api_schemas_token` is given, its applied API schemas.
+    ///
+    /// Spec: AOUSD Core §13.3.2.4 (fallback value resolution).
+    fn schema_fallback(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        store: &dyn LayerStore,
+        registry: &SchemaRegistry,
+        api_schemas_token: Option<TokenId>,
+    ) -> Option<FieldValue> {
+        let type_name = self.resolve_type_name(prim, store);
+        let applied = api_schemas_token
+            .and_then(|tok| self.resolve_token_list(prim, tok))
+            .map(|r| r.value)
+            .unwrap_or_default();
+        registry.resolve_fallback(type_name, &applied, field)
     }
 
     /// Resolves a dictionary-valued field on a prim, combining opinions.
@@ -1668,6 +1755,56 @@ mod tests {
             with_schema.value,
             ResolvedValue::Scalar(array_value(&[5, 6])),
             "a strongest block yields the schema fallback unmodified (AOUSD Core §12.3.6)"
+        );
+    }
+
+    /// The schema-aware time query shares the default-time fallback
+    /// contract: edits over a block compose over the fallback, and a
+    /// strongest block resolves the fallback itself.
+    ///
+    /// Spec: AOUSD Core §12.3.6 (blocked attributes), §13.3.2.4 (fallback
+    /// value resolution).
+    #[test]
+    fn time_query_with_schema_shares_the_fallback_contract() {
+        let resolve = |stage: &Stage, store, registry, prim, field| {
+            [InterpolationType::Held, InterpolationType::Linear].map(|interp| {
+                stage
+                    .resolve_value_at_time_with_schema(
+                        prim, field, 1.0, interp, store, registry, None,
+                    )
+                    .map(|resolved| resolved.value)
+            })
+        };
+        let (stage, store, registry, prim, field) = schema_fallback_fixture(vec![
+            FieldValue::Value(append_edit(7)),
+            FieldValue::Value(Value::Blocked),
+            FieldValue::Value(array_value(&[1, 2])),
+        ]);
+        assert_eq!(
+            resolve(&stage, &store, &registry, prim, field),
+            [Some(array_value(&[5, 6, 7])), Some(array_value(&[5, 6, 7]))],
+            "the edit composes over the fallback, never over the blocked [1, 2]"
+        );
+        assert_eq!(
+            stage
+                .resolve_property_path_at_time(
+                    PropertyPath::new(prim, field),
+                    1.0,
+                    InterpolationType::Held
+                )
+                .map(|resolved| resolved.value),
+            Some(array_value(&[7])),
+            "without a schema the edit composes over the empty array"
+        );
+
+        let (stage, store, registry, prim, field) = schema_fallback_fixture(vec![
+            FieldValue::Value(Value::Blocked),
+            FieldValue::Value(array_value(&[1, 2])),
+        ]);
+        assert_eq!(
+            resolve(&stage, &store, &registry, prim, field),
+            [Some(array_value(&[5, 6])), Some(array_value(&[5, 6]))],
+            "a strongest block resolves the fallback unmodified"
         );
     }
 

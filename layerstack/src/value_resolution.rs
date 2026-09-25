@@ -131,6 +131,13 @@ impl OpinionFamily<Opinion> for ArrayFamily<'_> {
         value
     }
 
+    /// The weakest dense value: the schema fallback, else the empty array.
+    ///
+    /// Edits over a block, default or sampled, compose over it too: a block
+    /// resolves to the fallback (Core §12.3.6), and a blocked time sample
+    /// blocks exactly like a blocked default (Core §16.2.16.3). OpenUSD 26.08
+    /// composes edits over a sampled block over the empty array instead: the
+    /// named divergence `sampled-block-drops-fallback`.
     fn seed(&self) -> Self::Value {
         match self.fallback {
             Some(Value::Array(items)) => items.clone(),
@@ -1887,10 +1894,10 @@ mod tests {
 
     /// OpenUSD 26.08 resolved values for a `Cube`'s `extent`, whose schema
     /// fallback is `[(-1, -1, -1), (1, 1, 1)]`: time-sampled edits compose
-    /// over the fallback, and so do edits above a default block. Recorded
-    /// with `layerstack_conformance/scripts/temporal_sparse_oracle.py`'s
-    /// OpenUSD build; Stage has no schema-aware time query, so these run
-    /// against the resolver directly.
+    /// over the fallback, and so do edits above a default block. The
+    /// `schema_*` cases of `layerstack_conformance/tests/temporal_sparse.rs`
+    /// check the same through `Stage::resolve_value_at_time_with_schema`;
+    /// these run against the resolver directly.
     #[test]
     fn time_sampled_edits_compose_over_the_fallback_seed() {
         let (spec_path, field) = test_ids();

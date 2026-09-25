@@ -41,13 +41,7 @@ const ORACLE: &str = include_str!("../fixtures/internal_arcs/oracle.json");
 
 /// Prims whose prim stack holds the oracle's sites in a different order,
 /// with the reason.
-const ORDER_DIVERGENCES: &[(&str, &str)] = &[(
-    "/Nested",
-    "NestedArcDepth in `composition_strict`: `inner.usda /Core`, three arcs \
-     deep, shares its strength key with `inner_sub.usda /Inner`, two deep, \
-     so the two interleave by layer strength instead of ranking the target \
-     beneath the site that authors its arc",
-)];
+const ORDER_DIVERGENCES: &[(&str, &str)] = &[];
 
 #[derive(Deserialize)]
 struct Oracle {

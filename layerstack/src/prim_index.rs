@@ -328,6 +328,7 @@ impl PrimIndex {
     /// Sorts every opinion and source strongest first, by
     /// [`PrimIndexGraph::cmp_keys`].
     pub(crate) fn finalize(&mut self) {
+        self.graph.rank();
         let graph = &self.graph;
         for opinions in self.opinions_by_field.values_mut() {
             opinions.sort_by(|a, b| graph.cmp_keys(&a.key, &b.key));

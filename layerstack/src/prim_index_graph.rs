@@ -24,16 +24,14 @@
 //!
 //! # Strength order
 //!
-//! The graph mirrors how composition expands arcs, but the prim's opinion
-//! order is not a depth-first walk of it. Each node carries a flat strength
-//! key (the outermost arc kind on its arc path, one nested arc kind, the
-//! specializes arcs above it, and the remaining tie-breakers), and opinions
-//! are ordered by their nodes' keys, then by layer strength within the
-//! node's layer stack; opinions of nodes whose keys tie interleave.
-//! [`PrimIndexGraph::strength_order`] lists nodes in that order;
-//! [`PrimIndexGraph::depth_first`] walks the tree itself. The two differ
-//! where Layerstack's order differs from OpenUSD's; the `TODO(graph)`
-//! comments in composition name each such difference.
+//! A prim's opinions are ranked by a strong-to-weak depth-first walk of its
+//! graph ([`PrimIndexGraph::strength_order`]), then by layer strength within
+//! each node's layer stack: a node is stronger than every node beneath it,
+//! and a node's children are ordered by arc kind (LIVERPS), then deeper
+//! namespace depth, then their position among the arcs authored beside them
+//! (`PcpCompareSiblingNodeStrength`). The one exception is specializes:
+//! each node records the specializes arcs above it, and nodes beneath a
+//! specializes arc rank after every other node (AOUSD Core §10.4.1).
 //!
 //! # Toward precise invalidation
 //!
@@ -51,7 +49,7 @@
 //!
 //! Spec: AOUSD Core §10 (composition arcs), §10.4 (strength ordering).
 
-use alloc::vec::Vec;
+use alloc::{borrow::Cow, boxed::Box, vec::Vec};
 use core::cmp::Ordering;
 
 use crate::{
@@ -78,6 +76,12 @@ impl NodeId {
         self.0 as usize
     }
 
+    /// The node with index `raw`.
+    #[cfg(test)]
+    pub(crate) const fn from_raw(raw: u32) -> Self {
+        Self(raw)
+    }
+
     fn from_index(index: usize) -> Self {
         Self(u32::try_from(index).expect("prim index graph node count overflow"))
     }
@@ -95,22 +99,28 @@ impl NodeId {
 /// `pxr/usd/pcp/strengthOrdering.cpp`, `PcpCompareSiblingNodeStrength`).
 ///
 /// An origin identifies one such propagated node by the position of its
-/// placeholder, ranked the way a [`NodeStrength`] of the placeholder would
-/// be, and by the specializes arc's own index in its site's list.
+/// placeholder, summarized by the arcs that bring the placeholder's site
+/// into the prim index, and by the specializes arc's own index in its
+/// site's list.
+///
+// TODO(graph): SpecializesPlacement. Propagate specializes nodes to the
+// root with their placeholder as origin, and rank them by walking the graph
+// to that origin (`_OriginIsStronger`), instead of by this summary; then
+// retire this type and [`NodeArc::specializes`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct SpecializesOrigin {
     /// Namespace depth of the prim the specializes node is propagated at.
     ///
-    /// Deeper is stronger, as for [`NodeStrength::namespace_depth`].
+    /// Deeper is stronger, as for sibling nodes.
     pub(crate) namespace_depth: u16,
     /// Arc kind the placeholder ranks under: the outermost arc that brings
     /// the authoring site into the prim index, or [`ArcKind::Specializes`]
     /// for a specializes authored in the composed prim's own layer stack.
     pub(crate) arc_kind: ArcKind,
-    /// Nested arc kind the placeholder ranks under, as in
-    /// [`NodeStrength::nested_arc_kind`]. A placeholder directly under an
-    /// arc target is nested as [`ArcKind::Specializes`], so it ranks after
-    /// the other arcs of that target, as OpenUSD orders a node's children.
+    /// The first arc kind nested inside [`Self::arc_kind`] on the way to the
+    /// placeholder, if any. A placeholder directly under an arc target is
+    /// nested as [`ArcKind::Specializes`], so it ranks after the other arcs
+    /// of that target, as OpenUSD orders a node's children.
     pub(crate) nested_arc_kind: Option<ArcKind>,
     /// Index of the outermost arc in its arc list.
     pub(crate) arc_list_index: u16,
@@ -151,114 +161,23 @@ fn cmp_nested_arc_kind(a: Option<ArcKind>, b: Option<ArcKind>) -> Ordering {
     }
 }
 
-/// The strength key a node's opinions are ranked by.
+/// Compares the specializes arcs above two nodes with "strongest first"
+/// ordering.
 ///
-/// This is a flat summary of the node's arc path: the outermost arc kind,
-/// one nested arc kind and the specializes arcs above the node, with the
-/// namespace depth and list position of the arc that ranks it.
+/// A node that no specializes arc introduces outranks every specializes
+/// node. Two chains are ordered by their first differing origin, outermost
+/// first, as OpenUSD orders sibling specializes nodes by their originating
+/// nodes (`PcpCompareSiblingNodeStrength`). A chain that extends another is
+/// a node nested in that node's specialized prim and ranks right after it,
+/// before the enclosing node's weaker siblings.
 ///
-// TODO(graph): NestedArcDepth. Rank nodes by walking the graph
-// (`PcpCompareNodeStrength` in `pxr/usd/pcp/strengthOrdering.cpp`) instead of
-// by this summary, which holds one nested arc kind, so that arcs nested two
-// or more deep, and the arcs of a nested target, rank beneath their own
-// target; then retire this type.
-///
-/// Spec: AOUSD Core §10.4 (strength ordering and tie-breakers).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct NodeStrength {
-    /// `true` for the root node's local opinions.
-    pub(crate) is_local: bool,
-    /// The specializes arcs on the node's arc path, outermost first.
-    ///
-    /// Empty for nodes that no specializes arc introduces. Otherwise the
-    /// node belongs to the specializes node the last origin names, and the
-    /// remaining fields rank it within that node: [`Self::arc_kind`] is
-    /// [`ArcKind::Specializes`] and [`Self::nested_arc_kind`] is the arc
-    /// inside the specialized prim that introduces it, if any.
-    ///
-    /// Chains are ordered by their first differing origin (see
-    /// [`SpecializesOrigin`]); a chain that extends another ranks right after
-    /// it, so a node that no specializes introduces outranks every
-    /// specializes node, and a nested node follows only its own enclosing
-    /// node.
-    ///
-    /// Spec: AOUSD Core §10.4.1.
-    pub(crate) specializes: Vec<SpecializesOrigin>,
-    /// The outermost arc kind on the node's arc path.
-    pub(crate) arc_kind: ArcKind,
-    /// The first arc kind nested inside the outermost arc, if any.
-    ///
-    /// Shorter arc chains are stronger than longer ones when the outer arc
-    /// kind ties. Arcs nested more deeply keep the outermost arc kind in
-    /// [`Self::arc_kind`] and the first nested arc kind here, so a reference
-    /// authored inside referenced content is `(References, Some(References))`
-    /// and stays weaker than the referenced site's own opinions.
-    ///
-    /// Spec: AOUSD Core §10.4 (strength ordering within an arc's target).
-    pub(crate) nested_arc_kind: Option<ArcKind>,
-    /// Namespace depth of the site where the ranking arc is introduced.
-    ///
-    /// For example, opinions introduced via a reference arc authored at `/A/B`
-    /// are stronger than otherwise-identical opinions introduced at `/A`,
-    /// regardless of which descendant prim paths they affect.
-    ///
-    /// Spec: AOUSD Core §10.4 (strength ordering tie-breakers).
-    pub(crate) namespace_depth: u16,
-    /// `true` for authored (vs implied) arcs.
-    pub(crate) authored: bool,
-    /// Index of the ranking arc within its arc list (e.g. the Nth reference).
-    pub(crate) arc_list_index: u16,
-}
-
-impl NodeStrength {
-    /// The strength of a prim's local opinions, at `namespace_depth`.
-    pub(crate) fn local(namespace_depth: u16) -> Self {
-        Self {
-            is_local: true,
-            specializes: Vec::new(),
-            arc_kind: ArcKind::Local,
-            nested_arc_kind: None,
-            namespace_depth,
-            authored: true,
-            arc_list_index: 0,
-        }
-    }
-
-    /// Compares strengths with "strongest first" ordering.
-    pub(crate) fn cmp_strongest_first(&self, other: &Self) -> Ordering {
-        match (self.is_local, other.is_local) {
-            (true, false) => return Ordering::Less,
-            (false, true) => return Ordering::Greater,
-            _ => {}
-        }
-
-        // Specializes nodes rank after every other node. Two chains are
-        // ordered by their first differing origin, outermost first, as
-        // OpenUSD orders sibling specializes nodes by their originating nodes
-        // (`PcpCompareSiblingNodeStrength` in
-        // `pxr/usd/pcp/strengthOrdering.cpp`). A chain that extends another
-        // is a node nested in that node's specialized prim and ranks right
-        // after it, before the enclosing node's weaker siblings
-        // (AOUSD Core §10.4.1).
-        let specializes = self
-            .specializes
-            .iter()
-            .zip(&other.specializes)
-            .map(|(a, b)| a.cmp_strongest_first(b))
-            .find(|ordering| ordering.is_ne())
-            .unwrap_or_else(|| self.specializes.len().cmp(&other.specializes.len()));
-        if specializes != Ordering::Equal {
-            return specializes;
-        }
-
-        self.arc_kind
-            .strength_rank()
-            .cmp(&other.arc_kind.strength_rank())
-            .then_with(|| cmp_nested_arc_kind(self.nested_arc_kind, other.nested_arc_kind))
-            .then_with(|| other.namespace_depth.cmp(&self.namespace_depth))
-            .then_with(|| other.authored.cmp(&self.authored))
-            .then_with(|| self.arc_list_index.cmp(&other.arc_list_index))
-    }
+/// Spec: AOUSD Core §10.4.1.
+fn cmp_specializes(a: &[SpecializesOrigin], b: &[SpecializesOrigin]) -> Ordering {
+    a.iter()
+        .zip(b)
+        .map(|(a, b)| a.cmp_strongest_first(b))
+        .find(|ordering| ordering.is_ne())
+        .unwrap_or_else(|| a.len().cmp(&b.len()))
 }
 
 /// The arc that introduces a node, and the site it reaches.
@@ -283,8 +202,15 @@ pub(crate) struct NodeArc {
     /// `true` for a node copied from another prim's graph by the late copy
     /// of an arc target's composed sources.
     pub(crate) copied: bool,
-    /// The strength key the node's opinions are ranked by.
-    pub(crate) strength: NodeStrength,
+    /// The specializes arcs on the node's arc path, outermost first; empty
+    /// for a node that no specializes arc introduces.
+    ///
+    /// Otherwise the node belongs to the specializes node the last origin
+    /// names, and ranks after every node outside it (see
+    /// [`SpecializesOrigin`]).
+    ///
+    /// Spec: AOUSD Core §10.4.1.
+    pub(crate) specializes: Box<[SpecializesOrigin]>,
 }
 
 /// One node of a [`PrimIndexGraph`]: a site that contributes opinions to a
@@ -389,6 +315,10 @@ impl PrimNode {
 #[derive(Clone, Debug, Default)]
 pub struct PrimIndexGraph {
     nodes: Vec<PrimNode>,
+    /// Each node's position in the strength walk, once ranked: equal for
+    /// nodes whose opinions interleave (see [`Self::rank`]). Empty or stale
+    /// while composition adds nodes.
+    ranks: Vec<u32>,
 }
 
 impl PrimIndexGraph {
@@ -401,6 +331,7 @@ impl PrimIndexGraph {
                 children: Vec::new(),
                 arc,
             }],
+            ranks: Vec::new(),
         }
     }
 
@@ -425,47 +356,130 @@ impl PrimIndexGraph {
         id
     }
 
-    /// Returns a child of `parent` reached by `arc`'s kind at `arc`'s site,
-    /// whatever its strength, adding `arc` if there is none.
-    ///
-    /// For a node on the way to another: a node's strength ranks only its
-    /// own opinions, so the node of a variant branch enclosing another is
-    /// the same node whichever of its descendants is added first.
-    pub(crate) fn intern_branch(&mut self, parent: NodeId, arc: NodeArc) -> NodeId {
-        let same_site = |node: &PrimNode| {
-            let other = &node.arc;
-            other.arc_kind == arc.arc_kind
-                && other.layer_stack == arc.layer_stack
-                && other.site == arc.site
-                && other.namespace_depth == arc.namespace_depth
-                && other.sibling_index == arc.sibling_index
-                && other.implied == arc.implied
-                && other.copied == arc.copied
-        };
-        if let Some(existing) = self.nodes[parent.index()]
-            .children
-            .iter()
-            .copied()
-            .find(|child| same_site(&self.nodes[child.index()]))
-        {
-            return existing;
-        }
-        self.intern_child(parent, arc)
+    /// The specializes arcs above `node`, outermost first.
+    pub(crate) fn specializes(&self, node: NodeId) -> &[SpecializesOrigin] {
+        &self.nodes[node.index()].arc.specializes
     }
 
-    /// The strength key of `node`'s opinions.
-    pub(crate) fn strength(&self, node: NodeId) -> &NodeStrength {
-        &self.nodes[node.index()].arc.strength
+    /// The nodes from beneath the root down to `node`, outermost first:
+    /// the arc path of `node`, empty for the root.
+    pub(crate) fn arc_path(&self, node: NodeId) -> Vec<&PrimNode> {
+        let mut path = Vec::new();
+        let mut cursor = &self.nodes[node.index()];
+        while let Some(parent) = cursor.parent {
+            path.push(cursor);
+            cursor = &self.nodes[parent.index()];
+        }
+        path.reverse();
+        path
+    }
+
+    /// Compares two children of one node with "strongest first" ordering:
+    /// by arc kind (LIVERPS), then deeper namespace depth, then their
+    /// position among the arcs authored beside them.
+    ///
+    /// Siblings that compare equal (the implied and authored copies of one
+    /// class arc, or the branches of different variant sets) rank as one
+    /// node, and their opinions interleave by layer strength.
+    ///
+    /// Spec: AOUSD Core §10.4. OpenUSD: `PcpCompareSiblingNodeStrength` in
+    /// `pxr/usd/pcp/strengthOrdering.cpp`.
+    // TODO(graph): ImpliedClasses. Implied class nodes belong under the node
+    // of the layer stack they are implied into, and variant nodes carry
+    // their variant set's position; then no two siblings compare equal.
+    fn cmp_siblings(&self, a: NodeId, b: NodeId) -> Ordering {
+        let (a, b) = (&self.nodes[a.index()].arc, &self.nodes[b.index()].arc);
+        a.arc_kind
+            .strength_rank()
+            .cmp(&b.arc_kind.strength_rank())
+            .then_with(|| b.namespace_depth.cmp(&a.namespace_depth))
+            .then_with(|| a.sibling_index.cmp(&b.sibling_index))
+    }
+
+    /// Ranks every node by a strong-to-weak depth-first walk of the graph.
+    ///
+    /// A node ranks above every node beneath it, and each node's children
+    /// rank in [`Self::cmp_siblings`] order, so the nodes beneath a child
+    /// rank before that child's weaker siblings. Siblings that compare equal
+    /// share a rank, and their children are walked as one sibling set.
+    ///
+    /// Composition calls this once the graph is complete, and before
+    /// comparing opinions while it still adds nodes.
+    ///
+    /// Spec: AOUSD Core §10.4. OpenUSD: `PcpCompareNodeStrength` in
+    /// `pxr/usd/pcp/strengthOrdering.cpp`.
+    pub(crate) fn rank(&mut self) {
+        if self.ranks.len() != self.nodes.len() {
+            self.ranks = self.walk_ranks();
+        }
+    }
+
+    /// The rank of every node in the strength walk (see [`Self::rank`]).
+    fn walk_ranks(&self) -> Vec<u32> {
+        let mut ranks = alloc::vec![0; self.nodes.len()];
+        let mut next = 0_u32;
+        let mut stack: Vec<Vec<NodeId>> = self
+            .root()
+            .map(|root| alloc::vec![root])
+            .into_iter()
+            .collect();
+        while let Some(group) = stack.pop() {
+            let mut children = Vec::new();
+            for id in &group {
+                ranks[id.index()] = next;
+                children.extend_from_slice(&self.nodes[id.index()].children);
+            }
+            next += 1;
+            children.sort_by(|a, b| self.cmp_siblings(*a, *b));
+            let groups: Vec<Vec<NodeId>> = children
+                .chunk_by(|a, b| self.cmp_siblings(*a, *b).is_eq())
+                .map(<[NodeId]>::to_vec)
+                .collect();
+            stack.extend(groups.into_iter().rev());
+        }
+        ranks
+    }
+
+    /// Sorts `keys` strongest first, as [`Self::cmp_keys`] orders them,
+    /// whether or not the graph is ranked.
+    pub(crate) fn sort_keys(&self, keys: &mut [OpinionKey]) {
+        let ranks = if self.ranks.len() == self.nodes.len() {
+            Cow::Borrowed(self.ranks.as_slice())
+        } else {
+            Cow::Owned(self.walk_ranks())
+        };
+        keys.sort_by(|a, b| self.cmp_keys_by(&ranks, a, b));
+    }
+
+    /// Compares two nodes' opinions with "strongest first" ordering: nodes
+    /// beneath a specializes arc after every other node (see
+    /// [`SpecializesOrigin`]), then by their rank in the strength walk.
+    ///
+    /// Needs the graph to be ranked ([`Self::rank`]).
+    pub(crate) fn cmp_nodes(&self, a: NodeId, b: NodeId) -> Ordering {
+        debug_assert_eq!(self.ranks.len(), self.nodes.len(), "graph is ranked");
+        self.cmp_nodes_by(&self.ranks, a, b)
+    }
+
+    fn cmp_nodes_by(&self, ranks: &[u32], a: NodeId, b: NodeId) -> Ordering {
+        cmp_specializes(self.specializes(a), self.specializes(b))
+            .then_with(|| ranks[a.index()].cmp(&ranks[b.index()]))
     }
 
     /// Compares two opinions of this prim with "strongest first" ordering:
-    /// by their nodes' strength, then by layer strength within the layer
-    /// stack, then by stable ids.
+    /// by their nodes ([`Self::cmp_nodes`]), then by layer strength within
+    /// the layer stack, then by stable ids.
+    ///
+    /// Needs the graph to be ranked ([`Self::rank`]).
     ///
     /// Spec: AOUSD Core §10.4 (strength ordering and tie-breakers).
     pub(crate) fn cmp_keys(&self, a: &OpinionKey, b: &OpinionKey) -> Ordering {
-        self.strength(a.node)
-            .cmp_strongest_first(self.strength(b.node))
+        debug_assert_eq!(self.ranks.len(), self.nodes.len(), "graph is ranked");
+        self.cmp_keys_by(&self.ranks, a, b)
+    }
+
+    fn cmp_keys_by(&self, ranks: &[u32], a: &OpinionKey, b: &OpinionKey) -> Ordering {
+        self.cmp_nodes_by(ranks, a.node, b.node)
             .then_with(|| a.layer_strength.cmp(&b.layer_strength))
             .then_with(|| a.layer_id.cmp(&b.layer_id))
             .then_with(|| a.spec_path.cmp(&b.spec_path))
@@ -511,12 +525,15 @@ impl PrimIndexGraph {
     #[must_use]
     pub fn strength_order(&self) -> Vec<NodeId> {
         let mut order: Vec<NodeId> = self.nodes().map(|(id, _)| id).collect();
-        order.sort_by(|a, b| self.strength(*a).cmp_strongest_first(self.strength(*b)));
+        order.sort_by(|a, b| self.cmp_nodes(*a, *b));
         order
     }
 
     /// Returns every node in depth-first preorder from the root, each node's
     /// children strongest first.
+    ///
+    /// This is [`Self::strength_order`] except where specializes arcs, which
+    /// rank after every other node, are authored.
     #[must_use]
     pub fn depth_first(&self) -> Vec<NodeId> {
         let mut order = Vec::with_capacity(self.nodes.len());
@@ -524,7 +541,7 @@ impl PrimIndexGraph {
         while let Some(id) = stack.pop() {
             order.push(id);
             let mut children = self.nodes[id.index()].children.clone();
-            children.sort_by(|a, b| self.strength(*a).cmp_strongest_first(self.strength(*b)));
+            children.sort_by(|a, b| self.cmp_siblings(*a, *b));
             stack.extend(children.into_iter().rev());
         }
         order
@@ -533,28 +550,36 @@ impl PrimIndexGraph {
 
 #[cfg(test)]
 impl PrimIndexGraph {
-    /// A graph whose root, at `site`, ranks as `root`, with one child of the
-    /// root per entry of `children`, in order, at the same site.
-    pub(crate) fn from_strengths(
-        site: SpecPath,
-        root: NodeStrength,
-        children: impl IntoIterator<Item = NodeStrength>,
+    /// A ranked graph whose root, at `site`, is at `namespace_depth`, with
+    /// one node per entry of `arcs`, `(parent, arc kind, namespace depth)`,
+    /// all at `site`. Node ids follow `arcs`, starting at 1.
+    pub(crate) fn from_arcs(
+        site: &SpecPath,
+        namespace_depth: u16,
+        arcs: impl IntoIterator<Item = (NodeId, ArcKind, u16)>,
     ) -> Self {
-        let arc = |strength: NodeStrength, sibling_index: u16| NodeArc {
-            arc_kind: strength.arc_kind,
+        let arc = |arc_kind, namespace_depth| NodeArc {
+            arc_kind,
             layer_stack: LayerId(1),
             site: site.clone(),
-            namespace_depth: strength.namespace_depth,
-            sibling_index,
+            namespace_depth,
+            sibling_index: 0,
             implied: false,
             copied: false,
-            strength,
+            specializes: Box::default(),
         };
-        let mut graph = Self::new(arc(root, 0));
-        for (index, strength) in children.into_iter().enumerate() {
-            let index = u16::try_from(index).expect("small test graph");
-            graph.intern_child(NodeId::ROOT, arc(strength, index));
+        let mut graph = Self::new(arc(ArcKind::Local, namespace_depth));
+        for (parent, arc_kind, namespace_depth) in arcs {
+            let id = NodeId::from_index(graph.nodes.len());
+            graph.nodes.push(PrimNode {
+                parent: Some(parent),
+                origin: None,
+                children: Vec::new(),
+                arc: arc(arc_kind, namespace_depth),
+            });
+            graph.nodes[parent.index()].children.push(id);
         }
+        graph.rank();
         graph
     }
 }
@@ -568,100 +593,90 @@ mod tests {
     };
     use alloc::{vec, vec::Vec};
 
-    fn strength(
-        is_local: bool,
-        arc_kind: ArcKind,
-        nested_arc_kind: Option<ArcKind>,
-        namespace_depth: u16,
-        authored: bool,
-        arc_list_index: u16,
-    ) -> NodeStrength {
-        NodeStrength {
-            is_local,
-            specializes: Vec::new(),
+    fn spec_path(text: &str) -> SpecPath {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let path = paths.intern(Path::parse_absolute(text, &mut tokens).expect("path"));
+        SpecPath::from_prim_path(path, &paths)
+    }
+
+    fn arc(arc_kind: ArcKind, namespace_depth: u16, sibling_index: u16) -> NodeArc {
+        NodeArc {
             arc_kind,
-            nested_arc_kind,
+            layer_stack: LayerId(1),
+            site: spec_path("/A"),
             namespace_depth,
-            authored,
-            arc_list_index,
+            sibling_index,
+            implied: false,
+            copied: false,
+            specializes: Box::default(),
         }
     }
 
-    fn assert_stronger(a: &NodeStrength, b: &NodeStrength) {
-        assert_eq!(a.cmp_strongest_first(b), Ordering::Less, "{a:?} < {b:?}");
-        assert_eq!(b.cmp_strongest_first(a), Ordering::Greater, "{b:?} > {a:?}");
+    /// A graph with a root and the nodes `arcs`, each `(parent, arc)`,
+    /// ranked. Node ids follow `arcs`, starting at 1.
+    fn graph(arcs: Vec<(u32, NodeArc)>) -> PrimIndexGraph {
+        let mut graph = PrimIndexGraph::new(arc(ArcKind::Local, 1, 0));
+        for (parent, arc) in arcs {
+            graph.intern_child(NodeId(parent), arc);
+        }
+        graph.rank();
+        graph
     }
 
-    #[test]
-    fn local_beats_remote() {
-        // Spec: local opinions are stronger than opinions introduced by arcs.
-        let local = strength(true, ArcKind::Local, None, 1, true, 0);
-        let remote = strength(false, ArcKind::Inherits, None, 999, false, 999);
-        assert_stronger(&local, &remote);
-    }
-
-    #[test]
-    fn arc_kind_follows_liverps_order() {
-        // Spec ordering (strongest -> weakest): Inherits, Variants, Relocates,
-        // References, Payloads, Specializes.
-        // Spec: AOUSD Core §10 (LIVERPS ordering).
-        let order: Vec<NodeStrength> = [
-            ArcKind::Inherits,
-            ArcKind::Variants,
-            ArcKind::Relocates,
-            ArcKind::References,
-            ArcKind::Payloads,
-            ArcKind::Specializes,
-        ]
-        .into_iter()
-        .map(|kind| strength(false, kind, None, 3, true, 0))
-        .collect();
+    fn assert_order(graph: &PrimIndexGraph, order: &[u32]) {
         for pair in order.windows(2) {
-            assert_stronger(&pair[0], &pair[1]);
+            let (a, b) = (NodeId(pair[0]), NodeId(pair[1]));
+            assert_eq!(graph.cmp_nodes(a, b), Ordering::Less, "{a:?} < {b:?}");
+            assert_eq!(graph.cmp_nodes(b, a), Ordering::Greater, "{b:?} > {a:?}");
         }
     }
 
     #[test]
-    fn deeper_namespace_wins_ties() {
-        // Spec: deeper namespace is stronger when arc kind ties.
-        let shallow = strength(false, ArcKind::References, None, 1, true, 0);
-        let deep = strength(false, ArcKind::References, None, 2, true, 0);
-        assert_stronger(&deep, &shallow);
+    fn siblings_follow_liverps_then_depth_then_list_order() {
+        // Spec: AOUSD Core §10.4. Local opinions first, then arcs in LIVERPS
+        // order; a deeper arc wins a tie; then the earlier arc of a list.
+        let graph = graph(vec![
+            (0, arc(ArcKind::Payloads, 1, 0)),
+            (0, arc(ArcKind::References, 1, 1)),
+            (0, arc(ArcKind::References, 1, 0)),
+            (0, arc(ArcKind::References, 2, 3)),
+            (0, arc(ArcKind::Variants, 1, 0)),
+            (0, arc(ArcKind::Inherits, 1, 0)),
+        ]);
+        assert_order(&graph, &[0, 6, 5, 4, 3, 2, 1]);
     }
 
     #[test]
-    fn authored_beats_implied() {
-        // Spec: authored arc beats implied.
-        let implied = strength(false, ArcKind::References, None, 1, false, 0);
-        let authored = strength(false, ArcKind::References, None, 1, true, 0);
-        assert_stronger(&authored, &implied);
+    fn a_node_ranks_its_descendants_before_its_weaker_siblings() {
+        // Spec: AOUSD Core §10.4. A reference authored inside a payload
+        // inside a reference ranks with that reference, before the prim's
+        // second reference, and after the payload's own site.
+        let graph = graph(vec![
+            (0, arc(ArcKind::References, 1, 0)),
+            (0, arc(ArcKind::References, 1, 1)),
+            (1, arc(ArcKind::Payloads, 1, 0)),
+            (3, arc(ArcKind::References, 1, 0)),
+            (1, arc(ArcKind::Inherits, 1, 0)),
+        ]);
+        assert_order(&graph, &[0, 1, 5, 3, 4, 2]);
     }
 
     #[test]
-    fn earlier_arc_in_list_is_stronger() {
-        // Spec: otherwise, list order of arcs.
-        let first = strength(false, ArcKind::References, None, 1, true, 0);
-        let second = strength(false, ArcKind::References, None, 1, true, 1);
-        assert_stronger(&first, &second);
-    }
-
-    #[test]
-    fn shorter_arc_chain_is_stronger() {
-        let base = strength(false, ArcKind::References, None, 1, true, 0);
-        let nested = strength(
-            false,
-            ArcKind::References,
-            Some(ArcKind::Inherits),
-            1,
-            true,
-            0,
-        );
-        assert_stronger(&base, &nested);
-    }
-
-    fn spec_path(text: &str, paths: &mut PathInterner, tokens: &mut TokenInterner) -> SpecPath {
-        let path = paths.intern(Path::parse_absolute(text, tokens).expect("path"));
-        SpecPath::from_prim_path(path, paths)
+    fn equal_siblings_share_a_rank_and_their_children() {
+        let implied = NodeArc {
+            implied: true,
+            ..arc(ArcKind::Inherits, 1, 0)
+        };
+        let graph = graph(vec![
+            (0, arc(ArcKind::Inherits, 1, 0)),
+            (0, implied),
+            (2, arc(ArcKind::References, 1, 0)),
+            (1, arc(ArcKind::Inherits, 1, 0)),
+        ]);
+        assert_eq!(graph.cmp_nodes(NodeId(1), NodeId(2)), Ordering::Equal);
+        assert_order(&graph, &[0, 1, 4, 3]);
+        assert_order(&graph, &[2, 4]);
     }
 
     fn key(node: NodeId, layer_strength: u16, layer_id: u64, spec_path: SpecPath) -> OpinionKey {
@@ -680,14 +695,13 @@ mod tests {
         // node; stable ids break the remaining ties.
         let mut tokens = TokenInterner::default();
         let mut paths = PathInterner::default();
-        let a = spec_path("/A", &mut paths, &mut tokens);
-        let b = spec_path("/B", &mut paths, &mut tokens);
-        let graph = PrimIndexGraph::from_strengths(
-            a.clone(),
-            NodeStrength::local(1),
-            [strength(false, ArcKind::Variants, None, 1, true, 0)],
-        );
-        let variant = graph.nodes().nth(1).expect("variant node").0;
+        let mut path = |text: &str| {
+            let path = paths.intern(Path::parse_absolute(text, &mut tokens).expect("path"));
+            SpecPath::from_prim_path(path, &paths)
+        };
+        let (a, b) = (path("/A"), path("/B"));
+        let graph = graph(vec![(0, arc(ArcKind::Variants, 1, 0))]);
+        let variant = NodeId(1);
         let order = [
             key(NodeId::ROOT, 0, 1, a.clone()),
             key(NodeId::ROOT, 0, 1, b),
@@ -701,29 +715,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn traversals_visit_every_node_strongest_first() {
-        let mut tokens = TokenInterner::default();
-        let mut paths = PathInterner::default();
-        let graph = PrimIndexGraph::from_strengths(
-            spec_path("/A", &mut paths, &mut tokens),
-            NodeStrength::local(2),
-            [
-                strength(false, ArcKind::Specializes, None, 1, true, 0),
-                strength(false, ArcKind::Variants, None, 3, true, 0),
-            ],
-        );
-        let kinds = |order: Vec<NodeId>| -> Vec<ArcKind> {
-            order
-                .into_iter()
-                .map(|id| graph.node(id).expect("node").arc_kind())
-                .collect()
-        };
-        let expected = [ArcKind::Local, ArcKind::Variants, ArcKind::Specializes];
-        assert_eq!(kinds(graph.strength_order()), expected);
-        assert_eq!(kinds(graph.depth_first()), expected);
-    }
-
     fn origin(arc_kind: ArcKind, nested_arc_kind: Option<ArcKind>) -> SpecializesOrigin {
         SpecializesOrigin {
             namespace_depth: 1,
@@ -735,30 +726,57 @@ mod tests {
         }
     }
 
-    fn specialized(specializes: Vec<SpecializesOrigin>) -> NodeStrength {
-        NodeStrength {
-            specializes,
-            ..strength(false, ArcKind::Specializes, None, 1, true, 0)
+    fn specialized(specializes: Vec<SpecializesOrigin>) -> NodeArc {
+        NodeArc {
+            specializes: specializes.into_boxed_slice(),
+            ..arc(ArcKind::Specializes, 1, 0)
         }
+    }
+
+    #[test]
+    fn traversals_visit_every_node_strongest_first() {
+        let graph = graph(vec![
+            (0, specialized(vec![origin(ArcKind::Specializes, None)])),
+            (0, arc(ArcKind::Variants, 3, 0)),
+            (0, arc(ArcKind::References, 1, 0)),
+        ]);
+        let kinds = |order: Vec<NodeId>| -> Vec<ArcKind> {
+            order
+                .into_iter()
+                .map(|id| graph.node(id).expect("node").arc_kind())
+                .collect()
+        };
+        let expected = [
+            ArcKind::Local,
+            ArcKind::Variants,
+            ArcKind::References,
+            ArcKind::Specializes,
+        ];
+        assert_eq!(kinds(graph.strength_order()), expected);
+        assert_eq!(kinds(graph.depth_first()), expected);
     }
 
     #[test]
     fn specializes_reached_through_a_reference_are_weaker_than_payloads() {
         // Spec: AOUSD Core §10.4.1: a specializes is weaker than every other
         // arc, not only than the arc it is reached through.
-        let payload = strength(
-            false,
-            ArcKind::Payloads,
-            Some(ArcKind::References),
-            1,
-            true,
-            3,
-        );
-        let class = specialized(vec![origin(
-            ArcKind::References,
-            Some(ArcKind::Specializes),
-        )]);
-        assert_stronger(&payload, &class);
+        let graph = graph(vec![
+            (0, arc(ArcKind::References, 1, 0)),
+            (0, arc(ArcKind::Payloads, 1, 3)),
+            (
+                1,
+                specialized(vec![origin(
+                    ArcKind::References,
+                    Some(ArcKind::Specializes),
+                )]),
+            ),
+        ]);
+        assert_order(&graph, &[0, 1, 2, 3]);
+    }
+
+    fn assert_chain_stronger(a: &[SpecializesOrigin], b: &[SpecializesOrigin]) {
+        assert_eq!(cmp_specializes(a, b), Ordering::Less, "{a:?} < {b:?}");
+        assert_eq!(cmp_specializes(b, a), Ordering::Greater, "{b:?} > {a:?}");
     }
 
     #[test]
@@ -768,11 +786,7 @@ mod tests {
             namespace_depth: 2,
             ..origin(ArcKind::Specializes, Some(ArcKind::Specializes))
         };
-        let enclosing = NodeStrength {
-            nested_arc_kind: Some(ArcKind::References),
-            ..specialized(vec![outer])
-        };
-        assert_stronger(&enclosing, &specialized(vec![outer, inner]));
+        assert_chain_stronger(&[outer], &[outer, inner]);
     }
 
     #[test]
@@ -785,13 +799,10 @@ mod tests {
             specializes_index: 1,
             ..a
         };
-        let c = SpecializesOrigin {
-            namespace_depth: 1,
-            ..origin(ArcKind::Specializes, Some(ArcKind::Specializes))
-        };
-        assert_stronger(&specialized(vec![a]), &specialized(vec![a, c]));
-        assert_stronger(&specialized(vec![a, c]), &specialized(vec![b]));
-        assert_stronger(&specialized(vec![a, c]), &specialized(vec![b, c]));
+        let c = origin(ArcKind::Specializes, Some(ArcKind::Specializes));
+        assert_chain_stronger(&[a], &[a, c]);
+        assert_chain_stronger(&[a, c], &[b]);
+        assert_chain_stronger(&[a, c], &[b, c]);
     }
 
     #[test]
@@ -813,7 +824,7 @@ mod tests {
         };
         let order = [deep, nested, beside, implied, direct];
         for pair in order.windows(2) {
-            assert_stronger(&specialized(vec![pair[0]]), &specialized(vec![pair[1]]));
+            assert_chain_stronger(&[pair[0]], &[pair[1]]);
         }
     }
 }

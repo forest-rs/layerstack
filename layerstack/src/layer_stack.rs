@@ -144,6 +144,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(2),
@@ -151,6 +152,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(3),
@@ -158,6 +160,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         });
 
         let stack = LayerStack::gather(&store, LayerId(1));
@@ -178,6 +181,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(2),
@@ -185,6 +189,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(3),
@@ -192,6 +197,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         });
 
         let mut cycles = Vec::new();
@@ -216,6 +222,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(2),
@@ -223,6 +230,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         });
 
         let mut cycles = Vec::new();
@@ -248,6 +256,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(2),
@@ -261,6 +270,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(3),
@@ -268,6 +278,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         });
 
         let stack = LayerStack::gather(&store, LayerId(1));
@@ -307,6 +318,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(2),
@@ -320,6 +332,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(3),
@@ -327,6 +340,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         });
 
         let stack = LayerStack::gather(&store, LayerId(1));

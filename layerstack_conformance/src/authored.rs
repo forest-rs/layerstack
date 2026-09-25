@@ -273,8 +273,26 @@ fn render_prim(out: &mut Vec<String>, path: PathId, spec: &PrimSpec, names: Name
         .specifier
         .map_or(String::from("-"), |s| format!("{s:?}").to_lowercase());
     let type_name = spec.type_name.map_or("", |t| names.token(t));
+    let branch: String = spec
+        .outer_variant_sites
+        .iter()
+        .map(|site| {
+            format!(
+                "{}{{{}={}}}",
+                names.path(site.host_path),
+                names.token(site.set),
+                names.token(site.variant)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+    let branch = if branch.is_empty() {
+        branch
+    } else {
+        format!(" in {branch}")
+    };
     out.push(
-        format!("prim {} {specifier} {type_name}", names.path(path))
+        format!("prim {}{branch} {specifier} {type_name}", names.path(path))
             .trim_end()
             .to_owned(),
     );
@@ -335,10 +353,26 @@ pub fn dump_layer(layer: &Layer, names: Names<'_>) -> Vec<String> {
         out.push(format!("    defaultPrim = {}", names.token(default_prim)));
     }
     render_fields(&mut out, "    meta ", &layer.metadata, names);
-    let mut prims: Vec<_> = layer.prims.iter().collect();
-    prims.sort_by_key(|(path, _)| names.path(**path));
-    for (path, spec) in prims {
-        render_prim(&mut out, *path, spec, names);
+    // Every spec, including those of other variant branches at the same
+    // path; each prim header names its branch context.
+    let mut prims: Vec<(PathId, Vec<String>)> = layer
+        .prims
+        .keys()
+        .map(|path| {
+            let mut lines = Vec::new();
+            for spec in layer.prim_specs(*path) {
+                let mut spec_lines = Vec::new();
+                render_prim(&mut spec_lines, *path, spec, names);
+                lines.push(spec_lines);
+            }
+            // Branch order at one path depends on ingestion order.
+            lines.sort();
+            (*path, lines.concat())
+        })
+        .collect();
+    prims.sort_by_key(|(path, _)| names.path(*path));
+    for (_, lines) in prims {
+        out.extend(lines);
     }
     out
 }

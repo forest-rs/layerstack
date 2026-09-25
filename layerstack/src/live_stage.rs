@@ -408,6 +408,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         let mut spec = PrimSpec::default();
         spec.set_field(field_x, FieldValue::Value(Value::Int64(42)));
@@ -434,6 +435,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         layer.insert_prim(prim, PrimSpec::default());
         store.insert_layer(layer);
@@ -455,6 +457,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         let mut spec = PrimSpec::default();
         spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
@@ -524,6 +527,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         layer.insert_prim(prim, PrimSpec::default());
         store.insert_layer(layer);
@@ -602,6 +606,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         let mut p_spec = PrimSpec::default();
         p_spec.add_reference(Reference::new(LayerId(2), prim_q));
@@ -614,6 +619,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         let mut q_spec = PrimSpec::default();
         q_spec.set_field(field_x, FieldValue::Value(Value::Int64(10)));
@@ -660,6 +666,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         let mut spec2 = PrimSpec::default();
         spec2.set_field(field_x, FieldValue::Value(Value::Int64(10)));
@@ -672,6 +679,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         let mut spec1 = PrimSpec::default();
         spec1.set_field(field_x, FieldValue::Value(Value::Int64(20)));
@@ -729,6 +737,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         // /Class_C defines x = 42.
         let mut class_spec = PrimSpec::default();
@@ -783,6 +792,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         let mut a_spec = PrimSpec::default();
         a_spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
@@ -795,6 +805,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         let mut b_spec = PrimSpec::default();
         b_spec.set_field(field_y, FieldValue::Value(Value::Int64(2)));
@@ -844,6 +855,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         let mut spec = PrimSpec::default();
         spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
@@ -886,6 +898,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         let mut p_spec = PrimSpec::default();
         p_spec.add_reference(Reference::new(LayerId(2), prim_q));
@@ -899,6 +912,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         let mut q_spec = PrimSpec::default();
         q_spec.set_field(field_x, FieldValue::Value(Value::Int64(100)));
@@ -940,6 +954,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         let mut a_spec = PrimSpec::default();
         a_spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
@@ -990,6 +1005,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         let mut a_spec = PrimSpec::default();
         a_spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
@@ -1043,6 +1059,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         let mut a_spec = PrimSpec::default();
         a_spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
@@ -1055,6 +1072,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         let mut b_spec = PrimSpec::default();
         b_spec.set_field(field_x, FieldValue::Value(Value::Int64(2)));
@@ -1087,6 +1105,7 @@ mod tests {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         };
         for &(prim, val) in &[(prim_a, 1), (prim_b, 2), (prim_c, 3)] {
             let mut spec = PrimSpec::default();

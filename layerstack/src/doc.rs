@@ -22,7 +22,7 @@ use crate::{
         PropertyEntry, PropertySpec, PropertyType, get_property, get_property_mut, remove_property,
         set_property_vec,
     },
-    spec_path::VariantSelectionSite,
+    spec_path::{SpecComponent, SpecPath, VariantSelectionSite},
 };
 
 /// Identifies a layer by stable ID.
@@ -1229,7 +1229,23 @@ pub struct Layer {
     /// is read from the root layer, not composed).
     pub metadata: Vec<FieldEntry>,
     /// Prim specs keyed by prim path.
+    ///
+    /// Each path holds one spec here: the spec authored outside any variant
+    /// branch if there is one, otherwise the first spec ingested for it.
+    /// Specs authored for the same path inside other variant branches are
+    /// kept in [`Layer::variant_prims`]; see [`Layer::prim_specs`].
     pub prims: HashMap<PathId, PrimSpec>,
+    /// Further prim specs at a path already in [`Layer::prims`], each
+    /// authored inside a different variant branch and identified by its
+    /// [`PrimSpec::outer_variant_sites`].
+    ///
+    /// Branches of one variant set may author the same descendant
+    /// (`/Model{lod=high}Geom` and `/Model{lod=low}Geom`); each branch keeps
+    /// its own spec so composition can use the selected one.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs contain their own prim specs),
+    /// §10.5 (only the selected variant contributes).
+    pub variant_prims: HashMap<PathId, Vec<PrimSpec>>,
 }
 
 impl Layer {
@@ -1241,12 +1257,92 @@ impl Layer {
             default_prim: None,
             metadata: Vec::new(),
             prims: HashMap::new(),
+            variant_prims: HashMap::new(),
         }
     }
 
-    /// Inserts a prim spec at the given path.
+    /// Inserts a prim spec at the given path, replacing the spec authored in
+    /// the same variant branch context ([`PrimSpec::outer_variant_sites`]).
+    ///
+    /// A spec from a different branch context is kept next to the existing
+    /// one (see [`Layer::variant_prims`]) instead of replacing it; a spec
+    /// authored outside any variant branch takes the [`Layer::prims`] slot.
     pub fn insert_prim(&mut self, path: PathId, spec: PrimSpec) {
+        let displaced = match self.prims.get(&path) {
+            Some(existing) if existing.outer_variant_sites == spec.outer_variant_sites => None,
+            Some(_) if !spec.outer_variant_sites.is_empty() => {
+                insert_branch_spec(self.variant_prims.entry(path).or_default(), spec);
+                return;
+            }
+            Some(_) => self.prims.remove(&path),
+            None => None,
+        };
         self.prims.insert(path, spec);
+        if let Some(displaced) = displaced {
+            insert_branch_spec(self.variant_prims.entry(path).or_default(), displaced);
+        }
+    }
+
+    /// Returns every prim spec this layer authors at `path`: the
+    /// [`Layer::prims`] spec, then those of other variant branches.
+    pub fn prim_specs(&self, path: PathId) -> impl Iterator<Item = &PrimSpec> {
+        self.prims
+            .get(&path)
+            .into_iter()
+            .chain(self.variant_prims.get(&path).into_iter().flatten())
+    }
+
+    /// Returns the prim spec at `path` authored in the variant branch
+    /// context `sites` (empty for a spec outside any branch).
+    #[must_use]
+    pub fn prim_spec_in(&self, path: PathId, sites: &[VariantSelectionSite]) -> Option<&PrimSpec> {
+        self.prim_specs(path)
+            .find(|spec| spec.outer_variant_sites == sites)
+    }
+
+    /// Returns the prim spec a composed opinion source names: the spec at
+    /// `lookup_path` whose variant branch context matches every variant
+    /// selection in `spec_path` enclosing that prim.
+    ///
+    /// Selections on the prim itself (`/P{v=b}`) name one of that spec's
+    /// variants, not another spec, so they do not take part. When no spec
+    /// has exactly that context (for example a source whose spec path was
+    /// remapped across an arc), the [`Layer::prims`] spec is returned.
+    ///
+    /// Spec: AOUSD Core §7.3.6, §10.5.
+    pub(crate) fn source_prim_spec(
+        &self,
+        lookup_path: PathId,
+        spec_path: &SpecPath,
+        paths: &PathInterner,
+    ) -> Option<&PrimSpec> {
+        if self.variant_prims.get(&lookup_path).is_none() {
+            return self.prims.get(&lookup_path);
+        }
+        let depth = paths.resolve(lookup_path).depth();
+        let mut segments = Vec::new();
+        let mut sites = Vec::new();
+        for component in spec_path.components() {
+            match *component {
+                SpecComponent::Prim(segment) => segments.push(segment),
+                SpecComponent::VariantSelection { set, variant } => {
+                    if segments.len() >= depth {
+                        break;
+                    }
+                    let Some(host_path) = paths.lookup(&crate::path::Path::root().join(&segments))
+                    else {
+                        continue;
+                    };
+                    sites.push(VariantSelectionSite {
+                        host_path,
+                        set,
+                        variant,
+                    });
+                }
+            }
+        }
+        self.prim_spec_in(lookup_path, &sites)
+            .or_else(|| self.prims.get(&lookup_path))
     }
 
     /// Returns an authored layer metadata field, if present.
@@ -1288,6 +1384,18 @@ impl Layer {
         self.prims
             .get_mut(&property_path.prim_path())?
             .property_mut(property_path.property())
+    }
+}
+
+/// Inserts `spec` into a list of branch specs, replacing the one from the
+/// same branch context.
+fn insert_branch_spec(specs: &mut Vec<PrimSpec>, spec: PrimSpec) {
+    match specs
+        .iter_mut()
+        .find(|existing| existing.outer_variant_sites == spec.outer_variant_sites)
+    {
+        Some(existing) => *existing = spec,
+        None => specs.push(spec),
     }
 }
 

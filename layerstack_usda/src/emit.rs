@@ -609,7 +609,12 @@ impl EmitCtx<'_> {
                             Path::parse_absolute(&child_path, self.tokens).expect("valid path");
                         let child_path_id = self.paths.intern(child_path_parsed);
 
-                        if layer.prims.contains_key(&child_path_id) {
+                        // A child already authored outside any variant branch
+                        // gets this branch's opinions through the child maps;
+                        // otherwise the branch authors its own prim spec,
+                        // which `Layer::insert_prim` keeps apart from other
+                        // branches' specs at the same path.
+                        if layer.prim_spec_in(child_path_id, &[]).is_some() {
                             // Route to variant child maps.
                             self.emit_variant_child_prim(
                                 child_prim,
@@ -763,13 +768,8 @@ impl EmitCtx<'_> {
 
                         // Emit the child prim as a full PrimSpec.
                         let child_path = format!("{}/{}", prim_path, child_prim.name);
-                        let child_path_parsed =
-                            Path::parse_absolute(&child_path, self.tokens).expect("valid path");
-                        let child_path_id = self.paths.intern(child_path_parsed);
-
-                        if !layer.prims.contains_key(&child_path_id) {
-                            self.emit_prim(child_prim, &child_path, &branch_context, layer);
-                        }
+                        // `Layer::insert_prim` keeps each branch's spec.
+                        self.emit_prim(child_prim, &child_path, &branch_context, layer);
 
                         // Route composition arcs to the nested variant spec.
                         self.emit_variant_child_arcs(

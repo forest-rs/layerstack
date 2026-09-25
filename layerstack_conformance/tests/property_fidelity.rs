@@ -95,6 +95,19 @@ fn dump(store: &InMemoryStore) -> Vec<String> {
     )
 }
 
+/// Lines only in `left` (`-`) or only in `right` (`+`).
+fn line_diff(left: &[String], right: &[String]) -> String {
+    let only = |a: &[String], b: &[String], mark: char| {
+        a.iter()
+            .filter(|line| !b.contains(line))
+            .map(|line| format!("{mark} {line}"))
+            .collect::<Vec<_>>()
+    };
+    let mut out = only(left, right, '-');
+    out.extend(only(right, left, '+'));
+    out.join("\n")
+}
+
 /// Loads one USDC layer as `LayerId(1)`, asserting a diagnostic-free read.
 fn load_usdc(path: &Path) -> InMemoryStore {
     let data =
@@ -127,11 +140,10 @@ fn assert_matches_usdcat(name: &str) -> InMemoryStore {
     let original = load_usda(&assets_dir().join(format!("{name}.usda")));
     let binary = load_usdc(&assets_dir().join(format!("{name}.usdc")));
     let (original_dump, binary_dump) = (dump(&original), dump(&binary));
-    assert_eq!(
-        original_dump,
-        binary_dump,
+    assert!(
+        original_dump == binary_dump,
         "{name}: USDC content differs from the USDA it was written from\n{}",
-        binary_dump.join("\n")
+        line_diff(&original_dump, &binary_dump)
     );
     assert_matches_usdcat_text(name)
 }
@@ -361,4 +373,97 @@ fn unknown_schemas_and_uniform_namespaced_properties_survive() {
         stage.resolve_property_order(prim, &store),
         Some(vec![softness, color])
     );
+}
+
+/// Two variant branches author the same descendant paths; each branch keeps
+/// its own specs, in USDA, in OpenUSD's rewrite and in its USDC, and only
+/// the selected branch contributes (checked against `usdcat --flatten`:
+/// `detail = 1`, `purpose = "proxy"`).
+///
+/// Spec: AOUSD Core §7.3.6 (variant specs contain prim specs), §10.5.
+#[test]
+fn variant_branch_specs_at_the_same_path_are_kept() {
+    let mut store = assert_matches_usdcat("variant_branches");
+    let geom = store.path("/Model/Geom");
+    let mesh = store.path("/Model/Geom/Mesh");
+    let detail = store.tokens.intern("detail");
+    let purpose = store.tokens.intern("purpose");
+    let proxy = store.tokens.intern("proxy");
+
+    let layer = &store.layers[&LayerId(1)];
+    assert_eq!(layer.prim_specs(geom).count(), 2, "one `Geom` per branch");
+    assert_eq!(layer.prim_specs(mesh).count(), 2, "one `Mesh` per branch");
+
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    assert_eq!(
+        stage
+            .resolve_field_path(PropertyPath::new(geom, detail))
+            .map(|r| r.value),
+        Some(Value::Int(1))
+    );
+    assert_eq!(
+        stage
+            .resolve_field_path(PropertyPath::new(mesh, purpose))
+            .map(|r| r.value),
+        Some(Value::Token(proxy))
+    );
+    assert_eq!(
+        stage
+            .explain_property_path(PropertyPath::new(mesh, purpose))
+            .map(<[layerstack::Opinion]>::len),
+        Some(1),
+        "the unselected branch contributes nothing"
+    );
+}
+
+/// The same fixture read from OpenUSD's USDC composes the same way.
+#[test]
+fn variant_branch_specs_compose_from_usdc() {
+    let mut store = load_usdc(&assets_dir().join("variant_branches.usdc"));
+    let mesh = store.path("/Model/Geom/Mesh");
+    let purpose = store.tokens.intern("purpose");
+    let proxy = store.tokens.intern("proxy");
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    assert_eq!(
+        stage
+            .resolve_field_path(PropertyPath::new(mesh, purpose))
+            .map(|r| r.value),
+        Some(Value::Token(proxy))
+    );
+}
+
+/// Declarations of a prim authored in several variant branches come from
+/// the selected branch's spec, including through nested selections.
+///
+/// Expected values from OpenUSD 26.08 (`GetTypeName`, `GetSpecifier`,
+/// `GetPropertyOrder`, `GetPrimStack` of `/P/C`):
+/// `variant_declarations.usda` → `Xform`, class, `[b]`, `/P{v=b}C`;
+/// `variant_declarations_nested.usda` → `Xform`, class, `[y]`,
+/// `/P{v=b}{w=y}C`.
+///
+/// Spec: AOUSD Core §10.5 (only the selected variant contributes), §12.2.1
+/// (specifier), §12.2.2 (type name).
+#[test]
+fn declarations_come_from_the_selected_variant_branch() {
+    for (fixture, order) in [
+        ("variant_declarations.usda", "b"),
+        ("variant_declarations_nested.usda", "y"),
+    ] {
+        let mut store = load_usda(&assets_dir().join(fixture));
+        let c = store.path("/P/C");
+        let xform = store.tokens.intern("Xform");
+        let order = store.tokens.intern(order);
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert_eq!(stage.resolve_type_name(c, &store), Some(xform), "{fixture}");
+        assert_eq!(
+            stage.resolve_specifier(c, &store),
+            Some(layerstack::Specifier::Class),
+            "{fixture}"
+        );
+        assert_eq!(
+            stage.resolve_property_order(c, &store),
+            Some(vec![order]),
+            "{fixture}"
+        );
+    }
 }

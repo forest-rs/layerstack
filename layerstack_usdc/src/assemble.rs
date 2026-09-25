@@ -30,6 +30,7 @@ use layerstack::path::{Path, PathId, PathInterner, PropertyPath, TargetPath};
 use layerstack::property::{
     PropertyEntry, PropertyKind, PropertySpec, Variability, property_entry, set_property_vec,
 };
+use layerstack::spec_path::VariantSelectionSite;
 use layerstack::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
 use layerstack::{AssetResolver, PropertyType, ReferenceTarget, ResolvedAsset};
 
@@ -161,12 +162,10 @@ impl AssembleCtx<'_> {
         for (i, spec) in self.sections.specs.iter().enumerate() {
             if spec.form == SpecForm::Prim {
                 let path_str = self.lookup_path(spec.path_index)?;
-                if path_str.contains('{') {
-                    self.report(
-                        &path_str,
-                        None,
-                        "unsupported: prim specs inside variant branches are not read",
-                    );
+                // Prims inside variant branches (`/A{v=x}B`) keep their
+                // variant-qualified key until they are placed in the layer.
+                if path_str.contains('{') && split_branch_path(&path_str).is_none() {
+                    self.report(&path_str, None, "prim spec path could not be parsed");
                     continue;
                 }
                 let (prim, children) = self.build_prim_spec(&path_str, &spec_fields[i])?;
@@ -186,15 +185,30 @@ impl AssembleCtx<'_> {
                 continue;
             }
             let path_str = self.lookup_path(spec.path_index)?;
-            if path_str.contains('{') {
-                continue;
-            }
-            let Ok(property_path) = PropertyPath::parse(&path_str, self.tokens, self.paths) else {
-                self.report(&path_str, None, "property spec path could not be parsed");
-                continue;
+            let (prim_path, name) = if path_str.contains('{') {
+                // A property directly on a variant (`/A{v=x}.b`) belongs to
+                // the variant spec and is handled with the variant specs;
+                // one on a prim inside a branch (`/A{v=x}B.c`) is handled
+                // here.
+                match path_str.rsplit_once('.') {
+                    Some((prim, _)) if prim.ends_with('}') => continue,
+                    Some((prim, name)) => (String::from(prim), String::from(name)),
+                    None => {
+                        self.report(&path_str, None, "property spec path could not be parsed");
+                        continue;
+                    }
+                }
+            } else {
+                let Ok(property_path) = PropertyPath::parse(&path_str, self.tokens, self.paths)
+                else {
+                    self.report(&path_str, None, "property spec path could not be parsed");
+                    continue;
+                };
+                (
+                    self.paths.display(property_path.prim_path(), self.tokens),
+                    String::from(self.tokens.resolve(property_path.property())),
+                )
             };
-            let prim_path = self.paths.display(property_path.prim_path(), self.tokens);
-            let name = String::from(self.tokens.resolve(property_path.property()));
             let Some(mut prim) = prim_specs_map.remove(&prim_path) else {
                 self.report(&path_str, None, "property spec has no owning prim spec");
                 continue;
@@ -258,9 +272,32 @@ impl AssembleCtx<'_> {
         // Establish parent-child relationships.
         self.build_child_relationships(&mut prim_specs_map);
 
-        // Convert prim_specs_map into layer prims.
-        for (path_str, prim) in prim_specs_map {
-            if let Ok(path) = Path::parse_absolute(&path_str, self.tokens) {
+        // Convert prim_specs_map into layer prims. A prim inside variant
+        // branches goes to its namespace path with its branch context, so
+        // each branch keeps its own spec (`Layer::insert_prim`).
+        //
+        // Spec: AOUSD Core §7.3.6 (variant specs contain prim specs).
+        let mut prim_specs: Vec<_> = prim_specs_map.into_iter().collect();
+        prim_specs.sort_by(|a, b| a.0.cmp(&b.0));
+        for (path_str, mut prim) in prim_specs {
+            let namespace = match split_branch_path(&path_str) {
+                Some((namespace, sites)) => {
+                    prim.outer_variant_sites = sites
+                        .into_iter()
+                        .filter_map(|(host, set, variant)| {
+                            let host = Path::parse_absolute(&host, self.tokens).ok()?;
+                            Some(VariantSelectionSite {
+                                host_path: self.paths.intern(host),
+                                set: self.tokens.intern(&set),
+                                variant: self.tokens.intern(&variant),
+                            })
+                        })
+                        .collect();
+                    namespace
+                }
+                None => path_str,
+            };
+            if let Ok(path) = Path::parse_absolute(&namespace, self.tokens) {
                 let path_id = self.paths.intern(path);
                 layer.insert_prim(path_id, prim);
             }
@@ -677,7 +714,12 @@ impl AssembleCtx<'_> {
         for (i, spec) in self.sections.specs.iter().enumerate() {
             if spec.form == SpecForm::Attribute || spec.form == SpecForm::Relationship {
                 let path_str = self.lookup_path(spec.path_index)?;
-                if !path_str.contains('{') {
+                // Only properties directly on a variant (`/A{v=x}.b`); those of
+                // prims inside a branch are attached with their prim.
+                if !path_str
+                    .rsplit_once('.')
+                    .is_some_and(|(prim, _)| prim.ends_with('}'))
+                {
                     continue;
                 }
                 // Check if this is under a variant context.
@@ -698,7 +740,7 @@ impl AssembleCtx<'_> {
                     self.report(
                         &path_str,
                         None,
-                        "unsupported: properties of prims inside variant branches are not read",
+                        "unsupported: properties of nested variants are not read",
                     );
                 }
             }
@@ -1375,6 +1417,40 @@ impl AssembleCtx<'_> {
 // ---------------------------------------------------------------------------
 // Path parsing helpers
 // ---------------------------------------------------------------------------
+
+/// A variant selection in a crate path: host prim path, set and variant.
+type BranchSite = (String, String, String);
+
+/// Splits the crate path of a prim inside variant branches, such as
+/// `/A{v=x}B/C`, into its namespace path (`/A/B/C`) and its variant
+/// selections with their host prim paths, outer to inner.
+///
+/// Returns `None` for a path outside any variant branch or a malformed one.
+fn split_branch_path(path: &str) -> Option<(String, Vec<BranchSite>)> {
+    let mut namespace = String::new();
+    let mut sites = Vec::new();
+    let mut rest = path;
+    while !rest.is_empty() {
+        if let Some(inner) = rest.strip_prefix('{') {
+            let close = inner.find('}')?;
+            let (set, variant) = inner[..close].split_once('=')?;
+            if set.is_empty() || variant.is_empty() || namespace.is_empty() {
+                return None;
+            }
+            sites.push((namespace.clone(), String::from(set), String::from(variant)));
+            rest = &inner[close + 1..];
+            if !rest.is_empty() && !rest.starts_with('/') && !rest.starts_with('{') {
+                namespace.push('/');
+            }
+        } else {
+            let end = rest.find('{').unwrap_or(rest.len());
+            namespace.push_str(&rest[..end]);
+            rest = &rest[end..];
+        }
+    }
+    (namespace.starts_with('/') && !sites.is_empty() && !namespace.ends_with('/'))
+        .then_some((namespace, sites))
+}
 
 /// Parses a variant set path like `/Prim{varSetName=}` → `("/Prim", "varSetName")`.
 fn parse_variant_set_path(path: &str) -> Option<(String, String)> {

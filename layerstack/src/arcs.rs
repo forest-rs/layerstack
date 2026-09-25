@@ -259,7 +259,8 @@ impl ArcAuthoring<'_> {
     /// enclosing branches of a selected spec authored inside branches
     /// (`/P{v=x}C`), or the selected branch of one of the prim's own variant
     /// sets whose header authors it (`/P{v=x}`), after the branches enclosing
-    /// that set.
+    /// that set. With them comes the index in the layer stack of the layer
+    /// that authors it (`None` when no spec of `prim` adds it).
     ///
     /// Each list op is passed through `edit` with the layer that authors it,
     /// as arc resolution passes it (see [`as_authored`] and
@@ -270,7 +271,7 @@ impl ArcAuthoring<'_> {
         spec_arcs: fn(&PrimSpec) -> &ListOp<T>,
         branch_arcs: fn(&VariantSpec) -> &ListOp<T>,
         edit: impl Fn(&ListOp<T>, LayerId) -> ListOp<T>,
-    ) -> Vec<VariantSelectionSite> {
+    ) -> (Vec<VariantSelectionSite>, Option<usize>) {
         let Self {
             store,
             stack,
@@ -286,22 +287,29 @@ impl ArcAuthoring<'_> {
                 || op.prepend.contains(item)
                 || op.append.contains(item)
         };
-        let layers = || stack.layers.iter().filter_map(|id| store.layer(*id));
-        let outside = layers().any(|layer| {
+        // Each layer with its index in `stack`, strongest first.
+        let layers = || {
+            stack
+                .layers
+                .iter()
+                .enumerate()
+                .filter_map(|(index, id)| Some((index, store.layer(*id)?)))
+        };
+        let outside = layers().find(|(_, layer)| {
             layer
                 .prim_specs(prim)
                 .any(|spec| spec.outer_variant_sites.is_empty() && adds(spec_arcs(spec), layer.id))
         });
-        if outside {
-            return Vec::new();
+        if let Some((index, _)) = outside {
+            return (Vec::new(), Some(index));
         }
-        for layer in layers() {
+        for (index, layer) in layers() {
             for spec in layer.prim_specs(prim) {
                 if !spec.outer_variant_sites.is_empty()
                     && adds(spec_arcs(spec), layer.id)
                     && spec_branches_selected(store, stack, spec, scope)
                 {
-                    return spec.outer_variant_sites.clone();
+                    return (spec.outer_variant_sites.clone(), Some(index));
                 }
             }
         }
@@ -310,7 +318,7 @@ impl ArcAuthoring<'_> {
             .map(|(set, variant)| (*set, *variant))
             .collect();
         selected.sort_unstable();
-        for layer in layers() {
+        for (index, layer) in layers() {
             for spec in variant_host_specs(store, stack, layer, prim, scope) {
                 for &(set, variant) in &selected {
                     let Some(branch) = spec
@@ -327,37 +335,69 @@ impl ArcAuthoring<'_> {
                             set,
                             variant,
                         });
-                        return sites;
+                        return (sites, Some(index));
                     }
                 }
             }
         }
-        Vec::new()
+        (Vec::new(), None)
     }
 
     /// The branches that author the inherits or specializes arc `item` (see
     /// [`Self::sites_by`]).
+    ///
+    /// A class arc carries no offset of its own, and none from the layer
+    /// that authors it: its target is read in the same layer stack, whose
+    /// layers keep their own sublayer offsets. OpenUSD maps a class arc with
+    /// the identity offset (`_AddClassBasedArcs` in
+    /// `pxr/usd/pcp/primIndex.cpp`).
     pub(crate) fn sites(
         &self,
         item: &PathId,
         spec_arcs: fn(&PrimSpec) -> &ListOp<PathId>,
         branch_arcs: fn(&VariantSpec) -> &ListOp<PathId>,
     ) -> Vec<VariantSelectionSite> {
-        self.sites_by(item, spec_arcs, branch_arcs, as_authored)
+        self.sites_by(item, spec_arcs, branch_arcs, as_authored).0
     }
 
-    /// The branches that author the reference or payload `item`, resolved
-    /// with internal arcs anchored to `anchor` (see [`Self::sites_by`]).
-    pub(crate) fn reference_sites(
+    /// The reference or payload `item`, resolved with internal arcs anchored
+    /// to `anchor`, with the offset of the layer that authors it applied,
+    /// and the branches that author it (see [`Self::sites_by`]).
+    ///
+    /// An arc to another layer stack is read on the timeline of the layer
+    /// that authors it: its offset composes beneath that layer's offset in
+    /// `stack` (the strongest layer adding the arc). An internal arc keeps
+    /// its own offset, as its target is read in `stack`, whose layers
+    /// already carry their sublayer offsets.
+    ///
+    /// Spec: AOUSD Core §12.3.2.1 (layer offsets on sublayers, references
+    /// and payloads), §10.3.1.1 (offsets compose along a chain of arcs),
+    /// §10.3.2.1 (an arc with no asset path targets the containing layer
+    /// stack). OpenUSD: `_EvalRefOrPayloadArcs` in
+    /// `pxr/usd/pcp/primIndex.cpp` sets the arc's offset to
+    /// `sourceLayerStackOffset * layerOffset` for a non-internal arc, where
+    /// `sourceLayerStackOffset` is `PcpLayerStack::GetLayerOffsetForLayer`
+    /// of the strongest layer adding the arc
+    /// (`_PcpComposeSiteReferencesOrPayloads`, `pxr/usd/pcp/composeSite.cpp`).
+    pub(crate) fn authored_reference(
         &self,
-        item: &Reference,
+        item: Reference,
         spec_arcs: fn(&PrimSpec) -> &ListOp<Reference>,
         branch_arcs: fn(&VariantSpec) -> &ListOp<Reference>,
         anchor: LayerId,
-    ) -> Vec<VariantSelectionSite> {
-        self.sites_by(item, spec_arcs, branch_arcs, |op, layer| {
+    ) -> (Reference, Vec<VariantSelectionSite>) {
+        let (sites, layer) = self.sites_by(&item, spec_arcs, branch_arcs, |op, layer| {
             anchor_internal_arcs(op, layer, anchor)
-        })
+        });
+        let internal = item.asset.is_none() && item.layer == anchor;
+        let reference = match layer {
+            Some(index) if !internal => Reference {
+                layer_offset: self.stack.offset_at(index).compose(item.layer_offset),
+                ..item
+            },
+            _ => item,
+        };
+        (reference, sites)
     }
 }
 

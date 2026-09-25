@@ -1,5 +1,0 @@
-*.usdc filter=lfs diff=lfs merge=lfs -text
-# Byte-exact OpenUSD oracle text: line breaks inside string literals are
-# part of the data, so never convert line endings on checkout.
-*.usda -text
-*.txt -text

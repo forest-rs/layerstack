@@ -223,6 +223,82 @@
      "/Sap"
     ]
    ]
+  },
+  {
+   "path": "/Maple",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Maple"
+    ],
+    [
+     "root.usda",
+     "/Bud"
+    ],
+    [
+     "root.usda",
+     "/Burl"
+    ],
+    [
+     "root.usda",
+     "/Burl{grain=fine}"
+    ],
+    [
+     "root.usda",
+     "/Pith"
+    ]
+   ]
+  },
+  {
+   "path": "/Bud",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Bud"
+    ],
+    [
+     "root.usda",
+     "/Pith"
+    ],
+    [
+     "root.usda",
+     "/Burl"
+    ],
+    [
+     "root.usda",
+     "/Burl{grain=fine}"
+    ]
+   ]
+  },
+  {
+   "path": "/Pith",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Pith"
+    ],
+    [
+     "root.usda",
+     "/Burl"
+    ],
+    [
+     "root.usda",
+     "/Burl{grain=fine}"
+    ]
+   ]
+  },
+  {
+   "path": "/Burl",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Burl"
+    ],
+    [
+     "root.usda",
+     "/Burl{grain=fine}"
+    ]
+   ]
   }
  ],
  "values": {
@@ -240,6 +316,14 @@
   "/Resin.x": 3,
   "/Bark.x": 4,
   "/Larch.x": 3,
-  "/Spruce.x": 7
+  "/Spruce.x": 7,
+  "/Maple.x": 4,
+  "/Maple.y": 8,
+  "/Bud.x": 3,
+  "/Bud.y": 8,
+  "/Pith.x": 3,
+  "/Pith.y": 8,
+  "/Burl.x": 4,
+  "/Burl.y": 8
  }
 }

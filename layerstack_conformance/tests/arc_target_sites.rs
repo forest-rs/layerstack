@@ -21,7 +21,9 @@
 //! `/Bark` directly and through the specializes of `/Needle`, in either list
 //! order, `/Larch` specializes it directly, and `/Spruce` reaches the first
 //! shape through a reference. Each resolves `x` from the site OpenUSD ranks
-//! strongest.
+//! strongest. `/Maple` repeats the first shape with a selected variant on the
+//! class reached twice: the branch goes with the registration that stays and
+//! appears once.
 //!
 //! Spec: AOUSD Core §10.4 (an arc's target ranks beneath the site that
 //! authors it), §10.4.2.4 (implied class arcs); `pxr/usd/pcp/primIndex.cpp`

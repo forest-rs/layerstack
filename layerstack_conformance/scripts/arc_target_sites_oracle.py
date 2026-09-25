@@ -18,7 +18,9 @@ references nested in another asset, and a class a prim inherits directly
 that a referenced prim implies again (`_IsRedundantSite`). A class reached
 twice is one site at its strongest registration (`skipDuplicateNodes`):
 inherited directly and through another class's specializes, in either list
-order, specialized directly, and the same shape through a reference.
+order, specialized directly, the same shape through a reference, and with a
+selected variant on the class, whose branch stays with the registration that
+stays.
 
 For every composed prim the vectors record its prim stack, repeats
 included, and for every attribute its resolved default.
@@ -111,6 +113,42 @@ def "Spruce" (
     references = @./classes.usda@</Sapling>
 )
 {
+}
+
+# The first shape again, with a selected variant on the class reached twice:
+# its branch stays with the registration that stays, and appears once.
+def "Maple" (
+    inherits = [</Bud>, </Burl>]
+)
+{
+}
+
+class "Bud" (
+    specializes = </Pith>
+)
+{
+}
+
+class "Pith" (
+    specializes = </Burl>
+)
+{
+    int x = 3
+}
+
+class "Burl" (
+    variants = {
+        string grain = "fine"
+    }
+    prepend variantSets = "grain"
+)
+{
+    int x = 4
+    variantSet "grain" = {
+        "fine" {
+            int y = 8
+        }
+    }
 }
 ''',
     "asset": '''#usda 1.0

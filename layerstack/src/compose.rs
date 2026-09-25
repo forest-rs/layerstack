@@ -34,7 +34,9 @@ use crate::{
     path::{PathId, PropertyPath, TargetPath},
     population::populate,
     prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue, PrimIndex},
-    prim_index_graph::{NodeArc, NodeId, NodeStrength, PrimIndexGraph, SpecializesOrigin},
+    prim_index_graph::{
+        NodeArc, NodeId, NodeStrength, PrimIndexGraph, PrimNode, SpecializesOrigin,
+    },
     property::PropertyType,
     spec_path::{SpecPath, VariantSelectionSite},
     stage::{Stage, StageOptions},
@@ -1446,7 +1448,8 @@ fn strip_instance_descendants(
             // type then comes from the strongest surviving declaration.
             // Variant/inherit/reference sources of the instance's own arcs
             // survive.
-            desc_index.retain_keys(|strength, key| {
+            desc_index.retain_keys(|graph, key| {
+                let strength = graph.strength(key.node);
                 if !strength.is_local {
                     return strength.namespace_depth >= instance_depth;
                 }
@@ -3344,7 +3347,10 @@ impl Graft<'_> {
 /// sources of a class arc whose site its destination already registers at
 /// least as strongly, returning them as `(destination, layer, site)`, and
 /// drops from the destination the weaker class arc registrations of a site
-/// that `pending` registers more strongly, with their opinions.
+/// that `pending` registers more strongly, with their opinions and the
+/// registrations of the same layer beneath their node (the selected
+/// variant branches of the replaced site), which the stronger registration
+/// brings again.
 ///
 /// A class arc adds no node for a site the prim index already uses: an
 /// implied class that an arc also reaches directly is one site (AOUSD Core
@@ -3388,10 +3394,36 @@ fn retain_new_class_sites(
     weaker.retain(|(dest, _, layer, site)| !redundant.contains(&(*dest, *layer, site.clone())));
     let dests: HashSet<PathId> = weaker.iter().map(|(dest, ..)| *dest).collect();
     for dest in dests {
+        let replaced: HashSet<(NodeId, LayerId)> = weaker
+            .iter()
+            .filter(|(weaker_dest, ..)| *weaker_dest == dest)
+            .map(|(_, node, layer, _)| (*node, *layer))
+            .collect();
+        let kept: HashSet<NodeId> = pending
+            .iter()
+            .filter(|(pending_dest, _)| *pending_dest == dest)
+            .map(|(_, key)| key.node)
+            .collect();
         out.get_mut(&dest)
             .expect("path exists")
-            .retain_keys(|_, key| {
-                !weaker.contains(&(dest, key.node, key.layer_id, key.spec_path.prim_spec()))
+            .retain_keys(|graph, key| {
+                if weaker.contains(&(dest, key.node, key.layer_id, key.spec_path.prim_spec())) {
+                    return false;
+                }
+                // A registration of the same layer beneath a replaced node,
+                // and not beneath a kept one, goes with that node.
+                let mut beneath_replaced = false;
+                let mut cursor = Some(key.node);
+                while let Some(node) = cursor {
+                    if kept.contains(&node) {
+                        return true;
+                    }
+                    if node != key.node && replaced.contains(&(node, key.layer_id)) {
+                        beneath_replaced = true;
+                    }
+                    cursor = graph.node(node).and_then(PrimNode::parent);
+                }
+                !beneath_replaced
             });
     }
     redundant

@@ -26,7 +26,8 @@ value resolution) and to keep it honest via a growing, fixture-driven conformanc
 - `layerstack_mesh_export/`: polygon mesh export to USDA/USDC/USDZ (`UsdGeomMesh` adapter over the
   `layerstack_usda` and `layerstack_usdc` writers and the `layerstack_usdz` packager, with generic
   and ARKit USDZ profiles; `UsdPreviewSurface` materials with direct and per-face bindings;
-  repeated geometry as static `UsdGeomPointInstancer`s)
+  repeated geometry as static `UsdGeomPointInstancer`s, written as references for ARKit, and
+  shared prototypes placed by instanced references)
 - `docs/`: focused design notes for active architecture slices
 - `core-spec-supplemental-release_dec2025/`: upstream AOUSD supplemental test corpus (vendored)
 - `specs/`: normative spec PDFs used as implementation references

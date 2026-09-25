@@ -20,7 +20,7 @@
 //!
 //! # Supported subset
 //!
-//! A static, arc-free, non-variant layer:
+//! An arc-free, non-variant layer:
 //!
 //! - layer metadata, including `defaultPrim` and bare-string comments;
 //! - prim specs with their specifier, `typeName`, metadata (`apiSchemas`
@@ -28,7 +28,8 @@
 //!   children in authored order, `reorder nameChildren`, `reorder
 //!   properties` and `reorder rootPrims`;
 //! - attribute specs with `custom`, `uniform`, the declared type, a default
-//!   value (a value block included), explicit or list-edited connections and
+//!   value (a value block included), time samples (blocked samples and an
+//!   empty sample map included), explicit or list-edited connections and
 //!   metadata;
 //! - relationship specs with `custom`, explicit or list-edited targets and
 //!   metadata;
@@ -44,19 +45,20 @@
 //!   arc whose asset did not resolve on import is kept as
 //!   `Reference::unresolved` and rejected the same way), inherits,
 //!   specializes, variant sets, variant selections and specs authored inside
-//!   variant branches; time samples (even an empty sample map) and splines;
-//!   sparse array edits; list ops mixing an explicit list with edits;
+//!   variant branches; splines; sparse array edits (as a default or a time
+//!   sample); list ops mixing an explicit list with edits;
 //!   `varying` relationships; list-op metadata other than token list ops;
 //!   and values the writers have no representation for (`half`, `uchar`,
 //!   `uint64`, quaternions, `matrix2d`/`matrix3d`, `pathExpression`,
 //!   `opaque`, `timecode` outside an attribute default, and arrays whose
 //!   element type is not recorded, such as an empty array in a dictionary);
 //! - [`SaveError::Invalid`]: a layer the file formats cannot hold as it
-//!   stands, such as a prim spec that no parent lists among its children or
-//!   an attribute without a type;
+//!   stands, such as a prim spec that no parent lists among its children,
+//!   an attribute without a type or a relationship with time samples;
 //! - [`SaveError::Document`]: what the writers' shared validation rejects
 //!   (invalid identifiers, a `defaultPrim` that names no prim of the layer, keys
-//!   whose USDA syntax the writer does not produce, ...).
+//!   whose USDA syntax the writer does not produce, sample times that are not
+//!   finite and increasing, ...).
 //!
 //! The crate writer additionally rejects metadata keys that OpenUSD does not
 //! register, since it cannot store them as the text parser would.
@@ -179,8 +181,6 @@ pub enum Unsupported {
     VariantSelections,
     /// A prim spec authored inside a variant branch.
     VariantSpec,
-    /// An attribute's `timeSamples`, even an empty sample map.
-    TimeSamples,
     /// An attribute's `spline`.
     Spline,
     /// A sparse array edit.
@@ -207,7 +207,6 @@ impl fmt::Display for Unsupported {
             Self::VariantSets => f.write_str("variant sets"),
             Self::VariantSelections => f.write_str("variant selections"),
             Self::VariantSpec => f.write_str("specs inside variant branches"),
-            Self::TimeSamples => f.write_str("time samples"),
             Self::Spline => f.write_str("splines"),
             Self::ArrayEdit => f.write_str("sparse array edits"),
             Self::MixedListOp => f.write_str("a list op with an explicit list and edits"),
@@ -230,7 +229,7 @@ pub enum Invalid {
     UnlistedPrim,
     /// A prim lists a child that has no prim spec.
     MissingChildSpec,
-    /// A relationship spec holds a type or value slot.
+    /// A relationship spec holds a type, default or time samples.
     RelationshipValue,
     /// The pseudo-root spec holds more than children and their order.
     PseudoRootOpinions,
@@ -243,7 +242,7 @@ impl fmt::Display for Invalid {
             Self::MissingTypeName => "attribute has no type name",
             Self::UnlistedPrim => "prim spec is not among its parent's children",
             Self::MissingChildSpec => "listed child has no prim spec",
-            Self::RelationshipValue => "relationship holds a type or value",
+            Self::RelationshipValue => "relationship holds a type or values",
             Self::PseudoRootOpinions => "pseudo-root spec holds prim opinions",
         })
     }
@@ -278,8 +277,9 @@ fn is_authored<T>(op: &LayerListOp<T>) -> bool {
 /// Where a value is authored, which decides the types it may have.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Site<'t> {
-    /// An attribute default declared with this type name (`[]` included).
-    Default(&'t str),
+    /// An attribute default or time sample, declared with this type name
+    /// (`[]` included).
+    Value(&'t str),
     /// A metadata field or dictionary entry.
     Metadata,
 }
@@ -431,9 +431,6 @@ impl Lowering<'_> {
         let name = self.name(entry.name);
         let path = format!("{prim}.{name}");
         let spec = &entry.spec;
-        if spec.time_samples.is_some() {
-            return unsupported(path, Unsupported::TimeSamples);
-        }
         if spec.spline.is_some() {
             return unsupported(path, Unsupported::Spline);
         }
@@ -456,8 +453,20 @@ impl Lowering<'_> {
                 } else {
                     String::from(base)
                 };
+                let site = Site::Value(&type_name);
                 let value = match &spec.default {
-                    Some(value) => Some(self.value(value, Site::Default(&type_name), &path)?),
+                    Some(value) => Some(self.value(value, site, &path)?),
+                    None => None,
+                };
+                // A blocked sample is a value block (§12.3.6), which
+                // `value` converts like any other value.
+                let time_samples = match &spec.time_samples {
+                    Some(samples) => Some(
+                        samples
+                            .iter()
+                            .map(|(time, value)| Ok((*time, self.value(value, site, &path)?)))
+                            .collect::<Result<Vec<_>, SaveError>>()?,
+                    ),
                     None => None,
                 };
                 Property::Attribute(Attribute {
@@ -469,12 +478,14 @@ impl Lowering<'_> {
                         Variability::Uniform => WriterVariability::Uniform,
                     },
                     value,
+                    time_samples,
                     connections: targets,
                     metadata,
                 })
             }
             PropertyKind::Relationship => {
-                if spec.type_name.is_some() || spec.default.is_some() {
+                if spec.type_name.is_some() || spec.default.is_some() || spec.time_samples.is_some()
+                {
                     return invalid(path, Invalid::RelationshipValue);
                 }
                 if spec.variability == Variability::Varying {
@@ -600,7 +611,7 @@ impl Lowering<'_> {
             L::Double(v) => Value::Double(*v),
             // The writers hold a `timecode` default as a double and store
             // it as `SdfTimeCode` from the declared type.
-            L::TimeCode(v) if matches!(site, Site::Default(_)) => Value::Double(*v),
+            L::TimeCode(v) if matches!(site, Site::Value(_)) => Value::Double(*v),
             L::TimeCode(_) => return no("timecode"),
             L::String(v) => Value::String(String::from(&**v)),
             L::Token(v) => Value::Token(self.name(*v)),
@@ -649,7 +660,7 @@ impl Lowering<'_> {
     /// must all have the first one's type.
     fn array(&self, items: &[LayerValue], site: Site<'_>, path: &str) -> Result<Value, SaveError> {
         let mut out = match site {
-            Site::Default(type_name) => Value::empty_array_of(type_name),
+            Site::Value(type_name) => Value::empty_array_of(type_name),
             Site::Metadata => None,
         };
         for item in items {

@@ -29,7 +29,10 @@
 //! composition arcs by their authored asset paths: sublayers with layer
 //! offsets ([`Document::sublayers`]), and references, payloads, inherits
 //! and specializes in any list-op form ([`Prim::references`] and its
-//! siblings). Splines and variant sets are not representable.
+//! siblings); and variant sets with their variants, nested variant sets
+//! included, the `variantSets` list op and variant selections
+//! ([`Prim::variant_sets`] and its siblings). Splines are not
+//! representable.
 //!
 //! # Example
 //!
@@ -236,8 +239,49 @@ pub struct Prim {
     ///
     /// Spec: AOUSD Core §10.3.2.4 (specializes).
     pub specializes: Option<ListOp<String>>,
+    /// Variant selections (`variants = { string set = "variant" }`, the
+    /// `variantSelection` field): set name and selected variant, in order,
+    /// each set once. An empty variant name selects no variant.
+    ///
+    /// Spec: AOUSD Core §7.6.2.3.4 (`variantSelection`), §10.3.2.5
+    /// (variants).
+    pub variant_selections: Vec<(String, String)>,
+    /// The variant sets the prim declares (`variantSets`, the
+    /// `variantSetNames` field): identifiers, in strength order.
+    ///
+    /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`).
+    pub variant_set_names: Option<ListOp<String>>,
     /// Child prims, in order.
     pub children: Vec<Self>,
+    /// Variant sets (`variantSet "name" = { ... }`), in order, written after
+    /// the children.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant set specs), §7.6.6 (variant set
+    /// spec fields).
+    pub variant_sets: Vec<VariantSet>,
+}
+
+/// A variant set spec: a named set of variants.
+///
+/// Spec: AOUSD Core §7.3.6 (variant set specs), §16.2.17 (`variantSet`
+/// statements).
+#[derive(Clone, Debug, PartialEq)]
+pub struct VariantSet {
+    /// Variant set name; must be a valid identifier (§7.3.3).
+    pub name: String,
+    /// The variants, in order; at least one, each named once.
+    ///
+    /// Each variant is the prim spec it holds, as OpenUSD's
+    /// `SdfVariantSpec::GetPrimSpec` presents it: named after the variant,
+    /// `over` and untyped, with the opinions the variant contributes to
+    /// the prim that hosts the set — metadata, arcs, variant selections,
+    /// properties, child prims and nested variant sets. A variant name is
+    /// made of identifier characters, `|` and `-`, after an optional
+    /// leading `.` (OpenUSD's `VariantName` path grammar).
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs may contain any spec a prim
+    /// spec contains), §7.6.7 (variant spec fields).
+    pub variants: Vec<Prim>,
 }
 
 impl Prim {
@@ -260,7 +304,10 @@ impl Prim {
             payloads: None,
             references: None,
             specializes: None,
+            variant_selections: Vec::new(),
+            variant_set_names: None,
             children: Vec::new(),
+            variant_sets: Vec::new(),
         }
     }
 
@@ -269,17 +316,23 @@ impl Prim {
         self.properties.push(property.into());
     }
 
-    /// Whether the prim authors any composition arc.
-    fn has_arcs(&self) -> bool {
-        self.inherits.is_some()
+    /// Whether the prim writes a metadata section: metadata, arcs or
+    /// variant fields.
+    fn has_metadata(&self) -> bool {
+        !self.metadata.is_empty()
+            || self.inherits.is_some()
             || self.payloads.is_some()
             || self.references.is_some()
             || self.specializes.is_some()
+            || !self.variant_selections.is_empty()
+            || self.variant_set_names.is_some()
     }
 
     fn validate<'a>(&'a self, parent: &str, siblings: &mut Vec<&'a str>) -> Result<(), WriteError> {
-        let path = if parent.is_empty() {
-            alloc::format!("/{}", self.name)
+        // A prim in a variant (`/P{v=x}C`) follows its variant's selection
+        // directly.
+        let path = if parent.ends_with('}') {
+            alloc::format!("{parent}{}", self.name)
         } else {
             alloc::format!("{parent}/{}", self.name)
         };
@@ -301,6 +354,13 @@ impl Prim {
                 name: type_name.clone(),
             });
         }
+        self.validate_body(&path)
+    }
+
+    /// Validates what a prim spec and a variant's prim spec both hold;
+    /// `path` names the spec (`/P` or `/P{v=x}`).
+    fn validate_body(&self, path: &str) -> Result<(), WriteError> {
+        let path = String::from(path);
         validate_metadata(&self.metadata, &mut Vec::new(), &path, true)?;
         for (key, arcs) in [
             ("inherits", &self.inherits),
@@ -349,9 +409,94 @@ impl Prim {
                 Property::Relationship(relationship) => relationship.validate(&prop_path)?,
             }
         }
+        self.validate_variant_fields(&path)?;
         let mut child_names: Vec<&str> = Vec::new();
         for child in &self.children {
             child.validate(&path, &mut child_names)?;
+        }
+        let mut set_names: Vec<&str> = Vec::new();
+        for set in &self.variant_sets {
+            set.validate(&path, &mut set_names)?;
+        }
+        Ok(())
+    }
+
+    /// Validates the variant selections and the `variantSets` list op:
+    /// set names are identifiers, each selected once; a selection is a
+    /// variant name or empty; the list op is well formed and names each
+    /// set once per operation.
+    ///
+    /// Spec: AOUSD Core §7.6.2.3.4, §7.6.2.3.5.
+    fn validate_variant_fields(&self, path: &str) -> Result<(), WriteError> {
+        let key = alloc::format!("{path}#variants");
+        let mut selected: Vec<&str> = Vec::new();
+        for (set, variant) in &self.variant_selections {
+            for (name, valid) in [
+                (set, is_identifier(set)),
+                (variant, variant.is_empty() || is_variant_name(variant)),
+            ] {
+                if !valid {
+                    return Err(WriteError::InvalidName {
+                        path: key,
+                        name: name.clone(),
+                    });
+                }
+            }
+            if selected.contains(&set.as_str()) {
+                return Err(WriteError::Duplicate {
+                    path: alloc::format!("{key}/{set}"),
+                });
+            }
+            selected.push(set);
+        }
+        if let Some(op) = &self.variant_set_names {
+            validate_arc_list(op, path, "variantSets")?;
+            if let Some(name) = op.items().find(|name| !is_identifier(name)) {
+                return Err(WriteError::InvalidName {
+                    path: alloc::format!("{path}#variantSets"),
+                    name: name.clone(),
+                });
+            }
+        }
+        Ok(())
+    }
+}
+
+impl VariantSet {
+    /// Validates the set on the spec at `owner` (`/P` or `/P{v=x}`), among
+    /// the sets `siblings` already named there.
+    fn validate<'a>(&'a self, owner: &str, siblings: &mut Vec<&'a str>) -> Result<(), WriteError> {
+        let path = alloc::format!("{owner}{{{}=}}", self.name);
+        if !is_identifier(&self.name) {
+            return Err(WriteError::InvalidName {
+                path,
+                name: self.name.clone(),
+            });
+        }
+        if siblings.contains(&self.name.as_str()) {
+            return Err(WriteError::Duplicate { path });
+        }
+        siblings.push(&self.name);
+        if self.variants.is_empty() {
+            return Err(WriteError::EmptyVariantSet { path });
+        }
+        let mut names: Vec<&str> = Vec::new();
+        for variant in &self.variants {
+            let path = alloc::format!("{owner}{{{}={}}}", self.name, variant.name);
+            if !is_variant_name(&variant.name) {
+                return Err(WriteError::InvalidName {
+                    path,
+                    name: variant.name.clone(),
+                });
+            }
+            if names.contains(&variant.name.as_str()) {
+                return Err(WriteError::Duplicate { path });
+            }
+            names.push(&variant.name);
+            if variant.specifier != Specifier::Over || variant.type_name.is_some() {
+                return Err(WriteError::InvalidVariant { path });
+            }
+            variant.validate_body(&path)?;
         }
         Ok(())
     }
@@ -1034,8 +1179,10 @@ pub enum WriteError {
     },
     /// A metadata key USDA spells with dedicated syntax: composition arcs
     /// and sublayers, which are written from their own members
-    /// ([`Prim::references`], [`Document::sublayers`], ...), and what this
-    /// writer does not produce: variant fields, relocates, identifier-valued
+    /// ([`Prim::references`], [`Document::sublayers`], ...) as are the
+    /// variant fields ([`Prim::variant_selections`] and
+    /// [`Prim::variant_set_names`]), and what this writer does not produce:
+    /// relocates, identifier-valued
     /// fields (`permission`, `symmetryFunction`) and the substitution maps.
     /// A quoted `key = value` statement would not parse.
     ReservedMetadata {
@@ -1064,6 +1211,17 @@ pub enum WriteError {
     /// A layer offset is not finite.
     InvalidLayerOffset {
         /// Path of the owning object (`/` for a sublayer).
+        path: String,
+    },
+    /// A variant set has no variants, which USDA cannot write.
+    EmptyVariantSet {
+        /// Variant set path (`/P{v=}`).
+        path: String,
+    },
+    /// A variant's prim spec is not an untyped `over`, which a variant
+    /// cannot hold.
+    InvalidVariant {
+        /// Variant path (`/P{v=x}`).
         path: String,
     },
 }
@@ -1113,6 +1271,10 @@ impl fmt::Display for WriteError {
                 )
             }
             Self::InvalidLayerOffset { path } => write!(f, "{path}: layer offset is not finite"),
+            Self::EmptyVariantSet { path } => write!(f, "{path}: variant set has no variants"),
+            Self::InvalidVariant { path } => {
+                write!(f, "{path}: a variant's prim spec is not an untyped over")
+            }
         }
     }
 }
@@ -1128,6 +1290,18 @@ impl core::error::Error for WriteError {}
 pub fn is_identifier(name: &str) -> bool {
     let mut chars = name.chars();
     chars.next().is_some_and(crate::ident::is_start) && chars.all(crate::ident::is_continue)
+}
+
+/// Whether `name` is a variant name: identifier characters, `|` and `-`,
+/// after an optional leading `.` — OpenUSD's `VariantName` path grammar
+/// (`pxr/usd/sdf/pathParser.h`), less the empty name, which names a variant
+/// set rather than a variant.
+fn is_variant_name(name: &str) -> bool {
+    let rest = name.strip_prefix('.').unwrap_or(name);
+    !rest.is_empty()
+        && rest
+            .chars()
+            .all(|c| crate::ident::is_continue(c) || c == '|' || c == '-')
 }
 
 /// Colon-joined identifiers — §7.3.3 (`PropertyName`).
@@ -1278,8 +1452,8 @@ fn validate_order(
 
 /// Metadata keys with dedicated USDA syntax that a quoted `key = value`
 /// statement cannot express (OpenUSD `pxr/usd/sdf/textFileFormat.peg`):
-/// composition arcs and sublayers (written from their own members),
-/// variant fields and relocates, the identifier-valued `permission` and
+/// composition arcs, sublayers and variant fields (written from their own
+/// members), relocates, the identifier-valued `permission` and
 /// `symmetryFunction`, and the string-to-string substitution maps.
 const RESERVED_METADATA: &[&str] = &[
     "references",
@@ -1817,36 +1991,95 @@ impl Writer<'_> {
             self.out.push(' ');
         }
         self.string(&prim.name);
-        if !prim.metadata.is_empty() || prim.has_arcs() {
-            self.out.push_str(" (\n");
-            self.metadata_entries(&prim.metadata, depth + 1);
-            self.arcs(prim, depth + 1);
-            self.indent(depth);
-            self.out.push(')');
-        }
+        self.prim_metadata(prim, depth);
         self.out.push('\n');
         self.indent(depth);
         self.out.push_str("{\n");
+        self.prim_body(prim, depth + 1);
+        self.indent(depth);
+        self.out.push_str("}\n");
+    }
+
+    /// ` ( metadata )` after a prim or variant name, when there is any:
+    /// the metadata, the arcs, then the variant selections and the
+    /// `variantSets` list op, the order OpenUSD writes those keys in.
+    fn prim_metadata(&mut self, prim: &Prim, depth: usize) {
+        if !prim.has_metadata() {
+            return;
+        }
+        self.out.push_str(" (\n");
+        self.metadata_entries(&prim.metadata, depth + 1);
+        self.arcs(prim, depth + 1);
+        if !prim.variant_selections.is_empty() {
+            // §16.2.17.3: `variants = { string set = "variant" }`, a
+            // dictionary of strings.
+            let selections = prim
+                .variant_selections
+                .iter()
+                .map(|(set, variant)| (set.clone(), Value::String(variant.clone())))
+                .collect();
+            self.indent(depth + 1);
+            self.out.push_str("variants = ");
+            self.value(&Value::Dictionary(selections), depth + 1);
+            self.out.push('\n');
+        }
+        if let Some(op) = &prim.variant_set_names {
+            self.list_op("variantSets", op, depth + 1, |w, s| w.string(s));
+        }
+        self.indent(depth);
+        self.out.push(')');
+    }
+
+    /// The statements of a prim or variant body at `depth`: `reorder`
+    /// statements, properties, child prims, then variant sets, as
+    /// `Sdf_WritePrimBody` orders them.
+    fn prim_body(&mut self, prim: &Prim, depth: usize) {
         if let Some(order) = &prim.property_order {
-            self.reorder("properties", order, depth + 1);
+            self.reorder("properties", order, depth);
         }
         if let Some(order) = &prim.prim_order {
-            self.reorder("nameChildren", order, depth + 1);
+            self.reorder("nameChildren", order, depth);
         }
         for property in &prim.properties {
             match property {
-                Property::Attribute(attribute) => self.attribute(attribute, depth + 1),
-                Property::Relationship(relationship) => self.relationship(relationship, depth + 1),
+                Property::Attribute(attribute) => self.attribute(attribute, depth),
+                Property::Relationship(relationship) => self.relationship(relationship, depth),
             }
         }
-        let has_body = !prim.properties.is_empty()
+        let mut has_body = !prim.properties.is_empty()
             || prim.property_order.is_some()
             || prim.prim_order.is_some();
-        for (i, child) in prim.children.iter().enumerate() {
-            if i > 0 || has_body {
+        for child in &prim.children {
+            if has_body {
                 self.out.push('\n');
             }
-            self.prim(child, depth + 1);
+            self.prim(child, depth);
+            has_body = true;
+        }
+        for set in &prim.variant_sets {
+            if has_body {
+                self.out.push('\n');
+            }
+            self.variant_set(set, depth);
+            has_body = true;
+        }
+    }
+
+    /// §16.2.17: `variantSet "name" = { "variant" [( metadata )] { body }
+    /// ... }`, each variant with its prim spec's metadata and body.
+    fn variant_set(&mut self, set: &VariantSet, depth: usize) {
+        self.indent(depth);
+        self.out.push_str("variantSet ");
+        self.string(&set.name);
+        self.out.push_str(" = {\n");
+        for variant in &set.variants {
+            self.indent(depth + 1);
+            self.string(&variant.name);
+            self.prim_metadata(variant, depth + 1);
+            self.out.push_str(" {\n");
+            self.prim_body(variant, depth + 2);
+            self.indent(depth + 1);
+            self.out.push_str("}\n");
         }
         self.indent(depth);
         self.out.push_str("}\n");
@@ -3455,6 +3688,162 @@ class "C"
             bad_arc(|d| d.sublayers[1].offset.scale = f64::INFINITY),
             WriteError::InvalidLayerOffset { path: "/".into() },
             "a layer offset is finite"
+        );
+    }
+
+    /// Variant sets are written after the children, each variant with its
+    /// metadata and body; nested sets inside variants; selections and the
+    /// `variantSets` list op after the arcs.
+    ///
+    /// Spec: AOUSD Core §7.3.6, §16.2.17.
+    #[test]
+    fn writes_variant_sets() {
+        let variant = |name: &str| Prim::new(Specifier::Over, None, name);
+        let mut summer = variant("summer");
+        summer
+            .metadata
+            .push(Metadatum::new("kind", Value::Token("component".into())));
+        summer.references = Some(ListOp::prepend(vec![Reference {
+            asset: Some("./leaves.usda".into()),
+            prim_path: None,
+            offset: LayerOffset::IDENTITY,
+        }]));
+        summer.variant_selections = vec![("size".into(), "tall".into())];
+        summer.variant_set_names = Some(ListOp::prepend(vec!["size".into()]));
+        summer.push_property(Attribute::new("height", "double", Value::Double(4.0)));
+        summer.children.push(Prim::def("Mesh", "Canopy"));
+        let mut tall = variant("tall");
+        tall.push_property(Attribute::new("height", "double", Value::Double(9.0)));
+        summer.variant_sets.push(VariantSet {
+            name: "size".into(),
+            variants: vec![tall],
+        });
+        let winter = variant("winter");
+
+        let mut tree = Prim::def("Xform", "Tree");
+        tree.variant_selections = vec![("season".into(), "summer".into())];
+        tree.variant_set_names = Some(ListOp::prepend(vec!["season".into()]));
+        tree.children.push(Prim::def("Scope", "Trunk"));
+        tree.variant_sets.push(VariantSet {
+            name: "season".into(),
+            variants: vec![summer, winter],
+        });
+        let doc = Document {
+            prims: vec![tree],
+            ..Document::new()
+        };
+        let text = doc.to_usda().unwrap();
+        let expected = r#"#usda 1.0
+
+def Xform "Tree" (
+    variants = {
+        string "season" = "summer"
+    }
+    prepend variantSets = ["season"]
+)
+{
+    def Scope "Trunk"
+    {
+    }
+
+    variantSet "season" = {
+        "summer" (
+            kind = "component"
+            prepend references = @./leaves.usda@
+            variants = {
+                string "size" = "tall"
+            }
+            prepend variantSets = ["size"]
+        ) {
+            double height = 4
+
+            def Mesh "Canopy"
+            {
+            }
+
+            variantSet "size" = {
+                "tall" {
+                    double height = 9
+                }
+            }
+        }
+        "winter" {
+        }
+    }
+}
+"#;
+        assert_eq!(text, expected, "variant sets");
+        assert!(parse(&text).diagnostics.is_empty(), "re-parses");
+
+        let bad = |edit: fn(&mut Prim)| {
+            let mut bad = doc.clone();
+            edit(&mut bad.prims[0]);
+            bad.to_usda().unwrap_err()
+        };
+        assert_eq!(
+            bad(|p| p.variant_sets[0].variants[1].specifier = Specifier::Def),
+            WriteError::InvalidVariant {
+                path: "/Tree{season=winter}".into()
+            },
+            "a variant is an untyped over"
+        );
+        assert_eq!(
+            bad(|p| p.variant_sets[0].variants.clear()),
+            WriteError::EmptyVariantSet {
+                path: "/Tree{season=}".into()
+            },
+            "a variant set has variants"
+        );
+        assert_eq!(
+            bad(|p| {
+                let again = p.variant_sets[0].variants[1].clone();
+                p.variant_sets[0].variants.push(again);
+            }),
+            WriteError::Duplicate {
+                path: "/Tree{season=winter}".into()
+            },
+            "variant names are unique in their set"
+        );
+        assert_eq!(
+            bad(|p| p.variant_sets[0].variants[1].name = "a b".into()),
+            WriteError::InvalidName {
+                path: "/Tree{season=a b}".into(),
+                name: "a b".into()
+            },
+            "variant names"
+        );
+        assert_eq!(
+            bad(|p| p
+                .variant_selections
+                .push(("season".into(), "winter".into()))),
+            WriteError::Duplicate {
+                path: "/Tree#variants/season".into()
+            },
+            "one selection per set"
+        );
+        assert_eq!(
+            bad(|p| p.variant_set_names = Some(ListOp::default())),
+            WriteError::InvalidListOp {
+                path: "/Tree#variantSets".into()
+            },
+            "a variantSets list op says something"
+        );
+        assert_eq!(
+            bad(|p| p.variant_sets[0].variants[0].children[0].name = "1".into()),
+            WriteError::InvalidName {
+                path: "/Tree{season=summer}1".into(),
+                name: "1".into()
+            },
+            "a prim in a variant follows its selection"
+        );
+        let mut empty_selection = doc.clone();
+        empty_selection.prims[0].variant_selections[0].1 = String::new();
+        assert!(
+            empty_selection
+                .to_usda()
+                .unwrap()
+                .contains("string \"season\" = \"\"\n"),
+            "an empty selection selects no variant"
         );
     }
 }

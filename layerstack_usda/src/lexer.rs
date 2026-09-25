@@ -44,6 +44,8 @@ pub enum TokenKind {
     MultilineSingleQuoteString,
     /// A multi-line double-quoted string: `"""..."""`.
     MultilineDoubleQuoteString,
+    /// An asset path: `@...@`, or `@@@...@@@` when the path holds `@`.
+    AssetPath,
 
     // ── Identifiers and keywords ────────────────────────────────────
     /// An identifier or keyword (e.g., `def`, `over`, `class`, `int`,
@@ -68,8 +70,6 @@ pub enum TokenKind {
     LeftAngle,
     /// `>`
     RightAngle,
-    /// `@` (asset reference delimiter).
-    At,
     /// `&`
     Ampersand,
     /// `*`
@@ -340,6 +340,50 @@ impl<'a> Lexer<'a> {
         self.token(kind, start)
     }
 
+    /// Lexes an asset path as one token, since its text is not USDA tokens
+    /// (it may hold `//`, `#`, quotes or spaces).
+    ///
+    /// `@path@` ends at the next `@`. `@@@path@@@` may hold `@` and escapes
+    /// `@@@` as `\@@@`; it ends at the first unescaped `@@@`, and one or two
+    /// further `@` before that belong to the path. Neither form spans lines.
+    ///
+    /// Spec: AOUSD Core §16.2.9; OpenUSD's `AssetRef`
+    /// (`pxr/usd/sdf/textFileFormatParser.h`).
+    fn lex_asset_path(&mut self, start: u32) -> Token {
+        let at = |lexer: &Self, n: u32| lexer.peek_at(n) == Some(b'@');
+        if at(self, 1) && at(self, 2) {
+            self.advance(3);
+            loop {
+                match self.peek() {
+                    None | Some(b'\n' | b'\r') => break, // unterminated
+                    Some(b'\\') if at(self, 1) && at(self, 2) && at(self, 3) => self.advance(4),
+                    Some(b'@') if at(self, 1) && at(self, 2) => {
+                        let mut n = 3;
+                        while n < 5 && at(self, n) {
+                            n += 1;
+                        }
+                        self.advance(n);
+                        break;
+                    }
+                    _ => self.advance(1),
+                }
+            }
+        } else {
+            self.advance(1);
+            loop {
+                match self.peek() {
+                    None | Some(b'\n' | b'\r') => break, // unterminated
+                    Some(b'@') => {
+                        self.advance(1);
+                        break;
+                    }
+                    _ => self.advance(1),
+                }
+            }
+        }
+        self.token(TokenKind::AssetPath, start)
+    }
+
     /// Lexes an identifier or keyword.
     fn lex_ident(&mut self, start: u32) -> Token {
         // First char is already validated as `XID_Start` or `_`
@@ -445,10 +489,7 @@ impl Iterator for Lexer<'_> {
                 self.advance(1);
                 self.token(TokenKind::RightAngle, start)
             }
-            b'@' => {
-                self.advance(1);
-                self.token(TokenKind::At, start)
-            }
+            b'@' => self.lex_asset_path(start),
             b'&' => {
                 self.advance(1);
                 self.token(TokenKind::Ampersand, start)
@@ -782,7 +823,7 @@ mod tests {
 
     #[test]
     fn all_punctuation() {
-        let tokens = tok_no_trivia("()[]{}< >@&*:,.=-+;");
+        let tokens = tok_no_trivia("()[]{}< >&*:,.=-+;");
         let kinds: alloc::vec::Vec<_> = tokens.iter().map(|(k, _)| *k).collect();
         assert_eq!(
             kinds,
@@ -795,7 +836,6 @@ mod tests {
                 TokenKind::RightBrace,
                 TokenKind::LeftAngle,
                 TokenKind::RightAngle,
-                TokenKind::At,
                 TokenKind::Ampersand,
                 TokenKind::Asterisk,
                 TokenKind::Colon,
@@ -807,6 +847,32 @@ mod tests {
                 TokenKind::Semicolon,
             ]
         );
+    }
+
+    // ── Asset paths ─────────────────────────────────────────────────
+
+    /// Each asset path is one token, as OpenUSD's `AssetRef` rule reads it.
+    #[test]
+    fn asset_paths() {
+        for (source, token) in [
+            ("@a.usd@", "@a.usd@"),
+            ("@@", "@@"),
+            ("@http://host/a b#c\"d'.usd@", "@http://host/a b#c\"d'.usd@"),
+            ("@@@cfg@x.ocio@@@", "@@@cfg@x.ocio@@@"),
+            (r"@@@a\@@@b@@@", r"@@@a\@@@b@@@"),
+            // One or two further `@` before the closing three belong to
+            // the path.
+            ("@@@a@@@@@ x", "@@@a@@@@@"),
+            ("@@@a@@@@ x", "@@@a@@@@"),
+        ] {
+            assert_eq!(
+                tok_no_trivia(source)[0],
+                (TokenKind::AssetPath, token),
+                "{source}"
+            );
+        }
+        // An asset path does not span lines.
+        assert_eq!(tok("@a\nb@")[0], (TokenKind::AssetPath, "@a"));
     }
 
     // ── Lossless round-trip ─────────────────────────────────────────
@@ -872,13 +938,7 @@ mod tests {
             [
                 (TokenKind::Ident, "references"),
                 (TokenKind::Equals, "="),
-                (TokenKind::At, "@"),
-                (TokenKind::Dot, "."),
-                (TokenKind::Error, "/"), // standalone `/`
-                (TokenKind::Ident, "model"),
-                (TokenKind::Dot, "."),
-                (TokenKind::Ident, "usd"),
-                (TokenKind::At, "@"),
+                (TokenKind::AssetPath, "@./model.usd@"),
                 (TokenKind::LeftAngle, "<"),
                 (TokenKind::Error, "/"), // standalone `/`
                 (TokenKind::Ident, "Root"),

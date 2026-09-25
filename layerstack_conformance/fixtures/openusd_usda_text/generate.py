@@ -17,6 +17,9 @@ to read each `.usda` as the USDC reader reads its `.usdc`.
   and time samples, written `edit [op; op]`: every instruction, with
   literal and `[index]` operands, the `fill` forms of `minsize` and
   `resize`, tuple and string literals, and an empty edit.
+- `asset_paths`: asset paths holding `@` (which OpenUSD writes between
+  `@@@` delimiters), `//`, `#`, spaces and quotes, in attribute values, a
+  sublayer and a reference.
 
 A source fixture is the other way round: its `.usda` is text given here,
 which OpenUSD reads but would not write in that form, and its `.usdc` is
@@ -124,9 +127,30 @@ def author_array_edits(layer):
     layer.SetTimeSample(sampled.path, 3.0, edit(Vt.DoubleArrayEditBuilder, lambda b: b.Write(3.5, -1)))
 
 
+def author_asset_paths(layer):
+    layer.subLayerPaths.append("./sub@1.usda")
+    prim = Sdf.PrimSpec(layer, "Assets", Sdf.SpecifierDef)
+    prim.referenceList.Prepend(Sdf.Reference("./ref@2.usda", "/Target"))
+    for name, path in [
+        ("at", "tex@1001.png"),
+        ("trailingAt", "a@"),
+        ("url", "http://host/dir/a b.png"),
+        ("fragment", "a.usdz[b#c.png]"),
+        ("quotes", "it's \"q\".png"),
+    ]:
+        attribute(prim, name, Sdf.ValueTypeNames.Asset, Sdf.AssetPath(path))
+    attribute(
+        prim,
+        "array",
+        Sdf.ValueTypeNames.AssetArray,
+        [Sdf.AssetPath("x@y.png"), Sdf.AssetPath("plain.png")],
+    )
+
+
 FIXTURES = {
     "strings": author_strings,
     "array_edits": author_array_edits,
+    "asset_paths": author_asset_paths,
 }
 
 # Text that OpenUSD reads but would not write in this form: the `.usda` is

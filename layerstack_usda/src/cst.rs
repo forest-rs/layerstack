@@ -48,6 +48,8 @@ pub enum SyntaxKind {
     MultilineSingleQuoteString,
     /// `"""..."""` multiline string.
     MultilineDoubleQuoteString,
+    /// `@...@` or `@@@...@@@` asset path.
+    AssetPath,
     /// Identifier or keyword.
     Ident,
     /// `(`
@@ -66,8 +68,6 @@ pub enum SyntaxKind {
     LeftAngle,
     /// `>`
     RightAngle,
-    /// `@`
-    At,
     /// `&`
     Ampersand,
     /// `*`
@@ -219,7 +219,7 @@ impl From<TokenKind> for SyntaxKind {
             TokenKind::RightBrace => Self::RightBrace,
             TokenKind::LeftAngle => Self::LeftAngle,
             TokenKind::RightAngle => Self::RightAngle,
-            TokenKind::At => Self::At,
+            TokenKind::AssetPath => Self::AssetPath,
             TokenKind::Ampersand => Self::Ampersand,
             TokenKind::Asterisk => Self::Asterisk,
             TokenKind::Colon => Self::Colon,

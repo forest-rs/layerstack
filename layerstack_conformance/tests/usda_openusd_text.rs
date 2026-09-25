@@ -90,6 +90,30 @@ fn string_escapes_read_as_openusd_wrote_them() {
     );
 }
 
+/// Asset paths are read whole, whatever they hold: OpenUSD writes a path
+/// holding `@` between `@@@` delimiters, and one or two `@` before the
+/// closing three belong to the path.
+///
+/// Spec: AOUSD Core §16.2.9; `_StringFromAssetPath`
+/// (`pxr/usd/sdf/fileIO_Common.cpp`), `Sdf_EvalAssetPath`.
+#[test]
+fn asset_paths_read_as_openusd_wrote_them() {
+    let mut layer = read_alike("asset_paths");
+    for (name, path) in [
+        ("at", "tex@1001.png"),
+        ("trailingAt", "a@"),
+        ("url", "http://host/dir/a b.png"),
+        ("fragment", "a.usdz[b#c.png]"),
+        ("quotes", "it's \"q\".png"),
+    ] {
+        assert_eq!(
+            default_value(&mut layer, &format!("/Assets.{name}")),
+            Value::Asset(path.into()),
+            "{name}"
+        );
+    }
+}
+
 /// `half` literals round to nearest even through `float` and keep
 /// subnormals, as OpenUSD's reading of the same text does.
 ///

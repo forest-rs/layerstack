@@ -217,6 +217,18 @@ jobs:
       - name: cargo test --doc
         run: cargo test --doc --workspace --locked --all-features --no-fail-fast
 
+      # The examples assert their own results, so run them rather than only build them.
+      - name: run examples
+        if: runner.os == 'Linux'
+        run: |
+          for example in asset_resolution instancing live_editing minimal sparse_array_edits timeline typed_schema; do
+            cargo run --locked --all-features -p layerstack_examples --example "$example"
+          done
+          cargo run --locked --all-features -p layerstack_examples --example validate_usda -- \
+            core-spec-supplemental-release_dec2025/file_formats/tests/assets/text/usda/geometryattributes.usda core-spec-supplemental-release_dec2025/file_formats/tests/assets/text/usda/simple.usda
+          cargo run --locked --all-features -p layerstack_examples --example mesh_to_usdz -- "$RUNNER_TEMP/cube.usdz"
+          cargo run --locked --all-features -p layerstack_examples --example mesh_materials_to_usdz -- "$RUNNER_TEMP/materials.usdz"
+
   test-stable-wasm:
     name: cargo test (wasm32)
     runs-on: ubuntu-latest

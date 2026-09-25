@@ -77,6 +77,77 @@ def "Cliff" (
         int grain = 0
     }
 }
+
+# `/Bank` inherits `/_class_Fern` and references `bed.usda /Bed`, which
+# inherits `/_class_Moss`; `/_class_Moss/Sprout` is implied into this layer
+# stack beneath the reference. `/Shade` references `/Bank/Sprout`, whose
+# ancestral arcs it reaches through the stage prim's composed index: the
+# implied class keeps its origin there, so the authored `/_class_Fern`
+# outranks it whichever class this layer declares first.
+class "_class_Moss"
+{
+    def "Sprout"
+    {
+        int tint = 2
+    }
+}
+
+class "_class_Fern"
+{
+    def "Sprout"
+    {
+        int tint = 1
+    }
+}
+
+def "Bank" (
+    inherits = </_class_Fern>
+    references = @./bed.usda@</Bed>
+)
+{
+    def "Sprout"
+    {
+    }
+}
+
+def "Shade" (
+    references = </Bank/Sprout>
+)
+{
+}
+
+# The same with the authored class declared first.
+class "_class_Reed"
+{
+    def "Sprout"
+    {
+        int tint = 1
+    }
+}
+
+class "_class_Sedge"
+{
+    def "Sprout"
+    {
+        int tint = 2
+    }
+}
+
+def "Marsh" (
+    inherits = </_class_Reed>
+    references = @./bed.usda@</Pool>
+)
+{
+    def "Sprout"
+    {
+    }
+}
+
+def "Shore" (
+    references = </Marsh/Sprout>
+)
+{
+}
 ''',
     "stand": '''#usda 1.0
 
@@ -159,6 +230,42 @@ class "_class_Boulder"
     )
     {
         int crack = 4
+    }
+}
+''',
+    "bed": '''#usda 1.0
+
+class "_class_Moss"
+{
+    def "Sprout"
+    {
+        int tint = 3
+    }
+}
+
+def "Bed" (
+    inherits = </_class_Moss>
+)
+{
+    def "Sprout"
+    {
+    }
+}
+
+class "_class_Sedge"
+{
+    def "Sprout"
+    {
+        int tint = 3
+    }
+}
+
+def "Pool" (
+    inherits = </_class_Sedge>
+)
+{
+    def "Sprout"
+    {
     }
 }
 ''',

@@ -3722,6 +3722,20 @@ impl Graft<'_> {
             .graph
             .intern_child(parent, arc);
         self.copies.insert(node, copy);
+        // An implied node keeps its origin, copied the same way, so it ranks
+        // by where that origin sits rather than as an arc authored at its
+        // parent (`PcpCompareSiblingNodeStrength`); the source root's copy is
+        // the forwarding arc's node.
+        if let Some(origin) = source.origin() {
+            let origin = match origin {
+                NodeId::ROOT => under,
+                origin => self.node(store, out, nodes, origin),
+            };
+            out.get_mut(&self.dest)
+                .expect("path exists")
+                .graph
+                .set_origin(copy, origin);
+        }
         copy
     }
 }

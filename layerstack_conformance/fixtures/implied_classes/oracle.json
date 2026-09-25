@@ -129,6 +129,236 @@
      "/_class_Boulder/_class_Face"
     ]
    ]
+  },
+  {
+   "path": "/_class_Moss",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Moss"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Moss/Sprout",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Moss/Sprout"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Fern",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Fern"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Fern/Sprout",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Fern/Sprout"
+    ]
+   ]
+  },
+  {
+   "path": "/Bank",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Bank"
+    ],
+    [
+     "root.usda",
+     "/_class_Fern"
+    ],
+    [
+     "root.usda",
+     "/_class_Moss"
+    ],
+    [
+     "bed.usda",
+     "/Bed"
+    ],
+    [
+     "bed.usda",
+     "/_class_Moss"
+    ]
+   ]
+  },
+  {
+   "path": "/Bank/Sprout",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Bank/Sprout"
+    ],
+    [
+     "root.usda",
+     "/_class_Fern/Sprout"
+    ],
+    [
+     "root.usda",
+     "/_class_Moss/Sprout"
+    ],
+    [
+     "bed.usda",
+     "/Bed/Sprout"
+    ],
+    [
+     "bed.usda",
+     "/_class_Moss/Sprout"
+    ]
+   ]
+  },
+  {
+   "path": "/Shade",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Shade"
+    ],
+    [
+     "root.usda",
+     "/Bank/Sprout"
+    ],
+    [
+     "root.usda",
+     "/_class_Fern/Sprout"
+    ],
+    [
+     "root.usda",
+     "/_class_Moss/Sprout"
+    ],
+    [
+     "bed.usda",
+     "/Bed/Sprout"
+    ],
+    [
+     "bed.usda",
+     "/_class_Moss/Sprout"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Reed",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Reed"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Reed/Sprout",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Reed/Sprout"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Sedge",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Sedge"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Sedge/Sprout",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Sedge/Sprout"
+    ]
+   ]
+  },
+  {
+   "path": "/Marsh",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Marsh"
+    ],
+    [
+     "root.usda",
+     "/_class_Reed"
+    ],
+    [
+     "root.usda",
+     "/_class_Sedge"
+    ],
+    [
+     "bed.usda",
+     "/Pool"
+    ],
+    [
+     "bed.usda",
+     "/_class_Sedge"
+    ]
+   ]
+  },
+  {
+   "path": "/Marsh/Sprout",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Marsh/Sprout"
+    ],
+    [
+     "root.usda",
+     "/_class_Reed/Sprout"
+    ],
+    [
+     "root.usda",
+     "/_class_Sedge/Sprout"
+    ],
+    [
+     "bed.usda",
+     "/Pool/Sprout"
+    ],
+    [
+     "bed.usda",
+     "/_class_Sedge/Sprout"
+    ]
+   ]
+  },
+  {
+   "path": "/Shore",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Shore"
+    ],
+    [
+     "root.usda",
+     "/Marsh/Sprout"
+    ],
+    [
+     "root.usda",
+     "/_class_Reed/Sprout"
+    ],
+    [
+     "root.usda",
+     "/_class_Sedge/Sprout"
+    ],
+    [
+     "bed.usda",
+     "/Pool/Sprout"
+    ],
+    [
+     "bed.usda",
+     "/_class_Sedge/Sprout"
+    ]
+   ]
   }
  ],
  "values": {
@@ -147,6 +377,14 @@
   "/Cliff/_class_Face.lichen": 2,
   "/Cliff/Face.crack": 4,
   "/Cliff/Face.grain": 0,
-  "/Cliff/Face.lichen": 2
+  "/Cliff/Face.lichen": 2,
+  "/_class_Moss/Sprout.tint": 2,
+  "/_class_Fern/Sprout.tint": 1,
+  "/Bank/Sprout.tint": 1,
+  "/Shade.tint": 1,
+  "/_class_Reed/Sprout.tint": 1,
+  "/_class_Sedge/Sprout.tint": 2,
+  "/Marsh/Sprout.tint": 1,
+  "/Shore.tint": 1
  }
 }

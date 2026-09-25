@@ -378,23 +378,25 @@ impl PrimIndexGraph {
 
     /// Removes every node `keep` rejects, returning the new id of each old
     /// node, `None` for a removed one. A node is kept whenever one of its
-    /// descendants is, so the graph stays a tree; ranks are kept.
+    /// descendants is, so the graph stays a tree, and so is the origin of a
+    /// kept node, so it still ranks by that origin; ranks are kept.
     pub(crate) fn retain_nodes(
         &mut self,
         mut keep: impl FnMut(NodeId, &PrimNode) -> bool,
     ) -> Vec<Option<NodeId>> {
         let mut kept = alloc::vec![false; self.nodes.len()];
-        for (index, node) in self.nodes.iter().enumerate() {
-            if kept[index] || !keep(NodeId::from_index(index), node) {
+        let mut pending: Vec<NodeId> = self
+            .nodes()
+            .filter(|(id, node)| keep(*id, node))
+            .map(|(id, _)| id)
+            .collect();
+        while let Some(id) = pending.pop() {
+            if core::mem::replace(&mut kept[id.index()], true) {
                 continue;
             }
-            let mut cursor = Some(NodeId::from_index(index));
-            while let Some(id) = cursor {
-                if core::mem::replace(&mut kept[id.index()], true) {
-                    break;
-                }
-                cursor = self.nodes[id.index()].parent;
-            }
+            let node = &self.nodes[id.index()];
+            pending.extend(node.parent);
+            pending.extend(node.origin);
         }
         let mut remap = alloc::vec![None; self.nodes.len()];
         let mut next = 0;
@@ -829,6 +831,36 @@ mod tests {
             Some(NodeId(4))
         );
         assert_order(&graph, &[0, 7, 6, 5, 1, 3, 2, 4]);
+    }
+
+    #[test]
+    fn retained_nodes_keep_their_origins() {
+        let mut graph = graph(vec![
+            (0, arc(ArcKind::References, 1, 0)),
+            (1, arc(ArcKind::Inherits, 1, 0)),
+            (
+                0,
+                NodeArc {
+                    implied: true,
+                    ..arc(ArcKind::Inherits, 1, 0)
+                },
+            ),
+        ]);
+        graph.set_origin(NodeId(3), NodeId(2));
+        let remap = graph.retain_nodes(|id, _| id == NodeId(0) || id == NodeId(3));
+        assert_eq!(
+            remap,
+            [
+                Some(NodeId(0)),
+                Some(NodeId(1)),
+                Some(NodeId(2)),
+                Some(NodeId(3))
+            ]
+        );
+        assert_eq!(
+            graph.node(NodeId(3)).and_then(PrimNode::origin),
+            Some(NodeId(2))
+        );
     }
 
     #[test]

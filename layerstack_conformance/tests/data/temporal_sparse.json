@@ -2,9 +2,27 @@
  "generator": "layerstack_conformance/scripts/temporal_sparse_oracle.py",
  "openusd_version": "0.26.8",
  "divergences": {
-  "nan-before-first-sample": "OpenUSD gives defaults and fallbacks the sample time -inf (pxr/usd/usd/stage.cpp, `_GetValueFromResolveInfoImpl`). Before the first composed time sample, the bracketing samples are (-inf, first) and `Usd_Interpolate` computes alpha = inf/inf, so interpolating types resolve to NaN under both held and linear interpolation. Composed and flattened stages agree on the first sample's value.",
-  "override-early-stop": "After a non-composing lower sample moves the query to the upper sample's time, `_ResolveInfoResolver::ProcessLayerAtTime` stops at a weaker series whose upper sample does not compose, although its held value at that time does. Weaker opinions then drop out of the interpolated upper sample, so the value differs from the value at the upper sample's own time and from the flattened stage. The proposal's `Evaluate` (sparse-array-edits README, 'Evaluating a Strength-Ordering of Samples at a Specific Time') keeps composing and agrees with the flattened stage.",
-  "transparent-sampled-block": "A sampled block that is a weaker series' lower bracketing sample, with a composing upper sample, contributes no samples (`_GetInterpolatingSamplesImpl` clears them) while the chain continues past it, so opinions weaker than the block show through. A block discards weaker opinions (AOUSD Core 12.3.6), and OpenUSD honours that at the block's own sample time."
+  "nan-before-first-sample": {
+   "openusd": "0.26.8",
+   "openusd_behavior": "Defaults and fallbacks become samples at time -inf. Before the first composed time sample the bracketing samples are (-inf, first), and `Usd_Interpolate` computes alpha = inf/inf, so interpolating types resolve to NaN under both held and linear interpolation.",
+   "openusd_source": "pxr/usd/usd/stage.cpp:8029 and :8054 (`_GetValueFromResolveInfoImpl` gives defaults and fallbacks time -inf); pxr/usd/usd/interpolators.cpp:125 (`Usd_Interpolate` alpha)",
+   "layerstack": "Holds the composed lower sample, as OpenUSD's own flattened stage does.",
+   "authority": "AOUSD Core 12.5.1 (queries before the first sample return the first sample's value)"
+  },
+  "override-early-stop": {
+   "openusd": "0.26.8",
+   "openusd_behavior": "After a non-composing lower sample moves the query to the upper sample's time, the resolve-info walk stops at a weaker series whose own upper sample does not compose, although its sample held at that time does. Weaker opinions drop out of the interpolated upper sample, which then differs from the value at the upper sample's own time and from the flattened stage.",
+   "openusd_source": "pxr/usd/usd/stage.cpp:9032 (`_ResolveInfoResolver::ProcessLayerAtTime`, `if (!_overrideTime || upperComposes)`)",
+   "layerstack": "Keeps composing weaker series at the upper sample's time, and agrees with the flattened stage.",
+   "authority": "sparse-array-edits proposal, 'Evaluating a Strength-Ordering of Samples at a Specific Time' (`Evaluate`); AOUSD Core 12.3.2 (time-based resolution visits every layer's samples, strongest first)"
+  },
+  "transparent-sampled-block": {
+   "openusd": "0.26.8",
+   "openusd_behavior": "A sampled block that is a weaker series' lower bracketing sample, with a composing upper sample, contributes no samples while the walk continues past it, so opinions weaker than the block show through. At the block's own sample time OpenUSD honours the block.",
+   "openusd_source": "pxr/usd/usd/interpolators.cpp:163 and :180 (`_GetInterpolatingSamplesImpl` clears the samples of a blocked lower sample); pxr/usd/usd/stage.cpp:9032 (the walk continues when the upper sample composes)",
+   "layerstack": "Lets the block end the fold wherever it is held.",
+   "authority": "AOUSD Core 12.3.6 (a block discards weaker opinions; individual time samples can be blocked)"
+  }
  },
  "cases": [
   {

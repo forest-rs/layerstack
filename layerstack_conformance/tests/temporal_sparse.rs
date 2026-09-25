@@ -8,8 +8,9 @@
 //! a set of USDA layers; every query resolves one attribute at one time under
 //! held and under linear interpolation. Most cases compose sparse array edits;
 //! others pin how scalar samples hold or interpolate. Layerstack must
-//! reproduce OpenUSD's value, except where the vectors pin a documented OpenUSD defect with an
-//! `expected` override.
+//! reproduce OpenUSD's value, except for the named divergences in
+//! [`DIVERGENCES`]: there it must produce the query's `expected` value, which
+//! OpenUSD does not. Any other difference is a failure.
 //!
 //! Where OpenUSD defines it, resolving the composed stage must also equal
 //! resolving OpenUSD's flattened layer of that stage.
@@ -29,10 +30,31 @@ use serde::Deserialize;
 
 const VECTORS: &str = include_str!("data/temporal_sparse.json");
 
+/// The Core-versus-OpenUSD divergences Layerstack follows, with the OpenUSD
+/// release each was confirmed against. `docs/generic-sparse-composition.md`
+/// ("Divergences From OpenUSD") gives each one's policy, Core section and
+/// OpenUSD source line; the oracle script records the same names.
+const DIVERGENCES: &[(&str, &str)] = &[
+    // Before the first composed sample, hold it instead of OpenUSD's NaN
+    // (AOUSD Core 12.5.1).
+    ("nan-before-first-sample", "0.26.8"),
+    // Keep composing weaker series after the query moves to the upper
+    // sample (sparse-array-edits proposal, `Evaluate`).
+    ("override-early-stop", "0.26.8"),
+    // A held sampled block ends the fold (AOUSD Core 12.3.6).
+    ("transparent-sampled-block", "0.26.8"),
+];
+
 #[derive(Deserialize)]
 struct Vectors {
     openusd_version: String,
+    divergences: BTreeMap<String, Divergence>,
     cases: Vec<Case>,
+}
+
+#[derive(Deserialize)]
+struct Divergence {
+    openusd: String,
 }
 
 #[derive(Deserialize)]
@@ -88,24 +110,26 @@ impl Query {
         }
     }
 
-    /// The value Layerstack must produce: OpenUSD's, unless the vectors pin
-    /// a documented OpenUSD defect.
+    /// The value Layerstack must produce: OpenUSD's, unless the query names
+    /// one of the [`DIVERGENCES`].
     fn expected(&self) -> Option<Resolved> {
-        let raw = if self.divergence.is_some() {
-            self.expected.as_ref()
+        if self.divergence.is_some() {
+            decode(self.expected.as_ref())
         } else {
-            self.openusd.as_ref()
-        };
-        raw.map(|value| match value {
-            serde_json::Value::Array(items) => {
-                Resolved::Array(items.iter().map(Element::from_json).collect())
-            }
-            serde_json::Value::Object(tuple) => {
-                Resolved::Scalar(Element::from_json(&tuple["tuple"]))
-            }
-            scalar => Resolved::Scalar(Element::from_json(scalar)),
-        })
+            decode(self.openusd.as_ref())
+        }
     }
+}
+
+/// Decodes a recorded value; `None` stays `None`.
+fn decode(raw: Option<&serde_json::Value>) -> Option<Resolved> {
+    raw.map(|value| match value {
+        serde_json::Value::Array(items) => {
+            Resolved::Array(items.iter().map(Element::from_json).collect())
+        }
+        serde_json::Value::Object(tuple) => Resolved::Scalar(Element::from_json(&tuple["tuple"])),
+        scalar => Resolved::Scalar(Element::from_json(scalar)),
+    })
 }
 
 /// A resolved attribute value, flattened to numeric components.
@@ -129,16 +153,17 @@ impl Resolved {
 struct Element(Vec<f64>);
 
 impl Element {
+    /// Reads a number or a list of components; the oracle writes NaN as the
+    /// string `"NaN"`.
     fn from_json(value: &serde_json::Value) -> Self {
+        let number = |value: &serde_json::Value| match value {
+            serde_json::Value::Number(n) => n.as_f64().expect("f64"),
+            serde_json::Value::String(s) if s == "NaN" => f64::NAN,
+            other => panic!("unexpected JSON number {other}"),
+        };
         match value {
-            serde_json::Value::Number(n) => Self(vec![n.as_f64().expect("f64")]),
-            serde_json::Value::Array(items) => Self(
-                items
-                    .iter()
-                    .map(|c| c.as_f64().expect("vector component"))
-                    .collect(),
-            ),
-            other => panic!("unexpected JSON element {other}"),
+            serde_json::Value::Array(items) => Self(items.iter().map(number).collect()),
+            scalar => Self(vec![number(scalar)]),
         }
     }
 
@@ -370,7 +395,7 @@ fn composed_resolution_matches_openusd() {
                     query
                         .divergence
                         .as_ref()
-                        .map(|d| format!(" (OpenUSD defect `{d}`)"))
+                        .map(|d| format!(" (divergence `{d}`)"))
                         .unwrap_or_default(),
                 );
             }
@@ -382,6 +407,48 @@ fn composed_resolution_matches_openusd() {
         "differential mismatches against OpenUSD {}:\n{failures}",
         vectors.openusd_version
     );
+}
+
+/// The vectors pin exactly the named divergences, each confirmed against
+/// the recorded OpenUSD release and each shown by some query whose OpenUSD
+/// value differs from Layerstack's expected one.
+#[test]
+fn divergences_are_exactly_the_named_ones() {
+    let vectors = vectors();
+    let recorded: Vec<(&str, &str)> = vectors
+        .divergences
+        .iter()
+        .map(|(name, divergence)| (name.as_str(), divergence.openusd.as_str()))
+        .collect();
+    let mut named = DIVERGENCES.to_vec();
+    named.sort_unstable();
+    assert_eq!(recorded, named, "recorded divergences and versions");
+
+    let mut shown = BTreeMap::new();
+    for case in &vectors.cases {
+        for query in &case.queries {
+            let Some(name) = &query.divergence else {
+                continue;
+            };
+            assert!(
+                DIVERGENCES.iter().any(|(known, _)| known == name),
+                "{}: unnamed divergence `{name}`",
+                query_label(case, query)
+            );
+            assert!(
+                !same(
+                    decode(query.openusd.as_ref()).as_ref(),
+                    query.expected().as_ref()
+                ),
+                "{}: OpenUSD no longer differs for `{name}`",
+                query_label(case, query)
+            );
+            *shown.entry(name.as_str()).or_insert(0) += 1;
+        }
+    }
+    for (name, _) in DIVERGENCES {
+        assert!(shown.contains_key(name), "no query shows `{name}`");
+    }
 }
 
 #[test]

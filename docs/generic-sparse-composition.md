@@ -148,27 +148,59 @@ from OpenUSD 26.08 (`scripts/temporal_sparse_oracle.py`, including ports of
 `testUsdAttributeArrayEdits.cpp`): mixed dense and sparse samples at differing
 times, held and linear interpolation, sublayer and reference offsets, sampled
 and default blocks, defaults under and over samples, and element types of
-arrays and scalars. It
-also checks that resolving the composed stage equals resolving OpenUSD's
-flattened layer.
+arrays and scalars. It also checks that resolving the composed stage equals
+resolving OpenUSD's flattened layer.
 
-The vectors pin three OpenUSD 26.08 results as defects instead of matching
-them; each disagrees with OpenUSD's own flattened stage or with the value at
-the sample's own time:
+Every recorded value must match OpenUSD, except for the named divergences
+below.
 
-- **NaN before the first sample.** A default or fallback under time samples
-  is a sample at `-inf`, and OpenUSD interpolates towards the first sample
-  with `alpha = inf / inf`, giving NaN for interpolating element types.
-  `layerstack` holds the composed lower sample.
-- **Early stop after moving the query.** After a dense lower sample moves the
-  query to the upper sample, OpenUSD stops at a weaker series whose own upper
-  sample is dense although its sample held at the query time is sparse, so
-  weaker opinions drop out of the interpolated upper sample. `layerstack`
-  keeps composing, as the proposal does.
-- **Transparent sampled block.** A weaker series whose lower bracketing sample
-  is a block and whose upper sample is sparse contributes nothing in OpenUSD,
-  and opinions weaker than the block show through. `layerstack` lets the block
-  end the fold (AOUSD Core §12.3.6).
+### Divergences From OpenUSD
+
+A divergence is a result Layerstack resolves differently from OpenUSD on
+purpose, following the Core specification or the sparse-array-edits proposal
+where OpenUSD disagrees with them, or with its own flattened stage. Each has a
+name and the OpenUSD release it was confirmed against. The oracle script
+records them in `DIVERGENCES`, and each affected query names one and pins
+Layerstack's `expected` value. The script refuses to write vectors when:
+
+- OpenUSD no longer shows a divergence, so the override must go;
+- the running OpenUSD release is not the confirmed one, so the source lines
+  must be re-checked and the version bumped;
+- no case shows a named divergence any more.
+
+`divergences_are_exactly_the_named_ones` requires the vectors to name exactly
+the divergences and versions below, each shown by a query where OpenUSD's
+value differs from the expected one. Any other difference from OpenUSD fails
+`composed_resolution_matches_openusd`.
+
+| Name | Confirmed with | OpenUSD | Layerstack | Authority |
+| --- | --- | --- | --- | --- |
+| `nan-before-first-sample` | 26.08 | NaN for interpolating types before the first composed sample | holds the first composed sample, as OpenUSD's flattened stage does | Core §12.5.1 |
+| `override-early-stop` | 26.08 | drops weaker opinions from the interpolated upper sample after the query moves to it | keeps composing weaker series at the upper sample's time | proposal's `Evaluate`; Core §12.3.2 |
+| `transparent-sampled-block` | 26.08 | a held sampled block in a weaker series lets opinions weaker than it show through | the block ends the fold | Core §12.3.6 |
+
+- **`nan-before-first-sample`.** A default or fallback under time samples is a
+  sample at `-inf` (`pxr/usd/usd/stage.cpp:8029` and `:8054`,
+  `_GetValueFromResolveInfoImpl`), and `Usd_Interpolate` interpolates towards
+  the first sample with `alpha = inf / inf`
+  (`pxr/usd/usd/interpolators.cpp:125`), giving NaN for interpolating element
+  types under held and linear interpolation alike. Core §12.5.1 says queries
+  before the first sample return its value.
+- **`override-early-stop`.** After a dense lower sample moves the query to the
+  upper sample, OpenUSD stops at a weaker series whose own upper sample is
+  dense although its sample held at the query time is sparse
+  (`pxr/usd/usd/stage.cpp:9032`, `ProcessLayerAtTime`), so weaker opinions
+  drop out of the interpolated upper sample, which then differs from the value
+  at that sample's own time. Layerstack keeps composing, as the proposal's
+  `Evaluate` ("Evaluating a Strength-Ordering of Samples at a Specific Time")
+  does.
+- **`transparent-sampled-block`.** A weaker series whose lower bracketing
+  sample is a block and whose upper sample is sparse contributes no samples in
+  OpenUSD (`pxr/usd/usd/interpolators.cpp:163` and `:180`,
+  `_GetInterpolatingSamplesImpl`), while the walk continues past it, so
+  opinions weaker than the block show through. A block discards weaker
+  opinions, sampled ones included (Core §12.3.6), so Layerstack lets it end
+  the fold.
 
 ## Open Gaps
 

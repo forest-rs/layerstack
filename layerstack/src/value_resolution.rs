@@ -87,7 +87,11 @@ impl ArrayFamily<'_> {
         match value {
             Value::Array(items) => FamilyMember::Dense(items.clone()),
             Value::ArrayEdit(edit) => FamilyMember::Sparse(edit.clone()),
-            // A sampled block blocks exactly like an authored default block.
+            // A sampled block blocks exactly like an authored default block,
+            // wherever it is the held sample. OpenUSD 26.08 lets opinions
+            // weaker than a held sampled block show through when the block's
+            // series composes at its next sample: the named divergence
+            // `transparent-sampled-block`.
             //
             // Spec: AOUSD Core §12.3.6 (blocked attributes: individual time
             // samples can be blocked).
@@ -584,9 +588,11 @@ struct BracketPlan<'o> {
 /// does not), so opinions hidden behind dense values and blocks are never
 /// visited.
 ///
-/// Unlike OpenUSD 26.08, the walk keeps composing after the query moves to
-/// the upper sample even when a weaker opinion's own upper sample does not
-/// compose, as the proposal does: its held sample at that time still does.
+/// The walk keeps composing after the query moves to the upper sample even
+/// when a weaker opinion's own upper sample does not compose, as the
+/// proposal does: its held sample at that time still does. OpenUSD 26.08
+/// stops there instead; this is the named divergence `override-early-stop`
+/// (`docs/generic-sparse-composition.md`, "Divergences From OpenUSD").
 fn plan_brackets<'o>(
     opinions: impl IntoIterator<Item = &'o Opinion>,
     time: f64,
@@ -653,9 +659,10 @@ impl<'o> OpinionFamily<Bracket<'o>> for PickedArrayFamily<'_> {
 /// interpolates or holds the composed values.
 ///
 /// Before the first composed time sample, a default or fallback is the lower
-/// bracketing sample at `-inf`; the composed lower value holds there. OpenUSD
-/// 26.08 interpolates towards the upper sample with `alpha = inf / inf`, which
-/// yields NaN for interpolating element types.
+/// bracketing sample at `-inf`; the composed lower value holds there (Core
+/// §12.5.1). OpenUSD 26.08 interpolates towards the upper sample with
+/// `alpha = inf / inf`, which yields NaN for interpolating element types:
+/// the named divergence `nan-before-first-sample`.
 ///
 /// Spec: AOUSD Core §12.3.2.2 (time samples), §12.3.6 (blocked samples),
 /// §12.5 (interpolation); sparse-array-edits proposal, "Composing and

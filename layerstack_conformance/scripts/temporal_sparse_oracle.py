@@ -20,10 +20,13 @@ for every query time and interpolation mode:
 A case records the flattened layer text only when layerstack is expected to
 resolve it to the composed result (`flatten_equivalent`).
 
-Where OpenUSD's composed result is a defect, the case pins layerstack's
-`expected` value instead and names the defect in `divergence`. The script
-fails if OpenUSD no longer shows a recorded defect, so a fixed OpenUSD forces
-the override to be removed.
+Where Layerstack deliberately resolves differently, the query pins
+Layerstack's `expected` value and names one of the `DIVERGENCES` in
+`divergence`. The script refuses to write vectors when OpenUSD no longer
+shows a recorded divergence (the override must go), when a divergence was
+confirmed with a different OpenUSD release (its source lines must be
+re-checked and its version bumped), or when no case shows a named
+divergence any more.
 """
 import json
 import math
@@ -42,35 +45,88 @@ DEFAULT_OUT = os.path.normpath(os.path.join(HERE, "..", "tests", "data", "tempor
 HELD = "held"
 LINEAR = "linear"
 
-# OpenUSD defects the vectors pin instead of replicating.
+# The divergences some query shows.
+USED = set()
+
+# The named Core-versus-OpenUSD divergences: results Layerstack resolves
+# differently from OpenUSD on purpose. Each records the OpenUSD release it was
+# confirmed against (`openusd`), OpenUSD's behaviour and where it comes from
+# (`openusd_behavior`, `openusd_source`, with paths and lines in that
+# release), and the behaviour Layerstack follows instead with its authority
+# (`layerstack`, `authority`). `docs/generic-sparse-composition.md` and
+# `tests/temporal_sparse.rs` list the same names and versions; any other
+# difference from OpenUSD is a failure.
 DIVERGENCES = {
-    "nan-before-first-sample": (
-        "OpenUSD gives defaults and fallbacks the sample time -inf "
-        "(pxr/usd/usd/stage.cpp, `_GetValueFromResolveInfoImpl`). Before the "
-        "first composed time sample, the bracketing samples are (-inf, first) "
-        "and `Usd_Interpolate` computes alpha = inf/inf, so interpolating "
-        "types resolve to NaN under both held and linear interpolation. "
-        "Composed and flattened stages agree on the first sample's value."
-    ),
-    "override-early-stop": (
-        "After a non-composing lower sample moves the query to the upper "
-        "sample's time, `_ResolveInfoResolver::ProcessLayerAtTime` stops at a "
-        "weaker series whose upper sample does not compose, although its held "
-        "value at that time does. Weaker opinions then drop out of the "
-        "interpolated upper sample, so the value differs from the value at "
-        "the upper sample's own time and from the flattened stage. The "
-        "proposal's `Evaluate` (sparse-array-edits README, 'Evaluating a "
-        "Strength-Ordering of Samples at a Specific Time') keeps composing "
-        "and agrees with the flattened stage."
-    ),
-    "transparent-sampled-block": (
-        "A sampled block that is a weaker series' lower bracketing sample, "
-        "with a composing upper sample, contributes no samples "
-        "(`_GetInterpolatingSamplesImpl` clears them) while the chain "
-        "continues past it, so opinions weaker than the block show through. "
-        "A block discards weaker opinions (AOUSD Core 12.3.6), and OpenUSD "
-        "honours that at the block's own sample time."
-    ),
+    "nan-before-first-sample": {
+        "openusd": "0.26.8",
+        "openusd_behavior": (
+            "Defaults and fallbacks become samples at time -inf. Before the "
+            "first composed time sample the bracketing samples are (-inf, "
+            "first), and `Usd_Interpolate` computes alpha = inf/inf, so "
+            "interpolating types resolve to NaN under both held and linear "
+            "interpolation."
+        ),
+        "openusd_source": (
+            "pxr/usd/usd/stage.cpp:8029 and :8054 "
+            "(`_GetValueFromResolveInfoImpl` gives defaults and fallbacks time "
+            "-inf); pxr/usd/usd/interpolators.cpp:125 (`Usd_Interpolate` alpha)"
+        ),
+        "layerstack": (
+            "Holds the composed lower sample, as OpenUSD's own flattened "
+            "stage does."
+        ),
+        "authority": (
+            "AOUSD Core 12.5.1 (queries before the first sample return the "
+            "first sample's value)"
+        ),
+    },
+    "override-early-stop": {
+        "openusd": "0.26.8",
+        "openusd_behavior": (
+            "After a non-composing lower sample moves the query to the upper "
+            "sample's time, the resolve-info walk stops at a weaker series "
+            "whose own upper sample does not compose, although its sample "
+            "held at that time does. Weaker opinions drop out of the "
+            "interpolated upper sample, which then differs from the value at "
+            "the upper sample's own time and from the flattened stage."
+        ),
+        "openusd_source": (
+            "pxr/usd/usd/stage.cpp:9032 "
+            "(`_ResolveInfoResolver::ProcessLayerAtTime`, "
+            "`if (!_overrideTime || upperComposes)`)"
+        ),
+        "layerstack": (
+            "Keeps composing weaker series at the upper sample's time, and "
+            "agrees with the flattened stage."
+        ),
+        "authority": (
+            "sparse-array-edits proposal, 'Evaluating a Strength-Ordering of "
+            "Samples at a Specific Time' (`Evaluate`); AOUSD Core 12.3.2 "
+            "(time-based resolution visits every layer's samples, strongest "
+            "first)"
+        ),
+    },
+    "transparent-sampled-block": {
+        "openusd": "0.26.8",
+        "openusd_behavior": (
+            "A sampled block that is a weaker series' lower bracketing "
+            "sample, with a composing upper sample, contributes no samples "
+            "while the walk continues past it, so opinions weaker than the "
+            "block show through. At the block's own sample time OpenUSD "
+            "honours the block."
+        ),
+        "openusd_source": (
+            "pxr/usd/usd/interpolators.cpp:163 and :180 "
+            "(`_GetInterpolatingSamplesImpl` clears the samples of a blocked "
+            "lower sample); pxr/usd/usd/stage.cpp:9032 (the walk continues "
+            "when the upper sample composes)"
+        ),
+        "layerstack": "Lets the block end the fold wherever it is held.",
+        "authority": (
+            "AOUSD Core 12.3.6 (a block discards weaker opinions; individual "
+            "time samples can be blocked)"
+        ),
+    },
 }
 
 HEADER = "#usda 1.0\n"
@@ -981,7 +1037,7 @@ def close(a, b):
     return True
 
 
-def run_case(tmp, spec):
+def run_case(tmp, spec, version):
     d = tempfile.mkdtemp(dir=tmp)
     for name, text in spec["layers"].items():
         with open(os.path.join(d, name), "w") as f:
@@ -1004,11 +1060,19 @@ def run_case(tmp, spec):
                        or spec["divergences"].get((attr, time, None)))
                 if div:
                     expected, reason = div
+                    if reason not in DIVERGENCES:
+                        sys.exit(f"{spec['name']}: unnamed divergence `{reason}`")
                     if close(openusd, expected):
                         sys.exit(f"{spec['name']} {attr}@{time} {interp}: OpenUSD no "
                                  f"longer shows `{reason}`; remove the override")
+                    if DIVERGENCES[reason]["openusd"] != version:
+                        sys.exit(f"{spec['name']} {attr}@{time} {interp}: `{reason}` "
+                                 f"was confirmed with OpenUSD "
+                                 f"{DIVERGENCES[reason]['openusd']}, not {version}; "
+                                 "re-check its source lines and bump it")
                     q["expected"] = expected
                     q["divergence"] = reason
+                    USED.add(reason)
                 queries.append(q)
     for key in spec["divergences"]:
         if not any(q["attr"] == key[0] and q["time"] == key[1] for q in queries):
@@ -1034,7 +1098,10 @@ def main():
     out_path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_OUT
     version = ".".join(str(v) for v in Usd.GetVersion())
     with tempfile.TemporaryDirectory() as tmp:
-        cases = [run_case(tmp, spec) for spec in CASES]
+        cases = [run_case(tmp, spec, version) for spec in CASES]
+    unused = sorted(set(DIVERGENCES) - USED)
+    if unused:
+        sys.exit(f"divergences no case shows: {unused}")
     doc = {
         "generator": "layerstack_conformance/scripts/temporal_sparse_oracle.py",
         "openusd_version": version,

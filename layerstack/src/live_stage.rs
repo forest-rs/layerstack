@@ -1961,6 +1961,66 @@ mod tests {
         );
     }
 
+    /// Path expressions authored across a reference are anchored and
+    /// mapped into the referencing prim, and `%_` splices in the weaker
+    /// one; editing the referenced expression recomposes to the same values
+    /// as a fresh composition.
+    ///
+    /// Spec: AOUSD Core §10 (composition arcs map namespace), §12.3.
+    /// OpenUSD: `PcpMapFunction::MapSourceToTarget(SdfPathExpression)` and
+    /// `SdfPathExpression::ComposeOver`.
+    #[test]
+    fn path_expression_edits_across_a_reference_match_fresh() {
+        let mut store = InMemoryStore::default();
+        let field = store.tokens.intern("members");
+        let part = p(&mut store, "/Part");
+        let gear = p(&mut store, "/Gear");
+        let expression =
+            |text: &str| PropertySpec::attribute().with_default(Value::PathExpression(text.into()));
+
+        let mut root = Layer::new(LayerId(1));
+        root.insert_prim(
+            part,
+            PrimSpec::def()
+                .with_reference(Reference::new(LayerId(2), gear))
+                .with_property(field, expression("/Part/Axle %_")),
+        );
+        store.insert_layer(root);
+        let mut asset = Layer::new(LayerId(2));
+        asset.insert_prim(
+            gear,
+            PrimSpec::def().with_property(field, expression(".//")),
+        );
+        store.insert_layer(asset);
+
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let members = |live: &LiveStage| {
+            live.stage()
+                .resolve_field_path(PropertyPath::new(part, field))
+                .map(|resolved| resolved.value)
+        };
+        assert_eq!(
+            members(&live),
+            Some(Value::PathExpression("/Part/Axle /Part//".into()))
+        );
+
+        store
+            .layers
+            .get_mut(&LayerId(2))
+            .unwrap()
+            .prims
+            .get_mut(&gear)
+            .unwrap()
+            .set_property(field, expression("Tooth /Elsewhere"));
+        live.notify_layer_prim_edits(LayerId(2), &[gear]);
+        live.recompose(&mut store);
+        assert_matches_fresh(&live, &mut store, &[field]);
+        assert_eq!(
+            members(&live),
+            Some(Value::PathExpression("/Part/Axle /Part/Tooth".into()))
+        );
+    }
+
     /// Opinions and arcs authored beneath an instance never contribute:
     /// editing them, or toggling `instanceable`, recomposes to the same stage
     /// as a fresh composition. A prim that becomes or stops being an

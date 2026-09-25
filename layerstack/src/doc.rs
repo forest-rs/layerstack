@@ -100,12 +100,14 @@ pub enum Value {
     ///
     /// Spec: §6.2 (asset type), §9 (asset resolution).
     Asset(Arc<str>),
-    /// A path expression (`pathExpression`), kept as its authored text.
+    /// A path expression (`pathExpression`), as its text.
     ///
     /// OpenUSD's `SdfPathExpression` (used for example by
-    /// `CollectionAPI`'s `membershipExpression`) is not evaluated here, and
-    /// its `%_` references to weaker expressions are not composed: the
-    /// strongest opinion wins like any scalar.
+    /// `CollectionAPI`'s `membershipExpression`) is not evaluated here.
+    /// Composition anchors each opinion's relative patterns at the prim that
+    /// authors it and maps its paths into the stage namespace, and a `%_`
+    /// splices in the next weaker opinion's expression; the resolved text is
+    /// written as `SdfPathExpression::GetText` writes it.
     ///
     /// Spec: AOUSD Core §16.3.10.14 (crate encoding); the type itself is an
     /// OpenUSD extension (`pxr/usd/sdf/pathExpression.h`).

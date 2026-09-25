@@ -283,6 +283,7 @@ pub(crate) fn compose_stage(
     // removal only drops entries.
     remove_prims_without_specs(store, &mut prims, &mut children);
     instances.retain(|instance| prims.contains_key(instance));
+    crate::path_expression::anchor_opinions(store, &mut prims);
 
     if let Some(builder) = dep_builder.as_mut() {
         builder.retain_prims(&prims);

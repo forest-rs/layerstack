@@ -635,3 +635,39 @@ fn all_gen_files_parse_without_error() {
     }
     assert!(count >= 30, "expected ≥30 gen_* files, found {count}");
 }
+
+/// Reads a crate layer from a supplemental composition fixture.
+fn read_composition_asset(fixture: &str, file: &str) -> ParsedUsdc {
+    read_usdc_file(
+        &workspace_root()
+            .join("core-spec-supplemental-release_dec2025/composition/tests/assets")
+            .join(fixture)
+            .join(file),
+    )
+}
+
+impl ParsedUsdc {
+    fn path_id(&mut self, prim_path: &str) -> layerstack::path::PathId {
+        let path = layerstack::path::Path::parse_absolute(prim_path, &mut self.store.tokens)
+            .expect("invalid path");
+        self.store.paths.intern(path)
+    }
+}
+
+/// Inherits and payloads are read from the `inheritPaths` and `payload`
+/// fields (AOUSD Core §7.6.2.3).
+#[test]
+fn inherits_and_payloads_are_read_from_their_fields() {
+    let mut rig = read_composition_asset("BasicListEditingWithInherits_root", "model.usd");
+    let sym_rig = rig.path_id("/Model/SymRig");
+    let left_rig = rig.prim("/Model/LeftRig");
+    assert_eq!(left_rig.inherits.append, [sym_rig]);
+    let inherit_paths = rig.store.tokens.intern("inheritPaths");
+    assert!(left_rig.field(inherit_paths).is_none());
+
+    let mut model = read_composition_asset("TrickyRelocationOfPrimFromPayload_root", "model.usd");
+    let payloads = model.prim("/Model").payloads;
+    let explicit = payloads.explicit.expect("an explicit payload list");
+    assert_eq!(explicit.len(), 1);
+    assert_eq!(explicit[0].asset.as_deref(), Some("./model_payload.usd"));
+}

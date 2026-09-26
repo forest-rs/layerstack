@@ -148,6 +148,34 @@ def "Shore" (
 )
 {
 }
+
+# `/Branch` inherits `/_class_Bough`, which references `bough.usda /Bough`,
+# where `SymTwig` inherits `_class_Twig` and `LeftTwig` inherits `SymTwig`.
+# `/Branch/_class_Twig/Bud` inherits `Leaf`, so `/Branch/SymTwig/Bud` has
+# that inherit through the ancestral class `/Branch/_class_Twig` and
+# implied as `/Branch/SymTwig/Leaf`. Both reach `bough.usda
+# /Bough/_class_Twig/Leaf`; OpenUSD keeps the node it adds first, beneath
+# the authored inherit, so the leaf ranks after `Bud`.
+class "_class_Bough" (
+    references = @./bough.usda@</Bough>
+)
+{
+}
+
+def "Branch" (
+    inherits = </_class_Bough>
+)
+{
+    over "_class_Twig"
+    {
+        def "Bud" (
+            inherits = </Branch/_class_Twig/Leaf>
+        )
+        {
+            int size = 2
+        }
+    }
+}
 ''',
     "stand": '''#usda 1.0
 
@@ -230,6 +258,32 @@ class "_class_Boulder"
     )
     {
         int crack = 4
+    }
+}
+''',
+    "bough": '''#usda 1.0
+
+def "Bough"
+{
+    class "_class_Twig"
+    {
+        def "Leaf"
+        {
+            int size = 1
+            int vein = 1
+        }
+    }
+
+    class "SymTwig" (
+        inherits = </Bough/_class_Twig>
+    )
+    {
+    }
+
+    def "LeftTwig" (
+        inherits = </Bough/SymTwig>
+    )
+    {
     }
 }
 ''',

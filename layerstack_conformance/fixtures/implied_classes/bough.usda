@@ -1,0 +1,25 @@
+#usda 1.0
+
+def "Bough"
+{
+    class "_class_Twig"
+    {
+        def "Leaf"
+        {
+            int size = 1
+            int vein = 1
+        }
+    }
+
+    class "SymTwig" (
+        inherits = </Bough/_class_Twig>
+    )
+    {
+    }
+
+    def "LeftTwig" (
+        inherits = </Bough/SymTwig>
+    )
+    {
+    }
+}

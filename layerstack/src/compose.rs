@@ -382,13 +382,17 @@ fn enclosing_arc(graph: &PrimIndexGraph, node: NodeId) -> Option<&PrimNode> {
 
 /// Drops the registrations that nodes skipping duplicates (see
 /// [`NodeArc::skips_duplicates`]) made of sites another node registers,
-/// and every such registration of a site but the strongest.
+/// and every such registration of a site but one: the one OpenUSD adds
+/// first where the graph shows it (see [`PrimIndexGraph::implied_after`]),
+/// else the strongest.
 ///
 /// OpenUSD adds no node for a site the prim index already uses while it
 /// builds the recursive index of a class arc's ancestors, whichever arc
 /// reaches the site first in its evaluation order; composition here does
 /// not expand arcs in that order, so it adds those nodes and drops their
-/// duplicate registrations once the graph is complete.
+/// duplicate registrations once the graph is complete. A class implied from
+/// a node comes after that node's subtree, so a site both reach stays
+/// beneath the node, however strong the implied class is.
 fn drop_skipped_duplicates(prim: &mut PrimIndex) {
     let registration = |key: &OpinionKey| OpinionKey {
         spec_path: key.spec_path.prim_spec(),
@@ -405,14 +409,31 @@ fn drop_skipped_duplicates(prim: &mut PrimIndex) {
         let mut sources: Vec<&OpinionKey> = prim.sources.iter().collect();
         sources.sort_by(|a, b| graph.cmp_keys(a, b));
         sources.dedup();
-        let mut kept: HashSet<(LayerId, &SpecPath)> = sources
+        let kept: HashSet<(LayerId, &SpecPath)> = sources
             .iter()
             .filter(|key| !skips(key.node))
             .map(|key| (key.layer_id, &key.spec_path))
             .collect();
+        // The registration OpenUSD adds first, else the strongest.
+        let mut first: HashMap<(LayerId, &SpecPath), &OpinionKey> = HashMap::new();
+        for key in sources.iter().filter(|key| skips(key.node)) {
+            let site = (key.layer_id, &key.spec_path);
+            if kept.contains(&site) {
+                continue;
+            }
+            let winner = first.entry(site).or_insert(key);
+            if graph.implied_after(key.node, winner.node) {
+                *winner = key;
+            }
+        }
         sources
             .into_iter()
-            .filter(|key| skips(key.node) && !kept.insert((key.layer_id, &key.spec_path)))
+            .filter(|key| {
+                skips(key.node)
+                    && first
+                        .get(&(key.layer_id, &key.spec_path))
+                        .is_none_or(|winner| *winner != *key)
+            })
             .cloned()
             .collect()
     };
@@ -4571,23 +4592,31 @@ struct AncestralArcs<'a> {
 
 impl AncestralArcs<'_> {
     /// The sites of `nodes`' destination graph an ancestral arc of a class
-    /// arc does not add again: every non-variant node's site, and for an
+    /// arc does not add again: every non-variant node's site but those of
+    /// the nodes OpenUSD adds after the arc's node `own`, beneath classes
+    /// implied from it (see [`PrimIndexGraph::implied_after`]), and for an
     /// implied or propagated class, the sites on the arc paths of the nodes
     /// it comes from, whose ancestral arcs lead back to them.
     ///
     /// OpenUSD adds class arcs with `skipDuplicateNodes`, which holds in the
     /// recursive index of the target's ancestors as well (`_AddArc` and
-    /// `_AddClassBasedArc` in `pxr/usd/pcp/primIndex.cpp`).
+    /// `_AddClassBasedArc` in `pxr/usd/pcp/primIndex.cpp`). Classes are
+    /// implied here before their origin's ancestral arcs are expanded, so
+    /// the sites an implied class reached are left to
+    /// [`drop_skipped_duplicates`], which keeps the origin's.
     fn used_sites(
         &self,
         store: &mut dyn LayerStore,
         nodes: &ArcNodes,
+        own: NodeId,
         out: &HashMap<PathId, PrimIndex>,
     ) -> HashSet<(LayerId, PathId)> {
-        let mut used: HashSet<(LayerId, PathId)> = out[&self.dest_root]
-            .graph
+        let graph = &out[&self.dest_root].graph;
+        let mut used: HashSet<(LayerId, PathId)> = graph
             .nodes()
-            .filter(|(_, node)| node.arc_kind() != ArcKind::Variants)
+            .filter(|(id, node)| {
+                node.arc_kind() != ArcKind::Variants && !graph.implied_after(own, *id)
+            })
             .map(|(_, node)| (node.layer_stack(), node.site().prim_path()))
             .collect();
         let mut pending: Vec<&[ArcStep]> = nodes
@@ -4835,7 +4864,17 @@ impl AncestralArcs<'_> {
         skip: usize,
     ) {
         let used = if self.class_arc {
-            self.used_sites(store, nodes, out)
+            // The arc's node, the origin of the classes implied from it.
+            let mut cursor = PathCursor::root(self.dest_root);
+            intern_steps(
+                store,
+                out,
+                self.dest_root,
+                &nodes.path,
+                &mut cursor,
+                &nodes.stage_relocates,
+            );
+            self.used_sites(store, nodes, cursor.node, out)
         } else {
             HashSet::new()
         };

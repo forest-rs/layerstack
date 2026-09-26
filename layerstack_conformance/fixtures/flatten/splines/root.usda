@@ -1,0 +1,25 @@
+#usda 1.0
+(
+    defaultPrim = "Grove"
+)
+
+# Splines read through a layer offset are retimed into stage time: knot
+# times, tangents, inner loops and sloped extrapolation.
+def Xform "Grove"
+{
+    def "Willow" (
+        references = @./willow.usda@ (offset = 3; scale = 2)
+    )
+    {
+    }
+
+    def "Alder" (
+        references = @./willow.usda@
+    )
+    {
+        double sway.spline = {
+            0: 1; pre (0, 0); post linear,
+            6: 2; post held,
+        }
+    }
+}

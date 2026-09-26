@@ -246,12 +246,6 @@ fn a_refusal_lists_every_unmet_requirement() {
                 "/Asset".into()
             ),
             (
-                Requirement::ExactAnimation,
-                "/World/Tree.curve".into(),
-                Loss::RetimedSpline,
-                "/Asset.curve".into()
-            ),
-            (
                 Requirement::NoLoss,
                 "/World/Tree.loose".into(),
                 Loss::UntypedAttribute,
@@ -269,7 +263,7 @@ fn relaxed_requirements_report_losses_instead() {
         exact_animation: false,
         ..FlattenRequirements::default()
     };
-    let requirements: Vec<Requirement> = unmet(flatten_edited(SHIFTED, &inexact, add_spline))
+    let requirements: Vec<Requirement> = unmet(flatten_edited(SHIFTED, &inexact, add_clips))
         .into_iter()
         .map(|(requirement, ..)| requirement)
         .collect();
@@ -282,7 +276,7 @@ fn relaxed_requirements_report_losses_instead() {
         ..FlattenRequirements::default()
     };
     let flat = flatten_edited(SHIFTED, &lenient, |store, spec| {
-        add_spline(store, spec);
+        add_clips(store, spec);
         add_untyped(store, spec);
     })
     .expect("losses are accepted");
@@ -294,10 +288,7 @@ fn relaxed_requirements_report_losses_instead() {
     assert_eq!(
         lost,
         [
-            (
-                "/World/Tree.curve".into(),
-                FindingKind::Lost(Loss::RetimedSpline)
-            ),
+            ("/World/Tree".into(), FindingKind::Lost(Loss::ValueClips)),
             (
                 "/World/Tree.loose".into(),
                 FindingKind::Lost(Loss::UntypedAttribute)
@@ -308,12 +299,9 @@ fn relaxed_requirements_report_losses_instead() {
         .layer
         .prims
         .values()
-        .find(|spec| spec.properties.len() == 2 && spec.specifier == Some(Specifier::Def));
-    let tree = tree.expect("the tree keeps its other properties");
-    assert!(
-        tree.properties.iter().all(|p| p.spec.spline.is_none()),
-        "the lost spline is not written"
-    );
+        .find(|spec| spec.properties.len() == 1 && spec.specifier == Some(Specifier::Def));
+    let tree = tree.expect("the tree keeps its other property");
+    assert!(tree.fields.is_empty(), "the lost clips are not written");
 }
 
 #[test]
@@ -350,15 +338,62 @@ fn exact_animation_alone_refuses_under_refuse_required() {
     };
     assert_eq!(
         unmet(flatten_edited(SHIFTED, &requirements, |store, spec| {
-            add_spline(store, spec);
+            add_clips(store, spec);
             add_untyped(store, spec);
         })),
         [(
             Requirement::ExactAnimation,
-            "/World/Tree.curve".into(),
-            Loss::RetimedSpline,
-            "/Asset.curve".into()
+            "/World/Tree".into(),
+            Loss::ValueClips,
+            "/Asset".into()
         )]
+    );
+}
+
+#[test]
+fn a_spline_through_an_offset_is_retimed() {
+    use crate::spline::{Knot, KnotInterp};
+
+    let flat = flatten_edited(SHIFTED, &FlattenRequirements::default(), |store, spec| {
+        add_spline(store, spec);
+        let curve = store.tokens.intern("curve");
+        let spline = spec
+            .properties
+            .iter_mut()
+            .find(|p| p.name == curve)
+            .and_then(|p| p.spec.spline.as_mut())
+            .unwrap();
+        spline.knots.push(Knot {
+            time: 2.0,
+            value: 1.0,
+            pre_value: None,
+            next_interp: KnotInterp::Held,
+            curve_type: CurveType::Bezier,
+            pre_tan_maya_form: false,
+            post_tan_maya_form: false,
+            pre_tan_width: 0.0,
+            post_tan_width: 0.0,
+            pre_tan_slope: 0.0,
+            post_tan_slope: 0.0,
+        });
+    })
+    .expect("flattens");
+    let spline = flat
+        .layer
+        .prims
+        .values()
+        .flat_map(|spec| &spec.properties)
+        .find_map(|p| p.spec.spline.as_ref())
+        .expect("the spline is written");
+    assert_eq!(spline.knots[0].time, 3.0, "in stage time");
+    let retimed: Vec<String> = flat.report.transformed().map(ToString::to_string).collect();
+    assert!(
+        retimed.contains(
+            &"/World/Tree.curve: transformed: spline retimed (offset 1, scale 1) \
+              (layer 2, /Asset.curve)"
+                .to_string()
+        ),
+        "{retimed:?}"
     );
 }
 

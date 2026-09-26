@@ -1,0 +1,33 @@
+#usda 1.0
+(
+    defaultPrim = "Willow"
+)
+
+def Xform "Willow"
+{
+    double sway.spline = {
+        bezier,
+        pre: sloped(0.25),
+        post: linear,
+        0: 1; pre (0, 0); post curve (2, 0.5),
+        8: 3 & 2.5; pre (2, -0.5); post linear,
+        12: 4; post held,
+    }
+    float droop.spline = {
+        hermite,
+        pre: held,
+        post: sloped(-0.5),
+        0: 0; pre (0); post curve (1),
+        10: 5; pre (0.5); post held,
+    }
+    half curl.spline = {
+        pre: linear,
+        0: 1.0004; pre (0, 0.1234); post curve (2, 0.33),
+        6: 2.0009 & 1.5003; pre (1, -0.2); post held,
+    }
+    double lean.spline = {
+        loop: (0, 4, 1, 2, 1),
+        0: 0; pre (0, 0); post linear,
+        4: 2; post held,
+    }
+}

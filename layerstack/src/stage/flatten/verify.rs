@@ -56,7 +56,10 @@ impl FlattenVerification {
 /// anchored ([`Transformation::AssetPathAnchored`]) is expected anchored,
 /// and a property declared as OpenUSD's flatten declares it
 /// ([`Transformation::CustomFromWeakestOpinion`],
-/// [`Transformation::DefinedBySchema`]) is expected declared so.
+/// [`Transformation::DefinedBySchema`]) is expected declared so. The values
+/// of a retimed spline ([`Transformation::SplineRetimed`]) agree to within
+/// `1e-9`, relative to their size, since the spline is evaluated at mapped
+/// times.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct VerifiedScope {
     /// Prims compared.
@@ -201,6 +204,17 @@ impl Stage {
             skips: skips(report),
             anchors: anchors(report),
             declarations: declarations(report),
+            retimed_splines: report
+                .findings
+                .iter()
+                .filter(|f| {
+                    matches!(
+                        f.kind,
+                        FindingKind::Transformed(Transformation::SplineRetimed { .. })
+                    )
+                })
+                .map(|f| f.path.to_string())
+                .collect(),
             out: FlattenVerification::default(),
             sample_times: Vec::new(),
         };
@@ -280,6 +294,8 @@ struct Verifier<'a> {
     /// Each property declared other than the stage declares it: its
     /// `custom` and, from a schema, its variability.
     declarations: Vec<(String, bool, Option<Variability>)>,
+    /// The properties whose spline the flatten retimed.
+    retimed_splines: Vec<String>,
     out: FlattenVerification,
     sample_times: Vec<f64>,
 }
@@ -583,9 +599,14 @@ impl Verifier<'_> {
                     .resolve_property_path_at_time(property, time, InterpolationType::Linear)
                     .map(|r| r.value)
             };
-            let want = self.value(self.expected_value(&path, value(source)));
-            let got = self.value(value(flattened));
-            self.compare(&path, MismatchKind::ValueAt { time }, want, got);
+            let (want, got) = (self.expected_value(&path, value(source)), value(flattened));
+            // A retimed spline is evaluated at mapped times, which may round
+            // differently.
+            let retimed = self.retimed_splines.contains(&path);
+            if !(retimed && close(want.as_ref(), got.as_ref())) {
+                let (want, got) = (self.value(want), self.value(got));
+                self.compare(&path, MismatchKind::ValueAt { time }, want, got);
+            }
         }
     }
 
@@ -656,6 +677,17 @@ impl Verifier<'_> {
         let mut out = String::new();
         write(&mut out, &value, self.tokens);
         out
+    }
+}
+
+/// Whether two floating-point values agree to within `1e-9`, relative to
+/// their size.
+fn close(a: Option<&Value>, b: Option<&Value>) -> bool {
+    let near = |a: f64, b: f64| (a - b).abs() <= 1e-9 * a.abs().max(b.abs()).max(1.0);
+    match (a, b) {
+        (Some(Value::Double(a)), Some(Value::Double(b))) => near(*a, *b),
+        (Some(Value::Float(a)), Some(Value::Float(b))) => near(f64::from(*a), f64::from(*b)),
+        (a, b) => a == b,
     }
 }
 

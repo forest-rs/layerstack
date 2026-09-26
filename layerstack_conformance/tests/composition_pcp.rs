@@ -970,6 +970,7 @@ fn assert_error_arc_cycle_root_composes(load: fn(&str) -> (LoadedStage, PathBuf)
         "</CoRecursiveParent1/Child1/Child2>: @root.usd@</CoRecursiveParent1/Child1/Child2> inherits @root.usd@</CoRecursiveParent2/Child2> CANNOT inherits @root.usd@</CoRecursiveParent1>",
         "</CoRecursiveParent2/Child2/Child1>: @root.usd@</CoRecursiveParent2/Child2/Child1> inherits @root.usd@</CoRecursiveParent1/Child1> CANNOT inherits @root.usd@</CoRecursiveParent2>",
         "</RelocatedInheritOfChild/Child>: @root.usd@</RelocatedInheritOfChild/Child> CANNOT inherits @root.usd@</RelocatedInheritOfChild/Child/Class>",
+        "</RelocatedInheritOfChild/Object>: @root.usd@</RelocatedInheritOfChild/Object> relocates @root.usd@</RelocatedInheritOfChild/Child> CANNOT inherits @root.usd@</RelocatedInheritOfChild/Child/Class>",
     ];
     let display = |path: layerstack::PathId| loaded.store.paths.display(path, &loaded.store.tokens);
     let mut actual_errors: Vec<String> = stage
@@ -986,6 +987,7 @@ fn assert_error_arc_cycle_root_composes(load: fn(&str) -> (LoadedStage, PathBuf)
                     let verb = match arc {
                         ArcKind::Inherits => "inherits",
                         ArcKind::References => "references",
+                        ArcKind::Relocates => "relocates",
                         other => panic!("unexpected arc {other:?}"),
                     };
                     let cannot = if i == last { "CANNOT " } else { "" };

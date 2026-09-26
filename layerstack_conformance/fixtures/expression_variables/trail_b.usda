@@ -1,0 +1,12 @@
+#usda 1.0
+(
+    expressionVariables = {
+        string PICK = "./step_b.usda"
+    }
+)
+
+def "Trail" (
+    references = @./path.usda@</Trail>
+)
+{
+}

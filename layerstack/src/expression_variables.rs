@@ -558,6 +558,22 @@ fn node_chain(graph: &PrimIndexGraph, node: NodeId) -> Vec<LayerId> {
     stacks
 }
 
+/// Whether the nodes `a` and `b` of `graph` read their layer stacks with
+/// the same expression variables ([`node_chain`], [`composed_variables`]):
+/// two nodes of one root layer are sites of one layer stack only then.
+///
+/// OpenUSD: `PcpLayerStackIdentifier::expressionVariablesOverrideSource`.
+pub(crate) fn same_context(
+    store: &dyn LayerStore,
+    graph: &PrimIndexGraph,
+    a: NodeId,
+    b: NodeId,
+) -> bool {
+    a == b
+        || composed_variables(store, &node_chain(graph, a))
+            == composed_variables(store, &node_chain(graph, b))
+}
+
 /// The variant selections `selections`, authored at a site read in
 /// `context`, with those authored as variable expressions evaluated there:
 /// one that fails to evaluate is left out, so a weaker selection applies;

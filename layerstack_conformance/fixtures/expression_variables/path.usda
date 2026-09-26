@@ -1,0 +1,17 @@
+#usda 1.0
+(
+    subLayers = [
+        @`"${PICK}"`@
+    ]
+)
+
+# The class each context's sublayer fills in differently.
+def "Trail" (
+    inherits = </_Marker>
+)
+{
+}
+
+class "_Marker"
+{
+}

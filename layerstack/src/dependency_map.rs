@@ -17,7 +17,7 @@ use alloc::vec::Vec;
 use hashbrown::{HashMap, HashSet};
 use invalidation::{CycleHandling, InvalidationGraph};
 
-use crate::{doc::LayerId, path::PathId, prim_index::ArcKind};
+use crate::{doc::LayerId, expression_variables::VariableReads, path::PathId, prim_index::ArcKind};
 
 use crate::live_stage::OPINION_EDIT;
 
@@ -59,6 +59,9 @@ pub(crate) struct CompositionDeps {
     pub default_prim_dependents: HashMap<LayerId, HashSet<PathId>>,
     /// Layers whose `layerRelocates` composition consulted.
     pub relocation_layers: HashSet<LayerId>,
+    /// The expression variables composition read evaluating variable
+    /// expressions.
+    pub expression_variables: VariableReads,
 }
 
 /// Builder for composition dependency data, used during composition.
@@ -72,6 +75,7 @@ pub(crate) struct DependencyBuilder {
     prim_to_layers: HashMap<PathId, HashSet<LayerId>>,
     default_prim_dependents: HashMap<LayerId, HashSet<PathId>>,
     relocation_layers: HashSet<LayerId>,
+    expression_variables: VariableReads,
 }
 
 impl DependencyBuilder {
@@ -83,7 +87,17 @@ impl DependencyBuilder {
             prim_to_layers: HashMap::new(),
             default_prim_dependents: HashMap::new(),
             relocation_layers: HashSet::new(),
+            expression_variables: VariableReads::default(),
         }
+    }
+
+    /// Records the expression variables composition read.
+    ///
+    /// Changing one of them may change an asset path or variant selection,
+    /// so the stage must be recomposed (OpenUSD resyncs the prims that
+    /// depend on them, `PcpChanges::DidChange` in `pxr/usd/pcp/changes.cpp`).
+    pub(crate) fn add_expression_variable_reads(&mut self, reads: VariableReads) {
+        self.expression_variables.extend(reads);
     }
 
     /// Records that composition consulted the `layerRelocates` of `layers`.
@@ -172,6 +186,7 @@ impl DependencyBuilder {
             prim_to_layers: self.prim_to_layers,
             default_prim_dependents: self.default_prim_dependents,
             relocation_layers: self.relocation_layers,
+            expression_variables: self.expression_variables,
         }
     }
 }

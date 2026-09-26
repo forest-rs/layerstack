@@ -8,13 +8,14 @@
 //!
 //! Spec: AOUSD Core §9 (Layer stacks).
 
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 
 use hashbrown::HashSet;
 
 use crate::{
-    composition_error::{CompositionError, SublayerCycle, UnresolvedSublayer},
-    doc::{LayerId, LayerOffset, LayerStore},
+    composition_error::{CompositionError, ExpressionContext, SublayerCycle, UnresolvedSublayer},
+    doc::{LayerId, LayerOffset, LayerStore, SublayerEntry},
+    expression_variables::{VariableReads, evaluate, expression_error},
 };
 
 /// An ordered set of layers gathered recursively from sublayers.
@@ -39,6 +40,13 @@ impl LayerStack {
     /// resolved, is ignored; composition reports it as a [`SublayerCycle`]
     /// or an [`UnresolvedSublayer`] through
     /// [`Stage::composition_errors`](crate::Stage::composition_errors).
+    ///
+    /// A sublayer asset path that is a variable expression
+    /// ([`SublayerEntry::is_expression`]) is evaluated with the expression
+    /// variables of `root` ([`crate::Layer::expression_variables`]),
+    /// whichever layer of the stack authors it, and resolved relative to
+    /// that layer ([`LayerStore::asset_layer`]); one that evaluates to
+    /// nothing is skipped.
     #[must_use]
     pub fn gather(store: &dyn LayerStore, root: LayerId) -> Self {
         Self::gather_reporting(store, root, &mut Vec::new())
@@ -66,62 +74,124 @@ impl LayerStack {
         root: LayerId,
         errors: &mut Vec<CompositionError>,
     ) -> Self {
-        fn visit(
-            store: &dyn LayerStore,
-            id: LayerId,
-            accumulated: LayerOffset,
-            visiting: &mut HashSet<LayerId>,
-            out: &mut Vec<LayerId>,
-            offsets: &mut Vec<LayerOffset>,
-            errors: &mut Vec<CompositionError>,
-        ) {
-            visiting.insert(id);
-            out.push(id);
-            offsets.push(accumulated);
-            if let Some(layer) = store.layer(id) {
-                for sub in &layer.sublayers {
-                    if sub.is_unresolved() {
-                        errors.push(CompositionError::UnresolvedSublayer(UnresolvedSublayer {
-                            layer: id,
-                            asset: sub.asset.clone().unwrap_or_default(),
-                        }));
-                        continue;
-                    }
-                    if visiting.contains(&sub.layer) {
-                        errors.push(CompositionError::SublayerCycle(SublayerCycle {
-                            layer: id,
-                            sublayer: sub.layer,
-                        }));
-                        continue;
-                    }
-                    let child_offset = accumulated.compose(sub.offset);
-                    visit(
-                        store,
-                        sub.layer,
-                        child_offset,
-                        visiting,
-                        out,
-                        offsets,
-                        errors,
-                    );
-                }
-            }
+        Self::gather_recording(store, root, errors, None)
+    }
 
-            visiting.remove(&id);
+    /// [`LayerStack::gather_reporting`], recording the expression
+    /// variables that sublayer asset paths read in `reads`.
+    ///
+    /// A sublayer asset path that is a variable expression
+    /// ([`SublayerEntry::is_expression`]) is evaluated with the expression
+    /// variables of `root`, whichever layer of the stack authors it, and
+    /// resolved relative to that layer ([`LayerStore::asset_layer`]). One
+    /// that evaluates to nothing is skipped, one that fails to evaluate is
+    /// reported as a [`CompositionError::VariableExpressionError`], and one
+    /// that does not resolve as an [`UnresolvedSublayer`].
+    ///
+    /// OpenUSD: `PcpLayerStack::_BuildLayerStack`
+    /// (`pxr/usd/pcp/layerStack.cpp`), which evaluates with the variables
+    /// of the layer stack's root (and session) layer. A layer stack reached
+    /// through a reference also takes variables from the referencing layer
+    /// stack there; its sublayers here see only its root's.
+    ///
+    /// [`SublayerEntry::is_expression`]: crate::SublayerEntry::is_expression
+    pub(crate) fn gather_recording(
+        store: &dyn LayerStore,
+        root: LayerId,
+        errors: &mut Vec<CompositionError>,
+        mut reads: Option<&mut VariableReads>,
+    ) -> Self {
+        struct Gather<'a, 'r> {
+            store: &'a dyn LayerStore,
+            root: LayerId,
+            visiting: HashSet<LayerId>,
+            layers: Vec<LayerId>,
+            offsets: Vec<LayerOffset>,
+            errors: &'a mut Vec<CompositionError>,
+            reads: Option<&'r mut VariableReads>,
         }
 
-        let mut layers = Vec::new();
-        let mut offsets = Vec::new();
-        visit(
+        impl Gather<'_, '_> {
+            /// The layer `sub`, a sublayer of `id`, resolves to, or `None`
+            /// after reporting why it does not.
+            fn sublayer(&mut self, id: LayerId, sub: &SublayerEntry) -> Option<LayerId> {
+                let asset = sub.asset.as_deref().unwrap_or_default();
+                if sub.is_unresolved() && sub.is_expression() {
+                    let evaluated =
+                        evaluate(self.store, &[self.root], asset, self.reads.as_deref_mut());
+                    let path = match evaluated {
+                        Ok(path) => path?,
+                        Err(error) => {
+                            self.errors.push(expression_error(
+                                ExpressionContext::Sublayer,
+                                id,
+                                None,
+                                asset,
+                                error,
+                            ));
+                            return None;
+                        }
+                    };
+                    let layer = self.store.asset_layer(id, &path);
+                    if layer.is_none() {
+                        self.errors.push(CompositionError::UnresolvedSublayer(
+                            UnresolvedSublayer {
+                                layer: id,
+                                asset: path,
+                            },
+                        ));
+                    }
+                    return layer;
+                }
+                if sub.is_unresolved() {
+                    self.errors
+                        .push(CompositionError::UnresolvedSublayer(UnresolvedSublayer {
+                            layer: id,
+                            asset: String::from(asset),
+                        }));
+                    return None;
+                }
+                Some(sub.layer)
+            }
+
+            fn visit(&mut self, id: LayerId, accumulated: LayerOffset) {
+                self.visiting.insert(id);
+                self.layers.push(id);
+                self.offsets.push(accumulated);
+                if let Some(layer) = self.store.layer(id) {
+                    for sub in &layer.sublayers {
+                        let Some(sublayer) = self.sublayer(id, sub) else {
+                            continue;
+                        };
+                        if self.visiting.contains(&sublayer) {
+                            self.errors
+                                .push(CompositionError::SublayerCycle(SublayerCycle {
+                                    layer: id,
+                                    sublayer,
+                                }));
+                            continue;
+                        }
+                        self.visit(sublayer, accumulated.compose(sub.offset));
+                    }
+                }
+                self.visiting.remove(&id);
+            }
+        }
+
+        let mut gather = Gather {
             store,
             root,
-            LayerOffset::IDENTITY,
-            &mut HashSet::new(),
-            &mut layers,
-            &mut offsets,
+            visiting: HashSet::new(),
+            layers: Vec::new(),
+            offsets: Vec::new(),
             errors,
-        );
-        Self { layers, offsets }
+            reads: reads.take(),
+        };
+        gather.visit(root, LayerOffset::IDENTITY);
+        Self {
+            layers: gather.layers,
+            offsets: gather.offsets,
+        }
     }
 
     /// Returns the accumulated offset for a layer at the given index in the stack.

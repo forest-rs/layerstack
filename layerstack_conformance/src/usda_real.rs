@@ -5,14 +5,17 @@
 //!
 //! Routes through the real lexer → CST → AST → emit pipeline.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use layerstack::doc::{Layer, LayerId};
 use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
-use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset};
+use layerstack::{
+    AssetResolveError, AssetResolver, ExpressionAssetPath, InMemoryStore, ResolvedAsset,
+    expression_asset_paths,
+};
 
 use layerstack_usda::diagnostic::{Diagnostic, Severity};
 use layerstack_usda::emit;
@@ -54,11 +57,57 @@ pub fn load_entry_usda(entry: &Path) -> LoadedStage {
         store.insert_layer(layer);
     }
 
+    load_expression_assets(&mut store, root_layer, |store, path| {
+        let resolved = resolver.resolve(
+            &path.asset_path,
+            Some(path.anchor),
+            &mut store.tokens,
+            &mut store.paths,
+        );
+        while let Some(layer) = resolver.pending_layers.pop() {
+            store.insert_layer(layer);
+        }
+        resolved.ok()
+    });
+
     LoadedStage {
         store,
         root_layer,
         layer_names: resolver.layer_names,
         invalid,
+    }
+}
+
+/// Loads the layers that asset paths authored as variable expressions
+/// evaluate to, with the variables of the layer stacks that reach them
+/// ([`expression_asset_paths`]), until nothing new resolves: a loaded layer
+/// may author expressions of its own.
+///
+/// `resolve` resolves one path, anchored to its layer, inserting any
+/// layer it loads into the store.
+pub(crate) fn load_expression_assets(
+    store: &mut InMemoryStore,
+    root: LayerId,
+    mut resolve: impl FnMut(&mut InMemoryStore, &ExpressionAssetPath) -> Option<ResolvedAsset>,
+) {
+    let mut attempted = BTreeSet::new();
+    loop {
+        let mut loaded_any = false;
+        for path in expression_asset_paths(store, root) {
+            if !attempted.insert(path.clone()) {
+                continue;
+            }
+            if let Some(resolved) = resolve(store, &path) {
+                if let Some(layer) = resolved.layer {
+                    store.insert_layer(layer);
+                }
+                store.insert_asset_layer(path.anchor, &path.asset_path, resolved.layer_id);
+                loaded_any = true;
+            }
+        }
+        if !loaded_any {
+            break;
+        }
     }
 }
 

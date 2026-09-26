@@ -686,9 +686,23 @@ impl SublayerEntry {
 
     /// Returns `true` when this sublayer's asset path could not be resolved
     /// (see [`SublayerEntry::unresolved`]).
+    ///
+    /// A sublayer whose asset path is a variable expression
+    /// ([`SublayerEntry::is_expression`]) is kept unresolved by importers:
+    /// gathering the layer stack evaluates it (see
+    /// [`LayerStack::gather`](crate::LayerStack::gather)).
     #[must_use]
     pub fn is_unresolved(&self) -> bool {
         self.layer == LayerId::UNRESOLVED
+    }
+
+    /// Returns `true` when this sublayer's asset path is a variable
+    /// expression ([`crate::variable_expression::is_expression`]).
+    #[must_use]
+    pub fn is_expression(&self) -> bool {
+        self.asset
+            .as_deref()
+            .is_some_and(crate::variable_expression::is_expression)
     }
 }
 
@@ -737,6 +751,11 @@ pub struct Reference {
     /// Spec: AOUSD Core §10.3.2.1 ("the layer stack containing the
     /// reference is assumed"). OpenUSD: `_EvalRefOrPayloadArcs` in
     /// `pxr/usd/pcp/primIndex.cpp`.
+    ///
+    /// An arc whose [`Reference::asset`] is a variable expression
+    /// ([`Reference::expression`]) names no layer until composition
+    /// evaluates it; its `layer` is the layer that authors it, which the
+    /// evaluated path is anchored to.
     pub layer: LayerId,
     /// The authored target within that layer/document.
     pub target: ReferenceTarget,
@@ -817,11 +836,53 @@ impl Reference {
         }
     }
 
-    /// Returns `true` when this arc's asset path could not be resolved (see
-    /// [`Reference::unresolved`]).
+    /// Creates a reference or payload, authored in `layer`, whose asset path
+    /// `asset` is a variable expression such as `` `"./${NAME}.usd"` ``.
+    ///
+    /// The arc targets no layer stack as authored
+    /// ([`Reference::is_unresolved`]): composition evaluates `asset` with
+    /// the expression variables of the layer stack that authors the arc,
+    /// resolves the resulting path relative to `layer`
+    /// ([`LayerStore::asset_layer`]) and follows the arc there. An
+    /// expression that evaluates to nothing drops the arc; one that fails
+    /// to evaluate drops it and is reported as
+    /// [`CompositionError::VariableExpressionError`].
+    ///
+    /// Spec: AOUSD Core §10.3.2.1 (references), §10.3.2.2 (payloads).
+    /// OpenUSD: `_PcpComposeSiteReferencesOrPayloads` in
+    /// `pxr/usd/pcp/composeSite.cpp`.
+    ///
+    /// [`CompositionError::VariableExpressionError`]: crate::CompositionError::VariableExpressionError
+    pub fn expression(
+        layer: LayerId,
+        asset: impl Into<String>,
+        target: ReferenceTarget,
+        layer_offset: LayerOffset,
+    ) -> Self {
+        Self {
+            layer,
+            target,
+            asset: Some(asset.into()),
+            layer_offset,
+        }
+    }
+
+    /// Returns `true` when this arc's asset path is a variable expression
+    /// (see [`Reference::expression`]).
+    #[must_use]
+    pub fn is_expression(&self) -> bool {
+        self.asset
+            .as_deref()
+            .is_some_and(crate::variable_expression::is_expression)
+    }
+
+    /// Returns `true` when this arc targets no layer stack as authored: its
+    /// asset path could not be resolved (see [`Reference::unresolved`]), or
+    /// it is a variable expression that composition has yet to evaluate
+    /// ([`Reference::is_expression`]).
     #[must_use]
     pub fn is_unresolved(&self) -> bool {
-        self.layer == LayerId::UNRESOLVED
+        self.layer == LayerId::UNRESOLVED || self.is_expression()
     }
 
     /// Returns the prim path this arc targets in the layer stack rooted at
@@ -1685,6 +1746,25 @@ impl Layer {
         get_field(&self.metadata, &key)
     }
 
+    /// Returns the expression variables this layer authors in its
+    /// `expressionVariables` metadata; empty when it authors none.
+    ///
+    /// Strings, booleans, integers and arrays of one of those convert to
+    /// [`VariableValue::Value`](crate::variable_expression::VariableValue),
+    /// an authored `None` to `VariableValue::None`, and any other value to
+    /// `VariableValue::Unsupported`. Only the root layer of a layer stack
+    /// provides its variables (see [`crate::variable_expression`]).
+    ///
+    /// Spec: AOUSD Core §7.6.1.7 reserves `expressionVariables`. OpenUSD:
+    /// `SdfLayer::GetExpressionVariables`.
+    #[must_use]
+    pub fn expression_variables(
+        &self,
+        tokens: &TokenInterner,
+    ) -> crate::variable_expression::ExpressionVariables {
+        crate::expression_variables::layer_expression_variables(self, tokens)
+    }
+
     /// Inserts or replaces a layer metadata field.
     pub fn set_metadata(&mut self, key: TokenId, value: impl Into<FieldValue>) -> &mut Self {
         self.touch_structure();
@@ -1763,6 +1843,32 @@ pub trait LayerStore {
 
     /// Returns the shared path interner mutably, allowing interning of derived paths.
     fn paths_mut(&mut self) -> &mut PathInterner;
+
+    /// Returns the loaded layer that `asset_path`, anchored to the layer
+    /// `anchor`, resolves to; `None` when it is not known.
+    ///
+    /// Importers resolve the asset paths they read before composition, but
+    /// the asset path of a variable expression
+    /// ([`crate::variable_expression`]) is only known once composition
+    /// evaluates it, with the expression variables of the layer stack that
+    /// authors it. Composition asks the store for the evaluated path here,
+    /// and reports one that does not resolve as
+    /// [`CompositionError::UnresolvedAsset`] or
+    /// [`CompositionError::UnresolvedSublayer`]. A host loads the paths
+    /// [`crate::asset::expression_asset_paths`] lists before composing.
+    ///
+    /// The default knows no asset path.
+    ///
+    /// Spec: AOUSD Core §9.4 (relative asset paths are anchored to the
+    /// layer that authors them). OpenUSD resolves the evaluated path with
+    /// `SdfComputeAssetPathRelativeToLayer` (`pxr/usd/pcp/composeSite.cpp`).
+    ///
+    /// [`CompositionError::UnresolvedAsset`]: crate::CompositionError::UnresolvedAsset
+    /// [`CompositionError::UnresolvedSublayer`]: crate::CompositionError::UnresolvedSublayer
+    fn asset_layer(&self, anchor: LayerId, asset_path: &str) -> Option<LayerId> {
+        let _ = (anchor, asset_path);
+        None
+    }
 }
 
 /// A simple in-memory [`LayerStore`] implementation.
@@ -1774,6 +1880,9 @@ pub struct InMemoryStore {
     pub paths: PathInterner,
     /// Layers keyed by [`LayerId`].
     pub layers: HashMap<LayerId, Layer>,
+    /// The layers asset paths resolve to, by the layer each path is
+    /// anchored to, then by path, for [`LayerStore::asset_layer`].
+    pub asset_layers: HashMap<LayerId, HashMap<Arc<str>, LayerId>>,
 }
 
 impl InMemoryStore {
@@ -1781,6 +1890,15 @@ impl InMemoryStore {
     pub fn insert_layer(&mut self, layer: Layer) {
         debug_assert_ne!(layer.id, LayerId::UNRESOLVED, "reserved layer ID");
         self.layers.insert(layer.id, layer);
+    }
+
+    /// Records that `asset_path`, anchored to the layer `anchor`, resolves
+    /// to the layer `layer` (see [`LayerStore::asset_layer`]).
+    pub fn insert_asset_layer(&mut self, anchor: LayerId, asset_path: &str, layer: LayerId) {
+        self.asset_layers
+            .entry(anchor)
+            .or_default()
+            .insert(Arc::from(asset_path), layer);
     }
 
     /// Parses and interns an absolute path, returning its [`PathId`].
@@ -1836,6 +1954,10 @@ impl LayerStore for InMemoryStore {
 
     fn paths_mut(&mut self) -> &mut PathInterner {
         &mut self.paths
+    }
+
+    fn asset_layer(&self, anchor: LayerId, asset_path: &str) -> Option<LayerId> {
+        self.asset_layers.get(&anchor)?.get(asset_path).copied()
     }
 }
 

@@ -22,6 +22,7 @@ use crate::{
         Layer, LayerId, LayerStore, PrimSpec, Reference, ReferenceTarget, VariantSpec,
         default_prim_names,
     },
+    expression_variables::ArcAnchor,
     interner::TokenId,
     layer_stack::LayerStack,
     listop::{ListOp, resolve_list_chain},
@@ -83,26 +84,37 @@ fn is_internal(reference: &Reference, layer: LayerId) -> bool {
 /// layer equal to the same arc authored in another, as OpenUSD compares them
 /// by asset and prim path.
 ///
+/// An arc whose asset path is a variable expression is evaluated here too,
+/// in `layer`'s context ([`ArcAnchor::evaluate`]), so list editing compares
+/// the evaluated, anchored arcs: a `delete` removes a weaker layer's
+/// expression arc when both evaluate to the same asset. An expression that
+/// evaluates to nothing, or fails, drops the item.
+///
 /// Spec: AOUSD Core §10.3.2.1 (for a reference with no layer asset path,
 /// "the layer stack containing the reference is assumed"), §10.3.2.2.
 /// OpenUSD: `_EvalRefOrPayloadArcs` in `pxr/usd/pcp/primIndex.cpp` (an
-/// empty asset path targets `node.GetLayerStack()` and its root layer).
+/// empty asset path targets `node.GetLayerStack()` and its root layer);
+/// `_PcpComposeSiteReferencesOrPayloads` in `pxr/usd/pcp/composeSite.cpp`
+/// evaluates and anchors each item in its layer's list-op callback.
 pub(crate) fn anchor_internal_arcs(
+    store: &dyn LayerStore,
     op: &ListOp<Reference>,
     layer: LayerId,
-    anchor: LayerId,
+    anchor: ArcAnchor<'_>,
 ) -> ListOp<Reference> {
     let anchored = |items: &[Reference]| -> Vec<Reference> {
         items
             .iter()
-            .map(|reference| {
+            .filter_map(|reference| {
                 if is_internal(reference, layer) {
-                    Reference {
-                        layer: anchor,
+                    Some(Reference {
+                        layer: anchor.layer,
                         ..reference.clone()
-                    }
+                    })
+                } else if reference.is_expression() {
+                    anchor.evaluate(store, reference, layer)
                 } else {
-                    reference.clone()
+                    Some(reference.clone())
                 }
             })
             .collect()
@@ -392,12 +404,12 @@ impl ArcAuthoring<'_> {
         item: Reference,
         spec_arcs: fn(&PrimSpec) -> &ListOp<Reference>,
         branch_arcs: fn(&VariantSpec) -> &ListOp<Reference>,
-        anchor: LayerId,
+        anchor: ArcAnchor<'_>,
     ) -> (AuthoredReference, Vec<VariantSelectionSite>) {
         let (sites, index) = self.sites_by(&item, spec_arcs, branch_arcs, |op, layer| {
-            anchor_internal_arcs(op, layer, anchor)
+            anchor_internal_arcs(self.store, op, layer, anchor)
         });
-        let internal = item.asset.is_none() && item.layer == anchor;
+        let internal = item.asset.is_none() && item.layer == anchor.layer;
         let reference = match index {
             Some(index) if !internal => Reference {
                 layer_offset: self.stack.offset_at(index).compose(item.layer_offset),
@@ -760,7 +772,7 @@ pub(crate) fn resolve_direct_references_for_prim(
     local_stack: &LayerStack,
     prim: PathId,
     scope: SelectionScope<'_>,
-    anchor: LayerId,
+    anchor: ArcAnchor<'_>,
 ) -> Vec<Reference> {
     let mut ops = Vec::new();
     for layer_id in &local_stack.layers {
@@ -768,7 +780,12 @@ pub(crate) fn resolve_direct_references_for_prim(
             continue;
         };
         for spec in arc_specs(store, fallbacks, local_stack, layer, prim, scope) {
-            ops.push(anchor_internal_arcs(&spec.references, *layer_id, anchor));
+            ops.push(anchor_internal_arcs(
+                store,
+                &spec.references,
+                *layer_id,
+                anchor,
+            ));
         }
     }
     resolve_list_chain::<Reference>(&[], ops)
@@ -786,7 +803,7 @@ pub(crate) fn resolve_references_for_prim(
     local_stack: &LayerStack,
     prim: PathId,
     scope: SelectionScope<'_>,
-    anchor: LayerId,
+    anchor: ArcAnchor<'_>,
 ) -> Vec<Reference> {
     let selections = resolve_variant_selections_for_prim(store, fallbacks, local_stack, prim);
     resolve_references_for_prim_selected(
@@ -811,7 +828,7 @@ pub(crate) fn resolve_references_for_prim_selected(
     local_stack: &LayerStack,
     prim: PathId,
     scope: SelectionScope<'_>,
-    anchor: LayerId,
+    anchor: ArcAnchor<'_>,
     selections: &HashMap<TokenId, TokenId>,
 ) -> Vec<Reference> {
     let mut ops = Vec::new();
@@ -820,7 +837,12 @@ pub(crate) fn resolve_references_for_prim_selected(
             continue;
         };
         for spec in arc_specs(store, fallbacks, local_stack, layer, prim, scope) {
-            ops.push(anchor_internal_arcs(&spec.references, *layer_id, anchor));
+            ops.push(anchor_internal_arcs(
+                store,
+                &spec.references,
+                *layer_id,
+                anchor,
+            ));
         }
     }
 
@@ -841,7 +863,7 @@ pub(crate) fn resolve_references_for_prim_selected(
         prim,
         selections,
         |branch| &branch.references,
-        |op, layer| anchor_internal_arcs(op, layer, anchor),
+        |op, layer| anchor_internal_arcs(store, op, layer, anchor),
     );
     // Discovery takes each list on its own, so the branches' list can join
     // them.
@@ -864,7 +886,7 @@ pub(crate) fn resolve_references_for_prim_selected(
                 prim,
                 &parent_selections,
                 |spec| &spec.references,
-                |op, layer| anchor_internal_arcs(op, layer, anchor),
+                |op, layer| anchor_internal_arcs(store, op, layer, anchor),
                 &mut ops,
             );
         }
@@ -878,7 +900,7 @@ pub(crate) fn resolve_references_for_prim_selected(
         scope,
         |v| &v.references,
         |spec| &spec.references,
-        |op, layer| anchor_internal_arcs(op, layer, anchor),
+        |op, layer| anchor_internal_arcs(store, op, layer, anchor),
     );
     if !discover {
         for reference in branches {
@@ -909,7 +931,7 @@ pub(crate) fn resolve_variant_references_in(
     selections: &HashMap<TokenId, TokenId>,
     parent_selections: &HashMap<TokenId, TokenId>,
     scope: SelectionScope<'_>,
-    anchor: LayerId,
+    anchor: ArcAnchor<'_>,
 ) -> Vec<Reference> {
     let mut ops = Vec::new();
     if let Some(parent_id) = parent_of(store, prim) {
@@ -931,7 +953,7 @@ pub(crate) fn resolve_variant_references_in(
                     child,
                     parent_selections,
                     |spec| &spec.references,
-                    |op, layer| anchor_internal_arcs(op, layer, anchor),
+                    |op, layer| anchor_internal_arcs(store, op, layer, anchor),
                     &mut ops,
                 );
             }
@@ -948,7 +970,7 @@ pub(crate) fn resolve_variant_references_in(
                 {
                     let vr = &variant_spec.references;
                     if vr.explicit.is_some() || !vr.prepend.is_empty() || !vr.append.is_empty() {
-                        ops.push(anchor_internal_arcs(vr, *layer_id, anchor));
+                        ops.push(anchor_internal_arcs(store, vr, *layer_id, anchor));
                     }
                 }
             }
@@ -966,8 +988,9 @@ pub(crate) fn resolve_branch_payloads_in(
     prim: PathId,
     selections: &HashMap<TokenId, TokenId>,
     scope: SelectionScope<'_>,
-    anchor: LayerId,
+    anchor: ArcAnchor<'_>,
 ) -> Vec<Reference> {
+    let anchor = anchor.payloads();
     let mut ops = Vec::new();
     for layer_id in &data_stack.layers {
         let Some(layer) = store.layer(*layer_id) else {
@@ -980,7 +1003,7 @@ pub(crate) fn resolve_branch_payloads_in(
                 {
                     let vp = &variant_spec.payloads;
                     if vp.explicit.is_some() || !vp.prepend.is_empty() || !vp.append.is_empty() {
-                        ops.push(anchor_internal_arcs(vp, *layer_id, anchor));
+                        ops.push(anchor_internal_arcs(store, vp, *layer_id, anchor));
                     }
                 }
             }
@@ -1002,7 +1025,7 @@ pub(crate) fn resolve_variant_child_references(
     data_stack: &LayerStack,
     selections_stack: &LayerStack,
     prim: PathId,
-    anchor: LayerId,
+    anchor: ArcAnchor<'_>,
 ) -> Vec<Reference> {
     let Some(parent_id) = parent_of(store, prim) else {
         return Vec::new();
@@ -1088,7 +1111,7 @@ pub(crate) fn resolve_variant_child_references(
                 child,
                 &parent_selections,
                 |spec| &spec.references,
-                |op, layer| anchor_internal_arcs(op, layer, anchor),
+                |op, layer| anchor_internal_arcs(store, op, layer, anchor),
                 &mut ops,
             );
         }
@@ -1107,7 +1130,7 @@ pub(crate) fn collect_all_variant_child_references(
     store: &dyn LayerStore,
     local_stack: &LayerStack,
     prim: PathId,
-    anchor: LayerId,
+    anchor: ArcAnchor<'_>,
 ) -> Vec<Reference> {
     let Some(parent_id) = parent_of(store, prim) else {
         return Vec::new();
@@ -1123,7 +1146,12 @@ pub(crate) fn collect_all_variant_child_references(
             {
                 all_refs.extend(resolve_list_chain::<Reference>(
                     &[],
-                    [anchor_internal_arcs(&spec.references, layer.id, anchor)],
+                    [anchor_internal_arcs(
+                        store,
+                        &spec.references,
+                        layer.id,
+                        anchor,
+                    )],
                 ));
             }
         }
@@ -1139,7 +1167,7 @@ pub(crate) fn collect_all_variant_branch_references(
     fallbacks: &VariantFallbacks,
     local_stack: &LayerStack,
     prim: PathId,
-    anchor: LayerId,
+    anchor: ArcAnchor<'_>,
 ) -> Vec<Reference> {
     let mut all_refs = Vec::new();
     for layer_id in &local_stack.layers {
@@ -1160,7 +1188,7 @@ pub(crate) fn collect_all_variant_branch_references(
                     if vr.explicit.is_some() || !vr.prepend.is_empty() || !vr.append.is_empty() {
                         let refs = resolve_list_chain::<Reference>(
                             &[],
-                            [anchor_internal_arcs(vr, *layer_id, anchor)],
+                            [anchor_internal_arcs(store, vr, *layer_id, anchor)],
                         );
                         all_refs.extend(refs);
                     }
@@ -1181,9 +1209,10 @@ pub(crate) fn resolve_variant_branch_payloads(
     fallbacks: &VariantFallbacks,
     stack: &LayerStack,
     prim: PathId,
-    anchor: LayerId,
+    anchor: ArcAnchor<'_>,
     selections: &HashMap<TokenId, TokenId>,
 ) -> Vec<Reference> {
+    let anchor = anchor.payloads();
     let inherits = resolve_inherits_for_prim(store, fallbacks, stack, prim, SelectionScope::Stack);
     let check_paths = core::iter::once(prim).chain(inherits.iter().copied());
     let mut payloads = Vec::new();
@@ -1199,7 +1228,7 @@ pub(crate) fn resolve_variant_branch_payloads(
             check_path,
             selections,
             |branch| &branch.payloads,
-            |op, layer| anchor_internal_arcs(op, layer, anchor),
+            |op, layer| anchor_internal_arcs(store, op, layer, anchor),
         ) {
             if !payloads.contains(&payload) {
                 payloads.push(payload);
@@ -1336,8 +1365,9 @@ pub(crate) fn collect_all_variant_branch_payloads(
     fallbacks: &VariantFallbacks,
     local_stack: &LayerStack,
     prim: PathId,
-    anchor: LayerId,
+    anchor: ArcAnchor<'_>,
 ) -> Vec<Reference> {
+    let anchor = anchor.payloads();
     let mut all_payloads = Vec::new();
     for layer_id in &local_stack.layers {
         let Some(layer) = store.layer(*layer_id) else {
@@ -1357,7 +1387,7 @@ pub(crate) fn collect_all_variant_branch_payloads(
                     if vp.explicit.is_some() || !vp.prepend.is_empty() || !vp.append.is_empty() {
                         let payloads = resolve_list_chain::<Reference>(
                             &[],
-                            [anchor_internal_arcs(vp, *layer_id, anchor)],
+                            [anchor_internal_arcs(store, vp, *layer_id, anchor)],
                         );
                         all_payloads.extend(payloads);
                     }
@@ -1464,8 +1494,9 @@ pub(crate) fn resolve_payloads_for_prim(
     local_stack: &LayerStack,
     prim: PathId,
     scope: SelectionScope<'_>,
-    anchor: LayerId,
+    anchor: ArcAnchor<'_>,
 ) -> Vec<Reference> {
+    let anchor = anchor.payloads();
     let (_, parent_selections) = stack_selections(store, fallbacks, local_stack, prim);
     resolve_payloads_for_prim_in(
         store,
@@ -1487,15 +1518,21 @@ pub(crate) fn resolve_payloads_for_prim_in(
     prim: PathId,
     parent_selections: &HashMap<TokenId, TokenId>,
     scope: SelectionScope<'_>,
-    anchor: LayerId,
+    anchor: ArcAnchor<'_>,
 ) -> Vec<Reference> {
+    let anchor = anchor.payloads();
     let mut ops = Vec::new();
     for layer_id in &local_stack.layers {
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
         for spec in arc_specs(store, fallbacks, local_stack, layer, prim, scope) {
-            ops.push(anchor_internal_arcs(&spec.payloads, *layer_id, anchor));
+            ops.push(anchor_internal_arcs(
+                store,
+                &spec.payloads,
+                *layer_id,
+                anchor,
+            ));
         }
     }
 
@@ -1507,7 +1544,7 @@ pub(crate) fn resolve_payloads_for_prim_in(
                 prim,
                 parent_selections,
                 |spec| &spec.payloads,
-                |op, layer| anchor_internal_arcs(op, layer, anchor),
+                |op, layer| anchor_internal_arcs(store, op, layer, anchor),
                 &mut ops,
             );
         }
@@ -1521,6 +1558,6 @@ pub(crate) fn resolve_payloads_for_prim_in(
         scope,
         |v| &v.payloads,
         |spec| &spec.payloads,
-        |op, layer| anchor_internal_arcs(op, layer, anchor),
+        |op, layer| anchor_internal_arcs(store, op, layer, anchor),
     )
 }

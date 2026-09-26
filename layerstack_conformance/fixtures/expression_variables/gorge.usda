@@ -1,0 +1,13 @@
+#usda 1.0
+(
+    defaultPrim = "Gorge"
+    expressionVariables = {
+        string DEPTH = "basalt"
+    }
+)
+
+def "Gorge" (
+    references = @./bed.usda@
+)
+{
+}

@@ -32,6 +32,7 @@ use layerstack::property::{
     PropertyEntry, PropertyKind, PropertySpec, Variability, property_entry, set_property_vec,
 };
 use layerstack::spec_path::VariantSelectionSite;
+use layerstack::variable_expression::is_expression;
 use layerstack::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
 use layerstack::{AssetResolver, PropertyType, ReferenceTarget, ResolvedAsset};
 
@@ -1573,6 +1574,16 @@ impl<'a> AssembleCtx<'a> {
                     layer_offset,
                 });
             }
+            // An asset path that is a variable expression is evaluated
+            // during composition, relative to this layer.
+            if is_expression(&asset_path) {
+                return Some(Reference::expression(
+                    self.layer_id,
+                    asset_path,
+                    target,
+                    layer_offset,
+                ));
+            }
             let Some(resolved) = self.resolve_asset(&asset_path) else {
                 return Some(Reference::unresolved(asset_path, target, layer_offset));
             };
@@ -1675,7 +1686,14 @@ impl<'a> AssembleCtx<'a> {
     }
 
     /// Resolves an asset path.
+    /// Resolves `asset_path` relative to this layer. A variable expression
+    /// is not resolved here: composition evaluates it with the variables of
+    /// the layer stack that authors it (see
+    /// [`layerstack::variable_expression`]).
     fn resolve_asset(&mut self, asset_path: &str) -> Option<ResolvedAsset> {
+        if is_expression(asset_path) {
+            return None;
+        }
         self.resolver
             .resolve(asset_path, Some(self.layer_id), self.tokens, self.paths)
             .ok()

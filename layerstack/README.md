@@ -31,6 +31,9 @@ It provides:
 - **Value resolution** — scalar (strongest-wins) and [`ListOp`] chaining
 - **Composition arcs** — local, inherits, variants, references, payloads,
   specializes (LIVERPS)
+- **Variable expressions** — sublayer, reference and payload asset paths
+  and variant selections authored as expressions, evaluated with each
+  layer stack's `expressionVariables` ([`variable_expression`])
 - **Incremental recomposition** — via [`LiveStage`] and the `invalidation`
   dependency graph
 - **Authoring** — via [`edit`]: edit targets through any node of a

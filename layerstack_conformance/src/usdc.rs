@@ -16,7 +16,7 @@ use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset};
 
-use crate::usda_real::LoadedStage;
+use crate::usda_real::{LoadedStage, load_expression_assets};
 
 /// Loads a USDC file and all of its sublayers/references recursively,
 /// producing a [`LoadedStage`] ready for composition.
@@ -40,6 +40,19 @@ pub fn load_entry_usdc(entry: &Path) -> LoadedStage {
     while let Some(layer) = resolver.pending_layers.pop() {
         store.insert_layer(layer);
     }
+
+    load_expression_assets(&mut store, root_layer, |store, path| {
+        let resolved = resolver.resolve(
+            &path.asset_path,
+            Some(path.anchor),
+            &mut store.tokens,
+            &mut store.paths,
+        );
+        while let Some(layer) = resolver.pending_layers.pop() {
+            store.insert_layer(layer);
+        }
+        resolved.ok()
+    });
 
     LoadedStage {
         store,

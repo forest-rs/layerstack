@@ -34,6 +34,7 @@ use hashbrown::{HashMap, HashSet};
 use crate::{
     composition_error::{ArcCycle, ArcCycleSite, CompositionError, OpinionAtRelocationSource},
     doc::{LayerId, LayerStore},
+    expression_variables::{ExpressionScope, VariableReads, expression_error},
     interner::TokenId,
     layer_stack::LayerStack,
     path::{Path, PathId, PathInterner, TargetPath},
@@ -127,6 +128,35 @@ impl ArcChain {
         path
     }
 
+    /// The root layers of the layer stacks whose expression variables
+    /// apply to the chain's innermost site, outermost first: the chain's
+    /// layer stacks up to the first site in the innermost site's layer
+    /// stack.
+    ///
+    /// A class arc stays in its layer stack, and an implied class returns
+    /// to a stronger one, whose variables are those it was first reached
+    /// with.
+    ///
+    /// OpenUSD: `_EvalRefOrPayloadArcs` in `pxr/usd/pcp/primIndex.cpp`
+    /// computes a referenced layer stack's variables over those of the
+    /// layer stack that references it.
+    pub(crate) fn expression_stacks(&self) -> Vec<LayerId> {
+        let Some(last) = self.sites.last() else {
+            return Vec::new();
+        };
+        let end = self
+            .sites
+            .iter()
+            .position(|site| site.layer_stack == last.layer_stack)
+            .unwrap_or(0);
+        let mut stacks: Vec<LayerId> = self.sites[..=end]
+            .iter()
+            .map(|site| site.layer_stack)
+            .collect();
+        stacks.dedup();
+        stacks
+    }
+
     /// Removes the site added by the matching [`push`](Self::push).
     pub(crate) fn pop(&mut self) {
         debug_assert!(
@@ -179,6 +209,9 @@ pub(crate) struct CycleDetector {
     /// `(composed prim, property, mapped target)`: they target no instance
     /// of the class (see `composition_checks::drop_instance_targets`).
     class_internal_targets: HashSet<(PathId, TokenId, TargetPath)>,
+    /// The expression variables read evaluating sublayer and arc asset
+    /// paths.
+    reads: VariableReads,
 }
 
 impl CycleDetector {
@@ -194,6 +227,7 @@ impl CycleDetector {
             errors: Vec::new(),
             seen: HashSet::new(),
             class_internal_targets: HashSet::new(),
+            reads: VariableReads::default(),
         }
     }
 
@@ -265,6 +299,48 @@ impl CycleDetector {
         self.arcs.pop();
     }
 
+    /// The scope the arcs authored in the layer stack at the end of the
+    /// chain evaluate their asset path expressions in: that layer stack's
+    /// variables, composed along the chain ([`ArcChain::expression_stacks`]).
+    ///
+    /// Hand it back with [`absorb`](Self::absorb) once the arcs are read.
+    ///
+    /// OpenUSD composes a referenced layer stack's variables over those of
+    /// the layer stack referencing it (`_EvalRefOrPayloadArcs` in
+    /// `pxr/usd/pcp/primIndex.cpp`, `PcpExpressionVariables::Compute`).
+    pub(crate) fn expression_scope(&self) -> ExpressionScope {
+        ExpressionScope::new(self.chain.expression_stacks())
+    }
+
+    /// Records what evaluating arc asset paths in `scope`, composing
+    /// `prim`, found: the variables read, and a
+    /// [`CompositionError::VariableExpressionError`] for each expression
+    /// that failed.
+    pub(crate) fn absorb(&mut self, scope: ExpressionScope, prim: PathId) {
+        let findings = scope.into_findings();
+        self.reads.extend(findings.reads);
+        for (context, layer, expression, error) in findings.errors {
+            self.report(expression_error(
+                context,
+                layer,
+                Some(prim),
+                &expression,
+                error,
+            ));
+        }
+    }
+
+    /// Adds expression variables composition read outside the chain of
+    /// arcs, evaluating variant selections.
+    pub(crate) fn add_variable_reads(&mut self, reads: VariableReads) {
+        self.reads.extend(reads);
+    }
+
+    /// Takes the expression variables composition has read so far.
+    pub(crate) fn take_variable_reads(&mut self) -> VariableReads {
+        core::mem::take(&mut self.reads)
+    }
+
     /// Gathers the layer stack rooted at `root`, recording each sublayer it
     /// ignores (a cycle or an unresolved asset path).
     pub(crate) fn gather_layer_stack(
@@ -273,7 +349,7 @@ impl CycleDetector {
         root: LayerId,
     ) -> LayerStack {
         let mut errors = Vec::new();
-        let stack = LayerStack::gather_reporting(store, root, &mut errors);
+        let stack = LayerStack::gather_recording(store, root, &mut errors, Some(&mut self.reads));
         for error in errors {
             self.report(error);
         }

@@ -39,6 +39,9 @@ use crate::{
     doc::{
         FieldValue, LayerId, LayerOffset, LayerStore, Reference, ReferenceTarget, composed_entries,
     },
+    expression_variables::{
+        ArcAnchor, ExpressionScope, SelectionFindings, read_selections, selection_view,
+    },
     interner::TokenId,
     layer_stack::LayerStack,
     path::{PathId, PropertyPath, TargetPath},
@@ -171,6 +174,23 @@ pub(crate) fn compose_stage(
     store: &mut dyn LayerStore,
     root: LayerId,
     options: StageOptions,
+) -> Stage {
+    // Variant selections authored as variable expressions are evaluated as
+    // composition reads their layers, through a view of the store.
+    match selection_view(store, root) {
+        None => compose_evaluated(store, root, options, None),
+        Some((mut view, findings)) => compose_evaluated(&mut view, root, options, Some(&findings)),
+    }
+}
+
+/// Composes the stage rooted at `root`, reporting the errors and recording
+/// the variable reads of the evaluated selections, `selections`, that
+/// composition read ([`read_selections`]).
+fn compose_evaluated(
+    store: &mut dyn LayerStore,
+    root: LayerId,
+    options: StageOptions,
+    selections: Option<&SelectionFindings>,
 ) -> Stage {
     // The variant fallbacks every selection is resolved with, passed
     // explicitly to each function that resolves selections.
@@ -331,10 +351,20 @@ pub(crate) fn compose_stage(
         drop_inconsistent_property_kinds(*path, prim, &mut cycles);
     }
     drop_instance_targets(store, &mut prims, &mut cycles);
+    // Only the evaluated variant selections composition read are errors
+    // and dependencies.
+    if let Some(selections) = selections {
+        let (errors, reads) = read_selections(store, &prims, selections);
+        for error in errors {
+            cycles.report(error);
+        }
+        cycles.add_variable_reads(reads);
+    }
 
     if let Some(builder) = dep_builder.as_mut() {
         builder.retain_prims(&prims);
         builder.add_relocation_layers(cycles.relocations().layers());
+        builder.add_expression_variable_reads(cycles.take_variable_reads());
     }
     let dependencies = dep_builder.map(DependencyBuilder::finish);
     // Only prims of the composed stage report arc errors: population
@@ -2445,7 +2475,11 @@ fn authored_full_variant_selections(
     // Reference and payload targets. Internal arcs target the whole stack
     // (AOUSD Core §10.3.2.1).
     let mut targets: Vec<(LayerStack, PathId)> = Vec::new();
-    if let Some(&anchor) = local_stack.layers.first() {
+    if let Some(&root) = local_stack.layers.first() {
+        // The stack's own variables evaluate its asset path expressions;
+        // composition reports what they find when it follows the arcs.
+        let scope = ExpressionScope::new(alloc::vec![root]);
+        let anchor = ArcAnchor::new(root, Some(&scope));
         let applied = |spec: &&crate::doc::PrimSpec| {
             spec_arcs_apply(
                 store,
@@ -2463,7 +2497,7 @@ fn authored_full_variant_selections(
                     continue;
                 };
                 for spec in layer.prim_specs(path).filter(applied) {
-                    ops.push(anchor_internal_arcs(list(spec), *layer_id, anchor));
+                    ops.push(anchor_internal_arcs(store, list(spec), *layer_id, anchor));
                 }
             }
             crate::listop::resolve_list_chain::<Reference>(&[], ops)
@@ -2686,7 +2720,10 @@ fn admitted_arcs(
     remote_path: PathId,
     dest_path: PathId,
     cache: &mut HashMap<PathId, HashMap<TokenId, TokenId>>,
+    // The root layer of `data_stack`, which internal arcs target.
     anchor: LayerId,
+    // Its asset path expressions evaluate in the chain's scope.
+    cycles: &mut CycleDetector,
 ) -> AdmittedArcs {
     let enclosing = enclosing_variant_selections(
         store,
@@ -2700,14 +2737,17 @@ fn admitted_arcs(
         dest_path,
         cache,
     );
-    arcs_admitted_by(
+    let scope = cycles.expression_scope();
+    let arcs = arcs_admitted_by(
         store,
         fallbacks,
         data_stack,
         remote_path,
         &enclosing,
-        anchor,
-    )
+        ArcAnchor::new(anchor, Some(&scope)),
+    );
+    cycles.absorb(scope, dest_path);
+    arcs
 }
 
 /// The arcs authored for `remote_path` in `data_stack`, admitted for the
@@ -2719,7 +2759,7 @@ fn arcs_admitted_by(
     data_stack: &LayerStack,
     remote_path: PathId,
     enclosing: &HashMap<PathId, HashMap<TokenId, TokenId>>,
-    anchor: LayerId,
+    anchor: ArcAnchor<'_>,
 ) -> AdmittedArcs {
     let selections = enclosing.get(&remote_path).cloned().unwrap_or_default();
     let parent_selections = store
@@ -2822,7 +2862,12 @@ fn arcs_admitted_by(
         payloads: payloads
             .into_iter()
             .map(|item| {
-                authoring.authored_reference(item, |spec| &spec.payloads, |b| &b.payloads, anchor)
+                authoring.authored_reference(
+                    item,
+                    |spec| &spec.payloads,
+                    |b| &b.payloads,
+                    anchor.payloads(),
+                )
             })
             .collect(),
     }
@@ -3255,6 +3300,12 @@ fn resolve_arc_target(
     cycles: &mut CycleDetector,
     deps: Option<&mut DependencyBuilder>,
 ) -> Option<PathId> {
+    // Arc resolution evaluates asset path expressions
+    // (`anchor_internal_arcs`); one read without an expression scope
+    // targets nothing and is not an error.
+    if reference.is_expression() {
+        return None;
+    }
     if reference.is_unresolved() {
         cycles.report(CompositionError::UnresolvedAsset(UnresolvedAsset {
             prim: dest_root,
@@ -3312,8 +3363,10 @@ fn add_reference_opinions(
     let mut visited_specializes = VisitedClasses::new();
     for dest_root in paths.iter().copied() {
         cycles.begin(dest_root);
-        // Internal arcs authored in the stage's layer stack target it.
-        let anchor = cycles.stage_layer_stack();
+        // Internal arcs authored in the stage's layer stack target it, and
+        // its variables evaluate their asset path expressions.
+        let scope = cycles.expression_scope();
+        let anchor = ArcAnchor::new(cycles.stage_layer_stack(), Some(&scope));
         // The prim's own branches follow the selections composed for it,
         // which its weaker arcs may author (`authored_full_variant_selections`).
         let selections = resolve_full_variant_selections(store, fallbacks, local_stack, dest_root);
@@ -3391,6 +3444,7 @@ fn add_reference_opinions(
                 deps.as_deref_mut(),
             );
         }
+        cycles.absorb(scope, dest_root);
     }
 }
 
@@ -4735,6 +4789,7 @@ impl AncestralArcs<'_> {
         nodes: &ArcNodes,
         out: &HashMap<PathId, PrimIndex>,
         ancestor: PathId,
+        cycles: &mut CycleDetector,
     ) -> AdmittedArcs {
         let mut enclosing = HashMap::new();
         let mut host = Some(ancestor);
@@ -4747,14 +4802,17 @@ impl AncestralArcs<'_> {
                 .filter(|parent| parent.depth() > 0)
                 .and_then(|parent| store.paths().lookup(&parent));
         }
-        arcs_admitted_by(
+        let scope = cycles.expression_scope();
+        let arcs = arcs_admitted_by(
             store,
             self.fallbacks,
             self.data_stack,
             ancestor,
             &enclosing,
-            self.arc_stack,
-        )
+            ArcAnchor::new(self.arc_stack, Some(&scope)),
+        );
+        cycles.absorb(scope, self.dest_root);
+        arcs
     }
 
     /// The variant selections for `host`, an ancestor of the target in the
@@ -4980,7 +5038,7 @@ impl AncestralArcs<'_> {
                 (dest_depth + ancestor_path.depth()).saturating_sub(target_path.depth()),
             )
             .unwrap_or(u16::MAX);
-            let arcs = self.arcs_of(store, nodes, out, ancestor);
+            let arcs = self.arcs_of(store, nodes, out, ancestor, cycles);
             let mapped = |store: &mut dyn LayerStore, path: PathId| {
                 let joined = store.paths().resolve(path).join(&rel);
                 store.paths_mut().intern(joined)
@@ -5768,6 +5826,7 @@ fn add_inherit_edge_opinions(
             dest_path_id,
             &mut host_selection_cache,
             arc_stack,
+            cycles,
         );
         for (nested_index, (nested, sites)) in nested_inherits.into_iter().enumerate() {
             let branch = nodes.branch_path(&sites);
@@ -6595,6 +6654,7 @@ fn add_reference_edge_opinions(
             dest_path_id,
             &mut host_selection_cache,
             reference.layer,
+            cycles,
         );
         let inherits = arcs.inherits;
         for (inherit_index, (inherited_root, sites)) in inherits.into_iter().enumerate() {
@@ -6792,8 +6852,10 @@ fn add_payload_opinions(
     let mut visited_specializes = VisitedClasses::new();
     for dest_root in paths.iter().copied() {
         cycles.begin(dest_root);
-        // Internal arcs authored in the stage's layer stack target it.
-        let anchor = cycles.stage_layer_stack();
+        // Internal arcs authored in the stage's layer stack target it, and
+        // its variables evaluate their asset path expressions.
+        let scope = cycles.expression_scope();
+        let anchor = ArcAnchor::new(cycles.stage_layer_stack(), Some(&scope)).payloads();
         let payloads = resolve_payloads_for_prim(
             store,
             fallbacks,
@@ -6863,6 +6925,7 @@ fn add_payload_opinions(
                 deps.as_deref_mut(),
             );
         }
+        cycles.absorb(scope, dest_root);
     }
 }
 
@@ -7286,6 +7349,7 @@ fn add_payload_edge_opinions(
             dest_path_id,
             &mut host_selection_cache,
             reference.layer,
+            cycles,
         );
         let inherits = arcs.inherits;
         for (inherit_index, (inherited_root, sites)) in inherits.into_iter().enumerate() {
@@ -7988,6 +8052,7 @@ fn add_specializes_edge_opinions(
             selection_path_id,
             &mut host_selection_cache,
             arc_stack,
+            cycles,
         );
         // A specializes authored inside the specialized prim leaves a
         // placeholder beneath this node and is propagated to the root, where
@@ -8055,6 +8120,7 @@ fn add_specializes_edge_opinions(
             selection_path_id,
             &mut host_selection_cache,
             arc_stack,
+            cycles,
         );
         let nested_inherits = arcs.inherits;
         for (nested_index, (inherited, sites)) in nested_inherits.into_iter().enumerate() {
@@ -8124,6 +8190,7 @@ fn add_specializes_edge_opinions(
             selection_path_id,
             &mut host_selection_cache,
             arc_stack,
+            cycles,
         );
         for (ref_index, (reference, sites)) in arcs.references.into_iter().enumerate() {
             let branch = nodes.branch_path(&sites);

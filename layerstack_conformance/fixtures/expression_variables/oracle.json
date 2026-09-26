@@ -1,0 +1,372 @@
+{
+ "generator": "layerstack_conformance/scripts/expression_variables_oracle.py",
+ "openusd_version": "0.26.8",
+ "root": "root.usda",
+ "layer_stack": [
+  "root.usda",
+  "strata.usda",
+  "vault.usda"
+ ],
+ "prims": [
+  {
+   "path": "/Cavern",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Cavern"
+    ],
+    [
+     "vault.usda",
+     "/Cavern"
+    ],
+    [
+     "granite.usda",
+     "/Chip"
+    ]
+   ]
+  },
+  {
+   "path": "/Grotto",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Grotto"
+    ],
+    [
+     "vault.usda",
+     "/Grotto"
+    ],
+    [
+     "granite.usda",
+     "/Granite"
+    ],
+    [
+     "granite.usda",
+     "/Chip"
+    ]
+   ]
+  },
+  {
+   "path": "/Grotto/Crystal",
+   "prim_stack": [
+    [
+     "granite.usda",
+     "/Granite/Crystal"
+    ]
+   ]
+  },
+  {
+   "path": "/Quarry",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Quarry"
+    ],
+    [
+     "strata.usda",
+     "/Quarry"
+    ]
+   ]
+  },
+  {
+   "path": "/Mine",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Mine"
+    ],
+    [
+     "strata.usda",
+     "/Mine"
+    ]
+   ]
+  },
+  {
+   "path": "/Outcrop",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Outcrop"
+    ],
+    [
+     "strata.usda",
+     "/Outcrop"
+    ],
+    [
+     "granite.usda",
+     "/Granite"
+    ]
+   ]
+  },
+  {
+   "path": "/Outcrop/Crystal",
+   "prim_stack": [
+    [
+     "granite.usda",
+     "/Granite/Crystal"
+    ]
+   ]
+  },
+  {
+   "path": "/Thicket",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Thicket"
+    ],
+    [
+     "strata.usda",
+     "/Thicket"
+    ],
+    [
+     "strata.usda",
+     "/Thicket{season=winter}"
+    ]
+   ]
+  },
+  {
+   "path": "/Deposit",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Deposit"
+    ],
+    [
+     "basalt.usda",
+     "/Basalt"
+    ]
+   ]
+  },
+  {
+   "path": "/Ridge",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Ridge"
+    ],
+    [
+     "cliff.usda",
+     "/Cliff"
+    ],
+    [
+     "granite.usda",
+     "/Granite"
+    ],
+    [
+     "shale.usda",
+     "/Shale"
+    ]
+   ]
+  },
+  {
+   "path": "/Ridge/Crystal",
+   "prim_stack": [
+    [
+     "granite.usda",
+     "/Granite/Crystal"
+    ]
+   ]
+  },
+  {
+   "path": "/Ledge",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Ledge"
+    ],
+    [
+     "granite.usda",
+     "/Granite/Crystal"
+    ]
+   ]
+  },
+  {
+   "path": "/Canyon",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Canyon"
+    ],
+    [
+     "gorge.usda",
+     "/Gorge"
+    ],
+    [
+     "bed.usda",
+     "/Bed"
+    ],
+    [
+     "granite.usda",
+     "/Granite"
+    ],
+    [
+     "basalt.usda",
+     "/Basalt"
+    ]
+   ]
+  },
+  {
+   "path": "/Canyon/Crystal",
+   "prim_stack": [
+    [
+     "granite.usda",
+     "/Granite/Crystal"
+    ]
+   ]
+  },
+  {
+   "path": "/Hollow",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Hollow"
+    ]
+   ]
+  },
+  {
+   "path": "/Void",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Void"
+    ]
+   ]
+  },
+  {
+   "path": "/Rubble",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Rubble"
+    ],
+    [
+     "basalt.usda",
+     "/Basalt"
+    ]
+   ]
+  },
+  {
+   "path": "/Plain",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Plain"
+    ]
+   ]
+  },
+  {
+   "path": "/Marsh",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Marsh"
+    ]
+   ]
+  },
+  {
+   "path": "/Meadow",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Meadow"
+    ],
+    [
+     "root.usda",
+     "/Meadow{season=summer}"
+    ]
+   ]
+  },
+  {
+   "path": "/Clearing",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Clearing"
+    ],
+    [
+     "glade.usda",
+     "/Glade"
+    ],
+    [
+     "glade.usda",
+     "/Glade{season=summer}"
+    ]
+   ]
+  },
+  {
+   "path": "/Orchard",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Orchard"
+    ],
+    [
+     "root.usda",
+     "/Orchard{season=summer}"
+    ]
+   ]
+  }
+ ],
+ "values": {
+  "/Cavern.hardness": 2,
+  "/Grotto.hardness": 7,
+  "/Grotto/Crystal.facets": 6,
+  "/Outcrop.hardness": 7,
+  "/Outcrop.layered": 1,
+  "/Outcrop/Crystal.facets": 6,
+  "/Thicket.bloom": 0,
+  "/Deposit.hardness": 6,
+  "/Ridge.hardness": 7,
+  "/Ridge/Crystal.facets": 6,
+  "/Ledge.facets": 6,
+  "/Canyon.hardness": 7,
+  "/Canyon/Crystal.facets": 6,
+  "/Rubble.hardness": 6,
+  "/Meadow.bloom": 3,
+  "/Clearing.bloom": 3
+ },
+ "errors": [
+  [
+   "InvalidAssetPath",
+   "/Hollow",
+   "",
+   "",
+   ""
+  ],
+  [
+   "VariableExpressionError",
+   "",
+   "payload",
+   "`${DEEP}`",
+   "Expression evaluated to 'bool' but expected 'string'"
+  ],
+  [
+   "VariableExpressionError",
+   "",
+   "reference",
+   "`\"./${ROCK\"`",
+   "Missing ending '}' at character 10"
+  ],
+  [
+   "VariableExpressionError",
+   "",
+   "reference",
+   "`${MISSING}`",
+   "No value for variable 'MISSING'"
+  ],
+  [
+   "VariableExpressionError",
+   "",
+   "variant",
+   "`${CLAY`",
+   "Missing ending '}' at character 7"
+  ],
+  [
+   "VariableExpressionError",
+   "",
+   "variant",
+   "`${NOPE}`",
+   "No value for variable 'NOPE'"
+  ]
+ ]
+}

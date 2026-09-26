@@ -1,0 +1,14 @@
+#usda 1.0
+(
+    defaultPrim = "Cliff"
+    expressionVariables = {
+        string ROCK = "shale"
+        string STONE = "shale"
+    }
+)
+
+def "Cliff" (
+    references = [@`"./${ROCK}.usda"`@, @`"./${STONE}.usda"`@]
+)
+{
+}

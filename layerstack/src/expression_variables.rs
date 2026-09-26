@@ -798,7 +798,8 @@ fn source_selections(
 }
 
 /// Every reference and payload `layer` authors, in any spec and variant
-/// branch, as authored.
+/// branch, as authored, deletions included: a deleted arc is compared by
+/// the asset it resolves to, so its asset must be known.
 fn layer_arcs(layer: &Layer) -> impl Iterator<Item = &Reference> {
     fn items(list: &ListOp<Reference>) -> impl Iterator<Item = &Reference> {
         list.explicit
@@ -806,6 +807,7 @@ fn layer_arcs(layer: &Layer) -> impl Iterator<Item = &Reference> {
             .flatten()
             .chain(&list.prepend)
             .chain(&list.append)
+            .chain(&list.delete)
     }
     layer
         .prims

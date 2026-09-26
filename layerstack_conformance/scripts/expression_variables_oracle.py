@@ -24,7 +24,9 @@ the arc silently; one that fails to evaluate drops it with a
 anchored to that layer before list ops compose them, so a stronger
 `delete` of an expression removes the arc a weaker layer adds when both
 evaluate to the same asset, and not when they anchor in different
-directories. A variant selection is evaluated only where composition
+directories; literal and expression arcs, and any spelling of one asset
+(`granite.usda`, `./granite.usda`, `deep/../granite.usda`), compare by
+the anchored asset. A variant selection is evaluated only where composition
 reads it.
 
 For every composed prim the vectors record its prim stack, for every
@@ -227,6 +229,40 @@ def "Lode" (
 {
 }
 
+# List ops compare anchored asset paths, so spellings of one asset match:
+# these deletes remove the arcs `strata.usda` and `deep/vault.usda` add.
+def "Flint" (
+    delete references = @granite.usda@</Granite>
+)
+{
+}
+
+def "Slate" (
+    delete payload = @deep/../basalt.usda@</Basalt>
+)
+{
+}
+
+def "Marble" (
+    delete references = @`"deep/../${ROCK}.usda"`@</Granite>
+)
+{
+}
+
+def "Gneiss" (
+    delete references = @./deep/granite.usda@</Chip>
+)
+{
+}
+
+# `deep/vault.usda`'s `./granite.usda` anchors to `deep/granite.usda`, another
+# asset than this layer's: the delete does not remove it.
+def "Quartz" (
+    delete references = @./granite.usda@</Chip>
+)
+{
+}
+
 # Only the selections composition reads are evaluated: the `soil`
 # selection of the selected `summer` branch is an error; that of the
 # unselected `winter` branch is never read.
@@ -279,6 +315,18 @@ over "Grotto" (
 )
 {
 }
+
+over "Gneiss" (
+    prepend references = @./granite.usda@</Chip>
+)
+{
+}
+
+over "Quartz" (
+    prepend references = @./granite.usda@</Chip>
+)
+{
+}
 ''',
     "deep/granite": '''#usda 1.0
 (
@@ -324,6 +372,24 @@ over "Seam" (
 
 over "Lode" (
     prepend payload = @./basalt.usda@</Basalt>
+)
+{
+}
+
+over "Flint" (
+    prepend references = @./granite.usda@</Granite>
+)
+{
+}
+
+over "Slate" (
+    prepend payload = @./basalt.usda@</Basalt>
+)
+{
+}
+
+over "Marble" (
+    prepend references = @./granite.usda@</Granite>
 )
 {
 }

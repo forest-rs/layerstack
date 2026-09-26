@@ -36,6 +36,24 @@ over "Lode" (
 {
 }
 
+over "Flint" (
+    prepend references = @./granite.usda@</Granite>
+)
+{
+}
+
+over "Slate" (
+    prepend payload = @./basalt.usda@</Basalt>
+)
+{
+}
+
+over "Marble" (
+    prepend references = @./granite.usda@</Granite>
+)
+{
+}
+
 over "Outcrop"
 {
     int layered = 1

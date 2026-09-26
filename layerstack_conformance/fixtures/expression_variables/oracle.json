@@ -56,6 +56,36 @@
    ]
   },
   {
+   "path": "/Gneiss",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Gneiss"
+    ],
+    [
+     "vault.usda",
+     "/Gneiss"
+    ]
+   ]
+  },
+  {
+   "path": "/Quartz",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Quartz"
+    ],
+    [
+     "vault.usda",
+     "/Quartz"
+    ],
+    [
+     "granite.usda",
+     "/Chip"
+    ]
+   ]
+  },
+  {
    "path": "/Quarry",
    "prim_stack": [
     [
@@ -130,6 +160,45 @@
     [
      "strata.usda",
      "/Lode"
+    ]
+   ]
+  },
+  {
+   "path": "/Flint",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Flint"
+    ],
+    [
+     "strata.usda",
+     "/Flint"
+    ]
+   ]
+  },
+  {
+   "path": "/Slate",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Slate"
+    ],
+    [
+     "strata.usda",
+     "/Slate"
+    ]
+   ]
+  },
+  {
+   "path": "/Marble",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Marble"
+    ],
+    [
+     "strata.usda",
+     "/Marble"
     ]
    ]
   },
@@ -363,6 +432,7 @@
   "/Cavern.hardness": 2,
   "/Grotto.hardness": 7,
   "/Grotto/Crystal.facets": 6,
+  "/Quartz.hardness": 2,
   "/Outcrop.hardness": 7,
   "/Outcrop.layered": 1,
   "/Outcrop/Crystal.facets": 6,

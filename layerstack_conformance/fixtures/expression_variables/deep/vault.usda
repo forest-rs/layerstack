@@ -16,3 +16,15 @@ over "Grotto" (
 )
 {
 }
+
+over "Gneiss" (
+    prepend references = @./granite.usda@</Chip>
+)
+{
+}
+
+over "Quartz" (
+    prepend references = @./granite.usda@</Chip>
+)
+{
+}

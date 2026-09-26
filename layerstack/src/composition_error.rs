@@ -249,7 +249,9 @@ pub struct UnresolvedAsset {
     pub prim: PathId,
     /// The arc: [`ArcKind::References`] or [`ArcKind::Payloads`].
     pub arc: ArcKind,
-    /// The asset path as authored.
+    /// The asset path as authored, or as a variable expression evaluates
+    /// it, normalized as list editing compares it (`./a/../b.usd` reads
+    /// `./b.usd`).
     pub asset: String,
 }
 

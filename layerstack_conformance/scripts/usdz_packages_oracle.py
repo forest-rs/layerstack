@@ -30,6 +30,26 @@ contributes to the stage (AOUSD Core §16.4, §9.7):
   layers, interleaved: a search path naming no member resolves beside the
   package, and a layer found there loads its own references there.
 
+A relative asset path names a member as `SdfComputeAssetPathRelativeToLayer`
+anchors it (`pxr/usd/sdf/layerUtils.cpp`): a path starting with `.` to the
+directory of the member that authors it, and nowhere else; a search path to
+that directory, then to the root layer's:
+
+- `anchored`: `models/parent.usdc` references `./asset.usda`, which is
+  `models/asset.usda`.
+- `same_basename`: `asset.usda` and `models/asset.usda` are different
+  members; a search path in `models/` finds the one beside it first.
+- `normalized`: `../../shared/part.usda` and `./sub/../local.usda`
+  normalize to members, and the root reaches the same `shared/part.usda`
+  by another path.
+- `root_in_subdirectory`: the root layer is `scene/root.usda`, and its
+  paths anchor to `scene/`.
+- `search_fallback`: a search path in `scene/models/` that names no member
+  there finds one beside the root layer, in `scene/`.
+- `layer_relative_stays`: `./common.usda` in `models/` does not fall back
+  to the root's `common.usda`; the reference is an error.
+- `root_back_reference`: a member references the root layer.
+
 For every composed prim the vectors record its prim stack, as package
 member paths (and paths relative to the package's directory for layers
 outside it), and its children; for every attribute, its resolved default
@@ -293,6 +313,231 @@ def "Member" (
 def "Second"
 {
     double second = 2
+}
+'''),
+    ],
+    "anchored": [
+        ("root.usda", '''#usda 1.0
+
+def "World" (
+    references = @models/parent.usdc@</Parent>
+)
+{
+}
+'''),
+        ("models/parent.usdc", '''#usda 1.0
+
+def "Parent" (
+    references = @./asset.usda@</Asset>
+)
+{
+}
+'''),
+        ("models/asset.usda", '''#usda 1.0
+
+def "Asset"
+{
+    double value = 7
+}
+'''),
+    ],
+    "same_basename": [
+        ("root.usda", '''#usda 1.0
+
+def "Top" (
+    references = @asset.usda@</Asset>
+)
+{
+}
+
+def "Nested" (
+    references = @models/parent.usda@</Parent>
+)
+{
+}
+'''),
+        ("models/parent.usda", '''#usda 1.0
+
+def "Parent" (
+    references = @./asset.usda@</Asset>
+)
+{
+    def "Searched" (
+        references = @asset.usda@</Asset>
+    )
+    {
+    }
+}
+'''),
+        ("asset.usda", '''#usda 1.0
+
+def "Asset"
+{
+    double value = 1
+}
+'''),
+        ("models/asset.usda", '''#usda 1.0
+
+def "Asset"
+{
+    double value = 2
+}
+'''),
+    ],
+    "normalized": [
+        ("root.usda", '''#usda 1.0
+
+def "World" (
+    references = @models/deep/child.usda@</Child>
+)
+{
+}
+
+def "Direct" (
+    references = @shared/part.usda@</Part>
+)
+{
+}
+'''),
+        ("models/deep/child.usda", '''#usda 1.0
+
+def "Child" (
+    references = [
+        @../../shared/part.usda@</Part>,
+        @./sub/../local.usda@</Local>
+    ]
+)
+{
+}
+'''),
+        ("shared/part.usda", '''#usda 1.0
+
+def "Part"
+{
+    double part = 3
+}
+'''),
+        ("models/deep/local.usda", '''#usda 1.0
+
+def "Local"
+{
+    double local = 4
+}
+'''),
+    ],
+    "root_in_subdirectory": [
+        ("scene/root.usda", '''#usda 1.0
+
+def "World" (
+    references = [
+        @./parts/a.usda@</A>,
+        @b.usda@</B>
+    ]
+)
+{
+}
+'''),
+        ("scene/parts/a.usda", '''#usda 1.0
+
+def "A"
+{
+    double a = 1
+}
+'''),
+        ("scene/b.usda", '''#usda 1.0
+
+def "B"
+{
+    double b = 2
+}
+'''),
+        ("b.usda", '''#usda 1.0
+
+def "B"
+{
+    double b = 20
+}
+'''),
+    ],
+    "search_fallback": [
+        ("scene/root.usda", '''#usda 1.0
+
+def "World" (
+    references = @models/parent.usda@</Parent>
+)
+{
+}
+'''),
+        ("scene/models/parent.usda", '''#usda 1.0
+
+def "Parent" (
+    references = @common.usda@</Common>
+)
+{
+}
+'''),
+        ("scene/common.usda", '''#usda 1.0
+
+def "Common"
+{
+    double common = 5
+}
+'''),
+        ("common.usda", '''#usda 1.0
+
+def "Common"
+{
+    double common = 50
+}
+'''),
+    ],
+    "layer_relative_stays": [
+        ("root.usda", '''#usda 1.0
+
+def "World" (
+    references = @models/parent.usda@</Parent>
+)
+{
+}
+'''),
+        ("models/parent.usda", '''#usda 1.0
+
+def "Parent" (
+    references = @./common.usda@</Common>
+)
+{
+    double parent = 1
+}
+'''),
+        ("common.usda", '''#usda 1.0
+
+def "Common"
+{
+    double common = 5
+}
+'''),
+    ],
+    "root_back_reference": [
+        ("root.usda", '''#usda 1.0
+
+def "Base"
+{
+    double base = 5
+}
+
+def "World" (
+    references = @asset.usda@</Asset>
+)
+{
+}
+'''),
+        ("asset.usda", '''#usda 1.0
+
+def "Asset" (
+    references = @root.usda@</Base>
+)
+{
+    double value = 7
 }
 '''),
     ],

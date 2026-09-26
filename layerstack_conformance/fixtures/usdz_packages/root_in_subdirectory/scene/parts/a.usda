@@ -1,0 +1,6 @@
+#usda 1.0
+
+def "A"
+{
+    double a = 1
+}

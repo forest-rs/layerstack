@@ -76,9 +76,12 @@ pub struct UsdzResult {
 ///
 /// `data` must contain the complete USDZ file contents.
 ///
-/// The `resolver` is used for asset paths that escape the package (i.e.,
-/// paths not found among the archive entries). Internal references are
-/// resolved within the package automatically.
+/// A relative asset path authored in a package layer names a member of the
+/// package, anchored as OpenUSD anchors it: a path relative to its layer
+/// (`./asset.usda`) to the directory of the member that authors it; a
+/// search path (`asset.usda`) to that directory, then to the root layer's.
+/// The `resolver` receives absolute paths and search paths that name no
+/// member, anchored to `layer_id`, which stands for the package.
 ///
 /// Every layer read from or through the package goes into one store, so
 /// `resolver` owns their IDs: `layer_id`, which the caller allocates from
@@ -88,7 +91,8 @@ pub struct UsdzResult {
 /// ([`UsdzError::LayerIdUnavailable`]), and a layer ID returned twice
 /// fails the read ([`UsdzError::DuplicateLayerId`]).
 ///
-/// Spec: AOUSD Core §16.4.
+/// Spec: AOUSD Core §16.4, §9.7. OpenUSD:
+/// `SdfComputeAssetPathRelativeToLayer` in `pxr/usd/sdf/layerUtils.cpp`.
 ///
 /// ```
 /// use layerstack::{
@@ -151,9 +155,11 @@ pub fn read_usdz(
         return Err(UsdzError::NoRootLayer);
     }
 
-    // 4. Create a package-scoped resolver. The outer resolver allocates the
-    //    layer IDs of the other members.
-    let mut usdz_resolver = resolver::UsdzResolver::new(&archive, resolver);
+    // 4. Create a package-scoped resolver, which knows the root layer as
+    //    the member it anchors to. The outer resolver allocates the layer
+    //    IDs of the other members.
+    let mut usdz_resolver =
+        resolver::UsdzResolver::new(&archive, root_entry.name.clone(), layer_id, resolver);
 
     // 5. Parse the root layer.
     let root_data = archive.entry_data(root_entry);
@@ -171,8 +177,7 @@ pub fn read_usdz(
     let loaded = usdz_resolver.finish()?;
     let mut resolved_layers = parsed.resolved_layers;
     resolved_layers.extend(loaded.descendants);
-    let mut member_paths = loaded.member_paths;
-    member_paths.insert(layer_id, root_entry.name.clone());
+    let member_paths = loaded.member_paths;
 
     // 7. Installing two layers with one ID would silently drop one, so an
     //    outer resolver that handed out an ID twice fails the read.

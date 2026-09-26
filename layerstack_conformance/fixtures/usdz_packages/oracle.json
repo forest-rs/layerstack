@@ -328,6 +328,294 @@
     "/Again.outside": 3.0
    },
    "composition_errors": 0
+  },
+  {
+   "name": "anchored",
+   "members": [
+    "root.usda",
+    "models/parent.usdc",
+    "models/asset.usda"
+   ],
+   "prims": [
+    {
+     "path": "/World",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/World"
+      ],
+      [
+       "models/parent.usdc",
+       "/Parent"
+      ],
+      [
+       "models/asset.usda",
+       "/Asset"
+      ]
+     ],
+     "children": []
+    }
+   ],
+   "values": {
+    "/World.value": 7.0
+   },
+   "composition_errors": 0
+  },
+  {
+   "name": "same_basename",
+   "members": [
+    "root.usda",
+    "models/parent.usda",
+    "asset.usda",
+    "models/asset.usda"
+   ],
+   "prims": [
+    {
+     "path": "/Top",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Top"
+      ],
+      [
+       "asset.usda",
+       "/Asset"
+      ]
+     ],
+     "children": []
+    },
+    {
+     "path": "/Nested",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Nested"
+      ],
+      [
+       "models/parent.usda",
+       "/Parent"
+      ],
+      [
+       "models/asset.usda",
+       "/Asset"
+      ]
+     ],
+     "children": [
+      "Searched"
+     ]
+    },
+    {
+     "path": "/Nested/Searched",
+     "prim_stack": [
+      [
+       "models/parent.usda",
+       "/Parent/Searched"
+      ],
+      [
+       "models/asset.usda",
+       "/Asset"
+      ]
+     ],
+     "children": []
+    }
+   ],
+   "values": {
+    "/Top.value": 1.0,
+    "/Nested.value": 2.0,
+    "/Nested/Searched.value": 2.0
+   },
+   "composition_errors": 0
+  },
+  {
+   "name": "normalized",
+   "members": [
+    "root.usda",
+    "models/deep/child.usda",
+    "shared/part.usda",
+    "models/deep/local.usda"
+   ],
+   "prims": [
+    {
+     "path": "/World",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/World"
+      ],
+      [
+       "models/deep/child.usda",
+       "/Child"
+      ],
+      [
+       "shared/part.usda",
+       "/Part"
+      ],
+      [
+       "models/deep/local.usda",
+       "/Local"
+      ]
+     ],
+     "children": []
+    },
+    {
+     "path": "/Direct",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Direct"
+      ],
+      [
+       "shared/part.usda",
+       "/Part"
+      ]
+     ],
+     "children": []
+    }
+   ],
+   "values": {
+    "/World.local": 4.0,
+    "/World.part": 3.0,
+    "/Direct.part": 3.0
+   },
+   "composition_errors": 0
+  },
+  {
+   "name": "root_in_subdirectory",
+   "members": [
+    "scene/root.usda",
+    "scene/parts/a.usda",
+    "scene/b.usda",
+    "b.usda"
+   ],
+   "prims": [
+    {
+     "path": "/World",
+     "prim_stack": [
+      [
+       "scene/root.usda",
+       "/World"
+      ],
+      [
+       "scene/parts/a.usda",
+       "/A"
+      ],
+      [
+       "scene/b.usda",
+       "/B"
+      ]
+     ],
+     "children": []
+    }
+   ],
+   "values": {
+    "/World.a": 1.0,
+    "/World.b": 2.0
+   },
+   "composition_errors": 0
+  },
+  {
+   "name": "search_fallback",
+   "members": [
+    "scene/root.usda",
+    "scene/models/parent.usda",
+    "scene/common.usda",
+    "common.usda"
+   ],
+   "prims": [
+    {
+     "path": "/World",
+     "prim_stack": [
+      [
+       "scene/root.usda",
+       "/World"
+      ],
+      [
+       "scene/models/parent.usda",
+       "/Parent"
+      ],
+      [
+       "scene/common.usda",
+       "/Common"
+      ]
+     ],
+     "children": []
+    }
+   ],
+   "values": {
+    "/World.common": 5.0
+   },
+   "composition_errors": 0
+  },
+  {
+   "name": "layer_relative_stays",
+   "members": [
+    "root.usda",
+    "models/parent.usda",
+    "common.usda"
+   ],
+   "prims": [
+    {
+     "path": "/World",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/World"
+      ],
+      [
+       "models/parent.usda",
+       "/Parent"
+      ]
+     ],
+     "children": []
+    }
+   ],
+   "values": {
+    "/World.parent": 1.0
+   },
+   "composition_errors": 1
+  },
+  {
+   "name": "root_back_reference",
+   "members": [
+    "root.usda",
+    "asset.usda"
+   ],
+   "prims": [
+    {
+     "path": "/Base",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Base"
+      ]
+     ],
+     "children": []
+    },
+    {
+     "path": "/World",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/World"
+      ],
+      [
+       "asset.usda",
+       "/Asset"
+      ],
+      [
+       "root.usda",
+       "/Base"
+      ]
+     ],
+     "children": []
+    }
+   ],
+   "values": {
+    "/Base.base": 5.0,
+    "/World.base": 5.0,
+    "/World.value": 7.0
+   },
+   "composition_errors": 0
   }
  ]
 }

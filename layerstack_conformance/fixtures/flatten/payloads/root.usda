@@ -1,0 +1,21 @@
+#usda 1.0
+(
+    defaultPrim = "Field"
+)
+
+# A payload, loaded, with an offset, and one nested in a reference.
+def Xform "Field"
+{
+    def "Meadow" (
+        payload = @./meadow.usda@ (offset = 10)
+    )
+    {
+        token season = "spring"
+    }
+
+    def "Orchard" (
+        references = @./orchard.usda@
+    )
+    {
+    }
+}

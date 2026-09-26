@@ -1,0 +1,23 @@
+#usda 1.0
+(
+    relocates = {
+        </Grove/Tree/Branch>: </Grove/Branch>,
+        </Grove/Tree/Deadwood>: <>
+    }
+)
+
+# Relocates are applied: the relocated prim is written at its target, the
+# removed one not at all, and targets follow the relocation.
+def Xform "Grove"
+{
+    def "Tree" (
+        references = @./tree.usda@
+    )
+    {
+    }
+
+    over "Branch"
+    {
+        double length = 4
+    }
+}

@@ -1,0 +1,16 @@
+#usda 1.0
+(
+    subLayers = [
+        @./spring.usda@ (offset = 10),
+        @./autumn.usda@ (offset = 4; scale = 2)
+    ]
+    startTimeCode = 0
+    endTimeCode = 50
+)
+
+# Sublayers with offsets: every sample lands in stage time, and the
+# strongest layer's opinions win.
+over "Tree"
+{
+    double height = 6
+}

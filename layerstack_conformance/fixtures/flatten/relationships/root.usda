@@ -1,0 +1,23 @@
+#usda 1.0
+
+# Relationship targets and connections authored in a referenced asset are
+# mapped into stage namespace.
+def Xform "Grove"
+{
+    def "Tree" (
+        references = @./tree.usda@
+    )
+    {
+        rel lights = </Grove/Sun>
+    }
+
+    def Scope "Sun"
+    {
+        float intensity = 2
+    }
+
+    def Scope "Watcher"
+    {
+        rel watches = [</Grove/Tree/Trunk>, </Grove/Tree.height>]
+    }
+}

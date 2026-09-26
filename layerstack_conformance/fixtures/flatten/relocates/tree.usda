@@ -1,0 +1,22 @@
+#usda 1.0
+(
+    defaultPrim = "Tree"
+)
+
+def Xform "Tree"
+{
+    rel perch = </Tree/Branch/Nest>
+
+    def Xform "Branch"
+    {
+        double length = 2
+
+        def Scope "Nest"
+        {
+        }
+    }
+
+    def Scope "Deadwood"
+    {
+    }
+}

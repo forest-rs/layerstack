@@ -1,0 +1,13 @@
+#usda 1.0
+(
+    defaultPrim = "Acorn"
+)
+
+def Xform "Acorn"
+{
+    double size = 0.1
+
+    def Scope "Cap"
+    {
+    }
+}

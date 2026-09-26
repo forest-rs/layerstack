@@ -1,0 +1,18 @@
+#usda 1.0
+(
+    defaultPrim = "Meadow"
+)
+
+def Xform "Meadow"
+{
+    token season = "summer"
+    double bloom.timeSamples = {
+        0: 0,
+        5: 1,
+    }
+
+    def Scope "Flowers"
+    {
+        int count = 12
+    }
+}

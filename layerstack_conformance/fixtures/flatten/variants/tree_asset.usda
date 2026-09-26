@@ -1,0 +1,21 @@
+#usda 1.0
+(
+    defaultPrim = "Tree"
+)
+
+def Xform "Tree" (
+    variants = {
+        string season = "autumn"
+    }
+    prepend variantSets = "season"
+)
+{
+    variantSet "season" = {
+        "autumn" {
+            token leafColor = "orange"
+        }
+        "spring" {
+            token leafColor = "green"
+        }
+    }
+}

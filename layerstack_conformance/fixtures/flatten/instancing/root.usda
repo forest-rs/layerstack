@@ -1,0 +1,44 @@
+#usda 1.0
+(
+    defaultPrim = "Grove"
+)
+
+# Instances that share a prototype get one `Flattened_Prototype_N` and an
+# internal reference to it; an instance of the same asset through another
+# offset gets its own; an instance keeps its own opinions; a nested
+# instance inside the prototype refers to its own prototype.
+def Xform "Grove"
+{
+    def "Oak1" (
+        instanceable = true
+        references = @./tree.usda@
+    )
+    {
+        double height = 7
+    }
+
+    def "Oak2" (
+        instanceable = true
+        references = @./tree.usda@
+    )
+    {
+    }
+
+    def "LateOak" (
+        instanceable = true
+        references = @./tree.usda@ (offset = 10)
+    )
+    {
+    }
+
+    def "Plain" (
+        references = @./tree.usda@
+    )
+    {
+    }
+
+    def Scope "Watcher"
+    {
+        rel watches = </Grove/Oak1/Canopy>
+    }
+}

@@ -1,0 +1,16 @@
+#usda 1.0
+(
+    endTimeCode = 5
+)
+
+def Xform "Tree"
+{
+    double height.timeSamples = {
+        0: 1,
+        2: 2,
+    }
+    double girth.timeSamples = {
+        0: 0.5,
+        1: 0.75,
+    }
+}

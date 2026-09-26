@@ -1,0 +1,27 @@
+#usda 1.0
+(
+    defaultPrim = "Tree"
+)
+
+def Xform "Tree"
+{
+    double height = 3
+    rel canopy = </Tree/Canopy>
+
+    def Scope "Canopy"
+    {
+        float density.timeSamples = {
+            0: 0.5,
+            10: 0.75,
+        }
+        float shade.connect = </Tree/Canopy.density>
+        rel acorns = </Tree/Canopy/Acorn>
+
+        def "Acorn" (
+            instanceable = true
+            references = @./acorn.usda@
+        )
+        {
+        }
+    }
+}

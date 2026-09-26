@@ -170,6 +170,8 @@ pub enum SyntaxKind {
     ConnectionSuffix,
     /// `.timeSamples = { ... }` suffix.
     TimeSamplesSuffix,
+    /// `.spline = { ... }` suffix; its value is read by the lowering.
+    SplineSuffix,
     /// Layer offset parameters `( offset = N; scale = N )`.
     LayerOffsetParams,
     /// An error recovery node wrapping unexpected tokens.

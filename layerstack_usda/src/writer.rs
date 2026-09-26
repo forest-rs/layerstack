@@ -31,8 +31,8 @@
 //! and specializes in any list-op form ([`Prim::references`] and its
 //! siblings); and variant sets with their variants, nested variant sets
 //! included, the `variantSets` list op and variant selections
-//! ([`Prim::variant_sets`] and its siblings). Splines are not
-//! representable.
+//! ([`Prim::variant_sets`] and its siblings); and splines
+//! ([`Attribute::spline`]), written as OpenUSD writes them.
 //!
 //! # Example
 //!
@@ -66,9 +66,12 @@
 //! Spec: AOUSD Core §16.2 (USDA grammar), §7.3.3 (names), §7.6 (core
 //! metadata fields), §6.2–§6.5 (value types and semantic aliases).
 
+use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt::{self, Write as _};
+
+use layerstack::spline::SplineData;
 
 pub use crate::ast::Specifier;
 
@@ -133,6 +136,12 @@ impl Document {
     /// See [`Self::to_usda`].
     pub fn write_usda(&self, out: &mut String) -> Result<(), WriteError> {
         self.validate()?;
+        // USDA has no syntax for a knot's own curve type (`SplineKnotItem`
+        // in `pxr/usd/sdf/textFileFormatParser.h`): a spline whose knots
+        // say otherwise than the spline is rejected rather than rewritten.
+        for prim in &self.prims {
+            knot_curve_types(prim, "")?;
+        }
         let mut w = Writer { out };
         w.document(self);
         Ok(())
@@ -593,6 +602,12 @@ pub struct Attribute {
     /// Spec: AOUSD Core §16.2.16.3 (time samples), §12.3.6 (blocked
     /// samples).
     pub time_samples: Option<Vec<(f64, Value)>>,
+    /// A spline (the `spline` field), written as a `.spline = { ... }`
+    /// statement. The attribute's type must be a `double`, `float` or
+    /// `half` scalar, and the knot times finite and strictly increasing.
+    ///
+    /// Spec: AOUSD Core §12.3.3 (spline opinions).
+    pub spline: Option<Box<SplineData>>,
     /// Connections (the `connectionPaths` field): a list op of absolute
     /// property paths such as `/Root/Materials/M/Tex.outputs:rgb`. `None`
     /// authors no connections; an explicit empty list blocks weaker ones
@@ -612,6 +627,7 @@ impl Attribute {
             variability: Variability::Varying,
             value: Some(value),
             time_samples: None,
+            spline: None,
             connections: None,
             metadata: Vec::new(),
         }
@@ -628,6 +644,7 @@ impl Attribute {
             variability: Variability::Varying,
             value: None,
             time_samples: None,
+            spline: None,
             connections: None,
             metadata: Vec::new(),
         }
@@ -701,6 +718,22 @@ impl Attribute {
                     });
                 }
                 validate_value(value, path)?;
+            }
+        }
+        if let Some(spline) = self.spline.as_deref() {
+            let scalar = matches!(self.type_name.as_str(), "double" | "float" | "half");
+            let increasing = spline
+                .knots
+                .windows(2)
+                .all(|pair| pair[0].time < pair[1].time);
+            if !scalar {
+                return Err(WriteError::TypeMismatch {
+                    path: path.into(),
+                    type_name: self.type_name.clone(),
+                });
+            }
+            if !increasing || spline.knots.iter().any(|knot| !knot.time.is_finite()) {
+                return Err(WriteError::InvalidTimeSamples { path: path.into() });
             }
         }
         validate_targets(self.connections.as_ref(), path, true)?;
@@ -1207,6 +1240,13 @@ pub enum WriteError {
         /// Attribute path.
         path: String,
     },
+    /// A spline has a knot whose own curve type differs from the spline's,
+    /// which USDA cannot write (USDC can). OpenUSD evaluates every segment
+    /// with the spline's curve type.
+    KnotCurveType {
+        /// Attribute path.
+        path: String,
+    },
     /// An arc's prim path is not an absolute prim path of identifiers.
     InvalidArcPath {
         /// Path of the prim that authors the arc.
@@ -1269,6 +1309,9 @@ impl fmt::Display for WriteError {
             Self::CommentNotText { path } => write!(f, "{path}: comment is not text"),
             Self::InvalidTimeSamples { path } => {
                 write!(f, "{path}: sample times are not finite and increasing")
+            }
+            Self::KnotCurveType { path } => {
+                write!(f, "{path}: a spline knot's own curve type has no USDA form")
             }
             Self::InvalidArcPath { path, target } => {
                 write!(
@@ -1482,6 +1525,49 @@ const RESERVED_METADATA: &[&str] = &[
 /// Spec: AOUSD Core §7.6.2 and §7.6.3 (the prim and property `permission`
 /// fields), §16.2.19 (`PermissionMetadata`, legacy content).
 pub const PERMISSIONS: &[&str] = &["public", "private"];
+
+/// Rejects a spline of `prim` or anything it holds whose knots carry a
+/// curve type other than the spline's, which USDA cannot write. `parent`
+/// is the path of the spec that holds `prim`.
+fn knot_curve_types(prim: &Prim, parent: &str) -> Result<(), WriteError> {
+    // A prim in a variant (`/P{v=x}C`) follows its variant's selection
+    // directly, as in `Prim::validate`.
+    let path = if parent.ends_with('}') {
+        alloc::format!("{parent}{}", prim.name)
+    } else {
+        alloc::format!("{parent}/{}", prim.name)
+    };
+    knot_curve_types_in_body(prim, &path)
+}
+
+/// [`knot_curve_types`] for the contents of a prim spec or a variant's
+/// prim spec at `path`: its properties, its children and its variant sets,
+/// nested ones included.
+fn knot_curve_types_in_body(body: &Prim, path: &str) -> Result<(), WriteError> {
+    for property in &body.properties {
+        if let Property::Attribute(attribute) = property
+            && let Some(spline) = attribute.spline.as_deref()
+            && spline
+                .knots
+                .iter()
+                .any(|knot| knot.curve_type != spline.default_curve_type)
+        {
+            return Err(WriteError::KnotCurveType {
+                path: alloc::format!("{path}.{}", attribute.name),
+            });
+        }
+    }
+    for child in &body.children {
+        knot_curve_types(child, path)?;
+    }
+    for set in &body.variant_sets {
+        for variant in &set.variants {
+            let branch = alloc::format!("{path}{{{}={}}}", set.name, variant.name);
+            knot_curve_types_in_body(variant, &branch)?;
+        }
+    }
+    Ok(())
+}
 
 /// Validates metadata keys and values; `list_ops` admits list-op entries
 /// (prim and property metadata only).
@@ -2218,7 +2304,9 @@ impl Writer<'_> {
         let declare = attribute.value.is_some()
             || !attribute.metadata.is_empty()
             || attribute.custom
-            || (attribute.connections.is_none() && attribute.time_samples.is_none());
+            || (attribute.connections.is_none()
+                && attribute.time_samples.is_none()
+                && attribute.spline.is_none());
         if declare {
             self.indent(depth);
             if attribute.custom {
@@ -2248,6 +2336,24 @@ impl Writer<'_> {
                 self.value(value, depth + 1);
                 self.out.push_str(",\n");
             }
+            self.indent(depth);
+            self.out.push_str("}\n");
+        }
+        if let Some(spline) = attribute.spline.as_deref() {
+            self.indent(depth);
+            self.attribute_head(attribute);
+            self.out.push_str(".spline = {\n");
+            let indent = "    ".repeat(depth + 1);
+            let time = |out: &mut String, v: f64| Writer { out }.f64(v);
+            let value = |out: &mut String, v: f64| {
+                #[allow(clippy::cast_possible_truncation, reason = "a float spline's values")]
+                match attribute.type_name.as_str() {
+                    "float" => Writer { out }.f32(v as f32),
+                    "half" => Writer { out }.half(layerstack::half::from_f64(v)),
+                    _ => Writer { out }.f64(v),
+                }
+            };
+            crate::spline_text::write(self.out, &indent, spline, &time, &value);
             self.indent(depth);
             self.out.push_str("}\n");
         }

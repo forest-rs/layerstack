@@ -449,6 +449,7 @@ impl<'a> LowerCtx<'a> {
         let mut name = "";
         let mut default = None;
         let mut time_samples = None;
+        let mut spline = None;
         let mut connection = None;
         let mut metadata = Vec::new();
         let mut list_op = ListOpKind::Explicit;
@@ -525,6 +526,9 @@ impl<'a> LowerCtx<'a> {
                 SyntaxKind::TimeSamplesSuffix => {
                     time_samples = Some(self.lower_time_samples(self.node_from(tree, id)));
                 }
+                SyntaxKind::SplineSuffix => {
+                    spline = self.lower_spline(self.node_from(tree, id), type_name, is_array);
+                }
                 SyntaxKind::ConnectionSuffix => {
                     let targets = self.lower_connection(self.node_from(tree, id));
                     connection = Some(Connection {
@@ -549,8 +553,44 @@ impl<'a> LowerCtx<'a> {
             name,
             default,
             time_samples,
+            spline,
             connection,
             metadata,
+        }
+    }
+
+    /// Reads a `.spline = { ... }` value of an attribute of `type_name`.
+    /// A spline holds `double`, `float` or `half` values.
+    ///
+    /// Spec: AOUSD Core §12.3.3 (spline opinions).
+    fn lower_spline(
+        &mut self,
+        node: SyntaxNode<'_>,
+        type_name: &str,
+        is_array: bool,
+    ) -> Option<layerstack::spline::SplineData> {
+        use layerstack::spline::SplineDataType;
+        let span = node.span();
+        let data_type = match (type_name, is_array) {
+            ("double", false) => SplineDataType::Double,
+            ("float", false) => SplineDataType::Float,
+            ("half", false) => SplineDataType::Half,
+            _ => {
+                self.error(
+                    span,
+                    alloc::format!("unsupported: a spline of `{type_name}` values"),
+                );
+                return None;
+            }
+        };
+        let text = self.text(node);
+        let start = text.find('{')?;
+        match crate::spline_text::parse(&text[start..], data_type) {
+            Ok(spline) => Some(spline),
+            Err(message) => {
+                self.error(span, alloc::format!("invalid spline: {message}"));
+                None
+            }
         }
     }
 

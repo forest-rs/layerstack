@@ -174,6 +174,8 @@ pub struct Attribute<'a> {
     pub default: Option<Value<'a>>,
     /// `.timeSamples = { ... }`
     pub time_samples: Option<Vec<TimeSample<'a>>>,
+    /// `.spline = { ... }`
+    pub spline: Option<layerstack::spline::SplineData>,
     /// `.connect = ...` / `prepend ... .connect = ...`
     pub connection: Option<Connection<'a>>,
     /// Attribute metadata block.

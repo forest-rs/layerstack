@@ -124,4 +124,5 @@ pub mod lower;
 pub mod emit;
 
 pub mod save;
+mod spline_text;
 pub mod writer;

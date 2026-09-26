@@ -111,7 +111,10 @@ pub struct Knot {
     pub pre_value: Option<f64>,
     /// How the segment *after* this knot is interpolated.
     pub next_interp: KnotInterp,
-    /// Curve type for this knot's segment (can override the spline default).
+    /// The knot's own curve type, which USDC stores. OpenUSD deprecates it
+    /// (`TsKnot::GetCurveType`) and evaluates every segment with the
+    /// spline's [`SplineData::default_curve_type`], as
+    /// [`SplineData::evaluate`] does; it is kept as stored data only.
     pub curve_type: CurveType,
     /// Whether the pre-tangent uses Maya form.
     pub pre_tan_maya_form: bool,
@@ -212,7 +215,10 @@ impl SplineData {
                 let v1 = k1.pre_value.unwrap_or(k1.value);
                 Some(k0.value + (v1 - k0.value) * alpha)
             }
-            KnotInterp::Curve => match k0.curve_type {
+            // OpenUSD evaluates every segment with the spline's curve type
+            // (`_Interpolate` in `pxr/base/ts/eval.cpp`); a knot's own curve
+            // type is deprecated and never read.
+            KnotInterp::Curve => match self.default_curve_type {
                 CurveType::Bezier => self.eval_bezier(k0, k1, time),
                 CurveType::Hermite => Some(self.eval_hermite(k0, k1, time)),
             },

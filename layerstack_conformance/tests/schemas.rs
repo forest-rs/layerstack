@@ -27,6 +27,11 @@
 //! `apiSchemas` entries, and fallbacks shadowed by authored values and
 //! blocks.
 //!
+//! The `openusd` set has no plugin: its scene (a mesh, a sphere, a material
+//! with a shader, a light, and a prim applying `CollectionAPI:foo` and
+//! `MaterialBindingAPI`) uses OpenUSD's own schemas, which layerstack takes
+//! from `layerstack_schemas`.
+//!
 //! One result differs on purpose: at the default time a default block
 //! resolves the fallback (AOUSD Core §12.3.6, §16.2.16.2), where OpenUSD
 //! resolves no value, the divergence `default-time-block-hides-fallback`
@@ -50,11 +55,12 @@ use layerstack_conformance::{usda_real::load_entry_usda, workspace_root};
 use serde::Deserialize;
 use serde_json::{Value as Json, json};
 
-const SETS: [&str; 4] = [
+const SETS: [&str; 5] = [
     "typed_and_applied",
     "inclusions",
     "fallback_order",
     "coverage",
+    "openusd",
 ];
 
 /// The properties whose default-time value layerstack resolves to the
@@ -180,6 +186,9 @@ fn read(set: &str, file: &str) -> String {
 /// `generatedSchema.usda`, with the kinds, bases and auto-applies its
 /// `plugInfo.json` declares.
 fn registry(set: &str, store: &mut InMemoryStore) -> SchemaRegistry {
+    if set == "openusd" {
+        return layerstack_schemas::openusd(&mut store.tokens);
+    }
     let plug_info: PlugInfo = serde_json::from_str(&read(set, "plugInfo.json")).expect("plugInfo");
     let info = &plug_info.plugins[0].info;
     let mut declared = Vec::new();
@@ -258,19 +267,54 @@ fn registry(set: &str, store: &mut InMemoryStore) -> SchemaRegistry {
     builder.build(&mut store.tokens)
 }
 
+/// A float as the oracle writes it: non-finite values as `inf`, `-inf` and
+/// `nan`, which JSON has no numbers for.
+fn number(value: f64) -> Json {
+    if value.is_nan() {
+        json!("nan")
+    } else if value.is_infinite() {
+        json!(if value > 0.0 { "inf" } else { "-inf" })
+    } else {
+        json!(value)
+    }
+}
+
 /// A resolved value as the oracle writes it.
 fn json(value: &Value, tokens: &TokenInterner) -> Json {
+    let half = |bits: &u16| number(f64::from(layerstack::half::to_f32(*bits)));
+    let floats =
+        |values: &[f32]| Json::Array(values.iter().map(|v| number(f64::from(*v))).collect());
+    let doubles = |values: &[f64]| Json::Array(values.iter().map(|v| number(*v)).collect());
     match value {
         Value::Bool(b) => json!(b),
         Value::Int(i) => json!(i),
-        Value::Half(bits) => json!(f64::from(layerstack::half::to_f32(*bits))),
-        Value::Float(f) => json!(f64::from(*f)),
-        Value::Double(d) => json!(d),
-        Value::String(s) => json!(&**s),
+        Value::UInt(i) => json!(i),
+        Value::Int64(i) => json!(i),
+        Value::UInt64(i) => json!(i),
+        Value::UChar(i) => json!(i),
+        Value::Half(bits) => half(bits),
+        Value::Float(f) => number(f64::from(*f)),
+        Value::Double(d) | Value::TimeCode(d) => number(*d),
+        Value::String(s) | Value::Asset(s) | Value::PathExpression(s) => json!(&**s),
         Value::Token(t) => json!(tokens.resolve(*t)),
-        Value::Vec2f(v) => json!(v.map(f64::from)),
-        Value::Vec3f(v) => json!(v.map(f64::from)),
-        Value::Vec3d(v) => json!(v),
+        Value::Vec2f(v) => floats(v),
+        Value::Vec3f(v) => floats(v),
+        Value::Vec4f(v) => floats(v),
+        Value::Vec2d(v) => doubles(v),
+        Value::Vec3d(v) => doubles(v),
+        Value::Vec4d(v) => doubles(v),
+        Value::Vec2h(v) => Json::Array(v.iter().map(half).collect()),
+        Value::Vec3h(v) => Json::Array(v.iter().map(half).collect()),
+        Value::Vec4h(v) => Json::Array(v.iter().map(half).collect()),
+        Value::Vec2i(v) => json!(v),
+        Value::Vec3i(v) => json!(v),
+        Value::Vec4i(v) => json!(v),
+        Value::Matrix2d(m) => doubles(&m[..]),
+        Value::Matrix3d(m) => doubles(&m[..]),
+        Value::Matrix4d(m) => doubles(&m[..]),
+        Value::Quatd([i, j, k, r]) => doubles(&[*r, *i, *j, *k]),
+        Value::Quatf([i, j, k, r]) => floats(&[*r, *i, *j, *k]),
+        Value::Quath([i, j, k, r]) => Json::Array([r, i, j, k].into_iter().map(half).collect()),
         Value::Array(items) => Json::Array(items.iter().map(|v| json(v, tokens)).collect()),
         other => panic!("no JSON form for {other:?}"),
     }

@@ -27,7 +27,8 @@ use crate::{
     },
     composition_checks::{
         ArcPathMap, Inside, Outside, TargetOwner, TargetSpecsCheck,
-        drop_inconsistent_property_kinds, map_arc_targets, target_error_applies,
+        drop_inconsistent_property_kinds, drop_instance_targets, map_arc_targets,
+        target_error_applies,
     },
     composition_error::{
         ArcToProhibitedChild, CompositionError, UnresolvedAsset, UnresolvedDefaultPrim,
@@ -319,6 +320,7 @@ pub(crate) fn compose_stage(
     for (path, prim) in &mut prims {
         drop_inconsistent_property_kinds(*path, prim, &mut cycles);
     }
+    drop_instance_targets(store, &mut prims, &mut cycles);
 
     if let Some(builder) = dep_builder.as_mut() {
         builder.retain_prims(&prims);

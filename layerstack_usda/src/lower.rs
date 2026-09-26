@@ -952,21 +952,19 @@ impl<'a> LowerCtx<'a> {
 
     fn lower_value(&mut self, node: SyntaxNode<'_>) -> Value<'a> {
         let tree = node.tree();
-        let sig: Vec<_> = node
-            .children_no_trivia()
-            .map(|c| (c.kind(), c.id.0))
-            .collect();
-
-        if sig.is_empty() {
+        let mut children = node.children_no_trivia();
+        let Some(first) = children.next() else {
             return Value::Blocked;
-        }
+        };
 
         // Negated number. As in OpenUSD (`_GetNumericValueFromString`,
         // `pxr/usd/sdf/textParserHelpers.cpp`), `-0` is the double `-0.0`
         // rather than the integer zero, and `-inf` is negative infinity.
-        if sig.len() >= 2 && sig[0].0 == SyntaxKind::Minus {
-            let text = self.text(self.node_from(tree, sig[1].1));
-            match sig[1].0 {
+        if first.kind() == SyntaxKind::Minus
+            && let Some(second) = children.next()
+        {
+            let text = self.text(second);
+            match second.kind() {
                 SyntaxKind::Number if text == "0" => return Value::Number(-0.0),
                 SyntaxKind::Number => {
                     return match parse_number_value(text) {
@@ -982,7 +980,7 @@ impl<'a> LowerCtx<'a> {
             }
         }
 
-        let (kind, id) = sig[0];
+        let (kind, id) = (first.kind(), first.id.0);
         match kind {
             SyntaxKind::Number => {
                 let text = self.text(self.node_from(tree, id));
@@ -1015,27 +1013,21 @@ impl<'a> LowerCtx<'a> {
     }
 
     fn lower_tuple(&mut self, node: SyntaxNode<'_>) -> Vec<Value<'a>> {
-        let tree = node.tree();
-        let ids: Vec<u32> = node
-            .children_no_trivia()
-            .filter(|c| c.kind() == SyntaxKind::ValueExpr)
-            .map(|c| c.id.0)
-            .collect();
-        ids.iter()
-            .map(|id| self.lower_value(self.node_from(tree, *id)))
-            .collect()
+        let children = node
+            .children()
+            .filter(|child| child.kind() == SyntaxKind::ValueExpr);
+        let mut values = Vec::with_capacity(children.clone().count());
+        values.extend(children.map(|child| self.lower_value(child)));
+        values
     }
 
     fn lower_array(&mut self, node: SyntaxNode<'_>) -> Vec<Value<'a>> {
-        let tree = node.tree();
-        let ids: Vec<u32> = node
-            .children_no_trivia()
-            .filter(|c| c.kind() == SyntaxKind::ValueExpr)
-            .map(|c| c.id.0)
-            .collect();
-        ids.iter()
-            .map(|id| self.lower_value(self.node_from(tree, *id)))
-            .collect()
+        let children = node
+            .children()
+            .filter(|child| child.kind() == SyntaxKind::ValueExpr);
+        let mut values = Vec::with_capacity(children.clone().count());
+        values.extend(children.map(|child| self.lower_value(child)));
+        values
     }
 
     fn lower_array_edit(&mut self, node: SyntaxNode<'_>) -> ArrayEdit<'a> {

@@ -2497,6 +2497,25 @@ fn resolve_variant_child_selections_for_prim(
         return HashMap::new();
     };
 
+    // Only specs inside a branch hosted on the parent can contribute here
+    // (AOUSD Core §7.3.6). Check the authored sites before resolving that
+    // parent's selections: ordinary descendants otherwise recursively walk
+    // their entire ancestry to discover that there is nothing to select.
+    let has_parent_branch = local_stack
+        .layers
+        .iter()
+        .filter_map(|id| store.layer(*id))
+        .any(|layer| {
+            layer.prim_specs(prim).any(|spec| {
+                spec.outer_variant_sites
+                    .last()
+                    .is_some_and(|site| site.host_path == parent_id)
+            })
+        });
+    if !has_parent_branch {
+        return HashMap::new();
+    }
+
     let parent_selections =
         resolve_full_variant_selections(store, fallbacks, local_stack, parent_id);
     let mut selected = HashMap::new();

@@ -520,8 +520,10 @@ enum Cause {
 
     // Unsupported features.
     /// Relocates (AOUSD Core §10.3.2.6) move a prim's ancestral opinions
-    /// to its relocation target, but classes implied through a relocation
-    /// source (OpenUSD's "spooky" inherits) are not composed.
+    /// to its relocation target, but a site reached through two
+    /// relocations of one stage path, variant opinions authored inside a
+    /// relocation source, and the classes of a relocation source outside a
+    /// subroot reference's target are not composed as OpenUSD composes them.
     Relocates,
     /// Asset-path variable expressions are not evaluated.
     ExpressionVariables,
@@ -688,15 +690,6 @@ const KNOWN: &[Known] = &[
         reason: "`ref.usd /CharRig/_Class_ToesRig/_Class_Toe` is kept beneath the class implied onto `/Rig/{Sym,L}ToesRig/ThumbToeLOCALRig`, not beneath the inherit `root.usd /Rig/_Class_ToesRig/ThumbToeLOCALRig` authors, so it outranks that site",
     },
     Known {
-        fixture: "TrickySpookyVariantSelectionInClass_root",
-        causes: &[C::Relocates],
-        prims: 4,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingSite, D::ExtraSite],
-        reason: "variant selections authored through classes implied across relocations are not applied: the relocated legs read both `LegRigStyle` branches, and the leg rigs neither",
-    },
-    Known {
         fixture: "TrickyVariantAncestralSelection_root",
         causes: &[C::AncestralArcs],
         prims: 1,
@@ -704,15 +697,6 @@ const KNOWN: &[Known] = &[
         values: 0,
         diffs: &[D::MissingSite],
         reason: "`/Root/B/C` selects the variants of `ref2.usd /A/B/C` and `/B/C`, reached through its ancestors' references, before its index is complete, so it misses their `{v1=C}` and `{v2=Z}`",
-    },
-    Known {
-        fixture: "TrickyVariantIndependentSelection_root",
-        causes: &[C::VariantSpecs],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingSite],
-        reason: "`/Model` misses the `transformVariant` branches of the weaker references to `ref.usd`",
     },
     Known {
         fixture: "TypicalReferenceToRiggedModel_root",

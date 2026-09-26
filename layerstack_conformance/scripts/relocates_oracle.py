@@ -426,6 +426,17 @@ def "Rack" (
 )
 {
 }
+
+# `dock.usda` relocates `/Dock/Shed/Net`, which its reference to
+# `shed.usda` brings, to the new root prim `/Net`, outside `/Dock`. A
+# target `shed.usda` authors beneath the net maps through that relocation
+# out of the namespace `/Harbor`'s reference maps, and is dropped; one
+# `dock.usda` authors is not relocated and maps.
+def "Harbor" (
+    references = @./dock.usda@</Dock>
+)
+{
+}
 ''',
     "kiln": '''#usda 1.0
 (
@@ -494,6 +505,38 @@ def "Glaze"
     def "Tray"
     {
         int coat = 3
+    }
+}
+''',
+    "dock": '''#usda 1.0
+(
+    relocates = {
+        </Dock/Shed/Net>: </Net>
+    }
+)
+
+def "Dock"
+{
+    def "Shed" (
+        references = @./shed.usda@</Shed>
+    )
+    {
+        rel mooring = <Net/Float>
+    }
+}
+''',
+    "shed": '''#usda 1.0
+
+def "Shed"
+{
+    rel haul = <Net/Float>
+
+    def "Net"
+    {
+        def "Float"
+        {
+            int depth = 1
+        }
     }
 }
 ''',

@@ -628,43 +628,58 @@ impl<'a> Walk<'a> {
         Some((store.paths_mut().intern(current), moved))
     }
 
-    /// Maps the path `rel` beneath the stage path `dest_root` through every
-    /// relocation, as a namespace mapping: each source moves to its target.
-    /// A relocation that removes its source maps nothing, so paths beneath
-    /// it still map through the arc, as OpenUSD leaves such relocations out
-    /// of its mapping functions (`_FilterRelocationsForPath` in
-    /// `pxr/usd/pcp/layerStack.cpp`).
+    /// Maps the path `rel` beneath the stage path `dest_root` through the
+    /// relocations of the layer stacks that author the arcs on the way
+    /// (`outer`, and `spooky`), as a namespace mapping: each source moves
+    /// to its target. `None` when a relocation moves the path outside the
+    /// namespace those arcs map, where no path of the stage stands for it.
+    ///
+    /// The arc's own target layer stack relocates nothing here: its
+    /// relocations apply to the arcs it authors, not to the paths it
+    /// authors itself. A relocation that removes its source maps nothing,
+    /// so paths beneath it still map through the arc, as OpenUSD leaves
+    /// such relocations out of its mapping functions
+    /// (`_FilterRelocationsForPath` in `pxr/usd/pcp/layerStack.cpp`).
     ///
     /// This is how an arc maps target paths and class paths authored in its
-    /// target (AOUSD Core §10.3.2.6.1).
+    /// target (AOUSD Core §10.3.2.6.1). OpenUSD composes the relocations of
+    /// the layer stack of the node authoring an arc into the arc's map
+    /// function (`_CreateMapExpressionForArc` in
+    /// `pxr/usd/pcp/primIndex.cpp`), which maps nothing for a path
+    /// relocated outside its domain.
     pub(crate) fn map(
         &self,
         store: &mut dyn LayerStore,
         dest_root: PathId,
         rel: &[TokenId],
-    ) -> PathId {
+    ) -> Option<PathId> {
         let mut current = store.paths().resolve(dest_root).clone();
         if self.is_empty() {
             let joined = current.join(rel);
-            return store.paths_mut().intern(joined);
+            return Some(store.paths_mut().intern(joined));
         }
         for &name in rel {
             let next = current.join(&[name]);
             let paths = store.paths();
-            let target = paths.lookup(&next).and_then(|id| {
-                self.own
-                    .into_iter()
-                    .chain(self.outer.iter().rev().copied())
-                    .chain(self.spooky.iter().rev().copied())
+            let relocate = paths.lookup(&next).and_then(|id| {
+                self.outer
+                    .iter()
+                    .rev()
+                    .chain(self.spooky.iter().rev())
                     .find_map(|set| set.source(id))
-                    .and_then(|relocate| relocate.stage_target)
             });
-            current = match target {
-                Some(target) => paths.resolve(target).clone(),
-                None => next,
+            current = match relocate {
+                Some(LiftedRelocate {
+                    stage_target: Some(target),
+                    ..
+                }) => paths.resolve(*target).clone(),
+                Some(LiftedRelocate {
+                    target: Some(_), ..
+                }) => return None,
+                _ => next,
             };
         }
-        store.paths_mut().intern(current)
+        Some(store.paths_mut().intern(current))
     }
 
     /// The `outer` relocations a walk from `host` took to reach the stage

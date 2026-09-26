@@ -1187,6 +1187,32 @@
      "/Clay/Chamber/Tray/Pot"
     ]
    ]
+  },
+  {
+   "path": "/Harbor",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Harbor"
+    ],
+    [
+     "dock.usda",
+     "/Dock"
+    ]
+   ]
+  },
+  {
+   "path": "/Harbor/Shed",
+   "prim_stack": [
+    [
+     "dock.usda",
+     "/Dock/Shed"
+    ],
+    [
+     "shed.usda",
+     "/Shed"
+    ]
+   ]
   }
  ],
  "values": {
@@ -1284,7 +1310,11 @@
   "/Stove/Shelf.holds": [
    "/Stove/Chamber/Tray/Pot"
   ],
-  "/Rack.holds": []
+  "/Rack.holds": [],
+  "/Harbor/Shed.haul": [],
+  "/Harbor/Shed.mooring": [
+   "/Harbor/Shed/Net/Float"
+  ]
  },
  "errors": [
   {
@@ -1298,6 +1328,10 @@
   {
    "kind": "ArcToProhibitedChild",
    "prim": "/StaleWrist"
+  },
+  {
+   "kind": "InvalidExternalTargetPath",
+   "prim": "/Harbor/Shed"
   },
   {
    "kind": "InvalidExternalTargetPath",

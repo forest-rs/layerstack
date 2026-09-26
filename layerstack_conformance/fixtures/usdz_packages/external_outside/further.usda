@@ -1,0 +1,6 @@
+#usda 1.0
+
+def "Further"
+{
+    double further = 4
+}

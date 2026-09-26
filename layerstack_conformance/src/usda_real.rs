@@ -40,14 +40,7 @@ pub fn load_entry_usda(entry: &Path) -> LoadedStage {
     let mut store = InMemoryStore::default();
     let root_dir = entry.parent().unwrap_or(Path::new(".")).to_path_buf();
 
-    let mut resolver = FileResolver {
-        root_dir: root_dir.clone(),
-        next_layer_id: 1,
-        by_path: BTreeMap::new(),
-        layer_paths: BTreeMap::new(),
-        layer_names: BTreeMap::new(),
-        pending_layers: Vec::new(),
-    };
+    let mut resolver = FileResolver::new(root_dir);
 
     // Load the entry file.
     let (root_layer, invalid) = load_file(entry, &mut store, &mut resolver);
@@ -233,17 +226,35 @@ fn rejections(diagnostics: &[Diagnostic]) -> Vec<String> {
 
 // ── File-based asset resolver ───────────────────────────────────────────
 
-struct FileResolver {
+/// Resolves asset paths to `.usda` files under `root_dir`, and owns the
+/// layer IDs of every layer loaded for one stage.
+pub(crate) struct FileResolver {
     root_dir: PathBuf,
     next_layer_id: u64,
     by_path: BTreeMap<PathBuf, LayerId>,
     /// Maps layer ID → absolute file path (for resolving relative references).
     layer_paths: BTreeMap<LayerId, PathBuf>,
-    layer_names: BTreeMap<LayerId, String>,
+    /// Each file's path relative to `root_dir`.
+    pub(crate) layer_names: BTreeMap<LayerId, String>,
     /// Layers produced during asset resolution that need to be inserted
     /// into the store after emit completes (since we can't borrow the store
     /// during emit).
-    pending_layers: Vec<Layer>,
+    pub(crate) pending_layers: Vec<Layer>,
+}
+
+impl FileResolver {
+    /// A resolver for the files under `root_dir`, which resolves any path
+    /// not anchored to a file it loaded against `root_dir`.
+    pub(crate) fn new(root_dir: PathBuf) -> Self {
+        Self {
+            root_dir,
+            next_layer_id: 1,
+            by_path: BTreeMap::new(),
+            layer_paths: BTreeMap::new(),
+            layer_names: BTreeMap::new(),
+            pending_layers: Vec::new(),
+        }
+    }
 }
 
 impl AssetResolver for FileResolver {
@@ -328,5 +339,11 @@ impl AssetResolver for FileResolver {
 
     fn resolved_path(&self, id: LayerId) -> Option<&str> {
         self.layer_names.get(&id).map(|s| s.as_str())
+    }
+
+    fn allocate_layer_id(&mut self) -> Option<LayerId> {
+        let layer_id = LayerId(self.next_layer_id);
+        self.next_layer_id += 1;
+        Some(layer_id)
     }
 }

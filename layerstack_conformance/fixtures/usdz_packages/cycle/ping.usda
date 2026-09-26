@@ -1,0 +1,13 @@
+#usda 1.0
+
+def "Ping" (
+    references = @pong.usda@</Pong>
+)
+{
+    double ping = 1
+}
+
+def "Echo"
+{
+    double echo = 3
+}

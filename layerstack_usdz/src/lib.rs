@@ -34,6 +34,8 @@
 
 extern crate alloc;
 
+use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use layerstack::AssetResolver;
@@ -55,10 +57,15 @@ pub use writer::{PackageFile, UsdzWriteError, write_usdz};
 pub struct UsdzResult {
     /// The root layer assembled from the first USD file in the package.
     pub layer: Layer,
-    /// Additional layers produced by resolving asset paths within the
-    /// package (sublayers, references, payloads). The caller should insert
-    /// these into their store.
+    /// Every other layer loaded while reading the package, each once: the
+    /// sublayers, references and payloads of the root layer, and theirs in
+    /// turn, whether read from the package or from the outer resolver. The
+    /// caller must insert all of them into their store before composing.
     pub resolved_layers: Vec<Layer>,
+    /// The package path of every layer read from the package, the root
+    /// layer's included (`root.usda`, `models/asset.usda`). Layers the
+    /// outer resolver loaded are not listed.
+    pub member_paths: BTreeMap<LayerId, Arc<str>>,
 }
 
 /// Reads a USDZ package from a byte slice and produces a [`Layer`].
@@ -72,6 +79,14 @@ pub struct UsdzResult {
 /// The `resolver` is used for asset paths that escape the package (i.e.,
 /// paths not found among the archive entries). Internal references are
 /// resolved within the package automatically.
+///
+/// Every layer read from or through the package goes into one store, so
+/// `resolver` owns their IDs: `layer_id`, which the caller allocates from
+/// it, names the root layer, and every other member loaded gets an ID from
+/// [`AssetResolver::allocate_layer_id`]. A package whose root layer loads
+/// another member needs a resolver that allocates
+/// ([`UsdzError::LayerIdUnavailable`]), and a layer ID returned twice
+/// fails the read ([`UsdzError::DuplicateLayerId`]).
 ///
 /// Spec: AOUSD Core §16.4.
 ///
@@ -136,13 +151,13 @@ pub fn read_usdz(
         return Err(UsdzError::NoRootLayer);
     }
 
-    // 4. Create a package-scoped resolver.
-    //    Layer IDs within the package start after the root layer's ID.
-    let mut usdz_resolver = resolver::UsdzResolver::new(&archive, layer_id.0 + 1, resolver);
+    // 4. Create a package-scoped resolver. The outer resolver allocates the
+    //    layer IDs of the other members.
+    let mut usdz_resolver = resolver::UsdzResolver::new(&archive, resolver);
 
     // 5. Parse the root layer.
     let root_data = archive.entry_data(root_entry);
-    let layer = resolver::parse_layer_data(
+    let parsed = resolver::parse_layer_data(
         root_data,
         &root_entry.name,
         layer_id,
@@ -151,12 +166,25 @@ pub fn read_usdz(
         &mut usdz_resolver,
     )?;
 
-    // 6. Collect all resolved layers.
-    let resolved_layers = usdz_resolver.pending_layers;
+    // 6. Collect every resolved layer once: those the root layer resolved,
+    //    and those resolved beneath them.
+    let loaded = usdz_resolver.finish()?;
+    let mut resolved_layers = parsed.resolved_layers;
+    resolved_layers.extend(loaded.descendants);
+    let mut member_paths = loaded.member_paths;
+    member_paths.insert(layer_id, root_entry.name.clone());
+
+    // 7. Installing two layers with one ID would silently drop one, so an
+    //    outer resolver that handed out an ID twice fails the read.
+    let mut ids = BTreeSet::from([layer_id]);
+    if let Some(layer) = resolved_layers.iter().find(|layer| !ids.insert(layer.id)) {
+        return Err(UsdzError::DuplicateLayerId { id: layer.id });
+    }
 
     Ok(UsdzResult {
-        layer,
+        layer: parsed.layer,
         resolved_layers,
+        member_paths,
     })
 }
 

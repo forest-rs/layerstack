@@ -1,0 +1,19 @@
+#usda 1.0
+
+def "First" (
+    references = @asset.usda@</Asset>
+)
+{
+}
+
+def "Second" (
+    references = @asset.usda@</Asset>
+)
+{
+}
+
+def "Third" (
+    references = @part.usda@</Part>
+)
+{
+}

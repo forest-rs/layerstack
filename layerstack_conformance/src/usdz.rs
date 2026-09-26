@@ -3,77 +3,66 @@
 
 //! USDZ loader for conformance testing.
 //!
-//! Reads `.usdz` package files through `layerstack_usdz::read_usdz` and
+//! Reads `.usdz` packages through `layerstack_usdz::read_usdz` and
 //! produces a [`LoadedStage`] ready for composition.
 
-use std::collections::BTreeMap;
 use std::path::Path;
 
-use layerstack::doc::LayerId;
-use layerstack::interner::TokenInterner;
-use layerstack::path::PathInterner;
-use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset};
+use layerstack::{AssetResolver, InMemoryStore, LayerStore};
 
-use crate::usda_real::LoadedStage;
+use crate::usda_real::{FileResolver, LoadedStage};
 
 /// Loads a USDZ file, producing a [`LoadedStage`] ready for composition.
+/// Asset paths that name no member resolve to `.usda` files beside it.
 pub fn load_entry_usdz(entry: &Path) -> LoadedStage {
-    let mut store = InMemoryStore::default();
-
-    let mut resolver = StubResolver;
-
     let data =
         std::fs::read(entry).unwrap_or_else(|e| panic!("failed to read {}: {e}", entry.display()));
+    load_usdz(&data, entry.parent().unwrap_or(Path::new(".")))
+        .unwrap_or_else(|e| panic!("failed to parse {}: {e}", entry.display()))
+}
 
-    let layer_id = LayerId(1);
+/// Loads a USDZ package from its bytes, as if it lay in `directory`,
+/// producing a [`LoadedStage`] ready for composition: the root layer and
+/// every layer it loads are in the store. Asset paths that name no member
+/// resolve to `.usda` files under `directory`, with IDs from the same
+/// resolver as the members'.
+///
+/// A member is named by its path inside the package, and a file outside
+/// it by its path relative to `directory`.
+pub fn load_usdz(data: &[u8], directory: &Path) -> Result<LoadedStage, layerstack_usdz::UsdzError> {
+    let mut store = InMemoryStore::default();
+    let mut resolver = FileResolver::new(directory.to_path_buf());
+    let layer_id = resolver.allocate_layer_id().expect("allocates");
     let result = layerstack_usdz::read_usdz(
-        &data,
+        data,
         layer_id,
         &mut store.tokens,
         &mut store.paths,
         &mut resolver,
-    )
-    .unwrap_or_else(|e| panic!("failed to parse {}: {e}", entry.display()));
+    )?;
 
-    // Insert resolved layers.
-    for layer in result.resolved_layers {
+    let mut layer_names = resolver.layer_names;
+    for (id, path) in result.member_paths {
+        layer_names.insert(id, path.to_string());
+    }
+    let layers = result
+        .resolved_layers
+        .into_iter()
+        .chain(resolver.pending_layers)
+        .chain([result.layer]);
+    for layer in layers {
+        assert!(
+            store.layer(layer.id).is_none(),
+            "two layers share {:?}",
+            layer.id
+        );
         store.insert_layer(layer);
     }
-    store.insert_layer(result.layer);
 
-    let mut layer_names = BTreeMap::new();
-    layer_names.insert(
-        layer_id,
-        entry
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("unknown")
-            .to_string(),
-    );
-
-    LoadedStage {
+    Ok(LoadedStage {
         store,
         root_layer: layer_id,
         layer_names,
         invalid: Vec::new(),
-    }
-}
-
-/// Stub resolver that doesn't resolve any assets outside the package.
-struct StubResolver;
-
-impl AssetResolver for StubResolver {
-    fn resolve(
-        &mut self,
-        _asset_path: &str,
-        _anchor: Option<LayerId>,
-        _tokens: &mut TokenInterner,
-        _paths: &mut PathInterner,
-    ) -> Result<ResolvedAsset, AssetResolveError> {
-        Err(AssetResolveError::NotFound)
-    }
-
-    fn resolved_path(&self, _id: LayerId) -> Option<&str> {
-        None
-    }
+    })
 }

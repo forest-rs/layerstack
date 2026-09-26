@@ -1,0 +1,13 @@
+#usda 1.0
+
+def "Shared"
+{
+    double middle = 20
+    double bottom = 3
+}
+
+def "Deep" (
+    references = @leaf.usda@</Leaf>
+)
+{
+}

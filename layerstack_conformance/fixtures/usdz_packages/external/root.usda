@@ -1,0 +1,16 @@
+#usda 1.0
+
+def "World" (
+    references = [
+        @member.usda@</Member>,
+        @outside.usda@</Outside>
+    ]
+)
+{
+}
+
+def "Again" (
+    payload = @outside.usda@</Outside>
+)
+{
+}

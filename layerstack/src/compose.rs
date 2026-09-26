@@ -4772,8 +4772,14 @@ fn map_across(
     else {
         return path;
     };
-    let stage_path =
-        Walk::new(relocates.across.iter().map(|set| &**set), None).map(store, arc_dest, &rel);
+    // A class moved outside the namespace the arcs map keeps its path
+    // beneath the destination.
+    let stage_path = Walk::new(relocates.across.iter().map(|set| &**set), None)
+        .map(store, arc_dest, &rel)
+        .unwrap_or_else(|| {
+            let joined = store.paths().resolve(arc_dest).join(&rel);
+            store.paths_mut().intern(joined)
+        });
     // Arc steps map from the composed prim's namespace; the outer mapping
     // maps into the namespace of the authoring site.
     match outer {
@@ -6505,7 +6511,7 @@ fn relocate_opinion_target_paths(
                 .map(<[_]>::to_vec)
         };
         match rel {
-            Some(rel) => walk.map(store, dest_root, &rel),
+            Some(rel) => walk.map(store, dest_root, &rel).unwrap_or(path),
             None => path,
         }
     };

@@ -75,9 +75,16 @@
 //!   `/Oven`, `/Stove` payloads `/Kiln`, and `/Rack` references the
 //!   relocated `/Kiln/Shelf`. Their target paths map through the arcs above
 //!   the relocate node only; `/Rack`'s is outside its target and reported.
+//! - `dock.usda` relocates `/Dock/Shed/Net`, which its reference to
+//!   `shed.usda` brings, to the new root prim `/Net`, outside `/Dock`. The
+//!   target `shed.usda` authors beneath the net maps through that
+//!   relocation out of the namespace `/Harbor`'s reference maps: it is
+//!   dropped and reported. The one `dock.usda` authors is not relocated,
+//!   and maps.
 //!
 //! Composition errors are compared by kind and the composed prim whose
-//! prim index reports them.
+//! prim index reports them, or whose property's targets OpenUSD reports
+//! them with.
 //!
 //! The same scene recomposed by a [`LiveStage`] after opinion edits at
 //! relocation targets and sources and in the classes implied through them,
@@ -331,6 +338,29 @@ fn composition_errors_match_openusd() {
         CompositionError::OpinionAtRelocationSource(error)
             if error.layer == root && error.path == source
     )));
+
+    // `shed.usda`'s target beneath the net `dock.usda` relocates out of
+    // `/Dock` cannot map across `/Harbor`'s reference, and `/Rack`'s is
+    // authored outside its reference's target.
+    let mut external: Vec<_> = stage
+        .composition_errors()
+        .iter()
+        .filter_map(|error| match error {
+            CompositionError::InvalidExternalTargetPath(error) => Some((
+                loaded.store.paths.display(error.prim, &loaded.store.tokens),
+                loaded.store.tokens.resolve(error.property).to_owned(),
+            )),
+            _ => None,
+        })
+        .collect();
+    external.sort();
+    assert_eq!(
+        external,
+        [
+            ("/Harbor/Shed".to_owned(), "haul".to_owned()),
+            ("/Rack".to_owned(), "holds".to_owned())
+        ]
+    );
 }
 
 /// Recomposes `live`, and checks the result against a full composition of

@@ -207,17 +207,17 @@ impl ArcPathMap<'_> {
     fn map(&self, store: &mut dyn LayerStore, path: PathId) -> Option<PathId> {
         let resolved = store.paths().resolve(path);
         if let Some(rel) = resolved.strip_prefix(self.source) {
-            return Some(match self.inside {
+            return match self.inside {
                 Inside::Join => {
                     let mapped = self.dest.join(rel);
-                    store.paths_mut().intern(mapped)
+                    Some(store.paths_mut().intern(mapped))
                 }
                 Inside::Relocate(walk, dest_root) => {
                     let rel = rel.to_vec();
                     walk.map(store, dest_root, &rel)
                 }
-                Inside::Keep => path,
-            });
+                Inside::Keep => Some(path),
+            };
         }
         match self.outside {
             Outside::Unmapped => None,

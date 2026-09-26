@@ -1195,14 +1195,16 @@ fn decode_math_type(
     let arr_start = off + 8;
     let count = element_count(data, arr_start, read_u64_at(data, off)?, total_bytes)?;
     budget.charge_elements(count)?;
-    let arr = (0..count)
-        .map(|i| {
-            Ok(CrateValue::Opaque {
-                value_type: vtype,
-                data: bytes_at(data, arr_start + i * total_bytes, total_bytes)?.to_vec(),
-            })
-        })
-        .collect::<Result<_, UsdcError>>()?;
+    // The byte extent and budget already validate the full element count.
+    // Fallible collection discards that exact size hint and repeatedly grows
+    // a large CrateValue buffer; reserve it once before decoding elements.
+    let mut arr = Vec::with_capacity(count);
+    for i in 0..count {
+        arr.push(CrateValue::Opaque {
+            value_type: vtype,
+            data: bytes_at(data, arr_start + i * total_bytes, total_bytes)?.to_vec(),
+        });
+    }
     Ok(CrateValue::Array(arr))
 }
 

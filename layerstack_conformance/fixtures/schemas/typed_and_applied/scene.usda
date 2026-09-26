@@ -1,0 +1,35 @@
+#usda 1.0
+
+# AOUSD Core 13.3.1.
+def Bar "bar1"
+{
+    string bar1prop = ""
+}
+
+def Baz "baz1"
+{
+    float2 baz1prop = (0, 0)
+}
+
+# AOUSD Core 13.3.2.
+def "foo" (
+    apiSchemas = ["FooBar"]
+)
+{
+    double3 pt
+}
+
+def "bar" (
+    apiSchemas = ["FooBar", "BarBaz:my_instance"]
+)
+{
+    string anotherString = "default"
+}
+
+# AOUSD Core 13.3.2.3, before `FooBar` includes anything.
+def Bar "myFoo" (
+    apiSchemas = ["FooBar"]
+)
+{
+    double myFoo:prop = 5
+}

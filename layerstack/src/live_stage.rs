@@ -651,6 +651,7 @@ impl LiveStage {
             with_provenance: self.options.with_provenance,
             with_dependencies: true,
             variant_fallbacks: self.options.variant_fallbacks.clone(),
+            schemas: self.options.schemas.clone(),
         };
         Stage::compose(store, self.root, scoped_opts)
     }
@@ -3178,5 +3179,66 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// An edit that applies a multiple-apply instance recomposes the prim,
+    /// which interns the names the instance forms, so the stage lists and
+    /// resolves its properties without mutating the store.
+    ///
+    /// Spec: AOUSD Core §13.3.2 (instance names form property names).
+    #[test]
+    fn an_edit_applying_a_multiple_apply_instance_lists_its_properties() {
+        use crate::{
+            edit::{Address, Transaction},
+            listop::ListOp,
+            schema::{PropertyDefinition, SchemaDefinition, SchemaKind, SchemaRegistry},
+            spec_path::SpecPath,
+        };
+        use alloc::sync::Arc;
+
+        let mut store = InMemoryStore::default();
+        let prim = p(&mut store, "/Floor");
+        let slot = store.tokens.intern("SlotAPI");
+        let index = store.tokens.intern("slot:__INSTANCE_NAME__:index");
+        let api_schemas = store.tokens.intern("apiSchemas");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(prim, PrimSpec::def());
+        store.insert_layer(layer);
+        let mut builder = SchemaRegistry::builder();
+        builder.register(
+            SchemaDefinition::new(slot, SchemaKind::MultipleApplyApi)
+                .with_property(PropertyDefinition::attribute(index).with_fallback(3)),
+        );
+        let options = StageOptions {
+            schemas: Some(Arc::new(builder.build(&mut store.tokens))),
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+        assert!(live.stage().property_names(prim, &store).is_empty());
+
+        let instance = store.tokens.intern("SlotAPI:left:upper");
+        let mut edit = Transaction::new();
+        edit.set_metadata(
+            Address::spec(LayerId(1), SpecPath::from_prim_path(prim, &store.paths)),
+            api_schemas,
+            FieldValue::TokenListOp(ListOp::prepended(vec![instance])),
+        );
+        live.apply(&mut store, &edit).expect("applies");
+
+        let name = store
+            .tokens
+            .lookup("slot:left:upper:index")
+            .expect("interned when the prim recomposed");
+        let stage = live.stage();
+        assert_eq!(stage.property_names(prim, &store), vec![name]);
+        assert_eq!(
+            stage
+                .resolve_field_with_schema(prim, name, &store)
+                .map(|resolved| resolved.value),
+            Some(Value::Int(3))
+        );
+        let left_upper = store.tokens.lookup("left:upper").expect("instance name");
+        let definition = stage.prim_definition(prim, &store).expect("on the stage");
+        assert!(definition.has_api_instance(slot, left_upper));
     }
 }

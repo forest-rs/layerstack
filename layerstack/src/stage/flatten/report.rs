@@ -14,7 +14,6 @@ use crate::{
     asset::AssetResolver,
     doc::{LayerId, LayerOffset},
     property::Variability,
-    schema::SchemaRegistry,
 };
 
 /// The guarantees a flatten must meet.
@@ -23,7 +22,7 @@ use crate::{
 /// requirement ([`FlattenError::Refused`]), rather than return a layer that
 /// breaks one. The default preserves instancing and animation exactly,
 /// writes asset paths as authored and refuses any loss.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FlattenRequirements<'a> {
     /// Whether instances keep sharing their prototypes.
     pub instancing: Instancing,
@@ -35,27 +34,6 @@ pub struct FlattenRequirements<'a> {
     pub asset_paths: AssetPaths<'a>,
     /// Which losses refuse the flatten.
     pub losses: LossPolicy,
-    /// The schemas whose property definitions the flattened layer
-    /// declares, as OpenUSD's flatten declares them: a property the prim's
-    /// schema defines is written not `custom`, an attribute with the
-    /// schema's variability ([`Transformation::DefinedBySchema`]). `None`
-    /// reads no schema.
-    pub schemas: Option<&'a SchemaRegistry>,
-}
-
-impl PartialEq for FlattenRequirements<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        let same_schemas = match (self.schemas, other.schemas) {
-            (Some(a), Some(b)) => core::ptr::eq(a, b),
-            (None, None) => true,
-            _ => false,
-        };
-        self.instancing == other.instancing
-            && self.exact_animation == other.exact_animation
-            && self.asset_paths == other.asset_paths
-            && self.losses == other.losses
-            && same_schemas
-    }
 }
 
 impl FlattenRequirements<'_> {
@@ -88,7 +66,6 @@ impl Default for FlattenRequirements<'_> {
             exact_animation: true,
             asset_paths: AssetPaths::AsAuthored,
             losses: LossPolicy::RefuseAny,
-            schemas: None,
         }
     }
 }
@@ -513,9 +490,9 @@ pub enum Transformation {
         /// The `custom` written.
         custom: bool,
     },
-    /// A property the prim's schema defines, written as its schema declares
-    /// it: not `custom`, and an attribute with the schema's variability
-    /// ([`FlattenRequirements::schemas`]).
+    /// A property the prim's schemas define, written as they declare it:
+    /// not `custom`, and an attribute with the schema's variability
+    /// ([`Stage::property_definition`](crate::Stage::property_definition)).
     ///
     /// Spec: AOUSD Core §12.2.3 (variability), §12.2.4 (`custom`), §13.3
     /// (schema properties).

@@ -1,0 +1,14 @@
+#usda 1.0
+
+# AOUSD Core 13.3.2.1.
+def "foo" (
+    apiSchemas = ["FooBar"]
+)
+{
+}
+
+def "twice" (
+    apiSchemas = ["BazFoo:one", "BazFoo:two:deep"]
+)
+{
+}

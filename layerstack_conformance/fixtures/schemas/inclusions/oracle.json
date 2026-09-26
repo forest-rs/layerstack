@@ -1,0 +1,164 @@
+{
+ "openusd_version": "0.26.8",
+ "prims": [
+  {
+   "applied_schemas": [
+    "FooBar",
+    "BazFoo:bazfooinstance",
+    "BarBaz:bazfooinstance"
+   ],
+   "has_api": {
+    "BarBaz": true,
+    "BazFoo": true,
+    "FooBar": true
+   },
+   "has_api_instance": [
+    [
+     "BarBaz",
+     "absent",
+     false
+    ],
+    [
+     "BarBaz",
+     "bazfooinstance",
+     true
+    ],
+    [
+     "BazFoo",
+     "absent",
+     false
+    ],
+    [
+     "BazFoo",
+     "bazfooinstance",
+     true
+    ]
+   ],
+   "is_a": {},
+   "path": "/foo",
+   "properties": {
+    "bazfooinstance:barbazprop": {
+     "defined": true,
+     "fallback": "",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "",
+     "variability": "varying"
+    },
+    "bazfooprop:bazfooinstance": {
+     "defined": true,
+     "fallback": 1,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 1,
+     "variability": "varying"
+    },
+    "foobarprop": {
+     "defined": true,
+     "fallback": 0.5,
+     "kind": "attribute",
+     "type_name": "half",
+     "value": 0.5,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "bazfooinstance:barbazprop",
+    "bazfooprop:bazfooinstance",
+    "foobarprop"
+   ],
+   "schema_type": "",
+   "type_name": ""
+  },
+  {
+   "applied_schemas": [
+    "BazFoo:one",
+    "BarBaz:one",
+    "BazFoo:two:deep",
+    "BarBaz:two:deep"
+   ],
+   "has_api": {
+    "BarBaz": true,
+    "BazFoo": true,
+    "FooBar": false
+   },
+   "has_api_instance": [
+    [
+     "BarBaz",
+     "absent",
+     false
+    ],
+    [
+     "BarBaz",
+     "one",
+     true
+    ],
+    [
+     "BarBaz",
+     "two:deep",
+     true
+    ],
+    [
+     "BazFoo",
+     "absent",
+     false
+    ],
+    [
+     "BazFoo",
+     "one",
+     true
+    ],
+    [
+     "BazFoo",
+     "two:deep",
+     true
+    ]
+   ],
+   "is_a": {},
+   "path": "/twice",
+   "properties": {
+    "bazfooprop:one": {
+     "defined": true,
+     "fallback": 1,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 1,
+     "variability": "varying"
+    },
+    "bazfooprop:two:deep": {
+     "defined": true,
+     "fallback": 1,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 1,
+     "variability": "varying"
+    },
+    "one:barbazprop": {
+     "defined": true,
+     "fallback": "",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "",
+     "variability": "varying"
+    },
+    "two:deep:barbazprop": {
+     "defined": true,
+     "fallback": "",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "",
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "bazfooprop:one",
+    "bazfooprop:two:deep",
+    "one:barbazprop",
+    "two:deep:barbazprop"
+   ],
+   "schema_type": "",
+   "type_name": ""
+  }
+ ],
+ "set": "inclusions"
+}

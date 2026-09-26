@@ -40,9 +40,9 @@
 //! - An attribute keeps its composed type, variability and metadata. Its
 //!   `custom` is the weakest opinion's, as OpenUSD's flatten writes it,
 //!   although the stage reports a property custom when any opinion is
-//!   (AOUSD Core §12.2.4). With [`FlattenRequirements::schemas`], a
-//!   property the prim's schema defines is written as the schema declares
-//!   it, as OpenUSD writes it.
+//!   (AOUSD Core §12.2.4). A property the prim's schemas define
+//!   ([`StageOptions::schemas`](crate::StageOptions::schemas)) is written as
+//!   the schema declares it, as OpenUSD writes it.
 //! - An attribute's time samples are written when its strongest value
 //!   source is time samples, or a sparse array edit default over weaker
 //!   samples: every sample in stage time, with sparse array edits composed
@@ -685,7 +685,7 @@ impl Flattener<'_, '_> {
             }
         }
 
-        for name in self.stage.property_names(source, &*self.store) {
+        for name in self.stage.authored_property_names(source, &*self.store) {
             if let Some(property) = self.copy_property(source, name, remap) {
                 spec.properties.push(PropertyEntry {
                     name,
@@ -962,22 +962,13 @@ impl Flattener<'_, '_> {
         }
     }
 
-    /// The variability the prim's schema declares for `name`, when a schema
-    /// defines it ([`FlattenRequirements::schemas`]).
+    /// The variability the prim's schemas declare for `name`, when one
+    /// defines it ([`Stage::property_definition`]).
     ///
-    /// Spec: AOUSD Core §13.3.2.4 (the prim's type, then its applied API
-    /// schemas).
-    fn schema_variability(&mut self, prim: PathId, name: TokenId) -> Option<Variability> {
-        let registry = self.requirements.schemas?;
-        let api_schemas = self.store.tokens_mut().intern("apiSchemas");
-        let type_name = self.stage.resolve_type_name(prim, &*self.store);
-        let applied = self
-            .stage
-            .resolve_token_list(prim, api_schemas)
-            .map(|resolved| resolved.value)
-            .unwrap_or_default();
-        registry
-            .resolve_property(type_name, &applied, name)
+    /// Spec: AOUSD Core §13.3.2.3 (the prim definition).
+    fn schema_variability(&self, prim: PathId, name: TokenId) -> Option<Variability> {
+        self.stage
+            .property_definition(prim, name, &*self.store)
             .map(|definition| definition.variability)
     }
 

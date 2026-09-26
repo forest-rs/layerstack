@@ -1,0 +1,12 @@
+#usda 1.0
+(
+    timeCodesPerSecond = 48
+)
+
+over "Hedge"
+{
+    double sway.timeSamples = {
+        0: 0,
+        48: 1,
+    }
+}

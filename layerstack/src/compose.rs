@@ -2419,6 +2419,15 @@ fn authored_full_variant_selections(
         let specs = selection_host_specs(store, fallbacks, stack, *target);
         sites.extend(VariantSite::of_node(store, &specs));
     }
+    // Specializes targets are the weakest sites (AOUSD Core §10.4, the S in
+    // LIVERPS); OpenUSD adds them before any variant set is evaluated, so
+    // a class a prim specializes selects the prim's own sets.
+    let specializes =
+        resolve_specializes_for_prim(store, fallbacks, local_stack, path, SelectionScope::Stack);
+    for target in specializes {
+        let specs = selection_host_specs(store, fallbacks, local_stack, target);
+        sites.extend(VariantSite::of_node(store, &specs));
+    }
     evaluate_variant_sets(&sites)
 }
 

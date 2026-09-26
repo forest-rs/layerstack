@@ -222,6 +222,21 @@ over "Clay" (
 {
 }
 
+# `tint_a.usda` and `tint_b.usda` set TONE differently and both reference
+# `shade.usda`, whose selection reads TONE: each context selects its own
+# variant of the one layer.
+def "Dawn" (
+    references = @./tint_a.usda@
+)
+{
+}
+
+def "Dusk" (
+    references = @./tint_b.usda@
+)
+{
+}
+
 # `red.usda` on its own, so a host holds it when the override changes.
 def "Swatch" (
     references = @./red.usda@</Paint>

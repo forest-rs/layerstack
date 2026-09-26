@@ -270,6 +270,21 @@ over "Clay" (
 {
 }
 
+# `tint_a.usda` and `tint_b.usda` set TONE differently and both reference
+# `shade.usda`, whose selection reads TONE: each context selects its own
+# variant of the one layer.
+def "Dawn" (
+    references = @./tint_a.usda@
+)
+{
+}
+
+def "Dusk" (
+    references = @./tint_b.usda@
+)
+{
+}
+
 # `red.usda` on its own, so a host holds it when the override changes.
 def "Swatch" (
     references = @./red.usda@</Paint>
@@ -372,6 +387,56 @@ over "Paint"
 over "Paint"
 {
     int shade = 2
+}
+''',
+    "tint_a": '''#usda 1.0
+(
+    defaultPrim = "Tint"
+    expressionVariables = {
+        string TONE = "light"
+    }
+)
+
+def "Tint" (
+    references = @./shade.usda@
+)
+{
+}
+''',
+    "tint_b": '''#usda 1.0
+(
+    defaultPrim = "Tint"
+    expressionVariables = {
+        string TONE = "dark"
+    }
+)
+
+def "Tint" (
+    references = @./shade.usda@
+)
+{
+}
+''',
+    "shade": '''#usda 1.0
+(
+    defaultPrim = "Shade"
+)
+
+def "Shade" (
+    variants = {
+        string tone = "`${TONE}`"
+    }
+    variantSets = "tone"
+)
+{
+    variantSet "tone" = {
+        "light" {
+            int level = 1
+        }
+        "dark" {
+            int level = 2
+        }
+    }
 }
 ''',
     "deep/vault": '''#usda 1.0

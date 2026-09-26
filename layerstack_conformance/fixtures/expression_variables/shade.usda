@@ -1,0 +1,21 @@
+#usda 1.0
+(
+    defaultPrim = "Shade"
+)
+
+def "Shade" (
+    variants = {
+        string tone = "`${TONE}`"
+    }
+    variantSets = "tone"
+)
+{
+    variantSet "tone" = {
+        "light" {
+            int level = 1
+        }
+        "dark" {
+            int level = 2
+        }
+    }
+}

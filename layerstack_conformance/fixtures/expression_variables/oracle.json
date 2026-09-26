@@ -467,6 +467,48 @@
    ]
   },
   {
+   "path": "/Dawn",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Dawn"
+    ],
+    [
+     "tint_a.usda",
+     "/Tint"
+    ],
+    [
+     "shade.usda",
+     "/Shade"
+    ],
+    [
+     "shade.usda",
+     "/Shade{tone=light}"
+    ]
+   ]
+  },
+  {
+   "path": "/Dusk",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Dusk"
+    ],
+    [
+     "tint_b.usda",
+     "/Tint"
+    ],
+    [
+     "shade.usda",
+     "/Shade"
+    ],
+    [
+     "shade.usda",
+     "/Shade{tone=dark}"
+    ]
+   ]
+  },
+  {
    "path": "/Swatch",
    "prim_stack": [
     [
@@ -512,6 +554,8 @@
   "/Meadow.bloom": 3,
   "/Clearing.bloom": 3,
   "/Canvas.shade": 2,
+  "/Dawn.level": 1,
+  "/Dusk.level": 2,
   "/Swatch.shade": 1
  },
  "errors": [

@@ -1268,14 +1268,17 @@ fn relocated_path(
         .unwrap_or(path)
 }
 
-/// Filters children maps by removing variant-only children that don't belong
-/// to the selected variant.
+/// Filters children maps by removing the children only unselected variant
+/// branches author.
 ///
-/// For each prim that has variant sets (found via its composed opinion sources),
-/// the selected variants determine which variant children remain. Children that
-/// exist only in non-selected variant branches are removed.
+/// Population follows every branch, so a prim's child list holds the names
+/// each branch of its variant sets, or of its parent's, authors. A name no
+/// contributing spec of the prim authors is removed
+/// ([`uncontributed_children`]); a name some contributing spec authors
+/// stays, however many unselected branches author it too.
 ///
-/// Spec: AOUSD Core §10.5 (variant selection), §11 (population).
+/// Spec: AOUSD Core §10.3.2.5 (only the selected variant contributes), §11
+/// (population).
 fn filter_variant_children(
     store: &dyn LayerStore,
     fallbacks: &VariantFallbacks,
@@ -1290,10 +1293,10 @@ fn filter_variant_children(
             continue;
         };
 
-        // Collect all variant set specs and variant selections across opinion sources.
+        // The children any branch of this prim's variant sets names, and
+        // those of the branches its composed selections select.
         let mut all_variant_children: HashSet<TokenId> = HashSet::new();
         let mut selected_children: HashSet<TokenId> = HashSet::new();
-        let mut has_variant_sets = false;
         let mut variant_set_order: Vec<TokenId> = Vec::new();
 
         // First, resolve variant selections and variant set order from all opinion sources.
@@ -1327,43 +1330,42 @@ fn filter_variant_children(
 
             for (set_name, set_spec) in &spec.variant_sets {
                 for (variant_name, variant_spec) in &set_spec.variants {
+                    all_variant_children.extend(variant_spec.authored_children.iter().copied());
+                    if selections.get(set_name) != Some(variant_name) {
+                        continue;
+                    }
+                    // A child of a variant set nested in other branches of
+                    // this prim also needs those branches selected.
+                    let branch = VariantSelectionSite {
+                        host_path: source.lookup_path,
+                        set: *set_name,
+                        variant: *variant_name,
+                    };
                     for child in &variant_spec.authored_children {
-                        has_variant_sets = true;
-                        all_variant_children.insert(*child);
-                        if selections.get(set_name) == Some(variant_name) {
-                            // A child of a variant set nested in other
-                            // branches of this prim also needs those
-                            // branches selected.
-                            let branch = VariantSelectionSite {
-                                host_path: source.lookup_path,
-                                set: *set_name,
-                                variant: *variant_name,
-                            };
-                            let requirements =
-                                nested_branch_requirements(store, layer, *child, branch);
-                            let outer_ok = requirements.is_empty()
-                                || requirements.iter().any(|reqs| {
-                                    reqs.iter().all(|site| {
-                                        selections.get(&site.set) == Some(&site.variant)
-                                    })
-                                });
-                            if outer_ok {
-                                selected_children.insert(*child);
-                            }
+                        let requirements = nested_branch_requirements(store, layer, *child, branch);
+                        let outer_ok = requirements.is_empty()
+                            || requirements.iter().any(|reqs| {
+                                reqs.iter()
+                                    .all(|site| selections.get(&site.set) == Some(&site.variant))
+                            });
+                        if outer_ok {
+                            selected_children.insert(*child);
                         }
                     }
                 }
             }
         }
 
-        if !has_variant_sets || all_variant_children.is_empty() {
+        if all_variant_children.is_empty() {
             continue;
         }
 
-        let unselected: HashSet<TokenId> = all_variant_children
-            .difference(&selected_children)
-            .copied()
-            .collect();
+        // The graph lacks the branches of selections made through the
+        // sites ancestral arcs reach (`Cause::AncestralArcs` in
+        // `composition_strict.rs`), so the children of every branch the
+        // composed selections select stay as well.
+        let mut unselected = uncontributed_children(store, prim_index, &all_variant_children);
+        unselected.retain(|name| !selected_children.contains(name));
 
         if unselected.is_empty() && variant_set_order.is_empty() {
             continue;
@@ -1619,7 +1621,11 @@ fn filter_variant_children(
             continue;
         }
 
-        let unselected_gc: HashSet<TokenId> = all_gc.difference(&selected_gc).copied().collect();
+        let Some(parent_index) = prims.get(&parent_path) else {
+            continue;
+        };
+        let mut unselected_gc = uncontributed_children(store, parent_index, &all_gc);
+        unselected_gc.retain(|name| !selected_gc.contains(name));
         if unselected_gc.is_empty() {
             continue;
         }
@@ -1790,6 +1796,37 @@ fn filter_variant_children(
             }
         }
     }
+}
+
+/// The names among `candidates` that no contributing spec of `index`
+/// authors a child for.
+///
+/// A prim's children are the names its contributing specs author: the
+/// specs outside any variant branch and those of the selected branches,
+/// reached through any node of its graph. An unselected branch is not a
+/// node of the graph, so a child it names exists only when a contributing
+/// spec authors it as well. `index` must already be pruned of unselected
+/// branches ([`prune_unselected_variant_specs`]).
+///
+/// Spec: AOUSD Core §10.3.2.5 (only the selected variant contributes), §11
+/// (stage population). OpenUSD: `PcpPrimIndex::ComputePrimChildNames`,
+/// which calls `PcpComposeSiteChildNames` (`pxr/usd/pcp/composeSite.cpp`)
+/// for each node of the prim index.
+fn uncontributed_children(
+    store: &dyn LayerStore,
+    index: &PrimIndex,
+    candidates: &HashSet<TokenId>,
+) -> HashSet<TokenId> {
+    candidates
+        .iter()
+        .copied()
+        .filter(|name| {
+            !index
+                .sources
+                .iter()
+                .any(|key| source_authors_child(store, key, *name))
+        })
+        .collect()
 }
 
 /// Returns, for each prim spec of `host`'s child `child` authored directly
@@ -8367,26 +8404,40 @@ fn fold_child_order(
 /// The names among `candidates`, in their order, that the spec `key`
 /// names has a child prim spec for.
 fn spec_children(store: &dyn LayerStore, key: &OpinionKey, candidates: &[TokenId]) -> Vec<TokenId> {
-    let Some(layer) = store.layer(key.layer_id) else {
-        return Vec::new();
-    };
-    let paths = store.paths();
-    let lookup = paths.resolve(key.lookup_path);
-    let spec_prim = paths.resolve(key.spec_path.prim_path());
     candidates
         .iter()
         .copied()
-        .filter(|name| {
-            let Some(child_lookup) = paths.lookup(&lookup.join(&[*name])) else {
-                return false;
-            };
-            let Some(child_prim) = paths.lookup(&spec_prim.join(&[*name])) else {
-                return false;
-            };
-            let spec = key.spec_path.prim_spec().child(*name, child_prim);
-            layer.source_prim_spec(child_lookup, &spec, paths).is_some()
-        })
+        .filter(|name| source_authors_child(store, key, *name))
         .collect()
+}
+
+/// Whether the spec the source `key` names authors a child prim spec named
+/// `name`: a spec at the child's path in that spec's own variant branch
+/// context.
+///
+/// The spec `/P{v=b}` is the branch `v=b` of `/P`, whose children are the
+/// specs `/P{v=b}C`; a spec outside any branch has the children authored
+/// outside any branch. A spec another branch holds at the same path is
+/// never the child of either.
+///
+/// Spec: AOUSD Core §7.3.6 (variant specs contain prim specs), §11 (stage
+/// population). OpenUSD: `PcpComposeSiteChildNames` in
+/// `pxr/usd/pcp/composeSite.cpp` reads the `primChildren` of each spec at a
+/// node's site, and the site of a variant node is the branch.
+fn source_authors_child(store: &dyn LayerStore, key: &OpinionKey, name: TokenId) -> bool {
+    let Some(layer) = store.layer(key.layer_id) else {
+        return false;
+    };
+    let paths = store.paths();
+    let Some(child_lookup) = paths.lookup(&paths.resolve(key.lookup_path).join(&[name])) else {
+        return false;
+    };
+    let Some(child_prim) = paths.lookup(&paths.resolve(key.spec_path.prim_path()).join(&[name]))
+    else {
+        return false;
+    };
+    let spec = key.spec_path.prim_spec().child(name, child_prim);
+    layer.branch_prim_spec(child_lookup, &spec, paths).is_some()
 }
 
 /// Reorders `children` by one `reorder nameChildren` list.
@@ -8813,18 +8864,31 @@ mod child_order_tests {
 
         store.insert_layer(layer);
 
-        // Build prim index.
+        // Build prim index: the spec and its selected branches, the
+        // sources the children are authored in.
+        let branches = [
+            vec![],
+            vec![site(standin, anim), site(shading, spooky)],
+            vec![
+                site(standin, anim),
+                site(shading, spooky),
+                site(standin, anim),
+            ],
+        ];
         let mut prims = HashMap::new();
         prims.insert(
             parent_path,
             PrimIndex {
-                sources: vec![OpinionKey {
-                    node: NodeId::ROOT,
-                    layer_strength: 0,
-                    layer_id,
-                    lookup_path: parent_path,
-                    spec_path: prim_spec_path(&store, parent_path, &[]),
-                }],
+                sources: branches
+                    .iter()
+                    .map(|sites| OpinionKey {
+                        node: NodeId::ROOT,
+                        layer_strength: 0,
+                        layer_id,
+                        lookup_path: parent_path,
+                        spec_path: prim_spec_path(&store, parent_path, sites),
+                    })
+                    .collect(),
                 ..PrimIndex::new(PrimIndexGraph::from_arcs(
                     &prim_spec_path(&store, parent_path, &[]),
                     1,

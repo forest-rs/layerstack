@@ -98,6 +98,7 @@ pub mod spec_path;
 pub mod spline;
 pub mod stage;
 mod value_resolution;
+pub mod variable_expression;
 pub mod variant_fallbacks;
 
 pub mod live_stage;

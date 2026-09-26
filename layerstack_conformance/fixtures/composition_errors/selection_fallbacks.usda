@@ -1,0 +1,55 @@
+#usda 1.0
+
+# No selection of `shape` is authored, so its fallback waits until every
+# authored selection is evaluated: `size` takes the referenced `large`
+# first, and the `size=small` of the fallback branch `shape=cube` comes too
+# late.
+def "Mast" (
+    references = @./selection_ref.usda@</Sized>
+    variantSets = ["shape", "size"]
+)
+{
+    variantSet "shape" = {
+        "cube" (
+            variants = {
+                string size = "small"
+            }
+        ) {
+        }
+    }
+    variantSet "size" = {
+        "small" {
+            int scale = 1
+        }
+        "large" {
+            int scale = 2
+        }
+    }
+}
+
+# The reference selects `shape=cube`, whose branch selects `size=small`:
+# an authored selection, so the fallback `size=large` is not used.
+def "Boom" (
+    references = @./selection_ref.usda@</Shaped>
+    variantSets = ["shape", "size"]
+)
+{
+    variantSet "shape" = {
+        "cube" (
+            variants = {
+                string size = "small"
+            }
+        ) {
+        }
+        "sphere" {
+        }
+    }
+    variantSet "size" = {
+        "small" {
+            int scale = 1
+        }
+        "large" {
+            int scale = 2
+        }
+    }
+}

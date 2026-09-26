@@ -1,0 +1,45 @@
+#usda 1.0
+
+def "Mast" (
+    variants = {
+        string shape = "cube"
+        string size = "large"
+    }
+)
+{
+}
+
+def "Hull" (
+    variants = {
+        string color = "blue"
+        string shape = "cube"
+    }
+)
+{
+}
+
+def "Spar" (
+    variants = {
+        string color = "blue"
+        string shape = "cube"
+        string size = "large"
+    }
+)
+{
+}
+
+def "Sized" (
+    variants = {
+        string size = "large"
+    }
+)
+{
+}
+
+def "Shaped" (
+    variants = {
+        string shape = "cube"
+    }
+)
+{
+}

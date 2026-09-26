@@ -18,13 +18,13 @@ use crate::variant_fallbacks::{VariantFallbacks, apply_variant_fallbacks};
 use crate::{
     arc_cycle::CycleDetector,
     arcs::{
-        ArcAuthoring, AuthoredReference, SelectionScope, anchor_internal_arcs,
-        authored_variant_selections_for_prim, lookup_reference_target_path,
-        resolve_branch_payloads_in, resolve_direct_references_for_prim, resolve_inherits_for_prim,
+        ArcAuthoring, AuthoredReference, SelectionScope, VariantNodeOrder, anchor_internal_arcs,
+        lookup_reference_target_path, resolve_branch_payloads_in,
+        resolve_direct_references_for_prim, resolve_inherits_for_prim,
         resolve_inherits_for_prim_in, resolve_payloads_for_prim, resolve_payloads_for_prim_in,
         resolve_references_for_prim, resolve_specializes_for_prim, resolve_specializes_for_prim_in,
         resolve_variant_branch_payloads, resolve_variant_child_references,
-        resolve_variant_references_in, spec_arcs_apply,
+        resolve_variant_references_in, selection_host_specs, spec_arcs_apply,
     },
     composition_checks::{
         ArcPathMap, Inside, Outside, TargetOwner, TargetSpecsCheck,
@@ -567,12 +567,10 @@ fn remove_relocation_sources(
 /// Resolves the variant selections that govern a composed prim, in strength
 /// order.
 ///
-/// Sources are visited strongest-first. A variant node (a source whose spec
-/// path ends in `{set=variant}`) contributes the selections authored inside
-/// that branch at the node's own strength, so a selection authored in a
-/// stronger variant beats one authored on a weaker referenced prim. Sets not
-/// resolved this way fall back to [`composed_variant_selections`], then to
-/// the variant fallbacks. A branch counts only once an authored selection
+/// The authored selections come from
+/// [`authored_strength_ordered_variant_selections`], which evaluates the
+/// variant sets one at a time, as OpenUSD does; sets it leaves without a
+/// selection take the variant fallbacks. A branch counts only once an authored selection
 /// selects it: a branch a fallback selected authors selections only for
 /// the sets declared after its own, which the fallback pass decides
 /// ([`apply_variant_fallbacks`]), so pruning keeps every fallback branch
@@ -592,27 +590,30 @@ pub(crate) fn strength_ordered_variant_selections(
 
 /// The selections of [`strength_ordered_variant_selections`] before variant
 /// fallbacks apply, for callers that add weaker selections first.
+///
+/// Each source of `prim_index` is a [`VariantSite`]: a spec outside the
+/// prim's own variant branches, or the branch its spec path ends in
+/// (`/P{a=x}`, or `/P{a=x}{b=y}` for a set nested in another branch), in
+/// the strength order of the prim index, where a branch of the prim's own
+/// set is stronger than a referenced site. [`evaluate_variant_sets`]
+/// decides the sets they declare; any other selection a source authors,
+/// and those of [`authored_composed_variant_selections`], fill in the rest.
 fn authored_strength_ordered_variant_selections(
     store: &dyn LayerStore,
     prim_index: &PrimIndex,
 ) -> HashMap<TokenId, TokenId> {
     use crate::spec_path::SpecComponent;
 
-    // A branch source's selections count as authored only once its own
-    // selection is: the branch of a set that falls back is not selected
-    // yet, and the selections it authors apply only to the sets after it
-    // (see `apply_variant_fallbacks`). Passes repeat until no branch is
-    // newly admitted, so nested branches chain in.
-    let mut selections: HashMap<TokenId, TokenId> = HashMap::new();
-    let mut admitted = alloc::vec![false; prim_index.sources.len()];
-    loop {
-        let mut changed = false;
-        for (source, admitted) in prim_index.sources.iter().zip(admitted.iter_mut()) {
-            if *admitted {
-                continue;
-            }
-            let components = source.spec_path.components();
-            let branch: Vec<(TokenId, TokenId)> = components
+    let sites: Vec<VariantSite<'_>> = prim_index
+        .sources
+        .iter()
+        .filter_map(|source| {
+            let spec = store.layer(source.layer_id).and_then(|layer| {
+                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+            })?;
+            let branch: Vec<(TokenId, TokenId)> = source
+                .spec_path
+                .components()
                 .iter()
                 .rev()
                 .map_while(|component| match component {
@@ -620,39 +621,226 @@ fn authored_strength_ordered_variant_selections(
                     SpecComponent::Prim(_) => None,
                 })
                 .collect();
-            if !branch
+            Some(VariantSite::of_spec(spec, source.lookup_path, branch))
+        })
+        .collect();
+    let mut selections = evaluate_variant_sets(&sites);
+    for (set, variant) in authored_composed_variant_selections(store, prim_index) {
+        selections.entry(set).or_insert(variant);
+    }
+    selections
+}
+
+/// A site that may author and declare variant selections for a composed
+/// prim: a prim spec, or one of the prim's own variant branches in it.
+///
+/// OpenUSD reads a node's site path, which ends in the node's variant
+/// selections for a variant node (`_ComposeVariantSelectionAcrossNodes` and
+/// `_EvalNodeVariantSets` in `pxr/usd/pcp/primIndex.cpp`).
+struct VariantSite<'a> {
+    /// The prim's own branches the site lies in, innermost first: empty for
+    /// a spec.
+    branch: Vec<(TokenId, TokenId)>,
+    /// The selections the site authors.
+    authored: Option<&'a HashMap<TokenId, TokenId>>,
+    /// The prim spec hosting the branches, and its path, for the variant
+    /// sets the site declares; `None` for a site that declares none.
+    host: Option<(&'a crate::doc::PrimSpec, PathId)>,
+}
+
+impl<'a> VariantSite<'a> {
+    /// The site of `spec`, the spec of the prim `host`, or of its branch
+    /// `branch`, innermost first.
+    fn of_spec(
+        spec: &'a crate::doc::PrimSpec,
+        host: PathId,
+        branch: Vec<(TokenId, TokenId)>,
+    ) -> Self {
+        let authored = match branch.first() {
+            Some((set, variant)) => spec
+                .variant_sets
+                .get(set)
+                .and_then(|set_spec| set_spec.variants.get(variant))
+                .map(|variant_spec| &variant_spec.variant_selections),
+            None => Some(&spec.variant_selections),
+        };
+        Self {
+            branch,
+            authored,
+            host: Some((spec, host)),
+        }
+    }
+
+    /// The sites of the node whose layer stack holds `specs`, the specs of
+    /// the prim `host`, stronger layers first: each spec, then each variant
+    /// branch in the node's strength order.
+    fn of_node(specs: &[&'a crate::doc::PrimSpec], host: PathId) -> Vec<Self> {
+        let mut sites: Vec<Self> = specs
+            .iter()
+            .map(|spec| Self::of_spec(spec, host, Vec::new()))
+            .collect();
+        sites.extend(Self::branches_of_node(specs, host));
+        sites
+    }
+
+    /// The sites of the variant branches of the node whose layer stack
+    /// holds `specs`, the specs of the prim `host`, stronger layers first:
+    /// in the order of their variant nodes ([`VariantNodeOrder`]), each
+    /// node's specs by layer.
+    fn branches_of_node(specs: &[&'a crate::doc::PrimSpec], host: PathId) -> Vec<Self> {
+        let order = VariantNodeOrder::new(specs.iter().copied());
+        // Each branch with its node's rank, then its layer.
+        let mut branches: Vec<(Vec<usize>, usize, Self)> = Vec::new();
+        for (layer, spec) in specs.iter().enumerate() {
+            for (set, set_spec) in &spec.variant_sets {
+                for (variant, variant_spec) in &set_spec.variants {
+                    let mut branch: Vec<(TokenId, TokenId)> = variant_spec
+                        .outer_variant_sites
+                        .iter()
+                        .filter(|site| site.host_path == host)
+                        .map(|site| (site.set, site.variant))
+                        .collect();
+                    branch.push((*set, *variant));
+                    branch.reverse();
+                    let node = order.rank(host, *set, variant_spec);
+                    branches.push((node, layer, Self::of_spec(spec, host, branch)));
+                }
+            }
+        }
+        // Variants of one set exclude each other, so their relative order
+        // does not matter.
+        branches.sort_by(|a, b| (&a.0, a.1).cmp(&(&b.0, b.1)));
+        branches.into_iter().map(|(_, _, site)| site).collect()
+    }
+
+    /// Selections authored at a site that declares no variant set.
+    fn authored_only(authored: &'a HashMap<TokenId, TokenId>) -> Self {
+        Self {
+            branch: Vec::new(),
+            authored: Some(authored),
+            host: None,
+        }
+    }
+
+    /// Whether every branch the site lies in is selected.
+    fn composed(&self, selections: &HashMap<TokenId, TokenId>) -> bool {
+        self.branch
+            .iter()
+            .all(|(set, variant)| selections.get(set) == Some(variant))
+    }
+
+    /// The variant sets the site declares, in `variantSets` order: the sets
+    /// of its spec nested in exactly its innermost branch, or, for a spec,
+    /// those not nested in a branch of the prim.
+    fn declared(&self) -> impl Iterator<Item = TokenId> + '_ {
+        let innermost = self.branch.first().copied();
+        self.host.into_iter().flat_map(move |(spec, host)| {
+            spec.variant_set_order
                 .iter()
-                .all(|(set, variant)| selections.get(set) == Some(variant))
-            {
+                .copied()
+                .filter(move |set| nesting_branch(spec, host, *set) == innermost)
+        })
+    }
+}
+
+/// Resolves the authored variant selections of a composed prim from its
+/// `sites`, strongest first.
+///
+/// A branch site composes only while every branch it names is selected.
+/// The variant sets are evaluated one at a time, each once: next is the
+/// first set, in `variantSets` order, of the strongest composed site that
+/// declares a set not yet evaluated (a set nested in a branch is declared
+/// by that branch). Its selection is the one authored on the strongest
+/// composed site that authors one, and selecting it composes its branch
+/// sites, whose selections count for the sets evaluated after it at the
+/// strength of their place among `sites`. A set no composed site selects is
+/// evaluated again once a newly selected branch composes, and otherwise
+/// stays unselected, for the fallbacks. The sets no site declares then take
+/// the strongest selection left.
+///
+/// Spec: AOUSD Core §10.3.2.5.1 (computing variant selection), §10.5.
+/// OpenUSD queues a task per declared set of each node
+/// (`_EvalNodeVariantSets`), processes them in node strength order and
+/// then set order (`Task::PriorityOrder`), resolves each with
+/// `_ComposeVariantSelection`, which takes a set's prior selection or
+/// searches the nodes added so far strongest first, and retries the sets
+/// left unselected when a new variant arc may author selections
+/// (`_AddVariantArc`, `RetryVariantTasks`), all in
+/// `pxr/usd/pcp/primIndex.cpp`.
+fn evaluate_variant_sets(sites: &[VariantSite<'_>]) -> HashMap<TokenId, TokenId> {
+    let mut selections: HashMap<TokenId, TokenId> = HashMap::new();
+    // Sets evaluated without a selection, until a new branch composes.
+    let mut unselected: HashSet<TokenId> = HashSet::new();
+    loop {
+        let next = sites
+            .iter()
+            .filter(|site| site.composed(&selections))
+            .flat_map(VariantSite::declared)
+            .find(|set| !selections.contains_key(set) && !unselected.contains(set));
+        let Some(set) = next else {
+            break;
+        };
+        let found = sites
+            .iter()
+            .filter(|site| site.composed(&selections))
+            .find_map(|site| site.authored?.get(&set).copied());
+        match found {
+            Some(variant) => {
+                selections.insert(set, variant);
+                unselected.clear();
+            }
+            None => {
+                unselected.insert(set);
+            }
+        }
+    }
+
+    // Sets no composed site declares: the strongest selection, as each
+    // newly selected branch composes.
+    loop {
+        let mut changed = false;
+        for site in sites {
+            if !site.composed(&selections) {
                 continue;
             }
-            *admitted = true;
-            changed = true;
-            let Some(spec) = store.layer(source.layer_id).and_then(|layer| {
-                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
-            }) else {
-                continue;
-            };
-            let authored = match branch.first() {
-                Some((set, variant)) => spec
-                    .variant_sets
-                    .get(set)
-                    .and_then(|set_spec| set_spec.variants.get(variant))
-                    .map(|variant_spec| &variant_spec.variant_selections),
-                None => Some(&spec.variant_selections),
-            };
-            for (set, variant) in authored.into_iter().flatten() {
-                selections.entry(*set).or_insert(*variant);
+            for (set, variant) in site.authored.into_iter().flatten() {
+                if !selections.contains_key(set) && !unselected.contains(set) {
+                    selections.insert(*set, *variant);
+                    changed = true;
+                }
             }
         }
         if !changed {
             break;
         }
     }
-    for (set, variant) in authored_composed_variant_selections(store, prim_index) {
-        selections.entry(set).or_insert(variant);
-    }
     selections
+}
+
+/// The branch of `host`'s own variant sets that the variant set `set` of
+/// `spec` is nested in, innermost, as `(set, variant)`; `None` for a set
+/// declared outside those branches, or nested in different branches in
+/// different variants.
+///
+/// A set nested in a branch (`/P{a=x}{b=y}`) is declared by that branch, so
+/// OpenUSD evaluates it only once the branch composes
+/// (`_EvalNodeVariantSets` in `pxr/usd/pcp/primIndex.cpp`).
+fn nesting_branch(
+    spec: &crate::doc::PrimSpec,
+    host: PathId,
+    set: TokenId,
+) -> Option<(TokenId, TokenId)> {
+    let set_spec = spec.variant_sets.get(&set)?;
+    let mut nesting = set_spec.variants.values().map(|variant| {
+        variant
+            .outer_variant_sites
+            .iter()
+            .rev()
+            .find(|site| site.host_path == host)
+            .map(|site| (site.set, site.variant))
+    });
+    let first = nesting.next()??;
+    nesting.all(|other| other == Some(first)).then_some(first)
 }
 
 /// Applies `fallbacks` to `selections`, every authored selection of a
@@ -2126,204 +2314,76 @@ fn resolve_full_variant_selections(
 
 /// The selections of [`resolve_full_variant_selections`] before variant
 /// fallbacks apply, for callers that add weaker selections first.
+///
+/// The sites that map to `path` are laid out in the strength order their
+/// nodes take (AOUSD Core §10.4, LIVERPS): the prim's specs, then the
+/// selections authored for it inside its parent's selected branch, each
+/// inherit target with its branches, the prim's own branches, then each
+/// reference and payload target with its branches. [`evaluate_variant_sets`]
+/// resolves them as OpenUSD does, so a branch of the prim's own set that a
+/// weaker reference selects still selects the sets evaluated after it.
 fn authored_full_variant_selections(
     store: &dyn LayerStore,
     fallbacks: &VariantFallbacks,
     local_stack: &LayerStack,
     path: PathId,
 ) -> HashMap<TokenId, TokenId> {
-    let mut selections = authored_variant_selections_for_prim(store, fallbacks, local_stack, path);
-    for (set, variant) in
-        resolve_variant_child_selections_for_prim(store, fallbacks, local_stack, path)
-    {
-        selections.entry(set).or_insert(variant);
-    }
-
-    // Also gather selections from inherit targets (weaker than local, per LIVERPS).
+    let local = selection_host_specs(store, fallbacks, local_stack, path);
+    let child = resolve_variant_child_selections_for_prim(store, fallbacks, local_stack, path);
     let inherits =
         resolve_inherits_for_prim(store, fallbacks, local_stack, path, SelectionScope::Stack);
-    for inherit_target in inherits.iter().copied() {
-        let inherit_selections =
-            authored_variant_selections_for_prim(store, fallbacks, local_stack, inherit_target);
-        for (set, variant) in inherit_selections {
-            selections.entry(set).or_insert(variant);
-        }
-    }
 
-    // Gather selections introduced by selected local/inherit variant branches
-    // before consulting weaker reference and payload targets.
-    loop {
-        let mut new_selections = HashMap::new();
-        let check_paths = core::iter::once(path).chain(inherits.iter().copied());
-        for check_path in check_paths {
+    // Reference and payload targets. Internal arcs target the whole stack
+    // (AOUSD Core §10.3.2.1).
+    let mut targets: Vec<(LayerStack, PathId)> = Vec::new();
+    if let Some(&anchor) = local_stack.layers.first() {
+        let applied = |spec: &&crate::doc::PrimSpec| {
+            spec_arcs_apply(
+                store,
+                fallbacks,
+                local_stack,
+                path,
+                spec,
+                SelectionScope::Stack,
+            )
+        };
+        let arcs = |list: fn(&crate::doc::PrimSpec) -> &crate::listop::ListOp<Reference>| {
+            let mut ops = Vec::new();
             for layer_id in &local_stack.layers {
                 let Some(layer) = store.layer(*layer_id) else {
                     continue;
                 };
-                let Some(spec) = layer.prims.get(&check_path) else {
-                    continue;
-                };
-                for (set, selected_variant) in &selections {
-                    if let Some(set_spec) = spec.variant_sets.get(set)
-                        && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                    {
-                        for (inner_set, inner_variant) in &variant_spec.variant_selections {
-                            if !selections.contains_key(inner_set) {
-                                new_selections.entry(*inner_set).or_insert(*inner_variant);
-                            }
-                        }
-                    }
+                for spec in layer.prim_specs(path).filter(applied) {
+                    ops.push(anchor_internal_arcs(list(spec), *layer_id, anchor));
                 }
             }
-        }
-        if new_selections.is_empty() {
-            break;
-        }
-        selections.extend(new_selections);
-    }
-
-    // Also gather selections from reference targets (weaker). Internal arcs
-    // target the whole stack (AOUSD Core §10.3.2.1).
-    let Some(&anchor) = local_stack.layers.first() else {
-        return selections;
-    };
-    let refs = {
-        let mut ops = Vec::new();
-        for layer_id in &local_stack.layers {
-            let Some(layer) = store.layer(*layer_id) else {
+            crate::listop::resolve_list_chain::<Reference>(&[], ops)
+        };
+        let references = arcs(|spec| &spec.references);
+        let payloads = arcs(|spec| &spec.payloads);
+        for arc in references.iter().chain(&payloads) {
+            let Some(target) = lookup_reference_target_path(store, arc) else {
                 continue;
             };
-            for spec in layer.prim_specs(path) {
-                if !spec_arcs_apply(
-                    store,
-                    fallbacks,
-                    local_stack,
-                    path,
-                    spec,
-                    SelectionScope::Stack,
-                ) {
-                    continue;
-                }
-                ops.push(anchor_internal_arcs(&spec.references, *layer_id, anchor));
-            }
-        }
-        crate::listop::resolve_list_chain::<Reference>(&[], ops)
-    };
-
-    let mut ref_stacks: Vec<(LayerStack, PathId)> = Vec::new();
-    for reference in refs {
-        let ref_stack = LayerStack::gather(store, reference.layer);
-        let Some(reference_path) = lookup_reference_target_path(store, &reference) else {
-            continue;
-        };
-        let ref_selections =
-            authored_variant_selections_for_prim(store, fallbacks, &ref_stack, reference_path);
-        for (set, variant) in ref_selections {
-            selections.entry(set).or_insert(variant);
-        }
-        ref_stacks.push((ref_stack, reference_path));
-    }
-
-    loop {
-        let mut new_selections = HashMap::new();
-        for (ref_stack, ref_path) in &ref_stacks {
-            for layer_id in &ref_stack.layers {
-                let Some(layer) = store.layer(*layer_id) else {
-                    continue;
-                };
-                let Some(spec) = layer.prims.get(ref_path) else {
-                    continue;
-                };
-                for (set, selected_variant) in &selections {
-                    if let Some(set_spec) = spec.variant_sets.get(set)
-                        && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                    {
-                        for (inner_set, inner_variant) in &variant_spec.variant_selections {
-                            if !selections.contains_key(inner_set) {
-                                new_selections.entry(*inner_set).or_insert(*inner_variant);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if new_selections.is_empty() {
-            break;
-        }
-        for (set, variant) in new_selections {
-            selections.entry(set).or_insert(variant);
+            targets.push((LayerStack::gather(store, arc.layer), target));
         }
     }
 
-    // Also gather selections from payload targets (weaker than references,
-    // stronger than specializes in LIVERPS).
-    let payloads = {
-        let mut ops = Vec::new();
-        for layer_id in &local_stack.layers {
-            let Some(layer) = store.layer(*layer_id) else {
-                continue;
-            };
-            for spec in layer.prim_specs(path) {
-                if !spec_arcs_apply(
-                    store,
-                    fallbacks,
-                    local_stack,
-                    path,
-                    spec,
-                    SelectionScope::Stack,
-                ) {
-                    continue;
-                }
-                ops.push(anchor_internal_arcs(&spec.payloads, *layer_id, anchor));
-            }
-        }
-        crate::listop::resolve_list_chain::<Reference>(&[], ops)
-    };
-
-    let mut payload_stacks: Vec<(LayerStack, PathId)> = Vec::new();
-    for payload in payloads {
-        let payload_stack = LayerStack::gather(store, payload.layer);
-        let Some(payload_path) = lookup_reference_target_path(store, &payload) else {
-            continue;
-        };
-        let payload_selections =
-            authored_variant_selections_for_prim(store, fallbacks, &payload_stack, payload_path);
-        for (set, variant) in payload_selections {
-            selections.entry(set).or_insert(variant);
-        }
-        payload_stacks.push((payload_stack, payload_path));
+    let mut sites: Vec<VariantSite<'_>> = local
+        .iter()
+        .map(|spec| VariantSite::of_spec(spec, path, Vec::new()))
+        .collect();
+    sites.push(VariantSite::authored_only(&child));
+    for target in inherits.iter().copied() {
+        let specs = selection_host_specs(store, fallbacks, local_stack, target);
+        sites.extend(VariantSite::of_node(&specs, target));
     }
-
-    loop {
-        let mut new_selections = HashMap::new();
-        for (payload_stack, payload_path) in &payload_stacks {
-            for layer_id in &payload_stack.layers {
-                let Some(layer) = store.layer(*layer_id) else {
-                    continue;
-                };
-                let Some(spec) = layer.prims.get(payload_path) else {
-                    continue;
-                };
-                for (set, selected_variant) in &selections {
-                    if let Some(set_spec) = spec.variant_sets.get(set)
-                        && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                    {
-                        for (inner_set, inner_variant) in &variant_spec.variant_selections {
-                            new_selections.entry(*inner_set).or_insert(*inner_variant);
-                        }
-                    }
-                }
-            }
-        }
-        if new_selections.is_empty() {
-            break;
-        }
-        for (set, variant) in new_selections {
-            selections.entry(set).or_insert(variant);
-        }
+    sites.extend(VariantSite::branches_of_node(&local, path));
+    for (stack, target) in &targets {
+        let specs = selection_host_specs(store, fallbacks, stack, *target);
+        sites.extend(VariantSite::of_node(&specs, *target));
     }
-
-    selections
+    evaluate_variant_sets(&sites)
 }
 
 /// Resolves the variant selections authored on `prim`'s specs inside the

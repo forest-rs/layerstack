@@ -1331,6 +1331,328 @@
     }
    ],
    "errors": []
+  },
+  {
+   "root": "selection.usda",
+   "fallbacks": {},
+   "prims": [
+    {
+     "path": "/Mast",
+     "prim_stack": [
+      [
+       "selection.usda",
+       "/Mast"
+      ],
+      [
+       "selection.usda",
+       "/Mast{shape=cube}"
+      ],
+      [
+       "selection.usda",
+       "/Mast{size=small}"
+      ],
+      [
+       "selection_ref.usda",
+       "/Mast"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "scale",
+       "kind": "attribute",
+       "stack": [
+        [
+         "selection.usda",
+         "/Mast{size=small}.scale"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    },
+    {
+     "path": "/Boom",
+     "prim_stack": [
+      [
+       "selection.usda",
+       "/Boom"
+      ],
+      [
+       "selection.usda",
+       "/Boom{size=large}"
+      ],
+      [
+       "selection.usda",
+       "/Boom{shape=cube}"
+      ],
+      [
+       "selection_ref.usda",
+       "/Mast"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "scale",
+       "kind": "attribute",
+       "stack": [
+        [
+         "selection.usda",
+         "/Boom{size=large}.scale"
+        ]
+       ],
+       "targets": [],
+       "value": 2
+      }
+     ]
+    },
+    {
+     "path": "/Hull",
+     "prim_stack": [
+      [
+       "selection.usda",
+       "/Hull"
+      ],
+      [
+       "selection.usda",
+       "/Hull{shape=cube}"
+      ],
+      [
+       "selection.usda",
+       "/Hull{shape=cube}{color=blue}"
+      ],
+      [
+       "selection_ref.usda",
+       "/Hull"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "hue",
+       "kind": "attribute",
+       "stack": [
+        [
+         "selection.usda",
+         "/Hull{shape=cube}{color=blue}.hue"
+        ]
+       ],
+       "targets": [],
+       "value": 2
+      }
+     ]
+    },
+    {
+     "path": "/Keel",
+     "prim_stack": [
+      [
+       "selection.usda",
+       "/Keel"
+      ],
+      [
+       "selection.usda",
+       "/Keel{shape=cube}"
+      ],
+      [
+       "selection.usda",
+       "/Keel{shape=cube}{color=red}"
+      ],
+      [
+       "selection_ref.usda",
+       "/Hull"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "hue",
+       "kind": "attribute",
+       "stack": [
+        [
+         "selection.usda",
+         "/Keel{shape=cube}{color=red}.hue"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    },
+    {
+     "path": "/Spar",
+     "prim_stack": [
+      [
+       "selection.usda",
+       "/Spar"
+      ],
+      [
+       "selection.usda",
+       "/Spar{shape=cube}"
+      ],
+      [
+       "selection.usda",
+       "/Spar{size=small}"
+      ],
+      [
+       "selection.usda",
+       "/Spar{color=red}"
+      ],
+      [
+       "selection_ref.usda",
+       "/Spar"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "hue",
+       "kind": "attribute",
+       "stack": [
+        [
+         "selection.usda",
+         "/Spar{color=red}.hue"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      },
+      {
+       "name": "scale",
+       "kind": "attribute",
+       "stack": [
+        [
+         "selection.usda",
+         "/Spar{size=small}.scale"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    },
+    {
+     "path": "/Deck",
+     "prim_stack": [
+      [
+       "selection.usda",
+       "/Deck"
+      ],
+      [
+       "selection.usda",
+       "/Mast"
+      ],
+      [
+       "selection.usda",
+       "/Mast{shape=cube}"
+      ],
+      [
+       "selection.usda",
+       "/Mast{size=small}"
+      ],
+      [
+       "selection_ref.usda",
+       "/Mast"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "scale",
+       "kind": "attribute",
+       "stack": [
+        [
+         "selection.usda",
+         "/Mast{size=small}.scale"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    }
+   ],
+   "errors": []
+  },
+  {
+   "root": "selection_fallbacks.usda",
+   "fallbacks": {
+    "shape": [
+     "cube"
+    ],
+    "size": [
+     "large",
+     "small"
+    ]
+   },
+   "prims": [
+    {
+     "path": "/Mast",
+     "prim_stack": [
+      [
+       "selection_fallbacks.usda",
+       "/Mast"
+      ],
+      [
+       "selection_fallbacks.usda",
+       "/Mast{shape=cube}"
+      ],
+      [
+       "selection_fallbacks.usda",
+       "/Mast{size=large}"
+      ],
+      [
+       "selection_ref.usda",
+       "/Sized"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "scale",
+       "kind": "attribute",
+       "stack": [
+        [
+         "selection_fallbacks.usda",
+         "/Mast{size=large}.scale"
+        ]
+       ],
+       "targets": [],
+       "value": 2
+      }
+     ]
+    },
+    {
+     "path": "/Boom",
+     "prim_stack": [
+      [
+       "selection_fallbacks.usda",
+       "/Boom"
+      ],
+      [
+       "selection_fallbacks.usda",
+       "/Boom{shape=cube}"
+      ],
+      [
+       "selection_fallbacks.usda",
+       "/Boom{size=small}"
+      ],
+      [
+       "selection_ref.usda",
+       "/Shaped"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "scale",
+       "kind": "attribute",
+       "stack": [
+        [
+         "selection_fallbacks.usda",
+         "/Boom{size=small}.scale"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    }
+   ],
+   "errors": []
   }
  ],
  "rejected": {

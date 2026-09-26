@@ -1,0 +1,7 @@
+#usda 1.0
+
+def "Slope" (
+    payload = @./stream.usda@</Stream{v=x}Bend>
+)
+{
+}

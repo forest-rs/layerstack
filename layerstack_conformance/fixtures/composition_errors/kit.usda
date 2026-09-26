@@ -1,0 +1,45 @@
+#usda 1.0
+(
+    relocates = {
+        </Kit/Left/Parts/Part>: </Kit/Parts/Left>,
+        </Kit/Right/Parts/Part>: </Kit/Parts/Right>
+    }
+)
+
+def "Kit"
+{
+    class "Side"
+    {
+        def "Gauge"
+        {
+            int level = 1
+            add int level.connect = [
+                </Kit/Parts/Right.value>,
+                </Kit/Parts/Left.value>,
+            ]
+        }
+
+        def "Parts"
+        {
+            def "Part"
+            {
+            }
+        }
+    }
+
+    def "Left" (
+        inherits = </Kit/Side>
+    )
+    {
+    }
+
+    def "Right" (
+        inherits = </Kit/Side>
+    )
+    {
+    }
+
+    def "Parts"
+    {
+    }
+}

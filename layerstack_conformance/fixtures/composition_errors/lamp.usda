@@ -1,0 +1,8 @@
+#usda 1.0
+
+def "Lamp"
+{
+    rel glow = </Lamp>
+    int wick = 4
+    int flame = 5
+}

@@ -1,0 +1,22 @@
+#usda 1.0
+
+# A relative connection inside a variant branch is anchored at the prim
+# without its variant selection: `/Hill/Rock.y`.
+def "Hill" (
+    variants = {
+        string v = "x"
+    }
+    variantSets = ["v"]
+)
+{
+    variantSet "v" = {
+        "x" {
+            def "Rock"
+            {
+                int x
+                int x.connect = <.y>
+                int y = 1
+            }
+        }
+    }
+}

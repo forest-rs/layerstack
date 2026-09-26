@@ -1,0 +1,23 @@
+#usda 1.0
+
+def "Garden"
+{
+    int water
+    int water.connect = [</Outside.level>, </Garden.soil>]
+    int soil = 1
+    rel fence = [</Outside>, </Garden/Bed>]
+
+    def "Bed"
+    {
+    }
+}
+
+def "Plot"
+{
+    rel border = </Outside>
+}
+
+def "Outside"
+{
+    int level = 2
+}

@@ -1,0 +1,18 @@
+layerstack_schemas
+
+The tables in `src/generated` are generated from the schema definitions of
+OpenUSD 26.8 (the `generatedSchema.usda` and `plugInfo.json` files of the
+usd-core 26.8 wheel), which are distributed under the Tomorrow Open Source
+Technology License 1.0; see `LICENSE-TOST-1.0`. OpenUSD's notice follows.
+
+Universal Scene Description
+Copyright 2016 Pixar
+
+All rights reserved.
+
+This product includes software developed at:
+
+Pixar (http://www.pixar.com/).
+
+The rest of this crate is copyright the LayerStack Authors and licensed
+under Apache-2.0 OR MIT.

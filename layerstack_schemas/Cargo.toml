@@ -1,0 +1,25 @@
+[package]
+name = "layerstack_schemas"
+description = "OpenUSD's schemas (usd, usdGeom, usdShade, usdLux) as layerstack schema definitions, generated from OpenUSD's own definitions."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+# The generated tables derive from OpenUSD's schema definitions, under the
+# Tomorrow Open Source Technology License 1.0 (`LICENSE-TOST-1.0`,
+# `NOTICE`); the hand-written code is Apache-2.0 OR MIT.
+license = "(Apache-2.0 OR MIT) AND LicenseRef-TOST-1.0"
+repository.workspace = true
+readme = "README.md"
+keywords = ["usd", "openusd", "schemas", "scene-description"]
+categories = ["graphics"]
+include = ["src/**", "Cargo.toml", "README.md", "NOTICE", "LICENSE-TOST-1.0"]
+
+[features]
+default = []
+std = []
+
+[dependencies]
+layerstack = { path = "../layerstack" }
+
+[lints]
+workspace = true

@@ -303,6 +303,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "layerstack_schemagen"
+version = "0.1.0"
+dependencies = [
+ "layerstack",
+ "layerstack_usda",
+ "serde_json",
+]
+
+[[package]]
+name = "layerstack_schemas"
+version = "0.1.0"
+dependencies = [
+ "layerstack",
+]
+
+[[package]]
 name = "layerstack_usda"
 version = "0.1.0"
 dependencies = [

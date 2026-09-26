@@ -15,7 +15,11 @@
 use alloc::{string::String, vec::Vec};
 
 use crate::{
-    doc::LayerId, interner::TokenId, path::PathId, prim_index::ArcKind, property::PropertyKind,
+    doc::LayerId,
+    interner::TokenId,
+    path::{PathId, TargetPath},
+    prim_index::ArcKind,
+    property::PropertyKind,
     spec_path::SpecPath,
 };
 
@@ -59,6 +63,9 @@ pub enum CompositionError {
     /// A property spec of a different kind (attribute or relationship) than
     /// the property's strongest spec. The spec was ignored.
     InconsistentPropertyType(InconsistentPropertyType),
+    /// A relationship target or attribute connection that cannot be mapped
+    /// across the arc that brings its spec in. The path was ignored.
+    InvalidExternalTargetPath(InvalidExternalTargetPath),
 }
 
 impl CompositionError {
@@ -79,6 +86,7 @@ impl CompositionError {
             Self::OpinionAtRelocationSource(error) => Some(error.prim),
             Self::ArcToProhibitedChild(error) => Some(error.prim),
             Self::InconsistentPropertyType(error) => Some(error.prim),
+            Self::InvalidExternalTargetPath(error) => Some(error.prim),
         }
     }
 }
@@ -434,4 +442,40 @@ pub struct InconsistentPropertyType {
     pub conflicting_layer: LayerId,
     /// The ignored spec's path in that layer.
     pub conflicting_spec: SpecPath,
+}
+
+/// A relationship target or attribute connection path authored inside an
+/// arc's target that cannot be mapped into the composed namespace, found
+/// while composing the property `property` of `prim`.
+///
+/// An arc maps its target prim, and the paths beneath it, onto its
+/// destination. A reference or payload to another layer stack maps no
+/// other path. An internal reference or payload, an inherit and a
+/// specializes map every other path to itself, except a path beneath the
+/// destination, which would not map back to where it was authored. A
+/// target path that does not map is removed from the property's list edit
+/// (a deletion is dropped without an error); the rest of the property
+/// composes as normal.
+///
+/// Spec: AOUSD Core §10.3.2 (an arc maps its target's namespace onto its
+/// destination), §10.6. OpenUSD reports it as
+/// `PcpErrorInvalidExternalTargetPath` and ignores the path
+/// (`_PathTranslateCallback` in `pxr/usd/pcp/targetIndex.cpp`; the mapping
+/// is `PcpMapFunction`, with the root identity added for internal and class
+/// arcs in `pxr/usd/pcp/primIndex.cpp`).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct InvalidExternalTargetPath {
+    /// The composed prim that owns the property.
+    pub prim: PathId,
+    /// The property's name.
+    pub property: TokenId,
+    /// The target path as authored, in the namespace of the arc's target.
+    pub target: TargetPath,
+    /// The property spec that authors the path, as the property's stack
+    /// names it ([`crate::Stage::explain_property_path`]).
+    pub spec: SpecPath,
+    /// The arc the path could not be mapped across.
+    pub arc: ArcKind,
+    /// The layer of the property spec that authors the path.
+    pub layer: LayerId,
 }

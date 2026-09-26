@@ -25,7 +25,10 @@ use crate::{
         resolve_variant_branch_payloads, resolve_variant_child_references,
         resolve_variant_references_in, resolve_variant_selections_for_prim, spec_arcs_apply,
     },
-    composition_checks::{TargetSpecsCheck, drop_inconsistent_property_kinds},
+    composition_checks::{
+        ArcPathMap, Inside, Outside, TargetOwner, TargetSpecsCheck,
+        drop_inconsistent_property_kinds, map_arc_targets, target_error_applies,
+    },
     composition_error::{
         ArcToProhibitedChild, CompositionError, UnresolvedAsset, UnresolvedDefaultPrim,
     },
@@ -328,6 +331,8 @@ pub(crate) fn compose_stage(
         .into_errors()
         .into_iter()
         .filter(|error| error.prim().is_none_or(|prim| prims.contains_key(&prim)))
+        // Target path errors of specs a stronger explicit list replaces.
+        .filter(|error| target_error_applies(error, &prims))
         .collect();
     Stage::from_parts(prims, children, options.with_provenance, dependencies)
         .with_composition_errors(errors)
@@ -4796,6 +4801,8 @@ fn add_inherit_edge_opinions(
     let stage_relocates = cycles.relocations().stage();
 
     let inherited_path = store.paths().resolve(inherited_root).clone();
+    // The destination prim, onto which target paths map.
+    let base_path = store.paths().resolve(dest_root).clone();
 
     let mut remote_paths: Vec<PathId> = local_stack
         .layers
@@ -4856,6 +4863,25 @@ fn add_inherit_edge_opinions(
 
     let mut nodes = ArcNodes::new(parent, step, stage_relocates);
     record_offset_layers(deps.as_deref_mut(), &nodes.step().offset_layers, &mapping);
+    // A class maps every path outside itself to itself, except content of
+    // the inheriting prim (see `Outside::Identity`). Nested in a reference,
+    // that prim is checked in the namespace the class's specs are authored
+    // in, the reference's target namespace.
+    let class_dest = ref_remap.and_then(|(ref_dest, ref_src)| {
+        base_path
+            .strip_prefix(ref_dest)
+            .map(|rel| ref_src.join(rel))
+    });
+    let class_outside = if class_dest.is_some() {
+        Outside::Identity
+    } else {
+        targets_outside_arc(&nodes.path, true)
+    };
+    let class_relocated: Vec<(PathId, PathId)> = cycles
+        .relocation_table(store, arc_stack)
+        .iter()
+        .filter_map(|relocate| Some((relocate.target?, relocate.source)))
+        .collect();
 
     for (layer_strength_idx, layer_id) in local_stack.layers.iter().copied().enumerate() {
         let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
@@ -5023,10 +5049,33 @@ fn add_inherit_edge_opinions(
             }
             let mut value = value;
             let walk = arc_walk(&nodes.stage_relocates, &nodes.path);
-            relocate_opinion_target_paths(store, &walk, dest_root, inherited_root, &mut value);
-            // Also apply reference namespace remapping if within a reference context.
+            map_arc_targets(
+                store,
+                &mut value,
+                ArcPathMap {
+                    arc: ArcKind::Inherits,
+                    source: &inherited_path,
+                    dest: class_dest.as_ref().unwrap_or(&base_path),
+                    inside: Inside::Relocate(&walk, dest_root),
+                    outside: class_outside,
+                    relocated: &class_relocated,
+                },
+                TargetOwner {
+                    prim: dest_path_id,
+                    property: field,
+                    layer: layer_id,
+                    spec: spec_path.clone(),
+                },
+                cycles,
+            );
+            // Also apply the enclosing reference's namespace mapping, through
+            // the relocations it passes, to the paths outside the class.
             if let Some((ref_dest, ref_src)) = ref_remap {
-                remap_opinion_target_paths(store, ref_dest, ref_src, &mut value);
+                let ref_walk =
+                    arc_walk(&nodes.stage_relocates, &nodes.path[..nodes.path.len() - 1]);
+                let ref_dest = store.paths_mut().intern(ref_dest.clone());
+                let ref_src = store.paths_mut().intern(ref_src.clone());
+                relocate_opinion_target_paths(store, &ref_walk, ref_dest, ref_src, &mut value);
             }
             let key = OpinionKey {
                 node,
@@ -5313,6 +5362,31 @@ fn relocate_opinion_target_paths(
     }
 }
 
+/// What the arc at the end of `path` does with a target path authored
+/// beneath its target but outside it (see [`Outside`]): `identity` for an
+/// internal reference or payload and for class arcs, which map such a path
+/// to itself.
+///
+/// The destination is in the namespace such a path is authored in only
+/// when every arc above this one is a variant of the composed prim's own
+/// layer stack, and the arc is not implied.
+///
+/// Spec: AOUSD Core §10.3.2; OpenUSD adds the root identity to internal
+/// and class arcs (`_EvalRefOrPayloadArcs` and `_AddClassBasedArcs` in
+/// `pxr/usd/pcp/primIndex.cpp`).
+fn targets_outside_arc(path: &[ArcStep], identity: bool) -> Outside {
+    let Some((arc, above)) = path.split_last() else {
+        return Outside::IdentityUnchecked;
+    };
+    if !identity {
+        Outside::Unmapped
+    } else if !arc.implied && above.iter().all(|step| step.arc_kind == ArcKind::Variants) {
+        Outside::Identity
+    } else {
+        Outside::IdentityUnchecked
+    }
+}
+
 fn remap_target_path(
     store: &mut dyn LayerStore,
     dest_root: &crate::path::Path,
@@ -5573,6 +5647,7 @@ fn add_reference_edge_opinions(
         },
         cycles.relocations().stage(),
     );
+    let targets_outside = targets_outside_arc(&nodes.path, reference.asset.is_none());
 
     let mut remote_paths: Vec<PathId> = remote_stack
         .layers
@@ -5777,9 +5852,31 @@ fn add_reference_edge_opinions(
                                 );
                             }
                             index.add_opinion(Opinion {
-                                key,
+                                key: key.clone(),
                                 field: entry.name(),
-                                value: entry.value(),
+                                value: {
+                                    let mut value = entry.value();
+                                    map_arc_targets(
+                                        store,
+                                        &mut value,
+                                        ArcPathMap {
+                                            arc: ArcKind::References,
+                                            source: &target_root,
+                                            dest: &dest_root_path,
+                                            inside: Inside::Keep,
+                                            outside: targets_outside,
+                                            relocated: &[],
+                                        },
+                                        TargetOwner {
+                                            prim: *dest_path_id,
+                                            property: entry.name(),
+                                            layer: remote_layer_id,
+                                            spec: key.spec_path.clone(),
+                                        },
+                                        cycles,
+                                    );
+                                    value
+                                },
                                 layer_offset: ref_offset,
                             });
                         }
@@ -5796,7 +5893,25 @@ fn add_reference_edge_opinions(
         let walk = arc_walk(&nodes.stage_relocates, &nodes.path);
         for (dest_path_id, field, key, value, property_type, offset) in pending_fields {
             let mut value = value;
-            relocate_opinion_target_paths(store, &walk, dest_root, reference_path, &mut value);
+            map_arc_targets(
+                store,
+                &mut value,
+                ArcPathMap {
+                    arc: ArcKind::References,
+                    source: &target_root,
+                    dest: &dest_root_path,
+                    inside: Inside::Relocate(&walk, dest_root),
+                    outside: targets_outside,
+                    relocated: &[],
+                },
+                TargetOwner {
+                    prim: dest_path_id,
+                    property: field,
+                    layer: key.layer_id,
+                    spec: key.spec_path.clone(),
+                },
+                cycles,
+            );
             let index = out.get_mut(&dest_path_id).expect("path exists");
             if let Some(property_type) = property_type {
                 index.add_property_type(field, key.clone(), property_type);
@@ -6217,6 +6332,7 @@ fn add_payload_edge_opinions(
         },
         cycles.relocations().stage(),
     );
+    let targets_outside = targets_outside_arc(&nodes.path, reference.asset.is_none());
 
     let mut remote_paths: Vec<PathId> = remote_stack
         .layers
@@ -6310,9 +6426,31 @@ fn add_payload_edge_opinions(
                         index.add_property_type(entry.name(), key.clone(), property_type.clone());
                     }
                     index.add_opinion(Opinion {
-                        key,
+                        key: key.clone(),
                         field: entry.name(),
-                        value: entry.value(),
+                        value: {
+                            let mut value = entry.value();
+                            map_arc_targets(
+                                store,
+                                &mut value,
+                                ArcPathMap {
+                                    arc: ArcKind::Payloads,
+                                    source: &target_root,
+                                    dest: &dest_root_path,
+                                    inside: Inside::Join,
+                                    outside: targets_outside,
+                                    relocated: &[],
+                                },
+                                TargetOwner {
+                                    prim: *dest_path_id,
+                                    property: entry.name(),
+                                    layer: remote_layer_id,
+                                    spec: key.spec_path.clone(),
+                                },
+                                cycles,
+                            );
+                            value
+                        },
                         layer_offset: payload_offset,
                     });
                 }
@@ -6419,9 +6557,31 @@ fn add_payload_edge_opinions(
                                 );
                             }
                             index.add_opinion(Opinion {
-                                key,
+                                key: key.clone(),
                                 field: entry.name(),
-                                value: entry.value(),
+                                value: {
+                                    let mut value = entry.value();
+                                    map_arc_targets(
+                                        store,
+                                        &mut value,
+                                        ArcPathMap {
+                                            arc: ArcKind::Payloads,
+                                            source: &target_root,
+                                            dest: &dest_root_path,
+                                            inside: Inside::Join,
+                                            outside: targets_outside,
+                                            relocated: &[],
+                                        },
+                                        TargetOwner {
+                                            prim: *dest_path_id,
+                                            property: entry.name(),
+                                            layer: remote_layer_id,
+                                            spec: key.spec_path.clone(),
+                                        },
+                                        cycles,
+                                    );
+                                    value
+                                },
                                 layer_offset: payload_offset,
                             });
                         }
@@ -6808,6 +6968,8 @@ fn add_specializes_edge_opinions(
 
     let selection_base_path = store.paths().resolve(selection_root).clone();
     let specialized_path = store.paths().resolve(specialized_root).clone();
+    // The destination prim, onto which target paths map.
+    let base_path = store.paths().resolve(dest_root).clone();
 
     let mut remote_paths: Vec<PathId> = local_stack
         .layers
@@ -6885,6 +7047,7 @@ fn add_specializes_edge_opinions(
     // authored inside it nest under that node.
     let mut nodes = ArcNodes::new(parent, ArcStep { relocates, ..step }, stage_relocates);
     record_offset_layers(deps.as_deref_mut(), &nodes.step().offset_layers, &mapping);
+    let targets_outside = targets_outside_arc(&nodes.path, true);
 
     for (layer_strength_idx, layer_id) in local_stack.layers.iter().copied().enumerate() {
         let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
@@ -7064,7 +7227,25 @@ fn add_specializes_edge_opinions(
             }
             let mut value = value;
             let walk = arc_walk(&nodes.stage_relocates, &nodes.path);
-            relocate_opinion_target_paths(store, &walk, dest_root, specialized_root, &mut value);
+            map_arc_targets(
+                store,
+                &mut value,
+                ArcPathMap {
+                    arc: ArcKind::Specializes,
+                    source: &specialized_path,
+                    dest: &base_path,
+                    inside: Inside::Relocate(&walk, dest_root),
+                    outside: targets_outside,
+                    relocated: &[],
+                },
+                TargetOwner {
+                    prim: dest_path_id,
+                    property: field,
+                    layer: layer_id,
+                    spec: spec_path.clone(),
+                },
+                cycles,
+            );
             let key = OpinionKey {
                 node,
                 layer_strength,

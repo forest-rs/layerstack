@@ -3321,8 +3321,11 @@ fn resolve_arc_target(
     if let Some(d) = deps {
         d.add_default_prim_dependency(reference.layer, dest_root);
     }
-    let has_spec = |store: &dyn LayerStore, path: PathId| {
-        LayerStack::gather(store, reference.layer)
+    // The target layer stack as the arc reaches it, its sublayers evaluated
+    // in that context.
+    let mut has_spec = |store: &dyn LayerStore, path: PathId| {
+        cycles
+            .gather_layer_stack(store, reference.layer)
             .layers
             .iter()
             .filter_map(|id| store.layer(*id))

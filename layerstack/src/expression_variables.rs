@@ -10,8 +10,9 @@
 //! the variable expressions it meets ([`crate::variable_expression`]) with
 //! the variables of the layer stack that authors them:
 //!
-//! - a sublayer asset path, with the variables of the layer stack's root
-//!   layer ([`crate::LayerStack::gather`]);
+//! - a sublayer asset path, with the variables composed along the chain of
+//!   arcs that reaches the layer stack (`LayerStack::gather_recording`), so
+//!   one root layer reached from two contexts may gather two stacks;
 //! - a reference or payload asset path, per authoring layer, as its list op
 //!   is read and before list ops compose, with the variables composed along
 //!   the chain of arcs that reaches the authoring layer stack
@@ -431,15 +432,14 @@ pub(crate) fn walk(store: &dyn LayerStore, root: LayerId) -> Walk {
         if !seen.insert((stack_root, variables.clone())) {
             continue;
         }
-        let stack = LayerStack::gather(store, stack_root);
-        let own = composed_variables(store, &[stack_root]);
+        let stack = LayerStack::gather_recording(store, &chain, &mut Vec::new(), None);
         for layer in stack.layers.iter().filter_map(|id| store.layer(*id)) {
             for sublayer in &layer.sublayers {
                 let Some(asset) = sublayer.asset.as_deref().filter(|a| is_expression(a)) else {
                     continue;
                 };
                 let evaluated = VariableExpression::parse(asset)
-                    .evaluate(&own)
+                    .evaluate(&variables)
                     .into_string();
                 if let Ok(Some(path)) = evaluated
                     && !path.is_empty()

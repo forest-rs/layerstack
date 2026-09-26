@@ -141,19 +141,35 @@ impl ArcChain {
     /// computes a referenced layer stack's variables over those of the
     /// layer stack that references it.
     pub(crate) fn expression_stacks(&self) -> Vec<LayerId> {
-        let Some(last) = self.sites.last() else {
-            return Vec::new();
-        };
+        match self.sites.last() {
+            Some(last) => self.stacks_for(last.layer_stack),
+            None => Vec::new(),
+        }
+    }
+
+    /// The root layers of the layer stacks whose expression variables
+    /// apply to the layer stack rooted at `root`, outermost first, ending
+    /// with `root`: the chain's layer stacks up to the first site in it, or,
+    /// for a layer stack not on the chain, which an arc from the innermost
+    /// site is about to reach, all of them and then `root`.
+    ///
+    /// OpenUSD identifies a referenced layer stack with the source of the
+    /// variables that override its own
+    /// (`PcpLayerStackIdentifier::expressionVariablesOverrideSource`).
+    pub(crate) fn stacks_for(&self, root: LayerId) -> Vec<LayerId> {
         let end = self
             .sites
             .iter()
-            .position(|site| site.layer_stack == last.layer_stack)
-            .unwrap_or(0);
-        let mut stacks: Vec<LayerId> = self.sites[..=end]
+            .position(|site| site.layer_stack == root)
+            .map_or(self.sites.len(), |index| index + 1);
+        let mut stacks: Vec<LayerId> = self.sites[..end]
             .iter()
             .map(|site| site.layer_stack)
             .collect();
         stacks.dedup();
+        if stacks.last() != Some(&root) {
+            stacks.push(root);
+        }
         stacks
     }
 
@@ -341,15 +357,20 @@ impl CycleDetector {
         core::mem::take(&mut self.reads)
     }
 
-    /// Gathers the layer stack rooted at `root`, recording each sublayer it
-    /// ignores (a cycle or an unresolved asset path).
+    /// Gathers the layer stack rooted at `root`, as reached along the chain
+    /// ([`ArcChain::stacks_for`]), recording each sublayer it ignores (a
+    /// cycle or an unresolved asset path).
+    ///
+    /// Its sublayer asset path expressions evaluate with the variables
+    /// composed along that chain (see [`LayerStack::gather_recording`]).
     pub(crate) fn gather_layer_stack(
         &mut self,
         store: &dyn LayerStore,
         root: LayerId,
     ) -> LayerStack {
         let mut errors = Vec::new();
-        let stack = LayerStack::gather_recording(store, root, &mut errors, Some(&mut self.reads));
+        let chain = self.chain.stacks_for(root);
+        let stack = LayerStack::gather_recording(store, &chain, &mut errors, Some(&mut self.reads));
         for error in errors {
             self.report(error);
         }

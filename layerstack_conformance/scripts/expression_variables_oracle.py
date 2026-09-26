@@ -18,7 +18,8 @@ layer stack that authors it. A layer stack reached through a reference or
 payload composes its root layer's variables beneath those of the layer
 stack that reaches it (`PcpExpressionVariables::Compute`), so a variable
 set by the referencing layer stack wins, and one set only by a layer stack
-in between passes through. An expression that evaluates to nothing drops
+in between passes through; that holds for a referenced layer stack's own
+sublayer paths too. An expression that evaluates to nothing drops
 the arc silently; one that fails to evaluate drops it with a
 `PcpErrorVariableExpressionError`. Each layer's arcs are evaluated and
 anchored to that layer before list ops compose them, so a stronger
@@ -52,6 +53,7 @@ LAYERS = {
         string LAYER = "strata"
         bool DEEP = true
         string SEASON = "summer"
+        string COLOR = "blue"
     }
     subLayers = [
         # The sublayer path comes from a variable.
@@ -229,6 +231,22 @@ def "Lode" (
 {
 }
 
+# `paint.usda` sublayers `${COLOR}.usda` and sets COLOR to red; this layer
+# stack's blue overrides it, so the referenced layer stack holds
+# `blue.usda`.
+def "Canvas" (
+    references = @./paint.usda@
+)
+{
+}
+
+# `red.usda` on its own, so a host holds it when the override changes.
+def "Swatch" (
+    references = @./red.usda@</Paint>
+)
+{
+}
+
 # List ops compare anchored asset paths, so spellings of one asset match:
 # these deletes remove the arcs `strata.usda` and `deep/vault.usda` add.
 def "Flint" (
@@ -295,6 +313,35 @@ def "Orchard" (
             int grain = 2
         }
     }
+}
+''',
+    "paint": '''#usda 1.0
+(
+    defaultPrim = "Paint"
+    expressionVariables = {
+        string COLOR = "red"
+    }
+    subLayers = [
+        @`"./${COLOR}.usda"`@
+    ]
+)
+
+def "Paint"
+{
+}
+''',
+    "red": '''#usda 1.0
+
+over "Paint"
+{
+    int shade = 1
+}
+''',
+    "blue": '''#usda 1.0
+
+over "Paint"
+{
+    int shade = 2
 }
 ''',
     "deep/vault": '''#usda 1.0

@@ -46,7 +46,9 @@ impl LayerStack {
     /// variables of `root` ([`crate::Layer::expression_variables`]),
     /// whichever layer of the stack authors it, and resolved relative to
     /// that layer ([`LayerStore::asset_layer`]); one that evaluates to
-    /// nothing is skipped.
+    /// nothing is skipped. This is the stack as the stage's root layer
+    /// stack, or opened on its own; composition gathers a stack reached
+    /// through arcs with the variables of the stacks referencing it too.
     #[must_use]
     pub fn gather(store: &dyn LayerStore, root: LayerId) -> Self {
         Self::gather_reporting(store, root, &mut Vec::new())
@@ -74,36 +76,43 @@ impl LayerStack {
         root: LayerId,
         errors: &mut Vec<CompositionError>,
     ) -> Self {
-        Self::gather_recording(store, root, errors, None)
+        Self::gather_recording(store, &[root], errors, None)
     }
 
-    /// [`LayerStack::gather_reporting`], recording the expression
+    /// Gathers the layer stack rooted at the last layer of `chain`, as
+    /// [`LayerStack::gather_reporting`] does, recording the expression
     /// variables that sublayer asset paths read in `reads`.
     ///
-    /// A sublayer asset path that is a variable expression
+    /// `chain` holds the root layers of the layer stacks on the chain of
+    /// arcs that reaches this one, outermost first, ending with its own
+    /// root; a stack gathered on its own passes just its root. A sublayer
+    /// asset path that is a variable expression
     /// ([`SublayerEntry::is_expression`]) is evaluated with the expression
-    /// variables of `root`, whichever layer of the stack authors it, and
-    /// resolved relative to that layer ([`LayerStore::asset_layer`]). One
-    /// that evaluates to nothing is skipped, one that fails to evaluate is
-    /// reported as a [`CompositionError::VariableExpressionError`], and one
-    /// that does not resolve as an [`UnresolvedSublayer`].
+    /// variables composed along `chain`, a stronger layer stack's variables
+    /// overriding a weaker one's, whichever layer of the stack authors it,
+    /// and resolved relative to that layer ([`LayerStore::asset_layer`]).
+    /// So one root layer reached from two contexts may gather two different
+    /// stacks. One that evaluates to nothing is skipped, one that fails to
+    /// evaluate is reported as a
+    /// [`CompositionError::VariableExpressionError`], and one that does not
+    /// resolve as an [`UnresolvedSublayer`].
     ///
     /// OpenUSD: `PcpLayerStack::_BuildLayerStack`
-    /// (`pxr/usd/pcp/layerStack.cpp`), which evaluates with the variables
-    /// of the layer stack's root (and session) layer. A layer stack reached
-    /// through a reference also takes variables from the referencing layer
-    /// stack there; its sublayers here see only its root's.
+    /// (`pxr/usd/pcp/layerStack.cpp`) evaluates with the layer stack's
+    /// composed variables, `PcpExpressionVariables::Compute` over its
+    /// `PcpLayerStackIdentifier::expressionVariablesOverrideSource`, which
+    /// is part of the layer stack's identity.
     ///
     /// [`SublayerEntry::is_expression`]: crate::SublayerEntry::is_expression
     pub(crate) fn gather_recording(
         store: &dyn LayerStore,
-        root: LayerId,
+        chain: &[LayerId],
         errors: &mut Vec<CompositionError>,
         mut reads: Option<&mut VariableReads>,
     ) -> Self {
         struct Gather<'a, 'r> {
             store: &'a dyn LayerStore,
-            root: LayerId,
+            chain: &'a [LayerId],
             visiting: HashSet<LayerId>,
             layers: Vec<LayerId>,
             offsets: Vec<LayerOffset>,
@@ -118,7 +127,7 @@ impl LayerStack {
                 let asset = sub.asset.as_deref().unwrap_or_default();
                 if sub.is_unresolved() && sub.is_expression() {
                     let evaluated =
-                        evaluate(self.store, &[self.root], asset, self.reads.as_deref_mut());
+                        evaluate(self.store, self.chain, asset, self.reads.as_deref_mut());
                     let path = match evaluated {
                         Ok(path) => path?,
                         Err(error) => {
@@ -178,9 +187,15 @@ impl LayerStack {
             }
         }
 
+        let Some(&root) = chain.last() else {
+            return Self {
+                layers: Vec::new(),
+                offsets: Vec::new(),
+            };
+        };
         let mut gather = Gather {
             store,
-            root,
+            chain,
             visiting: HashSet::new(),
             layers: Vec::new(),
             offsets: Vec::new(),

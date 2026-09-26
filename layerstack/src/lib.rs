@@ -105,9 +105,10 @@ pub use array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
 pub use asset::{AssetResolveError, AssetResolver, ResolvedAsset};
 pub use composition_error::{
     ArcCycle, ArcCycleSite, ArcToProhibitedChild, CompositionError, InconsistentPropertyType,
-    InvalidAuthoredRelocation, InvalidConflictingRelocation, InvalidRelocationReason,
-    InvalidSameTargetRelocations, OpinionAtRelocationSource, RelocationConflict, SublayerCycle,
-    UnresolvedAsset, UnresolvedDefaultPrim, UnresolvedPrimPath, UnresolvedSublayer,
+    InvalidAuthoredRelocation, InvalidConflictingRelocation, InvalidExternalTargetPath,
+    InvalidRelocationReason, InvalidSameTargetRelocations, OpinionAtRelocationSource,
+    RelocationConflict, SublayerCycle, UnresolvedAsset, UnresolvedDefaultPrim, UnresolvedPrimPath,
+    UnresolvedSublayer,
 };
 pub use dependency_map::ArcDependency;
 pub use doc::{

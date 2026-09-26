@@ -595,26 +595,26 @@ impl<'a> AssembleCtx<'a> {
                 "references" => {
                     if let Some(CrateValue::ListOp(listop)) = value.value() {
                         let converted = self.convert_ref_listop(listop)?;
-                        merge_ref_listop(&mut spec.references, converted);
+                        spec.references.merge(converted);
                     }
                 }
                 // Spec: AOUSD Core §7.6.2.3.2 (`payload`).
                 "payload" => {
                     if let Some(converted) = self.convert_payload_value(value)? {
-                        merge_ref_listop(&mut spec.payloads, converted);
+                        spec.payloads.merge(converted);
                     }
                 }
                 // Spec: AOUSD Core §7.6.2.3.3 (`inheritPaths`).
                 "inheritPaths" => {
                     if let Some(CrateValue::ListOp(listop)) = value.value() {
                         let converted = self.convert_path_listop(listop)?;
-                        merge_path_listop(&mut spec.inherits, converted);
+                        spec.inherits.merge(converted);
                     }
                 }
                 "specializes" => {
                     if let Some(CrateValue::ListOp(listop)) = value.value() {
                         let converted = self.convert_path_listop(listop)?;
-                        merge_path_listop(&mut spec.specializes, converted);
+                        spec.specializes.merge(converted);
                     }
                 }
                 "variantSelection" => {
@@ -899,26 +899,26 @@ impl<'a> AssembleCtx<'a> {
                     if let Some(CrateValue::ListOp(listop)) = value.value()
                         && let Ok(converted) = self.convert_ref_listop(listop)
                     {
-                        merge_ref_listop(&mut variant.references, converted);
+                        variant.references.merge(converted);
                     }
                 }
                 "payload" => {
                     if let Ok(Some(converted)) = self.convert_payload_value(value) {
-                        merge_ref_listop(&mut variant.payloads, converted);
+                        variant.payloads.merge(converted);
                     }
                 }
                 "inheritPaths" => {
                     if let Some(CrateValue::ListOp(listop)) = value.value()
                         && let Ok(converted) = self.convert_path_listop(listop)
                     {
-                        merge_path_listop(&mut variant.inherits, converted);
+                        variant.inherits.merge(converted);
                     }
                 }
                 "specializes" => {
                     if let Some(CrateValue::ListOp(listop)) = value.value()
                         && let Ok(converted) = self.convert_path_listop(listop)
                     {
-                        merge_path_listop(&mut variant.specializes, converted);
+                        variant.specializes.merge(converted);
                     }
                 }
                 _ => {
@@ -1465,10 +1465,7 @@ impl<'a> AssembleCtx<'a> {
                     .iter()
                     .filter_map(|s| TargetPath::parse(s, self.tokens, self.paths).ok())
                     .collect();
-                Ok(ListOp {
-                    explicit: Some(target_paths),
-                    ..ListOp::default()
-                })
+                Ok(ListOp::explicit(target_paths))
             }
             _ => Ok(ListOp::default()),
         }
@@ -1539,10 +1536,7 @@ impl<'a> AssembleCtx<'a> {
                 } else {
                     Vec::new()
                 };
-                Ok(Some(ListOp {
-                    explicit: Some(explicit),
-                    ..ListOp::default()
-                }))
+                Ok(Some(ListOp::explicit(explicit)))
             }
             _ => Ok(None),
         }
@@ -2170,26 +2164,6 @@ fn i32_le(d: &[u8], idx: usize) -> i32 {
 // ---------------------------------------------------------------------------
 // ListOp merge helpers
 // ---------------------------------------------------------------------------
-
-/// Merges a source reference list op into a target.
-fn merge_ref_listop(target: &mut ListOp<Reference>, source: ListOp<Reference>) {
-    if source.explicit.is_some() {
-        target.explicit = source.explicit;
-    }
-    target.prepend.extend(source.prepend);
-    target.append.extend(source.append);
-    target.delete.extend(source.delete);
-}
-
-/// Merges a source path list op into a target.
-fn merge_path_listop(target: &mut ListOp<PathId>, source: ListOp<PathId>) {
-    if source.explicit.is_some() {
-        target.explicit = source.explicit;
-    }
-    target.prepend.extend(source.prepend);
-    target.append.extend(source.append);
-    target.delete.extend(source.delete);
-}
 
 #[cfg(test)]
 mod tests {

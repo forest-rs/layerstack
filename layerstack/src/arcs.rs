@@ -155,12 +155,7 @@ pub(crate) fn anchor_internal_arcs(
             })
             .collect()
     };
-    ListOp {
-        explicit: op.explicit.as_deref().map(anchored),
-        prepend: anchored(&op.prepend),
-        append: anchored(&op.append),
-        delete: anchored(&op.delete),
-    }
+    op.map_lists(anchored)
 }
 
 /// Where arc resolution takes the variant selections that decide whether arcs
@@ -316,12 +311,7 @@ impl ArcAuthoring<'_> {
         edit: impl Fn(&ListOp<T>, LayerId) -> ListOp<T>,
     ) -> Option<usize> {
         let adds = |op: &ListOp<T>, layer: LayerId| {
-            let op = edit(op, layer);
-            op.explicit
-                .as_ref()
-                .is_some_and(|items| items.contains(item))
-                || op.prepend.contains(item)
-                || op.append.contains(item)
+            edit(op, layer).inserted_items().any(|added| added == item)
         };
         self.stack.layers.iter().position(|id| {
             let Some(layer) = self.store.layer(*id) else {
@@ -898,10 +888,7 @@ pub(crate) fn resolve_references_for_prim_selected(
     // them.
     let discover = matches!(scope, SelectionScope::Discover);
     if discover {
-        let op = ListOp {
-            explicit: Some(branches.iter().map(|(arc, _)| arc.clone()).collect()),
-            ..ListOp::default()
-        };
+        let op = ListOp::explicit(branches.iter().map(|(arc, _)| arc.clone()).collect());
         ops.push(&[], op);
     }
 

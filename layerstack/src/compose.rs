@@ -9508,10 +9508,8 @@ mod instancing_tests {
     fn instance_descendant_keeps_contributing_declaration_type() {
         let mut store = InMemoryStore::default();
         let x = store.tokens.intern("x");
-        let reference = |layer: u64, path| ListOp {
-            explicit: Some(vec![Reference::new(LayerId(layer), path)]),
-            ..ListOp::default()
-        };
+        let reference =
+            |layer: u64, path| ListOp::explicit(vec![Reference::new(LayerId(layer), path)]);
 
         // root.usda: def "P" (references = @group@</Group>) {}
         let p = store.path("/P");

@@ -112,6 +112,11 @@ impl<A, F> OpinionKey<A, F> {
 /// An authored `explicit` list makes the other edits spurious: applying the
 /// operation yields the explicit list unchanged. This matches the `ListOps`
 /// semantics of AOUSD Core §12.4 as implemented by `layerstack`.
+///
+/// Build one from the list it authors, [`ListOp::explicit`],
+/// [`ListOp::prepended`], [`ListOp::appended`] or [`ListOp::deleted`], adding
+/// the others with the `with_` builders; read every item it names with
+/// [`ListOp::items`].
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ListOp<T> {
     /// Optional explicit list replacement. When present, the other edits in
@@ -127,11 +132,154 @@ pub struct ListOp<T> {
 
 impl<T> Default for ListOp<T> {
     fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<T> ListOp<T> {
+    /// An operation that edits nothing: applying it leaves any list as it
+    /// is.
+    #[must_use]
+    pub const fn new() -> Self {
         Self {
             explicit: None,
             prepend: Vec::new(),
             append: Vec::new(),
             delete: Vec::new(),
+        }
+    }
+
+    /// An operation that replaces the whole list with `items`.
+    #[must_use]
+    pub const fn explicit(items: Vec<T>) -> Self {
+        Self {
+            explicit: Some(items),
+            prepend: Vec::new(),
+            append: Vec::new(),
+            delete: Vec::new(),
+        }
+    }
+
+    /// An operation that moves or inserts `items` at the front, in order.
+    #[must_use]
+    pub const fn prepended(items: Vec<T>) -> Self {
+        Self {
+            explicit: None,
+            prepend: items,
+            append: Vec::new(),
+            delete: Vec::new(),
+        }
+    }
+
+    /// An operation that moves or inserts `items` at the back, in order.
+    #[must_use]
+    pub const fn appended(items: Vec<T>) -> Self {
+        Self {
+            explicit: None,
+            prepend: Vec::new(),
+            append: items,
+            delete: Vec::new(),
+        }
+    }
+
+    /// An operation that deletes `items`.
+    #[must_use]
+    pub const fn deleted(items: Vec<T>) -> Self {
+        Self {
+            explicit: None,
+            prepend: Vec::new(),
+            append: Vec::new(),
+            delete: items,
+        }
+    }
+
+    /// This operation with `items` as the items it moves or inserts at the
+    /// front.
+    #[must_use]
+    pub fn with_prepended(mut self, items: Vec<T>) -> Self {
+        self.prepend = items;
+        self
+    }
+
+    /// This operation with `items` as the items it moves or inserts at the
+    /// back.
+    #[must_use]
+    pub fn with_appended(mut self, items: Vec<T>) -> Self {
+        self.append = items;
+        self
+    }
+
+    /// This operation with `items` as the items it deletes.
+    #[must_use]
+    pub fn with_deleted(mut self, items: Vec<T>) -> Self {
+        self.delete = items;
+        self
+    }
+
+    /// Adds `other`, authored by the same spec, to this operation: its
+    /// explicit list, if any, replaces this one's, and its edits follow
+    /// this one's in each list.
+    pub fn merge(&mut self, other: Self) {
+        if other.explicit.is_some() {
+            self.explicit = other.explicit;
+        }
+        self.prepend.extend(other.prepend);
+        self.append.extend(other.append);
+        self.delete.extend(other.delete);
+    }
+
+    /// Whether the operation authors nothing: no explicit list, however
+    /// short, and no edit.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.explicit.is_none() && self.items().next().is_none()
+    }
+
+    /// Every item the operation names, in every list: the explicit list,
+    /// then the deleted, prepended and appended items.
+    pub fn items(&self) -> impl Iterator<Item = &T> {
+        self.explicit
+            .iter()
+            .flatten()
+            .chain(&self.delete)
+            .chain(&self.prepend)
+            .chain(&self.append)
+    }
+
+    /// Every item the operation can put into a list: the explicit list,
+    /// then the prepended and appended items. Deleted items only name
+    /// items a list may hold.
+    pub fn inserted_items(&self) -> impl Iterator<Item = &T> {
+        self.explicit
+            .iter()
+            .flatten()
+            .chain(&self.prepend)
+            .chain(&self.append)
+    }
+
+    /// The lists of [`Self::inserted_items`], mutably.
+    pub fn inserted_lists_mut(&mut self) -> impl Iterator<Item = &mut Vec<T>> {
+        self.explicit
+            .iter_mut()
+            .chain([&mut self.prepend, &mut self.append])
+    }
+
+    /// Every list of the operation, mutably, in the order of
+    /// [`Self::items`].
+    pub fn lists_mut(&mut self) -> impl Iterator<Item = &mut Vec<T>> {
+        self.explicit
+            .iter_mut()
+            .chain([&mut self.delete, &mut self.prepend, &mut self.append])
+    }
+
+    /// The same operation over other items: each list mapped by `f`.
+    #[must_use]
+    pub fn map_lists<U>(&self, mut f: impl FnMut(&[T]) -> Vec<U>) -> ListOp<U> {
+        ListOp {
+            explicit: self.explicit.as_deref().map(&mut f),
+            prepend: f(&self.prepend),
+            append: f(&self.append),
+            delete: f(&self.delete),
         }
     }
 }

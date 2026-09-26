@@ -279,10 +279,7 @@ fn invalid<T>(path: impl Into<String>, problem: Invalid) -> Result<T, SaveError>
 }
 
 fn is_authored<T>(op: &LayerListOp<T>) -> bool {
-    op.explicit.is_some()
-        || !op.prepend.is_empty()
-        || !op.append.is_empty()
-        || !op.delete.is_empty()
+    !op.is_empty()
 }
 
 /// Where a value is authored, which decides the types it may have.

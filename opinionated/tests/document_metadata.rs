@@ -88,10 +88,7 @@ fn authors_compose_as_unique_ordered_list() {
             Layer::Defaults,
             Address::Document(1),
             Field::Authors,
-            OpinionOp::List(ListOp {
-                explicit: Some(vec!["template"]),
-                ..ListOp::default()
-            }),
+            OpinionOp::List(ListOp::explicit(vec!["template"])),
             "defaults",
         )
         .unwrap();
@@ -100,11 +97,7 @@ fn authors_compose_as_unique_ordered_list() {
             Layer::LocalDraft,
             Address::Document(1),
             Field::Authors,
-            OpinionOp::List(ListOp {
-                prepend: vec!["alice"],
-                append: vec!["reviewer"],
-                ..ListOp::default()
-            }),
+            OpinionOp::List(ListOp::prepended(vec!["alice"]).with_appended(vec!["reviewer"])),
             "draft",
         )
         .unwrap();

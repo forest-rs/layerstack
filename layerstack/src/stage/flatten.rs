@@ -828,10 +828,7 @@ impl Flattener<'_, '_> {
                 .into_iter()
                 .map(|target| self.remap_target(target, remap))
                 .collect();
-            spec.targets = Some(ListOp {
-                explicit: Some(targets),
-                ..ListOp::default()
-            });
+            spec.targets = Some(ListOp::explicit(targets));
         }
         if declaration.kind == PropertyKind::Relationship {
             return Some(spec);
@@ -1103,10 +1100,7 @@ impl Flattener<'_, '_> {
         remap: Option<Remap>,
     ) -> FieldValue {
         fn explicit<T>(items: Vec<T>) -> ListOp<T> {
-            ListOp {
-                explicit: Some(items),
-                ..ListOp::default()
-            }
+            ListOp::explicit(items)
         }
         match resolved {
             ResolvedValue::Scalar(value) => FieldValue::Value(value),

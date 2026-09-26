@@ -128,10 +128,7 @@ fn list_ops_compose_strong_to_weak() {
             Layer::Defaults,
             Address::Editor,
             Field::EnabledFeatures,
-            OpinionOp::List(ListOp {
-                explicit: Some(vec!["search", "outline"]),
-                ..ListOp::default()
-            }),
+            OpinionOp::List(ListOp::explicit(vec!["search", "outline"])),
             "defaults",
         )
         .unwrap();
@@ -140,10 +137,7 @@ fn list_ops_compose_strong_to_weak() {
             Layer::Workspace,
             Address::Editor,
             Field::EnabledFeatures,
-            OpinionOp::List(ListOp {
-                append: vec!["lint"],
-                ..ListOp::default()
-            }),
+            OpinionOp::List(ListOp::appended(vec!["lint"])),
             "workspace",
         )
         .unwrap();
@@ -152,11 +146,7 @@ fn list_ops_compose_strong_to_weak() {
             Layer::User,
             Address::Editor,
             Field::EnabledFeatures,
-            OpinionOp::List(ListOp {
-                prepend: vec!["theme"],
-                delete: vec!["outline"],
-                ..ListOp::default()
-            }),
+            OpinionOp::List(ListOp::prepended(vec!["theme"]).with_deleted(vec!["outline"])),
             "user",
         )
         .unwrap();
@@ -192,10 +182,7 @@ fn list_block_suppresses_weaker_list_ops() {
             Layer::Defaults,
             Address::Editor,
             Field::EnabledFeatures,
-            OpinionOp::List(ListOp {
-                explicit: Some(vec!["search", "outline"]),
-                ..ListOp::default()
-            }),
+            OpinionOp::List(ListOp::explicit(vec!["search", "outline"])),
             "defaults",
         )
         .unwrap();
@@ -213,10 +200,7 @@ fn list_block_suppresses_weaker_list_ops() {
             Layer::User,
             Address::Editor,
             Field::EnabledFeatures,
-            OpinionOp::List(ListOp {
-                append: vec!["theme"],
-                ..ListOp::default()
-            }),
+            OpinionOp::List(ListOp::appended(vec!["theme"])),
             "user",
         )
         .unwrap();
@@ -536,10 +520,7 @@ fn explain_reports_scalar_winner_ignores_weaker_opinions() {
             Layer::Defaults,
             Address::Editor,
             Field::EnabledFeatures,
-            OpinionOp::List(ListOp {
-                explicit: Some(vec!["search"]),
-                ..ListOp::default()
-            }),
+            OpinionOp::List(ListOp::explicit(vec!["search"])),
             "defaults",
         )
         .unwrap();
@@ -594,10 +575,7 @@ fn explain_reports_list_contributors_and_blocked_weaker_opinions() {
             Layer::Defaults,
             Address::Editor,
             Field::EnabledFeatures,
-            OpinionOp::List(ListOp {
-                explicit: Some(vec!["search"]),
-                ..ListOp::default()
-            }),
+            OpinionOp::List(ListOp::explicit(vec!["search"])),
             "defaults",
         )
         .unwrap();
@@ -615,10 +593,7 @@ fn explain_reports_list_contributors_and_blocked_weaker_opinions() {
             Layer::User,
             Address::Editor,
             Field::EnabledFeatures,
-            OpinionOp::List(ListOp {
-                append: vec!["theme"],
-                ..ListOp::default()
-            }),
+            OpinionOp::List(ListOp::appended(vec!["theme"])),
             "user",
         )
         .unwrap();

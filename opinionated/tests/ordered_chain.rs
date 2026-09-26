@@ -60,15 +60,9 @@ fn ordered_chain_without_opinions_is_absent() {
 
 #[test]
 fn ordered_chain_composes_lists_until_block() {
-    let strong = OpinionOp::<&str, &str, &str>::List(ListOp {
-        append: vec!["theme"],
-        ..ListOp::default()
-    });
+    let strong = OpinionOp::<&str, &str, &str>::List(ListOp::appended(vec!["theme"]));
     let block = OpinionOp::Block;
-    let weak = OpinionOp::List(ListOp {
-        explicit: Some(vec!["search"]),
-        ..ListOp::default()
-    });
+    let weak = OpinionOp::List(ListOp::explicit(vec!["search"]));
     let opinions = [
         ChainOpinion {
             op: &strong,
@@ -114,10 +108,7 @@ fn ordered_chain_combines_dictionaries_until_block() {
 
 #[test]
 fn ordered_chain_report_marks_mixed_operation_kinds() {
-    let strong = OpinionOp::<&str, &str, &str>::List(ListOp {
-        append: vec!["theme"],
-        ..ListOp::default()
-    });
+    let strong = OpinionOp::<&str, &str, &str>::List(ListOp::appended(vec!["theme"]));
     let weak = OpinionOp::Set("light");
     let opinions = [
         ChainOpinion {
@@ -155,15 +146,9 @@ fn ordered_chain_report_marks_mixed_operation_kinds() {
 
 #[test]
 fn lean_and_report_resolvers_agree() {
-    let strong = OpinionOp::<&str, &str, &str>::List(ListOp {
-        append: vec!["theme"],
-        ..ListOp::default()
-    });
+    let strong = OpinionOp::<&str, &str, &str>::List(ListOp::appended(vec!["theme"]));
     let incompatible = OpinionOp::Set("light");
-    let weak = OpinionOp::List(ListOp {
-        explicit: Some(vec!["search"]),
-        ..ListOp::default()
-    });
+    let weak = OpinionOp::List(ListOp::explicit(vec!["search"]));
     let opinions = [
         ChainOpinion {
             op: &strong,

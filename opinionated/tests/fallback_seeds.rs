@@ -15,14 +15,8 @@ use opinionated::{
 
 #[test]
 fn list_chain_folds_over_fallback_seed() {
-    let strong = OpinionOp::<&str, &str, &str>::List(ListOp {
-        append: vec!["profiler"],
-        ..ListOp::default()
-    });
-    let weak = OpinionOp::List(ListOp {
-        delete: vec!["legacy"],
-        ..ListOp::default()
-    });
+    let strong = OpinionOp::<&str, &str, &str>::List(ListOp::appended(vec!["profiler"]));
+    let weak = OpinionOp::List(ListOp::deleted(vec!["legacy"]));
     let opinions = [
         ChainOpinion {
             op: &strong,
@@ -108,15 +102,9 @@ fn strongest_block_hides_fallback() {
 
 #[test]
 fn weaker_block_cuts_chain_but_stronger_edits_fold_over_seed() {
-    let strong = OpinionOp::<&str, &str, &str>::List(ListOp {
-        append: vec!["profiler"],
-        ..ListOp::default()
-    });
+    let strong = OpinionOp::<&str, &str, &str>::List(ListOp::appended(vec!["profiler"]));
     let block = OpinionOp::Block;
-    let weak = OpinionOp::List(ListOp {
-        append: vec!["legacy"],
-        ..ListOp::default()
-    });
+    let weak = OpinionOp::List(ListOp::appended(vec!["legacy"]));
     let opinions = [
         ChainOpinion {
             op: &strong,
@@ -145,10 +133,7 @@ fn weaker_block_cuts_chain_but_stronger_edits_fold_over_seed() {
 
 #[test]
 fn mismatched_fallback_shape_is_ignored() {
-    let strong = OpinionOp::<&str, &str, &str>::List(ListOp {
-        append: vec!["profiler"],
-        ..ListOp::default()
-    });
+    let strong = OpinionOp::<&str, &str, &str>::List(ListOp::appended(vec!["profiler"]));
     let opinions = [ChainOpinion {
         op: &strong,
         provenance: &"user",
@@ -174,10 +159,7 @@ fn composer_resolves_list_field_over_fallback() {
             "user",
             "editor",
             "panels",
-            OpinionOp::List(ListOp {
-                append: vec!["profiler"],
-                ..ListOp::default()
-            }),
+            OpinionOp::List(ListOp::appended(vec!["profiler"])),
             "user-layer",
         )
         .unwrap();

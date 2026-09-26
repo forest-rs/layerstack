@@ -182,10 +182,7 @@ fn render_reference(reference: &Reference, names: Names<'_>) -> String {
 }
 
 fn is_empty_list<T>(list: &ListOp<T>) -> bool {
-    list.explicit.is_none()
-        && list.prepend.is_empty()
-        && list.append.is_empty()
-        && list.delete.is_empty()
+    list.is_empty()
 }
 
 fn render_arcs(

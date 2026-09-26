@@ -60,8 +60,6 @@
 //! # Not supported
 //!
 //! - Relocates combined with implied classes ([`Cause::Relocates`]).
-//! - Variant branches of different sets at one site are not ordered by
-//!   their sets ([`Cause::VariantSetOrder`]).
 //! - Implied classes in population and variant selection
 //!   ([`Cause::ImpliedClasses`]).
 //! - One site per arc path ([`Cause::CollapsedNodes`]).
@@ -500,11 +498,6 @@ enum Cause {
     /// selections of an arc's target are resolved before the classes
     /// implied across that arc are known.
     ImpliedClasses,
-    /// Variant branches of different variant sets hosted at one site rank
-    /// as one node, their opinions interleaving by layer and spec path,
-    /// while OpenUSD ranks them in the order of the site's variant sets
-    /// (`PcpCompareSiblingNodeStrength` compares `GetSiblingNumAtOrigin`).
-    VariantSetOrder,
     // Missing sources or extra opinions.
     /// The variant sets of a site that an arc authored on a namespace
     /// ancestor reaches are selected when that arc is expanded, before the
@@ -773,21 +766,21 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "TrickyVariantAncestralSelection_root",
-        causes: &[C::AncestralArcs, C::VariantSetOrder],
+        causes: &[C::AncestralArcs],
         prims: 1,
         props: 0,
         values: 0,
-        diffs: &[D::MissingSite, D::Order],
-        reason: "`/Root/B/C` selects the variants of `ref2.usd /A/B/C` and `/B/C`, reached through its ancestors' references, before its index is complete, so it misses their `{v1=C}` and `{v2=Z}`, and ranks `ref2.usd /C{v2=Z}` before `{v1=C}`",
+        diffs: &[D::MissingSite],
+        reason: "`/Root/B/C` selects the variants of `ref2.usd /A/B/C` and `/B/C`, reached through its ancestors' references, before its index is complete, so it misses their `{v1=C}` and `{v2=Z}`",
     },
     Known {
         fixture: "TrickyVariantIndependentSelection_root",
-        causes: &[C::VariantSpecs, C::VariantSetOrder],
+        causes: &[C::VariantSpecs],
         prims: 1,
         props: 0,
         values: 0,
-        diffs: &[D::MissingSite, D::Order],
-        reason: "`/Model` misses the `transformVariant` branches of the weaker references to `ref.usd`, and ranks `{pin=test}` before `{transformVariant=a}`",
+        diffs: &[D::MissingSite],
+        reason: "`/Model` misses the `transformVariant` branches of the weaker references to `ref.usd`",
     },
     Known {
         fixture: "TypicalReferenceToRiggedModel_root",

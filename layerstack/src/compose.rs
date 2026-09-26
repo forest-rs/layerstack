@@ -3171,6 +3171,7 @@ impl ArcStep {
         dest: PathId,
         cursor: &mut PathCursor,
     ) -> Option<NodeArc> {
+        let mut sibling_index = self.sibling_index;
         let (site, namespace_depth) = match self.target {
             StepTarget::Namespace {
                 dest_root,
@@ -3194,6 +3195,8 @@ impl ArcStep {
                     return None;
                 }
                 cursor.variants.push(site);
+                sibling_index = declared_variant_set_index(store, self.layer_stack, site);
+                let paths = store.paths();
                 let site =
                     SpecPath::from_variant_selection_sites(cursor.prim, &cursor.variants, paths);
                 if let StepTarget::LocalVariant(local) = self.target {
@@ -3210,7 +3213,7 @@ impl ArcStep {
             layer_stack: self.layer_stack,
             site,
             namespace_depth,
-            sibling_index: self.sibling_index,
+            sibling_index,
             implied: self.implied,
             skips_duplicates: self.skips_duplicates,
         })
@@ -3240,6 +3243,43 @@ fn map_namespace(
         }
         None => target_root,
     }
+}
+
+/// The position of `site`'s variant set among the variant sets its host
+/// declares (`variantSets`, [`crate::doc::PrimSpec::variant_set_order`]) in
+/// the layer stack rooted at `layer_stack`, strongest layer first, which
+/// ranks the branches of different sets at one site; sets declared nowhere
+/// follow every declared one.
+///
+/// Spec: AOUSD Core §10.3.2.5 (variant sets are evaluated in the order of
+/// the `variantSetNames` list op). OpenUSD: `PcpCompareSiblingNodeStrength`
+/// compares variant siblings by `GetSiblingNumAtOrigin`, the set's index in
+/// `PcpComposeSiteVariantSets` (`pxr/usd/pcp/strengthOrdering.cpp`,
+/// `_AddVariantArc` in `pxr/usd/pcp/primIndex.cpp`).
+fn declared_variant_set_index(
+    store: &dyn LayerStore,
+    layer_stack: LayerId,
+    site: VariantSelectionSite,
+) -> u16 {
+    let mut declared: Vec<TokenId> = Vec::new();
+    for layer in LayerStack::gather(store, layer_stack)
+        .layers
+        .iter()
+        .filter_map(|id| store.layer(*id))
+    {
+        for spec in layer.prim_specs(site.host_path) {
+            for set in &spec.variant_set_order {
+                if !declared.contains(set) {
+                    declared.push(*set);
+                }
+            }
+        }
+    }
+    let index = declared
+        .iter()
+        .position(|set| *set == site.set)
+        .unwrap_or(declared.len());
+    u16::try_from(index).unwrap_or(u16::MAX)
 }
 
 /// Adds the nodes of `steps` beneath `cursor` in the graph of the composed

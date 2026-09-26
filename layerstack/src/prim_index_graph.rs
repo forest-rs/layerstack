@@ -386,13 +386,11 @@ impl PrimIndexGraph {
     /// their origins sit. Specializes rank by their origins as
     /// [`Self::cmp_specializes`] describes.
     ///
-    /// Siblings that compare equal (the branches of different variant sets)
-    /// rank as one node, and their opinions interleave by layer strength.
+    /// The branches of different variant sets at one site rank by their
+    /// sets' declared order, which their sibling index carries.
     ///
     /// Spec: AOUSD Core §10.4. OpenUSD: `PcpCompareSiblingNodeStrength` in
     /// `pxr/usd/pcp/strengthOrdering.cpp`.
-    // TODO(graph): VariantSetOrder. Variant nodes carry their variant set's
-    // position; then no two siblings compare equal.
     fn cmp_siblings(&self, a: NodeId, b: NodeId) -> Ordering {
         let (node_a, node_b) = (&self.nodes[a.index()], &self.nodes[b.index()]);
         let (arc_a, arc_b) = (&node_a.arc, &node_b.arc);

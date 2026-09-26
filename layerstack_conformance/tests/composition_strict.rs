@@ -501,9 +501,7 @@ enum Cause {
     /// `_EvalImpliedClasses`).
     /// Layerstack implies inherits that way, but the variant selections of
     /// an arc's target are resolved before the classes implied across that
-    /// arc are known, and of two nodes reaching one class site it keeps the
-    /// stronger, where OpenUSD keeps the one it adds first: an implied
-    /// class's origin comes before the class implied from it.
+    /// arc are known.
     ImpliedClasses,
     // Missing sources or extra opinions.
     /// The variant sets of a site that an arc authored on a namespace
@@ -681,15 +679,6 @@ const KNOWN: &[Known] = &[
         reason: "the subroot reference to `groups.usd /Groups/CrowdGroup/Char` misses the class `_class_Char` of its relocation source's namespace",
     },
     Known {
-        fixture: "TrickyNestedClasses4_root",
-        causes: &[C::ImpliedClasses],
-        prims: 2,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "`ref.usd /CharRig/_Class_ToesRig/_Class_Toe` is kept beneath the class implied onto `/Rig/{Sym,L}ToesRig/ThumbToeLOCALRig`, not beneath the inherit `root.usd /Rig/_Class_ToesRig/ThumbToeLOCALRig` authors, so it outranks that site",
-    },
-    Known {
         fixture: "TrickyVariantAncestralSelection_root",
         causes: &[C::AncestralArcs],
         prims: 1,
@@ -706,15 +695,6 @@ const KNOWN: &[Known] = &[
         values: 1,
         diffs: &[D::MissingPrim, D::MissingSite, D::ExtraSite],
         reason: "implied `root.usd /Class` selects `pin=latest` in OpenUSD; here `mcat.usd`'s `pin=stable` wins",
-    },
-    Known {
-        fixture: "bug69932_root",
-        causes: &[C::ImpliedClasses],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::Order],
-        reason: "as in `TrickyNestedClasses4`, `Pigeon_bodyrig.usd /CharRig/Rig/ToesRig/_Class_ToesRig/_Class_Toe` is kept beneath the class implied onto `/Pigeon/Rig/ToesRig/LToesRig/ThumbToeLOCALRig`, so it outranks `Pigeon_rig.usd /Pigeon/Rig/ToesRig/_Class_ToesRig/ThumbToeLOCALRig`",
     },
 ];
 

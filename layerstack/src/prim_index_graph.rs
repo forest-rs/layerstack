@@ -554,6 +554,54 @@ impl PrimIndexGraph {
         beneath(a, b) || beneath(b, a)
     }
 
+    /// `true` when OpenUSD adds `a` to the prim index before `b` because
+    /// `b` lies beneath a class implied from a node whose subtree holds `a`,
+    /// outside that subtree's variant branches.
+    ///
+    /// A class node is added with the recursive index of its site, every
+    /// arc but the variant branches at once, and its implied class is added
+    /// after it, by the parent's `EvalImpliedClasses` task: so every node of
+    /// the origin's subtree outside a variant branch comes before the
+    /// implied class and all beneath it. This holds through a chain of
+    /// origins, as each implied class comes after its own origin's subtree.
+    ///
+    /// OpenUSD: `_AddArc` (`includeAncestralOpinions`), `_EvalImpliedClasses`
+    /// and `Task::PriorityOrder` in `pxr/usd/pcp/primIndex.cpp`.
+    pub(crate) fn implied_after(&self, a: NodeId, b: NodeId) -> bool {
+        // `a`'s ancestors up to the first variant branch: the nodes whose
+        // recursive index adds `a`.
+        let mut holders = Vec::new();
+        let mut cursor = Some(a);
+        while let Some(node) = cursor {
+            holders.push(node);
+            let entry = &self.nodes[node.index()];
+            if entry.arc.arc_kind == ArcKind::Variants {
+                break;
+            }
+            cursor = entry.parent;
+        }
+        let mut pending = alloc::vec![b];
+        let mut seen = Vec::new();
+        while let Some(node) = pending.pop() {
+            let mut cursor = Some(node);
+            while let Some(current) = cursor {
+                let entry = &self.nodes[current.index()];
+                if entry.arc.implied
+                    && let Some(origin) = entry.origin
+                    && !seen.contains(&origin)
+                {
+                    if holders.contains(&origin) {
+                        return true;
+                    }
+                    seen.push(origin);
+                    pending.push(origin);
+                }
+                cursor = entry.parent;
+            }
+        }
+        false
+    }
+
     /// How far a node is below the prim its arc is authored on.
     ///
     /// OpenUSD: `PcpNodeRef::GetDepthBelowIntroduction`.
@@ -965,6 +1013,44 @@ mod tests {
             Some(NodeId(4))
         );
         assert_order(&graph, &[0, 7, 6, 5, 1, 3, 2, 4]);
+    }
+
+    #[test]
+    fn implied_classes_come_after_their_origins_subtrees() {
+        // OpenUSD adds a class node with its recursive index, then implies
+        // it (`_AddArc`, `_EvalImpliedClasses`): the class `2`'s subtree
+        // comes before its implied class `5` and everything beneath it,
+        // except the variant branch `8`, which is selected last.
+        let in_stack = |layer_stack, arc_kind| NodeArc {
+            layer_stack: LayerId(layer_stack),
+            ..arc(arc_kind, 1, 0)
+        };
+        let mut graph = graph(vec![
+            (0, in_stack(1, ArcKind::Inherits)),
+            (1, in_stack(2, ArcKind::Inherits)),
+            (2, in_stack(3, ArcKind::Inherits)),
+            (3, in_stack(4, ArcKind::References)),
+            (
+                0,
+                NodeArc {
+                    implied: true,
+                    ..in_stack(5, ArcKind::Inherits)
+                },
+            ),
+            (5, in_stack(6, ArcKind::Inherits)),
+            (6, in_stack(4, ArcKind::References)),
+            (2, in_stack(7, ArcKind::Variants)),
+            (8, in_stack(8, ArcKind::References)),
+        ]);
+        graph.set_origin(NodeId(5), NodeId(2));
+        let after = |a, b| graph.implied_after(NodeId(a), NodeId(b));
+        assert!(after(4, 7));
+        assert!(after(2, 5));
+        assert!(after(3, 6));
+        assert!(!after(7, 4));
+        assert!(!after(5, 2));
+        assert!(!after(9, 7));
+        assert!(!after(1, 7));
     }
 
     #[test]

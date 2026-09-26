@@ -359,6 +359,219 @@
      "/_class_Sedge/Sprout"
     ]
    ]
+  },
+  {
+   "path": "/_class_Bough",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Bough"
+    ],
+    [
+     "bough.usda",
+     "/Bough"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Bough/_class_Twig",
+   "prim_stack": [
+    [
+     "bough.usda",
+     "/Bough/_class_Twig"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Bough/_class_Twig/Leaf",
+   "prim_stack": [
+    [
+     "bough.usda",
+     "/Bough/_class_Twig/Leaf"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Bough/SymTwig",
+   "prim_stack": [
+    [
+     "bough.usda",
+     "/Bough/SymTwig"
+    ],
+    [
+     "bough.usda",
+     "/Bough/_class_Twig"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Bough/SymTwig/Leaf",
+   "prim_stack": [
+    [
+     "bough.usda",
+     "/Bough/_class_Twig/Leaf"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Bough/LeftTwig",
+   "prim_stack": [
+    [
+     "bough.usda",
+     "/Bough/LeftTwig"
+    ],
+    [
+     "bough.usda",
+     "/Bough/SymTwig"
+    ],
+    [
+     "bough.usda",
+     "/Bough/_class_Twig"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Bough/LeftTwig/Leaf",
+   "prim_stack": [
+    [
+     "bough.usda",
+     "/Bough/_class_Twig/Leaf"
+    ]
+   ]
+  },
+  {
+   "path": "/Branch",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Branch"
+    ],
+    [
+     "root.usda",
+     "/_class_Bough"
+    ],
+    [
+     "bough.usda",
+     "/Bough"
+    ]
+   ]
+  },
+  {
+   "path": "/Branch/_class_Twig",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Branch/_class_Twig"
+    ],
+    [
+     "bough.usda",
+     "/Bough/_class_Twig"
+    ]
+   ]
+  },
+  {
+   "path": "/Branch/_class_Twig/Leaf",
+   "prim_stack": [
+    [
+     "bough.usda",
+     "/Bough/_class_Twig/Leaf"
+    ]
+   ]
+  },
+  {
+   "path": "/Branch/_class_Twig/Bud",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Branch/_class_Twig/Bud"
+    ],
+    [
+     "bough.usda",
+     "/Bough/_class_Twig/Leaf"
+    ]
+   ]
+  },
+  {
+   "path": "/Branch/SymTwig",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Branch/_class_Twig"
+    ],
+    [
+     "bough.usda",
+     "/Bough/SymTwig"
+    ],
+    [
+     "bough.usda",
+     "/Bough/_class_Twig"
+    ]
+   ]
+  },
+  {
+   "path": "/Branch/SymTwig/Leaf",
+   "prim_stack": [
+    [
+     "bough.usda",
+     "/Bough/_class_Twig/Leaf"
+    ]
+   ]
+  },
+  {
+   "path": "/Branch/SymTwig/Bud",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Branch/_class_Twig/Bud"
+    ],
+    [
+     "bough.usda",
+     "/Bough/_class_Twig/Leaf"
+    ]
+   ]
+  },
+  {
+   "path": "/Branch/LeftTwig",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Branch/_class_Twig"
+    ],
+    [
+     "bough.usda",
+     "/Bough/LeftTwig"
+    ],
+    [
+     "bough.usda",
+     "/Bough/SymTwig"
+    ],
+    [
+     "bough.usda",
+     "/Bough/_class_Twig"
+    ]
+   ]
+  },
+  {
+   "path": "/Branch/LeftTwig/Leaf",
+   "prim_stack": [
+    [
+     "bough.usda",
+     "/Bough/_class_Twig/Leaf"
+    ]
+   ]
+  },
+  {
+   "path": "/Branch/LeftTwig/Bud",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Branch/_class_Twig/Bud"
+    ],
+    [
+     "bough.usda",
+     "/Bough/_class_Twig/Leaf"
+    ]
+   ]
   }
  ],
  "values": {
@@ -385,6 +598,24 @@
   "/_class_Reed/Sprout.tint": 1,
   "/_class_Sedge/Sprout.tint": 2,
   "/Marsh/Sprout.tint": 1,
-  "/Shore.tint": 1
+  "/Shore.tint": 1,
+  "/_class_Bough/_class_Twig/Leaf.size": 1,
+  "/_class_Bough/_class_Twig/Leaf.vein": 1,
+  "/_class_Bough/SymTwig/Leaf.size": 1,
+  "/_class_Bough/SymTwig/Leaf.vein": 1,
+  "/_class_Bough/LeftTwig/Leaf.size": 1,
+  "/_class_Bough/LeftTwig/Leaf.vein": 1,
+  "/Branch/_class_Twig/Leaf.size": 1,
+  "/Branch/_class_Twig/Leaf.vein": 1,
+  "/Branch/_class_Twig/Bud.size": 2,
+  "/Branch/_class_Twig/Bud.vein": 1,
+  "/Branch/SymTwig/Leaf.size": 1,
+  "/Branch/SymTwig/Leaf.vein": 1,
+  "/Branch/SymTwig/Bud.size": 2,
+  "/Branch/SymTwig/Bud.vein": 1,
+  "/Branch/LeftTwig/Leaf.size": 1,
+  "/Branch/LeftTwig/Leaf.vein": 1,
+  "/Branch/LeftTwig/Bud.size": 2,
+  "/Branch/LeftTwig/Bud.vein": 1
  }
 }

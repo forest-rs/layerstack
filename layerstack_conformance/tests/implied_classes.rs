@@ -27,6 +27,12 @@
 //!   implied beneath `/Bank`'s reference from `bed.usda`; the implied class
 //!   keeps its origin, so `/Bank`'s authored inherit outranks it. `/Shore`
 //!   is the same case with the classes declared in the other order.
+//! - `/Branch/SymTwig/Bud` and `/Branch/LeftTwig/Bud` reach
+//!   `bough.usda /Bough/_class_Twig/Leaf` beneath the inherit
+//!   `/Branch/_class_Twig/Bud` authors and beneath the class implied from
+//!   it. OpenUSD adds an implied class after its origin's subtree and skips
+//!   the site the second time, so the leaf stays beneath the authored
+//!   inherit and ranks after `Bud`.
 //!
 //! Spec: AOUSD Core §10.4.2.4 (implied class arcs); OpenUSD
 //! `_EvalImpliedClasses` in `pxr/usd/pcp/primIndex.cpp`.

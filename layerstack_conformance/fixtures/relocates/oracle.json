@@ -872,6 +872,321 @@
      "/Crew/_class_Sailor"
     ]
    ]
+  },
+  {
+   "path": "/Belltower",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Belltower"
+    ],
+    [
+     "tower.usda",
+     "/Tower"
+    ]
+   ]
+  },
+  {
+   "path": "/Belltower/Floor",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Belltower/Floor"
+    ],
+    [
+     "root.usda",
+     "/Belltower/Floor{tone=low}"
+    ],
+    [
+     "tower.usda",
+     "/Tower/Floor"
+    ]
+   ]
+  },
+  {
+   "path": "/Belltower/Bell",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Belltower/Floor{tone=low}Bell"
+    ],
+    [
+     "tower.usda",
+     "/Tower/Floor/Bell"
+    ]
+   ]
+  },
+  {
+   "path": "/Belltower/Bell/Clapper",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Belltower/Floor{tone=low}Bell/Clapper"
+    ],
+    [
+     "tower.usda",
+     "/Tower/Floor/Bell/Clapper"
+    ]
+   ]
+  },
+  {
+   "path": "/Belltower/Ringer",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Belltower/Ringer"
+    ],
+    [
+     "root.usda",
+     "/Belltower/Floor{tone=low}Bell/Clapper"
+    ],
+    [
+     "tower.usda",
+     "/Tower/Floor/Bell/Clapper"
+    ]
+   ]
+  },
+  {
+   "path": "/Oven",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Oven"
+    ],
+    [
+     "kiln.usda",
+     "/Kiln"
+    ],
+    [
+     "clay.usda",
+     "/Clay"
+    ]
+   ]
+  },
+  {
+   "path": "/Oven/Chamber",
+   "prim_stack": [
+    [
+     "kiln.usda",
+     "/Kiln/Chamber"
+    ],
+    [
+     "kiln.usda",
+     "/Kiln/Chamber{heat=high}"
+    ],
+    [
+     "glaze.usda",
+     "/Glaze"
+    ],
+    [
+     "clay.usda",
+     "/Clay/Chamber"
+    ]
+   ]
+  },
+  {
+   "path": "/Oven/Shelf",
+   "prim_stack": [
+    [
+     "kiln.usda",
+     "/Kiln/Chamber{heat=high}Tray"
+    ],
+    [
+     "glaze.usda",
+     "/Glaze/Tray"
+    ],
+    [
+     "clay.usda",
+     "/Clay/Chamber/Tray"
+    ]
+   ]
+  },
+  {
+   "path": "/Oven/Shelf/Pot",
+   "prim_stack": [
+    [
+     "kiln.usda",
+     "/Kiln/Chamber{heat=high}Tray/Pot"
+    ],
+    [
+     "clay.usda",
+     "/Clay/Chamber/Tray/Pot"
+    ]
+   ]
+  },
+  {
+   "path": "/Forge",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Forge"
+    ],
+    [
+     "root.usda",
+     "/Oven"
+    ],
+    [
+     "kiln.usda",
+     "/Kiln"
+    ],
+    [
+     "clay.usda",
+     "/Clay"
+    ]
+   ]
+  },
+  {
+   "path": "/Forge/Chamber",
+   "prim_stack": [
+    [
+     "kiln.usda",
+     "/Kiln/Chamber"
+    ],
+    [
+     "kiln.usda",
+     "/Kiln/Chamber{heat=high}"
+    ],
+    [
+     "glaze.usda",
+     "/Glaze"
+    ],
+    [
+     "clay.usda",
+     "/Clay/Chamber"
+    ]
+   ]
+  },
+  {
+   "path": "/Forge/Shelf",
+   "prim_stack": [
+    [
+     "kiln.usda",
+     "/Kiln/Chamber{heat=high}Tray"
+    ],
+    [
+     "glaze.usda",
+     "/Glaze/Tray"
+    ],
+    [
+     "clay.usda",
+     "/Clay/Chamber/Tray"
+    ]
+   ]
+  },
+  {
+   "path": "/Forge/Shelf/Pot",
+   "prim_stack": [
+    [
+     "kiln.usda",
+     "/Kiln/Chamber{heat=high}Tray/Pot"
+    ],
+    [
+     "clay.usda",
+     "/Clay/Chamber/Tray/Pot"
+    ]
+   ]
+  },
+  {
+   "path": "/Stove",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Stove"
+    ],
+    [
+     "kiln.usda",
+     "/Kiln"
+    ],
+    [
+     "clay.usda",
+     "/Clay"
+    ]
+   ]
+  },
+  {
+   "path": "/Stove/Chamber",
+   "prim_stack": [
+    [
+     "kiln.usda",
+     "/Kiln/Chamber"
+    ],
+    [
+     "kiln.usda",
+     "/Kiln/Chamber{heat=high}"
+    ],
+    [
+     "glaze.usda",
+     "/Glaze"
+    ],
+    [
+     "clay.usda",
+     "/Clay/Chamber"
+    ]
+   ]
+  },
+  {
+   "path": "/Stove/Shelf",
+   "prim_stack": [
+    [
+     "kiln.usda",
+     "/Kiln/Chamber{heat=high}Tray"
+    ],
+    [
+     "glaze.usda",
+     "/Glaze/Tray"
+    ],
+    [
+     "clay.usda",
+     "/Clay/Chamber/Tray"
+    ]
+   ]
+  },
+  {
+   "path": "/Stove/Shelf/Pot",
+   "prim_stack": [
+    [
+     "kiln.usda",
+     "/Kiln/Chamber{heat=high}Tray/Pot"
+    ],
+    [
+     "clay.usda",
+     "/Clay/Chamber/Tray/Pot"
+    ]
+   ]
+  },
+  {
+   "path": "/Rack",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Rack"
+    ],
+    [
+     "kiln.usda",
+     "/Kiln/Chamber{heat=high}Tray"
+    ],
+    [
+     "glaze.usda",
+     "/Glaze/Tray"
+    ],
+    [
+     "clay.usda",
+     "/Clay/Chamber/Tray"
+    ]
+   ]
+  },
+  {
+   "path": "/Rack/Pot",
+   "prim_stack": [
+    [
+     "kiln.usda",
+     "/Kiln/Chamber{heat=high}Tray/Pot"
+    ],
+    [
+     "clay.usda",
+     "/Clay/Chamber/Tray/Pot"
+    ]
+   ]
   }
  ],
  "values": {
@@ -930,7 +1245,22 @@
   "/Chain_2/Tail_2/Bow.loops": 1,
   "/Deck/Sailor.age": 1,
   "/Deck/Sailor.rank": 2,
-  "/Deck/Sailor.watch": 2
+  "/Deck/Sailor.watch": 2,
+  "/Belltower/Bell.pitch": 1,
+  "/Belltower/Bell/Clapper.weight": 1,
+  "/Belltower/Ringer.weight": 1,
+  "/Oven/Shelf.coat": 3,
+  "/Oven/Shelf.temp": 7,
+  "/Oven/Shelf/Pot.temp": 7,
+  "/Forge/Shelf.coat": 3,
+  "/Forge/Shelf.temp": 7,
+  "/Forge/Shelf/Pot.temp": 7,
+  "/Stove/Shelf.coat": 3,
+  "/Stove/Shelf.temp": 7,
+  "/Stove/Shelf/Pot.temp": 7,
+  "/Rack.coat": 3,
+  "/Rack.temp": 7,
+  "/Rack/Pot.temp": 7
  },
  "targets": {
   "/Robot.debug": [
@@ -944,7 +1274,17 @@
   ],
   "/Crate/Parts.gear": [
    "/Crate/Gear"
-  ]
+  ],
+  "/Oven/Shelf.holds": [
+   "/Oven/Chamber/Tray/Pot"
+  ],
+  "/Forge/Shelf.holds": [
+   "/Forge/Chamber/Tray/Pot"
+  ],
+  "/Stove/Shelf.holds": [
+   "/Stove/Chamber/Tray/Pot"
+  ],
+  "/Rack.holds": []
  },
  "errors": [
   {
@@ -958,6 +1298,18 @@
   {
    "kind": "ArcToProhibitedChild",
    "prim": "/StaleWrist"
+  },
+  {
+   "kind": "InvalidExternalTargetPath",
+   "prim": "/Rack"
+  },
+  {
+   "kind": "OpinionAtRelocationSource",
+   "prim": "/Belltower/Bell"
+  },
+  {
+   "kind": "OpinionAtRelocationSource",
+   "prim": "/Belltower/Ringer"
   },
   {
    "kind": "OpinionAtRelocationSource",

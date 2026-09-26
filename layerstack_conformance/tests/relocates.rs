@@ -62,6 +62,19 @@
 //!   `/Deck/Sailor` still composes the source's ancestral opinions, with
 //!   the class the sailor inherits and the class implied from it into
 //!   `fleet.usda`.
+//! - `/Belltower/Floor/Bell` is relocated to `/Belltower/Bell`: the
+//!   variant branch `/Belltower/Floor` selects authors ancestral opinions
+//!   of the source, which compose at the target, while the source's own
+//!   spec and variant branch are ignored. `/Belltower/Ringer` inherits
+//!   beneath the relocated prim. That is the stage's own relocation.
+//! - `kiln.usda` relocates `/Kiln/Chamber/Tray`, which its reference to
+//!   `clay.usda` brings, to `/Kiln/Shelf`, and authors opinions at the
+//!   source inside the variant branch `/Kiln/Chamber` selects, which also
+//!   references `glaze.usda`. Every arc reaching the relocated tray
+//!   composes both: `/Oven` references `/Kiln`, `/Forge` references
+//!   `/Oven`, `/Stove` payloads `/Kiln`, and `/Rack` references the
+//!   relocated `/Kiln/Shelf`. Their target paths map through the arcs above
+//!   the relocate node only; `/Rack`'s is outside its target and reported.
 //!
 //! Composition errors are compared by kind and the composed prim whose
 //! prim index reports them.
@@ -286,6 +299,7 @@ fn error_kind(error: &CompositionError) -> &'static str {
         CompositionError::InvalidAuthoredRelocation(_) => "InvalidAuthoredRelocation",
         CompositionError::InvalidConflictingRelocation(_) => "InvalidConflictingRelocation",
         CompositionError::InvalidSameTargetRelocations(_) => "InvalidSameTargetRelocations",
+        CompositionError::InvalidExternalTargetPath(_) => "InvalidExternalTargetPath",
         _ => "Other",
     }
 }
@@ -429,6 +443,23 @@ fn opinion_edits_at_relocation_targets_and_sources_recompose_in_scope() {
             "rank",
             "/Deck/Sailor",
         ),
+        // Beneath a source whose ancestor's variant branch authors
+        // opinions at it, and a class there.
+        (
+            "tower.usda",
+            "/Tower/Floor/Bell/Clapper",
+            "weight",
+            "/Belltower/Ringer",
+        ),
+        // Beneath a source a referenced layer stack relocates, through
+        // each arc that reaches it.
+        (
+            "clay.usda",
+            "/Clay/Chamber/Tray/Pot",
+            "temp",
+            "/Forge/Shelf/Pot",
+        ),
+        ("glaze.usda", "/Glaze/Tray", "coat", "/Rack"),
     ];
     for (layer, prim, attr, relocated) in edits {
         let source = set_int(&mut loaded, layer, prim, attr, 42);
@@ -518,7 +549,7 @@ fn the_store_keeps_relocates_as_authored() {
     let oracle = oracle();
     let loaded = load(&oracle);
     let root = loaded.store.layer(loaded.root_layer).expect("root layer");
-    assert_eq!(root.relocates.len(), 10);
+    assert_eq!(root.relocates.len(), 11);
     assert_eq!(
         root.relocates.iter().filter(|r| r.target.is_none()).count(),
         1

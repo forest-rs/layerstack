@@ -1,0 +1,17 @@
+#usda 1.0
+
+def "Tower"
+{
+    def "Floor"
+    {
+        def "Bell"
+        {
+            int pitch = 0
+
+            def "Clapper"
+            {
+                int weight = 0
+            }
+        }
+    }
+}

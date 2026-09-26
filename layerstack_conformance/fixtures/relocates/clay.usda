@@ -1,0 +1,17 @@
+#usda 1.0
+
+def "Clay"
+{
+    def "Chamber"
+    {
+        def "Tray"
+        {
+            int temp = 0
+
+            def "Pot"
+            {
+                int temp = 0
+            }
+        }
+    }
+}

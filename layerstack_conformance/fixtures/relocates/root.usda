@@ -10,7 +10,8 @@
         </Flyer/Streamer>: </Ribbon>,
         </Flyer/Tail>: </Knot>,
         </Chain_2/Tail>: </Chain_2/Tail_2>,
-        </Chain/Tail>: </Chain/Tail_1>
+        </Chain/Tail>: </Chain/Tail_1>,
+        </Belltower/Floor/Bell>: </Belltower/Bell>
     }
 )
 
@@ -292,6 +293,100 @@ def "Chain_2" (
 # inherits and the class implied from it into `fleet.usda`.
 def "Deck" (
     references = @./fleet.usda@</Fleet/Deck>
+)
+{
+}
+
+# `/Belltower/Floor/Bell` is relocated to `/Belltower/Bell`. The variant
+# branch `/Belltower/Floor` selects authors opinions at the source, which
+# are ancestral opinions of the source and compose at the target; the
+# source's own spec and variant branch are ignored. `/Belltower/Ringer`
+# inherits beneath the relocated prim.
+def "Belltower" (
+    references = @./tower.usda@</Tower>
+)
+{
+    over "Floor" (
+        variantSets = "tone"
+        variants = {
+            string tone = "low"
+        }
+    )
+    {
+        variantSet "tone" = {
+            "low" {
+                over "Bell"
+                {
+                    int pitch = 1
+
+                    over "Clapper"
+                    {
+                        int weight = 1
+                    }
+                }
+            }
+            "high" {
+                over "Bell"
+                {
+                    int pitch = 9
+                }
+            }
+        }
+
+        over "Bell" (
+            variantSets = "size"
+            variants = {
+                string size = "big"
+            }
+        )
+        {
+            int pitch = 9
+
+            variantSet "size" = {
+                "big" {
+                    over "Clapper"
+                    {
+                        int weight = 9
+                    }
+                }
+            }
+        }
+    }
+
+    def "Ringer" (
+        inherits = </Belltower/Bell/Clapper>
+    )
+    {
+    }
+}
+
+# `kiln.usda` relocates `/Kiln/Chamber/Tray`, which its reference to
+# `clay.usda` brings, to `/Kiln/Shelf`, and authors opinions at the source
+# inside the variant branch `/Kiln/Chamber` selects, while its reference
+# on `/Kiln/Chamber` brings more ancestral opinions of the source. Each
+# arc reaching the relocated tray composes them: `/Oven` references
+# `/Kiln`, `/Forge` references `/Oven`, `/Stove` payloads `/Kiln`, and
+# `/Rack` references the relocated `/Kiln/Shelf` itself.
+def "Oven" (
+    references = @./kiln.usda@</Kiln>
+)
+{
+}
+
+def "Forge" (
+    references = </Oven>
+)
+{
+}
+
+def "Stove" (
+    payload = @./kiln.usda@</Kiln>
+)
+{
+}
+
+def "Rack" (
+    references = @./kiln.usda@</Kiln/Shelf>
 )
 {
 }

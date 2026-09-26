@@ -106,6 +106,27 @@ impl ArcChain {
         });
     }
 
+    /// The composed prim path the path `path` of the chain's innermost layer
+    /// stack maps to: through the innermost arc whose target contains it,
+    /// every arc mapping the paths outside its target to themselves, as
+    /// class paths map when implied into stronger layer stacks.
+    ///
+    /// Spec: AOUSD Core §10.4.2.4. OpenUSD: `_EvalImpliedClasses` maps a
+    /// class across each arc with `PcpMapExpression::AddRootIdentity`.
+    pub(crate) fn stage_path(&self, paths: &mut PathInterner, path: PathId) -> PathId {
+        for site in self.sites[1..].iter().rev() {
+            let rel = paths
+                .resolve(path)
+                .strip_prefix(paths.resolve(site.site))
+                .map(<[_]>::to_vec);
+            if let Some(rel) = rel {
+                let joined = paths.resolve(site.dest).join(&rel);
+                return paths.intern(joined);
+            }
+        }
+        path
+    }
+
     /// Removes the site added by the matching [`push`](Self::push).
     pub(crate) fn pop(&mut self) {
         debug_assert!(

@@ -499,10 +499,11 @@ enum Cause {
     /// are implied onto each stronger layer stack and ranked with that
     /// stack's node (AOUSD Core §10.4.2.4; `pxr/usd/pcp/primIndex.cpp`,
     /// `_EvalImpliedClasses`).
-    /// Layerstack implies inherits that way, but population does not follow
-    /// implied classes to their namespace children, and the variant
-    /// selections of an arc's target are resolved before the classes
-    /// implied across that arc are known.
+    /// Layerstack implies inherits that way, but the variant selections of
+    /// an arc's target are resolved before the classes implied across that
+    /// arc are known, and of two nodes reaching one class site it keeps the
+    /// stronger, where OpenUSD keeps the one it adds first: an implied
+    /// class's origin comes before the class implied from it.
     ImpliedClasses,
     // Missing sources or extra opinions.
     /// The variant sets of a site that an arc authored on a namespace
@@ -678,22 +679,13 @@ const KNOWN: &[Known] = &[
         reason: "the subroot reference to `groups.usd /Groups/CrowdGroup/Char` misses the class `_class_Char` of its relocation source's namespace",
     },
     Known {
-        fixture: "TrickyLocalClassHierarchyWithRelocates_root",
-        causes: &[C::Relocates],
-        prims: 4,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingPrim, D::MissingSite],
-        reason: "local classes implied through relocation sources are not composed, so the symmetric and left arm rigs miss their regions and the relocated `SimRegions/LArm` composes no opinions",
-    },
-    Known {
         fixture: "TrickyNestedClasses4_root",
         causes: &[C::ImpliedClasses],
         prims: 2,
         props: 0,
         values: 0,
-        diffs: &[D::MissingPrim],
-        reason: "population misses the namespace children of the classes implied onto `/Rig/SymToesRig` and `/Rig/LToesRig`",
+        diffs: &[D::Order],
+        reason: "`ref.usd /CharRig/_Class_ToesRig/_Class_Toe` is kept beneath the class implied onto `/Rig/{Sym,L}ToesRig/ThumbToeLOCALRig`, not beneath the inherit `root.usd /Rig/_Class_ToesRig/ThumbToeLOCALRig` authors, so it outranks that site",
     },
     Known {
         fixture: "TrickySpookyVariantSelectionInClass_root",
@@ -733,12 +725,12 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "bug69932_root",
-        causes: &[C::Relocates],
-        prims: 2,
+        causes: &[C::ImpliedClasses],
+        prims: 1,
         props: 0,
         values: 0,
-        diffs: &[D::MissingPrim, D::MissingSite],
-        reason: "classes implied into the pigeon's toe rigs through relocation sources are not composed, so `/Pigeon/Rig/ToesRig/LToesRig/ThumbToeLOCALRig` is missing and the relocated `/Pigeon/Anim/Legs/LToes/Thumb` composes no opinions",
+        diffs: &[D::Order],
+        reason: "as in `TrickyNestedClasses4`, `Pigeon_bodyrig.usd /CharRig/Rig/ToesRig/_Class_ToesRig/_Class_Toe` is kept beneath the class implied onto `/Pigeon/Rig/ToesRig/LToesRig/ThumbToeLOCALRig`, so it outranks `Pigeon_rig.usd /Pigeon/Rig/ToesRig/_Class_ToesRig/ThumbToeLOCALRig`",
     },
 ];
 

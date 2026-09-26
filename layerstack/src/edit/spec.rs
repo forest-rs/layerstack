@@ -44,11 +44,12 @@ pub(crate) enum Loc {
 
 impl Loc {
     /// The storage location of the prim or variant spec path `path` (its
-    /// property suffix is ignored), interning the variant hosts' paths;
-    /// `None` for a path editing does not reach yet: a variant spec
-    /// nested in another branch of the same prim (`/Rock{a=x}{b=y}`).
-    pub(crate) fn of(path: &SpecPath, paths: &mut PathInterner) -> Option<Self> {
+    /// property suffix is ignored), interning the variant hosts' paths.
+    /// A variant spec may be nested in other branches of the same prim
+    /// (`/Rock{a=x}{b=y}`).
+    pub(crate) fn of(path: &SpecPath, paths: &mut PathInterner) -> Self {
         Self::with_hosts(path, |host| Some(paths.intern(host)))
+            .expect("interning names every variant host")
     }
 
     /// [`Loc::of`] without interning: also `None` if a variant host's path
@@ -71,9 +72,6 @@ impl Loc {
                     last_is_variant = false;
                 }
                 SpecComponent::VariantSelection { set, variant } => {
-                    if last_is_variant {
-                        return None;
-                    }
                     sites.push(VariantSelectionSite {
                         host_path: host_id(Path::root().join(&prefix))?,
                         set,

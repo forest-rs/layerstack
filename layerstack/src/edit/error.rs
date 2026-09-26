@@ -70,9 +70,6 @@ pub enum Rejection {
     NoSuchLayer(LayerId),
     /// The edit target does not map the stage path.
     Unmappable,
-    /// Editing does not reach this spec path yet: a variant spec nested in
-    /// another branch of the same prim (`/Rock{a=x}{b=y}`).
-    UnsupportedPath(SpecPath),
     /// The edit needs a property path and was given a prim or variant
     /// path.
     NotAProperty(SpecPath),
@@ -136,9 +133,6 @@ impl fmt::Display for Rejection {
         match self {
             Self::NoSuchLayer(layer) => write!(f, "no layer {}", layer.0),
             Self::Unmappable => f.write_str("the edit target does not map the path"),
-            Self::UnsupportedPath(_) => {
-                f.write_str("variant specs nested in a branch of the same prim are not edited")
-            }
             Self::NotAProperty(_) => f.write_str("expected a property path"),
             Self::NotAPrim(_) => f.write_str("expected a prim or variant path"),
             Self::NoSuchSpec(_) => f.write_str("no spec at the path"),

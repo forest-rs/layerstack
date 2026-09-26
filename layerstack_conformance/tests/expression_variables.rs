@@ -18,7 +18,9 @@
 //! value and one that evaluates to another type than string, a stronger
 //! layer's `delete` of an expression reference and payload a weaker layer
 //! adds (each layer's arcs are evaluated and anchored before list ops
-//! compose them), the same expression anchored in two directories (two
+//! compose them), a literal delete of an expression arc and an expression
+//! delete of a literal arc evaluating to the same asset, for references
+//! and payloads, the same expression anchored in two directories (two
 //! different arcs, which a delete in one does not remove from the other),
 //! and invalid selections in a selected and an unselected variant branch
 //! (only the one composition reads is an error).

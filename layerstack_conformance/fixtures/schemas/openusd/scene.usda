@@ -1,0 +1,37 @@
+#usda 1.0
+
+def Xform "World"
+{
+    def Mesh "Mesh"
+    {
+        int[] faceVertexCounts = [4]
+    }
+
+    def Sphere "Ball"
+    {
+        double radius = 2
+    }
+
+    def Material "Material"
+    {
+        token outputs:surface.connect = </World/Material/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            token outputs:surface
+        }
+    }
+
+    def SphereLight "Light"
+    {
+        float inputs:intensity = 5
+    }
+
+    def Scope "Group" (
+        prepend apiSchemas = ["CollectionAPI:foo", "MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </World/Material>
+    }
+}

@@ -273,6 +273,7 @@ version = "0.1.0"
 dependencies = [
  "layerstack",
  "layerstack_mesh_export",
+ "layerstack_schemas",
  "layerstack_usda",
  "layerstack_usdc",
  "layerstack_usdz",
@@ -300,6 +301,22 @@ dependencies = [
  "layerstack_usdc",
  "layerstack_usdz",
  "libm",
+]
+
+[[package]]
+name = "layerstack_schemagen"
+version = "0.1.0"
+dependencies = [
+ "layerstack",
+ "layerstack_usda",
+ "serde_json",
+]
+
+[[package]]
+name = "layerstack_schemas"
+version = "0.1.0"
+dependencies = [
+ "layerstack",
 ]
 
 [[package]]

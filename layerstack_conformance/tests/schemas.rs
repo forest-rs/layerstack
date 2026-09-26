@@ -24,6 +24,11 @@
 //! `apiSchemas` entries, and fallbacks shadowed by authored values and
 //! blocks.
 //!
+//! The `openusd` set has no plugin: its scene (a mesh, a sphere, a material
+//! with a shader, a light, and a prim applying `CollectionAPI:foo` and
+//! `MaterialBindingAPI`) uses OpenUSD's own schemas, which layerstack takes
+//! from `layerstack_schemas`.
+//!
 //! One result differs on purpose: at the default time a default block
 //! resolves the fallback (AOUSD Core §12.3.6, §16.2.16.2), where OpenUSD
 //! resolves no value, the divergence `default-time-block-hides-fallback`
@@ -47,11 +52,12 @@ use layerstack_conformance::{usda_real::load_entry_usda, workspace_root};
 use serde::Deserialize;
 use serde_json::{Value as Json, json};
 
-const SETS: [&str; 4] = [
+const SETS: [&str; 5] = [
     "typed_and_applied",
     "inclusions",
     "fallback_order",
     "coverage",
+    "openusd",
 ];
 
 /// The properties whose default-time value layerstack resolves to the
@@ -162,6 +168,9 @@ fn read(set: &str, file: &str) -> String {
 /// `generatedSchema.usda`, with the kinds, bases and auto-applies its
 /// `plugInfo.json` declares.
 fn registry(set: &str, store: &mut InMemoryStore) -> SchemaRegistry {
+    if set == "openusd" {
+        return layerstack_schemas::openusd(&mut store.tokens);
+    }
     let plug_info: PlugInfo = serde_json::from_str(&read(set, "plugInfo.json")).expect("plugInfo");
     let info = &plug_info.plugins[0].info;
     let mut declared = Vec::new();
@@ -230,6 +239,10 @@ fn json(value: &Value, tokens: &TokenInterner) -> Json {
         Value::Vec2f(v) => json!(v.map(f64::from)),
         Value::Vec3f(v) => json!(v.map(f64::from)),
         Value::Vec3d(v) => json!(v),
+        Value::Asset(s) | Value::PathExpression(s) => json!(&**s),
+        Value::TimeCode(t) => json!(t),
+        Value::Quatf([i, j, k, r]) => json!([r, i, j, k].map(|v| f64::from(*v))),
+        Value::Matrix4d(m) => json!(&m[..]),
         Value::Array(items) => Json::Array(items.iter().map(|v| json(v, tokens)).collect()),
         other => panic!("no JSON form for {other:?}"),
     }

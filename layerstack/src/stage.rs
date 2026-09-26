@@ -29,8 +29,8 @@ use crate::{
     interner::TokenId,
     listop::{ListOp, resolve_list_chain},
     path::{PathId, PropertyPath, TargetPath},
-    prim_index::{Opinion, OpinionKey, OpinionValue, PrimIndex},
-    prim_index_graph::PrimIndexGraph,
+    prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue, PrimIndex},
+    prim_index_graph::{NodeId, PrimIndexGraph},
     property::{PropertyKind, PropertySpec, PropertyType, Variability},
     schema::SchemaRegistry,
     spec_path::SpecPath,
@@ -1213,11 +1213,33 @@ impl Stage {
     /// - If the strongest defining opinion is `class`, the prim is *abstractly defining* → `Class`.
     /// - If the strongest defining opinion is `def`, the prim is *concretely defining* → `Def`.
     ///
+    /// A `class` read through a direct inherit is weaker than every other
+    /// defining opinion: inheriting a class does not make the inheriting
+    /// prim a class, even when the class's opinion is stronger than the
+    /// `def` of a reference. OpenUSD resolves specifiers the same way
+    /// (`_GetPrimSpecifierImpl` in `pxr/usd/usd/stage.cpp`).
+    ///
     /// Spec: AOUSD Core §12.2.1 (specifier resolution), §7.6.
     #[must_use]
     pub fn resolve_specifier(&self, prim: PathId, store: &dyn LayerStore) -> Option<Specifier> {
         let index = self.prims.get(&prim)?;
-        let mut strongest_defining: Option<Specifier> = None;
+        let depth = store.paths().resolve(prim).depth();
+        // Whether `node` is reached through an inherit authored at this
+        // prim rather than at one of its ancestors (OpenUSD's
+        // `PcpIsInheritArc` and `!PcpNodeRef::IsDueToAncestor`).
+        let direct_inherit = |node: NodeId| {
+            let mut cursor = Some(node);
+            while let Some(current) = cursor.and_then(|id| index.graph.node(id)) {
+                if current.arc_kind() == ArcKind::Inherits
+                    && usize::from(current.namespace_depth()) >= depth
+                {
+                    return true;
+                }
+                cursor = current.parent();
+            }
+            false
+        };
+        let mut resolved = Specifier::Over;
 
         // Walk sources in strength order (strongest first) and find the
         // strongest defining opinion (def or class).
@@ -1230,16 +1252,16 @@ impl Stage {
                 continue;
             };
             match spec.specifier {
-                Some(Specifier::Def) | Some(Specifier::Class) => {
-                    if strongest_defining.is_none() {
-                        strongest_defining = spec.specifier;
-                    }
+                Some(Specifier::Def) => return Some(Specifier::Def),
+                Some(Specifier::Class) if !direct_inherit(key.node) => {
+                    return Some(Specifier::Class);
                 }
+                Some(Specifier::Class) => resolved = Specifier::Class,
                 Some(Specifier::Over) | None => {}
             }
         }
 
-        Some(strongest_defining.unwrap_or(Specifier::Over))
+        Some(resolved)
     }
 
     /// Returns `true` if the prim is *defined* per §11.5.
@@ -1263,7 +1285,9 @@ impl Stage {
     /// Resolves the type name for a composed prim.
     ///
     /// Returns the strongest opinion's type name. If no contributing source
-    /// has a type name, returns `None`.
+    /// has a type name, returns `None`. An empty type name and `__AnyType__`
+    /// are no opinion, as in OpenUSD (`_ComposeTypeName` in
+    /// `pxr/usd/usd/stage.cpp`).
     ///
     /// Spec: AOUSD Core §7.6 (typeName field), §12.2.3 (type name resolution).
     #[must_use]
@@ -1278,7 +1302,10 @@ impl Stage {
                 continue;
             };
             if let Some(tn) = spec.type_name {
-                return Some(tn);
+                let name = store.tokens().resolve(tn);
+                if !name.is_empty() && name != "__AnyType__" {
+                    return Some(tn);
+                }
             }
         }
         None
@@ -1644,6 +1671,88 @@ mod tests {
     use alloc::sync::Arc;
     use alloc::vec;
 
+    /// Layer 1 authors `class "C"` and `over "A"`, which references `/B` of
+    /// layer 2; layer 2 authors `class "C"` and `def "B"`, which inherits
+    /// `/C`. `/A`'s specifier opinions, strongest first: `over` (`/A`),
+    /// `class` (`/C` of layer 1, implied), `def` (`/B`), `class` (`/C` of
+    /// layer 2).
+    fn inherited_class_scene(store: &mut crate::InMemoryStore) -> PathId {
+        use crate::{Layer, PrimSpec, Reference};
+
+        let (a, b, c) = (store.path("/A"), store.path("/B"), store.path("/C"));
+        let mut root = Layer::new(LayerId(1));
+        root.insert_prim(c, PrimSpec::class());
+        let mut over = PrimSpec::over();
+        over.references.explicit = Some(vec![Reference::new(LayerId(2), b)]);
+        root.insert_prim(a, over);
+        store.insert_layer(root);
+        let mut other = Layer::new(LayerId(2));
+        other.insert_prim(c, PrimSpec::class());
+        other.insert_prim(b, PrimSpec::def().with_inherit(c));
+        store.insert_layer(other);
+        a
+    }
+
+    #[test]
+    fn inheriting_a_class_does_not_make_a_prim_a_class() {
+        // Spec: AOUSD Core §12.2.1. The `class` of a direct inherit is
+        // weaker than every other defining specifier, as in OpenUSD's
+        // `_GetPrimSpecifierImpl`: `/A` is a `def`.
+        let mut store = crate::InMemoryStore::default();
+        let a = inherited_class_scene(&mut store);
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        let layers: Vec<LayerId> = stage
+            .prim_stack(a)
+            .expect("composed")
+            .into_iter()
+            .map(|(layer, _)| layer)
+            .collect();
+        assert_eq!(
+            layers,
+            [LayerId(1), LayerId(1), LayerId(2), LayerId(2)],
+            "the implied class of layer 1 is stronger than the referenced def"
+        );
+        assert_eq!(stage.resolve_specifier(a, &store), Some(Specifier::Def));
+        let c = store.path("/C");
+        assert_eq!(stage.resolve_specifier(c, &store), Some(Specifier::Class));
+    }
+
+    #[test]
+    fn a_prim_that_only_inherits_a_class_is_a_class() {
+        // Spec: AOUSD Core §12.2.1. With no other defining opinion, the
+        // inherited `class` still defines the prim.
+        let mut store = crate::InMemoryStore::default();
+        let (a, c) = (store.path("/A"), store.path("/C"));
+        let mut root = crate::Layer::new(LayerId(1));
+        root.insert_prim(c, crate::PrimSpec::class());
+        root.insert_prim(a, crate::PrimSpec::over().with_inherit(c));
+        store.insert_layer(root);
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert_eq!(stage.resolve_specifier(a, &store), Some(Specifier::Class));
+    }
+
+    #[test]
+    fn any_type_is_no_type_name_opinion() {
+        // OpenUSD's `_ComposeTypeName` skips `__AnyType__`, so the
+        // referenced prim's type wins.
+        use crate::{Layer, PrimSpec, Reference};
+
+        let mut store = crate::InMemoryStore::default();
+        let (a, b) = (store.path("/A"), store.path("/B"));
+        let any = store.tokens.intern("__AnyType__");
+        let tree = store.tokens.intern("Tree");
+        let mut root = Layer::new(LayerId(1));
+        let mut spec = PrimSpec::def().with_type_name(any);
+        spec.references.explicit = Some(vec![Reference::new(LayerId(2), b)]);
+        root.insert_prim(a, spec);
+        store.insert_layer(root);
+        let mut other = Layer::new(LayerId(2));
+        other.insert_prim(b, PrimSpec::def().with_type_name(tree));
+        store.insert_layer(other);
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert_eq!(stage.resolve_type_name(a, &store), Some(tree));
+    }
+
     /// Test-only opinion payload: a property authoring only time samples.
     fn samples(samples: Vec<(f64, Value)>) -> OpinionValue {
         OpinionValue::from(PropertySpec {
@@ -1665,7 +1774,7 @@ mod tests {
         let mut paths = PathInterner::default();
         let spec_path = SpecPath::parse("/A", &mut tokens, &mut paths).expect("spec path");
         OpinionKey {
-            node: crate::prim_index_graph::NodeId::ROOT,
+            node: NodeId::ROOT,
             layer_strength: 0,
             layer_id: layer,
             lookup_path,

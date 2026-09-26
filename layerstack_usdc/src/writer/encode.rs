@@ -595,7 +595,25 @@ impl<'a> Packer<'a> {
             }
             Value::UnregisteredValue(inner) => self.unregistered(inner, site)?,
             Value::TimeSamples(samples) => self.time_samples(samples, site)?,
+            Value::Spline(spline) => self.spline(spline)?,
         })
+    }
+
+    /// `Write(TsSpline)`: the spline's Ts binary data as a byte vector (a
+    /// `u64` length, then the bytes), then its knot custom data as a map
+    /// (a `u64` count; there is none). An empty spline is inlined as
+    /// nothing.
+    ///
+    /// Spec: AOUSD Core §16.3.10.33 (spline encoding).
+    fn spline(&mut self, spline: &layerstack::spline::SplineData) -> Result<u64, UsdcWriteError> {
+        if is_empty_spline(spline) {
+            return Ok(inlined(ValueType::Spline, 0));
+        }
+        let data = ts_spline_data(spline);
+        let mut bytes = (data.len() as u64).to_le_bytes().to_vec();
+        bytes.extend_from_slice(&data);
+        bytes.extend_from_slice(&0_u64.to_le_bytes());
+        self.blob(ValueType::Spline, 0, bytes, false)
     }
 
     /// `Write(TimeSamples)`: the times, packed as a `std::vector<double>`,
@@ -1267,17 +1285,127 @@ fn has_timecode(value: &Value) -> bool {
 }
 
 /// `RequestWriteVersionUpgrade`: start from OpenUSD's default and move to
-/// the version a value needs (`Write(GfTimeCode)`).
+/// the version a value needs (`Write(GfTimeCode)`, `Write(TsSpline)`).
 pub(super) fn required_version(specs: &[Spec]) -> CrateVersion {
-    let timecode = specs
-        .iter()
-        .flat_map(|s| &s.fields)
-        .any(|f| has_timecode(&f.value));
-    if timecode {
+    let fields = || specs.iter().flat_map(|s| &s.fields);
+    if fields().any(|f| matches!(f.value, Value::Spline(_))) {
+        CrateVersion::SPLINES
+    } else if fields().any(|f| has_timecode(&f.value)) {
         CrateVersion::TIMECODES
     } else {
         CrateVersion::NEW_FILE_DEFAULT
     }
+}
+
+/// Whether `spline` is a default `TsSpline`, which OpenUSD inlines.
+fn is_empty_spline(spline: &layerstack::spline::SplineData) -> bool {
+    use layerstack::spline::{CurveType, Extrapolation, SplineDataType};
+    spline.data_type == SplineDataType::Unspecified
+        && spline.knots.is_empty()
+        && spline.default_curve_type == CurveType::Bezier
+        && spline.pre_extrapolation == Extrapolation::Held
+        && spline.post_extrapolation == Extrapolation::Held
+        && spline.loop_params.is_none_or(|lp| lp == no_loops())
+}
+
+fn no_loops() -> layerstack::spline::LoopParams {
+    layerstack::spline::LoopParams {
+        proto_start: 0.0,
+        proto_end: 0.0,
+        num_pre_loops: 0,
+        num_post_loops: 0,
+        value_offset: 0.0,
+    }
+}
+
+/// The Ts binary data of `spline` in format 1, as
+/// `Ts_BinaryDataAccess::GetBinaryData` writes it (`pxr/base/ts/binary.cpp`,
+/// OpenUSD v26.08): no tangent algorithms and no `loopBoundaryTime`, which
+/// [`layerstack::spline::SplineData`] does not hold.
+fn ts_spline_data(spline: &layerstack::spline::SplineData) -> Vec<u8> {
+    use layerstack::spline::{CurveType, Extrapolation, KnotInterp, SplineDataType};
+    let mode = |e: Extrapolation| -> u8 {
+        match e {
+            Extrapolation::Block => 0,
+            Extrapolation::Held => 1,
+            Extrapolation::Linear => 2,
+            Extrapolation::Sloped(_) => 3,
+            Extrapolation::LoopRepeat => 4,
+            Extrapolation::LoopReset => 5,
+            Extrapolation::LoopOscillate => 6,
+        }
+    };
+    let descriptor: u8 = match spline.data_type {
+        SplineDataType::Unspecified => 0,
+        SplineDataType::Double => 1,
+        SplineDataType::Float => 2,
+        SplineDataType::Half => 3,
+    };
+    let hermite = spline.default_curve_type == CurveType::Hermite;
+    let loops = spline.loop_params.filter(|lp| *lp != no_loops());
+    let mut out = Vec::new();
+    out.push(1 | (descriptor << 4) | (u8::from(hermite) << 7));
+    out.push(
+        mode(spline.pre_extrapolation)
+            | (mode(spline.post_extrapolation) << 3)
+            | (u8::from(loops.is_some()) << 6),
+    );
+    for extrapolation in [spline.pre_extrapolation, spline.post_extrapolation] {
+        if let Extrapolation::Sloped(slope) = extrapolation {
+            out.extend_from_slice(&slope.to_le_bytes());
+        }
+    }
+    if let Some(lp) = loops {
+        out.extend_from_slice(&lp.proto_start.to_le_bytes());
+        out.extend_from_slice(&lp.proto_end.to_le_bytes());
+        out.extend_from_slice(&lp.num_pre_loops.to_le_bytes());
+        out.extend_from_slice(&lp.num_post_loops.to_le_bytes());
+        out.extend_from_slice(&lp.value_offset.to_le_bytes());
+    }
+    if spline.data_type == SplineDataType::Unspecified {
+        return out;
+    }
+    let value = |out: &mut Vec<u8>, v: f64| match spline.data_type {
+        SplineDataType::Double | SplineDataType::Unspecified => {
+            out.extend_from_slice(&v.to_le_bytes());
+        }
+        #[allow(clippy::cast_possible_truncation, reason = "a float spline's values")]
+        SplineDataType::Float => out.extend_from_slice(&(v as f32).to_le_bytes()),
+        SplineDataType::Half => {
+            out.extend_from_slice(&layerstack::half::from_f64(v).to_le_bytes());
+        }
+    };
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "a spline holds fewer knots"
+    )]
+    out.extend_from_slice(&(spline.knots.len() as u32).to_le_bytes());
+    for knot in &spline.knots {
+        let interp: u8 = match knot.next_interp {
+            KnotInterp::Block => 0,
+            KnotInterp::Held => 1,
+            KnotInterp::Linear => 2,
+            KnotInterp::Curve => 3,
+        };
+        let flag = u8::from(knot.pre_value.is_some())
+            | (interp << 1)
+            | (u8::from(knot.curve_type == CurveType::Hermite) << 3)
+            | (u8::from(knot.pre_tan_maya_form) << 4)
+            | (u8::from(knot.post_tan_maya_form) << 5);
+        out.push(flag);
+        out.extend_from_slice(&knot.time.to_le_bytes());
+        value(&mut out, knot.value);
+        if let Some(pre_value) = knot.pre_value {
+            value(&mut out, pre_value);
+        }
+        if !hermite {
+            out.extend_from_slice(&knot.pre_tan_width.to_le_bytes());
+            out.extend_from_slice(&knot.post_tan_width.to_le_bytes());
+        }
+        value(&mut out, knot.pre_tan_slope);
+        value(&mut out, knot.post_tan_slope);
+    }
+    out
 }
 
 /// Checks the specs' paths, forms, parents and field names, and returns

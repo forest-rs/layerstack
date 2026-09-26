@@ -635,6 +635,9 @@ impl EmitCtx<'_> {
         if let Some(samples) = time_samples {
             *spec = core::mem::take(spec).with_time_samples(samples);
         }
+        if let Some(spline) = &attr.spline {
+            spec.spline = Some(spline.clone());
+        }
         if let Some(value) = default {
             spec.default = Some(value);
         }

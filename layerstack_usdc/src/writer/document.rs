@@ -27,8 +27,9 @@
 //!   `[]` included), `variability`, `default` when a value is authored (a
 //!   value block included), its metadata in order, then `connectionPaths`
 //!   (a path list op) when it has connections, which USDA writes as later
-//!   `.connect` statements, and `timeSamples` (an `SdfTimeSampleMap`) when
-//!   it has time samples, which USDA writes as a `.timeSamples` statement;
+//!   `.connect` statements, `timeSamples` (an `SdfTimeSampleMap`) when it
+//!   has time samples, which USDA writes as a `.timeSamples` statement,
+//!   and `spline` (a `TsSpline`) when it has a spline;
 //! - a relationship holds `variability` (always uniform), `custom` only
 //!   when custom, then `targetPaths` (a path list op, an empty explicit one
 //!   for `rel r = None`) and its metadata: an explicit target list is part
@@ -287,6 +288,9 @@ fn lower_attribute(attribute: &Attribute, prim: &str) -> Result<Spec, UsdcWriteE
             .map(|(time, value)| (*time, attribute_value(&attribute.type_name, value)))
             .collect();
         spec = spec.with_field("timeSamples", Value::TimeSamples(samples));
+    }
+    if let Some(spline) = &attribute.spline {
+        spec = spec.with_field("spline", Value::Spline((**spline).clone()));
     }
     Ok(spec)
 }
@@ -1371,6 +1375,24 @@ def Xform "A" (
     )
     timecode t = 24
     asset[] files = [@./a.png@, @b/c.exr@]
+    double height.spline = {
+        bezier,
+        pre: linear,
+        post: sloped(0.57),
+        loop: (15, 25, 0, 2, 11.7),
+        7: 5.5 & 7.21; pre (0, 0); post held,
+        15: 8.18; post curve (2.49, 1.17),
+        20: 14.72; pre (3.77, -1.4); post curve (1.1, -1.4),
+    }
+    float sway.spline = {
+        hermite,
+        post: loop oscillate,
+        0: 0.1; pre (0); post curve (0.25),
+        10: 1; pre (-0.5); post linear,
+    }
+    half twist.spline = {
+        0: 0.5; pre (0, 0); post held,
+    }
 
     def Scope "C"
     {

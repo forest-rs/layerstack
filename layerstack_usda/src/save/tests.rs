@@ -8,7 +8,7 @@ use alloc::vec;
 use layerstack::doc::{LayerId, Reference, SublayerEntry};
 use layerstack::path::PropertyPath;
 use layerstack::property::PropertySpec;
-use layerstack::spline::{CurveType, Extrapolation, SplineDataType};
+use layerstack::spline::{CurveType, Extrapolation, KnotInterp, SplineDataType};
 use layerstack::{AssetResolveError, AssetResolver, ResolvedAsset};
 
 use super::*;
@@ -254,24 +254,6 @@ fn rejects_unsupported_features_with_their_source_paths() {
 #[test]
 fn rejects_unsupported_slots_built_through_the_api() {
     let source = "#usda 1.0\ndef \"A\"\n{\n    float a = 1\n    rel r = </A>\n}\n";
-
-    let mut imported = Imported::new(source);
-    imported.property("/A.a").spline = Some(layerstack::SplineData {
-        data_type: SplineDataType::Float,
-        default_curve_type: CurveType::Bezier,
-        pre_extrapolation: Extrapolation::Held,
-        post_extrapolation: Extrapolation::Held,
-        loop_params: None,
-        knots: vec![],
-    });
-    assert_eq!(
-        imported.save(),
-        Err(SaveError::Unsupported {
-            path: "/A.a".into(),
-            feature: Unsupported::Spline
-        }),
-        "spline"
-    );
 
     let mut imported = Imported::new(source);
     imported.property("/A.r").variability = Variability::Varying;
@@ -783,6 +765,221 @@ def "A" (
             feature: Unsupported::ListOpMetadata("path list op")
         }),
         "a path list op"
+    );
+}
+
+/// Splines save as OpenUSD writes them and read back as the same splines.
+#[test]
+fn saves_splines() {
+    let source = r#"#usda 1.0
+
+def "A"
+{
+    double height.spline = {
+        bezier,
+        pre: linear,
+        post: sloped(0.57),
+        loop: (15, 25, 0, 2, 11.7),
+        7: 5.5 & 7.21; pre (0, 0); post held,
+        15: 8.18; post curve (2.49, 1.17),
+        20: 14.72; pre (3.77, -1.4); post curve (1.1, -1.4),
+        30: 1; pre (0.5, 0); post none,
+    }
+    float sway.spline = {
+        hermite,
+        pre: loop repeat,
+        post: none,
+        0: 0.1; pre (0); post curve (0.25),
+        10: 1; pre (-0.5); post linear,
+    }
+    half twist = 1
+    half twist.spline = {
+        0: 0.5; pre (0, 0); post held,
+    }
+}
+"#;
+    let imported = Imported::new(source);
+    let text = imported.save().unwrap();
+    assert_eq!(text, source, "saved text");
+    assert_eq!(
+        Imported::new(&text).layer,
+        imported.layer,
+        "reads back the same"
+    );
+
+    let a = Path::parse_absolute("/A", &mut Imported::new(source).tokens).unwrap();
+    let mut imported = Imported::new(source);
+    let a = imported.paths.intern(a);
+    let height = imported.tokens.intern("height");
+    let spline = imported.layer.prims[&a]
+        .property(height)
+        .unwrap()
+        .spline
+        .clone()
+        .unwrap();
+    assert_eq!(spline.data_type, SplineDataType::Double);
+    assert_eq!(spline.default_curve_type, CurveType::Bezier);
+    assert_eq!(spline.pre_extrapolation, Extrapolation::Linear);
+    assert_eq!(spline.post_extrapolation, Extrapolation::Sloped(0.57));
+    let knot = &spline.knots[0];
+    assert_eq!(
+        (knot.time, knot.pre_value, knot.value),
+        (7.0, Some(5.5), 7.21)
+    );
+    assert_eq!(knot.next_interp, KnotInterp::Held);
+    let knot = &spline.knots[2];
+    assert_eq!(
+        (
+            knot.pre_tan_width,
+            knot.pre_tan_slope,
+            knot.post_tan_width,
+            knot.post_tan_slope
+        ),
+        (3.77, -1.4, 1.1, -1.4)
+    );
+    // Knot custom data has no place in a spline here: it is reported, not
+    // dropped.
+    let parsed = crate::parser::parse(
+        "#usda 1.0\ndef \"A\"\n{\n    double a.spline = {\n        1: 0; { string n = \"x\" },\n    }\n}\n",
+    );
+    assert!(
+        parsed
+            .diagnostics
+            .iter()
+            .any(|d| d.message.contains("custom data")),
+        "{:?}",
+        parsed.diagnostics
+    );
+}
+
+/// Half and float spline knots hold values of their type, as OpenUSD's
+/// parser stores them: `1.0004` is the half `1`.
+#[test]
+fn spline_knots_are_quantized_to_their_type() {
+    let source = "#usda 1.0\ndef \"A\"\n{\n    half h.spline = {\n        0: 1.0004; post held,\n    }\n    float f.spline = {\n        0: 0.1 & 0.3; post held,\n    }\n}\n";
+    let mut imported = Imported::new(source);
+    let knot = |imported: &mut Imported, path: &str| {
+        imported.property(path).spline.clone().unwrap().knots[0].clone()
+    };
+    let half = knot(&mut imported, "/A.h");
+    assert_eq!(half.value, 1.0);
+    assert_eq!(
+        imported
+            .property("/A.h")
+            .spline
+            .as_ref()
+            .unwrap()
+            .evaluate(0.0),
+        Some(1.0)
+    );
+    let float = knot(&mut imported, "/A.f");
+    assert_eq!(
+        (float.pre_value, float.value),
+        (Some(f64::from(0.1_f32)), f64::from(0.3_f32))
+    );
+}
+
+/// A spline knot's own curve type has no USDA form: saving one that
+/// differs from the spline's is an error, never a silent rewrite.
+#[test]
+fn a_knot_curve_type_is_not_rewritten() {
+    let source = "#usda 1.0\ndef \"A\"\n{\n    double d.spline = {\n        bezier,\n        0: 0; pre (0, 0); post curve (1, 1),\n        1: 1; pre (1, 1); post held,\n    }\n}\n";
+    let mut imported = Imported::new(source);
+    let spline = imported.property("/A.d").spline.as_mut().unwrap();
+    let before = spline.evaluate(0.5);
+    spline.knots[0].curve_type = CurveType::Hermite;
+    assert_eq!(
+        imported
+            .property("/A.d")
+            .spline
+            .as_ref()
+            .unwrap()
+            .evaluate(0.5),
+        before,
+        "evaluation follows the spline's curve type"
+    );
+    assert_eq!(
+        imported.save(),
+        Err(SaveError::Document(WriteError::KnotCurveType {
+            path: "/A.d".into()
+        }))
+    );
+}
+
+/// The rejection reaches splines in nested variant sets and in the prims
+/// they hold.
+#[test]
+fn a_knot_curve_type_in_a_nested_variant_is_not_rewritten() {
+    use crate::writer::{Attribute, Document, Prim, Property, VariantSet, WriteError};
+    use layerstack::spline::{Knot, SplineData};
+
+    let knot = |time: f64, curve_type| Knot {
+        time,
+        value: time,
+        pre_value: None,
+        next_interp: KnotInterp::Curve,
+        curve_type,
+        pre_tan_maya_form: false,
+        post_tan_maya_form: false,
+        pre_tan_width: 0.0,
+        post_tan_width: 0.0,
+        pre_tan_slope: 0.0,
+        post_tan_slope: 0.0,
+    };
+    let spline = SplineData {
+        data_type: SplineDataType::Double,
+        default_curve_type: CurveType::Bezier,
+        pre_extrapolation: Extrapolation::Held,
+        post_extrapolation: Extrapolation::Held,
+        loop_params: None,
+        knots: vec![knot(0.0, CurveType::Hermite), knot(1.0, CurveType::Bezier)],
+    };
+    let attribute = Property::Attribute(Attribute {
+        spline: Some(Box::new(spline)),
+        ..Attribute::declared("d", "double")
+    });
+    let variant = |name: &str| Prim::new(crate::writer::Specifier::Over, None, name);
+    let set = |name: &str, variant: Prim| VariantSet {
+        name: name.into(),
+        variants: vec![variant],
+    };
+
+    // `/A{outer=x}{inner=y}.d`
+    let mut inner = variant("y");
+    inner.properties.push(attribute.clone());
+    let mut outer = variant("x");
+    outer.variant_sets.push(set("inner", inner));
+    let mut a = Prim::def("Xform", "A");
+    a.variant_sets.push(set("outer", outer));
+    let doc = Document {
+        prims: vec![a],
+        ..Document::new()
+    };
+    assert_eq!(
+        doc.to_usda(),
+        Err(WriteError::KnotCurveType {
+            path: "/A{outer=x}{inner=y}.d".into()
+        })
+    );
+
+    // `/A{outer=x}{inner=y}Child.d`
+    let mut child = Prim::def("Xform", "Child");
+    child.properties.push(attribute);
+    let mut inner = variant("y");
+    inner.children.push(child);
+    let mut outer = variant("x");
+    outer.variant_sets.push(set("inner", inner));
+    let mut a = Prim::def("Xform", "A");
+    a.variant_sets.push(set("outer", outer));
+    let doc = Document {
+        prims: vec![a],
+        ..Document::new()
+    };
+    assert_eq!(
+        doc.to_usda(),
+        Err(WriteError::KnotCurveType {
+            path: "/A{outer=x}{inner=y}Child.d".into()
+        })
     );
 }
 

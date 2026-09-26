@@ -64,7 +64,7 @@
 //! [`layer_document`] checks the whole layer before a writer runs and
 //! returns the first problem it finds, naming its source path:
 //!
-//! - [`SaveError::Unsupported`]: splines; sparse array edits (as a
+//! - [`SaveError::Unsupported`]: sparse array edits (as a
 //!   default or a time sample); list ops mixing an explicit list with
 //!   edits; `varying` relationships; path list-op metadata; and values the
 //!   writers have no representation for (`pathExpression`, `opaque`, and
@@ -88,6 +88,7 @@
 //! Spec: AOUSD Core §7 (scene description: layers, specs, fields and
 //! metadata), §16.2 (USDA), §16.3 (crate format).
 
+use alloc::boxed::Box;
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
@@ -193,8 +194,6 @@ impl core::error::Error for SaveError {
 /// Authored content outside the supported subset.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Unsupported {
-    /// An attribute's `spline`.
-    Spline,
     /// A sparse array edit.
     ArrayEdit,
     /// A list op that holds an explicit list and edits at once, which the
@@ -214,7 +213,6 @@ pub enum Unsupported {
 impl fmt::Display for Unsupported {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Spline => f.write_str("splines"),
             Self::ArrayEdit => f.write_str("sparse array edits"),
             Self::MixedListOp => f.write_str("a list op with an explicit list and edits"),
             Self::VaryingRelationship => f.write_str("varying relationships"),
@@ -661,9 +659,6 @@ impl Lowering<'_> {
         let name = self.name(entry.name);
         let path = format!("{prim}.{name}");
         let spec = &entry.spec;
-        if spec.spline.is_some() {
-            return unsupported(path, Unsupported::Spline);
-        }
         let targets = match &spec.targets {
             Some(op) => Some(self.target_list(op, &path)?),
             None => None,
@@ -709,6 +704,7 @@ impl Lowering<'_> {
                     },
                     value,
                     time_samples,
+                    spline: spec.spline.clone().map(Box::new),
                     connections: targets,
                     metadata,
                 })

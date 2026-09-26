@@ -337,6 +337,10 @@ pub enum Value {
     /// metadata field no schema registers, wrapping the parsed value (a
     /// `VtDictionary` for a dictionary literal).
     UnregisteredValue(Box<Self>),
+    /// `TsSpline` (the `spline` field); requires crate version 0.12.0.
+    ///
+    /// Spec: AOUSD Core §16.3.10.33 (spline encoding).
+    Spline(layerstack::spline::SplineData),
 }
 
 /// Serializes `specs` as a USDC file.

@@ -1034,12 +1034,15 @@ impl<'a> Parser<'a> {
                 } else if text == "connect" {
                     self.parse_connection_suffix();
                     return;
+                } else if text == "spline" {
+                    self.parse_spline_suffix();
+                    return;
                 }
             }
         }
-        // Another attribute field (for example `.spline`): keep the
-        // declaration, report the field and skip its value rather than
-        // misreading it as further statements.
+        // Another attribute field: keep the declaration, report the field
+        // and skip its value rather than misreading it as further
+        // statements.
         let span = self.current_span();
         self.bump(); // `.`
         let field = if self.peek() == Some(TokenKind::Ident) {
@@ -1088,6 +1091,25 @@ impl<'a> Parser<'a> {
         self.bump(); // `timeSamples`
         self.expect(TokenKind::Equals);
         self.parse_time_sample_map();
+        let end = self.current_span().start;
+        self.builder.finish_node(end);
+    }
+
+    /// `.spline = { ... }`: the value's tokens are kept in the node, whose
+    /// text the lowering reads as a spline.
+    fn parse_spline_suffix(&mut self) {
+        let start = self.current_span().start;
+        self.builder.start_node(SyntaxKind::SplineSuffix, start);
+        self.bump(); // `.`
+        self.bump(); // `spline`
+        self.expect(TokenKind::Equals);
+        self.eat_trivia();
+        if self.peek() == Some(TokenKind::LeftBrace) {
+            self.skip_value_tokens();
+        } else {
+            let span = self.current_span();
+            self.error(span, "expected `{` to begin a spline");
+        }
         let end = self.current_span().start;
         self.builder.finish_node(end);
     }
@@ -1808,12 +1830,12 @@ mod tests {
 
     #[test]
     fn parse_reports_unsupported_attribute_field() {
-        // USDA splines (`.spline`) are not parsed; the declaration survives
+        // An unknown attribute field is not parsed; the declaration survives
         // and the field is reported instead of being misread.
-        let src = "#usda 1.0\ndef \"A\" {\n    double a.spline = {\n        1: 0; post held,\n    }\n    double b = 1\n}\n";
+        let src = "#usda 1.0\ndef \"A\" {\n    double a.curve = {\n        1: 0; post held,\n    }\n    double b = 1\n}\n";
         let result = parse(src);
         assert_eq!(result.diagnostics.len(), 1, "{:?}", result.diagnostics);
-        assert!(result.diagnostics[0].message.contains("`.spline`"));
+        assert!(result.diagnostics[0].message.contains("`.curve`"));
         let children = &result.layer.prims[0].children;
         assert_eq!(children.len(), 2, "{children:?}");
         let PrimChild::Attribute(a) = &children[0] else {

@@ -320,6 +320,62 @@ def "Chain_2" (
 )
 {
 }
+
+# `fleet.usda` relocates `/Fleet/Crew/Sailor`, which its reference to
+# `crew.usda` brings, to `/Fleet/Deck/Sailor`. The subroot reference to
+# `/Fleet/Deck` maps the target but not the source: `/Deck/Sailor` still
+# composes the source's ancestral opinions, with the class the sailor
+# inherits and the class implied from it into `fleet.usda`.
+def "Deck" (
+    references = @./fleet.usda@</Fleet/Deck>
+)
+{
+}
+''',
+    "fleet": '''#usda 1.0
+(
+    relocates = {
+        </Fleet/Crew/Sailor>: </Fleet/Deck/Sailor>
+    }
+)
+
+def "Fleet"
+{
+    def "Deck"
+    {
+        over "Sailor"
+        {
+            int watch = 2
+        }
+    }
+
+    def "Crew" (
+        references = @./crew.usda@</Crew>
+    )
+    {
+        over "_class_Sailor"
+        {
+            int rank = 2
+        }
+    }
+}
+''',
+    "crew": '''#usda 1.0
+
+def "Crew"
+{
+    def "_class_Sailor"
+    {
+        int rank = 1
+    }
+
+    def "Sailor" (
+        inherits = </Crew/_class_Sailor>
+    )
+    {
+        int age = 1
+    }
+}
 ''',
     "kite": '''#usda 1.0
 (

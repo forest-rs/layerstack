@@ -1,0 +1,27 @@
+#usda 1.0
+(
+    relocates = {
+        </Fleet/Crew/Sailor>: </Fleet/Deck/Sailor>
+    }
+)
+
+def "Fleet"
+{
+    def "Deck"
+    {
+        over "Sailor"
+        {
+            int watch = 2
+        }
+    }
+
+    def "Crew" (
+        references = @./crew.usda@</Crew>
+    )
+    {
+        over "_class_Sailor"
+        {
+            int rank = 2
+        }
+    }
+}

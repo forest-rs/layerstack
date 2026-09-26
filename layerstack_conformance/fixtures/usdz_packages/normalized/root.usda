@@ -1,0 +1,13 @@
+#usda 1.0
+
+def "World" (
+    references = @models/deep/child.usda@</Child>
+)
+{
+}
+
+def "Direct" (
+    references = @shared/part.usda@</Part>
+)
+{
+}

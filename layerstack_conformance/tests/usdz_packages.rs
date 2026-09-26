@@ -17,10 +17,15 @@
 //!   each other, loads once;
 //! - a path naming no member resolves beside the package (the case's
 //!   `<case>_outside` directory) through the outer resolver, whose layers
-//!   and the members share one ID space, so none is lost on install.
+//!   and the members share one ID space, so none is lost on install;
+//! - a relative path names the member OpenUSD anchors it to: a path
+//!   starting with `.` in the directory of the member authoring it and
+//!   nowhere else, a search path there and then beside the root layer,
+//!   which may itself sit in a directory.
 //!
-//! Spec: AOUSD Core §16.4 (USDZ packages), §9.7 (packaged resource
-//! resolution).
+//! Spec: AOUSD Core §16.4 (USDZ packages), §9.4 (relative asset paths),
+//! §9.7 (packaged resource resolution). OpenUSD:
+//! `SdfComputeAssetPathRelativeToLayer` in `pxr/usd/sdf/layerUtils.cpp`.
 
 #![allow(missing_docs, reason = "integration tests")]
 
@@ -213,6 +218,13 @@ fn every_case_is_tested() {
         "repeated",
         "cycle",
         "external",
+        "anchored",
+        "same_basename",
+        "normalized",
+        "root_in_subdirectory",
+        "search_fallback",
+        "layer_relative_stays",
+        "root_back_reference",
     ];
     let recorded: Vec<String> = oracle().cases.into_iter().map(|case| case.name).collect();
     assert_eq!(recorded, tested);
@@ -259,4 +271,50 @@ fn members_that_reference_each_other_load_once() {
 #[test]
 fn members_and_layers_outside_the_package_all_contribute() {
     check("external");
+}
+
+/// `./asset.usda` in `models/parent.usdc` is `models/asset.usda`.
+#[test]
+fn a_layer_relative_path_anchors_to_its_member() {
+    check("anchored");
+}
+
+/// `asset.usda` and `models/asset.usda` are different members, and a
+/// search path in `models/` finds the one beside it.
+#[test]
+fn members_with_one_file_name_stay_apart() {
+    check("same_basename");
+}
+
+/// `..` and `.` segments normalize, and one member reached by two paths
+/// is one layer.
+#[test]
+fn member_paths_normalize() {
+    check("normalized");
+}
+
+/// A root layer in `scene/` anchors its paths there.
+#[test]
+fn a_root_layer_in_a_directory_anchors_there() {
+    check("root_in_subdirectory");
+}
+
+/// A search path naming no member beside its layer finds one beside the
+/// root layer.
+#[test]
+fn a_search_path_falls_back_to_the_root_layers_directory() {
+    check("search_fallback");
+}
+
+/// A path starting with `.` never searches: a missing member is an error,
+/// even with a like-named member beside the root layer.
+#[test]
+fn a_layer_relative_path_never_searches() {
+    check("layer_relative_stays");
+}
+
+/// A member referencing the root layer finds it.
+#[test]
+fn a_member_can_reference_the_root_layer() {
+    check("root_back_reference");
 }

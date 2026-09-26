@@ -18,7 +18,8 @@ use hashbrown::HashMap;
 use crate::{
     arc_cycle::CycleDetector,
     composition_error::{
-        CompositionError, InconsistentPropertyType, InvalidExternalTargetPath, UnresolvedPrimPath,
+        CompositionError, InconsistentPropertyType, InvalidExternalTargetPath,
+        InvalidInstanceTargetPath, UnresolvedPrimPath,
     },
     doc::{FieldValue, LayerId, LayerStore, Reference, ReferenceTarget},
     interner::TokenId,
@@ -237,6 +238,12 @@ impl ArcPathMap<'_> {
         })
     }
 
+    /// Whether `target` is authored beneath the arc's target.
+    fn is_inside(&self, store: &dyn LayerStore, target: TargetPath) -> bool {
+        self.source
+            .is_prefix_of(store.paths().resolve(target.prim_path()))
+    }
+
     fn map_target(&self, store: &mut dyn LayerStore, target: TargetPath) -> Option<TargetPath> {
         match target {
             TargetPath::Prim(path) => self.map(store, path).map(TargetPath::Prim),
@@ -298,6 +305,8 @@ pub(crate) fn map_arc_targets(
         }
         OpinionValue::Field(_) => return,
     };
+    // Paths authored inside a class, which name no instance of it.
+    let mut internal = Vec::new();
     let mut report = |target: TargetPath| {
         cycles.report(CompositionError::InvalidExternalTargetPath(
             InvalidExternalTargetPath {
@@ -318,12 +327,19 @@ pub(crate) fn map_arc_targets(
             .iter()
             .filter_map(|item| {
                 let mapped = map.map_target(store, *item);
-                if mapped.is_none() {
-                    report(*item);
+                match mapped {
+                    None => report(*item),
+                    Some(mapped) if map.arc == ArcKind::Inherits && map.is_inside(store, *item) => {
+                        internal.push(mapped);
+                    }
+                    Some(_) => {}
                 }
                 mapped
             })
             .collect();
+    }
+    for target in internal {
+        cycles.note_class_internal_target(owner.prim, owner.property, target);
     }
     list.delete = list
         .delete
@@ -337,6 +353,7 @@ pub(crate) fn map_arc_targets(
 fn target_error_spec(error: &CompositionError) -> Option<&SpecPath> {
     match error {
         CompositionError::InvalidExternalTargetPath(error) => Some(&error.spec),
+        CompositionError::InvalidInstanceTargetPath(error) => Some(&error.spec),
         _ => None,
     }
 }
@@ -362,6 +379,9 @@ pub(crate) fn target_error_applies(
         CompositionError::InvalidExternalTargetPath(error) => {
             (error.prim, error.property, error.layer)
         }
+        CompositionError::InvalidInstanceTargetPath(error) => {
+            (error.prim, error.property, error.layer)
+        }
         _ => return true,
     };
     let Some(spec) = target_error_spec(error) else {
@@ -385,6 +405,133 @@ pub(crate) fn target_error_applies(
         }
     }
     true
+}
+
+/// A target path authored in a class that [`drop_instance_targets`]
+/// removes.
+struct InstanceTarget {
+    prim: PathId,
+    property: TokenId,
+    key: OpinionKey,
+    target: TargetPath,
+}
+
+/// Drops each relationship target or attribute connection authored in an
+/// inherited class that targets an instance of that class, reporting
+/// [`InvalidInstanceTargetPath`] for each.
+///
+/// A spec reached through an inherits node authors a path outside the class
+/// (one [`map_arc_targets`] maps to itself); when the prim that path names
+/// inherits the class too, in the same layer stack, the path is removed.
+/// Reverse path translation could not tell which instance it meant.
+///
+/// Spec: AOUSD Core §10.3.2.4 (inherits), §10.6. OpenUSD:
+/// `_TargetInClassAndTargetsInstance` in `pxr/usd/pcp/targetIndex.cpp`,
+/// reported as `PcpErrorInvalidInstanceTargetPath`.
+pub(crate) fn drop_instance_targets(
+    store: &dyn LayerStore,
+    prims: &mut HashMap<PathId, PrimIndex>,
+    cycles: &mut CycleDetector,
+) {
+    let paths = store.paths();
+    let prefix = |path: &Path, depth: usize| Path::root().join(&path.segments()[..depth]);
+    let mut found = Vec::new();
+    for (&prim, index) in prims.iter() {
+        let prim_path = paths.resolve(prim);
+        for (field, opinions) in &index.opinions_by_field {
+            let FieldKey::Property(property) = *field else {
+                continue;
+            };
+            for opinion in opinions {
+                let Some(targets) = opinion.value.as_property().and_then(|s| s.targets.as_ref())
+                else {
+                    continue;
+                };
+                let Some(node) = index.graph.node(opinion.key.node) else {
+                    continue;
+                };
+                if node.arc.arc_kind != ArcKind::Inherits {
+                    continue;
+                }
+                // The inherit maps the class `class` onto `dest`, an ancestor
+                // of `prim` when the arc is ancestral.
+                let depth = usize::from(node.arc.namespace_depth).min(prim_path.depth());
+                let below = prim_path.depth() - depth;
+                let dest = prefix(prim_path, depth);
+                let site = paths.resolve(node.arc.site.prim_path());
+                let class = prefix(site, site.depth().saturating_sub(below));
+                let items = targets
+                    .prepend
+                    .iter()
+                    .chain(&targets.append)
+                    .chain(targets.explicit.iter().flatten());
+                for target in items {
+                    if cycles.is_class_internal_target(prim, property, *target) {
+                        continue;
+                    }
+                    let target_prim = paths.resolve(target.prim_path());
+                    if dest.is_prefix_of(target_prim) {
+                        continue;
+                    }
+                    let inherits_class = prims.get(&target.prim_path()).is_some_and(|other| {
+                        other.graph.nodes().any(|(_, other)| {
+                            other.arc.arc_kind == ArcKind::Inherits
+                                && other.arc.layer_stack == node.arc.layer_stack
+                                && class.is_prefix_of(paths.resolve(other.arc.site.prim_path()))
+                        })
+                    });
+                    if inherits_class {
+                        found.push(InstanceTarget {
+                            prim,
+                            property,
+                            key: opinion.key.clone(),
+                            target: *target,
+                        });
+                    }
+                }
+            }
+        }
+    }
+    for InstanceTarget {
+        prim,
+        property,
+        key,
+        target,
+    } in found
+    {
+        let Some(opinion) = prims
+            .get_mut(&prim)
+            .and_then(|index| {
+                index
+                    .opinions_by_field
+                    .get_mut(&FieldKey::Property(property))
+            })
+            .and_then(|opinions| opinions.iter_mut().find(|opinion| opinion.key == key))
+        else {
+            continue;
+        };
+        let OpinionValue::Property(spec) = &mut opinion.value else {
+            continue;
+        };
+        let Some(targets) = spec.targets.as_mut() else {
+            continue;
+        };
+        for items in [&mut targets.prepend, &mut targets.append]
+            .into_iter()
+            .chain(targets.explicit.as_mut())
+        {
+            items.retain(|item| *item != target);
+        }
+        cycles.report(CompositionError::InvalidInstanceTargetPath(
+            InvalidInstanceTargetPath {
+                prim,
+                property,
+                target,
+                spec: key.spec_path.clone(),
+                layer: key.layer_id,
+            },
+        ));
+    }
 }
 
 #[cfg(test)]

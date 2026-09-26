@@ -106,9 +106,9 @@ pub use asset::{AssetResolveError, AssetResolver, ResolvedAsset};
 pub use composition_error::{
     ArcCycle, ArcCycleSite, ArcToProhibitedChild, CompositionError, InconsistentPropertyType,
     InvalidAuthoredRelocation, InvalidConflictingRelocation, InvalidExternalTargetPath,
-    InvalidRelocationReason, InvalidSameTargetRelocations, OpinionAtRelocationSource,
-    RelocationConflict, SublayerCycle, UnresolvedAsset, UnresolvedDefaultPrim, UnresolvedPrimPath,
-    UnresolvedSublayer,
+    InvalidInstanceTargetPath, InvalidRelocationReason, InvalidSameTargetRelocations,
+    OpinionAtRelocationSource, RelocationConflict, SublayerCycle, UnresolvedAsset,
+    UnresolvedDefaultPrim, UnresolvedPrimPath, UnresolvedSublayer,
 };
 pub use dependency_map::ArcDependency;
 pub use doc::{

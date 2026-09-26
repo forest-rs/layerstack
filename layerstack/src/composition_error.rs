@@ -66,6 +66,9 @@ pub enum CompositionError {
     /// A relationship target or attribute connection that cannot be mapped
     /// across the arc that brings its spec in. The path was ignored.
     InvalidExternalTargetPath(InvalidExternalTargetPath),
+    /// A relationship target or attribute connection authored in a class
+    /// that targets an instance of that class. The path was ignored.
+    InvalidInstanceTargetPath(InvalidInstanceTargetPath),
 }
 
 impl CompositionError {
@@ -87,6 +90,7 @@ impl CompositionError {
             Self::ArcToProhibitedChild(error) => Some(error.prim),
             Self::InconsistentPropertyType(error) => Some(error.prim),
             Self::InvalidExternalTargetPath(error) => Some(error.prim),
+            Self::InvalidInstanceTargetPath(error) => Some(error.prim),
         }
     }
 }
@@ -477,5 +481,33 @@ pub struct InvalidExternalTargetPath {
     /// The arc the path could not be mapped across.
     pub arc: ArcKind,
     /// The layer of the property spec that authors the path.
+    pub layer: LayerId,
+}
+
+/// A relationship target or attribute connection path authored in an
+/// inherited class that targets an instance of that class, found while
+/// composing the property `property` of `prim`.
+///
+/// A class maps every path outside itself to itself (see
+/// [`InvalidExternalTargetPath`]), so a path authored in the class to a
+/// prim that also inherits the class names one instance from all of them.
+/// Such a path is removed from the property's list edit of every prim that
+/// inherits the class; the rest of the property composes as normal.
+///
+/// Spec: AOUSD Core §10.3.2.4 (inherits), §10.6. OpenUSD reports it as
+/// `PcpErrorInvalidInstanceTargetPath` and ignores the path
+/// (`_TargetInClassAndTargetsInstance` in `pxr/usd/pcp/targetIndex.cpp`).
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct InvalidInstanceTargetPath {
+    /// The composed prim that owns the property.
+    pub prim: PathId,
+    /// The property's name.
+    pub property: TokenId,
+    /// The target path, which names an instance of the class.
+    pub target: TargetPath,
+    /// The class's property spec that authors the path, as the property's
+    /// stack names it ([`crate::Stage::explain_property_path`]).
+    pub spec: SpecPath,
+    /// The layer of the class's property spec that authors the path.
     pub layer: LayerId,
 }

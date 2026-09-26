@@ -34,8 +34,9 @@ use hashbrown::{HashMap, HashSet};
 use crate::{
     composition_error::{ArcCycle, ArcCycleSite, CompositionError, OpinionAtRelocationSource},
     doc::{LayerId, LayerStore},
+    interner::TokenId,
     layer_stack::LayerStack,
-    path::{Path, PathId, PathInterner},
+    path::{Path, PathId, PathInterner, TargetPath},
     prim_index::ArcKind,
     relocates::{LiftedSet, RelocationTable, Relocations, Walk},
 };
@@ -153,6 +154,10 @@ pub(crate) struct CycleDetector {
     relocations: Relocations,
     errors: Vec<CompositionError>,
     seen: HashSet<CompositionError>,
+    /// Target paths authored inside the class an inherit maps, as
+    /// `(composed prim, property, mapped target)`: they target no instance
+    /// of the class (see `composition_checks::drop_instance_targets`).
+    class_internal_targets: HashSet<(PathId, TokenId, TargetPath)>,
 }
 
 impl CycleDetector {
@@ -167,6 +172,7 @@ impl CycleDetector {
             relocations: Relocations::default(),
             errors: Vec::new(),
             seen: HashSet::new(),
+            class_internal_targets: HashSet::new(),
         }
     }
 
@@ -360,6 +366,28 @@ impl CycleDetector {
         if self.seen.insert(error.clone()) {
             self.errors.push(error);
         }
+    }
+
+    /// Records that the target path `target` of `prim`'s `property` was
+    /// authored inside the class an inherit maps.
+    pub(crate) fn note_class_internal_target(
+        &mut self,
+        prim: PathId,
+        property: TokenId,
+        target: TargetPath,
+    ) {
+        self.class_internal_targets.insert((prim, property, target));
+    }
+
+    /// Whether [`Self::note_class_internal_target`] recorded `target`.
+    pub(crate) fn is_class_internal_target(
+        &self,
+        prim: PathId,
+        property: TokenId,
+        target: TargetPath,
+    ) -> bool {
+        self.class_internal_targets
+            .contains(&(prim, property, target))
     }
 
     /// Returns the recorded errors in the order they were found.

@@ -33,6 +33,9 @@ It provides:
   specializes (LIVERPS)
 - **Incremental recomposition** — via [`LiveStage`] and the `invalidation`
   dependency graph
+- **Authoring** — via [`edit`]: edit targets through any node of a
+  prim's composition, and atomic transactions of spec edits that
+  return their inverses and check preconditions
 - **Schema fallbacks** — via [`SchemaRegistry`]
 - **Value explanations** — [`Stage::explain_property_value`] and its
   siblings say why a value is what it is: every consulted opinion with its

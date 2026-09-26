@@ -18,6 +18,7 @@ use invalidation::{Channel, CycleHandling, InvalidationTracker};
 use crate::{
     dependency_map::{ArcDependency, CompositionDeps},
     doc::{LayerId, LayerStore},
+    edit::{Applied, EditError, Transaction},
     path::PathId,
     stage::{PopulationMask, Stage, StageOptions},
 };
@@ -161,6 +162,55 @@ impl LiveStage {
         live
     }
 
+    /// Applies `txn` to the layers of `store` (see [`Transaction::apply`])
+    /// and recomposes the prims it affects: the entry point for authoring a
+    /// live stage.
+    ///
+    /// Edits of opinions on existing specs are notified as edits of their
+    /// source sites ([`LiveStage::notify_layer_prim_edits`]), so only the
+    /// prims drawing on those specs are recomposed. Edits that create or
+    /// remove specs, or change variant selections, may change namespace and
+    /// are notified as structural changes, which rebuild the stage.
+    ///
+    /// Stage addresses take the declared type of an attribute they create
+    /// from this stage's composed declaration of the property
+    /// ([`crate::Stage::resolve_property_declaration`]), as
+    /// `UsdAttribute::Set` does.
+    ///
+    /// On error nothing was applied and nothing is recomposed.
+    pub fn apply(
+        &mut self,
+        store: &mut dyn LayerStore,
+        txn: &Transaction,
+    ) -> Result<Applied, EditError> {
+        let outcome = crate::edit::apply(store, txn, Some(&self.stage))?;
+        if outcome.structural {
+            self.notify_structural_change();
+        } else {
+            for &(layer, prim) in &outcome.touched {
+                self.notify_layer_prim_edits(layer, &[prim]);
+            }
+        }
+        // A value-only transaction moved each layer's generation once, and
+        // it is notified; an earlier unnotified edit of the layer stays
+        // visible to `notify_changed_layers`. A structural one rebuilds,
+        // which sees every layer afresh.
+        for layer in &outcome.layers {
+            if let (Some(Some(seen)), Some(found)) = (
+                self.generations.get_mut(layer),
+                generations_of(store, *layer),
+            ) && (seen.0 + 1, seen.1) == found
+            {
+                *seen = found;
+            }
+        }
+        let recomposed = self.recompose(store);
+        Ok(Applied {
+            inverse: outcome.inverse,
+            recomposed,
+        })
+    }
+
     /// Notifies the edits of every layer the stage reads whose
     /// [`Layer::generation`](crate::Layer::generation) moved since this
     /// stage last saw it, and returns those layers, sorted.
@@ -177,11 +227,12 @@ impl LiveStage {
     /// The layers the stage reads are its root layer stack and every layer
     /// stack a reference or payload authored in them targets, including
     /// layers that contribute no opinions yet, such as an empty sublayer.
-    /// The stage sees their generations when it composes or rebuilds. So
-    /// after edits made through [`Layer`](crate::Layer) methods by code
-    /// that does not notify the stage, this finds the layers they changed,
-    /// and the next [`recompose`](Self::recompose) stops serving what those
-    /// layers no longer hold.
+    /// The stage sees their generations when it composes or rebuilds, and
+    /// the generations its own [`apply`](Self::apply) moves. So after edits
+    /// made through [`Layer`](crate::Layer) methods by code that does not
+    /// notify the stage, this finds the layers they changed, and the next
+    /// [`recompose`](Self::recompose) stops serving what those layers no
+    /// longer hold.
     ///
     /// Generations cannot tell which prims changed, so this is coarser than
     /// the notifications that name them, and a layer edited by a host that
@@ -401,6 +452,7 @@ impl LiveStage {
     /// new arcs, a variant selection that adds children) are not visible to a
     /// scoped recomposition and must be reported with
     /// [`notify_structural_change`](Self::notify_structural_change).
+    /// [`LiveStage::apply`] reports its edits itself, and
     /// [`notify_changed_layers`](Self::notify_changed_layers) finds layers
     /// edited without a notification.
     pub fn recompose(&mut self, store: &mut dyn LayerStore) -> Vec<PathId> {

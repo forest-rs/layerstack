@@ -18,9 +18,11 @@
 //!   the chain of arcs that reaches the authoring layer stack
 //!   ([`ArcAnchor`], `anchor_internal_arcs`), so list editing compares the
 //!   evaluated, anchored arcs;
-//! - a variant selection, with the variables of the first layer stack
-//!   holding its layer that the arcs reach ([`selection_view`]), counted
-//!   only where composition reads it ([`read_selections`]).
+//! - a variant selection, where composition reads it, with the variables
+//!   of the chain of arcs through which it reads that site
+//!   ([`site_selections`], [`SiteContext`]), so one layer reached from two
+//!   contexts may select two variants; it is an error or a dependency only
+//!   where composition reads it ([`read_selections`]).
 //!
 //! An asset path expression that evaluates to no value or to an empty
 //! string drops the sublayer or arc without an error; any expression that
@@ -40,7 +42,7 @@
 //! `_EvalRefOrPayloadArcs` (`pxr/usd/pcp/primIndex.cpp`) and
 //! `Pcp_EvaluateVariableExpression` (`pxr/usd/pcp/utils.cpp`).
 
-use alloc::{collections::BTreeSet, rc::Rc, string::String, vec::Vec};
+use alloc::{borrow::Cow, collections::BTreeSet, string::String, vec::Vec};
 use core::cell::{OnceCell, RefCell};
 
 use hashbrown::{HashMap, HashSet};
@@ -52,7 +54,8 @@ use crate::{
     interner::{TokenId, TokenInterner},
     layer_stack::LayerStack,
     listop::ListOp,
-    spec_path::{SpecPath, VariantSelectionSite},
+    prim_index::{OpinionKey, PrimIndex},
+    prim_index_graph::{NodeId, PrimIndexGraph, PrimNode},
     variable_expression::{
         ExpressionValue, ExpressionVariables, VariableExpression, VariableValue, is_expression,
     },
@@ -485,7 +488,7 @@ pub(crate) fn walk(store: &dyn LayerStore, root: LayerId) -> Walk {
                 queue.push_back(target_chain);
             }
         }
-        stacks.push(WalkedStack { stack, chain });
+        stacks.push(WalkedStack { stack });
     }
     Walk {
         stacks,
@@ -495,282 +498,189 @@ pub(crate) fn walk(store: &dyn LayerStore, root: LayerId) -> Walk {
 
 /// A layer stack [`walk`] reached.
 pub(crate) struct WalkedStack {
-    /// The layer stack.
+    /// The layer stack, gathered with the variables of the chain that
+    /// reaches it.
     pub(crate) stack: LayerStack,
-    /// The root layers of the layer stacks on the way to it, outermost
-    /// first, ending with its own.
-    pub(crate) chain: Vec<LayerId>,
 }
 
-/// One variant selection authored as a variable expression that
-/// [`SelectionView`] evaluated, with the site authoring it.
-pub(crate) struct EvaluatedSelection {
-    /// The layer authoring the selection.
-    layer: LayerId,
-    /// The prim spec or variant branch authoring it, as a prim index names
-    /// its sources.
-    site: SpecPath,
-    /// The variant set it selects for.
-    set: TokenId,
-    /// The variables the evaluation read.
-    reads: VariableReads,
-    /// The [`VariableExpressionError`], when it failed.
-    error: Option<crate::CompositionError>,
-}
-
-/// What reading the evaluated selections composition used found.
-pub(crate) type SelectionFindings = Rc<RefCell<Vec<EvaluatedSelection>>>;
-
-/// A view of a store whose layers read their variant selections authored
-/// as variable expressions evaluated, or `None` when no token of the store
-/// is an expression, so no selection can be one.
+/// Where a site's variant selections are read: the context their variable
+/// expressions evaluate in.
 ///
-/// A layer is evaluated when composition first reads it, with the
-/// variables of the first layer stack holding it that [`walk`] reaches
-/// (breadth first, through the arcs in authored order). A selection that
-/// fails to evaluate is removed, so a weaker selection applies
-/// (`PcpComposeSiteVariantSelection` in `pxr/usd/pcp/composeSite.cpp`). An
-/// evaluated name no layer uses selects the expression's own token, which
-/// names no variant either.
-///
-/// What each evaluation found is recorded, but only the selections
-/// composition reads count ([`read_selections`]): OpenUSD evaluates a
-/// selection only where it composes it.
-pub(crate) fn selection_view(
-    store: &mut dyn LayerStore,
-    root: LayerId,
-) -> Option<(SelectionView<'_>, SelectionFindings)> {
-    if !store.tokens().any(is_expression) {
-        return None;
-    }
-    let mut lazy = HashMap::new();
-    for walked in walk(store, root).stacks {
-        for id in &walked.stack.layers {
-            lazy.entry(*id)
-                .or_insert_with(|| (walked.chain.clone(), OnceCell::new()));
-        }
-    }
-    let findings = SelectionFindings::default();
-    let view = SelectionView {
-        store,
-        lazy,
-        findings: findings.clone(),
-    };
-    Some((view, findings))
+/// OpenUSD evaluates a selection with the expression variables of the layer
+/// stack of the node it is read through (`PcpComposeSiteVariantSelection`
+/// in `pxr/usd/pcp/composeSite.cpp`), composed along the arcs that reach it,
+/// so one layer reached from two contexts may select two variants.
+#[derive(Clone, Copy)]
+pub(crate) enum SiteContext<'a> {
+    /// A site of a layer stack reached through the chain of layer stacks,
+    /// outermost first (see [`LayerStack::chain_of`]).
+    Chain(&'a [LayerId]),
+    /// A site of the layer stack of `node` in a prim index's graph.
+    Node(&'a PrimIndexGraph, NodeId),
 }
 
-/// See [`selection_view`].
-pub(crate) struct SelectionView<'s> {
-    store: &'s mut dyn LayerStore,
-    /// For each layer the arcs reach, the chain of layer stacks whose
-    /// variables evaluate its selections, and its evaluated copy, once
-    /// read: `None` when it authors no selection expression.
-    lazy: HashMap<LayerId, (Vec<LayerId>, OnceCell<Option<Layer>>)>,
-    findings: SelectionFindings,
-}
+impl SiteContext<'_> {
+    /// The context of `source`, a site of the prim index `index`.
+    pub(crate) fn of_source<'a>(index: &'a PrimIndex, source: &OpinionKey) -> SiteContext<'a> {
+        SiteContext::Node(&index.graph, source.node)
+    }
 
-impl SelectionView<'_> {
-    /// A copy of the layer `id` with its selection expressions evaluated
-    /// in the chain `chain`; `None` when it authors none.
-    fn evaluate(&self, id: LayerId, chain: &[LayerId]) -> Option<Layer> {
-        let store = &*self.store;
-        let tokens = store.tokens();
-        let source = store
-            .layer(id)
-            .filter(|layer| has_selection_expressions(layer, tokens))?;
-        let variables = composed_variables(store, chain);
-        let mut layer = source.clone();
-        let mut findings = self.findings.borrow_mut();
-        for (site, selections) in selection_sites(store, &mut layer) {
-            let expressions: Vec<(TokenId, TokenId)> = selections
-                .iter()
-                .filter(|(_, variant)| is_expression(tokens.resolve(**variant)))
-                .map(|(set, variant)| (*set, *variant))
-                .collect();
-            for (set, token) in expressions {
-                let expression = tokens.resolve(token);
-                let evaluation = VariableExpression::parse(expression).evaluate(&variables);
-                let mut reads = VariableReads::default();
-                reads.record(store, chain, &evaluation.used_variables);
-                let error = match evaluation.into_string() {
-                    Ok(variant) => {
-                        let name = variant.as_deref().unwrap_or_default();
-                        selections.insert(set, tokens.lookup(name).unwrap_or(token));
-                        None
-                    }
-                    Err(error) => {
-                        selections.remove(&set);
-                        Some(expression_error(
-                            ExpressionContext::VariantSelection,
-                            id,
-                            None,
-                            expression,
-                            error,
-                        ))
-                    }
-                };
-                findings.push(EvaluatedSelection {
-                    layer: id,
-                    site: site.clone(),
-                    set,
-                    reads,
-                    error,
-                });
-            }
+    /// The root layers of the layer stacks whose variables apply,
+    /// outermost first.
+    fn chain(self) -> Vec<LayerId> {
+        match self {
+            Self::Chain(chain) => chain.to_vec(),
+            Self::Node(graph, node) => node_chain(graph, node),
         }
-        Some(layer)
     }
 }
 
-impl LayerStore for SelectionView<'_> {
-    fn layer(&self, id: LayerId) -> Option<&Layer> {
-        if let Some((chain, cell)) = self.lazy.get(&id)
-            && let Some(layer) = cell.get_or_init(|| self.evaluate(id, chain))
-        {
-            return Some(layer);
-        }
-        self.store.layer(id)
-    }
-
-    fn layer_mut(&mut self, id: LayerId) -> Option<&mut Layer> {
-        let evaluated = self
-            .lazy
-            .get_mut(&id)
-            .and_then(|(_, cell)| cell.get_mut())
-            .is_some_and(|layer| layer.is_some());
-        if evaluated {
-            self.lazy
-                .get_mut(&id)
-                .and_then(|(_, cell)| cell.get_mut())
-                .and_then(Option::as_mut)
-        } else {
-            self.store.layer_mut(id)
-        }
-    }
-
-    fn tokens(&self) -> &TokenInterner {
-        self.store.tokens()
-    }
-
-    fn tokens_mut(&mut self) -> &mut TokenInterner {
-        self.store.tokens_mut()
-    }
-
-    fn paths(&self) -> &crate::path::PathInterner {
-        self.store.paths()
-    }
-
-    fn paths_mut(&mut self) -> &mut crate::path::PathInterner {
-        self.store.paths_mut()
-    }
-
-    fn asset_layer(&self, anchor: LayerId, asset_path: &str) -> Option<LayerId> {
-        self.store.asset_layer(anchor, asset_path)
-    }
-}
-
-/// The selection maps of every prim spec and variant branch of `layer`,
-/// each with the spec path that names it as a source.
-fn selection_sites<'l>(
-    store: &dyn LayerStore,
-    layer: &'l mut Layer,
-) -> Vec<(SpecPath, &'l mut HashMap<TokenId, TokenId>)> {
-    let specs = layer
-        .prims
-        .iter_mut()
-        .map(|(path, spec)| (*path, spec))
-        .chain(
-            layer
-                .variant_prims
-                .iter_mut()
-                .flat_map(|(path, specs)| specs.iter_mut().map(|spec| (*path, spec))),
-        );
-    let mut maps = Vec::new();
-    for (path, spec) in specs {
-        let site = if spec.outer_variant_sites.is_empty() {
-            SpecPath::from_prim_path(path, store.paths())
-        } else {
-            SpecPath::from_variant_selection_sites(path, &spec.outer_variant_sites, store.paths())
+/// The root layers of the layer stacks on the arcs from `graph`'s root to
+/// `node`, outermost first, up to the first node of `node`'s layer stack:
+/// the chain whose variables `node`'s layer stack composes (see
+/// [`composed_variables`]).
+fn node_chain(graph: &PrimIndexGraph, node: NodeId) -> Vec<LayerId> {
+    let mut stacks = Vec::new();
+    let mut cursor = Some(node);
+    while let Some(id) = cursor {
+        let Some(current) = graph.node(id) else {
+            break;
         };
-        maps.push((site, &mut spec.variant_selections));
-        for (set, set_spec) in &mut spec.variant_sets {
-            for (variant, branch) in &mut set_spec.variants {
-                let mut sites = branch.outer_variant_sites.clone();
-                sites.push(VariantSelectionSite {
-                    host_path: path,
-                    set: *set,
-                    variant: *variant,
-                });
-                let site = SpecPath::from_variant_selection_sites(path, &sites, store.paths());
-                maps.push((site, &mut branch.variant_selections));
+        stacks.push(current.layer_stack());
+        cursor = current.parent();
+    }
+    stacks.reverse();
+    let own = graph.node(node).map(PrimNode::layer_stack);
+    if let Some(end) = stacks.iter().position(|stack| Some(*stack) == own) {
+        stacks.truncate(end + 1);
+    }
+    stacks.dedup();
+    stacks
+}
+
+/// The variant selections `selections`, authored at a site read in
+/// `context`, with those authored as variable expressions evaluated there:
+/// one that fails to evaluate is left out, so a weaker selection applies;
+/// an evaluated name no layer uses selects the expression's own token,
+/// which names no variant either. Borrowed unless a selection is an
+/// expression.
+///
+/// OpenUSD: `PcpComposeSiteVariantSelection` and
+/// `PcpComposeSiteVariantSelections` in `pxr/usd/pcp/composeSite.cpp`.
+pub(crate) fn site_selections<'m>(
+    store: &dyn LayerStore,
+    selections: &'m HashMap<TokenId, TokenId>,
+    context: SiteContext<'_>,
+) -> Cow<'m, HashMap<TokenId, TokenId>> {
+    let tokens = store.tokens();
+    if !tokens.has_expressions()
+        || !selections
+            .values()
+            .any(|variant| is_expression(tokens.resolve(*variant)))
+    {
+        return Cow::Borrowed(selections);
+    }
+    let variables = composed_variables(store, &context.chain());
+    let mut evaluated = selections.clone();
+    for (set, variant) in selections {
+        let expression = tokens.resolve(*variant);
+        if !is_expression(expression) {
+            continue;
+        }
+        match VariableExpression::parse(expression)
+            .evaluate(&variables)
+            .into_string()
+        {
+            Ok(name) => {
+                let name = name.unwrap_or_default();
+                evaluated.insert(*set, tokens.lookup(&name).unwrap_or(*variant));
+            }
+            Err(_) => {
+                evaluated.remove(set);
             }
         }
     }
-    maps
+    Cow::Owned(evaluated)
 }
 
-/// Whether a variant selection of `layer` is a variable expression.
-fn has_selection_expressions(layer: &Layer, tokens: &TokenInterner) -> bool {
-    let is_expression_token = |variant: &TokenId| is_expression(tokens.resolve(*variant));
-    layer
-        .prims
-        .values()
-        .chain(layer.variant_prims.values().flatten())
-        .any(|spec| {
-            spec.variant_selections.values().any(is_expression_token)
-                || spec
-                    .variant_sets
-                    .values()
-                    .flat_map(|set| set.variants.values())
-                    .any(|variant| variant.variant_selections.values().any(is_expression_token))
-        })
+/// The variant selections authored at `source`: those of its prim spec, or
+/// of the variant branch its spec path ends in, as authored.
+fn authored_source_selections<'s>(
+    store: &'s dyn LayerStore,
+    source: &OpinionKey,
+) -> Option<&'s HashMap<TokenId, TokenId>> {
+    use crate::spec_path::SpecComponent;
+    let spec = store.layer(source.layer_id).and_then(|layer| {
+        layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+    })?;
+    match source.spec_path.components().last() {
+        Some(SpecComponent::VariantSelection { set, variant }) => spec
+            .variant_sets
+            .get(set)
+            .and_then(|set_spec| set_spec.variants.get(variant))
+            .map(|branch| &branch.variant_selections),
+        _ => Some(&spec.variant_selections),
+    }
 }
 
-/// The errors and variable reads of the evaluated selections `findings`
-/// that composition reads: those of a site among a composed prim's
-/// sources, `prims`, for a variant set a node of the prim declares
-/// ([`declared_variant_sets`]), that no stronger source of the prim
-/// selects the same set at.
+/// The variable expression errors and variable reads of the variant
+/// selections composition reads for the composed prims `prims`.
 ///
-/// OpenUSD evaluates a selection only when it composes it: for each
-/// variant set a node's `variantSets` declare (`_EvalNodeVariantSets`), it
-/// searches the nodes strongest first until one selects the set
-/// (`_ComposeVariantSelectionForNode` in `pxr/usd/pcp/primIndex.cpp`,
-/// `PcpComposeSiteVariantSelection` in `pxr/usd/pcp/composeSite.cpp`),
-/// and records the variables it used there. A selection in an unselected
+/// For each variant set some node of a prim declares
+/// ([`declared_variant_sets`]), the prim's sources are searched strongest
+/// first until one selects the set: each selection authored as an
+/// expression on the way is evaluated in its source's context
+/// ([`SiteContext::Node`]), recording the variables it reads; one that
+/// fails is an error and the search goes on. A selection in an unselected
 /// branch, beneath a stronger one, or for a set no node declares is
 /// neither an error nor a dependency.
+///
+/// OpenUSD: `_EvalNodeVariantSets` and `_ComposeVariantSelectionForNode`
+/// in `pxr/usd/pcp/primIndex.cpp`, `PcpComposeSiteVariantSelection` in
+/// `pxr/usd/pcp/composeSite.cpp`.
 pub(crate) fn read_selections(
     store: &dyn LayerStore,
-    prims: &HashMap<crate::path::PathId, crate::prim_index::PrimIndex>,
-    findings: &SelectionFindings,
+    prims: &HashMap<crate::path::PathId, PrimIndex>,
 ) -> (Vec<crate::CompositionError>, VariableReads) {
-    let findings = core::mem::take(&mut *findings.borrow_mut());
-    let mut read = alloc::vec![false; findings.len()];
-    if !findings.is_empty() {
-        for index in prims.values() {
-            let declared = declared_variant_sets(store, index);
-            let mut decided: HashSet<TokenId> = HashSet::new();
-            for source in &index.sources {
-                for (i, finding) in findings.iter().enumerate() {
-                    if finding.layer == source.layer_id
-                        && finding.site == source.spec_path
-                        && declared.contains(&finding.set)
-                        && !decided.contains(&finding.set)
-                    {
-                        read[i] = true;
-                    }
-                }
-                decided.extend(source_selections(store, source));
-            }
-        }
-    }
     let mut errors = Vec::new();
     let mut reads = VariableReads::default();
-    for (finding, read) in findings.into_iter().zip(read) {
-        if read {
-            reads.extend(finding.reads);
-            errors.extend(finding.error);
+    if !store.tokens().has_expressions() {
+        return (errors, reads);
+    }
+    let tokens = store.tokens();
+    for index in prims.values() {
+        let declared = declared_variant_sets(store, index);
+        let mut decided: HashSet<TokenId> = HashSet::new();
+        for source in &index.sources {
+            let Some(selections) = authored_source_selections(store, source) else {
+                continue;
+            };
+            for (set, variant) in selections {
+                if !declared.contains(set) || decided.contains(set) {
+                    continue;
+                }
+                let expression = tokens.resolve(*variant);
+                if !is_expression(expression) {
+                    decided.insert(*set);
+                    continue;
+                }
+                let chain = node_chain(&index.graph, source.node);
+                let variables = composed_variables(store, &chain);
+                let evaluation = VariableExpression::parse(expression).evaluate(&variables);
+                reads.record(store, &chain, &evaluation.used_variables);
+                match evaluation.into_string() {
+                    Ok(_) => {
+                        decided.insert(*set);
+                    }
+                    Err(error) => errors.push(expression_error(
+                        ExpressionContext::VariantSelection,
+                        source.layer_id,
+                        None,
+                        expression,
+                        error,
+                    )),
+                }
+            }
         }
     }
     (errors, reads)
@@ -783,11 +693,8 @@ pub(crate) fn read_selections(
 /// OpenUSD: `PcpComposeSiteVariantSets` in `pxr/usd/pcp/composeSite.cpp`,
 /// called for each node by `_EvalNodeVariantSets` in
 /// `pxr/usd/pcp/primIndex.cpp`.
-pub(crate) fn declared_variant_sets(
-    store: &dyn LayerStore,
-    index: &crate::prim_index::PrimIndex,
-) -> HashSet<TokenId> {
-    let mut per_node: HashMap<crate::prim_index_graph::NodeId, Vec<TokenId>> = HashMap::new();
+pub(crate) fn declared_variant_sets(store: &dyn LayerStore, index: &PrimIndex) -> HashSet<TokenId> {
+    let mut per_node: HashMap<NodeId, Vec<TokenId>> = HashMap::new();
     for source in index.sources.iter().rev() {
         let Some(spec) = store.layer(source.layer_id).and_then(|layer| {
             layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
@@ -803,31 +710,6 @@ pub(crate) fn declared_variant_sets(
         }
     }
     per_node.into_values().flatten().collect()
-}
-
-/// The variant sets `source` selects: the selections of its prim spec, or
-/// of the variant branch its spec path ends in.
-fn source_selections(
-    store: &dyn LayerStore,
-    source: &crate::prim_index::OpinionKey,
-) -> Vec<TokenId> {
-    use crate::spec_path::SpecComponent;
-    let Some(spec) = store.layer(source.layer_id).and_then(|layer| {
-        layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
-    }) else {
-        return Vec::new();
-    };
-    let selections = match source.spec_path.components().last() {
-        Some(SpecComponent::VariantSelection { set, variant }) => spec
-            .variant_sets
-            .get(set)
-            .and_then(|set_spec| set_spec.variants.get(variant))
-            .map(|branch| &branch.variant_selections),
-        _ => Some(&spec.variant_selections),
-    };
-    selections
-        .map(|selections| selections.keys().copied().collect())
-        .unwrap_or_default()
 }
 
 /// Every reference and payload `layer` authors, in any spec and variant

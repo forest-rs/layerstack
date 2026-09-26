@@ -23,7 +23,11 @@ use alloc::vec::Vec;
 
 use hashbrown::{HashMap, HashSet};
 
-use crate::{doc::PrimSpec, interner::TokenId};
+use crate::{
+    doc::{LayerStore, PrimSpec},
+    expression_variables::{SiteContext, site_selections},
+    interner::TokenId,
+};
 
 /// Variant fallback selections: for each variant set name, the variant
 /// names to select, in order of preference, where no selection is
@@ -50,10 +54,14 @@ pub type VariantFallbacks = HashMap<TokenId, Vec<TokenId>>;
 /// re-evaluating the pending ones as authored after each fallback branch is
 /// added (`_EvalNodeAuthoredVariant`, `_EvalNodeFallbackVariant` and
 /// `_ChooseBestFallbackAmongOptions` in `pxr/usd/pcp/primIndex.cpp`).
+///
+/// Each spec comes with the context its branches' selections, variable
+/// expressions among them, are read in ([`SiteContext`]).
 pub(crate) fn apply_variant_fallbacks(
+    store: &dyn LayerStore,
     fallbacks: &VariantFallbacks,
     selections: &mut HashMap<TokenId, TokenId>,
-    specs: &[&PrimSpec],
+    specs: &[(&PrimSpec, SiteContext<'_>)],
 ) {
     if fallbacks.is_empty() {
         return;
@@ -62,7 +70,7 @@ pub(crate) fn apply_variant_fallbacks(
     loop {
         let next = specs
             .iter()
-            .flat_map(|spec| spec.variant_set_order.iter().copied())
+            .flat_map(|(spec, _)| spec.variant_set_order.iter().copied())
             .find(|set| {
                 !selections.contains_key(set)
                     && fallbacks.contains_key(set)
@@ -73,7 +81,7 @@ pub(crate) fn apply_variant_fallbacks(
         };
         filled.insert(set);
         let chosen = fallbacks[&set].iter().copied().find(|variant| {
-            specs.iter().any(|spec| {
+            specs.iter().any(|(spec, _)| {
                 spec.variant_sets
                     .get(&set)
                     .is_some_and(|set_spec| set_spec.variants.contains_key(variant))
@@ -87,7 +95,7 @@ pub(crate) fn apply_variant_fallbacks(
         // select in turn.
         let mut pending = alloc::vec![(set, variant)];
         while let Some((set, variant)) = pending.pop() {
-            for spec in specs {
+            for (spec, context) in specs {
                 let Some(branch) = spec
                     .variant_sets
                     .get(&set)
@@ -95,7 +103,8 @@ pub(crate) fn apply_variant_fallbacks(
                 else {
                     continue;
                 };
-                for (inner_set, inner_variant) in &branch.variant_selections {
+                let inner = site_selections(store, &branch.variant_selections, *context);
+                for (inner_set, inner_variant) in inner.iter() {
                     if !selections.contains_key(inner_set) {
                         selections.insert(*inner_set, *inner_variant);
                         pending.push((*inner_set, *inner_variant));

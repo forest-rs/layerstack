@@ -13,7 +13,8 @@
 //! The fixture covers a sublayer path, reference and payload paths,
 //! variant selections, a referencing layer stack overriding a referenced
 //! one's variable (for an asset path, for a variant selection and for the
-//! referenced layer stack's own sublayer path), a
+//! referenced layer stack's own sublayer path), one layer whose selection
+//! two referencing contexts evaluate to two variants, a
 //! variable passing through a layer stack in between, a variable that is
 //! not set, an expression that does not parse, one that evaluates to no
 //! value and one that evaluates to another type than string, a stronger

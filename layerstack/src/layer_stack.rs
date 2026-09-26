@@ -8,7 +8,7 @@
 //!
 //! Spec: AOUSD Core §9 (Layer stacks).
 
-use alloc::{string::String, vec::Vec};
+use alloc::{rc::Rc, string::String, vec::Vec};
 
 use hashbrown::HashSet;
 
@@ -31,9 +31,41 @@ pub struct LayerStack {
     ///
     /// Spec: §12.3.2.1 (sublayer offsets compose when nested).
     pub offsets: Vec<LayerOffset>,
+    /// For each layer in `layers` (parallel indexing), the root layers of
+    /// the layer stacks on the chain of arcs that reaches it, outermost
+    /// first: the context its variable expressions evaluate in (see
+    /// [`LayerStack::chain_of`]). Every layer of a gathered stack shares
+    /// one chain; a stack composition joins from two has each part's.
+    pub(crate) chains: Vec<Rc<[LayerId]>>,
 }
 
 impl LayerStack {
+    /// The chain of layer stacks that reaches `layer` in this stack
+    /// ([`LayerStack::chains`]), outermost first; empty for a layer not in
+    /// it.
+    pub(crate) fn chain_of(&self, layer: LayerId) -> &[LayerId] {
+        self.layers
+            .iter()
+            .position(|id| *id == layer)
+            .and_then(|index| self.chains.get(index))
+            .map_or(&[], |chain| chain)
+    }
+
+    /// This stack followed by `weaker`, each layer keeping its offset and
+    /// chain.
+    pub(crate) fn joined(&self, weaker: &Self) -> Self {
+        Self {
+            layers: self.layers.iter().chain(&weaker.layers).copied().collect(),
+            offsets: self
+                .offsets
+                .iter()
+                .chain(&weaker.offsets)
+                .copied()
+                .collect(),
+            chains: self.chains.iter().chain(&weaker.chains).cloned().collect(),
+        }
+    }
+
     /// Gathers the layer stack rooted at `root`.
     ///
     /// A sublayer that would form a cycle, or whose asset path could not be
@@ -191,6 +223,7 @@ impl LayerStack {
             return Self {
                 layers: Vec::new(),
                 offsets: Vec::new(),
+                chains: Vec::new(),
             };
         };
         let mut gather = Gather {
@@ -203,7 +236,9 @@ impl LayerStack {
             reads: reads.take(),
         };
         gather.visit(root, LayerOffset::IDENTITY);
+        let shared: Rc<[LayerId]> = Rc::from(chain);
         Self {
+            chains: alloc::vec![shared; gather.layers.len()],
             layers: gather.layers,
             offsets: gather.offsets,
         }

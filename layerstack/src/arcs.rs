@@ -22,7 +22,7 @@ use crate::{
         Layer, LayerId, LayerStore, PrimSpec, Reference, ReferenceTarget, VariantSpec,
         default_prim_names,
     },
-    expression_variables::ArcAnchor,
+    expression_variables::{ArcAnchor, SiteContext, site_selections},
     interner::TokenId,
     layer_stack::LayerStack,
     listop::{ListOp, resolve_list_chain},
@@ -756,13 +756,19 @@ fn apply_site_fallbacks(
     if fallbacks.is_empty() {
         return;
     }
-    let specs: Vec<&PrimSpec> = stack
+    let specs: Vec<(&PrimSpec, SiteContext<'_>)> = stack
         .layers
         .iter()
         .filter_map(|id| store.layer(*id))
-        .flat_map(|layer| paths.iter().filter_map(|path| layer.prims.get(path)))
+        .flat_map(|layer| {
+            let context = SiteContext::Chain(stack.chain_of(layer.id));
+            paths
+                .iter()
+                .filter_map(|path| layer.prims.get(path))
+                .map(move |spec| (spec, context))
+        })
         .collect();
-    apply_variant_fallbacks(fallbacks, selections, &specs);
+    apply_variant_fallbacks(store, fallbacks, selections, &specs);
 }
 
 /// Resolves the variant selections of `prim` in `local_stack`: the
@@ -779,11 +785,12 @@ pub(crate) fn resolve_variant_selections_for_prim(
 ) -> HashMap<TokenId, TokenId> {
     let mut selected = authored_variant_selections_for_prim(store, fallbacks, local_stack, prim);
     if !fallbacks.is_empty() {
-        let specs: Vec<&PrimSpec> = local_stack
+        let specs: Vec<(&PrimSpec, SiteContext<'_>)> = local_stack
             .layers
             .iter()
             .filter_map(|id| store.layer(*id))
             .flat_map(|layer| {
+                let context = SiteContext::Chain(local_stack.chain_of(layer.id));
                 variant_host_specs(
                     store,
                     fallbacks,
@@ -792,9 +799,11 @@ pub(crate) fn resolve_variant_selections_for_prim(
                     prim,
                     SelectionScope::Stack,
                 )
+                .into_iter()
+                .map(move |spec| (spec, context))
             })
             .collect();
-        apply_variant_fallbacks(fallbacks, &mut selected, &specs);
+        apply_variant_fallbacks(store, fallbacks, &mut selected, &specs);
     }
     selected
 }
@@ -815,31 +824,39 @@ pub(crate) fn authored_variant_selections_for_prim(
     prim: PathId,
 ) -> HashMap<TokenId, TokenId> {
     let mut selected = HashMap::new();
-    for spec in selection_host_specs(store, fallbacks, local_stack, prim) {
-        for (set, variant) in &spec.variant_selections {
+    for (spec, chain) in selection_host_specs(store, fallbacks, local_stack, prim) {
+        let selections =
+            site_selections(store, &spec.variant_selections, SiteContext::Chain(chain));
+        for (set, variant) in selections.iter() {
             selected.entry(*set).or_insert(*variant);
         }
     }
     selected
 }
 
+/// A spec of a prim with the chain of layer stacks that reaches its layer,
+/// the context its variant selection expressions evaluate in
+/// ([`LayerStack::chain_of`]).
+pub(crate) type HostSpec<'a, 's> = (&'a PrimSpec, &'s [LayerId]);
+
 /// Returns the specs of `prim` in `local_stack`, stronger layers first,
 /// whose variant selections and variant sets compose: its specs outside any
 /// variant branch and its specs inside selected branches of its ancestors
-/// (`/P{v=x}C`).
+/// (`/P{v=x}C`), each with the chain that reaches its layer.
 ///
 /// Spec: AOUSD Core §7.3.6 (variant specs contain prim specs), §10.3.2.5.
-pub(crate) fn selection_host_specs<'a>(
+pub(crate) fn selection_host_specs<'a, 's>(
     store: &'a dyn LayerStore,
     fallbacks: &VariantFallbacks,
-    local_stack: &LayerStack,
+    local_stack: &'s LayerStack,
     prim: PathId,
-) -> Vec<&'a PrimSpec> {
+) -> Vec<HostSpec<'a, 's>> {
     local_stack
         .layers
         .iter()
-        .filter_map(|id| store.layer(*id))
-        .flat_map(|layer| {
+        .zip(&local_stack.chains)
+        .filter_map(|(id, chain)| Some((store.layer(*id)?, &**chain)))
+        .flat_map(|(layer, chain)| {
             variant_host_specs(
                 store,
                 fallbacks,
@@ -848,6 +865,8 @@ pub(crate) fn selection_host_specs<'a>(
                 prim,
                 SelectionScope::Stack,
             )
+            .into_iter()
+            .map(move |spec| (spec, chain))
         })
         .collect()
 }
@@ -1133,14 +1152,16 @@ pub(crate) fn resolve_variant_child_references(
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
+        let context = SiteContext::Chain(selections_stack.chain_of(*layer_id));
         if let Some(spec) = layer.prims.get(&parent_id) {
-            for (set, variant) in &spec.variant_selections {
+            for (set, variant) in site_selections(store, &spec.variant_selections, context).iter() {
                 parent_selections.entry(*set).or_insert(*variant);
             }
         }
         for inherit_target in &inherits {
             if let Some(inherit_spec) = layer.prims.get(inherit_target) {
-                for (set, variant) in &inherit_spec.variant_selections {
+                let authored = site_selections(store, &inherit_spec.variant_selections, context);
+                for (set, variant) in authored.iter() {
                     parent_selections.entry(*set).or_insert(*variant);
                 }
             }
@@ -1161,11 +1182,14 @@ pub(crate) fn resolve_variant_child_references(
                 let Some(spec) = layer.prims.get(&check_path) else {
                     continue;
                 };
+                let context = SiteContext::Chain(selections_stack.chain_of(*layer_id));
                 for (set, selected_variant) in &parent_selections {
                     if let Some(set_spec) = spec.variant_sets.get(set)
                         && let Some(variant_spec) = set_spec.variants.get(selected_variant)
                     {
-                        for (inner_set, inner_variant) in &variant_spec.variant_selections {
+                        let inner =
+                            site_selections(store, &variant_spec.variant_selections, context);
+                        for (inner_set, inner_variant) in inner.iter() {
                             if !parent_selections.contains_key(inner_set) {
                                 new_sels.entry(*inner_set).or_insert(*inner_variant);
                             }

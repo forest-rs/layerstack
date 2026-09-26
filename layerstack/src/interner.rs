@@ -40,6 +40,9 @@ impl TokenId {
 pub struct TokenInterner {
     by_str: HashMap<Arc<str>, TokenId>,
     strings: Vec<Arc<str>>,
+    /// Whether some interned string is a variable expression, so a variant
+    /// selection may be one ([`crate::variable_expression::is_expression`]).
+    expressions: bool,
 }
 
 impl TokenInterner {
@@ -53,6 +56,7 @@ impl TokenInterner {
 
         let id = TokenId(u32::try_from(self.strings.len()).expect("token interner overflow"));
         let arc: Arc<str> = Arc::from(s_ref);
+        self.expressions |= crate::variable_expression::is_expression(s_ref);
         self.strings.push(arc.clone());
         self.by_str.insert(arc, id);
         id
@@ -70,8 +74,10 @@ impl TokenInterner {
         &self.strings[usize::try_from(id.0).expect("token id out of range")]
     }
 
-    /// Returns `true` when some interned string satisfies `f`.
-    pub(crate) fn any(&self, f: impl Fn(&str) -> bool) -> bool {
-        self.strings.iter().any(|s| f(s))
+    /// Returns `true` when some interned string is a variable expression
+    /// ([`crate::variable_expression::is_expression`]), which a variant
+    /// selection token may then be.
+    pub(crate) fn has_expressions(&self) -> bool {
+        self.expressions
     }
 }

@@ -18,8 +18,8 @@ use crate::variant_fallbacks::{VariantFallbacks, apply_variant_fallbacks};
 use crate::{
     arc_cycle::CycleDetector,
     arcs::{
-        ArcAuthoring, AuthoredReference, SelectionScope, VariantNodeOrder, anchor_internal_arcs,
-        lookup_reference_target_path, resolve_branch_payloads_in,
+        ArcAuthoring, AuthoredReference, HostSpec, SelectionScope, VariantNodeOrder,
+        anchor_internal_arcs, lookup_reference_target_path, resolve_branch_payloads_in,
         resolve_direct_references_for_prim, resolve_inherits_for_prim,
         resolve_inherits_for_prim_in, resolve_payloads_for_prim, resolve_payloads_for_prim_in,
         resolve_references_for_prim_selected, resolve_specializes_for_prim,
@@ -40,7 +40,7 @@ use crate::{
         FieldValue, LayerId, LayerOffset, LayerStore, Reference, ReferenceTarget, composed_entries,
     },
     expression_variables::{
-        ArcAnchor, ExpressionScope, SelectionFindings, read_selections, selection_view,
+        ArcAnchor, ExpressionScope, SiteContext, read_selections, site_selections,
     },
     interner::TokenId,
     layer_stack::LayerStack,
@@ -174,23 +174,6 @@ pub(crate) fn compose_stage(
     store: &mut dyn LayerStore,
     root: LayerId,
     options: StageOptions,
-) -> Stage {
-    // Variant selections authored as variable expressions are evaluated as
-    // composition reads their layers, through a view of the store.
-    match selection_view(store, root) {
-        None => compose_evaluated(store, root, options, None),
-        Some((mut view, findings)) => compose_evaluated(&mut view, root, options, Some(&findings)),
-    }
-}
-
-/// Composes the stage rooted at `root`, reporting the errors and recording
-/// the variable reads of the evaluated selections, `selections`, that
-/// composition read ([`read_selections`]).
-fn compose_evaluated(
-    store: &mut dyn LayerStore,
-    root: LayerId,
-    options: StageOptions,
-    selections: Option<&SelectionFindings>,
 ) -> Stage {
     // The variant fallbacks every selection is resolved with, passed
     // explicitly to each function that resolves selections.
@@ -351,15 +334,14 @@ fn compose_evaluated(
         drop_inconsistent_property_kinds(*path, prim, &mut cycles);
     }
     drop_instance_targets(store, &mut prims, &mut cycles);
-    // Only the evaluated variant selections composition read are errors
-    // and dependencies.
-    if let Some(selections) = selections {
-        let (errors, reads) = read_selections(store, &prims, selections);
-        for error in errors {
-            cycles.report(error);
-        }
-        cycles.add_variable_reads(reads);
+    // Variant selections authored as expressions are evaluated where they
+    // are read (`site_selections`); those composition reads are errors and
+    // dependencies.
+    let (errors, reads) = read_selections(store, &prims);
+    for error in errors {
+        cycles.report(error);
     }
+    cycles.add_variable_reads(reads);
 
     if let Some(builder) = dep_builder.as_mut() {
         builder.retain_prims(&prims);
@@ -635,15 +617,17 @@ pub(crate) fn strength_ordered_variant_selections(
     fallbacks: &VariantFallbacks,
     prim_index: &PrimIndex,
 ) -> HashMap<TokenId, TokenId> {
-    let mut selections = authored_strength_ordered_variant_selections(store, prim_index);
-    apply_fallbacks_at(store, fallbacks, &mut selections, &prim_index.sources, &[]);
+    let (graph, sources) = (&prim_index.graph, &prim_index.sources[..]);
+    let mut selections = authored_strength_ordered_variant_selections(store, graph, sources);
+    apply_fallbacks_at(store, fallbacks, &mut selections, graph, sources, &[]);
     selections
 }
 
 /// The selections of [`strength_ordered_variant_selections`] before variant
 /// fallbacks apply, for callers that add weaker selections first.
 ///
-/// Each source of `prim_index` is a [`VariantSite`]: a spec outside the
+/// Each of `sources`, sites of the prim index whose graph is `graph`, is
+/// a [`VariantSite`], read in its node's context: a spec outside the
 /// prim's own variant branches, or the branch its spec path ends in
 /// (`/P{a=x}`, or `/P{a=x}{b=y}` for a set nested in another branch), in
 /// the strength order of the prim index, where a branch of the prim's own
@@ -652,12 +636,12 @@ pub(crate) fn strength_ordered_variant_selections(
 /// and those of [`authored_composed_variant_selections`], fill in the rest.
 fn authored_strength_ordered_variant_selections(
     store: &dyn LayerStore,
-    prim_index: &PrimIndex,
+    graph: &PrimIndexGraph,
+    sources: &[OpinionKey],
 ) -> HashMap<TokenId, TokenId> {
     use crate::spec_path::SpecComponent;
 
-    let sites: Vec<VariantSite<'_>> = prim_index
-        .sources
+    let sites: Vec<VariantSite<'_>> = sources
         .iter()
         .filter_map(|source| {
             let spec = store.layer(source.layer_id).and_then(|layer| {
@@ -673,11 +657,18 @@ fn authored_strength_ordered_variant_selections(
                     SpecComponent::Prim(_) => None,
                 })
                 .collect();
-            Some(VariantSite::of_spec(spec, source.lookup_path, branch))
+            let context = SiteContext::Node(graph, source.node);
+            Some(VariantSite::of_spec(
+                store,
+                spec,
+                source.lookup_path,
+                branch,
+                context,
+            ))
         })
         .collect();
     let mut selections = evaluate_variant_sets(&sites);
-    for (set, variant) in authored_composed_variant_selections(store, prim_index) {
+    for (set, variant) in authored_composed_variant_selections(store, graph, sources) {
         selections.entry(set).or_insert(variant);
     }
     selections
@@ -693,8 +684,8 @@ struct VariantSite<'a> {
     /// The prim's own branches the site lies in, innermost first: empty for
     /// a spec.
     branch: Vec<(TokenId, TokenId)>,
-    /// The selections the site authors.
-    authored: Option<&'a HashMap<TokenId, TokenId>>,
+    /// The selections the site authors, evaluated where it is read.
+    authored: Option<Cow<'a, HashMap<TokenId, TokenId>>>,
     /// The prim spec hosting the branches, and its path, for the variant
     /// sets the site declares; `None` for a site that declares none.
     host: Option<(&'a crate::doc::PrimSpec, PathId)>,
@@ -702,11 +693,13 @@ struct VariantSite<'a> {
 
 impl<'a> VariantSite<'a> {
     /// The site of `spec`, the spec of the prim `host`, or of its branch
-    /// `branch`, innermost first.
+    /// `branch`, innermost first, read in `context`.
     fn of_spec(
+        store: &dyn LayerStore,
         spec: &'a crate::doc::PrimSpec,
         host: PathId,
         branch: Vec<(TokenId, TokenId)>,
+        context: SiteContext<'_>,
     ) -> Self {
         let authored = match branch.first() {
             Some((set, variant)) => spec
@@ -718,20 +711,23 @@ impl<'a> VariantSite<'a> {
         };
         Self {
             branch,
-            authored,
+            authored: authored.map(|authored| site_selections(store, authored, context)),
             host: Some((spec, host)),
         }
     }
 
     /// The sites of the node whose layer stack holds `specs`, the specs of
-    /// the prim `host`, stronger layers first: each spec, then each variant
-    /// branch in the node's strength order.
-    fn of_node(specs: &[&'a crate::doc::PrimSpec], host: PathId) -> Vec<Self> {
+    /// the prim `host` with the chains reaching them, stronger layers
+    /// first: each spec, then each variant branch in the node's strength
+    /// order.
+    fn of_node(store: &dyn LayerStore, specs: &[HostSpec<'a, '_>], host: PathId) -> Vec<Self> {
         let mut sites: Vec<Self> = specs
             .iter()
-            .map(|spec| Self::of_spec(spec, host, Vec::new()))
+            .map(|(spec, chain)| {
+                Self::of_spec(store, spec, host, Vec::new(), SiteContext::Chain(chain))
+            })
             .collect();
-        sites.extend(Self::branches_of_node(specs, host));
+        sites.extend(Self::branches_of_node(store, specs, host));
         sites
     }
 
@@ -739,11 +735,15 @@ impl<'a> VariantSite<'a> {
     /// holds `specs`, the specs of the prim `host`, stronger layers first:
     /// in the order of their variant nodes ([`VariantNodeOrder`]), each
     /// node's specs by layer.
-    fn branches_of_node(specs: &[&'a crate::doc::PrimSpec], host: PathId) -> Vec<Self> {
-        let order = VariantNodeOrder::new(specs.iter().copied());
+    fn branches_of_node(
+        store: &dyn LayerStore,
+        specs: &[HostSpec<'a, '_>],
+        host: PathId,
+    ) -> Vec<Self> {
+        let order = VariantNodeOrder::new(specs.iter().map(|(spec, _)| *spec));
         // Each branch with its node's rank, then its layer.
         let mut branches: Vec<(Vec<usize>, usize, Self)> = Vec::new();
-        for (layer, spec) in specs.iter().enumerate() {
+        for (layer, (spec, chain)) in specs.iter().enumerate() {
             for (set, set_spec) in &spec.variant_sets {
                 for (variant, variant_spec) in &set_spec.variants {
                     let mut branch: Vec<(TokenId, TokenId)> = variant_spec
@@ -755,7 +755,8 @@ impl<'a> VariantSite<'a> {
                     branch.push((*set, *variant));
                     branch.reverse();
                     let node = order.rank(host, *set, variant_spec);
-                    branches.push((node, layer, Self::of_spec(spec, host, branch)));
+                    let site = Self::of_spec(store, spec, host, branch, SiteContext::Chain(chain));
+                    branches.push((node, layer, site));
                 }
             }
         }
@@ -769,7 +770,7 @@ impl<'a> VariantSite<'a> {
     fn authored_only(authored: &'a HashMap<TokenId, TokenId>) -> Self {
         Self {
             branch: Vec::new(),
-            authored: Some(authored),
+            authored: Some(Cow::Borrowed(authored)),
             host: None,
         }
     }
@@ -835,7 +836,7 @@ fn evaluate_variant_sets(sites: &[VariantSite<'_>]) -> HashMap<TokenId, TokenId>
         let found = sites
             .iter()
             .filter(|site| site.composed(&selections))
-            .find_map(|site| site.authored?.get(&set).copied());
+            .find_map(|site| site.authored.as_ref()?.get(&set).copied());
         match found {
             Some(variant) => {
                 selections.insert(set, variant);
@@ -855,7 +856,7 @@ fn evaluate_variant_sets(sites: &[VariantSite<'_>]) -> HashMap<TokenId, TokenId>
             if !site.composed(&selections) {
                 continue;
             }
-            for (set, variant) in site.authored.into_iter().flatten() {
+            for (set, variant) in site.authored.iter().flat_map(|authored| authored.iter()) {
                 if !selections.contains_key(set) && !unselected.contains(set) {
                     selections.insert(*set, *variant);
                     changed = true;
@@ -904,6 +905,7 @@ fn apply_fallbacks_at(
     store: &dyn LayerStore,
     fallbacks: &VariantFallbacks,
     selections: &mut HashMap<TokenId, TokenId>,
+    graph: &PrimIndexGraph,
     sources: &[OpinionKey],
     sites: &[(&LayerStack, PathId)],
 ) {
@@ -911,19 +913,24 @@ fn apply_fallbacks_at(
         return;
     }
     let source_specs = sources.iter().filter_map(|source| {
-        store.layer(source.layer_id).and_then(|layer| {
+        let spec = store.layer(source.layer_id).and_then(|layer| {
             layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
-        })
+        })?;
+        Some((spec, SiteContext::Node(graph, source.node)))
     });
     let site_specs = sites.iter().flat_map(|(stack, prim)| {
         stack
             .layers
             .iter()
             .filter_map(|id| store.layer(*id))
-            .flat_map(|layer| layer.prim_specs(*prim))
+            .flat_map(move |layer| {
+                let context = SiteContext::Chain(stack.chain_of(layer.id));
+                layer.prim_specs(*prim).map(move |spec| (spec, context))
+            })
     });
-    let specs: Vec<&crate::doc::PrimSpec> = source_specs.chain(site_specs).collect();
-    apply_variant_fallbacks(fallbacks, selections, &specs);
+    let specs: Vec<(&crate::doc::PrimSpec, SiteContext<'_>)> =
+        source_specs.chain(site_specs).collect();
+    apply_variant_fallbacks(store, fallbacks, selections, &specs);
 }
 
 /// Resolves the variant selections of a composed prim from its prim index.
@@ -938,8 +945,9 @@ fn composed_variant_selections(
     fallbacks: &VariantFallbacks,
     prim_index: &PrimIndex,
 ) -> HashMap<TokenId, TokenId> {
-    let mut selections = authored_composed_variant_selections(store, prim_index);
-    apply_fallbacks_at(store, fallbacks, &mut selections, &prim_index.sources, &[]);
+    let (graph, sources) = (&prim_index.graph, &prim_index.sources[..]);
+    let mut selections = authored_composed_variant_selections(store, graph, sources);
+    apply_fallbacks_at(store, fallbacks, &mut selections, graph, sources, &[]);
     selections
 }
 
@@ -947,10 +955,11 @@ fn composed_variant_selections(
 /// fallbacks apply.
 fn authored_composed_variant_selections(
     store: &dyn LayerStore,
-    prim_index: &PrimIndex,
+    graph: &PrimIndexGraph,
+    sources: &[OpinionKey],
 ) -> HashMap<TokenId, TokenId> {
     let mut selections: HashMap<TokenId, TokenId> = HashMap::new();
-    for source in &prim_index.sources {
+    for source in sources {
         let Some(layer) = store.layer(source.layer_id) else {
             continue;
         };
@@ -959,7 +968,9 @@ fn authored_composed_variant_selections(
         else {
             continue;
         };
-        for (set, variant) in &spec.variant_selections {
+        let context = SiteContext::Node(graph, source.node);
+        let authored = site_selections(store, &spec.variant_selections, context);
+        for (set, variant) in authored.iter() {
             selections.entry(*set).or_insert(*variant);
         }
     }
@@ -967,7 +978,7 @@ fn authored_composed_variant_selections(
     // Expand selections from within selected variant branches (chaining).
     loop {
         let mut new_sels = HashMap::new();
-        for source in &prim_index.sources {
+        for source in sources {
             let Some(layer) = store.layer(source.layer_id) else {
                 continue;
             };
@@ -980,7 +991,9 @@ fn authored_composed_variant_selections(
                 if let Some(set_spec) = spec.variant_sets.get(set)
                     && let Some(variant_spec) = set_spec.variants.get(selected_variant)
                 {
-                    for (inner_set, inner_variant) in &variant_spec.variant_selections {
+                    let context = SiteContext::Node(graph, source.node);
+                    let inner = site_selections(store, &variant_spec.variant_selections, context);
+                    for (inner_set, inner_variant) in inner.iter() {
                         if !selections.contains_key(inner_set) {
                             new_sels.entry(*inner_set).or_insert(*inner_variant);
                         }
@@ -1176,13 +1189,9 @@ fn spec_path_branches_selected(
                     .copied()
             })
             .or_else(|| {
-                store
-                    .layer(layer_id)?
-                    .prims
-                    .get(&host?)?
-                    .variant_selections
-                    .get(&set)
-                    .copied()
+                let authored = &store.layer(layer_id)?.prims.get(&host?)?.variant_selections;
+                let context = SiteContext::Node(&prims[&prim_path].graph, node);
+                site_selections(store, authored, context).get(&set).copied()
             });
         if selection.is_some_and(|selected| selected != variant) {
             return false;
@@ -1553,7 +1562,8 @@ fn filter_variant_children(
             else {
                 continue;
             };
-            for (set, variant) in &spec.variant_selections {
+            let context = SiteContext::of_source(gp_index, source);
+            for (set, variant) in site_selections(store, &spec.variant_selections, context).iter() {
                 gp_selections.entry(*set).or_insert(*variant);
             }
         }
@@ -1573,7 +1583,10 @@ fn filter_variant_children(
                     if let Some(set_spec) = spec.variant_sets.get(set)
                         && let Some(variant_spec) = set_spec.variants.get(selected_variant)
                     {
-                        for (inner_set, inner_variant) in &variant_spec.variant_selections {
+                        let context = SiteContext::of_source(gp_index, source);
+                        let inner =
+                            site_selections(store, &variant_spec.variant_selections, context);
+                        for (inner_set, inner_variant) in inner.iter() {
                             if !gp_selections.contains_key(inner_set) {
                                 new_sels.entry(*inner_set).or_insert(*inner_variant);
                             }
@@ -2044,7 +2057,9 @@ fn strip_instance_descendants(
                     ) else {
                         continue;
                     };
-                    for (set, variant) in &spec.variant_selections {
+                    let context = SiteContext::of_source(index, source);
+                    let authored = site_selections(store, &spec.variant_selections, context);
+                    for (set, variant) in authored.iter() {
                         selections.entry(*set).or_insert(*variant);
                     }
                 }
@@ -2245,7 +2260,8 @@ fn collect_non_identity_children(
             else {
                 continue;
             };
-            for (set, variant) in &spec.variant_selections {
+            let context = SiteContext::of_source(index, source);
+            for (set, variant) in site_selections(store, &spec.variant_selections, context).iter() {
                 selections.entry(*set).or_insert(*variant);
             }
         }
@@ -2445,6 +2461,7 @@ fn resolve_full_variant_selections(
         store,
         fallbacks,
         &mut selections,
+        &PrimIndexGraph::default(),
         &[],
         &[(local_stack, path)],
     );
@@ -2476,9 +2493,11 @@ fn authored_full_variant_selections(
     // (AOUSD Core §10.3.2.1).
     let mut targets: Vec<(LayerStack, PathId)> = Vec::new();
     if let Some(&root) = local_stack.layers.first() {
-        // The stack's own variables evaluate its asset path expressions;
-        // composition reports what they find when it follows the arcs.
-        let scope = ExpressionScope::new(alloc::vec![root]);
+        // The stack's variables, as its chain of arcs composes them,
+        // evaluate its asset path expressions; composition reports what
+        // they find when it follows the arcs.
+        let chain = local_stack.chain_of(root).to_vec();
+        let scope = ExpressionScope::new(chain.clone());
         let anchor = ArcAnchor::new(root, Some(&scope));
         let applied = |spec: &&crate::doc::PrimSpec| {
             spec_arcs_apply(
@@ -2508,23 +2527,29 @@ fn authored_full_variant_selections(
             let Some(target) = lookup_reference_target_path(store, arc) else {
                 continue;
             };
-            targets.push((LayerStack::gather(store, arc.layer), target));
+            // The target stack as this stack's arcs reach it.
+            let mut target_chain = chain.clone();
+            target_chain.push(arc.layer);
+            let stack = LayerStack::gather_recording(store, &target_chain, &mut Vec::new(), None);
+            targets.push((stack, target));
         }
     }
 
     let mut sites: Vec<VariantSite<'_>> = local
         .iter()
-        .map(|spec| VariantSite::of_spec(spec, path, Vec::new()))
+        .map(|(spec, chain)| {
+            VariantSite::of_spec(store, spec, path, Vec::new(), SiteContext::Chain(chain))
+        })
         .collect();
     sites.push(VariantSite::authored_only(&child));
     for target in inherits.iter().copied() {
         let specs = selection_host_specs(store, fallbacks, local_stack, target);
-        sites.extend(VariantSite::of_node(&specs, target));
+        sites.extend(VariantSite::of_node(store, &specs, target));
     }
-    sites.extend(VariantSite::branches_of_node(&local, path));
+    sites.extend(VariantSite::branches_of_node(store, &local, path));
     for (stack, target) in &targets {
         let specs = selection_host_specs(store, fallbacks, stack, *target);
-        sites.extend(VariantSite::of_node(&specs, *target));
+        sites.extend(VariantSite::of_node(store, &specs, *target));
     }
     evaluate_variant_sets(&sites)
 }
@@ -2551,6 +2576,7 @@ fn resolve_variant_child_selections_for_prim(
         resolve_full_variant_selections(store, fallbacks, local_stack, parent_id);
     let mut selected = HashMap::new();
     for layer in local_stack.layers.iter().filter_map(|id| store.layer(*id)) {
+        let context = SiteContext::Chain(local_stack.chain_of(layer.id));
         for spec in layer.selected_branch_prim_specs(prim, parent_id, &parent_selections) {
             // Branches hosted on the parent's ancestors must be selected too.
             let ancestors_selected = spec
@@ -2565,7 +2591,8 @@ fn resolve_variant_child_selections_for_prim(
             if !ancestors_selected {
                 continue;
             }
-            for (child_set, child_variant) in &spec.variant_selections {
+            let authored = site_selections(store, &spec.variant_selections, context);
+            for (child_set, child_variant) in authored.iter() {
                 selected.entry(*child_set).or_insert(*child_variant);
             }
         }
@@ -2625,20 +2652,15 @@ fn enclosing_variant_selections(
                 Some(_) if !declares_variant_sets(store, remote_stack, host) => HashMap::new(),
                 Some(dest_host) => {
                     // Every authored selection first, then the fallbacks.
-                    let sources = out
-                        .get(&dest_host)
-                        .map(|index| {
+                    let empty = PrimIndexGraph::default();
+                    let (graph, sources) =
+                        out.get(&dest_host).map_or((&empty, Vec::new()), |index| {
                             let mut sources = index.sources.clone();
                             index.graph.sort_keys(&mut sources);
-                            sources
-                        })
-                        .unwrap_or_default();
-                    let so_far = PrimIndex {
-                        sources,
-                        ..PrimIndex::default()
-                    };
+                            (&index.graph, sources)
+                        });
                     let mut selections =
-                        authored_strength_ordered_variant_selections(store, &so_far);
+                        authored_strength_ordered_variant_selections(store, graph, &sources);
                     let sites = [(stage_stack, dest_host), (remote_stack, host)];
                     for (stack, path) in sites {
                         for (set, variant) in
@@ -2647,7 +2669,7 @@ fn enclosing_variant_selections(
                             selections.entry(set).or_insert(variant);
                         }
                     }
-                    apply_fallbacks_at(store, fallbacks, &mut selections, &so_far.sources, &sites);
+                    apply_fallbacks_at(store, fallbacks, &mut selections, graph, &sources, &sites);
                     selections
                 }
                 None => resolve_full_variant_selections(store, fallbacks, ancestor_stack, host),
@@ -2987,6 +3009,7 @@ fn resolve_forwarded_variant_selections(
         store,
         fallbacks,
         &mut selections,
+        &PrimIndexGraph::default(),
         &[],
         &[
             (stronger_stack, selection_path),
@@ -3037,11 +3060,9 @@ fn arc_target_variant_selections(
         .cloned()
         .collect();
     so_far.graph.sort_keys(&mut sources);
-    let composed = PrimIndex {
-        sources,
-        ..PrimIndex::default()
-    };
-    for (set, variant) in authored_strength_ordered_variant_selections(store, &composed) {
+    for (set, variant) in
+        authored_strength_ordered_variant_selections(store, &so_far.graph, &sources)
+    {
         selections.entry(set).or_insert(variant);
     }
     for (set, variant) in
@@ -3053,6 +3074,7 @@ fn arc_target_variant_selections(
         store,
         fallbacks,
         &mut selections,
+        &PrimIndexGraph::default(),
         &[],
         &[
             (stronger_stack, selection_path),
@@ -4836,20 +4858,16 @@ impl AncestralArcs<'_> {
         host: PathId,
     ) -> HashMap<TokenId, TokenId> {
         // Every authored selection first, then the fallbacks.
-        let sources = self
+        let empty = PrimIndexGraph::default();
+        let (graph, sources) = self
             .stage_host(store, nodes, out, host)
             .and_then(|stage| out.get(&stage))
-            .map(|index| {
+            .map_or((&empty, Vec::new()), |index| {
                 let mut sources = index.sources.clone();
                 index.graph.sort_keys(&mut sources);
-                sources
-            })
-            .unwrap_or_default();
-        let so_far = PrimIndex {
-            sources,
-            ..PrimIndex::default()
-        };
-        let mut selections = authored_strength_ordered_variant_selections(store, &so_far);
+                (&index.graph, sources)
+            });
+        let mut selections = authored_strength_ordered_variant_selections(store, graph, &sources);
         for (set, variant) in
             authored_full_variant_selections(store, self.fallbacks, self.ancestor_stack, host)
         {
@@ -4859,7 +4877,8 @@ impl AncestralArcs<'_> {
             store,
             self.fallbacks,
             &mut selections,
-            &so_far.sources,
+            graph,
+            &sources,
             &[(self.ancestor_stack, host)],
         );
         selections
@@ -6310,20 +6329,7 @@ fn add_reference_edge_opinions(
     // whole stack (AOUSD Core §10.3.2.1; OpenUSD `_EvalRefOrPayloadArcs` in
     // `pxr/usd/pcp/primIndex.cpp`, see `anchor_internal_arcs`).
     let remote_stack = cycles.gather_layer_stack(store, reference.layer);
-    let combined_stack = LayerStack {
-        layers: stage_stack
-            .layers
-            .iter()
-            .copied()
-            .chain(remote_stack.layers.iter().copied())
-            .collect(),
-        offsets: stage_stack
-            .offsets
-            .iter()
-            .copied()
-            .chain(remote_stack.offsets.iter().copied())
-            .collect(),
-    };
+    let combined_stack = stage_stack.joined(&remote_stack);
     let target_root = store.paths().resolve(reference_path).clone();
     let dest_root_path = store.paths().resolve(dest_root).clone();
     let offset_layers = parent.offset_layers_within(arc.layer);
@@ -7017,20 +7023,7 @@ fn add_payload_edge_opinions(
     // whole stack (AOUSD Core §10.3.2.1; OpenUSD `_EvalRefOrPayloadArcs` in
     // `pxr/usd/pcp/primIndex.cpp`, see `anchor_internal_arcs`).
     let remote_stack = cycles.gather_layer_stack(store, reference.layer);
-    let combined_stack = LayerStack {
-        layers: stage_stack
-            .layers
-            .iter()
-            .copied()
-            .chain(remote_stack.layers.iter().copied())
-            .collect(),
-        offsets: stage_stack
-            .offsets
-            .iter()
-            .copied()
-            .chain(remote_stack.offsets.iter().copied())
-            .collect(),
-    };
+    let combined_stack = stage_stack.joined(&remote_stack);
     let target_root = store.paths().resolve(reference_path).clone();
     let dest_root_path = store.paths().resolve(dest_root).clone();
     let offset_layers = parent.offset_layers_within(arc.layer);

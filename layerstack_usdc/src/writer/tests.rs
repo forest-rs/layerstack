@@ -133,6 +133,8 @@ fn list_op(op: &CrateListOp) -> ListOp<String> {
         prepended: strings(&op.prepended_items),
         appended: strings(&op.appended_items),
         deleted: strings(&op.deleted_items),
+        added: strings(&op.added_items),
+        reordered: strings(&op.ordered_items),
     }
 }
 
@@ -498,6 +500,8 @@ fn every_kind() -> Vec<(&'static str, Value)> {
                 prepended: vec!["a".into()],
                 appended: vec!["b".into(), "c".into()],
                 deleted: vec!["d".into()],
+                added: vec!["e".into()],
+                reordered: vec!["c".into(), "a".into()],
             }),
         ),
         (

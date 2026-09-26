@@ -596,13 +596,21 @@ impl<'a> Parser<'a> {
                     self.bump();
                     crate::ast::ListOpKind::Prepend
                 }
-                "append" | "add" => {
+                "append" => {
                     self.bump();
                     crate::ast::ListOpKind::Append
+                }
+                "add" => {
+                    self.bump();
+                    crate::ast::ListOpKind::Add
                 }
                 "delete" => {
                     self.bump();
                     crate::ast::ListOpKind::Delete
+                }
+                "reorder" => {
+                    self.bump();
+                    crate::ast::ListOpKind::Reorder
                 }
                 _ => crate::ast::ListOpKind::Explicit,
             }
@@ -823,7 +831,7 @@ impl<'a> Parser<'a> {
                 self.parse_prim();
             } else if self.peek() == Some(TokenKind::Ident) && self.current_text() == "variantSet" {
                 self.parse_variant_set();
-            } else if self.peek() == Some(TokenKind::Ident) && self.current_text() == "reorder" {
+            } else if self.is_reorder_statement() {
                 self.parse_reorder_statement();
             } else if (self.peek() == Some(TokenKind::Ident) && self.current_text() == "rel")
                 || self.is_listop_rel()
@@ -855,7 +863,7 @@ impl<'a> Parser<'a> {
         if self.peek() != Some(TokenKind::Ident) {
             return false;
         }
-        if !matches!(self.current_text(), "prepend" | "append" | "add" | "delete") {
+        if !is_list_op_keyword(self.current_text()) {
             return false;
         }
         let mut i = self.pos + 1;
@@ -919,7 +927,7 @@ impl<'a> Parser<'a> {
         if self.peek() != Some(TokenKind::Ident) {
             return false;
         }
-        if !matches!(self.current_text(), "prepend" | "append" | "add" | "delete") {
+        if !is_list_op_keyword(self.current_text()) {
             return false;
         }
         let mut i = self.pos + 1;
@@ -960,9 +968,7 @@ impl<'a> Parser<'a> {
 
         // Optional list-op prefix.
         self.eat_trivia();
-        if self.peek() == Some(TokenKind::Ident)
-            && matches!(self.current_text(), "prepend" | "append" | "add" | "delete")
-        {
+        if self.peek() == Some(TokenKind::Ident) && is_list_op_keyword(self.current_text()) {
             self.bump();
         }
 
@@ -1187,9 +1193,7 @@ impl<'a> Parser<'a> {
 
         // Optional list-op prefix.
         self.eat_trivia();
-        if self.peek() == Some(TokenKind::Ident)
-            && matches!(self.current_text(), "prepend" | "append" | "add" | "delete")
-        {
+        if self.peek() == Some(TokenKind::Ident) && is_list_op_keyword(self.current_text()) {
             self.bump();
         }
 
@@ -1295,6 +1299,25 @@ impl<'a> Parser<'a> {
 
         let end = self.current_span().start;
         self.builder.finish_node(end);
+    }
+
+    /// Whether the prim body continues with a `reorder` statement:
+    /// `reorder nameChildren = [...]` or `reorder properties = [...]`,
+    /// rather than a reordered relationship or connection.
+    fn is_reorder_statement(&self) -> bool {
+        if self.peek() != Some(TokenKind::Ident) || self.current_text() != "reorder" {
+            return false;
+        }
+        let mut i = self.pos + 1;
+        while i < self.tokens.len() && is_trivia(self.tokens[i].kind) {
+            i += 1;
+        }
+        i < self.tokens.len()
+            && self.tokens[i].kind == TokenKind::Ident
+            && matches!(
+                self.tokens[i].text(self.source),
+                "nameChildren" | "properties" | "rootPrims"
+            )
     }
 
     fn parse_reorder_statement(&mut self) {
@@ -1809,6 +1832,13 @@ impl<'a> Parser<'a> {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
+
+/// Whether `text` is a list-op keyword prefixing a list-edited statement
+/// (AOUSD Core §16.2.14). `add` is the legacy list edit that inserts an
+/// item only when the list lacks it; unlike `append`, it never moves one.
+fn is_list_op_keyword(text: &str) -> bool {
+    matches!(text, "prepend" | "append" | "add" | "delete" | "reorder")
+}
 
 fn is_trivia(kind: TokenKind) -> bool {
     matches!(

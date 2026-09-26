@@ -668,7 +668,8 @@ fn inherits_and_payloads_are_read_from_their_fields() {
     let mut rig = read_composition_asset("BasicListEditingWithInherits_root", "model.usd");
     let sym_rig = rig.path_id("/Model/SymRig");
     let left_rig = rig.prim("/Model/LeftRig");
-    assert_eq!(left_rig.inherits.append, [sym_rig]);
+    // The file authors the inherit as a legacy `add`.
+    assert_eq!(left_rig.inherits.add, [sym_rig]);
     let inherit_paths = rig.store.tokens.intern("inheritPaths");
     assert!(left_rig.field(inherit_paths).is_none());
 

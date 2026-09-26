@@ -153,9 +153,8 @@ pub enum Permission {
     Private,
 }
 
-/// An `SdfListOp`: either an explicit list, or prepended, appended and
-/// deleted items. The deprecated "added" and "ordered" lists are not
-/// written.
+/// An `SdfListOp`: either an explicit list, or prepended, appended,
+/// deleted, added (the legacy `add`) and ordered (reordered) items.
 ///
 /// Spec: AOUSD Core §12.4 (list ops), §16.3.10 (list op encoding).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -168,6 +167,10 @@ pub struct ListOp<T> {
     pub appended: Vec<T>,
     /// Deleted items.
     pub deleted: Vec<T>,
+    /// Added items: the legacy `add`, inserted when absent.
+    pub added: Vec<T>,
+    /// Ordered items: the order a `reorder` moves the items it names into.
+    pub reordered: Vec<T>,
 }
 
 impl<T> ListOp<T> {
@@ -178,6 +181,8 @@ impl<T> ListOp<T> {
             prepended: Vec::new(),
             appended: Vec::new(),
             deleted: Vec::new(),
+            added: Vec::new(),
+            reordered: Vec::new(),
         }
     }
 
@@ -188,6 +193,8 @@ impl<T> ListOp<T> {
             prepended: items,
             appended: Vec::new(),
             deleted: Vec::new(),
+            added: Vec::new(),
+            reordered: Vec::new(),
         }
     }
 }

@@ -12,9 +12,11 @@
 //!
 //! Spec: AOUSD Core §12.4 (`ListOps`). List op properties are ordered unique
 //! sequences; an authored explicit list makes the other edits spurious (see
-//! supplemental reference implementation behavior). Chains compose via
-//! strength ordering: operations apply from weakest → strongest so that
-//! stronger ops have the last word.
+//! supplemental reference implementation behavior); a reorder moves the
+//! items it names into its order after the other edits, as OpenUSD's
+//! `SdfListOp::ApplyOperations` does. Chains compose via strength ordering:
+//! operations apply from weakest → strongest so that stronger ops have the
+//! last word.
 //!
 //! ```
 //! use layerstack::listop::{ListOp, resolve_list_chain};
@@ -29,6 +31,11 @@
 //!
 //! // Strong op runs last, so 0 ends up at the front.
 //! assert_eq!(resolve_list_chain::<u32>(&[], [strong, weak]), vec![0, 1, 2]);
+//!
+//! // A stronger reorder orders the weaker items.
+//! let order = ListOp::reordered(vec![2_u32, 1]);
+//! let weak = ListOp::appended(vec![1_u32, 2]);
+//! assert_eq!(resolve_list_chain::<u32>(&[], [order, weak]), vec![2, 1]);
 //! ```
 
 pub use opinionated::{ListOp, resolve_list_chain};

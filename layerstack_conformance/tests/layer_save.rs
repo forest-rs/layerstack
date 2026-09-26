@@ -112,6 +112,63 @@ fn saved_explicit_empty_lists_block_weaker_opinions() {
     }
 }
 
+/// Saved reorders and legacy adds compose over a weaker layer as OpenUSD
+/// composes them, from both formats: `add` puts a new target at the back
+/// and leaves one the weaker list holds where it is, before the reorder
+/// moves the items it names, each with the items that follow it. OpenUSD
+/// 26.8 gives `[/Press/C, /Press/D, /Press/A, /Press/B]` and
+/// `[/Press.a, /Press.b]`; were `add` an `append`, the connections would
+/// be `[/Press.b, /Press.a]`.
+///
+/// Spec: AOUSD Core §12.4 (list ops). OpenUSD: `SdfListOp::ApplyOperations`
+/// in `pxr/usd/sdf/listOp.cpp`.
+#[test]
+fn saved_adds_and_reorders_compose_as_openusd() {
+    let case = cases()
+        .into_iter()
+        .find(|c| c.name == "reordered_lists")
+        .expect("case");
+    let mut layer = Imported::usda(case.source);
+    (case.edit)(&mut layer);
+    let from_usda = layer.save_usda().unwrap();
+    let from_usdc = Imported::usdc(&layer.save_usdc().unwrap())
+        .save_usda()
+        .unwrap();
+    for (format, saved) in [("USDA", from_usda), ("USDC", from_usdc)] {
+        let mut store = InMemoryStore::default();
+        emit_into(&mut store, 1, &saved);
+        emit_into(&mut store, 2, case.weaker.expect("weaker layer"));
+        let mut root = Layer::new(LayerId(3));
+        root.sublayers = vec![
+            SublayerEntry::new(LayerId(1)),
+            SublayerEntry::new(LayerId(2)),
+        ];
+        store.insert_layer(root);
+        let properties = ["/Press.pins", "/Press.width"].map(|p| store.property_path(p));
+        let stage = Stage::compose(&mut store, LayerId(3), StageOptions::default());
+        let targets: Vec<Vec<String>> = properties
+            .iter()
+            .map(|p| {
+                stage
+                    .resolve_target_list_path(*p)
+                    .map(|r| r.value)
+                    .unwrap_or_default()
+                    .iter()
+                    .map(|t| t.display(&store.paths, &store.tokens))
+                    .collect()
+            })
+            .collect();
+        assert_eq!(
+            targets,
+            [
+                vec!["/Press/C", "/Press/D", "/Press/A", "/Press/B"],
+                vec!["/Press.a", "/Press.b"],
+            ],
+            "{format}: composed targets and connections"
+        );
+    }
+}
+
 #[test]
 fn corpus_saves_as_expected_in_both_formats() {
     for case in cases() {

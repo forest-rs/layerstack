@@ -38,6 +38,14 @@ Writes, under `layerstack_conformance/fixtures/composition_misc` by default:
   one node, whose list ops chain across the layer stack, deletes
   included, so none remains there, while the same reference `/Press`
   itself adds stays.
+- `/Punch`, and `/Stamp`'s selected branch, add references, payloads and
+  inherits in `press.usda`, which `root.usda` only reorders: each list
+  takes the order its reorder gives (`SdfListOp::_ReorderKeysHelper` in
+  `pxr/usd/sdf/listOp.cpp`).
+- `/Die`'s references, payloads and inherits from `press.usda` are edited
+  in `root.usda` with the legacy `add`, of new items and of items the
+  weaker list holds, and a reorder: an added item the list holds stays
+  where it is (`SdfListOp::_AddKeys`).
 - Path expressions: a stronger expression's `%_` splices in the next weaker
   one (`SdfPathExpression::ComposeOver`); a relative expression is anchored
   at the prim that authors it, and every expression is mapped through the
@@ -344,6 +352,45 @@ over "Press"
         }
     }
 }
+
+# `press.usda` adds references, payloads and inherits to `/Punch` and to
+# `/Stamp`'s `firm` branch; the stronger `root.usda` only reorders each
+# list. A reorder moves the items it names into its order, each with the
+# items that follow it (`SdfListOp::_ReorderKeysHelper`).
+over "Punch" (
+    reorder references = [@./clay.usda@</Board>, @./clay.usda@</Clay>]
+    reorder payload = [@./clay.usda@</Ash>, @./clay.usda@</Glaze>]
+    reorder inherits = [</_class_Die>, </_class_Stamp>]
+)
+{
+}
+
+over "Stamp"
+{
+    variantSet "grip" = {
+        "firm" (
+            reorder references = [@./clay.usda@</Board>, @./clay.usda@</Clay>]
+            reorder payload = [@./clay.usda@</Ash>, @./clay.usda@</Glaze>]
+            reorder inherits = [</_class_Die>, </_class_Stamp>]
+        ) {
+        }
+    }
+}
+
+# `press.usda` gives `/Die` references, payloads and inherits, which
+# `root.usda` edits with the legacy `add` and a reorder: `add` puts an
+# item the list lacks at its back and leaves one it holds in place
+# (`SdfListOp::_AddKeys`), before the reorder moves the items it names.
+over "Die" (
+    add references = [@./clay.usda@</Ash>, @./clay.usda@</Board>]
+    reorder references = [@./clay.usda@</Slip>, @./clay.usda@</Clay>]
+    add payload = [@./clay.usda@</Glaze>, @./clay.usda@</Slip>]
+    reorder payload = [@./clay.usda@</Rim>]
+    add inherits = [</_class_Press>, </_class_Stamp>]
+    reorder inherits = [</_class_Die>]
+)
+{
+}
 ''',
     "rows": '''#usda 1.0
 
@@ -535,6 +582,49 @@ def "Press" (
 class "_class_Press"
 {
     double press = 1
+}
+
+def "Punch" (
+    prepend references = [@./clay.usda@</Clay>, @./clay.usda@</Board>]
+    prepend payload = [@./clay.usda@</Glaze>, @./clay.usda@</Ash>]
+    prepend inherits = [</_class_Stamp>, </_class_Die>]
+)
+{
+}
+
+def "Stamp" (
+    variantSets = "grip"
+    variants = {
+        string grip = "firm"
+    }
+)
+{
+    variantSet "grip" = {
+        "firm" (
+            prepend references = [@./clay.usda@</Clay>, @./clay.usda@</Board>]
+            prepend payload = [@./clay.usda@</Glaze>, @./clay.usda@</Ash>]
+            prepend inherits = [</_class_Stamp>, </_class_Die>]
+        ) {
+        }
+    }
+}
+
+class "_class_Stamp"
+{
+    double stamp = 1
+}
+
+class "_class_Die"
+{
+    double die = 1
+}
+
+def "Die" (
+    prepend references = [@./clay.usda@</Clay>, @./clay.usda@</Board>, @./clay.usda@</Slip>]
+    prepend payload = [@./clay.usda@</Glaze>, @./clay.usda@</Rim>]
+    prepend inherits = [</_class_Stamp>, </_class_Die>]
+)
+{
 }
 ''',
     "part": '''#usda 1.0

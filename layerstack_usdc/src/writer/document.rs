@@ -338,6 +338,8 @@ fn map_list_op<T, U>(op: &UsdaListOp<T>, item: impl Fn(&T) -> U) -> ListOp<U> {
         prepended: list(&op.prepended),
         appended: list(&op.appended),
         deleted: list(&op.deleted),
+        added: list(&op.added),
+        reordered: list(&op.reordered),
     }
 }
 

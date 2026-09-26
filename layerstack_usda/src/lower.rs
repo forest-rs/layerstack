@@ -317,12 +317,20 @@ impl<'a> LowerCtx<'a> {
                     op = ListOpKind::Prepend;
                     idx += 1;
                 }
-                "append" | "add" => {
+                "append" => {
                     op = ListOpKind::Append;
+                    idx += 1;
+                }
+                "add" => {
+                    op = ListOpKind::Add;
                     idx += 1;
                 }
                 "delete" => {
                     op = ListOpKind::Delete;
+                    idx += 1;
+                }
+                "reorder" => {
+                    op = ListOpKind::Reorder;
                     idx += 1;
                 }
                 _ => {}
@@ -463,12 +471,20 @@ impl<'a> LowerCtx<'a> {
                     list_op = ListOpKind::Prepend;
                     idx += 1;
                 }
-                "append" | "add" => {
+                "append" => {
                     list_op = ListOpKind::Append;
+                    idx += 1;
+                }
+                "add" => {
+                    list_op = ListOpKind::Add;
                     idx += 1;
                 }
                 "delete" => {
                     list_op = ListOpKind::Delete;
+                    idx += 1;
+                }
+                "reorder" => {
+                    list_op = ListOpKind::Reorder;
                     idx += 1;
                 }
                 _ => {}
@@ -633,12 +649,20 @@ impl<'a> LowerCtx<'a> {
                     op = ListOpKind::Prepend;
                     idx += 1;
                 }
-                "append" | "add" => {
+                "append" => {
                     op = ListOpKind::Append;
+                    idx += 1;
+                }
+                "add" => {
+                    op = ListOpKind::Add;
                     idx += 1;
                 }
                 "delete" => {
                     op = ListOpKind::Delete;
+                    idx += 1;
+                }
+                "reorder" => {
+                    op = ListOpKind::Reorder;
                     idx += 1;
                 }
                 _ => {}
@@ -1580,13 +1604,23 @@ impl<'a> LowerCtx<'a> {
                         idx += 1;
                         continue;
                     }
-                    "append" | "add" => {
+                    "append" => {
                         op = ListOpKind::Append;
+                        idx += 1;
+                        continue;
+                    }
+                    "add" => {
+                        op = ListOpKind::Add;
                         idx += 1;
                         continue;
                     }
                     "delete" => {
                         op = ListOpKind::Delete;
+                        idx += 1;
+                        continue;
+                    }
+                    "reorder" => {
+                        op = ListOpKind::Reorder;
                         idx += 1;
                         continue;
                     }

@@ -29,6 +29,8 @@ pub struct ListOpData {
     pub appended_items: Vec<u32>,
     #[serde(default)]
     pub deleted_items: Vec<u32>,
+    #[serde(default)]
+    pub ordered_items: Vec<u32>,
 }
 
 impl ListOpData {
@@ -38,6 +40,8 @@ impl ListOpData {
             prepend: self.prepended_items.clone(),
             append: self.appended_items.clone(),
             delete: self.deleted_items.clone(),
+            add: Vec::new(),
+            reorder: self.ordered_items.clone(),
         }
     }
 

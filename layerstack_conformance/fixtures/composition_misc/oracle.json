@@ -40,6 +40,164 @@
    "children": []
   },
   {
+   "path": "/Punch",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Punch"
+    ],
+    [
+     "press.usda",
+     "/Punch"
+    ],
+    [
+     "press.usda",
+     "/_class_Die"
+    ],
+    [
+     "press.usda",
+     "/_class_Stamp"
+    ],
+    [
+     "clay.usda",
+     "/Board"
+    ],
+    [
+     "clay.usda",
+     "/Clay"
+    ],
+    [
+     "clay.usda",
+     "/Ash"
+    ],
+    [
+     "clay.usda",
+     "/Glaze"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Stamp",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Stamp"
+    ],
+    [
+     "press.usda",
+     "/Stamp"
+    ],
+    [
+     "root.usda",
+     "/Stamp{grip=firm}"
+    ],
+    [
+     "press.usda",
+     "/Stamp{grip=firm}"
+    ],
+    [
+     "press.usda",
+     "/_class_Die"
+    ],
+    [
+     "press.usda",
+     "/_class_Stamp"
+    ],
+    [
+     "clay.usda",
+     "/Board"
+    ],
+    [
+     "clay.usda",
+     "/Clay"
+    ],
+    [
+     "clay.usda",
+     "/Ash"
+    ],
+    [
+     "clay.usda",
+     "/Glaze"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/_class_Stamp",
+   "prim_stack": [
+    [
+     "press.usda",
+     "/_class_Stamp"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/_class_Die",
+   "prim_stack": [
+    [
+     "press.usda",
+     "/_class_Die"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Die",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Die"
+    ],
+    [
+     "press.usda",
+     "/Die"
+    ],
+    [
+     "press.usda",
+     "/_class_Stamp"
+    ],
+    [
+     "press.usda",
+     "/_class_Die"
+    ],
+    [
+     "press.usda",
+     "/_class_Press"
+    ],
+    [
+     "clay.usda",
+     "/Slip"
+    ],
+    [
+     "clay.usda",
+     "/Ash"
+    ],
+    [
+     "clay.usda",
+     "/Clay"
+    ],
+    [
+     "clay.usda",
+     "/Board"
+    ],
+    [
+     "clay.usda",
+     "/Glaze"
+    ],
+    [
+     "clay.usda",
+     "/Rim"
+    ],
+    [
+     "clay.usda",
+     "/Slip"
+    ]
+   ],
+   "children": []
+  },
+  {
    "path": "/Row",
    "prim_stack": [
     [
@@ -729,6 +887,29 @@
  "values": {
   "/Press.slip": 1.0,
   "/_class_Press.press": 1.0,
+  "/Punch.ash": 1.0,
+  "/Punch.board": 1.0,
+  "/Punch.clay": 1.0,
+  "/Punch.die": 1.0,
+  "/Punch.glaze": 1.0,
+  "/Punch.stamp": 1.0,
+  "/Stamp.ash": 1.0,
+  "/Stamp.board": 1.0,
+  "/Stamp.clay": 1.0,
+  "/Stamp.die": 1.0,
+  "/Stamp.glaze": 1.0,
+  "/Stamp.stamp": 1.0,
+  "/_class_Stamp.stamp": 1.0,
+  "/_class_Die.die": 1.0,
+  "/Die.ash": 1.0,
+  "/Die.board": 1.0,
+  "/Die.clay": 1.0,
+  "/Die.die": 1.0,
+  "/Die.glaze": 1.0,
+  "/Die.press": 1.0,
+  "/Die.rim": 1.0,
+  "/Die.slip": 1.0,
+  "/Die.stamp": 1.0,
   "/Sets.blocked": null,
   "/Sets.both": "/Stray// - /Stray/Leaf/Bud",
   "/Sets.heroes": "/Stray/L* (/Stray/Leaf //Bud)",
@@ -804,6 +985,29 @@
   "0.0": {
    "/Press.slip": 1.0,
    "/_class_Press.press": 1.0,
+   "/Punch.ash": 1.0,
+   "/Punch.board": 1.0,
+   "/Punch.clay": 1.0,
+   "/Punch.die": 1.0,
+   "/Punch.glaze": 1.0,
+   "/Punch.stamp": 1.0,
+   "/Stamp.ash": 1.0,
+   "/Stamp.board": 1.0,
+   "/Stamp.clay": 1.0,
+   "/Stamp.die": 1.0,
+   "/Stamp.glaze": 1.0,
+   "/Stamp.stamp": 1.0,
+   "/_class_Stamp.stamp": 1.0,
+   "/_class_Die.die": 1.0,
+   "/Die.ash": 1.0,
+   "/Die.board": 1.0,
+   "/Die.clay": 1.0,
+   "/Die.die": 1.0,
+   "/Die.glaze": 1.0,
+   "/Die.press": 1.0,
+   "/Die.rim": 1.0,
+   "/Die.slip": 1.0,
+   "/Die.stamp": 1.0,
    "/Sets.blocked": "/Stray",
    "/Sets.both": "/Stray// - /Stray/Leaf/Bud",
    "/Sets.heroes": "/Stray/L* (/Stray/Leaf //Bud)",
@@ -878,6 +1082,29 @@
   "5.0": {
    "/Press.slip": 1.0,
    "/_class_Press.press": 1.0,
+   "/Punch.ash": 1.0,
+   "/Punch.board": 1.0,
+   "/Punch.clay": 1.0,
+   "/Punch.die": 1.0,
+   "/Punch.glaze": 1.0,
+   "/Punch.stamp": 1.0,
+   "/Stamp.ash": 1.0,
+   "/Stamp.board": 1.0,
+   "/Stamp.clay": 1.0,
+   "/Stamp.die": 1.0,
+   "/Stamp.glaze": 1.0,
+   "/Stamp.stamp": 1.0,
+   "/_class_Stamp.stamp": 1.0,
+   "/_class_Die.die": 1.0,
+   "/Die.ash": 1.0,
+   "/Die.board": 1.0,
+   "/Die.clay": 1.0,
+   "/Die.die": 1.0,
+   "/Die.glaze": 1.0,
+   "/Die.press": 1.0,
+   "/Die.rim": 1.0,
+   "/Die.slip": 1.0,
+   "/Die.stamp": 1.0,
    "/Sets.blocked": "/Stray",
    "/Sets.both": "/Stray// - /Stray/Leaf/Bud",
    "/Sets.heroes": "/Stray/L* (/Stray/Leaf //Bud)",
@@ -952,6 +1179,29 @@
   "10.0": {
    "/Press.slip": 1.0,
    "/_class_Press.press": 1.0,
+   "/Punch.ash": 1.0,
+   "/Punch.board": 1.0,
+   "/Punch.clay": 1.0,
+   "/Punch.die": 1.0,
+   "/Punch.glaze": 1.0,
+   "/Punch.stamp": 1.0,
+   "/Stamp.ash": 1.0,
+   "/Stamp.board": 1.0,
+   "/Stamp.clay": 1.0,
+   "/Stamp.die": 1.0,
+   "/Stamp.glaze": 1.0,
+   "/Stamp.stamp": 1.0,
+   "/_class_Stamp.stamp": 1.0,
+   "/_class_Die.die": 1.0,
+   "/Die.ash": 1.0,
+   "/Die.board": 1.0,
+   "/Die.clay": 1.0,
+   "/Die.die": 1.0,
+   "/Die.glaze": 1.0,
+   "/Die.press": 1.0,
+   "/Die.rim": 1.0,
+   "/Die.slip": 1.0,
+   "/Die.stamp": 1.0,
    "/Sets.blocked": "/Stray",
    "/Sets.both": "/Stray// - /Stray/Leaf/Bud",
    "/Sets.heroes": "/Stray/L* (/Stray/Leaf //Bud)",

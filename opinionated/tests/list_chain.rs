@@ -90,12 +90,59 @@ fn items_and_lists_cover_every_list() {
     assert_eq!(names.append, vec!["40".to_string()]);
 }
 
+// Reorder semantics follow OpenUSD's `SdfListOp::_ReorderKeysHelper`
+// (`pxr/usd/sdf/listOp.cpp`); AOUSD Core §12.4.
+
+#[test]
+fn reorder_moves_named_items_with_their_followers() {
+    let op = ListOp::reordered(vec!["c", "a"]);
+    assert_eq!(op.apply_to(&["a", "b", "c", "d"]), vec!["c", "d", "a", "b"]);
+}
+
+#[test]
+fn reorder_keeps_leading_unnamed_items_in_front() {
+    let op = ListOp::reordered(vec!["b", "a"]);
+    assert_eq!(op.apply_to(&["x", "a", "b"]), vec!["x", "b", "a"]);
+}
+
+#[test]
+fn reorder_ignores_items_the_list_does_not_hold_and_repeats() {
+    let op = ListOp::reordered(vec!["z", "b", "b", "a"]);
+    assert_eq!(op.apply_to(&["a", "b"]), vec!["b", "a"]);
+    assert_eq!(
+        ListOp::reordered(vec!["z"]).apply_to(&["a", "b"]),
+        vec!["a", "b"]
+    );
+}
+
+#[test]
+fn reorder_applies_after_the_other_edits_of_its_operation() {
+    let op = ListOp::appended(vec!["c"])
+        .with_deleted(vec!["b"])
+        .with_reordered(vec!["c", "a"]);
+    assert_eq!(op.apply_to(&["a", "b"]), vec!["c", "a"]);
+    // An explicit list makes the reorder spurious.
+    let op = ListOp::explicit(vec!["a", "b"]).with_reordered(vec!["b", "a"]);
+    assert_eq!(op.apply_to(&[]), vec!["a", "b"]);
+}
+
+#[test]
+fn stronger_reorder_orders_weaker_items() {
+    let weak = ListOp::prepended(vec!["clay", "board"]);
+    let strong = ListOp::reordered(vec!["board", "clay"]);
+    assert_eq!(
+        resolve_list_chain::<&str>(&[], [strong, weak]),
+        vec!["board", "clay"]
+    );
+}
+
 #[test]
 fn merge_combines_two_statements_of_one_spec() {
-    let mut op = ListOp::prepended(vec![1_u32]);
-    op.merge(ListOp::appended(vec![3]).with_prepended(vec![2]));
-    assert_eq!(op.prepend, vec![1, 2]);
+    let mut op = ListOp::prepended(vec![1_u32]).with_reordered(vec![2]);
+    op.merge(ListOp::appended(vec![3]).with_reordered(vec![1]));
+    assert_eq!(op.prepend, vec![1]);
     assert_eq!(op.append, vec![3]);
+    assert_eq!(op.reorder, vec![2, 1]);
     op.merge(ListOp::explicit(vec![4]));
     assert_eq!(op.explicit, Some(vec![4]));
 }
@@ -104,5 +151,36 @@ fn merge_combines_two_statements_of_one_spec() {
 fn an_empty_explicit_list_is_authored() {
     assert!(ListOp::<u32>::new().is_empty());
     assert!(!ListOp::<u32>::explicit(Vec::new()).is_empty());
-    assert!(!ListOp::deleted(vec![1_u32]).is_empty());
+    assert!(!ListOp::reordered(vec![1_u32]).is_empty());
+}
+
+// The legacy `add` follows OpenUSD's `SdfListOp::_AddKeys`: an item the
+// list lacks goes to the back, one it holds stays in place.
+
+#[test]
+fn add_inserts_missing_items_before_the_reorder() {
+    let op = ListOp::added(vec!["d"]).with_reordered(vec!["c", "a"]);
+    assert_eq!(op.apply_to(&["a", "b", "c"]), vec!["c", "d", "a", "b"]);
+}
+
+#[test]
+fn add_leaves_a_held_item_where_it_is() {
+    assert_eq!(
+        ListOp::added(vec!["a"]).apply_to(&["a", "b"]),
+        vec!["a", "b"]
+    );
+    assert_eq!(
+        ListOp::appended(vec!["a"]).apply_to(&["a", "b"]),
+        vec!["b", "a"]
+    );
+    let op = ListOp::added(vec!["a"]).with_reordered(vec!["b"]);
+    assert_eq!(op.apply_to(&["a", "b"]), vec!["a", "b"]);
+}
+
+#[test]
+fn add_applies_after_delete_and_before_prepend() {
+    let op = ListOp::added(vec!["a", "c"])
+        .with_deleted(vec!["a"])
+        .with_prepended(vec!["c"]);
+    assert_eq!(op.apply_to(&["a", "b"]), vec!["c", "b", "a"]);
 }

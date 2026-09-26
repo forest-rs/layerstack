@@ -287,6 +287,10 @@ pub struct CrateListOp {
     pub appended_items: Vec<CrateValue>,
     /// Deleted items.
     pub deleted_items: Vec<CrateValue>,
+    /// Added items: the legacy `add`, inserted when absent.
+    pub added_items: Vec<CrateValue>,
+    /// Ordered items: the order a `reorder` moves the items it names into.
+    pub ordered_items: Vec<CrateValue>,
 }
 
 /// A decoded reference or payload.
@@ -1456,6 +1460,8 @@ fn decode_list_op(
             prepended_items: vec![],
             appended_items: vec![],
             deleted_items: vec![],
+            added_items: vec![],
+            ordered_items: vec![],
         }));
     }
 
@@ -1467,7 +1473,7 @@ fn decode_list_op(
     let add_explicit = header & (1 << 1) != 0;
     let add_items_flag = header & (1 << 2) != 0;
     let delete_flag = header & (1 << 3) != 0;
-    // bit 4: reorder (deprecated)
+    // bit 4: ordered items (`reorder`)
     let reorder_flag = header & (1 << 4) != 0;
     let prepend_flag = header & (1 << 5) != 0;
     let append_flag = header & (1 << 6) != 0;
@@ -1477,6 +1483,7 @@ fn decode_list_op(
     let mut prepended_items = vec![];
     let mut appended_items = vec![];
     let mut deleted_items = vec![];
+    let mut ordered_items = vec![];
 
     if add_explicit {
         let (items, consumed) = read_list_op_items(vtype, data, pos, sections, budget)?;
@@ -1511,17 +1518,8 @@ fn decode_list_op(
     }
 
     if reorder_flag {
-        // Deprecated; skip.
-        let (_items, _consumed) = read_list_op_items(vtype, data, pos, sections, budget)?;
-    }
-
-    // Map deprecated 'add' to 'append' when it's the only composable op.
-    if !added_items.is_empty()
-        && prepended_items.is_empty()
-        && deleted_items.is_empty()
-        && appended_items.is_empty()
-    {
-        appended_items = added_items;
+        let (items, _consumed) = read_list_op_items(vtype, data, pos, sections, budget)?;
+        ordered_items = items;
     }
 
     Ok(CrateValue::ListOp(CrateListOp {
@@ -1530,6 +1528,8 @@ fn decode_list_op(
         prepended_items,
         appended_items,
         deleted_items,
+        added_items,
+        ordered_items,
     }))
 }
 

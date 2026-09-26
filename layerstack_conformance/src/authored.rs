@@ -79,6 +79,8 @@ fn render_list<T>(list: &ListOp<T>, item: impl Fn(&T) -> String) -> String {
         ("prepend", &list.prepend),
         ("append", &list.append),
         ("delete", &list.delete),
+        ("add", &list.add),
+        ("reorder", &list.reorder),
     ] {
         if !items.is_empty() {
             let _ = write!(out, "{label}=[{}] ", render(items));

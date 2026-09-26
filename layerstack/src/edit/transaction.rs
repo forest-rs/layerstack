@@ -126,7 +126,8 @@ pub(crate) enum Precondition {
     Authored {
         at: Address,
         slot: Slot,
-        expected: Option<Authored>,
+        /// Boxed: an authored value, a list op among them, is large.
+        expected: Box<Option<Authored>>,
     },
 }
 
@@ -404,7 +405,7 @@ impl Transaction {
                 expectations.push(Precondition::Authored {
                     at: at.clone(),
                     slot,
-                    expected: found,
+                    expected: Box::new(found),
                 });
             }
         }
@@ -439,8 +440,11 @@ impl Transaction {
     }
 
     fn expect(&mut self, at: Address, slot: Slot, expected: Option<Authored>) -> &mut Self {
-        self.preconditions
-            .push(Precondition::Authored { at, slot, expected });
+        self.preconditions.push(Precondition::Authored {
+            at,
+            slot,
+            expected: Box::new(expected),
+        });
         self
     }
 }

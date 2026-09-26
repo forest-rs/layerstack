@@ -169,6 +169,8 @@ fn explicit_list_makes_other_edits_spurious() {
         prepend: vec!["theme"],
         append: vec!["lint"],
         delete: vec!["outline"],
+        add: vec!["tabs"],
+        reorder: vec!["outline", "search"],
     };
 
     assert_eq!(op.apply_to(&["base"]), vec!["search", "outline"]);

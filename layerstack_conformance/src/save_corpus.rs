@@ -482,6 +482,33 @@ pub fn cases() -> Vec<SaveCase> {
             composition: Some(&[("./assets/leaves.usda", LEAVES_ASSET)]),
             minimum_openusd: None,
         },
+        SaveCase {
+            name: "nested_variant_sets",
+            covers: "variant sets nested in branches of the same prim: a set nested in a \
+                     branch that nests another set of the enclosing set's name, one set \
+                     name nested under two branches with different contents, three \
+                     levels with a selection authored at each, and `variantSets` on \
+                     the branches; the edit changes an attribute in the innermost branch",
+            source: NESTED_VARIANT_SETS,
+            edit: |layer| {
+                let dust = layer.tokens.intern("dust");
+                let inner = layer.variant(
+                    "/Stone",
+                    &[
+                        ("finish", "rough"),
+                        ("grain", "coarse"),
+                        ("finish", "rough"),
+                    ],
+                );
+                layerstack::property::get_property_mut(&mut inner.properties, dust)
+                    .expect("inner dust")
+                    .default = Some(Value::Int(30));
+            },
+            expected: NESTED_VARIANT_SETS_EDITED,
+            weaker: None,
+            composition: Some(&[]),
+            minimum_openusd: None,
+        },
     ]
 }
 
@@ -1714,6 +1741,256 @@ def Xform "Forest" (
             }
         }
         "sparse" {
+        }
+    }
+}
+"#;
+
+const NESTED_VARIANT_SETS: &str = r#"#usda 1.0
+
+def "Stone" (
+    variants = {
+        string finish = "rough"
+        string grain = "coarse"
+    }
+    prepend variantSets = "finish"
+)
+{
+    variantSet "finish" = {
+        "rough" (
+            prepend variantSets = "grain"
+        ) {
+            int depth = 1
+
+            def "Chip"
+            {
+            }
+
+            variantSet "grain" = {
+                "coarse" (
+                    prepend variantSets = "finish"
+                ) {
+                    int depth = 2
+
+                    variantSet "finish" = {
+                        "rough" {
+                            int dust = 3
+
+                            def "Dust"
+                            {
+                            }
+                        }
+                    }
+                }
+                "fine" {
+                    int depth = 4
+                }
+            }
+        }
+        "smooth" {
+            int depth = 5
+        }
+    }
+}
+
+def "Tree" (
+    variants = {
+        string canopy = "full"
+        string season = "winter"
+    }
+    prepend variantSets = "season"
+)
+{
+    variantSet "season" = {
+        "summer" (
+            prepend variantSets = "canopy"
+        ) {
+            variantSet "canopy" = {
+                "full" {
+                    int leaves = 10
+
+                    def "Leaves"
+                    {
+                    }
+                }
+            }
+        }
+        "winter" (
+            prepend variantSets = "canopy"
+        ) {
+            variantSet "canopy" = {
+                "full" {
+                    int leaves = 0
+
+                    def "Snow"
+                    {
+                    }
+                }
+                "sparse" {
+                    int leaves = 1
+                }
+            }
+        }
+    }
+}
+
+def "River" (
+    variants = {
+        string flow = "fast"
+    }
+    prepend variantSets = "flow"
+)
+{
+    variantSet "flow" = {
+        "fast" (
+            variants = {
+                string depth = "deep"
+            }
+            prepend variantSets = "depth"
+        ) {
+            variantSet "depth" = {
+                "deep" (
+                    variants = {
+                        string bed = "rocky"
+                    }
+                    prepend variantSets = "bed"
+                ) {
+                    variantSet "bed" = {
+                        "rocky" {
+                            int grit = 7
+
+                            def "Boulder"
+                            {
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+"#;
+
+const NESTED_VARIANT_SETS_EDITED: &str = r#"#usda 1.0
+
+def "Stone" (
+    variants = {
+        string finish = "rough"
+        string grain = "coarse"
+    }
+    prepend variantSets = "finish"
+)
+{
+    variantSet "finish" = {
+        "rough" (
+            prepend variantSets = "grain"
+        ) {
+            int depth = 1
+
+            def "Chip"
+            {
+            }
+
+            variantSet "grain" = {
+                "coarse" (
+                    prepend variantSets = "finish"
+                ) {
+                    int depth = 2
+
+                    variantSet "finish" = {
+                        "rough" {
+                            int dust = 30
+
+                            def "Dust"
+                            {
+                            }
+                        }
+                    }
+                }
+                "fine" {
+                    int depth = 4
+                }
+            }
+        }
+        "smooth" {
+            int depth = 5
+        }
+    }
+}
+
+def "Tree" (
+    variants = {
+        string canopy = "full"
+        string season = "winter"
+    }
+    prepend variantSets = "season"
+)
+{
+    variantSet "season" = {
+        "summer" (
+            prepend variantSets = "canopy"
+        ) {
+            variantSet "canopy" = {
+                "full" {
+                    int leaves = 10
+
+                    def "Leaves"
+                    {
+                    }
+                }
+            }
+        }
+        "winter" (
+            prepend variantSets = "canopy"
+        ) {
+            variantSet "canopy" = {
+                "full" {
+                    int leaves = 0
+
+                    def "Snow"
+                    {
+                    }
+                }
+                "sparse" {
+                    int leaves = 1
+                }
+            }
+        }
+    }
+}
+
+def "River" (
+    variants = {
+        string flow = "fast"
+    }
+    prepend variantSets = "flow"
+)
+{
+    variantSet "flow" = {
+        "fast" (
+            variants = {
+                string depth = "deep"
+            }
+            prepend variantSets = "depth"
+        ) {
+            variantSet "depth" = {
+                "deep" (
+                    variants = {
+                        string bed = "rocky"
+                    }
+                    prepend variantSets = "bed"
+                ) {
+                    variantSet "bed" = {
+                        "rocky" {
+                            int grit = 7
+
+                            def "Boulder"
+                            {
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

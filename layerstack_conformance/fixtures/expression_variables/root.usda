@@ -182,6 +182,40 @@ def "Lode" (
 {
 }
 
+# List ops compare anchored asset paths, so spellings of one asset match:
+# these deletes remove the arcs `strata.usda` and `deep/vault.usda` add.
+def "Flint" (
+    delete references = @granite.usda@</Granite>
+)
+{
+}
+
+def "Slate" (
+    delete payload = @deep/../basalt.usda@</Basalt>
+)
+{
+}
+
+def "Marble" (
+    delete references = @`"deep/../${ROCK}.usda"`@</Granite>
+)
+{
+}
+
+def "Gneiss" (
+    delete references = @./deep/granite.usda@</Chip>
+)
+{
+}
+
+# `deep/vault.usda`'s `./granite.usda` anchors to `deep/granite.usda`, another
+# asset than this layer's: the delete does not remove it.
+def "Quartz" (
+    delete references = @./granite.usda@</Chip>
+)
+{
+}
+
 # Only the selections composition reads are evaluated: the `soil`
 # selection of the selected `summer` branch is an error; that of the
 # unselected `winter` branch is never read.

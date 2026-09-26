@@ -16,7 +16,7 @@ use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset};
 
-use crate::usda_real::{LoadedStage, load_expression_assets};
+use crate::usda_real::{LoadedStage, load_expression_assets, normalize_file_path};
 
 /// Loads a USDC file and all of its sublayers/references recursively,
 /// producing a [`LoadedStage`] ready for composition.
@@ -140,7 +140,7 @@ impl AssetResolver for UsdcFileResolver {
             .and_then(|id| self.layer_paths.get(&id))
             .and_then(|p| p.parent())
             .unwrap_or(&self.root_dir);
-        let resolved_path = base_dir.join(asset_path.trim_start_matches("./"));
+        let resolved_path = normalize_file_path(&base_dir.join(asset_path));
 
         // Deduplication.
         if let Some(id) = self.by_path.get(&resolved_path) {

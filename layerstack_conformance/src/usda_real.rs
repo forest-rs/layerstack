@@ -111,6 +111,26 @@ pub(crate) fn load_expression_assets(
     }
 }
 
+/// `path` with its `.` components dropped and each `..` removing the
+/// component before it, lexically, so every spelling of one file names one
+/// layer (OpenUSD anchors asset paths with `TfNormPath`).
+pub(crate) fn normalize_file_path(path: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut out = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir
+                if matches!(out.components().next_back(), Some(Component::Normal(_))) =>
+            {
+                out.pop();
+            }
+            other => out.push(other),
+        }
+    }
+    out
+}
+
 /// Loads only the layer stack structure (sublayers), ignoring prim contents.
 ///
 /// Loads only the layer stack structure (sublayers), ignoring prim contents.
@@ -239,7 +259,7 @@ impl AssetResolver for FileResolver {
             .and_then(|id| self.layer_paths.get(&id))
             .and_then(|p| p.parent())
             .unwrap_or(&self.root_dir);
-        let resolved_path = base_dir.join(asset_path.trim_start_matches("./"));
+        let resolved_path = normalize_file_path(&base_dir.join(asset_path));
 
         // Deduplication.
         if let Some(id) = self.by_path.get(&resolved_path) {

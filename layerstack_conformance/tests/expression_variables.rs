@@ -20,7 +20,10 @@
 //! adds (each layer's arcs are evaluated and anchored before list ops
 //! compose them), a literal delete of an expression arc and an expression
 //! delete of a literal arc evaluating to the same asset, for references
-//! and payloads, the same expression anchored in two directories (two
+//! and payloads, deletes spelling an asset differently from the arc they
+//! remove (list editing compares anchored assets), a delete in one
+//! directory that does not match an arc anchored in another, the same
+//! expression anchored in two directories (two
 //! different arcs, which a delete in one does not remove from the other),
 //! and invalid selections in a selected and an unselected variant branch
 //! (only the one composition reads is an error).

@@ -96,11 +96,10 @@ pub enum AssetPaths<'a> {
     #[default]
     AsAuthored,
     /// Anchored to the layer that authors each, through the resolver that
-    /// knows where each layer is ([`AssetResolver::resolved_path`]), as
-    /// OpenUSD's flatten anchors them. An asset path that cannot be
-    /// anchored is an unmet requirement ([`Loss::UnanchoredAssetPath`]);
-    /// anchoring is not implemented yet, so every asset path that is not
-    /// already absolute is one.
+    /// knows where each layer is ([`AssetResolver::anchor_asset_path`]), as
+    /// OpenUSD's flatten anchors them (`SdfAnchorAssetPaths`), in values,
+    /// arrays, dictionaries and metadata alike. An asset path that cannot
+    /// be anchored is an unmet requirement ([`Loss::UnanchoredAssetPath`]).
     Anchored(&'a dyn AssetResolver),
 }
 
@@ -460,6 +459,16 @@ pub enum Transformation {
     /// An instance written with its own copy of its descendants
     /// ([`Instancing::Expand`]).
     InstanceExpanded,
+    /// An asset path anchored to the layer that authors it
+    /// ([`AssetPaths::Anchored`]).
+    ///
+    /// Spec: AOUSD Core §9.4 (relative asset paths).
+    AssetPathAnchored {
+        /// The path as authored (`./bark.png`).
+        authored: String,
+        /// The path as written (`/assets/trees/bark.png`).
+        anchored: String,
+    },
 }
 
 impl fmt::Display for Transformation {
@@ -485,6 +494,9 @@ impl fmt::Display for Transformation {
             }
             Self::InstanceShared { prototype } => write!(f, "instance of {prototype}"),
             Self::InstanceExpanded => f.write_str("instance expanded"),
+            Self::AssetPathAnchored { authored, anchored } => {
+                write!(f, "@{authored}@ anchored as @{anchored}@")
+            }
         }
     }
 }

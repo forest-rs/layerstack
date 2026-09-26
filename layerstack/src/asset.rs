@@ -173,4 +173,231 @@ pub trait AssetResolver {
     ///
     /// Returns `None` if `id` was not produced by this resolver.
     fn resolved_path(&self, id: LayerId) -> Option<&str>;
+
+    /// Returns `asset_path`, authored in the layer `anchor`, anchored to that
+    /// layer: an identifier that names the same asset from any layer.
+    /// `None` when it cannot be anchored, because the layer's location is
+    /// not known or the path is an expression (`` `...` ``).
+    ///
+    /// The default anchors a path relative to its layer (`./bark.png`,
+    /// `../shared/leaf.png`) against [`AssetResolver::resolved_path`] with
+    /// [`anchor_asset_path`]; a search path (`textures/bark.png`) and an
+    /// absolute path are normalized and kept, and a URI is kept as
+    /// authored. OpenUSD's default resolver anchors a search path too when
+    /// the anchored asset exists (`ArDefaultResolver::_CreateIdentifier`); a
+    /// resolver that can look overrides this to do the same.
+    ///
+    /// Spec: AOUSD Core §9.4 (relative asset paths).
+    fn anchor_asset_path(&self, asset_path: &str, anchor: LayerId) -> Option<String> {
+        if asset_path.starts_with('`') {
+            return None;
+        }
+        if !is_file_relative(&asset_path.replace('\\', "/")) {
+            return anchor_asset_path(asset_path, "");
+        }
+        anchor_asset_path(asset_path, self.resolved_path(anchor)?)
+    }
+}
+
+/// Whether `asset_path` is relative to the layer that authors it or to a
+/// search path: not empty, not from the root (`/`), and not a URI or a
+/// drive (`https:`, `C:`).
+fn is_relative(asset_path: &str) -> bool {
+    if asset_path.is_empty() || asset_path.starts_with('/') {
+        return false;
+    }
+    !asset_path.split_once(':').is_some_and(|(scheme, _)| {
+        !scheme.is_empty()
+            && scheme
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+    })
+}
+
+/// Whether `asset_path` is relative to the layer that authors it: `./` or
+/// `../` (OpenUSD's `_IsFileRelative` in `pxr/usd/ar/defaultResolver.cpp`).
+/// Any other relative path is a search path.
+fn is_file_relative(asset_path: &str) -> bool {
+    asset_path.starts_with("./") || asset_path.starts_with("../")
+}
+
+/// Normalizes the asset path `path` as OpenUSD identifies an asset it has
+/// not anchored (`TfNormPath`): empty and `.` segments are dropped and each
+/// `..` removes the segment before it. A path relative to its layer (`./`
+/// or `../`) stays marked as such, since it anchors to the layer; a search
+/// path (`granite.usda`, `sub/../granite.usda`) does not; an absolute path
+/// stays absolute, from `/` or from a drive root (`C:/`). A URI and an
+/// expression are kept as authored.
+///
+/// Composition compares unresolved reference and payload arcs by this
+/// identity, and flattening writes search and absolute paths with it
+/// ([`AssetResolver::anchor_asset_path`]), so both agree.
+///
+/// OpenUSD: `_IsFileRelative`, `_IsSearchPath` and `_CreateIdentifier` in
+/// `pxr/usd/ar/defaultResolver.cpp`.
+#[must_use]
+pub fn normalize_asset_path(path: &str) -> String {
+    if let Some((drive, rest)) = drive_root(path) {
+        return alloc::format!("{drive}{}", normalize_asset_path(rest));
+    }
+    let absolute = path.starts_with('/');
+    if !absolute && (!is_relative(path) || path.starts_with('`')) {
+        return String::from(path);
+    }
+    let file_relative = is_file_relative(path);
+    let mut segments: Vec<&str> = Vec::new();
+    for segment in path.split('/') {
+        match segment {
+            "" | "." => {}
+            ".." if segments.last().is_some_and(|last| *last != "..") => {
+                segments.pop();
+            }
+            ".." if absolute => {}
+            other => segments.push(other),
+        }
+    }
+    let joined = segments.join("/");
+    if absolute {
+        alloc::format!("/{joined}")
+    } else if file_relative && segments.first() != Some(&"..") {
+        alloc::format!("./{joined}")
+    } else {
+        joined
+    }
+}
+
+/// Splits a Windows drive root off `path`: `C:/a` is `("C:", "/a")`.
+fn drive_root(path: &str) -> Option<(&str, &str)> {
+    let bytes = path.as_bytes();
+    (bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'/')
+        .then(|| path.split_at(2))
+}
+
+/// Anchors `asset_path` to the layer at `layer_location` (its resolved
+/// path), as `ArDefaultResolver::_CreateIdentifier` anchors a path it
+/// finds: a path relative to the layer (`./bark.png`, `../leaf.png`) is
+/// joined to the layer's directory and normalized
+/// ([`normalize_asset_path`]); any other path is normalized and kept, a
+/// search path staying a search path. `None` for an expression
+/// (`` `...` ``), or for a layer relative path in a layer inside a package
+/// (`a.usdz[b.usda]`) or of unknown location, which only a package-aware
+/// resolver can anchor.
+///
+/// The location and the path may use `\` separators and a drive root
+/// (`C:\assets\oak.usda`); the anchored path uses `/`, as OpenUSD's
+/// `TfNormPath` writes it on Windows.
+///
+/// Spec: AOUSD Core §9.4 (relative asset paths).
+#[must_use]
+pub fn anchor_asset_path(asset_path: &str, layer_location: &str) -> Option<String> {
+    if asset_path.starts_with('`') {
+        return None;
+    }
+    let asset_path = asset_path.replace('\\', "/");
+    if !is_file_relative(&asset_path) {
+        return Some(normalize_asset_path(&asset_path));
+    }
+    if layer_location.contains('[') || layer_location.is_empty() {
+        return None;
+    }
+    let location = layer_location.replace('\\', "/");
+    let directory = location.rfind('/').map_or("", |end| &location[..end]);
+    Some(normalize_asset_path(&alloc::format!(
+        "{directory}/{asset_path}"
+    )))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn asset_paths_normalize_as_openusd_identifies_them() {
+        for (path, normalized) in [
+            ("./granite.usda", "./granite.usda"),
+            ("./deep/../granite.usda", "./granite.usda"),
+            ("../rock/./granite.usda", "../rock/granite.usda"),
+            ("./../granite.usda", "../granite.usda"),
+            ("granite.usda", "granite.usda"),
+            ("deep/../granite.usda", "granite.usda"),
+            ("/assets/./deep/../granite.usda", "/assets/granite.usda"),
+            (
+                "https://example.com/a/../b.usda",
+                "https://example.com/a/../b.usda",
+            ),
+            ("", ""),
+            ("C:/assets/./deep/../granite.usda", "C:/assets/granite.usda"),
+        ] {
+            assert_eq!(normalize_asset_path(path), normalized, "{path}");
+        }
+    }
+
+    #[test]
+    fn layer_relative_paths_are_anchored_to_their_layer() {
+        let layer = "/assets/trees/oak.usda";
+        for (path, anchored) in [
+            ("./bark.png", "/assets/trees/bark.png"),
+            ("../shared//leaf.png", "/assets/shared/leaf.png"),
+            ("textures/./bark.png", "textures/bark.png"),
+            ("/abs/./bark.png", "/abs/bark.png"),
+            (
+                "https://example.com/bark.png",
+                "https://example.com/bark.png",
+            ),
+            ("C:/bark.png", "C:/bark.png"),
+            ("", ""),
+        ] {
+            assert_eq!(
+                anchor_asset_path(path, layer).as_deref(),
+                Some(anchored),
+                "{path}"
+            );
+        }
+        // A Windows location: `\` separators and a drive root.
+        let windows = "C:\\assets\\trees\\oak.usda";
+        for (path, anchored) in [
+            ("./bark.png", "C:/assets/trees/bark.png"),
+            ("../../../shared/leaf.png", "C:/shared/leaf.png"),
+            (".\\textures\\bark.png", "C:/assets/trees/textures/bark.png"),
+        ] {
+            assert_eq!(
+                anchor_asset_path(path, windows).as_deref(),
+                Some(anchored),
+                "{path}"
+            );
+        }
+        assert_eq!(
+            anchor_asset_path("./bark.png", "C:\\assets/mixed\\oak.usda").as_deref(),
+            Some("C:/assets/mixed/bark.png")
+        );
+        assert_eq!(anchor_asset_path("`${X}.png`", layer), None);
+        assert_eq!(anchor_asset_path("./a.png", "/p/a.usdz[b.usda]"), None);
+    }
+
+    #[test]
+    fn the_default_keeps_search_paths() {
+        struct Located;
+        impl AssetResolver for Located {
+            fn resolve(
+                &mut self,
+                _: &str,
+                _: Option<LayerId>,
+                _: &mut TokenInterner,
+                _: &mut PathInterner,
+            ) -> Result<ResolvedAsset, AssetResolveError> {
+                Err(AssetResolveError::NotFound)
+            }
+            fn resolved_path(&self, id: LayerId) -> Option<&str> {
+                (id == LayerId(1)).then_some("/assets/oak.usda")
+            }
+        }
+        let anchor = |path| Located.anchor_asset_path(path, LayerId(1));
+        assert_eq!(anchor("./bark.png").as_deref(), Some("/assets/bark.png"));
+        assert_eq!(
+            anchor("textures/../textures/bark.png").as_deref(),
+            Some("textures/bark.png")
+        );
+        assert_eq!(anchor("/abs.png").as_deref(), Some("/abs.png"));
+        assert_eq!(Located.anchor_asset_path("./bark.png", LayerId(2)), None);
+    }
 }

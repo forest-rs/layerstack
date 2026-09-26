@@ -27,9 +27,12 @@
 //! - OpenUSD must read the USDA and USDC files of Layerstack's flattened
 //!   layer as the same layer as its own flatten (every spec and field, see
 //!   the script for the two things it leaves out);
-//! - OpenUSD must compose each of those files as it composes the case
-//!   itself: every prim, property, metadata field, target and value at the
-//!   default time, at every sample time and at [`TIMES`].
+//! - OpenUSD must compose each of those files as it composes its own
+//!   flatten: every prim, property, metadata field, target and value at
+//!   the default time, at every sample time and at [`TIMES`]. (Its own
+//!   flatten composes as the case does, but for what flattening anchors
+//!   or retimes: a metadata asset path the stage reports as authored, for
+//!   one.)
 //!
 //! Without such a Python that check reports that it skipped and passes.
 
@@ -37,8 +40,9 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use layerstack::stage::flatten::{
-    FindingKind, FlattenError, FlattenReport, FlattenRequirements, FlattenVerification, Loss,
-    LossPolicy, MismatchKind, Preserved, Requirement, SkipReason,
+    AssetPaths, ExternalDependency, FindingKind, FlattenError, FlattenReport, FlattenRequirements,
+    FlattenVerification, Loss, LossPolicy, MismatchKind, Preserved, Requirement, SkipReason,
+    Transformation,
 };
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, Layer, LayerId, ListOp, PathInterner,
@@ -69,7 +73,8 @@ fn not_exact() -> Vec<&'static str> {
 /// Unregistered metadata the cases author. The USDA reader types its value
 /// from its text; a USDC file holds the text, as OpenUSD's text parser
 /// records it (an `SdfUnregisteredValue` string), so it reads back from the
-/// USDC as a string. Each must still differ that way.
+/// USDC as a string, and each must still differ that way. OpenUSD's own
+/// flatten drops it, as it cannot set it on a spec; this flatten keeps it.
 const UNREGISTERED: &[(&str, &str)] = &[("BasicVariantWithConnections_root", "avar")];
 
 /// Cases where OpenUSD's composition differs from Layerstack's in what the
@@ -184,25 +189,97 @@ struct Flattened {
     report: FlattenReport,
 }
 
+/// Flattens `case` with its asset paths anchored, as OpenUSD's flatten
+/// anchors them, under otherwise default requirements.
 fn flatten(case: &Case) -> Result<Flattened, String> {
-    flatten_with(case, &FlattenRequirements::default()).map_err(|e| e.to_string())
+    flatten_with(case, FlattenRequirements::default()).map_err(|e| e.to_string())
 }
 
+/// Flattens `case` under `requirements`, anchoring its asset paths to the
+/// files its layers are read from.
 fn flatten_with(
     case: &Case,
-    requirements: &FlattenRequirements<'_>,
+    requirements: FlattenRequirements<'_>,
 ) -> Result<Flattened, FlattenError> {
     let mut loaded = load_entry_usda(&case.entry);
     let options = options(&mut loaded.store, case.fallbacks);
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
     let id = LayerId(loaded.store.layers.keys().map(|id| id.0).max().unwrap_or(0) + 1);
-    let flat = stage.flatten(&mut loaded.store, loaded.root_layer, id, requirements)?;
+    let directory = case_directory(case);
+    let locations = Locations {
+        layers: loaded
+            .layer_names
+            .iter()
+            .map(|(&id, name)| (id, directory.join(name).to_string_lossy().into_owned()))
+            .collect(),
+    };
+    let requirements = FlattenRequirements {
+        asset_paths: AssetPaths::Anchored(&locations),
+        ..requirements
+    };
+    let flat = stage.flatten(&mut loaded.store, loaded.root_layer, id, &requirements)?;
     Ok(Flattened {
         store: loaded.store,
         stage,
         layer: flat.layer,
         report: flat.report,
     })
+}
+
+/// The directory of a case's entry layer, canonical as OpenUSD resolves
+/// it; under WASI, whose preopened directories have no canonical path, as
+/// found. On Windows the verbatim prefix `canonicalize` adds (`\\?\`) is
+/// dropped, as OpenUSD's paths have none.
+fn case_directory(case: &Case) -> PathBuf {
+    let directory = case.entry.parent().expect("a directory");
+    if cfg!(target_os = "wasi") {
+        return directory.to_path_buf();
+    }
+    let canonical = std::fs::canonicalize(directory).unwrap();
+    match canonical.to_string_lossy().strip_prefix(r"\\?\") {
+        Some(plain) => PathBuf::from(plain),
+        None => canonical,
+    }
+}
+
+/// Where each layer of a case is read from, for anchoring its asset paths
+/// as OpenUSD's default resolver anchors them.
+struct Locations {
+    layers: std::collections::HashMap<LayerId, String>,
+}
+
+impl AssetResolver for Locations {
+    fn resolve(
+        &mut self,
+        _: &str,
+        _: Option<LayerId>,
+        _: &mut TokenInterner,
+        _: &mut PathInterner,
+    ) -> Result<ResolvedAsset, AssetResolveError> {
+        Err(AssetResolveError::NotFound)
+    }
+
+    fn resolved_path(&self, id: LayerId) -> Option<&str> {
+        self.layers.get(&id).map(String::as_str)
+    }
+
+    /// A search path (`textures/bark.png`) is anchored only when the asset
+    /// exists beside its layer (`ArDefaultResolver::_CreateIdentifier`).
+    fn anchor_asset_path(&self, asset_path: &str, anchor: LayerId) -> Option<String> {
+        use layerstack::asset::{anchor_asset_path, normalize_asset_path};
+        let location = self.resolved_path(anchor)?;
+        let anchored = anchor_asset_path(asset_path, location)?;
+        let search = anchored == normalize_asset_path(asset_path)
+            && !asset_path.starts_with('/')
+            && !asset_path.contains(':');
+        if search
+            && let Some(beside) = anchor_asset_path(&format!("./{asset_path}"), location)
+            && Path::new(&beside).exists()
+        {
+            return Some(beside);
+        }
+        Some(anchored)
+    }
 }
 
 /// Resolves no asset: a flattened layer names none.
@@ -448,7 +525,7 @@ fn known_losses_are_reported_exactly() {
         "every scene has its expected losses"
     );
     for (case, (name, unmet)) in cases.iter().zip(expected) {
-        let refusal = match flatten_with(case, &FlattenRequirements::default()) {
+        let refusal = match flatten_with(case, FlattenRequirements::default()) {
             Err(FlattenError::Refused(refusal)) => refusal,
             other => panic!("{name}: expected a refusal, got {:?}", other.err()),
         };
@@ -477,7 +554,7 @@ fn known_losses_are_reported_exactly() {
         // Accepting the losses flattens; the report lists the same losses.
         let lenient = FlattenRequirements::default().accepting(&refusal.unmet);
         assert_eq!(lenient.losses, LossPolicy::RefuseRequired);
-        let mut flat = flatten_with(case, &lenient).expect("the losses are accepted");
+        let mut flat = flatten_with(case, lenient).expect("the losses are accepted");
         let lost: Vec<(String, FindingKind)> = flat
             .report
             .lost()
@@ -509,6 +586,73 @@ fn known_losses_are_reported_exactly() {
             .collect();
         assert_eq!(skipped, want_skipped, "{name}: only the losses are skipped");
     }
+}
+
+/// The asset paths of `fixtures/flatten/asset_paths` are anchored to the
+/// layer that authors each, and the report lists each anchoring and each
+/// asset the layer still names.
+#[test]
+fn asset_paths_are_anchored_and_reported() {
+    let case = fixture_cases("flatten")
+        .into_iter()
+        .find(|case| case.name == "asset_paths")
+        .expect("the asset_paths scene");
+    let flat = flatten(&case).expect("flattens");
+    // Anchored paths use `/` separators, as `TfNormPath` writes them.
+    let directory = case_directory(&case).to_string_lossy().replace('\\', "/");
+    let local = |path: &str| path.replace(directory.as_str(), "<dir>");
+    let mut anchored: Vec<String> = flat
+        .report
+        .transformed()
+        .filter_map(|finding| match &finding.kind {
+            FindingKind::Transformed(Transformation::AssetPathAnchored { authored, anchored }) => {
+                Some(format!(
+                    "{} {authored} -> {}",
+                    finding.path,
+                    local(anchored)
+                ))
+            }
+            _ => None,
+        })
+        .collect();
+    anchored.sort();
+    assert_eq!(
+        anchored,
+        [
+            "/ ./maps/grove.png -> <dir>/maps/grove.png",
+            "/Grove ./moss.png -> <dir>/moss.png",
+            "/Grove/Birch ./birch.usda -> <dir>/parts/birch.usda",
+            "/Grove/Birch.bark ./textures/bark.png -> <dir>/parts/textures/bark.png",
+            "/Grove/Birch.glow ./glow_override.png -> <dir>/glow_override.png",
+            "/Grove/Birch.glow ./mask.png -> <dir>/parts/mask.png",
+            "/Grove/Birch.leaves ../shared/leaf.png -> <dir>/shared/leaf.png",
+            "/Grove/Birch.lichen textures/lichen.png -> <dir>/parts/textures/lichen.png",
+            "/Grove/Birch.shadow ./shadow0.png -> <dir>/parts/shadow0.png",
+            "/Grove/Birch.shadow ./shadow5.png -> <dir>/parts/shadow5.png",
+        ]
+    );
+    let mut external: Vec<String> = flat
+        .report
+        .external()
+        .map(|finding| {
+            let FindingKind::External(ExternalDependency::AssetPath(asset)) = &finding.kind else {
+                unreachable!("an external finding")
+            };
+            format!("{} {}", finding.path, local(asset))
+        })
+        .filter(|entry| !entry.contains("<dir>"))
+        .collect();
+    external.sort();
+    assert_eq!(
+        external,
+        [
+            "/Grove.sky https://example.com/sky.hdr",
+            "/Grove/Birch.fungus textures/fungus.png",
+            "/Grove/Birch.leaves /opt/assets/leaf.png",
+        ],
+        "absolute paths, URIs and search paths with nothing beside their layer stay"
+    );
+    assert!(flat.report.is_lossless());
 }
 
 /// The flattened layer saved as USDA and as USDC.
@@ -633,10 +777,19 @@ fn flatten_matches_openusd() {
                     json_difference(&result["openusd"], &result["ours"][i])
                 ));
             }
-            if result["reopened"][i] != result["stage"] {
+            // OpenUSD's flatten drops unregistered metadata, which it cannot
+            // set on a spec; this flatten keeps it.
+            let unregistered: Vec<&str> = UNREGISTERED
+                .iter()
+                .filter(|(case, _)| case == name)
+                .map(|(_, field)| *field)
+                .collect();
+            let reopened = without(&result["reopened"][i], &unregistered);
+            let openusd = without(&result["openusd_reopened"], &unregistered);
+            if reopened != openusd {
                 differences.push(format!(
-                    "{name} ({format}): OpenUSD composes it differently from the stage\n{}",
-                    json_difference(&result["stage"], &result["reopened"][i])
+                    "{name} ({format}): OpenUSD composes it differently from its own flatten\n{}",
+                    json_difference(&openusd, &reopened)
                 ));
             }
         }
@@ -651,6 +804,32 @@ fn flatten_matches_openusd() {
     }
     eprintln!("compared {} cases with OpenUSD {version}", names.len());
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
+/// A stage dump without each property's `custom`, which OpenUSD's flatten
+/// takes from the weakest opinion while this flatten, as `IsCustom` does,
+/// from any, and without the property metadata fields `fields`.
+fn without(dump: &serde_json::Value, fields: &[&str]) -> serde_json::Value {
+    let mut dump = dump.clone();
+    for prim in dump
+        .as_object_mut()
+        .into_iter()
+        .flat_map(|prims| prims.values_mut())
+    {
+        let properties = prim.get_mut("properties").and_then(|p| p.as_object_mut());
+        for property in properties.into_iter().flat_map(|p| p.values_mut()) {
+            let Some(property) = property.as_object_mut() else {
+                continue;
+            };
+            property.remove("custom");
+            if let Some(metadata) = property.get_mut("metadata").and_then(|m| m.as_object_mut()) {
+                for field in fields {
+                    metadata.remove(*field);
+                }
+            }
+        }
+    }
+    dump
 }
 
 /// The first place two JSON values differ, as `path: expected / actual`.

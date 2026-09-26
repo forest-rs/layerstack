@@ -81,7 +81,7 @@ fn is_internal(reference: &Reference, layer: LayerId) -> bool {
 /// - A resolved arc is identified by its [`Reference::layer`], the asset
 ///   its path anchors to; its asset path is cleared to `""`.
 /// - An unresolved arc keeps its path, normalized
-///   ([`normalize_asset_path`]).
+///   ([`crate::asset::normalize_asset_path`]).
 ///
 /// OpenUSD compares the items after `SdfComputeAssetPathRelativeToLayer`
 /// anchors them (`_PcpComposeSiteReferencesOrPayloads` in
@@ -95,70 +95,17 @@ fn is_internal(reference: &Reference, layer: LayerId) -> bool {
 /// authors an unresolved arc is not known here, so the same unresolved
 /// `./` path authored in two directories compares equal.
 ///
-/// Must agree with flatten's `anchor_asset_path`, which anchors asset paths
-/// the same way; the two are to become one helper.
+/// The normalization is the one flattening writes asset paths with
+/// ([`crate::AssetResolver::anchor_asset_path`]).
 fn anchored_asset(reference: Reference) -> Reference {
     let asset = if reference.is_unresolved() {
-        normalize_asset_path(reference.asset.as_deref().unwrap_or_default())
+        crate::asset::normalize_asset_path(reference.asset.as_deref().unwrap_or_default())
     } else {
         alloc::string::String::new()
     };
     Reference {
         asset: Some(asset),
         ..reference
-    }
-}
-
-/// Normalizes the asset path `path` as OpenUSD identifies an asset it
-/// cannot resolve: empty and `.` segments are dropped and each `..` removes
-/// the segment before it (`TfNormPath`). A path relative to its layer
-/// (`./` or `../`) stays marked as such, since it anchors to the layer; a
-/// search path (`granite.usda`, `sub/../granite.usda`) does not, and an
-/// absolute path stays absolute.
-///
-/// OpenUSD: `_IsFileRelative` and `_IsSearchPath` in
-/// `pxr/usd/ar/defaultResolver.cpp`.
-pub(crate) fn normalize_asset_path(path: &str) -> alloc::string::String {
-    let absolute = path.starts_with('/');
-    let file_relative = path.starts_with("./") || path.starts_with("../");
-    let mut segments: Vec<&str> = Vec::new();
-    for segment in path.split('/') {
-        match segment {
-            "" | "." => {}
-            ".." if segments.last().is_some_and(|last| *last != "..") => {
-                segments.pop();
-            }
-            ".." if absolute => {}
-            other => segments.push(other),
-        }
-    }
-    let joined = segments.join("/");
-    if absolute {
-        alloc::format!("/{joined}")
-    } else if file_relative && segments.first() != Some(&"..") {
-        alloc::format!("./{joined}")
-    } else {
-        joined
-    }
-}
-
-#[cfg(test)]
-mod anchoring_tests {
-    use super::normalize_asset_path;
-
-    #[test]
-    fn asset_paths_normalize_as_openusd_identifies_them() {
-        for (path, normalized) in [
-            ("./granite.usda", "./granite.usda"),
-            ("./deep/../granite.usda", "./granite.usda"),
-            ("../rock/./granite.usda", "../rock/granite.usda"),
-            ("./../granite.usda", "../granite.usda"),
-            ("granite.usda", "granite.usda"),
-            ("deep/../granite.usda", "granite.usda"),
-            ("/assets/./deep/../granite.usda", "/assets/granite.usda"),
-        ] {
-            assert_eq!(normalize_asset_path(path), normalized, "{path}");
-        }
     }
 }
 

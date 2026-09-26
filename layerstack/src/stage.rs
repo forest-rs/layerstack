@@ -942,8 +942,20 @@ impl Stage {
         key: TokenId,
     ) -> Option<Resolved<ResolvedValue>> {
         let opinions = self.prims.get(&prim)?.property_opinions(property)?;
-        // Spec: AOUSD Core §12.3.2.1 (`timecode` values in stage time).
         let property_type = self.prims.get(&prim)?.property_type_for(&property);
+        self.resolve_property_metadata_over(opinions, property_type, property, key)
+    }
+
+    /// Resolves the property metadata field `key` over a chain of property
+    /// opinions, as [`Stage::resolve_property_metadata`] does.
+    fn resolve_property_metadata_over(
+        &self,
+        opinions: &[Opinion],
+        property_type: Option<&PropertyType>,
+        property: TokenId,
+        key: TokenId,
+    ) -> Option<Resolved<ResolvedValue>> {
+        // Spec: AOUSD Core §12.3.2.1 (`timecode` values in stage time).
         let opinions = stage_time::opinions_in_stage_time(opinions, property_type);
         let authored: Vec<(&Opinion, &FieldValue)> = opinions
             .iter()

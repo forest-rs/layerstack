@@ -54,6 +54,10 @@
 //!   `Flattened_Prototype_N`, written first, holding the prototype's
 //!   descendants, and each instance an internal reference to it in place
 //!   of its descendants, as OpenUSD writes them.
+//! - Asset paths are anchored to the layer that authors each, as OpenUSD's
+//!   flatten anchors them, when the requirements ask for it
+//!   ([`AssetPaths::Anchored`]); either way every asset path the layer
+//!   names is reported as an external dependency.
 //! - The layer metadata is the root layer's: `defaultPrim`, `upAxis`,
 //!   `metersPerUnit`, `timeCodesPerSecond`, `startTimeCode`,
 //!   `endTimeCode`, `documentation`, `reorder rootPrims` and the rest
@@ -69,8 +73,6 @@
 //! - For a property a schema defines, OpenUSD writes the schema's
 //!   variability; no schema is read here, so the composed variability is
 //!   written.
-//! - OpenUSD anchors relative asset paths to the layer that authors them;
-//!   they are written as authored here, and reported as external.
 //! - OpenUSD also reads the session layer's metadata; a [`Stage`] has no
 //!   session layer.
 //!
@@ -87,15 +89,16 @@ pub use report::{
 };
 pub use verify::{FlattenVerification, Mismatch, MismatchKind, SkipReason, Skipped, VerifiedScope};
 
-use alloc::{format, string::String, sync::Arc, vec::Vec};
+use alloc::{borrow::Cow, format, string::String, sync::Arc, vec::Vec};
 
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 
 use super::{
     ResolvedValue, Stage,
-    stage_time::{retime_value, to_stage_time},
+    stage_time::{map_leaves, map_opinion, retime_value, to_stage_time},
 };
 use crate::{
+    asset::AssetResolver,
     doc::{FieldEntry, FieldValue, Layer, LayerId, LayerStore, PrimSpec, Reference, Value},
     interner::TokenId,
     listop::ListOp,
@@ -217,21 +220,22 @@ impl Stage {
             out,
             prototypes: HashMap::new(),
             prototype_of: HashMap::new(),
+            anchored: HashMap::new(),
+            unanchored: HashSet::new(),
             report: FlattenReport::default(),
         };
-        let layer_metadata: Vec<Value> = flattener
-            .out
-            .metadata
-            .iter()
-            .filter_map(|entry| match &entry.value {
-                FieldValue::Value(value) => Some(value.clone()),
-                _ => None,
-            })
-            .collect();
-        for value in &layer_metadata {
-            flattener.note_assets("/", value, None);
+        // The layer metadata's asset paths are anchored to the root layer.
+        let mut metadata = core::mem::take(&mut flattener.out.metadata);
+        for entry in &mut metadata {
+            if let FieldValue::Value(value) = &mut entry.value {
+                if let Some(anchored) = flattener.anchor_value(value, root) {
+                    *value = anchored;
+                }
+                flattener.note_assets("/", value, None);
+            }
+            flattener.report.preserved.metadata_fields += 1;
         }
-        flattener.report.preserved.metadata_fields += layer_metadata.len();
+        flattener.out.metadata = metadata;
         let prototypes = match requirements.instancing {
             Instancing::Preserve => flattener.find_prototypes(pseudo_root),
             Instancing::Expand => Vec::new(),
@@ -263,6 +267,10 @@ struct Flattener<'a, 'r> {
     prototypes: HashMap<InstanceKey, PathId>,
     /// The prototype each instance references.
     prototype_of: HashMap<PathId, PathId>,
+    /// Each anchored asset path written, with the path it was authored as.
+    anchored: HashMap<Arc<str>, Arc<str>>,
+    /// The authored asset paths that could not be anchored.
+    unanchored: HashSet<Arc<str>>,
     report: FlattenReport,
 }
 
@@ -372,8 +380,53 @@ impl Flattener<'_, '_> {
         false
     }
 
-    /// Records each asset path in `value` as an external dependency, and,
-    /// when anchoring is required, each that is not anchored as a loss.
+    /// `value` with its asset paths anchored to the layer `layer`, when the
+    /// requirements anchor them; `None` when nothing changes. Records what
+    /// was anchored and what could not be.
+    ///
+    /// Spec: AOUSD Core §9.4 (relative asset paths are anchored to the
+    /// layer that authors them). OpenUSD: `SdfAnchorAssetPaths`, which its
+    /// flatten applies to every value and metadatum.
+    fn anchor_value(&mut self, value: &Value, layer: LayerId) -> Option<Value> {
+        let AssetPaths::Anchored(resolver) = self.requirements.asset_paths else {
+            return None;
+        };
+        let (anchored, unanchored) = (&mut self.anchored, &mut self.unanchored);
+        map_leaves(value, &mut |leaf| {
+            anchor_leaf(leaf, layer, resolver, anchored, unanchored)
+        })
+    }
+
+    /// `opinions` with the asset paths of each anchored to the layer that
+    /// authors it, when the requirements anchor them.
+    fn anchor_opinions<'o>(&mut self, opinions: &'o [Opinion]) -> Cow<'o, [Opinion]> {
+        let AssetPaths::Anchored(resolver) = self.requirements.asset_paths else {
+            return Cow::Borrowed(opinions);
+        };
+        let (anchored, unanchored) = (&mut self.anchored, &mut self.unanchored);
+        let mut out: Option<Vec<Opinion>> = None;
+        for (i, opinion) in opinions.iter().enumerate() {
+            let layer = opinion.key.layer_id;
+            let mapped = map_opinion(opinion, &mut |leaf| {
+                anchor_leaf(leaf, layer, resolver, anchored, unanchored)
+            });
+            match (mapped, &mut out) {
+                (Some(mapped), Some(out)) => out.push(mapped),
+                (Some(mapped), None) => {
+                    let mut started = opinions[..i].to_vec();
+                    started.push(mapped);
+                    out = Some(started);
+                }
+                (None, Some(out)) => out.push(opinion.clone()),
+                (None, None) => {}
+            }
+        }
+        out.map_or(Cow::Borrowed(opinions), Cow::Owned)
+    }
+
+    /// Records each asset path in `value` as an external dependency, each
+    /// anchored one as a transformation, and each that could not be
+    /// anchored when the requirements anchor them as a loss.
     ///
     /// Spec: AOUSD Core §9.4 (relative asset paths are anchored to the
     /// layer that authors them).
@@ -386,9 +439,13 @@ impl Flattener<'_, '_> {
                 continue;
             }
             seen.push(asset.clone());
-            if matches!(self.requirements.asset_paths, AssetPaths::Anchored(_))
-                && !is_absolute_asset_path(&asset)
-            {
+            if let Some(authored) = self.anchored.get(&asset) {
+                let t = Transformation::AssetPathAnchored {
+                    authored: String::from(&**authored),
+                    anchored: String::from(&*asset),
+                };
+                self.transformed(path.into(), t, source.cloned());
+            } else if self.unanchored.contains(&asset) {
                 self.lost(path.into(), Loss::UnanchoredAssetPath, source.cloned());
             }
             self.note(
@@ -645,10 +702,16 @@ impl Flattener<'_, '_> {
                 }
                 continue;
             }
-            let Some(resolved) = stage.resolve_value(prim, key) else {
+            let authored = strongest.and_then(|opinion| opinion.value.as_field());
+            let resolved = if authored.is_some_and(FieldValue::is_list_op) {
+                stage.resolve_value(prim, key)
+            } else {
+                let anchored = self.anchor_opinions(opinions);
+                stage.resolve_default(key, &anchored, index.property_type_for(&key), None)
+            };
+            let Some(resolved) = resolved else {
                 continue;
             };
-            let authored = strongest.and_then(|opinion| opinion.value.as_field());
             if authored.is_some_and(|value| !is_explicit(value)) {
                 let field = String::from(self.store.tokens().resolve(key));
                 self.transformed(
@@ -687,7 +750,7 @@ impl Flattener<'_, '_> {
         let mut spec = PropertySpec::of_kind(declaration.kind);
         spec.custom = declaration.custom;
         spec.variability = declaration.variability;
-        spec.metadata = self.property_metadata(prim, name, opinions, remap, &path);
+        spec.metadata = self.property_metadata(name, opinions, remap, &path);
 
         let targets = stage
             .resolve_target_list_path(property)
@@ -734,6 +797,8 @@ impl Flattener<'_, '_> {
             return None;
         };
         spec.type_name = Some(property_type);
+        let anchored = self.anchor_opinions(opinions);
+        let opinions: &[Opinion] = &anchored;
 
         // Spec: AOUSD Core §12.3.2 (per opinion, time samples, then a
         // spline, then the default).
@@ -777,7 +842,10 @@ impl Flattener<'_, '_> {
             .iter()
             .find(|opinion| opinion.value.default_value().is_some())
         {
-            let value = match stage.resolve_property_path(property) {
+            let index = stage.prims.get(&prim)?;
+            let resolved =
+                stage.resolve_default(name, opinions, index.property_type_for(&name), None);
+            let value = match resolved {
                 Some(resolved) => match resolved.value {
                     ResolvedValue::Scalar(value) => value,
                     ResolvedValue::Dictionary(entries) => Value::Dictionary(entries),
@@ -847,7 +915,6 @@ impl Flattener<'_, '_> {
     /// Spec: AOUSD Core §12.2 (metadata resolution).
     fn property_metadata(
         &mut self,
-        prim: PathId,
         name: TokenId,
         opinions: &[Opinion],
         remap: Option<Remap>,
@@ -867,9 +934,13 @@ impl Flattener<'_, '_> {
             let tokens = self.store.tokens();
             keys.sort_unstable_by(|a, b| tokens.resolve(*a).cmp(tokens.resolve(*b)));
         }
+        let anchored = self.anchor_opinions(opinions);
         let mut out = Vec::new();
         for key in keys {
-            let Some(resolved) = self.stage.resolve_property_metadata(prim, name, key) else {
+            let Some(resolved) = self
+                .stage
+                .resolve_property_metadata_over(&anchored, None, name, key)
+            else {
                 continue;
             };
             let strongest = opinions
@@ -1028,19 +1099,33 @@ fn asset_paths(value: &Value, out: &mut Vec<Arc<str>>) {
     }
 }
 
-/// Whether an asset path means the same wherever the layer that holds it
-/// is: a filesystem path from the root, a drive path or a URI.
-fn is_absolute_asset_path(path: &str) -> bool {
-    if path.starts_with('/') || path.starts_with('\\') {
-        return true;
+/// Anchors one leaf value, an asset path, to `layer` through `resolver`,
+/// recording the result.
+fn anchor_leaf(
+    leaf: &Value,
+    layer: LayerId,
+    resolver: &dyn AssetResolver,
+    anchored: &mut HashMap<Arc<str>, Arc<str>>,
+    unanchored: &mut HashSet<Arc<str>>,
+) -> Option<Value> {
+    let Value::Asset(path) = leaf else {
+        return None;
+    };
+    if path.is_empty() {
+        return None;
     }
-    // A scheme (`https:`) or a drive (`C:`).
-    path.split_once(':').is_some_and(|(scheme, _)| {
-        !scheme.is_empty()
-            && scheme
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
-    })
+    match resolver.anchor_asset_path(path, layer) {
+        Some(to) if *to != **path => {
+            let to: Arc<str> = Arc::from(to);
+            anchored.insert(to.clone(), path.clone());
+            Some(Value::Asset(to))
+        }
+        Some(_) => None,
+        None => {
+            unanchored.insert(path.clone());
+            None
+        }
+    }
 }
 
 #[cfg(test)]

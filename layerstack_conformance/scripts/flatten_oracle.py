@@ -19,6 +19,8 @@ the global variant fallbacks `fallbacks`, flattens it with
   stage, saved as USDA and USDC), read the same way;
 - `stage`: what the stage opened from `root` composes, as `stage_dump`
   reads it;
+- `openusd_reopened`: what OpenUSD's own flatten composes when OpenUSD
+  opens it as a stage;
 - `reopened`: what each layer in `flattened` composes when OpenUSD opens it
   as a stage.
 
@@ -190,6 +192,8 @@ def run(job):
     result = {
         "openusd": layer_dump(Sdf.Layer.FindOrOpen(job["export"])),
         "stage": stage_dump(stage, times),
+        "openusd_reopened": stage_dump(
+            Usd.Stage.Open(Sdf.Layer.FindOrOpen(job["export"])), times),
         "ours": [],
         "reopened": [],
     }

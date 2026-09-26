@@ -1,0 +1,28 @@
+#usda 1.0
+(
+    defaultPrim = "Grove"
+    customLayerData = {
+        asset map = @./maps/grove.png@
+    }
+)
+
+# Asset paths are anchored to the layer that authors each: values, arrays,
+# time samples, dictionaries and metadata alike. A search path is anchored
+# only when the asset exists beside its layer.
+def Xform "Grove" (
+    customData = {
+        dictionary shading = {
+            asset moss = @./moss.png@
+        }
+    }
+)
+{
+    asset sky = @https://example.com/sky.hdr@
+
+    def "Birch" (
+        references = @./parts/birch.usda@
+    )
+    {
+        asset glow = @./glow_override.png@
+    }
+}

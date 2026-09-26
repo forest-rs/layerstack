@@ -37,8 +37,8 @@ use layerstack::{AssetResolver, PropertyType, ReferenceTarget, ResolvedAsset};
 use crate::error::UsdcError;
 use crate::section::CrateSections;
 use crate::value_rep::{
-    CrateArrayEdit, CrateArrayEditOp, CrateListOp, CrateValue, DecodeBudget, RawValueRep,
-    decode_value_within,
+    CrateArrayEdit, CrateArrayEditOp, CrateListOp, CrateValue, DecodeBudget, DecodedField,
+    FloatArray, RawValueRep, decode_field_within,
 };
 use crate::value_type::{SpecForm, ValueType};
 
@@ -127,7 +127,7 @@ struct AssembleCtx<'a> {
 }
 
 /// A spec's fields: names borrowed from the token table, and their values.
-type Fields<'a> = Vec<(&'a str, CrateValue)>;
+type Fields<'a> = Vec<(&'a str, DecodedField<'a>)>;
 
 impl<'a> AssembleCtx<'a> {
     /// Records content that could not be represented.
@@ -427,7 +427,7 @@ impl<'a> AssembleCtx<'a> {
                 let field_name = self.lookup_token(field_def.token_index);
                 self.budget.charge_text(field_name.len())?;
                 let rep = RawValueRep::new(field_def.value_rep);
-                let value = decode_value_within(&rep, self.data, self.sections, self.budget)?;
+                let value = decode_field_within(&rep, self.data, self.sections, self.budget)?;
                 result.push((field_name, value));
             }
             idx += 1;
@@ -442,7 +442,7 @@ impl<'a> AssembleCtx<'a> {
     /// Spec: AOUSD Core §7.6.1 (layer spec fields).
     fn process_pseudo_root(
         &mut self,
-        fields: &[(&str, CrateValue)],
+        fields: &[(&str, DecodedField<'_>)],
         layer: &mut Layer,
     ) -> Result<(), UsdcError> {
         let mut root_children = Vec::new();
@@ -456,12 +456,14 @@ impl<'a> AssembleCtx<'a> {
                 // (`StringVector`) and `subLayerOffsets` as a
                 // `LayerOffsetVector` parallel to it.
                 "subLayers" => {
-                    if let CrateValue::PathVector(paths) | CrateValue::StringVector(paths) = value {
+                    if let Some(CrateValue::PathVector(paths) | CrateValue::StringVector(paths)) =
+                        value.value()
+                    {
                         sublayer_paths = paths;
                     }
                 }
                 "subLayerOffsets" => {
-                    if let CrateValue::LayerOffsetVector(offsets) = value {
+                    if let Some(CrateValue::LayerOffsetVector(offsets)) = value.value() {
                         sublayer_offsets = offsets;
                     }
                 }
@@ -472,14 +474,14 @@ impl<'a> AssembleCtx<'a> {
                     prim_order = Some(self.extract_token_names(value));
                 }
                 "defaultPrim" => {
-                    if let CrateValue::Token(name) = value {
+                    if let Some(CrateValue::Token(name)) = value.value() {
                         layer.default_prim = Some(self.tokens.intern(name));
                     }
                 }
                 "layerRelocates" => {
                     // Spec: AOUSD Core §7.6.1.2.4 (`layerRelocates`),
                     // §16.3.10.15 (crate relocates values).
-                    if let CrateValue::RelocatesMap(pairs) = value {
+                    if let Some(CrateValue::RelocatesMap(pairs)) = value.value() {
                         for (source, target) in pairs {
                             self.push_relocate(layer, source, target)?;
                         }
@@ -550,7 +552,7 @@ impl<'a> AssembleCtx<'a> {
     fn build_prim_spec(
         &mut self,
         spec_path: &str,
-        fields: &[(&str, CrateValue)],
+        fields: &[(&str, DecodedField<'_>)],
     ) -> Result<(PrimSpec, Option<Vec<TokenId>>), UsdcError> {
         let mut spec = PrimSpec::default();
         let mut property_children = None;
@@ -558,7 +560,7 @@ impl<'a> AssembleCtx<'a> {
         for (name, value) in fields {
             match *name {
                 "specifier" => {
-                    if let CrateValue::Specifier(v) = value {
+                    if let Some(CrateValue::Specifier(v)) = value.value() {
                         spec.specifier = Some(match v {
                             0 => Specifier::Def,
                             1 => Specifier::Over,
@@ -568,7 +570,7 @@ impl<'a> AssembleCtx<'a> {
                     }
                 }
                 "typeName" => {
-                    if let CrateValue::Token(t) = value
+                    if let Some(CrateValue::Token(t)) = value.value()
                         && !t.is_empty()
                     {
                         spec.type_name = Some(self.tokens.intern(t));
@@ -591,7 +593,7 @@ impl<'a> AssembleCtx<'a> {
                 // Derived from the variant set specs themselves.
                 "variantSetChildren" => {}
                 "references" => {
-                    if let CrateValue::ListOp(listop) = value {
+                    if let Some(CrateValue::ListOp(listop)) = value.value() {
                         let converted = self.convert_ref_listop(listop)?;
                         merge_ref_listop(&mut spec.references, converted);
                     }
@@ -604,19 +606,19 @@ impl<'a> AssembleCtx<'a> {
                 }
                 // Spec: AOUSD Core §7.6.2.3.3 (`inheritPaths`).
                 "inheritPaths" => {
-                    if let CrateValue::ListOp(listop) = value {
+                    if let Some(CrateValue::ListOp(listop)) = value.value() {
                         let converted = self.convert_path_listop(listop)?;
                         merge_path_listop(&mut spec.inherits, converted);
                     }
                 }
                 "specializes" => {
-                    if let CrateValue::ListOp(listop) = value {
+                    if let Some(CrateValue::ListOp(listop)) = value.value() {
                         let converted = self.convert_path_listop(listop)?;
                         merge_path_listop(&mut spec.specializes, converted);
                     }
                 }
                 "variantSelection" => {
-                    if let CrateValue::VariantSelectionMap(pairs) = value {
+                    if let Some(CrateValue::VariantSelectionMap(pairs)) = value.value() {
                         for (set_name, branch_name) in pairs {
                             let set_tok = self.tokens.intern(set_name);
                             let branch_tok = self.tokens.intern(branch_name);
@@ -628,19 +630,19 @@ impl<'a> AssembleCtx<'a> {
                     // Ordered variant set names: a string list op (AOUSD
                     // Core §7.6.2.3.5) whose items, in order, give the
                     // variant sets' strength order.
-                    let names = match value {
-                        CrateValue::ListOp(listop) => self.list_op_names(listop),
+                    let names = match value.value() {
+                        Some(CrateValue::ListOp(listop)) => self.list_op_names(listop),
                         _ => self.extract_token_names(value),
                     };
                     append_unique(&mut spec.variant_set_order, names);
                 }
-                "instanceable" if matches!(value, CrateValue::Bool(_)) => {
-                    if let CrateValue::Bool(b) = value {
+                "instanceable" if matches!(value.value(), Some(CrateValue::Bool(_))) => {
+                    if let Some(CrateValue::Bool(b)) = value.value() {
                         spec.instanceable = Some(*b);
                     }
                 }
-                "active" if matches!(value, CrateValue::Bool(_)) => {
-                    if let CrateValue::Bool(b) = value {
+                "active" if matches!(value.value(), Some(CrateValue::Bool(_))) => {
+                    if let Some(CrateValue::Bool(b)) = value.value() {
                         spec.active = Some(*b);
                     }
                 }
@@ -672,7 +674,7 @@ impl<'a> AssembleCtx<'a> {
     fn apply_attribute_fields(
         &mut self,
         spec_path: &str,
-        fields: &[(&str, CrateValue)],
+        fields: &[(&str, DecodedField<'_>)],
         attr_name: &str,
         prim: &mut PrimSpec,
     ) -> Result<(), UsdcError> {
@@ -686,7 +688,7 @@ impl<'a> AssembleCtx<'a> {
     fn apply_relationship_fields(
         &mut self,
         spec_path: &str,
-        fields: &[(&str, CrateValue)],
+        fields: &[(&str, DecodedField<'_>)],
         rel_name: &str,
         prim: &mut PrimSpec,
     ) -> Result<(), UsdcError> {
@@ -700,7 +702,7 @@ impl<'a> AssembleCtx<'a> {
     /// attribute itself authors no `connectionPaths`.
     fn apply_connection_fields(
         &mut self,
-        fields: &[(&str, CrateValue)],
+        fields: &[(&str, DecodedField<'_>)],
         attr_name: &str,
         prim: &mut PrimSpec,
     ) -> Result<(), UsdcError> {
@@ -832,7 +834,7 @@ impl<'a> AssembleCtx<'a> {
                     // Nested variant sets are read from their own specs.
                     "variantSetChildren" | "variantSetNames" => {}
                     "variantSelection" => {
-                        if let CrateValue::VariantSelectionMap(pairs) = value {
+                        if let Some(CrateValue::VariantSelectionMap(pairs)) = value.value() {
                             for (sn, bn) in pairs {
                                 let st = self.tokens.intern(sn);
                                 let bt = self.tokens.intern(bn);
@@ -841,7 +843,7 @@ impl<'a> AssembleCtx<'a> {
                         }
                     }
                     "references" => {
-                        if let CrateValue::ListOp(listop) = value
+                        if let Some(CrateValue::ListOp(listop)) = value.value()
                             && let Ok(converted) = self.convert_ref_listop(listop)
                         {
                             merge_ref_listop(&mut variant.references, converted);
@@ -853,14 +855,14 @@ impl<'a> AssembleCtx<'a> {
                         }
                     }
                     "inheritPaths" => {
-                        if let CrateValue::ListOp(listop) = value
+                        if let Some(CrateValue::ListOp(listop)) = value.value()
                             && let Ok(converted) = self.convert_path_listop(listop)
                         {
                             merge_path_listop(&mut variant.inherits, converted);
                         }
                     }
                     "specializes" => {
-                        if let CrateValue::ListOp(listop) = value
+                        if let Some(CrateValue::ListOp(listop)) = value.value()
                             && let Ok(converted) = self.convert_path_listop(listop)
                         {
                             merge_path_listop(&mut variant.specializes, converted);
@@ -938,6 +940,30 @@ impl<'a> AssembleCtx<'a> {
     }
 
     // ── Value conversion helpers ──────────────────────────────────────
+
+    /// Converts a validated field directly into its final layer value.
+    fn convert_field_value(&mut self, field: &DecodedField<'_>) -> Value {
+        match field {
+            DecodedField::Value(value) => self.convert_crate_value(value),
+            DecodedField::FloatArray(array) => Value::Array(match array {
+                FloatArray::Half(values) => values.iter().copied().map(Value::Half).collect(),
+                FloatArray::Float(values) => values.iter().copied().map(Value::Float).collect(),
+                FloatArray::Double(values) => values.iter().copied().map(Value::Double).collect(),
+                FloatArray::TimeCode(values) => {
+                    values.iter().copied().map(Value::TimeCode).collect()
+                }
+            }),
+            DecodedField::IntegerArray(array) => {
+                convert_integer_array(array.value_type, &array.values)
+            }
+            DecodedField::MathArray(array) => Value::Array(
+                array
+                    .elements()
+                    .map(|bytes| convert_math_value(array.value_type, bytes))
+                    .collect(),
+            ),
+        }
+    }
 
     /// Converts a [`CrateValue`] to a [`Value`].
     fn convert_crate_value(&mut self, cv: &CrateValue) -> Value {
@@ -1101,23 +1127,26 @@ impl<'a> AssembleCtx<'a> {
         &mut self,
         spec_path: &str,
         field: &str,
-        cv: &CrateValue,
+        field_value: &DecodedField<'_>,
     ) -> Result<Option<FieldValue>, UsdcError> {
+        let Some(cv) = field_value.value() else {
+            return Ok(Some(FieldValue::Value(
+                self.convert_field_value(field_value),
+            )));
+        };
         Ok(match cv {
             CrateValue::ListOp(listop) => {
                 let converted = match listop.op_type {
                     ValueType::TokenListOp => {
                         Some(FieldValue::TokenListOp(self.convert_token_listop(listop)))
                     }
-                    ValueType::PathListOp => {
-                        match self.convert_connection_value(&CrateValue::ListOp(listop.clone())) {
-                            Ok(converted) => Some(FieldValue::PathListOp(converted)),
-                            Err(error) => {
-                                self.report(spec_path, Some(field), alloc::format!("{error}"))?;
-                                return Ok(None);
-                            }
+                    ValueType::PathListOp => match self.convert_target_listop(listop) {
+                        Ok(converted) => Some(FieldValue::PathListOp(converted)),
+                        Err(error) => {
+                            self.report(spec_path, Some(field), alloc::format!("{error}"))?;
+                            return Ok(None);
                         }
-                    }
+                    },
                     ValueType::StringListOp => convert_scalar_listop(listop, |v| match v {
                         CrateValue::String(s) => Some(Arc::from(s.as_str())),
                         _ => None,
@@ -1191,21 +1220,21 @@ impl<'a> AssembleCtx<'a> {
     fn build_attribute_spec(
         &mut self,
         spec_path: &str,
-        fields: &[(&str, CrateValue)],
+        fields: &[(&str, DecodedField<'_>)],
     ) -> Result<PropertySpec, UsdcError> {
         let mut spec = PropertySpec::typed_attribute(self.attribute_property_type(fields));
         for (name, value) in fields {
-            match (*name, value) {
-                ("default", value) => spec.default = Some(self.convert_crate_value(value)),
-                ("timeSamples", CrateValue::TimeSamples(samples)) => {
+            match (*name, value.value()) {
+                ("default", _) => spec.default = Some(self.convert_field_value(value)),
+                ("timeSamples", Some(CrateValue::TimeSamples(samples))) => {
                     let samples = samples
                         .iter()
                         .map(|(tc, v)| (*tc, self.convert_crate_value(v)))
                         .collect();
                     spec.time_samples = Some(samples);
                 }
-                ("spline", CrateValue::Spline(spline)) => spec.spline = Some(spline.clone()),
-                ("connectionPaths", value) => {
+                ("spline", Some(CrateValue::Spline(spline))) => spec.spline = Some(spline.clone()),
+                ("connectionPaths", _) => {
                     spec.targets = Some(self.convert_connection_value(value)?);
                 }
                 // Read by `attribute_property_type`; `connectionChildren`
@@ -1226,12 +1255,12 @@ impl<'a> AssembleCtx<'a> {
         &mut self,
         spec_path: &str,
         name: &str,
-        value: &CrateValue,
+        value: &DecodedField<'_>,
         spec: &mut PropertySpec,
     ) -> Result<(), UsdcError> {
-        match (name, value) {
-            ("custom", CrateValue::Bool(custom)) => spec.custom = *custom,
-            ("variability", CrateValue::Variability(variability)) => {
+        match (name, value.value()) {
+            ("custom", Some(CrateValue::Bool(custom))) => spec.custom = *custom,
+            ("variability", Some(CrateValue::Variability(variability))) => {
                 spec.variability = match variability {
                     0 => Variability::Varying,
                     1 => Variability::Uniform,
@@ -1261,7 +1290,7 @@ impl<'a> AssembleCtx<'a> {
     fn build_relationship_spec(
         &mut self,
         spec_path: &str,
-        fields: &[(&str, CrateValue)],
+        fields: &[(&str, DecodedField<'_>)],
     ) -> Result<PropertySpec, UsdcError> {
         let mut spec = PropertySpec::relationship();
         for (name, value) in fields {
@@ -1275,11 +1304,11 @@ impl<'a> AssembleCtx<'a> {
         Ok(spec)
     }
 
-    fn attribute_property_type(&mut self, fields: &[(&str, CrateValue)]) -> PropertyType {
+    fn attribute_property_type(&mut self, fields: &[(&str, DecodedField<'_>)]) -> PropertyType {
         let mut type_name = String::new();
         for (name, value) in fields {
             if *name == "typeName"
-                && let CrateValue::Token(token) = value
+                && let Some(CrateValue::Token(token)) = value.value()
             {
                 type_name = token.clone();
                 break;
@@ -1287,7 +1316,8 @@ impl<'a> AssembleCtx<'a> {
         }
 
         let inferred_array = fields.iter().any(|(name, value)| {
-            matches!(*name, "default" | "timeSamples") && crate_value_is_array(value)
+            matches!(*name, "default" | "timeSamples")
+                && value.value().is_none_or(crate_value_is_array)
         });
 
         // `typeName` spells arrays with `[]` (`point3f[]`); the declared type
@@ -1395,8 +1425,11 @@ impl<'a> AssembleCtx<'a> {
     /// Converts a connection or target paths value to `ListOp<TargetPath>`.
     fn convert_connection_value(
         &mut self,
-        value: &CrateValue,
+        field: &DecodedField<'_>,
     ) -> Result<ListOp<TargetPath>, UsdcError> {
+        let Some(value) = field.value() else {
+            return Ok(ListOp::default());
+        };
         match value {
             CrateValue::ListOp(listop) => self.convert_target_listop(listop),
             CrateValue::PathVector(paths) => {
@@ -1461,8 +1494,11 @@ impl<'a> AssembleCtx<'a> {
     /// Spec: AOUSD Core §7.6.2.3.2 (`payload`).
     fn convert_payload_value(
         &mut self,
-        value: &CrateValue,
+        field: &DecodedField<'_>,
     ) -> Result<Option<ListOp<Reference>>, UsdcError> {
+        let Some(value) = field.value() else {
+            return Ok(None);
+        };
         match value {
             CrateValue::ListOp(listop) => self.convert_ref_listop(listop).map(Some),
             CrateValue::Dictionary(entries) => {
@@ -1583,7 +1619,10 @@ impl<'a> AssembleCtx<'a> {
 
     /// Extracts token names from a [`CrateValue`] (typically a `TokenVector`
     /// or `Array` of tokens).
-    fn extract_token_names(&mut self, value: &CrateValue) -> Vec<TokenId> {
+    fn extract_token_names(&mut self, field: &DecodedField<'_>) -> Vec<TokenId> {
+        let Some(value) = field.value() else {
+            return Vec::new();
+        };
         match value {
             CrateValue::TokenVector(tokens) => {
                 tokens.iter().map(|t| self.tokens.intern(t)).collect()
@@ -1903,6 +1942,26 @@ fn parent_prim_path(path: &str) -> Option<String> {
 // Math type → Value conversion
 // ---------------------------------------------------------------------------
 
+/// Converts integer components without materializing a `CrateValue` per item.
+/// The narrowing casts preserve the public decoder's bitwise signed/unsigned
+/// interpretation (AOUSD Core §16.3.10).
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "integer element bit patterns"
+)]
+fn convert_integer_array(vtype: ValueType, values: &[i64]) -> Value {
+    Value::Array(match vtype {
+        ValueType::Bool => values.iter().map(|&v| Value::Bool(v != 0)).collect(),
+        ValueType::UChar => values.iter().map(|&v| Value::UChar(v as u8)).collect(),
+        ValueType::Int => values.iter().map(|&v| Value::Int(v as i32)).collect(),
+        ValueType::UInt => values.iter().map(|&v| Value::UInt(v as u32)).collect(),
+        ValueType::Int64 => values.iter().map(|&v| Value::Int64(v)).collect(),
+        ValueType::UInt64 => values.iter().map(|&v| Value::UInt64(v as u64)).collect(),
+        _ => unreachable!("integer array types are selected by decode_field_within"),
+    })
+}
+
 /// Converts USDC opaque math bytes into a typed [`Value`] variant.
 ///
 /// The byte layout is little-endian and matches the USDC binary format
@@ -2082,6 +2141,186 @@ mod tests {
 
         fn resolved_path(&self, _: LayerId) -> Option<&str> {
             None
+        }
+    }
+
+    #[test]
+    fn compact_integer_conversion_preserves_width_and_signedness() {
+        let values = [-1, 0, 1, i64::MIN, i64::MAX];
+        for (ty, expected) in [
+            (
+                ValueType::Bool,
+                alloc::vec![
+                    Value::Bool(true),
+                    Value::Bool(false),
+                    Value::Bool(true),
+                    Value::Bool(true),
+                    Value::Bool(true)
+                ],
+            ),
+            (
+                ValueType::UChar,
+                alloc::vec![
+                    Value::UChar(255),
+                    Value::UChar(0),
+                    Value::UChar(1),
+                    Value::UChar(0),
+                    Value::UChar(255)
+                ],
+            ),
+            (
+                ValueType::Int,
+                alloc::vec![
+                    Value::Int(-1),
+                    Value::Int(0),
+                    Value::Int(1),
+                    Value::Int(0),
+                    Value::Int(-1)
+                ],
+            ),
+            (
+                ValueType::UInt,
+                alloc::vec![
+                    Value::UInt(u32::MAX),
+                    Value::UInt(0),
+                    Value::UInt(1),
+                    Value::UInt(0),
+                    Value::UInt(u32::MAX)
+                ],
+            ),
+            (
+                ValueType::Int64,
+                alloc::vec![
+                    Value::Int64(-1),
+                    Value::Int64(0),
+                    Value::Int64(1),
+                    Value::Int64(i64::MIN),
+                    Value::Int64(i64::MAX)
+                ],
+            ),
+            (
+                ValueType::UInt64,
+                alloc::vec![
+                    Value::UInt64(u64::MAX),
+                    Value::UInt64(0),
+                    Value::UInt64(1),
+                    Value::UInt64(1 << 63),
+                    Value::UInt64((1 << 63) - 1)
+                ],
+            ),
+        ] {
+            assert_eq!(convert_integer_array(ty, &values), Value::Array(expected));
+        }
+    }
+
+    #[test]
+    fn compact_array_fields_preserve_metadata_defaults_and_variants() {
+        for tag in (1..=9).chain(13..=30).chain(core::iter::once(56)) {
+            let ty = ValueType::try_from(tag).unwrap();
+            let mut data = alloc::vec![0; 8];
+            data.extend_from_slice(&1_u64.to_le_bytes());
+            data.extend_from_slice(&[0x81; 128]);
+            let mut raw = [0; 8];
+            raw[0] = 8;
+            raw[6] = tag;
+            raw[7] = 0x80;
+            let sections = CrateSections {
+                tokens: alloc::vec!["default".into(), "customArray".into()],
+                strings: Vec::new(),
+                fields: alloc::vec![
+                    FieldDef {
+                        token_index: 0,
+                        value_rep: raw
+                    },
+                    FieldDef {
+                        token_index: 1,
+                        value_rep: raw
+                    },
+                ],
+                fieldsets: alloc::vec![0, -1, 1, -1],
+                paths: alloc::vec![
+                    "/P".into(),
+                    "/P.a".into(),
+                    "/P{v=x}".into(),
+                    "/P{v=x}.a".into()
+                ],
+                specs: alloc::vec![
+                    SpecDef {
+                        path_index: 0,
+                        fieldset_index: 2,
+                        form: SpecForm::Prim
+                    },
+                    SpecDef {
+                        path_index: 1,
+                        fieldset_index: 0,
+                        form: SpecForm::Attribute
+                    },
+                    SpecDef {
+                        path_index: 2,
+                        fieldset_index: 2,
+                        form: SpecForm::Variant
+                    },
+                    SpecDef {
+                        path_index: 3,
+                        fieldset_index: 0,
+                        form: SpecForm::Attribute
+                    },
+                ],
+                version: CrateVersion::NEWEST_READABLE,
+            };
+            let mut tokens = TokenInterner::default();
+            let mut paths = PathInterner::default();
+            let result = assemble(
+                &data,
+                &sections,
+                LayerId(1),
+                &mut tokens,
+                &mut paths,
+                &mut NoAssets,
+                &mut DecodeBudget::with_limit(100),
+            )
+            .unwrap();
+            assert!(result.diagnostics.is_empty());
+            let prim = result.layer.prims.values().next().unwrap();
+            let expected = if tag <= 6 {
+                convert_integer_array(ty, &[i64::from_le_bytes([0x81; 8])])
+            } else if matches!(tag, 7 | 8 | 9 | 56) {
+                Value::Array(alloc::vec![match ty {
+                    ValueType::Half => Value::Half(u16::from_le_bytes([0x81; 2])),
+                    ValueType::Float => Value::Float(f32::from_le_bytes([0x81; 4])),
+                    ValueType::Double => Value::Double(f64::from_le_bytes([0x81; 8])),
+                    _ => Value::TimeCode(f64::from_le_bytes([0x81; 8])),
+                }])
+            } else {
+                Value::Array(alloc::vec![convert_math_value(ty, &data[16..])])
+            };
+            let property = prim.property(tokens.intern("a")).unwrap();
+            assert_eq!(property.default, Some(expected.clone()));
+            assert!(property.type_name.as_ref().unwrap().is_array);
+            assert_eq!(
+                prim.field(tokens.intern("customArray")),
+                Some(&FieldValue::Value(expected.clone()))
+            );
+            let variant = &prim.variant_sets[&tokens.intern("v")].variants[&tokens.intern("x")];
+            assert_eq!(variant.properties[0].spec.default, Some(expected.clone()));
+            assert_eq!(variant.fields[0].value, FieldValue::Value(expected));
+        }
+    }
+
+    #[test]
+    fn unused_math_fields_are_still_validated() {
+        let mut sections = shared_fieldset_sections(1, 1, alloc::vec!["/Missing.a".into()], |_| 0);
+        let mut raw = [0; 8];
+        raw[0] = 8;
+        raw[6] = ValueType::Vec3f as u8;
+        raw[7] = 0x80;
+        sections.fields[0].value_rep = raw;
+        for form in [SpecForm::Attribute, SpecForm::Mapper] {
+            sections.specs[0].form = form;
+            assert!(matches!(
+                assemble_within(&sections, &mut DecodeBudget::with_limit(100)),
+                Err(UsdcError::UnexpectedEof { .. })
+            ));
         }
     }
 

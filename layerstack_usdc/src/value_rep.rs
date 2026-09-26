@@ -338,6 +338,61 @@ pub fn decode_value_within(
     decode_nested(rep, data, sections, budget)
 }
 
+/// A field decoded for assembly. Array payloads stay compact until assembly
+/// converts them into the final layer values.
+pub(crate) enum DecodedField<'a> {
+    Value(CrateValue),
+    MathArray(MathArray<'a>),
+    IntegerArray(IntegerArray),
+    FloatArray(FloatArray),
+}
+
+impl DecodedField<'_> {
+    pub(crate) fn value(&self) -> Option<&CrateValue> {
+        match self {
+            Self::Value(value) => Some(value),
+            Self::MathArray(_) | Self::IntegerArray(_) | Self::FloatArray(_) => None,
+        }
+    }
+}
+
+/// Decodes one field with the same validation and budget as the public decoder,
+/// retaining compact array data instead of allocating type-erased elements.
+pub(crate) fn decode_field_within<'a>(
+    rep: &RawValueRep,
+    data: &'a [u8],
+    sections: &CrateSections,
+    budget: &mut DecodeBudget,
+) -> Result<DecodedField<'a>, UsdcError> {
+    within_value_budget(budget, |budget| {
+        let vtype = rep.value_type()?;
+        if rep.is_array() && !rep.is_array_edit() {
+            if math_type_info(vtype).0 != 0 {
+                return decode_math_array(rep, data, vtype, budget).map(DecodedField::MathArray);
+            }
+            if matches!(
+                vtype,
+                ValueType::Half | ValueType::Float | ValueType::Double | ValueType::TimeCode
+            ) {
+                return decode_float_array(rep, data, vtype, budget).map(DecodedField::FloatArray);
+            }
+            let width = match vtype {
+                ValueType::Bool | ValueType::UChar => Some(1),
+                ValueType::Int | ValueType::UInt => Some(4),
+                ValueType::Int64 | ValueType::UInt64 => Some(8),
+                _ => None,
+            };
+            if let Some(width) = width {
+                return Ok(DecodedField::IntegerArray(IntegerArray {
+                    value_type: vtype,
+                    values: read_integer_array(rep, data, width, false, budget)?,
+                }));
+            }
+        }
+        decode_one(rep, data, sections, budget).map(DecodedField::Value)
+    })
+}
+
 /// How deeply decoded values may nest.
 ///
 /// OpenUSD guards only against a value that contains itself
@@ -461,6 +516,13 @@ fn decode_nested(
     sections: &CrateSections,
     budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
+    within_value_budget(budget, |budget| decode_one(rep, data, sections, budget))
+}
+
+fn within_value_budget<T>(
+    budget: &mut DecodeBudget,
+    decode: impl FnOnce(&mut DecodeBudget) -> Result<T, UsdcError>,
+) -> Result<T, UsdcError> {
     if budget.depth >= MAX_VALUE_DEPTH {
         return Err(UsdcError::Inconsistent {
             message: "values nest too deeply",
@@ -468,7 +530,7 @@ fn decode_nested(
     }
     budget.charge(1)?;
     budget.depth += 1;
-    let value = decode_one(rep, data, sections, budget);
+    let value = decode(budget);
     budget.depth -= 1;
     value
 }
@@ -704,6 +766,14 @@ fn decode_integer_u64(
     Ok(CrateValue::UInt64(read_u64_at(data, off)?))
 }
 
+/// Integer components decoded by the shared integer-array reader, before
+/// expansion into assembly's type-erased values. Unsigned values retain their
+/// signed bit representation until conversion, just as in the public decoder.
+pub(crate) struct IntegerArray {
+    pub(crate) value_type: ValueType,
+    pub(crate) values: Vec<i64>,
+}
+
 /// Reads an array of integers from the file data at the payload offset.
 fn read_integer_array(
     rep: &RawValueRep,
@@ -790,10 +860,89 @@ fn decode_float(
         return element(bytes_at(data, off, element_size)?);
     }
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "integer-coded floats store int32 values"
+    )]
+    read_float_array(rep, data, element_size, budget, element, |v| {
+        to_value(v as f64)
+    })
+    .map(CrateValue::Array)
+}
+
+/// Compact scalar float arrays. Stored half bits are never widened; plain and
+/// LUT-encoded floating values keep their original NaN payloads and zero signs.
+pub(crate) enum FloatArray {
+    Half(Vec<u16>),
+    Float(Vec<f32>),
+    Double(Vec<f64>),
+    TimeCode(Vec<f64>),
+}
+
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    reason = "integer-coded floats store int32 values"
+)]
+fn decode_float_array(
+    rep: &RawValueRep,
+    data: &[u8],
+    vtype: ValueType,
+    budget: &mut DecodeBudget,
+) -> Result<FloatArray, UsdcError> {
+    match vtype {
+        ValueType::Half => read_float_array(
+            rep,
+            data,
+            2,
+            budget,
+            |bytes| Ok(u16::from_le_bytes(bytes.try_into().unwrap())),
+            |v| f64_to_half_bits(v as f64),
+        )
+        .map(FloatArray::Half),
+        ValueType::Float => read_float_array(
+            rep,
+            data,
+            4,
+            budget,
+            |bytes| Ok(f32::from_le_bytes(bytes.try_into().unwrap())),
+            |v| v as f64 as f32,
+        )
+        .map(FloatArray::Float),
+        ValueType::Double | ValueType::TimeCode => {
+            let values = read_float_array(
+                rep,
+                data,
+                8,
+                budget,
+                |bytes| Ok(f64::from_le_bytes(bytes.try_into().unwrap())),
+                |v| v as f64,
+            )?;
+            Ok(if vtype == ValueType::Double {
+                FloatArray::Double(values)
+            } else {
+                FloatArray::TimeCode(values)
+            })
+        }
+        _ => unreachable!("float array types are selected by decode_field_within"),
+    }
+}
+
+/// Shared float-array framing, decompression, lookup validation and budget.
+/// Callers choose the final element representation, without duplicating the
+/// decoding rules (AOUSD Core §16.3.10).
+fn read_float_array<T: Clone>(
+    rep: &RawValueRep,
+    data: &[u8],
+    element_size: usize,
+    budget: &mut DecodeBudget,
+    element: impl Fn(&[u8]) -> Result<T, UsdcError>,
+    integer: impl Fn(i64) -> T,
+) -> Result<Vec<T>, UsdcError> {
     // Array
     let off = payload_offset_usize(rep, data)?;
     if off == 0 {
-        return Ok(CrateValue::Array(vec![]));
+        return Ok(vec![]);
     }
     let count = read_u64_at(data, off)?;
     let arr_start = off + 8;
@@ -807,7 +956,7 @@ fn decode_float(
         let arr = (0..count)
             .map(|i| element(bytes_at(data, arr_start + i * element_size, element_size)?))
             .collect::<Result<_, UsdcError>>()?;
-        return Ok(CrateValue::Array(arr));
+        return Ok(arr);
     }
 
     // Compressed float array. `read_compressed_ints` checks the count
@@ -824,12 +973,7 @@ fn decode_float(
         // numerically (`crateFile.cpp`, `_WritePossiblyCompressedArray` and
         // `_ReadPossiblyCompressedArray` for floating-point arrays).
         let (int_values, _) = read_compressed_ints(bytes_from(data, pos)?, count, 4)?;
-        #[allow(
-            clippy::cast_precision_loss,
-            reason = "values were written as exact int32 conversions"
-        )]
-        let arr = int_values.into_iter().map(|v| to_value(v as f64)).collect();
-        Ok(CrateValue::Array(arr))
+        Ok(int_values.into_iter().map(integer).collect())
     } else if compression_type == b't' {
         // LUT compression.
         let lut_count = read_u32_le(data, &mut pos)?;
@@ -852,7 +996,7 @@ fn decode_float(
                     })
             })
             .collect::<Result<_, _>>()?;
-        Ok(CrateValue::Array(arr))
+        Ok(arr)
     } else {
         Err(UsdcError::Inconsistent {
             message: "unsupported float compression type",
@@ -1188,24 +1332,56 @@ fn decode_math_type(
         });
     }
 
-    // Array of math values.
-    if off == 0 {
-        return Ok(CrateValue::Array(vec![]));
+    let array = decode_math_array(rep, data, vtype, budget)?;
+    Ok(CrateValue::Array(
+        array
+            .elements()
+            .map(|bytes| CrateValue::Opaque {
+                value_type: vtype,
+                data: bytes.to_vec(),
+            })
+            .collect(),
+    ))
+}
+
+/// A bounds-checked array of fixed-size little-endian math values.
+/// Shares the count/bounds/budget checks between public decoding and assembly.
+pub(crate) struct MathArray<'a> {
+    pub(crate) value_type: ValueType,
+    bytes: &'a [u8],
+    element_size: usize,
+}
+
+impl MathArray<'_> {
+    pub(crate) fn elements(&self) -> core::slice::ChunksExact<'_, u8> {
+        self.bytes.chunks_exact(self.element_size)
     }
-    let arr_start = off + 8;
-    let count = element_count(data, arr_start, read_u64_at(data, off)?, total_bytes)?;
-    budget.charge_elements(count)?;
-    // The byte extent and budget already validate the full element count.
-    // Fallible collection discards that exact size hint and repeatedly grows
-    // a large CrateValue buffer; reserve it once before decoding elements.
-    let mut arr = Vec::with_capacity(count);
-    for i in 0..count {
-        arr.push(CrateValue::Opaque {
+}
+
+fn decode_math_array<'a>(
+    rep: &RawValueRep,
+    data: &'a [u8],
+    vtype: ValueType,
+    budget: &mut DecodeBudget,
+) -> Result<MathArray<'a>, UsdcError> {
+    let (components, component_size) = math_type_info(vtype);
+    let element_size = components * component_size;
+    let off = payload_offset_usize(rep, data)?;
+    if off == 0 {
+        return Ok(MathArray {
             value_type: vtype,
-            data: bytes_at(data, arr_start + i * total_bytes, total_bytes)?.to_vec(),
+            bytes: &[],
+            element_size,
         });
     }
-    Ok(CrateValue::Array(arr))
+    let start = off + 8;
+    let count = element_count(data, start, read_u64_at(data, off)?, element_size)?;
+    budget.charge_elements(count)?;
+    Ok(MathArray {
+        value_type: vtype,
+        bytes: bytes_at(data, start, count * element_size)?,
+        element_size,
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -2400,6 +2576,330 @@ fn read_typed_value(data: &[u8], pos: &mut usize, dt: SplineDataType) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn compact_float_arrays_preserve_bits_errors_and_budgets() {
+        let sections = sections_with(CrateVersion::NEWEST_READABLE);
+        for (ty, width, bits) in [
+            (
+                ValueType::Half,
+                2,
+                [0_u64, 0x8000, 0x7c01, 0x7e02, 0x7c00, 1],
+            ),
+            (
+                ValueType::Float,
+                4,
+                [0, 0x8000_0000, 0x7f80_0001, 0x7fc0_0002, 0x7f80_0000, 1],
+            ),
+            (
+                ValueType::Double,
+                8,
+                [
+                    0,
+                    0x8000_0000_0000_0000,
+                    0x7ff0_0000_0000_0001,
+                    0x7ff8_0000_0000_0002,
+                    0x7ff0_0000_0000_0000,
+                    1,
+                ],
+            ),
+            (
+                ValueType::TimeCode,
+                8,
+                [
+                    0,
+                    0x8000_0000_0000_0000,
+                    0x7ff0_0000_0000_0001,
+                    0x7ff8_0000_0000_0002,
+                    0x7ff0_0000_0000_0000,
+                    1,
+                ],
+            ),
+        ] {
+            for count in [0_usize, 1, 15, 16, 33] {
+                // Plain, short compressed, integral compression, LUT, bad LUT.
+                for mode in 0..5 {
+                    let mut data = vec![0; 8];
+                    data.extend_from_slice(&(count as u64).to_le_bytes());
+                    if mode < 2 || count < 16 {
+                        for i in 0..count {
+                            data.extend_from_slice(&bits[i % bits.len()].to_le_bytes()[..width]);
+                        }
+                    } else if mode == 2 {
+                        data.push(b'i');
+                        compressed_ints(&mut data, -1, count);
+                    } else {
+                        data.push(b't');
+                        data.extend_from_slice(&6_u32.to_le_bytes());
+                        for bits in bits {
+                            data.extend_from_slice(&bits.to_le_bytes()[..width]);
+                        }
+                        // One-byte delta code for each index, cycling all LUT
+                        // entries (or deliberately selecting the missing seventh).
+                        let mut encoded = vec![0; 4];
+                        encoded.resize(4 + count.div_ceil(4), 0x55);
+                        let mut previous = 0_i8;
+                        for i in 0..count {
+                            let index = if mode == 4 { 6 } else { (i % 6) as i8 };
+                            encoded.push((index - previous).cast_unsigned());
+                            previous = index;
+                        }
+                        let mut block = vec![0];
+                        block.extend_from_slice(&lz4_flex::compress(&encoded));
+                        data.extend_from_slice(&(block.len() as u64).to_le_bytes());
+                        data.extend(block);
+                    }
+                    let mut raw = [0; 8];
+                    raw[0] = if count == 0 { 0 } else { 8 };
+                    raw[6] = ty as u8;
+                    raw[7] = if mode == 0 { 0x80 } else { 0xa0 };
+                    let rep = RawValueRep::new(raw);
+                    for end in [0, 8, data.len().saturating_sub(1), data.len()] {
+                        for limit in [0, count as u64, 1 + count as u64, 7 + count as u64] {
+                            let mut a = DecodeBudget::with_limit(limit);
+                            let mut b = DecodeBudget::with_limit(limit);
+                            let ordinary =
+                                decode_value_within(&rep, &data[..end], &sections, &mut a);
+                            let compact =
+                                decode_field_within(&rep, &data[..end], &sections, &mut b);
+                            assert_eq!(ordinary.as_ref().err(), compact.as_ref().err());
+                            assert_eq!(a.used(), b.used());
+                            if let Ok(CrateValue::Array(values)) = ordinary {
+                                let expected: Vec<_> = values
+                                    .iter()
+                                    .map(|value| match value {
+                                        CrateValue::Half(v) => u64::from(*v),
+                                        CrateValue::Float(v) => u64::from(v.to_bits()),
+                                        CrateValue::Double(v) | CrateValue::TimeCode(v) => {
+                                            v.to_bits()
+                                        }
+                                        _ => panic!("floating element"),
+                                    })
+                                    .collect();
+                                let Ok(DecodedField::FloatArray(array)) = compact else {
+                                    panic!("compact float array");
+                                };
+                                let actual: Vec<_> = match array {
+                                    FloatArray::Half(values) => {
+                                        values.into_iter().map(u64::from).collect()
+                                    }
+                                    FloatArray::Float(values) => {
+                                        values.into_iter().map(|v| u64::from(v.to_bits())).collect()
+                                    }
+                                    FloatArray::Double(values) | FloatArray::TimeCode(values) => {
+                                        values.into_iter().map(f64::to_bits).collect()
+                                    }
+                                };
+                                assert_eq!(actual, expected, "{ty:?} mode {mode}");
+                                if (mode < 2 || count < 16 || mode == 3) && count != 0 {
+                                    assert_eq!(
+                                        actual,
+                                        (0..count)
+                                            .map(|i| bits[i % bits.len()])
+                                            .collect::<Vec<_>>()
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn compact_integer_arrays_match_public_decode_and_budgets() {
+        let sections = sections_with(CrateVersion::NEWEST_READABLE);
+        for tag in 1..=6 {
+            let width = match tag {
+                1 | 2 => 1,
+                3 | 4 => 4,
+                _ => 8,
+            };
+            for count in [0_usize, 1, 15, 16, 33] {
+                for compressed in [false, true] {
+                    let mut data = vec![0; 8];
+                    data.extend_from_slice(&(count as u64).to_le_bytes());
+                    if compressed && count >= 16 {
+                        let mut encoded = vec![0xff; width]; // delta -1
+                        encoded.resize(width + count.div_ceil(4), 0);
+                        let mut block = vec![0];
+                        block.extend_from_slice(&lz4_flex::compress(&encoded));
+                        data.extend_from_slice(&(block.len() as u64).to_le_bytes());
+                        data.extend(block);
+                    } else {
+                        let pattern = [0_i64, -1, i64::MIN, i64::MAX, -128, 128];
+                        for i in 0..count {
+                            data.extend_from_slice(
+                                &pattern[i % pattern.len()].to_le_bytes()[..width],
+                            );
+                        }
+                    }
+                    let mut raw = [0; 8];
+                    raw[0] = if count == 0 { 0 } else { 8 };
+                    raw[6] = tag;
+                    raw[7] = if compressed { 0xa0 } else { 0x80 };
+                    let rep = RawValueRep::new(raw);
+                    for end in [0, 8, data.len().saturating_sub(1), data.len()] {
+                        for limit in [0, count as u64, 1 + count as u64] {
+                            let mut a = DecodeBudget::with_limit(limit);
+                            let mut b = DecodeBudget::with_limit(limit);
+                            let ordinary =
+                                decode_value_within(&rep, &data[..end], &sections, &mut a);
+                            let compact =
+                                decode_field_within(&rep, &data[..end], &sections, &mut b);
+                            assert_eq!(ordinary.as_ref().err(), compact.as_ref().err());
+                            assert_eq!(a.used(), b.used());
+                            if let Ok(CrateValue::Array(values)) = ordinary {
+                                let Ok(DecodedField::IntegerArray(array)) = compact else {
+                                    panic!("compact integer array");
+                                };
+                                assert_eq!(values.len(), array.values.len());
+                                for (decoded, compact) in values.iter().zip(array.values) {
+                                    let expected = match decoded {
+                                        CrateValue::Bool(v) => {
+                                            assert_eq!(*v, compact != 0);
+                                            continue;
+                                        }
+                                        CrateValue::UChar(v) => i64::from(*v),
+                                        CrateValue::Int(v) => i64::from(*v),
+                                        CrateValue::UInt(v) => i64::from(*v),
+                                        CrateValue::Int64(v) => *v,
+                                        CrateValue::UInt64(v) => v.cast_signed(),
+                                        _ => panic!("integer element"),
+                                    };
+                                    let bits = compact.to_le_bytes();
+                                    assert_eq!(&expected.to_le_bytes()[..width], &bits[..width]);
+                                }
+                                assert!(
+                                    decode_field_within(&rep, &data[..end], &sections, &mut b)
+                                        .is_err(),
+                                    "each reference is charged"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn borrowed_math_arrays_match_public_decode_and_budget() {
+        let sections = sections_with(CrateVersion::NEWEST_READABLE);
+        for tag in 13..=30 {
+            let ty = ValueType::try_from(tag).unwrap();
+            let (n, size) = math_type_info(ty);
+            for count in [0, 1, 3] {
+                let mut data = vec![0; 8];
+                data.extend_from_slice(&(count as u64).to_le_bytes());
+                // Arbitrary bits include non-finite floats and signed zeros.
+                let pattern = [0x00, 0x00, 0x00, 0x80, 0x01, 0x00, 0xc0, 0x7f];
+                data.extend((0..count * n * size).map(|i| pattern[i % pattern.len()]));
+                for flags in [0x80, 0xa0, 0xc0] {
+                    let mut raw = [0; 8];
+                    raw[0] = if count == 0 { 0 } else { 8 };
+                    raw[6] = tag;
+                    raw[7] = flags;
+                    let rep = RawValueRep::new(raw);
+                    let mut ordinary_budget = DecodeBudget::with_limit(1 + count as u64);
+                    let CrateValue::Array(ordinary) =
+                        decode_value_within(&rep, &data, &sections, &mut ordinary_budget).unwrap()
+                    else {
+                        panic!("array");
+                    };
+                    let mut borrowed_budget = DecodeBudget::with_limit(1 + count as u64);
+                    let DecodedField::MathArray(borrowed) =
+                        decode_field_within(&rep, &data, &sections, &mut borrowed_budget).unwrap()
+                    else {
+                        panic!("borrowed array");
+                    };
+                    assert_eq!(ordinary_budget.used(), borrowed_budget.used());
+                    assert_eq!(borrowed.elements().len(), ordinary.len());
+                    for (bytes, value) in borrowed.elements().zip(ordinary) {
+                        let CrateValue::Opaque { value_type, data } = value else {
+                            panic!("math");
+                        };
+                        assert_eq!(value_type, borrowed.value_type);
+                        assert_eq!(bytes, data);
+                    }
+                    assert!(
+                        matches!(
+                            decode_field_within(&rep, &data, &sections, &mut borrowed_budget),
+                            Err(UsdcError::DecodeBudgetExceeded { .. })
+                        ),
+                        "every reference is charged"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn borrowed_math_arrays_preserve_failures_and_array_edit_dispatch() {
+        let sections = sections_with(CrateVersion::NEWEST_READABLE);
+        let mut data = vec![0; 8];
+        data.extend_from_slice(&2_u64.to_le_bytes());
+        data.extend_from_slice(&[0; 24]);
+        for flags in [0x80, 0x90] {
+            for offset in [0, 8, 9, 40, 255] {
+                let mut raw = [0; 8];
+                raw[0] = offset;
+                raw[6] = ValueType::Vec3f as u8;
+                raw[7] = flags;
+                let rep = RawValueRep::new(raw);
+                for end in [0, 8, 15, 16, 39, 40] {
+                    for limit in [0, 1, 2, 3, 100] {
+                        let mut a = DecodeBudget::with_limit(limit);
+                        let mut b = DecodeBudget::with_limit(limit);
+                        let ordinary = decode_value_within(&rep, &data[..end], &sections, &mut a);
+                        let borrowed = decode_field_within(&rep, &data[..end], &sections, &mut b);
+                        assert_eq!(ordinary.as_ref().err(), borrowed.as_ref().err());
+                        assert_eq!(a.used(), b.used());
+                        if flags & 0x10 != 0
+                            && let Ok(value) = borrowed
+                        {
+                            assert!(matches!(value, DecodedField::Value(_)));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn nested_math_arrays_keep_the_public_decode_path() {
+        let sections = sections_with(CrateVersion::NEWEST_READABLE);
+        let mut data = vec![0; 8];
+        data.extend_from_slice(&1_u64.to_le_bytes());
+        data.extend_from_slice(&[0x81; 12]);
+        let mut array = [0; 8];
+        array[0] = 8;
+        array[6] = ValueType::Vec3f as u8;
+        array[7] = 0x80;
+        let offset = data.len() as u8;
+        data.extend_from_slice(&1_u64.to_le_bytes());
+        data.extend_from_slice(&0_u32.to_le_bytes());
+        data.extend_from_slice(&8_i64.to_le_bytes());
+        data.extend_from_slice(&array);
+        let rep = list_op_rep(ValueType::Dictionary, offset);
+        let mut a = DecodeBudget::with_limit(100);
+        let mut b = DecodeBudget::with_limit(100);
+        let ordinary = decode_value_within(&rep, &data, &sections, &mut a).unwrap();
+        let DecodedField::Value(field) =
+            decode_field_within(&rep, &data, &sections, &mut b).unwrap()
+        else {
+            panic!("nested fallback");
+        };
+        assert_eq!(alloc::format!("{ordinary:?}"), alloc::format!("{field:?}"));
+        assert_eq!(a.used(), b.used());
+        a.depth = MAX_VALUE_DEPTH;
+        b.depth = MAX_VALUE_DEPTH;
+        assert_eq!(
+            decode_value_within(&rep, &data, &sections, &mut a).err(),
+            decode_field_within(&rep, &data, &sections, &mut b).err()
+        );
+    }
 
     #[test]
     fn raw_value_rep_flags() {

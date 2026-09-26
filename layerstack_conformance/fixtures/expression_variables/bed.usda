@@ -1,0 +1,14 @@
+#usda 1.0
+(
+    defaultPrim = "Bed"
+    expressionVariables = {
+        string ROCK = "shale"
+        string DEPTH = "shale"
+    }
+)
+
+def "Bed" (
+    references = [@`"./${ROCK}.usda"`@, @`"./${DEPTH}.usda"`@]
+)
+{
+}

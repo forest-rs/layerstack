@@ -13,6 +13,9 @@
 //! - **Value resolution** — scalar (strongest-wins) and [`ListOp`] chaining
 //! - **Composition arcs** — local, inherits, variants, references, payloads,
 //!   specializes (LIVERPS)
+//! - **Variable expressions** — sublayer, reference and payload asset paths
+//!   and variant selections authored as expressions, evaluated with each
+//!   layer stack's `expressionVariables` ([`variable_expression`])
 //! - **Incremental recomposition** — via [`LiveStage`] and the `invalidation`
 //!   dependency graph
 //! - **Authoring** — via [`edit`]: edit targets through any node of a
@@ -82,6 +85,7 @@ pub mod composition_error;
 pub mod dependency_map;
 pub mod doc;
 pub mod edit;
+pub(crate) mod expression_variables;
 pub mod half;
 pub mod interner;
 pub mod layer_stack;
@@ -104,13 +108,16 @@ pub mod variant_fallbacks;
 pub mod live_stage;
 
 pub use array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
-pub use asset::{AssetResolveError, AssetResolver, ResolvedAsset};
+pub use asset::{
+    AssetResolveError, AssetResolver, ExpressionAssetPath, ResolvedAsset, expression_asset_paths,
+};
 pub use composition_error::{
-    ArcCycle, ArcCycleSite, ArcToProhibitedChild, CompositionError, InconsistentPropertyType,
-    InvalidAuthoredRelocation, InvalidConflictingRelocation, InvalidExternalTargetPath,
-    InvalidInstanceTargetPath, InvalidRelocationReason, InvalidSameTargetRelocations,
-    OpinionAtRelocationSource, RelocationConflict, SublayerCycle, UnresolvedAsset,
-    UnresolvedDefaultPrim, UnresolvedPrimPath, UnresolvedSublayer,
+    ArcCycle, ArcCycleSite, ArcToProhibitedChild, CompositionError, ExpressionContext,
+    InconsistentPropertyType, InvalidAuthoredRelocation, InvalidConflictingRelocation,
+    InvalidExternalTargetPath, InvalidInstanceTargetPath, InvalidRelocationReason,
+    InvalidSameTargetRelocations, OpinionAtRelocationSource, RelocationConflict, SublayerCycle,
+    UnresolvedAsset, UnresolvedDefaultPrim, UnresolvedPrimPath, UnresolvedSublayer,
+    VariableExpressionError,
 };
 pub use dependency_map::ArcDependency;
 pub use doc::{

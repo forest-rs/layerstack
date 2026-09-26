@@ -1,0 +1,190 @@
+#usda 1.0
+(
+    expressionVariables = {
+        string ROCK = "granite"
+        string LAYER = "strata"
+        bool DEEP = true
+        string SEASON = "summer"
+    }
+    subLayers = [
+        # The sublayer path comes from a variable.
+        @`"./${LAYER}.usda"`@,
+        # An expression that evaluates to nothing is skipped silently.
+        @`""`@,
+        # A sublayer in another directory, whose relative asset paths
+        # anchor there.
+        @./deep/vault.usda@
+    ]
+)
+
+# The reference path comes from a variable.
+def "Outcrop" (
+    references = @`"./${ROCK}.usda"`@
+)
+{
+}
+
+# The payload path comes from a function of a variable.
+def "Deposit" (
+    payload = @`if(${DEEP}, "./basalt.usda", "./granite.usda")`@
+)
+{
+}
+
+# `cliff.usda` sets ROCK to shale for its own reference; this layer stack
+# sets it to granite, which wins. STONE, set only there, keeps its value.
+def "Ridge" (
+    references = @./cliff.usda@
+)
+{
+}
+
+# A reference to a child of `/Cliff`, which only `/Cliff`'s own reference
+# brings: that ancestral arc is evaluated as for `/Ridge`.
+def "Ledge" (
+    references = @./cliff.usda@</Cliff/Crystal>
+)
+{
+}
+
+# `bed.usda`, two references down, reads ROCK from this layer stack and
+# DEPTH from `gorge.usda`, the layer stack in between.
+def "Canyon" (
+    references = @./gorge.usda@
+)
+{
+}
+
+# Substituted into a string, a variable that is not set leaves its name:
+# `./MISSING.usda` does not resolve.
+def "Hollow" (
+    references = @`"./${MISSING}.usda"`@
+)
+{
+}
+
+# On its own, a variable that is not set is an error; the arc is dropped.
+def "Void" (
+    references = @`${MISSING}`@
+)
+{
+}
+
+# An expression that does not parse is an error; the arc is dropped, and
+# the next one still composes.
+def "Rubble" (
+    references = [@`"./${ROCK"`@, @./basalt.usda@]
+)
+{
+}
+
+# An expression that evaluates to no value drops the arc silently.
+def "Plain" (
+    references = @`if(${DEEP}, None, "./granite.usda")`@
+)
+{
+}
+
+# A value of another type than string is an error.
+def "Marsh" (
+    payload = @`${DEEP}`@
+)
+{
+}
+
+# The variant selection comes from a variable.
+def "Meadow" (
+    variants = {
+        string season = "`${SEASON}`"
+    }
+    variantSets = "season"
+)
+{
+    variantSet "season" = {
+        "summer" {
+            int bloom = 3
+        }
+        "winter" {
+            int bloom = 0
+        }
+    }
+}
+
+# `glade.usda` sets SEASON to winter for its own selection; this layer
+# stack's summer wins.
+def "Clearing" (
+    references = @./glade.usda@
+)
+{
+}
+
+# A selection that fails to evaluate is an error, and the weaker selection
+# `strata.usda` authors applies.
+over "Thicket" (
+    variants = {
+        string season = "`${NOPE}`"
+    }
+)
+{
+}
+
+def "Cavern" (
+    delete references = @`"./${ROCK}.usda"`@
+)
+{
+}
+
+def "Grotto" (
+    prepend references = @`"./${ROCK}.usda"`@
+)
+{
+}
+
+# List ops compose the arcs each layer evaluates and anchors: this layer's
+# delete removes the expression reference and payload `strata.usda` adds,
+# which evaluate to the same assets.
+def "Quarry" (
+    delete references = @`"./${ROCK}.usda"`@
+)
+{
+}
+
+def "Mine" (
+    delete payload = @`if(${DEEP}, "./basalt.usda", "./granite.usda")`@
+)
+{
+}
+
+# Only the selections composition reads are evaluated: the `soil`
+# selection of the selected `summer` branch is an error; that of the
+# unselected `winter` branch is never read.
+def "Orchard" (
+    variants = {
+        string season = "summer"
+    }
+    variantSets = ["season", "soil"]
+)
+{
+    variantSet "season" = {
+        "summer" (
+            variants = {
+                string soil = "`${CLAY`"
+            }
+        ) {
+        }
+        "winter" (
+            variants = {
+                string soil = "`${SAND`"
+            }
+        ) {
+        }
+    }
+    variantSet "soil" = {
+        "clay" {
+            int grain = 1
+        }
+        "sand" {
+            int grain = 2
+        }
+    }
+}

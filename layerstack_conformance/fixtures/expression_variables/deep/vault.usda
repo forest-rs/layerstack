@@ -1,0 +1,18 @@
+#usda 1.0
+
+# The same expression as `root.usda`'s evaluates to `./granite.usda` here
+# too, but anchors in this directory: another asset, which the root
+# layer's delete does not remove.
+over "Cavern" (
+    prepend references = @`"./${ROCK}.usda"`@
+)
+{
+}
+
+# Both layers add the expression; each anchors it in its own directory, so
+# the two arcs differ and both compose.
+over "Grotto" (
+    prepend references = @`"./${ROCK}.usda"`@
+)
+{
+}

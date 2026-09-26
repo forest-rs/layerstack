@@ -22,6 +22,7 @@ use crate::{
     },
     doc::LayerStore,
     doc::{LayerId, Reference, ReferenceTarget},
+    expression_variables::{ArcAnchor, ExpressionScope},
     layer_stack::LayerStack,
     path::{Path, PathId, PathInterner},
     relocates::{LiftedSet, Relocations, Walk},
@@ -195,6 +196,10 @@ fn gather_populated_paths(
         let path = queue[idx];
         idx += 1;
         let mut chain = Chain::new(stage_layer_stack, path, relocations);
+        // Discovery evaluates asset path expressions as composition does;
+        // composition reports what they find.
+        let expressions = chain.expression_scope();
+        let anchor = ArcAnchor::new(stage_layer_stack, Some(&expressions));
 
         let inherits = resolve_inherits_for_prim(
             store,
@@ -223,7 +228,7 @@ fn gather_populated_paths(
             local_stack,
             path,
             SelectionScope::Discover,
-            stage_layer_stack,
+            anchor,
         );
         for reference in refs {
             expand_reference_paths(
@@ -243,8 +248,7 @@ fn gather_populated_paths(
         // parent, regardless of which variant is currently selected. This
         // ensures that paths introduced by variant-scoped child references
         // are discovered during population.
-        let variant_refs =
-            collect_all_variant_child_references(store, local_stack, path, stage_layer_stack);
+        let variant_refs = collect_all_variant_child_references(store, local_stack, path, anchor);
         for reference in variant_refs {
             expand_reference_paths(
                 store,
@@ -261,13 +265,8 @@ fn gather_populated_paths(
 
         // Expand references from variant branch headers of this prim itself.
         // E.g. `"full" (add references = @...@) {}` on the prim's variant set.
-        let branch_refs = collect_all_variant_branch_references(
-            store,
-            fallbacks,
-            local_stack,
-            path,
-            stage_layer_stack,
-        );
+        let branch_refs =
+            collect_all_variant_branch_references(store, fallbacks, local_stack, path, anchor);
         for reference in branch_refs {
             expand_reference_paths(
                 store,
@@ -290,7 +289,7 @@ fn gather_populated_paths(
             local_stack,
             path,
             SelectionScope::Discover,
-            stage_layer_stack,
+            anchor,
         );
         for payload in payloads {
             expand_reference_paths(
@@ -307,13 +306,8 @@ fn gather_populated_paths(
         }
 
         // Expand payloads from variant branch headers (all branches).
-        let branch_payloads = collect_all_variant_branch_payloads(
-            store,
-            fallbacks,
-            local_stack,
-            path,
-            stage_layer_stack,
-        );
+        let branch_payloads =
+            collect_all_variant_branch_payloads(store, fallbacks, local_stack, path, anchor);
         for payload in branch_payloads {
             expand_reference_paths(
                 store,
@@ -430,6 +424,8 @@ fn expand_inherit_paths(
         chain.implied.push((dest_root, stage_class));
     }
     chain.push(store, stack, inherited_root, dest_root);
+    let expressions = chain.expression_scope();
+    let anchor = ArcAnchor::new(layer_stack, Some(&expressions));
 
     let src_root = store.paths().resolve(inherited_root).clone();
 
@@ -496,7 +492,7 @@ fn expand_inherit_paths(
             stack,
             remote_path_id,
             SelectionScope::Discover,
-            layer_stack,
+            anchor,
         );
         nested_refs.extend(resolve_payloads_for_prim(
             store,
@@ -504,7 +500,7 @@ fn expand_inherit_paths(
             stack,
             remote_path_id,
             SelectionScope::Discover,
-            layer_stack,
+            anchor,
         ));
         for nested in nested_refs {
             expand_reference_paths(
@@ -564,6 +560,8 @@ fn expand_reference_paths(
     }
     let remote_stack = LayerStack::gather(store, reference.layer);
     chain.push(store, &remote_stack, reference_path, dest_root);
+    let expressions = chain.expression_scope();
+    let anchor = ArcAnchor::new(reference.layer, Some(&expressions));
 
     let target = store.paths().resolve(reference_path).clone();
     let base = store.paths().resolve(dest_root).clone();
@@ -654,7 +652,7 @@ fn expand_reference_paths(
             &remote_stack,
             remote_path_id,
             SelectionScope::Discover,
-            reference.layer,
+            anchor,
         );
         for nested in nested_refs {
             expand_reference_paths(
@@ -671,12 +669,8 @@ fn expand_reference_paths(
         }
 
         // Expand variant-scoped child references from ALL variant branches.
-        let variant_refs = collect_all_variant_child_references(
-            store,
-            &remote_stack,
-            remote_path_id,
-            reference.layer,
-        );
+        let variant_refs =
+            collect_all_variant_child_references(store, &remote_stack, remote_path_id, anchor);
         for nested in variant_refs {
             expand_reference_paths(
                 store,
@@ -697,7 +691,7 @@ fn expand_reference_paths(
             fallbacks,
             &remote_stack,
             remote_path_id,
-            reference.layer,
+            anchor,
         );
         for nested in branch_refs {
             expand_reference_paths(
@@ -719,7 +713,7 @@ fn expand_reference_paths(
             fallbacks,
             &remote_stack,
             remote_path_id,
-            reference.layer,
+            anchor,
         );
         for nested in branch_payloads {
             expand_reference_paths(
@@ -742,7 +736,7 @@ fn expand_reference_paths(
             &remote_stack,
             remote_path_id,
             SelectionScope::Discover,
-            reference.layer,
+            anchor,
         );
         for payload in payloads {
             expand_reference_paths(
@@ -871,7 +865,8 @@ fn expand_ancestral_paths_from(
 ) {
     // No variant fallbacks, as in `gather_populated_paths`.
     let fallbacks = &VariantFallbacks::default();
-    let anchor = layer_stack_root(stack);
+    let expressions = chain.expression_scope();
+    let anchor = ArcAnchor::new(layer_stack_root(stack), Some(&expressions));
     let target_path = store.paths().resolve(target).clone();
     let mut ancestors = Vec::new();
     let mut cursor = target_path.parent();
@@ -1058,6 +1053,12 @@ impl<'r> Chain<'r> {
     /// the arcs beneath it map.
     fn lifts_relocations(&self) -> bool {
         self.lifted.iter().any(Option::is_some)
+    }
+
+    /// The scope the arcs of the layer stack last pushed evaluate their
+    /// asset path expressions in (see [`ArcChain::expression_stacks`]).
+    fn expression_scope(&self) -> ExpressionScope {
+        ExpressionScope::new(self.arcs.expression_stacks())
     }
 
     fn pop(&mut self) {

@@ -69,6 +69,9 @@ pub enum CompositionError {
     /// A relationship target or attribute connection authored in a class
     /// that targets an instance of that class. The path was ignored.
     InvalidInstanceTargetPath(InvalidInstanceTargetPath),
+    /// A variable expression in an asset path or variant selection that
+    /// failed to evaluate. The sublayer, arc or selection was ignored.
+    VariableExpressionError(VariableExpressionError),
 }
 
 impl CompositionError {
@@ -91,6 +94,7 @@ impl CompositionError {
             Self::InconsistentPropertyType(error) => Some(error.prim),
             Self::InvalidExternalTargetPath(error) => Some(error.prim),
             Self::InvalidInstanceTargetPath(error) => Some(error.prim),
+            Self::VariableExpressionError(error) => error.prim,
         }
     }
 }
@@ -510,4 +514,49 @@ pub struct InvalidInstanceTargetPath {
     pub spec: SpecPath,
     /// The layer of the class's property spec that authors the path.
     pub layer: LayerId,
+}
+
+/// Where a variable expression that failed to evaluate is authored (see
+/// [`VariableExpressionError`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum ExpressionContext {
+    /// A sublayer asset path.
+    Sublayer,
+    /// A reference asset path.
+    Reference,
+    /// A payload asset path.
+    Payload,
+    /// A variant selection.
+    VariantSelection,
+}
+
+/// A variable expression that failed to evaluate: a sublayer, reference or
+/// payload asset path, or a variant selection, authored as an expression
+/// that does not parse, uses a variable that is not set, or does not
+/// evaluate to a string.
+///
+/// The sublayer or arc is ignored, and a variant selection is ignored in
+/// favor of the next weaker selection; the rest of the layer stack or prim
+/// composes as normal. An expression that evaluates to no value or to an
+/// empty string is not an error: the sublayer or arc is dropped silently.
+///
+/// Spec: AOUSD Core §7.6.1.7 reserves `expressionVariables`; §10.6
+/// (composition errors). OpenUSD reports it as
+/// `PcpErrorVariableExpressionError` (`Pcp_EvaluateVariableExpression` in
+/// `pxr/usd/pcp/utils.cpp`), with the context `sublayer`, `reference`,
+/// `payload` or `variant`.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct VariableExpressionError {
+    /// The composed prim whose composition reached the expression, or
+    /// `None` for one found in a layer stack: a sublayer asset path, or a
+    /// variant selection.
+    pub prim: Option<PathId>,
+    /// Where the expression is authored.
+    pub context: ExpressionContext,
+    /// The layer that authors the expression.
+    pub layer: LayerId,
+    /// The expression as authored, backticks included.
+    pub expression: String,
+    /// The evaluation errors, joined with `"; "`.
+    pub error: String,
 }

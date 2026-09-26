@@ -1,0 +1,9 @@
+#usda 1.0
+(
+    defaultPrim = "Shale"
+)
+
+def "Shale"
+{
+    int hardness = 3
+}

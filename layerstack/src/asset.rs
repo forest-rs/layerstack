@@ -5,7 +5,7 @@
 //!
 //! Asset paths appear in references, payloads, and sublayer includes. Before
 //! composition can use them, they must be resolved to concrete [`LayerId`]s
-//! with their layer data loaded into a [`LayerStore`](crate::doc::LayerStore).
+//! with their layer data loaded into a [`LayerStore`].
 //!
 //! The [`AssetResolver`] trait defines this mapping. Implementations handle
 //! the full resolution pipeline described in AOUSD Core §9:
@@ -43,18 +43,55 @@
 //! };
 //! ```
 
-use alloc::sync::Arc;
+use alloc::{string::String, sync::Arc, vec::Vec};
 
 use crate::{
-    doc::{Layer, LayerId},
+    doc::{Layer, LayerId, LayerStore},
     interner::TokenInterner,
     path::PathInterner,
 };
 
+/// An asset path a variable expression evaluates to, and the layer that
+/// authors the expression, which a relative path is anchored to (see
+/// [`expression_asset_paths`]).
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub struct ExpressionAssetPath {
+    /// The layer that authors the expression.
+    pub anchor: LayerId,
+    /// The evaluated asset path.
+    pub asset_path: String,
+}
+
+/// Returns the asset paths that composing the layer stack rooted at `root`
+/// evaluates variable expressions to and that `store` does not resolve
+/// ([`LayerStore::asset_layer`]), sorted.
+///
+/// The asset path of a sublayer, reference or payload may be a variable
+/// expression (see [`crate::variable_expression`]), evaluated with the
+/// expression variables of the layer stack that authors it, so an importer
+/// cannot resolve it on its own. A host loads each path this lists,
+/// anchored to its layer, records it for [`LayerStore::asset_layer`] (for
+/// example [`InMemoryStore::insert_asset_layer`]) and asks again, until
+/// nothing new resolves: a newly loaded layer may author expressions of its
+/// own.
+///
+/// Every reference and payload the reachable layers author is visited, in
+/// every variant branch, with the variables of each layer stack that
+/// reaches it, so this may list paths composition does not follow.
+///
+/// OpenUSD resolves these paths during composition
+/// (`_PcpComposeSiteReferencesOrPayloads` in `pxr/usd/pcp/composeSite.cpp`).
+///
+/// [`InMemoryStore::insert_asset_layer`]: crate::InMemoryStore::insert_asset_layer
+#[must_use]
+pub fn expression_asset_paths(store: &dyn LayerStore, root: LayerId) -> Vec<ExpressionAssetPath> {
+    crate::expression_variables::walk(store, root).unresolved
+}
+
 /// The result of successfully resolving an asset path.
 ///
 /// On the first resolution of a given path, `layer` is `Some` and the caller
-/// should insert it into their [`LayerStore`](crate::doc::LayerStore). On
+/// should insert it into their [`LayerStore`]. On
 /// subsequent resolutions of the same path (deduplication), `layer` is `None`.
 #[derive(Clone, Debug)]
 pub struct ResolvedAsset {
@@ -99,7 +136,7 @@ pub enum AssetResolveError {
 ///    [`LayerId`] with `layer: None`
 ///
 /// The caller is responsible for inserting returned layers into their
-/// [`LayerStore`](crate::doc::LayerStore).
+/// [`LayerStore`].
 ///
 /// Spec: AOUSD Core §9 (asset resolution).
 pub trait AssetResolver {

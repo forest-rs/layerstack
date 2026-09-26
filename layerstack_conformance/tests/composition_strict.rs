@@ -57,8 +57,10 @@
 //! target paths, specializes propagated to the root of the graph and
 //! implied like inherits, relocates of the stage's and of referenced layer
 //! stacks (relocated prims composed at their targets beneath relocate
-//! nodes, their sources prohibited), and variant selections, including
-//! fallbacks, that do not depend on the features below.
+//! nodes, their sources prohibited), asset paths authored as variable
+//! expressions, evaluated with the expression variables of the referencing
+//! layer stacks, and variant selections, including fallbacks, that do not
+//! depend on the features below.
 //!
 //! # Not supported
 //!
@@ -66,9 +68,8 @@
 //! - Implied classes in population and variant selection
 //!   ([`Cause::ImpliedClasses`]).
 //! - Variant selections of the sites ancestral arcs reach, made before the
-//!   prim's index is complete ([`Cause::AncestralArcs`]),
-//!   some nested variant specs ([`Cause::VariantSpecs`]) and asset-path
-//!   expressions ([`Cause::ExpressionVariables`]).
+//!   prim's index is complete ([`Cause::AncestralArcs`]), and
+//!   some nested variant specs ([`Cause::VariantSpecs`]).
 //!
 //! The test prints the per-cause tally and the list of exact matches.
 
@@ -516,8 +517,6 @@ enum Cause {
     /// relocation source, and the classes of a relocation source outside a
     /// subroot reference's target are not composed as OpenUSD composes them.
     Relocates,
-    /// Asset-path variable expressions are not evaluated.
-    ExpressionVariables,
 }
 
 /// A fixture known to mismatch the oracle, with its exact mismatch shape.
@@ -589,24 +588,6 @@ const KNOWN: &[Known] = &[
         values: 0,
         diffs: &[D::MissingSite],
         reason: "`/VariantAtRelocateSource/Sibling` misses the variant opinions `root.usd` authors inside the relocated `/VariantAtRelocateSource/Child`",
-    },
-    Known {
-        fixture: "ExpressionsInPayloads_root",
-        causes: &[C::ExpressionVariables],
-        prims: 4,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingSite],
-        reason: "payload asset paths such as `` @`\"./${REF}.usd\"`@ `` are variable expressions",
-    },
-    Known {
-        fixture: "ExpressionsInReferences_root",
-        causes: &[C::ExpressionVariables],
-        prims: 4,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingSite],
-        reason: "reference asset paths such as `` @`\"./${REF}.usd\"`@ `` are variable expressions",
     },
     Known {
         fixture: "RelocatePrimsWithSameName_root",

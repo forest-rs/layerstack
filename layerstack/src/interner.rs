@@ -69,4 +69,9 @@ impl TokenInterner {
     pub fn resolve(&self, id: TokenId) -> &str {
         &self.strings[usize::try_from(id.0).expect("token id out of range")]
     }
+
+    /// Returns `true` when some interned string satisfies `f`.
+    pub(crate) fn any(&self, f: impl Fn(&str) -> bool) -> bool {
+        self.strings.iter().any(|s| f(s))
+    }
 }

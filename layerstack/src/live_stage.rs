@@ -19,6 +19,7 @@ use crate::{
     dependency_map::{ArcDependency, CompositionDeps},
     doc::{LayerId, LayerStore},
     edit::{Applied, EditError, Transaction},
+    expression_variables::VariableReads,
     path::PathId,
     stage::{PopulationMask, Stage, StageOptions},
 };
@@ -53,6 +54,7 @@ fn participating_layers(store: &dyn LayerStore, root: LayerId) -> HashSet<LayerI
         references: &crate::ListOp<crate::Reference>,
         payloads: &crate::ListOp<crate::Reference>,
         pending: &mut Vec<LayerId>,
+        expressions: &mut bool,
     ) {
         for list in [references, payloads] {
             let items = list
@@ -61,10 +63,14 @@ fn participating_layers(store: &dyn LayerStore, root: LayerId) -> HashSet<LayerI
                 .flatten()
                 .chain(&list.prepend)
                 .chain(&list.append);
-            pending.extend(items.map(|arc| arc.layer));
+            for arc in items {
+                *expressions |= arc.is_expression();
+                pending.push(arc.layer);
+            }
         }
     }
     let mut seen = HashSet::new();
+    let mut expressions = false;
     let mut pending = alloc::vec![root];
     while let Some(id) = pending.pop() {
         if id == LayerId::UNRESOLVED || !seen.insert(id) {
@@ -73,18 +79,38 @@ fn participating_layers(store: &dyn LayerStore, root: LayerId) -> HashSet<LayerI
         let Some(layer) = store.layer(id) else {
             continue;
         };
-        pending.extend(layer.sublayers.iter().map(|entry| entry.layer));
+        for entry in &layer.sublayers {
+            expressions |= entry.is_expression();
+            pending.push(entry.layer);
+        }
         for spec in layer
             .prims
             .values()
             .chain(layer.variant_prims.values().flatten())
         {
-            arc_layers(&spec.references, &spec.payloads, &mut pending);
+            arc_layers(
+                &spec.references,
+                &spec.payloads,
+                &mut pending,
+                &mut expressions,
+            );
             for set in spec.variant_sets.values() {
                 for variant in set.variants.values() {
-                    arc_layers(&variant.references, &variant.payloads, &mut pending);
+                    arc_layers(
+                        &variant.references,
+                        &variant.payloads,
+                        &mut pending,
+                        &mut expressions,
+                    );
                 }
             }
+        }
+    }
+    // The layers asset paths authored as variable expressions reach, with
+    // the variables of each layer stack reaching them.
+    if expressions {
+        for walked in crate::expression_variables::walk(store, root).stacks {
+            seen.extend(walked.stack.layers);
         }
     }
     seen
@@ -121,6 +147,8 @@ pub struct LiveStage {
     default_prim_dependents: HashMap<LayerId, HashSet<PathId>>,
     /// Layers whose `layerRelocates` the last full composition consulted.
     relocation_layers: HashSet<LayerId>,
+    /// The expression variables composition read, with the values found.
+    expression_variables: VariableReads,
     /// The generation and structural generation of every layer the stage
     /// reads, as this stage last saw them; `None` for a layer the store
     /// did not hold (see [`LiveStage::notify_changed_layers`]).
@@ -152,6 +180,7 @@ impl LiveStage {
             prim_to_sources: HashMap::new(),
             default_prim_dependents: deps.default_prim_dependents,
             relocation_layers: deps.relocation_layers,
+            expression_variables: deps.expression_variables,
             generations: HashMap::new(),
             root,
             options,
@@ -422,6 +451,30 @@ impl LiveStage {
         }
     }
 
+    /// Notifies that the `expressionVariables` metadata of `layer` was
+    /// authored, changed or cleared.
+    ///
+    /// Composition evaluates the variable expressions of asset paths and
+    /// variant selections with the expression variables of the layer
+    /// stacks that author them, which the root layers of those layer
+    /// stacks, and of the layer stacks referencing them, provide (see
+    /// [`crate::variable_expression`]). When a variable composition read
+    /// from `layer` now has another value in `store`, or is now set where
+    /// composition found it unset, the next [`recompose`](Self::recompose)
+    /// rebuilds the whole stage, as for
+    /// [`notify_structural_change`](Self::notify_structural_change).
+    /// Otherwise nothing depends on the change and nothing is recomposed.
+    ///
+    /// OpenUSD records the variables each layer stack's expressions use
+    /// (`PcpExpressionVariablesDependencyData`) and resyncs the prims that
+    /// use a changed one (`PcpChanges::DidChange` in
+    /// `pxr/usd/pcp/changes.cpp`).
+    pub fn notify_expression_variables_edit(&mut self, store: &dyn LayerStore, layer: LayerId) {
+        if self.expression_variables.changed(store, layer) {
+            self.needs_full_rebuild = true;
+        }
+    }
+
     /// Notifies that a structural change occurred (prims added/removed, arcs changed).
     ///
     /// This forces a full rebuild on the next [`recompose`](Self::recompose) call.
@@ -496,7 +549,9 @@ impl LiveStage {
         };
 
         // Extract partial dependency data before merging the stage.
-        let partial_deps = partial.take_deps().unwrap_or_default();
+        let mut partial_deps = partial.take_deps().unwrap_or_default();
+        self.expression_variables
+            .extend(core::mem::take(&mut partial_deps.expression_variables));
 
         // Replace only the recomposed prim indexes; hierarchy is unchanged.
         self.stage.merge_prims_from(partial, &affected);
@@ -631,6 +686,7 @@ impl LiveStage {
         self.prim_to_layers = deps.prim_to_layers;
         self.default_prim_dependents = deps.default_prim_dependents;
         self.relocation_layers = deps.relocation_layers;
+        self.expression_variables = deps.expression_variables;
         self.reindex_all_sources();
         self.record_generations(store);
 

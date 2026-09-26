@@ -1,0 +1,35 @@
+#usda 1.0
+
+over "Quarry" (
+    prepend references = @`"./${ROCK}.usda"`@
+)
+{
+}
+
+over "Mine" (
+    prepend payload = @`if(${DEEP}, "./basalt.usda", "./granite.usda")`@
+)
+{
+}
+
+over "Outcrop"
+{
+    int layered = 1
+}
+
+def "Thicket" (
+    variants = {
+        string season = "winter"
+    }
+    variantSets = "season"
+)
+{
+    variantSet "season" = {
+        "summer" {
+            int bloom = 3
+        }
+        "winter" {
+            int bloom = 0
+        }
+    }
+}

@@ -4,6 +4,42 @@
  "root": "root.usda",
  "prims": [
   {
+   "path": "/Press",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Press"
+    ],
+    [
+     "press.usda",
+     "/Press"
+    ],
+    [
+     "root.usda",
+     "/Press{grip=firm}"
+    ],
+    [
+     "press.usda",
+     "/Press{grip=firm}"
+    ],
+    [
+     "clay.usda",
+     "/Slip"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/_class_Press",
+   "prim_stack": [
+    [
+     "press.usda",
+     "/_class_Press"
+    ]
+   ],
+   "children": []
+  },
+  {
    "path": "/Row",
    "prim_stack": [
     [
@@ -304,9 +340,395 @@
     ]
    ],
    "children": []
+  },
+  {
+   "path": "/Kiln",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Kiln"
+    ],
+    [
+     "root.usda",
+     "/_class_Fire"
+    ],
+    [
+     "root.usda",
+     "/Kiln{heat=high}"
+    ],
+    [
+     "root.usda",
+     "/_class_Smoke"
+    ],
+    [
+     "clay.usda",
+     "/Slip"
+    ],
+    [
+     "clay.usda",
+     "/Ash"
+    ],
+    [
+     "clay.usda",
+     "/Clay"
+    ],
+    [
+     "clay.usda",
+     "/Glaze"
+    ],
+    [
+     "root.usda",
+     "/_base_Vent"
+    ],
+    [
+     "root.usda",
+     "/_base_Kiln"
+    ]
+   ],
+   "children": [
+    "Shelf"
+   ]
+  },
+  {
+   "path": "/Kiln/Shelf",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Kiln/Shelf"
+    ],
+    [
+     "root.usda",
+     "/_class_Rack"
+    ],
+    [
+     "root.usda",
+     "/Kiln{heat=high}Shelf"
+    ],
+    [
+     "root.usda",
+     "/_class_Tray"
+    ],
+    [
+     "clay.usda",
+     "/Rim"
+    ],
+    [
+     "clay.usda",
+     "/Board"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/_class_Fire",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Fire"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/_class_Smoke",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Smoke"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/_base_Kiln",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_base_Kiln"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/_base_Vent",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_base_Vent"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/_class_Rack",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Rack"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/_class_Tray",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Tray"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Studio",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Studio"
+    ],
+    [
+     "root.usda",
+     "/_class_Fire"
+    ],
+    [
+     "root.usda",
+     "/_class_Smoke"
+    ],
+    [
+     "kiln.usda",
+     "/Kiln"
+    ],
+    [
+     "kiln.usda",
+     "/_class_Fire"
+    ],
+    [
+     "kiln.usda",
+     "/Kiln{heat=high}"
+    ],
+    [
+     "kiln.usda",
+     "/_class_Smoke"
+    ],
+    [
+     "clay.usda",
+     "/Slip"
+    ],
+    [
+     "clay.usda",
+     "/Ash"
+    ],
+    [
+     "clay.usda",
+     "/Clay"
+    ],
+    [
+     "clay.usda",
+     "/Glaze"
+    ],
+    [
+     "root.usda",
+     "/_base_Vent"
+    ],
+    [
+     "kiln.usda",
+     "/_base_Vent"
+    ],
+    [
+     "root.usda",
+     "/_base_Kiln"
+    ],
+    [
+     "kiln.usda",
+     "/_base_Kiln"
+    ]
+   ],
+   "children": [
+    "Shelf"
+   ]
+  },
+  {
+   "path": "/Studio/Shelf",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Rack"
+    ],
+    [
+     "root.usda",
+     "/_class_Tray"
+    ],
+    [
+     "kiln.usda",
+     "/Kiln/Shelf"
+    ],
+    [
+     "kiln.usda",
+     "/_class_Rack"
+    ],
+    [
+     "kiln.usda",
+     "/Kiln{heat=high}Shelf"
+    ],
+    [
+     "kiln.usda",
+     "/_class_Tray"
+    ],
+    [
+     "clay.usda",
+     "/Rim"
+    ],
+    [
+     "clay.usda",
+     "/Board"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Loom",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Loom"
+    ],
+    [
+     "root.usda",
+     "/Loom{weave=tight}"
+    ]
+   ],
+   "children": [
+    "Frame"
+   ]
+  },
+  {
+   "path": "/Loom/Frame",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Loom/Frame"
+    ],
+    [
+     "root.usda",
+     "/_class_Loom"
+    ],
+    [
+     "root.usda",
+     "/Loom{weave=tight}Frame"
+    ],
+    [
+     "clay.usda",
+     "/Clay"
+    ],
+    [
+     "clay.usda",
+     "/Glaze"
+    ],
+    [
+     "clay.usda",
+     "/Clay"
+    ],
+    [
+     "clay.usda",
+     "/Glaze"
+    ],
+    [
+     "root.usda",
+     "/_base_Loom"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/_class_Loom",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Loom"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/_base_Loom",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_base_Loom"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Mill",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Mill"
+    ],
+    [
+     "kiln.usda",
+     "/Loom"
+    ],
+    [
+     "kiln.usda",
+     "/Loom{weave=tight}"
+    ]
+   ],
+   "children": [
+    "Frame"
+   ]
+  },
+  {
+   "path": "/Mill/Frame",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Loom"
+    ],
+    [
+     "kiln.usda",
+     "/Loom/Frame"
+    ],
+    [
+     "kiln.usda",
+     "/_class_Loom"
+    ],
+    [
+     "kiln.usda",
+     "/Loom{weave=tight}Frame"
+    ],
+    [
+     "clay.usda",
+     "/Clay"
+    ],
+    [
+     "clay.usda",
+     "/Glaze"
+    ],
+    [
+     "clay.usda",
+     "/Clay"
+    ],
+    [
+     "clay.usda",
+     "/Glaze"
+    ],
+    [
+     "root.usda",
+     "/_base_Loom"
+    ],
+    [
+     "kiln.usda",
+     "/_base_Loom"
+    ]
+   ],
+   "children": []
   }
  ],
  "values": {
+  "/Press.slip": 1.0,
+  "/_class_Press.press": 1.0,
   "/Sets.blocked": null,
   "/Sets.both": "/Stray// - /Stray/Leaf/Bud",
   "/Sets.heroes": "/Stray/L* (/Stray/Leaf //Bud)",
@@ -336,10 +758,52 @@
   "/Local.globs": "/Local/P[a-z]n /S* //S* %/Local:parts %:parts",
   "/Local.mixed": "/Local/Pin /Stray /Local/Pin /Stray",
   "/Heir.mixed": "/Heir/Pin /Stray /Heir/Pin",
-  "/_class_Heir.mixed": "/_class_Heir/Pin /Stray /_class_Heir/Pin"
+  "/_class_Heir.mixed": "/_class_Heir/Pin /Stray /_class_Heir/Pin",
+  "/Kiln.ash": 1.0,
+  "/Kiln.base": 1.0,
+  "/Kiln.clay": 1.0,
+  "/Kiln.fire": 1.0,
+  "/Kiln.glaze": 1.0,
+  "/Kiln.slip": 1.0,
+  "/Kiln.smoke": 1.0,
+  "/Kiln.vent": 1.0,
+  "/Kiln/Shelf.board": 1.0,
+  "/Kiln/Shelf.rack": 1.0,
+  "/Kiln/Shelf.rim": 1.0,
+  "/Kiln/Shelf.tray": 1.0,
+  "/_class_Fire.fire": 1.0,
+  "/_class_Smoke.smoke": 1.0,
+  "/_base_Kiln.base": 1.0,
+  "/_base_Vent.vent": 1.0,
+  "/_class_Rack.rack": 1.0,
+  "/_class_Tray.tray": 1.0,
+  "/Studio.ash": 1.0,
+  "/Studio.base": 1.0,
+  "/Studio.clay": 1.0,
+  "/Studio.fire": 1.0,
+  "/Studio.glaze": 1.0,
+  "/Studio.slip": 1.0,
+  "/Studio.smoke": 1.0,
+  "/Studio.vent": 1.0,
+  "/Studio/Shelf.board": 1.0,
+  "/Studio/Shelf.rack": 1.0,
+  "/Studio/Shelf.rim": 1.0,
+  "/Studio/Shelf.tray": 1.0,
+  "/Loom/Frame.clay": 1.0,
+  "/Loom/Frame.glaze": 1.0,
+  "/Loom/Frame.loom": 1.0,
+  "/Loom/Frame.warp": 1.0,
+  "/_class_Loom.loom": 1.0,
+  "/_base_Loom.warp": 1.0,
+  "/Mill/Frame.clay": 1.0,
+  "/Mill/Frame.glaze": 1.0,
+  "/Mill/Frame.loom": 1.0,
+  "/Mill/Frame.warp": 1.0
  },
  "values_at_time": {
   "0.0": {
+   "/Press.slip": 1.0,
+   "/_class_Press.press": 1.0,
    "/Sets.blocked": "/Stray",
    "/Sets.both": "/Stray// - /Stray/Leaf/Bud",
    "/Sets.heroes": "/Stray/L* (/Stray/Leaf //Bud)",
@@ -369,9 +833,51 @@
    "/Local.globs": "/Local/P[a-z]n /S* //S* %/Local:parts %:parts",
    "/Local.mixed": "/Local/Pin /Stray /Local/Pin /Stray",
    "/Heir.mixed": "/Heir/Pin /Stray /Heir/Pin",
-   "/_class_Heir.mixed": "/_class_Heir/Pin /Stray /_class_Heir/Pin"
+   "/_class_Heir.mixed": "/_class_Heir/Pin /Stray /_class_Heir/Pin",
+   "/Kiln.ash": 1.0,
+   "/Kiln.base": 1.0,
+   "/Kiln.clay": 1.0,
+   "/Kiln.fire": 1.0,
+   "/Kiln.glaze": 1.0,
+   "/Kiln.slip": 1.0,
+   "/Kiln.smoke": 1.0,
+   "/Kiln.vent": 1.0,
+   "/Kiln/Shelf.board": 1.0,
+   "/Kiln/Shelf.rack": 1.0,
+   "/Kiln/Shelf.rim": 1.0,
+   "/Kiln/Shelf.tray": 1.0,
+   "/_class_Fire.fire": 1.0,
+   "/_class_Smoke.smoke": 1.0,
+   "/_base_Kiln.base": 1.0,
+   "/_base_Vent.vent": 1.0,
+   "/_class_Rack.rack": 1.0,
+   "/_class_Tray.tray": 1.0,
+   "/Studio.ash": 1.0,
+   "/Studio.base": 1.0,
+   "/Studio.clay": 1.0,
+   "/Studio.fire": 1.0,
+   "/Studio.glaze": 1.0,
+   "/Studio.slip": 1.0,
+   "/Studio.smoke": 1.0,
+   "/Studio.vent": 1.0,
+   "/Studio/Shelf.board": 1.0,
+   "/Studio/Shelf.rack": 1.0,
+   "/Studio/Shelf.rim": 1.0,
+   "/Studio/Shelf.tray": 1.0,
+   "/Loom/Frame.clay": 1.0,
+   "/Loom/Frame.glaze": 1.0,
+   "/Loom/Frame.loom": 1.0,
+   "/Loom/Frame.warp": 1.0,
+   "/_class_Loom.loom": 1.0,
+   "/_base_Loom.warp": 1.0,
+   "/Mill/Frame.clay": 1.0,
+   "/Mill/Frame.glaze": 1.0,
+   "/Mill/Frame.loom": 1.0,
+   "/Mill/Frame.warp": 1.0
   },
   "5.0": {
+   "/Press.slip": 1.0,
+   "/_class_Press.press": 1.0,
    "/Sets.blocked": "/Stray",
    "/Sets.both": "/Stray// - /Stray/Leaf/Bud",
    "/Sets.heroes": "/Stray/L* (/Stray/Leaf //Bud)",
@@ -401,9 +907,51 @@
    "/Local.globs": "/Local/P[a-z]n /S* //S* %/Local:parts %:parts",
    "/Local.mixed": "/Local/Pin /Stray /Local/Pin /Stray",
    "/Heir.mixed": "/Heir/Pin /Stray /Heir/Pin",
-   "/_class_Heir.mixed": "/_class_Heir/Pin /Stray /_class_Heir/Pin"
+   "/_class_Heir.mixed": "/_class_Heir/Pin /Stray /_class_Heir/Pin",
+   "/Kiln.ash": 1.0,
+   "/Kiln.base": 1.0,
+   "/Kiln.clay": 1.0,
+   "/Kiln.fire": 1.0,
+   "/Kiln.glaze": 1.0,
+   "/Kiln.slip": 1.0,
+   "/Kiln.smoke": 1.0,
+   "/Kiln.vent": 1.0,
+   "/Kiln/Shelf.board": 1.0,
+   "/Kiln/Shelf.rack": 1.0,
+   "/Kiln/Shelf.rim": 1.0,
+   "/Kiln/Shelf.tray": 1.0,
+   "/_class_Fire.fire": 1.0,
+   "/_class_Smoke.smoke": 1.0,
+   "/_base_Kiln.base": 1.0,
+   "/_base_Vent.vent": 1.0,
+   "/_class_Rack.rack": 1.0,
+   "/_class_Tray.tray": 1.0,
+   "/Studio.ash": 1.0,
+   "/Studio.base": 1.0,
+   "/Studio.clay": 1.0,
+   "/Studio.fire": 1.0,
+   "/Studio.glaze": 1.0,
+   "/Studio.slip": 1.0,
+   "/Studio.smoke": 1.0,
+   "/Studio.vent": 1.0,
+   "/Studio/Shelf.board": 1.0,
+   "/Studio/Shelf.rack": 1.0,
+   "/Studio/Shelf.rim": 1.0,
+   "/Studio/Shelf.tray": 1.0,
+   "/Loom/Frame.clay": 1.0,
+   "/Loom/Frame.glaze": 1.0,
+   "/Loom/Frame.loom": 1.0,
+   "/Loom/Frame.warp": 1.0,
+   "/_class_Loom.loom": 1.0,
+   "/_base_Loom.warp": 1.0,
+   "/Mill/Frame.clay": 1.0,
+   "/Mill/Frame.glaze": 1.0,
+   "/Mill/Frame.loom": 1.0,
+   "/Mill/Frame.warp": 1.0
   },
   "10.0": {
+   "/Press.slip": 1.0,
+   "/_class_Press.press": 1.0,
    "/Sets.blocked": "/Stray",
    "/Sets.both": "/Stray// - /Stray/Leaf/Bud",
    "/Sets.heroes": "/Stray/L* (/Stray/Leaf //Bud)",
@@ -433,7 +981,47 @@
    "/Local.globs": "/Local/P[a-z]n /S* //S* %/Local:parts %:parts",
    "/Local.mixed": "/Local/Pin /Stray /Local/Pin /Stray",
    "/Heir.mixed": "/Heir/Pin /Stray /Heir/Pin",
-   "/_class_Heir.mixed": "/_class_Heir/Pin /Stray /_class_Heir/Pin"
+   "/_class_Heir.mixed": "/_class_Heir/Pin /Stray /_class_Heir/Pin",
+   "/Kiln.ash": 1.0,
+   "/Kiln.base": 1.0,
+   "/Kiln.clay": 1.0,
+   "/Kiln.fire": 1.0,
+   "/Kiln.glaze": 1.0,
+   "/Kiln.slip": 1.0,
+   "/Kiln.smoke": 1.0,
+   "/Kiln.vent": 1.0,
+   "/Kiln/Shelf.board": 1.0,
+   "/Kiln/Shelf.rack": 1.0,
+   "/Kiln/Shelf.rim": 1.0,
+   "/Kiln/Shelf.tray": 1.0,
+   "/_class_Fire.fire": 1.0,
+   "/_class_Smoke.smoke": 1.0,
+   "/_base_Kiln.base": 1.0,
+   "/_base_Vent.vent": 1.0,
+   "/_class_Rack.rack": 1.0,
+   "/_class_Tray.tray": 1.0,
+   "/Studio.ash": 1.0,
+   "/Studio.base": 1.0,
+   "/Studio.clay": 1.0,
+   "/Studio.fire": 1.0,
+   "/Studio.glaze": 1.0,
+   "/Studio.slip": 1.0,
+   "/Studio.smoke": 1.0,
+   "/Studio.vent": 1.0,
+   "/Studio/Shelf.board": 1.0,
+   "/Studio/Shelf.rack": 1.0,
+   "/Studio/Shelf.rim": 1.0,
+   "/Studio/Shelf.tray": 1.0,
+   "/Loom/Frame.clay": 1.0,
+   "/Loom/Frame.glaze": 1.0,
+   "/Loom/Frame.loom": 1.0,
+   "/Loom/Frame.warp": 1.0,
+   "/_class_Loom.loom": 1.0,
+   "/_base_Loom.warp": 1.0,
+   "/Mill/Frame.clay": 1.0,
+   "/Mill/Frame.glaze": 1.0,
+   "/Mill/Frame.loom": 1.0,
+   "/Mill/Frame.warp": 1.0
   }
  }
 }

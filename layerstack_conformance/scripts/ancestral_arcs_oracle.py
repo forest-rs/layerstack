@@ -186,7 +186,7 @@ def "Hut"
 # lies beneath `Shelf`, the internal reference's destination, which that
 # reference does not map back: `Shelf` drops it, `_proto_Jar` keeps it.
 def "Hut" (
-    prepend inherits = </_class_Beam>
+    inherits = </_class_Beam>
     variantSets = "lamp"
     variants = {
         string lamp = "lit"
@@ -235,8 +235,8 @@ def "Hut" (
 
     variantSet "lamp" = {
         "lit" (
-            prepend inherits = </_class_Glow>
-            prepend references = @./shade.usda@</Shade>
+            inherits = </_class_Glow>
+            references = @./shade.usda@</Shade>
         ) {
             rel shine = </Hut/Wick>
             int heat = 1

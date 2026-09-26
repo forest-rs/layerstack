@@ -19,9 +19,9 @@ use crate::variant_fallbacks::{VariantFallbacks, apply_variant_fallbacks};
 use crate::{
     arc_cycle::{ChainState, CycleDetector},
     arcs::{
-        ArcAuthoring, AuthoredReference, HostSpec, SelectionScope, VariantNodeOrder,
-        anchor_internal_arcs, lookup_reference_target_path, resolve_branch_payloads_in,
-        resolve_direct_references_for_prim, resolve_inherits_for_prim,
+        ArcAuthoring, AuthoredReference, HostSpec, NodeLists, SelectionScope, Sited,
+        VariantNodeOrder, anchor_internal_arcs, arcs_of, lookup_reference_target_path,
+        resolve_branch_payloads_in, resolve_direct_references_for_prim, resolve_inherits_for_prim,
         resolve_inherits_for_prim_in, resolve_payloads_for_prim, resolve_payloads_for_prim_in,
         resolve_references_for_prim_selected, resolve_specializes_for_prim,
         resolve_specializes_for_prim_in, resolve_variant_branch_payloads,
@@ -2391,8 +2391,13 @@ fn authored_full_variant_selections(
 ) -> HashMap<TokenId, TokenId> {
     let local = selection_host_specs(store, fallbacks, local_stack, path);
     let child = resolve_variant_child_selections_for_prim(store, fallbacks, local_stack, path);
-    let inherits =
-        resolve_inherits_for_prim(store, fallbacks, local_stack, path, SelectionScope::Stack);
+    let inherits = arcs_of(resolve_inherits_for_prim(
+        store,
+        fallbacks,
+        local_stack,
+        path,
+        SelectionScope::Stack,
+    ));
 
     // Reference and payload targets. Internal arcs target the whole stack
     // (AOUSD Core §10.3.2.1).
@@ -2415,16 +2420,17 @@ fn authored_full_variant_selections(
             )
         };
         let arcs = |list: fn(&crate::doc::PrimSpec) -> &crate::listop::ListOp<Reference>| {
-            let mut ops = Vec::new();
+            let mut ops = NodeLists::new();
             for layer_id in &local_stack.layers {
                 let Some(layer) = store.layer(*layer_id) else {
                     continue;
                 };
                 for spec in layer.prim_specs(path).filter(applied) {
-                    ops.push(anchor_internal_arcs(store, list(spec), *layer_id, anchor));
+                    let op = anchor_internal_arcs(store, list(spec), *layer_id, anchor);
+                    ops.push(&spec.outer_variant_sites, op);
                 }
             }
-            crate::listop::resolve_list_chain::<Reference>(&[], ops)
+            arcs_of(ops.resolve())
         };
         let references = arcs(|spec| &spec.references);
         let payloads = arcs(|spec| &spec.payloads);
@@ -2459,8 +2465,13 @@ fn authored_full_variant_selections(
     // Specializes targets are the weakest sites (AOUSD Core §10.4, the S in
     // LIVERPS); OpenUSD adds them before any variant set is evaluated, so
     // a class a prim specializes selects the prim's own sets.
-    let specializes =
-        resolve_specializes_for_prim(store, fallbacks, local_stack, path, SelectionScope::Stack);
+    let specializes = arcs_of(resolve_specializes_for_prim(
+        store,
+        fallbacks,
+        local_stack,
+        path,
+        SelectionScope::Stack,
+    ));
     for target in specializes {
         let specs = selection_host_specs(store, fallbacks, local_stack, target);
         sites.extend(VariantSite::of_node(store, &specs));
@@ -2619,7 +2630,7 @@ fn declares_variant_sets(store: &dyn LayerStore, stack: &LayerStack, path: PathI
 /// specialize) brought the content in.
 ///
 /// Each arc comes with the variant branches of the prim that author it,
-/// outermost first (see [`ArcAuthoring::sites`]); its node goes beneath theirs.
+/// outermost first (see [`NodeLists`]); its node goes beneath theirs.
 /// A reference or payload carries the offset of the layer that authors it
 /// (see [`ArcAuthoring::authored_reference`]).
 #[derive(Debug, Default)]
@@ -2628,6 +2639,18 @@ struct AdmittedArcs {
     specializes: Vec<(PathId, Vec<VariantSelectionSite>)>,
     references: Vec<(AuthoredReference, Vec<VariantSelectionSite>)>,
     payloads: Vec<(AuthoredReference, Vec<VariantSelectionSite>)>,
+}
+
+/// `arcs` without repeats: an arc of one node, read from two lists that
+/// both read the node, is one arc (see [`NodeLists`]).
+fn unique<T: PartialEq>(arcs: Vec<Sited<T>>) -> Vec<Sited<T>> {
+    let mut kept: Vec<Sited<T>> = Vec::with_capacity(arcs.len());
+    for arc in arcs {
+        if !kept.contains(&arc) {
+            kept.push(arc);
+        }
+    }
+    kept
 }
 
 /// Resolves the arcs authored for `remote_path` in `data_stack` that apply
@@ -2761,29 +2784,18 @@ fn arcs_admitted_by(
         &parent_selections,
         scope,
     );
+    // The prim's specs in its parent's branches are read for both lists
+    // of each kind; an arc of one node is one arc.
+    references = unique(references);
+    payloads = unique(payloads);
     let authoring = ArcAuthoring {
         store,
-        fallbacks,
         stack: data_stack,
         prim: remote_path,
-        selections: &selections,
-        scope,
     };
     AdmittedArcs {
-        inherits: inherits
-            .into_iter()
-            .map(|item| {
-                let sites = authoring.sites(&item, |spec| &spec.inherits, |b| &b.inherits);
-                (item, sites)
-            })
-            .collect(),
-        specializes: specializes
-            .into_iter()
-            .map(|item| {
-                let sites = authoring.sites(&item, |spec| &spec.specializes, |b| &b.specializes);
-                (item, sites)
-            })
-            .collect(),
+        inherits,
+        specializes,
         references: references
             .into_iter()
             .map(|item| {
@@ -3620,34 +3632,27 @@ fn add_reference_opinions(
             anchor,
         );
         // Both lists read the prim's specs inside its parent's selected
-        // branches; each reference there is one arc, listed once.
-        let variant_child_refs: Vec<Reference> = variant_child_refs
-            .into_iter()
-            .filter(|reference| !refs.contains(reference))
-            .collect();
-        let all_refs = refs.into_iter().chain(variant_child_refs);
-        for (arc_list_index, reference) in all_refs.enumerate() {
+        // branches; each reference of a node is one arc, listed once.
+        let all_refs = unique(refs.into_iter().chain(variant_child_refs).collect());
+        for (arc_list_index, reference) in all_refs.into_iter().enumerate() {
             let arc_list_index = u16::try_from(arc_list_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_root).depth()).unwrap_or(u16::MAX);
             // An unresolved target is reported when the arc is followed.
             if let Some(d) = deps.as_deref_mut()
-                && let Some(reference_path) = reference.target_path(store)
+                && let Some(reference_path) = reference.0.target_path(store)
             {
                 d.add_arc(ArcDependency {
                     source: reference_path,
                     target: dest_root,
                     arc_kind: ArcKind::References,
-                    layer: reference.layer,
+                    layer: reference.0.layer,
                 });
             }
             let (reference, sites) = ArcAuthoring {
                 store,
-                fallbacks,
                 stack: local_stack,
                 prim: dest_root,
-                selections: &selections,
-                scope: SelectionScope::Stack,
             }
             .authored_reference(
                 reference,
@@ -3702,8 +3707,7 @@ fn add_inherit_opinions(
             dest_root,
             SelectionScope::Stack,
         );
-        let selections = resolve_full_variant_selections(store, fallbacks, local_stack, dest_root);
-        for (arc_list_index, inherited_root) in inherits.into_iter().enumerate() {
+        for (arc_list_index, (inherited_root, sites)) in inherits.into_iter().enumerate() {
             let arc_list_index = u16::try_from(arc_list_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_root).depth()).unwrap_or(u16::MAX);
@@ -3715,19 +3719,6 @@ fn add_inherit_opinions(
                     layer: local_stack.layers[0],
                 });
             }
-            let sites = ArcAuthoring {
-                store,
-                fallbacks,
-                stack: local_stack,
-                prim: dest_root,
-                selections: &selections,
-                scope: SelectionScope::Stack,
-            }
-            .sites(
-                &inherited_root,
-                |spec| &spec.inherits,
-                |branch| &branch.inherits,
-            );
             let branch = local_variant_steps(root_layer_stack(out, dest_root), &sites);
             add_inherit_edge_opinions(
                 store,
@@ -7529,29 +7520,26 @@ fn add_payload_opinions(
             anchor,
             &selections,
         );
-        let all_payloads = payloads.into_iter().chain(branch_payloads);
-        for (arc_list_index, payload) in all_payloads.enumerate() {
+        let all_payloads = unique(payloads.into_iter().chain(branch_payloads).collect());
+        for (arc_list_index, payload) in all_payloads.into_iter().enumerate() {
             let arc_list_index = u16::try_from(arc_list_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_root).depth()).unwrap_or(u16::MAX);
             // An unresolved target is reported when the arc is followed.
             if let Some(d) = deps.as_deref_mut()
-                && let Some(payload_path) = payload.target_path(store)
+                && let Some(payload_path) = payload.0.target_path(store)
             {
                 d.add_arc(ArcDependency {
                     source: payload_path,
                     target: dest_root,
                     arc_kind: ArcKind::Payloads,
-                    layer: payload.layer,
+                    layer: payload.0.layer,
                 });
             }
             let (payload, sites) = ArcAuthoring {
                 store,
-                fallbacks,
                 stack: local_stack,
                 prim: dest_root,
-                selections: &selections,
-                scope: SelectionScope::Stack,
             }
             .authored_reference(
                 payload,
@@ -8002,8 +7990,7 @@ fn add_specializes_opinions(
             dest_root,
             SelectionScope::Stack,
         );
-        let selections = resolve_full_variant_selections(store, fallbacks, local_stack, dest_root);
-        for (arc_list_index, specialized_root) in specializes.into_iter().enumerate() {
+        for (arc_list_index, (specialized_root, sites)) in specializes.into_iter().enumerate() {
             let arc_list_index = u16::try_from(arc_list_index).unwrap_or(u16::MAX);
             let namespace_depth =
                 u16::try_from(store.paths().resolve(dest_root).depth()).unwrap_or(u16::MAX);
@@ -8015,19 +8002,6 @@ fn add_specializes_opinions(
                     layer: local_stack.layers[0],
                 });
             }
-            let sites = ArcAuthoring {
-                store,
-                fallbacks,
-                stack: local_stack,
-                prim: dest_root,
-                selections: &selections,
-                scope: SelectionScope::Stack,
-            }
-            .sites(
-                &specialized_root,
-                |spec| &spec.specializes,
-                |branch| &branch.specializes,
-            );
             let branch = local_variant_steps(root_layer_stack(out, dest_root), &sites);
             add_specializes_edge_opinions(
                 store,

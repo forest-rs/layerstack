@@ -1,0 +1,31 @@
+#usda 1.0
+
+def "Clay"
+{
+    double clay = 1
+}
+
+def "Glaze"
+{
+    double glaze = 1
+}
+
+def "Slip"
+{
+    double slip = 1
+}
+
+def "Ash"
+{
+    double ash = 1
+}
+
+def "Board"
+{
+    double board = 1
+}
+
+def "Rim"
+{
+    double rim = 1
+}

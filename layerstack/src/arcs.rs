@@ -285,56 +285,36 @@ fn variant_host_specs<'a>(
         .collect()
 }
 
-/// Finds where the arcs resolved for `prim` in `stack` are authored among its
-/// variant branches.
+/// Finds which layer of a node of `prim` in `stack` authors one of the
+/// node's arcs (see [`NodeLists`]).
 ///
-/// Arc resolution chains every spec's list op into one list; this finds, for
-/// one arc of that list, the strongest opinion that adds it, so the arc's
-/// node can be placed beneath the variant node of the branch that authors
-/// it.
+/// A reference or payload is read on the timeline of the strongest layer
+/// of its node that adds it.
 ///
-/// Spec: AOUSD Core §10.3.2.5 (arcs authored inside a variant apply when it
-/// is selected). OpenUSD adds them beneath the variant node
-/// (`pxr/usd/pcp/primIndex.cpp`, `_AddVariantArc`, `_AddArc`).
+/// Spec: AOUSD Core §12.3.2.1 (layer offsets). OpenUSD:
+/// `_PcpComposeSiteReferencesOrPayloads` in `pxr/usd/pcp/composeSite.cpp`.
 pub(crate) struct ArcAuthoring<'a> {
     pub(crate) store: &'a dyn LayerStore,
-    /// The stage's variant fallbacks.
-    pub(crate) fallbacks: &'a VariantFallbacks,
     pub(crate) stack: &'a LayerStack,
     pub(crate) prim: PathId,
-    /// The variant selections of `prim`'s own variant sets.
-    pub(crate) selections: &'a HashMap<TokenId, TokenId>,
-    /// Decides whether the branches enclosing a spec are selected.
-    pub(crate) scope: SelectionScope<'a>,
 }
 
 impl ArcAuthoring<'_> {
-    /// Returns the variant branches that author `item`, outermost first:
-    /// empty for an arc authored on a spec outside every branch, the
-    /// enclosing branches of a selected spec authored inside branches
-    /// (`/P{v=x}C`), or the selected branch of one of the prim's own variant
-    /// sets whose header authors it (`/P{v=x}`), after the branches enclosing
-    /// that set. With them comes the index in the layer stack of the layer
-    /// that authors it (`None` when no spec of `prim` adds it).
+    /// The index in the layer stack of the strongest layer that adds
+    /// `item` at the node inside the branches `sites`: a spec of the prim
+    /// in those branches, or the branch of the prim's own variant set they
+    /// end in (`/P{v=x}`); `None` when no layer does.
     ///
     /// Each list op is passed through `edit` with the layer that authors it,
-    /// as arc resolution passes it (see [`as_authored`] and
-    /// [`anchor_internal_arcs`]).
-    fn sites_by<T: Clone + PartialEq>(
+    /// as arc resolution passes it (see [`anchor_internal_arcs`]).
+    fn authoring_layer<T: Clone + PartialEq>(
         &self,
         item: &T,
+        sites: &[VariantSelectionSite],
         spec_arcs: fn(&PrimSpec) -> &ListOp<T>,
         branch_arcs: fn(&VariantSpec) -> &ListOp<T>,
         edit: impl Fn(&ListOp<T>, LayerId) -> ListOp<T>,
-    ) -> (Vec<VariantSelectionSite>, Option<usize>) {
-        let Self {
-            store,
-            fallbacks,
-            stack,
-            prim,
-            selections,
-            scope,
-        } = *self;
+    ) -> Option<usize> {
         let adds = |op: &ListOp<T>, layer: LayerId| {
             let op = edit(op, layer);
             op.explicit
@@ -343,73 +323,29 @@ impl ArcAuthoring<'_> {
                 || op.prepend.contains(item)
                 || op.append.contains(item)
         };
-        // Each layer with its index in `stack`, strongest first.
-        let layers = || {
-            stack
-                .layers
-                .iter()
-                .enumerate()
-                .filter_map(|(index, id)| Some((index, store.layer(*id)?)))
-        };
-        let outside = layers().find(|(_, layer)| {
-            layer
-                .prim_specs(prim)
-                .any(|spec| spec.outer_variant_sites.is_empty() && adds(spec_arcs(spec), layer.id))
-        });
-        if let Some((index, _)) = outside {
-            return (Vec::new(), Some(index));
-        }
-        for (index, layer) in layers() {
-            for spec in layer.prim_specs(prim) {
-                if !spec.outer_variant_sites.is_empty()
-                    && adds(spec_arcs(spec), layer.id)
-                    && spec_branches_selected(store, fallbacks, stack, spec, scope)
-                {
-                    return (spec.outer_variant_sites.clone(), Some(index));
-                }
-            }
-        }
-        for (index, layer) in layers() {
-            for spec in variant_host_specs(store, fallbacks, stack, layer, prim, scope) {
-                let mut branches: Vec<_> = spec.selected_variant_branches(selections).collect();
-                branches.sort_unstable_by(|a, b| a.chain().cmp(b.chain()));
-                if let Some(branch) = branches
-                    .iter()
-                    .find(|branch| adds(branch_arcs(branch.spec), layer.id))
-                {
-                    return (branch.sites(&spec.outer_variant_sites, prim), Some(index));
-                }
-            }
-        }
-        (Vec::new(), None)
+        self.stack.layers.iter().position(|id| {
+            let Some(layer) = self.store.layer(*id) else {
+                return false;
+            };
+            layer.prim_specs(self.prim).any(|spec| {
+                (spec.outer_variant_sites == sites && adds(spec_arcs(spec), layer.id))
+                    || spec.variant_branches().any(|branch| {
+                        branch.sites(&spec.outer_variant_sites, self.prim) == sites
+                            && adds(branch_arcs(branch.spec), layer.id)
+                    })
+            })
+        })
     }
 
-    /// The branches that author the inherits or specializes arc `item` (see
-    /// [`Self::sites_by`]).
-    ///
-    /// A class arc carries no offset of its own, and none from the layer
-    /// that authors it: its target is read in the same layer stack, whose
-    /// layers keep their own sublayer offsets. OpenUSD maps a class arc with
-    /// the identity offset (`_AddClassBasedArcs` in
-    /// `pxr/usd/pcp/primIndex.cpp`).
-    pub(crate) fn sites(
-        &self,
-        item: &PathId,
-        spec_arcs: fn(&PrimSpec) -> &ListOp<PathId>,
-        branch_arcs: fn(&VariantSpec) -> &ListOp<PathId>,
-    ) -> Vec<VariantSelectionSite> {
-        self.sites_by(item, spec_arcs, branch_arcs, as_authored).0
-    }
-
-    /// The reference or payload `item`, resolved with internal arcs anchored
-    /// to `anchor`, with the offset of the layer that authors it applied,
-    /// and the branches that author it (see [`Self::sites_by`]).
+    /// The reference or payload `item` of the node inside the branches
+    /// `sites`, resolved with internal arcs anchored to `anchor`, with the
+    /// offset of the layer that authors it applied.
     ///
     /// An arc to another layer stack is read on the timeline of the layer
     /// that authors it: its offset composes beneath that layer's offset in
-    /// `stack` (the strongest layer adding the arc). An internal arc keeps
-    /// its own offset, as its target is read in `stack`, whose layers
-    /// already carry their sublayer offsets.
+    /// `stack` (the strongest layer of the node adding the arc). An internal
+    /// arc keeps its own offset, as its target is read in `stack`, whose
+    /// layers already carry their sublayer offsets.
     ///
     /// Spec: AOUSD Core §12.3.2.1 (layer offsets on sublayers, references
     /// and payloads), §10.3.1.1 (offsets compose along a chain of arcs),
@@ -422,12 +358,12 @@ impl ArcAuthoring<'_> {
     /// (`_PcpComposeSiteReferencesOrPayloads`, `pxr/usd/pcp/composeSite.cpp`).
     pub(crate) fn authored_reference(
         &self,
-        item: Reference,
+        (item, sites): Sited<Reference>,
         spec_arcs: fn(&PrimSpec) -> &ListOp<Reference>,
         branch_arcs: fn(&VariantSpec) -> &ListOp<Reference>,
         anchor: ArcAnchor<'_>,
     ) -> (AuthoredReference, Vec<VariantSelectionSite>) {
-        let (sites, index) = self.sites_by(&item, spec_arcs, branch_arcs, |op, layer| {
+        let index = self.authoring_layer(&item, &sites, spec_arcs, branch_arcs, |op, layer| {
             anchor_internal_arcs(self.store, op, layer, anchor)
         });
         let internal = item.asset.is_none() && item.layer == anchor.layer;
@@ -475,6 +411,69 @@ fn child_of(store: &dyn LayerStore, host: PathId, prim: PathId) -> Option<PathId
         .lookup(&store.paths().resolve(host).join(&[leaf]))
 }
 
+/// An arc with the variant branches of the node that authors it, outermost
+/// first: empty for the prim's own site.
+pub(crate) type Sited<T> = (T, Vec<VariantSelectionSite>);
+
+/// The arcs of `sited`, without their nodes.
+pub(crate) fn arcs_of<T>(sited: Vec<Sited<T>>) -> Vec<T> {
+    sited.into_iter().map(|(arc, _)| arc).collect()
+}
+
+/// The list ops of one kind of arc that a prim's sites author, gathered
+/// per node: the prim's specs outside every variant branch, the specs of
+/// each selected branch enclosing the prim (`/P{v=x}C`), and each selected
+/// branch of the prim's own variant sets (`/P{v=x}`), each identified by
+/// the branches it lies in, outermost first.
+///
+/// A node's arcs compose from its own sites alone: its layers' list ops
+/// chain, strongest last to apply, and an explicit list replaces the
+/// weaker opinions of that node only, never those of another node. The
+/// prim's arcs are those of each node in turn, each with the branches of
+/// its node: an arc two nodes author is two arcs, as in OpenUSD, where
+/// each is a node of its own.
+///
+/// Spec: AOUSD Core §10.3.2.5 (a variant branch is a site of its own),
+/// §12.4 (list ops compose across the layers of a site). OpenUSD composes
+/// each node's arcs from its site (`PcpComposeSiteInherits`,
+/// `PcpComposeSiteReferences` and the like in `pxr/usd/pcp/composeSite.cpp`,
+/// called per node from `pxr/usd/pcp/primIndex.cpp`).
+pub(crate) struct NodeLists<T> {
+    nodes: Vec<(Vec<VariantSelectionSite>, Vec<ListOp<T>>)>,
+}
+
+impl<T: Clone + Eq> NodeLists<T> {
+    pub(crate) fn new() -> Self {
+        Self { nodes: Vec::new() }
+    }
+
+    /// Adds `op`, authored at the site inside the branches `sites`, to its
+    /// node, after the stronger ops of that node.
+    pub(crate) fn push(&mut self, sites: &[VariantSelectionSite], op: ListOp<T>) {
+        match self.nodes.iter_mut().find(|(node, _)| node == sites) {
+            Some((_, ops)) => ops.push(op),
+            None => self.nodes.push((sites.to_vec(), alloc::vec![op])),
+        }
+    }
+
+    /// The arcs of every node, node by node, each with its node's branches.
+    pub(crate) fn resolve(self) -> Vec<Sited<T>> {
+        self.nodes
+            .into_iter()
+            .flat_map(|(sites, ops)| {
+                resolve_list_chain::<T>(&[], ops)
+                    .into_iter()
+                    .map(move |item| (item, sites.clone()))
+            })
+            .collect()
+    }
+
+    /// Every op of every node, for discovery, which takes each on its own.
+    fn into_ops(self) -> Vec<ListOp<T>> {
+        self.nodes.into_iter().flat_map(|(_, ops)| ops).collect()
+    }
+}
+
 /// Pushes the arcs (`arcs`) authored in `layer` for `child` inside the
 /// branches of `host` selected by `selections`: those of the prim specs at
 /// `/host{set=variant}child`, including those of variant sets nested in
@@ -494,25 +493,25 @@ fn child_of(store: &dyn LayerStore, host: PathId, prim: PathId) -> Option<PathId
 ///
 /// Each list op is passed through `edit` with the layer that authors it (see
 /// [`as_authored`] and [`anchor_internal_arcs`]).
-fn push_branch_ops<T: Clone>(
+fn push_branch_ops<T: Clone + Eq>(
     layer: &Layer,
     host: PathId,
     child: PathId,
     selections: &HashMap<TokenId, TokenId>,
     arcs: fn(&PrimSpec) -> &ListOp<T>,
     edit: impl Fn(&ListOp<T>, LayerId) -> ListOp<T>,
-    ops: &mut Vec<ListOp<T>>,
+    ops: &mut NodeLists<T>,
 ) {
-    ops.extend(
-        layer
-            .selected_branch_prim_specs(child, host, selections)
-            .filter(|spec| {
-                spec.outer_variant_sites
-                    .iter()
-                    .all(|site| site.host_path == host)
-            })
-            .map(|spec| edit(arcs(spec), layer.id)),
-    );
+    let specs = layer
+        .selected_branch_prim_specs(child, host, selections)
+        .filter(|spec| {
+            spec.outer_variant_sites
+                .iter()
+                .all(|site| site.host_path == host)
+        });
+    for spec in specs {
+        ops.push(&spec.outer_variant_sites, edit(arcs(spec), layer.id));
+    }
 }
 
 /// Finishes an arc list for `scope`.
@@ -522,21 +521,23 @@ fn push_branch_ops<T: Clone>(
 /// inside a branch of its parent (`branch`), and each list op is resolved on
 /// its own
 /// and unioned: discovery must not let one branch's `explicit` list hide
-/// another branch's targets. Otherwise the ops are chained strongest-first.
-/// The ops read here pass through `edit`, as in [`push_branch_ops`].
+/// another branch's targets. Otherwise each node's ops are chained (see
+/// [`NodeLists`]). The ops read here pass through `edit`, as in
+/// [`push_branch_ops`].
 fn finish_arc_list<T: Clone + Eq>(
     store: &dyn LayerStore,
     stack: &LayerStack,
     prim: PathId,
-    mut ops: Vec<ListOp<T>>,
+    lists: NodeLists<T>,
     scope: SelectionScope<'_>,
     own: fn(&VariantSpec) -> &ListOp<T>,
     branch: fn(&PrimSpec) -> &ListOp<T>,
     edit: impl Fn(&ListOp<T>, LayerId) -> ListOp<T>,
-) -> Vec<T> {
+) -> Vec<Sited<T>> {
     if !matches!(scope, SelectionScope::Discover) {
-        return resolve_list_chain::<T>(&[], ops);
+        return lists.resolve();
     }
+    let mut ops = lists.into_ops();
     let parent = parent_of(store, prim);
     for layer in stack.layers.iter().filter_map(|id| store.layer(*id)) {
         for spec in layer.prim_specs(prim) {
@@ -566,7 +567,8 @@ fn finish_arc_list<T: Clone + Eq>(
             }
         }
     }
-    all
+    // Discovery follows every target once, whatever its node.
+    all.into_iter().map(|item| (item, Vec::new())).collect()
 }
 
 /// Returns the variant selections authored in `stack` for `prim` and for its
@@ -594,7 +596,7 @@ pub(crate) fn resolve_inherits_for_prim(
     local_stack: &LayerStack,
     prim: PathId,
     scope: SelectionScope<'_>,
-) -> Vec<PathId> {
+) -> Vec<Sited<PathId>> {
     let (selections, parent_selections) = stack_selections(store, fallbacks, local_stack, prim);
     resolve_inherits_for_prim_in(
         store,
@@ -621,14 +623,14 @@ pub(crate) fn resolve_inherits_for_prim_in(
     selections: &HashMap<TokenId, TokenId>,
     parent_selections: &HashMap<TokenId, TokenId>,
     scope: SelectionScope<'_>,
-) -> Vec<PathId> {
-    let mut ops = Vec::new();
+) -> Vec<Sited<PathId>> {
+    let mut ops = NodeLists::new();
     for layer_id in &local_stack.layers {
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
         for spec in arc_specs(store, fallbacks, local_stack, layer, prim, scope) {
-            ops.push(spec.inherits.clone());
+            ops.push(&spec.outer_variant_sites, spec.inherits.clone());
         }
     }
 
@@ -639,9 +641,7 @@ pub(crate) fn resolve_inherits_for_prim_in(
         for spec in variant_host_specs(store, fallbacks, local_stack, layer, prim, scope) {
             for branch in spec.selected_variant_branches(selections) {
                 let vi = &branch.spec.inherits;
-                if vi.explicit.is_some() || !vi.prepend.is_empty() || !vi.append.is_empty() {
-                    ops.push(vi.clone());
-                }
+                ops.push(&branch.sites(&spec.outer_variant_sites, prim), vi.clone());
             }
         }
     }
@@ -810,22 +810,18 @@ pub(crate) fn resolve_direct_references_for_prim(
     prim: PathId,
     scope: SelectionScope<'_>,
     anchor: ArcAnchor<'_>,
-) -> Vec<Reference> {
-    let mut ops = Vec::new();
+) -> Vec<Sited<Reference>> {
+    let mut ops = NodeLists::new();
     for layer_id in &local_stack.layers {
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
         for spec in arc_specs(store, fallbacks, local_stack, layer, prim, scope) {
-            ops.push(anchor_internal_arcs(
-                store,
-                &spec.references,
-                *layer_id,
-                anchor,
-            ));
+            let op = anchor_internal_arcs(store, &spec.references, *layer_id, anchor);
+            ops.push(&spec.outer_variant_sites, op);
         }
     }
-    resolve_list_chain::<Reference>(&[], ops)
+    ops.resolve()
 }
 
 /// Resolves the references arc list of `prim` across `local_stack`: its
@@ -841,7 +837,7 @@ pub(crate) fn resolve_references_for_prim(
     prim: PathId,
     scope: SelectionScope<'_>,
     anchor: ArcAnchor<'_>,
-) -> Vec<Reference> {
+) -> Vec<Sited<Reference>> {
     let selections = resolve_variant_selections_for_prim(store, fallbacks, local_stack, prim);
     resolve_references_for_prim_selected(
         store,
@@ -867,19 +863,15 @@ pub(crate) fn resolve_references_for_prim_selected(
     scope: SelectionScope<'_>,
     anchor: ArcAnchor<'_>,
     selections: &HashMap<TokenId, TokenId>,
-) -> Vec<Reference> {
-    let mut ops = Vec::new();
+) -> Vec<Sited<Reference>> {
+    let mut ops = NodeLists::new();
     for layer_id in &local_stack.layers {
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
         for spec in arc_specs(store, fallbacks, local_stack, layer, prim, scope) {
-            ops.push(anchor_internal_arcs(
-                store,
-                &spec.references,
-                *layer_id,
-                anchor,
-            ));
+            let op = anchor_internal_arcs(store, &spec.references, *layer_id, anchor);
+            ops.push(&spec.outer_variant_sites, op);
         }
     }
 
@@ -897,6 +889,7 @@ pub(crate) fn resolve_references_for_prim_selected(
         .collect();
     let branches = selected_branch_arcs(
         &specs,
+        prim,
         selections,
         |branch| &branch.references,
         |op, layer| anchor_internal_arcs(store, op, layer, anchor),
@@ -905,10 +898,11 @@ pub(crate) fn resolve_references_for_prim_selected(
     // them.
     let discover = matches!(scope, SelectionScope::Discover);
     if discover {
-        ops.push(ListOp {
-            explicit: Some(branches.clone()),
+        let op = ListOp {
+            explicit: Some(branches.iter().map(|(arc, _)| arc.clone()).collect()),
             ..ListOp::default()
-        });
+        };
+        ops.push(&[], op);
     }
 
     // Also check the prim's specs inside its parent's selected branches.
@@ -939,11 +933,7 @@ pub(crate) fn resolve_references_for_prim_selected(
         |op, layer| anchor_internal_arcs(store, op, layer, anchor),
     );
     if !discover {
-        for reference in branches {
-            if !references.contains(&reference) {
-                references.push(reference);
-            }
-        }
+        references.extend(branches);
     }
     references
 }
@@ -968,16 +958,16 @@ pub(crate) fn resolve_variant_references_in(
     parent_selections: &HashMap<TokenId, TokenId>,
     scope: SelectionScope<'_>,
     anchor: ArcAnchor<'_>,
-) -> Vec<Reference> {
-    let mut ops = Vec::new();
+) -> Vec<Sited<Reference>> {
+    let mut ops = NodeLists::new();
     if let Some(parent_id) = parent_of(store, prim) {
-        let inherits = resolve_inherits_for_prim(
+        let inherits = arcs_of(resolve_inherits_for_prim(
             store,
             fallbacks,
             data_stack,
             parent_id,
             SelectionScope::Stack,
-        );
+        ));
         for check_path in core::iter::once(parent_id).chain(inherits) {
             let Some(child) = child_of(store, check_path, prim) else {
                 continue;
@@ -1002,13 +992,12 @@ pub(crate) fn resolve_variant_references_in(
         for spec in variant_host_specs(store, fallbacks, data_stack, layer, prim, scope) {
             for branch in spec.selected_variant_branches(selections) {
                 let vr = &branch.spec.references;
-                if vr.explicit.is_some() || !vr.prepend.is_empty() || !vr.append.is_empty() {
-                    ops.push(anchor_internal_arcs(store, vr, *layer_id, anchor));
-                }
+                let op = anchor_internal_arcs(store, vr, *layer_id, anchor);
+                ops.push(&branch.sites(&spec.outer_variant_sites, prim), op);
             }
         }
     }
-    resolve_list_chain::<Reference>(&[], ops)
+    ops.resolve()
 }
 
 /// Resolves the payloads authored on the branch headers of `prim`'s own
@@ -1021,9 +1010,9 @@ pub(crate) fn resolve_branch_payloads_in(
     selections: &HashMap<TokenId, TokenId>,
     scope: SelectionScope<'_>,
     anchor: ArcAnchor<'_>,
-) -> Vec<Reference> {
+) -> Vec<Sited<Reference>> {
     let anchor = anchor.payloads();
-    let mut ops = Vec::new();
+    let mut ops = NodeLists::new();
     for layer_id in &data_stack.layers {
         let Some(layer) = store.layer(*layer_id) else {
             continue;
@@ -1031,13 +1020,12 @@ pub(crate) fn resolve_branch_payloads_in(
         for spec in variant_host_specs(store, fallbacks, data_stack, layer, prim, scope) {
             for branch in spec.selected_variant_branches(selections) {
                 let vp = &branch.spec.payloads;
-                if vp.explicit.is_some() || !vp.prepend.is_empty() || !vp.append.is_empty() {
-                    ops.push(anchor_internal_arcs(store, vp, *layer_id, anchor));
-                }
+                let op = anchor_internal_arcs(store, vp, *layer_id, anchor);
+                ops.push(&branch.sites(&spec.outer_variant_sites, prim), op);
             }
         }
     }
-    resolve_list_chain::<Reference>(&[], ops)
+    ops.resolve()
 }
 
 /// Resolves variant-scoped child references using a separate stack for variant
@@ -1054,19 +1042,19 @@ pub(crate) fn resolve_variant_child_references(
     selections_stack: &LayerStack,
     prim: PathId,
     anchor: ArcAnchor<'_>,
-) -> Vec<Reference> {
+) -> Vec<Sited<Reference>> {
     let Some(parent_id) = parent_of(store, prim) else {
         return Vec::new();
     };
 
     // Resolve parent selections with inherit-based chaining.
-    let inherits = resolve_inherits_for_prim(
+    let inherits = arcs_of(resolve_inherits_for_prim(
         store,
         fallbacks,
         selections_stack,
         parent_id,
         SelectionScope::Stack,
-    );
+    ));
     let mut parent_selections = HashMap::new();
     for layer_id in &selections_stack.layers {
         let Some(layer) = store.layer(*layer_id) else {
@@ -1126,7 +1114,7 @@ pub(crate) fn resolve_variant_child_references(
         &mut parent_selections,
     );
 
-    let mut ops = Vec::new();
+    let mut ops = NodeLists::new();
     // Check the branches of the parent and of its inherit targets.
     for &check_path in &check_paths {
         let Some(child) = child_of(store, check_path, prim) else {
@@ -1145,7 +1133,18 @@ pub(crate) fn resolve_variant_child_references(
         }
     }
 
-    resolve_list_chain::<Reference>(&[], ops)
+    // An inherited class's branches are nodes beneath the class's, not
+    // branches enclosing the prim's own site.
+    ops.resolve()
+        .into_iter()
+        .map(|(arc, sites)| {
+            if sites.iter().all(|site| site.host_path == parent_id) {
+                (arc, sites)
+            } else {
+                (arc, Vec::new())
+            }
+        })
+        .collect()
 }
 
 /// Collects ALL variant-scoped child references for a prim from all variant
@@ -1212,13 +1211,11 @@ pub(crate) fn collect_all_variant_branch_references(
         ) {
             for branch in spec.variant_branches() {
                 let vr = &branch.spec.references;
-                if vr.explicit.is_some() || !vr.prepend.is_empty() || !vr.append.is_empty() {
-                    let refs = resolve_list_chain::<Reference>(
-                        &[],
-                        [anchor_internal_arcs(store, vr, *layer_id, anchor)],
-                    );
-                    all_refs.extend(refs);
-                }
+                let refs = resolve_list_chain::<Reference>(
+                    &[],
+                    [anchor_internal_arcs(store, vr, *layer_id, anchor)],
+                );
+                all_refs.extend(refs);
             }
         }
     }
@@ -1237,9 +1234,15 @@ pub(crate) fn resolve_variant_branch_payloads(
     prim: PathId,
     anchor: ArcAnchor<'_>,
     selections: &HashMap<TokenId, TokenId>,
-) -> Vec<Reference> {
+) -> Vec<Sited<Reference>> {
     let anchor = anchor.payloads();
-    let inherits = resolve_inherits_for_prim(store, fallbacks, stack, prim, SelectionScope::Stack);
+    let inherits = arcs_of(resolve_inherits_for_prim(
+        store,
+        fallbacks,
+        stack,
+        prim,
+        SelectionScope::Stack,
+    ));
     let check_paths = core::iter::once(prim).chain(inherits.iter().copied());
     let mut payloads = Vec::new();
     for check_path in check_paths {
@@ -1249,16 +1252,22 @@ pub(crate) fn resolve_variant_branch_payloads(
             .filter_map(|id| store.layer(*id))
             .filter_map(|layer| Some((layer.id, layer.prims.get(&check_path)?)))
             .collect();
-        for payload in selected_branch_arcs(
+        let arcs = selected_branch_arcs(
             &specs,
+            check_path,
             selections,
             |branch| &branch.payloads,
             |op, layer| anchor_internal_arcs(store, op, layer, anchor),
-        ) {
-            if !payloads.contains(&payload) {
-                payloads.push(payload);
+        );
+        // An inherited class's branches are nodes beneath the class's,
+        // not branches of the prim's own site.
+        payloads.extend(arcs.into_iter().map(|(arc, sites)| {
+            if check_path == prim {
+                (arc, sites)
+            } else {
+                (arc, Vec::new())
             }
-        }
+        }));
     }
     payloads
 }
@@ -1350,38 +1359,36 @@ impl<'s> VariantNodeOrder<'s> {
 /// `pxr/usd/pcp/primIndex.cpp`).
 fn selected_branch_arcs<T: Clone + Eq>(
     specs: &[(LayerId, &PrimSpec)],
+    prim: PathId,
     selections: &HashMap<TokenId, TokenId>,
     arcs: fn(&VariantSpec) -> &ListOp<T>,
     edit: impl Fn(&ListOp<T>, LayerId) -> ListOp<T>,
-) -> Vec<T> {
+) -> Vec<Sited<T>> {
     let order = VariantNodeOrder::new(specs.iter().map(|(_, spec)| *spec));
-    // Each variant node by its path on the prim.
+    // Each variant node by its path on the prim, with its branches.
     type Chain = Vec<(TokenId, TokenId)>;
-    let mut nodes: Vec<(Chain, Vec<ListOp<T>>)> = Vec::new();
+    let mut nodes: Vec<(Chain, NodeLists<T>)> = Vec::new();
     for (layer, spec) in specs {
         for branch in spec.selected_variant_branches(selections) {
             let list = arcs(branch.spec);
-            if list.explicit.is_none() && list.prepend.is_empty() && list.append.is_empty() {
-                continue;
-            }
             let chain: Chain = branch.chain().collect();
+            let sites = branch.sites(&spec.outer_variant_sites, prim);
             let op = edit(list, *layer);
             match nodes.iter_mut().find(|(c, _)| *c == chain) {
-                Some((_, ops)) => ops.push(op),
-                None => nodes.push((chain, alloc::vec![op])),
+                Some((_, lists)) => lists.push(&sites, op),
+                None => {
+                    let mut lists = NodeLists::new();
+                    lists.push(&sites, op);
+                    nodes.push((chain, lists));
+                }
             }
         }
     }
     nodes.sort_by_cached_key(|(chain, _)| order.rank(chain));
-    let mut all: Vec<T> = Vec::new();
-    for (_, ops) in nodes {
-        for item in resolve_list_chain::<T>(&[], ops) {
-            if !all.contains(&item) {
-                all.push(item);
-            }
-        }
-    }
-    all
+    nodes
+        .into_iter()
+        .flat_map(|(_, lists)| lists.resolve())
+        .collect()
 }
 
 /// Collects ALL variant branch-level payloads for a prim from all variant
@@ -1410,13 +1417,11 @@ pub(crate) fn collect_all_variant_branch_payloads(
         ) {
             for branch in spec.variant_branches() {
                 let vp = &branch.spec.payloads;
-                if vp.explicit.is_some() || !vp.prepend.is_empty() || !vp.append.is_empty() {
-                    let payloads = resolve_list_chain::<Reference>(
-                        &[],
-                        [anchor_internal_arcs(store, vp, *layer_id, anchor)],
-                    );
-                    all_payloads.extend(payloads);
-                }
+                let payloads = resolve_list_chain::<Reference>(
+                    &[],
+                    [anchor_internal_arcs(store, vp, *layer_id, anchor)],
+                );
+                all_payloads.extend(payloads);
             }
         }
     }
@@ -1432,7 +1437,7 @@ pub(crate) fn resolve_specializes_for_prim(
     local_stack: &LayerStack,
     prim: PathId,
     scope: SelectionScope<'_>,
-) -> Vec<PathId> {
+) -> Vec<Sited<PathId>> {
     let (selections, parent_selections) = stack_selections(store, fallbacks, local_stack, prim);
     resolve_specializes_for_prim_in(
         store,
@@ -1455,14 +1460,14 @@ pub(crate) fn resolve_specializes_for_prim_in(
     selections: &HashMap<TokenId, TokenId>,
     parent_selections: &HashMap<TokenId, TokenId>,
     scope: SelectionScope<'_>,
-) -> Vec<PathId> {
-    let mut ops = Vec::new();
+) -> Vec<Sited<PathId>> {
+    let mut ops = NodeLists::new();
     for layer_id in &local_stack.layers {
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
         for spec in arc_specs(store, fallbacks, local_stack, layer, prim, scope) {
-            ops.push(spec.specializes.clone());
+            ops.push(&spec.outer_variant_sites, spec.specializes.clone());
         }
     }
 
@@ -1473,9 +1478,7 @@ pub(crate) fn resolve_specializes_for_prim_in(
         for spec in variant_host_specs(store, fallbacks, local_stack, layer, prim, scope) {
             for branch in spec.selected_variant_branches(selections) {
                 let vs = &branch.spec.specializes;
-                if vs.explicit.is_some() || !vs.prepend.is_empty() || !vs.append.is_empty() {
-                    ops.push(vs.clone());
-                }
+                ops.push(&branch.sites(&spec.outer_variant_sites, prim), vs.clone());
             }
         }
     }
@@ -1516,7 +1519,7 @@ pub(crate) fn resolve_payloads_for_prim(
     prim: PathId,
     scope: SelectionScope<'_>,
     anchor: ArcAnchor<'_>,
-) -> Vec<Reference> {
+) -> Vec<Sited<Reference>> {
     let anchor = anchor.payloads();
     let (_, parent_selections) = stack_selections(store, fallbacks, local_stack, prim);
     resolve_payloads_for_prim_in(
@@ -1540,20 +1543,16 @@ pub(crate) fn resolve_payloads_for_prim_in(
     parent_selections: &HashMap<TokenId, TokenId>,
     scope: SelectionScope<'_>,
     anchor: ArcAnchor<'_>,
-) -> Vec<Reference> {
+) -> Vec<Sited<Reference>> {
     let anchor = anchor.payloads();
-    let mut ops = Vec::new();
+    let mut ops = NodeLists::new();
     for layer_id in &local_stack.layers {
         let Some(layer) = store.layer(*layer_id) else {
             continue;
         };
         for spec in arc_specs(store, fallbacks, local_stack, layer, prim, scope) {
-            ops.push(anchor_internal_arcs(
-                store,
-                &spec.payloads,
-                *layer_id,
-                anchor,
-            ));
+            let op = anchor_internal_arcs(store, &spec.payloads, *layer_id, anchor);
+            ops.push(&spec.outer_variant_sites, op);
         }
     }
 

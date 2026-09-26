@@ -1,0 +1,11 @@
+#usda 1.0
+(
+    subLayers = [
+        @middle.usda@
+    ]
+)
+
+over "Shared"
+{
+    double top = 1
+}

@@ -1,0 +1,10 @@
+#usda 1.0
+
+def "Part" (
+    references = [
+        @asset.usda@</Asset>,
+        @./asset.usda@</Other>
+    ]
+)
+{
+}

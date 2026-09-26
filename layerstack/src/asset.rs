@@ -131,7 +131,9 @@ pub enum AssetResolveError {
 ///
 /// 1. Locating the asset (applying search paths, extension probing, etc.)
 /// 2. Loading and parsing the layer data
-/// 3. Assigning a [`LayerId`] and returning the [`Layer`]
+/// 3. Assigning a [`LayerId`] and returning the [`Layer`]; the resolver
+///    owns the ID space, and also allocates IDs for layers loaded on its
+///    behalf ([`AssetResolver::allocate_layer_id`])
 /// 4. Deduplicating: repeated resolution of the same path returns the same
 ///    [`LayerId`] with `layer: None`
 ///
@@ -173,6 +175,22 @@ pub trait AssetResolver {
     ///
     /// Returns `None` if `id` was not produced by this resolver.
     fn resolved_path(&self, id: LayerId) -> Option<&str>;
+
+    /// Allocates a [`LayerId`] for a layer loaded on this resolver's behalf
+    /// by someone else: a layer inside a package that
+    /// [`AssetResolver::resolve`] never sees, such as a member of a USDZ
+    /// package read by `layerstack_usdz::read_usdz`.
+    ///
+    /// The layers this resolver returns and the layers it allocates IDs for
+    /// end up in one store, so the resolver owns the one ID space for both:
+    /// an allocated ID is never one it has returned or will return from
+    /// [`AssetResolver::resolve`], and never allocated twice.
+    ///
+    /// `None`, the default, when the resolver does not allocate IDs for
+    /// others; a package reader then fails rather than guess at free IDs.
+    fn allocate_layer_id(&mut self) -> Option<LayerId> {
+        None
+    }
 
     /// Returns `asset_path`, authored in the layer `anchor`, anchored to that
     /// layer: an identifier that names the same asset from any layer.

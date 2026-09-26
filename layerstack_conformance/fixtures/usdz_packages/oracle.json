@@ -1,0 +1,333 @@
+{
+ "generator": "layerstack_conformance/scripts/usdz_packages_oracle.py",
+ "openusd_version": "0.26.8",
+ "cases": [
+  {
+   "name": "reference",
+   "members": [
+    "root.usda",
+    "asset.usda"
+   ],
+   "prims": [
+    {
+     "path": "/World",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/World"
+      ],
+      [
+       "asset.usda",
+       "/Asset"
+      ]
+     ],
+     "children": []
+    }
+   ],
+   "values": {
+    "/World.value": 7.0
+   },
+   "composition_errors": 0
+  },
+  {
+   "name": "payload",
+   "members": [
+    "root.usda",
+    "asset.usda"
+   ],
+   "prims": [
+    {
+     "path": "/World",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/World"
+      ],
+      [
+       "asset.usda",
+       "/Asset"
+      ]
+     ],
+     "children": []
+    }
+   ],
+   "values": {
+    "/World.value": 7.0
+   },
+   "composition_errors": 0
+  },
+  {
+   "name": "sublayers",
+   "members": [
+    "root.usda",
+    "middle.usda",
+    "bottom.usda",
+    "leaf.usda"
+   ],
+   "prims": [
+    {
+     "path": "/Shared",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Shared"
+      ],
+      [
+       "middle.usda",
+       "/Shared"
+      ],
+      [
+       "bottom.usda",
+       "/Shared"
+      ]
+     ],
+     "children": []
+    },
+    {
+     "path": "/Deep",
+     "prim_stack": [
+      [
+       "bottom.usda",
+       "/Deep"
+      ],
+      [
+       "leaf.usda",
+       "/Leaf"
+      ]
+     ],
+     "children": []
+    }
+   ],
+   "values": {
+    "/Shared.bottom": 3.0,
+    "/Shared.middle": 2.0,
+    "/Shared.top": 1.0,
+    "/Deep.depth": 4.0
+   },
+   "composition_errors": 0
+  },
+  {
+   "name": "mixed",
+   "members": [
+    "root.usda",
+    "base.usdc",
+    "shape.usdc",
+    "detail.usda",
+    "finish.usdc"
+   ],
+   "prims": [
+    {
+     "path": "/Ground",
+     "prim_stack": [
+      [
+       "base.usdc",
+       "/Ground"
+      ]
+     ],
+     "children": []
+    },
+    {
+     "path": "/World",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/World"
+      ],
+      [
+       "shape.usdc",
+       "/Shape"
+      ],
+      [
+       "detail.usda",
+       "/Detail"
+      ],
+      [
+       "finish.usdc",
+       "/Finish"
+      ]
+     ],
+     "children": []
+    }
+   ],
+   "values": {
+    "/Ground.level": 1.0,
+    "/World.gloss": 4.0,
+    "/World.grain": 3.0,
+    "/World.size": 2.0
+   },
+   "composition_errors": 0
+  },
+  {
+   "name": "repeated",
+   "members": [
+    "root.usda",
+    "part.usda",
+    "asset.usda"
+   ],
+   "prims": [
+    {
+     "path": "/First",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/First"
+      ],
+      [
+       "asset.usda",
+       "/Asset"
+      ]
+     ],
+     "children": []
+    },
+    {
+     "path": "/Second",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Second"
+      ],
+      [
+       "asset.usda",
+       "/Asset"
+      ]
+     ],
+     "children": []
+    },
+    {
+     "path": "/Third",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Third"
+      ],
+      [
+       "part.usda",
+       "/Part"
+      ],
+      [
+       "asset.usda",
+       "/Asset"
+      ],
+      [
+       "asset.usda",
+       "/Other"
+      ]
+     ],
+     "children": []
+    }
+   ],
+   "values": {
+    "/First.value": 7.0,
+    "/Second.value": 7.0,
+    "/Third.other": 8.0,
+    "/Third.value": 7.0
+   },
+   "composition_errors": 0
+  },
+  {
+   "name": "cycle",
+   "members": [
+    "root.usda",
+    "ping.usda",
+    "pong.usda"
+   ],
+   "prims": [
+    {
+     "path": "/World",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/World"
+      ],
+      [
+       "ping.usda",
+       "/Ping"
+      ],
+      [
+       "pong.usda",
+       "/Pong"
+      ],
+      [
+       "ping.usda",
+       "/Echo"
+      ]
+     ],
+     "children": []
+    }
+   ],
+   "values": {
+    "/World.echo": 3.0,
+    "/World.ping": 1.0,
+    "/World.pong": 2.0
+   },
+   "composition_errors": 0
+  },
+  {
+   "name": "external",
+   "members": [
+    "root.usda",
+    "member.usda",
+    "second.usda"
+   ],
+   "prims": [
+    {
+     "path": "/World",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/World"
+      ],
+      [
+       "member.usda",
+       "/Member"
+      ],
+      [
+       "further.usda",
+       "/Further"
+      ],
+      [
+       "second.usda",
+       "/Second"
+      ],
+      [
+       "outside.usda",
+       "/Outside"
+      ],
+      [
+       "further.usda",
+       "/Further"
+      ]
+     ],
+     "children": []
+    },
+    {
+     "path": "/Again",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Again"
+      ],
+      [
+       "outside.usda",
+       "/Outside"
+      ],
+      [
+       "further.usda",
+       "/Further"
+      ]
+     ],
+     "children": []
+    }
+   ],
+   "values": {
+    "/World.further": 4.0,
+    "/World.member": 1.0,
+    "/World.outside": 3.0,
+    "/World.second": 2.0,
+    "/Again.further": 4.0,
+    "/Again.outside": 3.0
+   },
+   "composition_errors": 0
+  }
+ ]
+}

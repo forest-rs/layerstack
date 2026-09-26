@@ -8,6 +8,8 @@
 use alloc::sync::Arc;
 use core::fmt;
 
+use layerstack::doc::LayerId;
+
 /// Errors that can occur while reading a USDZ package.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UsdzError {
@@ -39,6 +41,22 @@ pub enum UsdzError {
     },
     /// Data too short for the expected structure.
     UnexpectedEof,
+    /// A member the package loads needs a layer ID, and the outer
+    /// resolver allocates none ([`AssetResolver::allocate_layer_id`]
+    /// returned `None`).
+    ///
+    /// [`AssetResolver::allocate_layer_id`]: layerstack::AssetResolver::allocate_layer_id
+    LayerIdUnavailable {
+        /// The member's path in the package.
+        member: Arc<str>,
+    },
+    /// Two of the layers read share a layer ID, so installing both would
+    /// lose one: the outer resolver returned or allocated an ID twice, or
+    /// one equal to the root layer's.
+    DuplicateLayerId {
+        /// The shared ID.
+        id: LayerId,
+    },
 }
 
 impl fmt::Display for UsdzError {
@@ -59,6 +77,13 @@ impl fmt::Display for UsdzError {
             ),
             Self::LayerParseError { message } => write!(f, "layer parse error: {message}"),
             Self::UnexpectedEof => write!(f, "unexpected end of data"),
+            Self::LayerIdUnavailable { member } => write!(
+                f,
+                "the outer resolver allocates no layer ID for package member {member:?}"
+            ),
+            Self::DuplicateLayerId { id } => {
+                write!(f, "two layers read from the package share {id:?}")
+            }
         }
     }
 }

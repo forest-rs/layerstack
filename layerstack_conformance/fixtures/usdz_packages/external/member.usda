@@ -1,0 +1,11 @@
+#usda 1.0
+
+def "Member" (
+    references = [
+        @further.usda@</Further>,
+        @second.usda@</Second>
+    ]
+)
+{
+    double member = 1
+}

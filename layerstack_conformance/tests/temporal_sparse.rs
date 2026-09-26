@@ -29,8 +29,8 @@ use std::sync::Arc;
 
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, InterpolationType, Layer, LayerId,
-    PathInterner, PropertyPath, ResolvedAsset, SchemaDefinition, SchemaRegistry, Stage,
-    StageOptions, TokenInterner, Value,
+    PathInterner, PropertyDefinition, PropertyPath, ResolvedAsset, SchemaDefinition,
+    SchemaRegistry, Stage, StageOptions, TokenInterner, Value,
 };
 use layerstack_usda::{emit, lower, parser::parse_cst};
 use serde::Deserialize;
@@ -364,7 +364,8 @@ fn emit_layer(
 struct Composed {
     store: InMemoryStore,
     stage: Stage,
-    registry: Option<SchemaRegistry>,
+    /// Whether the stage has the case's schema.
+    schema: bool,
 }
 
 impl Composed {
@@ -387,20 +388,27 @@ impl Composed {
         for layer in resolver.pending.drain(..) {
             store.insert_layer(layer);
         }
-        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-        let registry = schema.map(|schema| {
+        let schemas = schema.map(|schema| {
             let mut definition = SchemaDefinition::typed(store.tokens.intern(&schema.type_name));
             for (name, fallback) in schema_fallbacks(&schema.type_name) {
-                definition = definition.with_property(store.tokens.intern(name), fallback);
+                definition = definition.with_property(
+                    PropertyDefinition::attribute(store.tokens.intern(name))
+                        .with_fallback(fallback),
+                );
             }
-            let mut registry = SchemaRegistry::new();
-            registry.register(definition);
-            registry
+            let mut builder = SchemaRegistry::builder();
+            builder.register(definition);
+            Arc::new(builder.build(&mut store.tokens))
         });
+        let options = StageOptions {
+            schemas: schemas.clone(),
+            ..StageOptions::default()
+        };
+        let stage = Stage::compose(&mut store, LayerId(1), options);
         Self {
             store,
             stage,
-            registry,
+            schema: schemas.is_some(),
         }
     }
 
@@ -408,14 +416,14 @@ impl Composed {
         let path = PropertyPath::parse(&query.attr, &mut self.store.tokens, &mut self.store.paths)
             .expect("attribute path");
         let (prim, property) = (path.prim_path(), path.property());
-        let value = match (query.time, &self.registry) {
-            (Some(time), None) => {
+        let value = match (query.time, self.schema) {
+            (Some(time), false) => {
                 self.stage
                     .resolve_property_path_at_time(path, time, query.interpolation())?
                     .value
             }
-            (None, None) => self.stage.resolve_field_path(path)?.value,
-            (Some(time), Some(registry)) => {
+            (None, false) => self.stage.resolve_field_path(path)?.value,
+            (Some(time), true) => {
                 self.stage
                     .resolve_value_at_time_with_schema(
                         prim,
@@ -423,14 +431,12 @@ impl Composed {
                         time,
                         query.interpolation(),
                         &self.store,
-                        registry,
-                        None,
                     )?
                     .value
             }
-            (None, Some(registry)) => {
+            (None, true) => {
                 self.stage
-                    .resolve_field_with_schema(prim, property, &self.store, registry, None)?
+                    .resolve_field_with_schema(prim, property, &self.store)?
                     .value
             }
         };

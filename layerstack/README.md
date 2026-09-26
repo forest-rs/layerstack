@@ -39,7 +39,9 @@ It provides:
 - **Authoring** — via [`edit`]: edit targets through any node of a
   prim's composition, and atomic transactions of spec edits that
   return their inverses and check preconditions
-- **Schema fallbacks** — via [`SchemaRegistry`]
+- **Schemas** — prim definitions (type, applied schemas, defined
+  properties and their fallbacks) from the [`SchemaRegistry`] a stage is
+  composed with ([`StageOptions::schemas`], [`Stage::prim_definition`])
 - **Value explanations** — [`Stage::explain_property_value`] and its
   siblings say why a value is what it is: every consulted opinion with its
   layer, spec, arc and layer offset, and whether it contributed a value, a
@@ -77,7 +79,7 @@ assert_eq!(resolved.value, Value::string("Hello"));
 | [`LayerStore`] | Trait for pluggable layer storage |
 | [`Value`] / [`FieldValue`] | Scalar values and field containers |
 | [`TokenInterner`] / [`PathInterner`] | Interning for strings and paths |
-| [`SchemaRegistry`] | Schema definitions and fallback value lookup |
+| [`SchemaRegistry`] | Schema definitions and the prim definitions they build |
 
 # `no_std` support
 

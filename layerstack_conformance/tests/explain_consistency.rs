@@ -38,8 +38,8 @@ use std::sync::Arc;
 
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, InterpolationType, Layer, LayerId, PathId,
-    PathInterner, PrimSpec, PropertyPath, ResolvedAsset, SchemaDefinition, SchemaRegistry, Stage,
-    StageOptions, TokenId, TokenInterner, Value, ValueSource,
+    PathInterner, PrimSpec, PropertyDefinition, PropertyPath, ResolvedAsset, SchemaDefinition,
+    SchemaRegistry, Stage, StageOptions, TokenId, TokenInterner, Value, ValueSource,
 };
 use layerstack_conformance::{pcp_txt::load_pcp_txt, usda_real::load_entry_usda, workspace_root};
 use layerstack_usda::{emit, lower, parser::parse_cst};
@@ -127,8 +127,8 @@ fn names(store: &InMemoryStore) -> Names {
 
 /// A registry giving every prim type a fallback for every property name;
 /// `alternate` picks different fallbacks (of another array length).
-fn registry(names: &Names, alternate: bool) -> SchemaRegistry {
-    let mut registry = SchemaRegistry::new();
+fn registry(names: &Names, alternate: bool, tokens: &mut TokenInterner) -> SchemaRegistry {
+    let mut builder = SchemaRegistry::builder();
     for &type_name in &names.types {
         let mut schema = SchemaDefinition::typed(type_name);
         for (&property, &array) in &names.properties {
@@ -138,19 +138,31 @@ fn registry(names: &Names, alternate: bool) -> SchemaRegistry {
                 (false, false) => Value::Double(0.5),
                 (false, true) => Value::Double(0.25),
             };
-            schema = schema.with_property(property, fallback);
+            schema = schema
+                .with_property(PropertyDefinition::attribute(property).with_fallback(fallback));
         }
-        registry.register(schema);
+        builder.register(schema);
     }
-    registry
+    builder.build(tokens)
 }
 
-/// Checks every explain/resolve pair over a composed stage.
-fn check_stage(label: &str, store: &InMemoryStore, stage: &Stage, tally: &mut Tally) {
+/// Checks every explain/resolve pair over the stage composed from `root`:
+/// without schemas, and with two registries of different fallbacks.
+fn check_stage(label: &str, store: &mut InMemoryStore, root: LayerId, tally: &mut Tally) {
     let names = names(store);
-    let alternate = registry(&names, true);
-    let registry = registry(&names, false);
-    let empty = SchemaRegistry::new();
+    let mut compose = |schemas: Option<bool>| {
+        let schemas =
+            schemas.map(|alternate| Arc::new(registry(&names, alternate, &mut store.tokens)));
+        let options = StageOptions {
+            schemas,
+            ..StageOptions::default()
+        };
+        Stage::compose(store, root, options)
+    };
+    let stage = compose(None);
+    let with_schemas = compose(Some(false));
+    let alternate = compose(Some(true));
+    let store = &*store;
     let root = store
         .paths
         .lookup(&layerstack::Path::root())
@@ -181,23 +193,23 @@ fn check_stage(label: &str, store: &InMemoryStore, stage: &Stage, tally: &mut Ta
             }
             tally.check(
                 || format!("{} default with schema", name()),
-                stage
-                    .explain_value_with_schema(prim, property, store, &registry, None)
+                with_schemas
+                    .explain_value_with_schema(prim, property, store)
                     .and_then(|e| e.value),
-                stage
-                    .resolve_value_with_schema(prim, property, store, &registry, None)
+                with_schemas
+                    .resolve_value_with_schema(prim, property, store)
                     .map(|r| r.value),
             );
             // Without fallbacks, an authored property is always explained,
             // blocks included.
             let unexplained = stage
-                .explain_value_with_schema(prim, property, store, &empty, None)
+                .explain_value_with_schema(prim, property, store)
                 .map(|e| e.value);
             tally.check(
                 || format!("{} default without fallback", name()),
                 unexplained.clone().flatten(),
                 stage
-                    .resolve_value_with_schema(prim, property, store, &empty, None)
+                    .resolve_value_with_schema(prim, property, store)
                     .map(|r| r.value),
             );
             tally.check(
@@ -207,16 +219,15 @@ fn check_stage(label: &str, store: &InMemoryStore, stage: &Stage, tally: &mut Ta
             );
             // An authored value that reports no use of the fallback is the
             // same under another fallback.
-            if let Some(explained) =
-                stage.explain_value_with_schema(prim, property, store, &registry, None)
+            if let Some(explained) = with_schemas.explain_value_with_schema(prim, property, store)
                 && !explained.seeded_by_fallback
                 && !matches!(explained.source, ValueSource::Fallback | ValueSource::None)
             {
                 tally.check(
                     || format!("{} default independent of the fallback", name()),
                     explained.value,
-                    stage
-                        .resolve_value_with_schema(prim, property, store, &alternate, None)
+                    alternate
+                        .resolve_value_with_schema(prim, property, store)
                         .map(|r| r.value),
                 );
             }
@@ -233,9 +244,8 @@ fn check_stage(label: &str, store: &InMemoryStore, stage: &Stage, tally: &mut Ta
                                 .map(|r| r.value),
                         );
                     }
-                    let explained = stage.explain_value_at_time_with_schema(
-                        prim, property, time, interp, store, &registry, None,
-                    );
+                    let explained = with_schemas
+                        .explain_value_at_time_with_schema(prim, property, time, interp, store);
                     let seeded = explained.as_ref().is_none_or(|e| {
                         e.seeded_by_fallback
                             || matches!(e.source, ValueSource::Fallback | ValueSource::None)
@@ -244,10 +254,8 @@ fn check_stage(label: &str, store: &InMemoryStore, stage: &Stage, tally: &mut Ta
                     tally.check(
                         || format!("{} at {time} {interp:?} with schema", name()),
                         value.clone(),
-                        stage
-                            .resolve_value_at_time_with_schema(
-                                prim, property, time, interp, store, &registry, None,
-                            )
+                        with_schemas
+                            .resolve_value_at_time_with_schema(prim, property, time, interp, store)
                             .map(|r| r.value),
                     );
                     if !seeded {
@@ -259,25 +267,21 @@ fn check_stage(label: &str, store: &InMemoryStore, stage: &Stage, tally: &mut Ta
                                 )
                             },
                             value,
-                            stage
+                            alternate
                                 .resolve_value_at_time_with_schema(
-                                    prim, property, time, interp, store, &alternate, None,
+                                    prim, property, time, interp, store,
                                 )
                                 .map(|r| r.value),
                         );
                     }
                     let unexplained = stage
-                        .explain_value_at_time_with_schema(
-                            prim, property, time, interp, store, &empty, None,
-                        )
+                        .explain_value_at_time_with_schema(prim, property, time, interp, store)
                         .map(|e| e.value);
                     tally.check(
                         || format!("{} at {time} {interp:?} without fallback", name()),
                         unexplained.clone().flatten(),
                         stage
-                            .resolve_value_at_time_with_schema(
-                                prim, property, time, interp, store, &empty, None,
-                            )
+                            .resolve_value_at_time_with_schema(prim, property, time, interp, store)
                             .map(|r| r.value),
                     );
                     tally.check(
@@ -316,12 +320,7 @@ fn sorted_dirs(dir: &PathBuf) -> Vec<PathBuf> {
 
 fn check_file(label: &str, entry: &std::path::Path, tally: &mut Tally) {
     let mut loaded = load_entry_usda(entry);
-    let stage = Stage::compose(
-        &mut loaded.store,
-        loaded.root_layer,
-        StageOptions::default(),
-    );
-    check_stage(label, &loaded.store, &stage, tally);
+    check_stage(label, &mut loaded.store, loaded.root_layer, tally);
 }
 
 #[derive(Deserialize)]
@@ -447,8 +446,7 @@ fn explanations_resolve_what_resolution_resolves() {
         for layer in resolver.pending.drain(..) {
             store.insert_layer(layer);
         }
-        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-        check_stage(&case.name, &store, &stage, &mut tally);
+        check_stage(&case.name, &mut store, LayerId(1), &mut tally);
         fixtures += 1;
     }
 

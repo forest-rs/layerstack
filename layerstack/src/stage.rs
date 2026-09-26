@@ -37,7 +37,7 @@ use crate::{
     prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue, PrimIndex},
     prim_index_graph::{NodeId, PrimIndexGraph},
     property::{PropertyKind, PropertySpec, PropertyType, Variability},
-    schema::SchemaRegistry,
+    schema::{PrimDefinition, PropertyDefinition, SchemaRegistry},
     spec_path::SpecPath,
     spline::{SplineData, SplineDataType},
     value_resolution::{
@@ -254,6 +254,17 @@ pub struct StageOptions {
     /// `UsdStage::SetGlobalVariantFallbacks` (see
     /// [`crate::variant_fallbacks`]).
     pub variant_fallbacks: VariantFallbacks,
+    /// The schemas that give the stage's prims their definitions: their
+    /// types, applied schemas and schema-defined properties, whose fallbacks
+    /// the schema-aware queries resolve ([`Stage::resolve_value_with_schema`]).
+    /// `None`, the default, reads no schema: every prim is typeless and
+    /// defines no property.
+    ///
+    /// The registry's tokens must be those of the store the stage is
+    /// composed from. Composition itself never reads schemas.
+    ///
+    /// Spec: AOUSD Core §13 (schemas), §13.3.2.3 (the prim definition).
+    pub schemas: Option<Arc<SchemaRegistry>>,
 }
 
 /// A composed stage: read-only facade over composition results.
@@ -292,12 +303,48 @@ pub struct Stage {
     /// The variant fallbacks the stage was composed with
     /// ([`StageOptions::variant_fallbacks`]).
     variant_fallbacks: VariantFallbacks,
+    /// The schemas the stage was composed with ([`StageOptions::schemas`]).
+    schemas: Option<Arc<SchemaRegistry>>,
 }
 
 impl Stage {
     /// Composes a stage from a root layer.
+    ///
+    /// With schemas ([`StageOptions::schemas`]), this also interns the
+    /// names of the multiple-apply schema instances each composed prim's
+    /// `apiSchemas` applies ([`SchemaRegistry::intern_instance_names`]), so
+    /// the schema queries read the store without mutating it. A masked
+    /// composition does this for the prims it composes only.
     pub fn compose(store: &mut dyn LayerStore, root: LayerId, options: StageOptions) -> Self {
-        crate::compose::compose_stage(store, root, options)
+        let schemas = options.schemas.clone();
+        let mut stage = crate::compose::compose_stage(store, root, options);
+        stage.schemas = schemas;
+        stage.intern_instance_names(store);
+        stage
+    }
+
+    /// Interns the names of the multiple-apply schema instances the
+    /// composed `apiSchemas` of every prim on the stage applies.
+    ///
+    /// Spec: AOUSD Core §13.3.2 (instance names form property names).
+    fn intern_instance_names(&self, store: &mut dyn LayerStore) {
+        let Some(schemas) = self.schemas.as_deref() else {
+            return;
+        };
+        let Some(api_schemas) = store.tokens().lookup("apiSchemas") else {
+            return;
+        };
+        for &prim in self.prims.keys() {
+            if let Some(applied) = self.resolve_token_list(prim, api_schemas) {
+                schemas.intern_instance_names(&applied.value, store.tokens_mut());
+            }
+        }
+    }
+
+    /// The schemas the stage was composed with ([`StageOptions::schemas`]).
+    #[must_use]
+    pub fn schemas(&self) -> Option<&SchemaRegistry> {
+        self.schemas.as_deref()
     }
 
     pub(crate) fn from_parts(
@@ -314,6 +361,7 @@ impl Stage {
             errors: Vec::new(),
             instances: HashSet::new(),
             variant_fallbacks: VariantFallbacks::default(),
+            schemas: None,
         }
     }
 
@@ -1385,13 +1433,10 @@ impl Stage {
 
     /// Resolves a property on a prim with schema fallback.
     ///
-    /// Like [`Stage::resolve_property_path`], but when no authored opinion exists,
-    /// consults the schema registry for a fallback value based on the prim's
-    /// resolved type name and applied API schemas.
-    ///
-    /// `api_schemas_token` is the interned token for `"apiSchemas"`. Pass it
-    /// so the resolver can look up applied API schemas on the prim. If `None`,
-    /// only the typed schema (and its built-ins / auto-applies) are consulted.
+    /// Like [`Stage::resolve_property_path`], but when no authored opinion
+    /// exists, resolves the fallback of the property's definition in the
+    /// prim's definition ([`Stage::property_definition`]), from the stage's
+    /// schemas ([`StageOptions::schemas`]).
     ///
     /// Only properties are read here; the applied schemas come from the
     /// prim metadata field `apiSchemas`, never from a property that happens
@@ -1410,12 +1455,10 @@ impl Stage {
         prim: PathId,
         field: TokenId,
         store: &dyn LayerStore,
-        registry: &SchemaRegistry,
-        api_schemas_token: Option<TokenId>,
     ) -> Option<Resolved<ResolvedValue>> {
         let index = self.prims.get(&prim);
         let authored = index.and_then(|index| index.property_opinions(field));
-        let fallback = self.schema_fallback(prim, field, store, registry, api_schemas_token);
+        let fallback = self.schema_fallback(prim, field, store);
 
         if let (Some(index), Some(opinions)) = (index, authored) {
             let is_value_field = matches!(
@@ -1434,15 +1477,11 @@ impl Stage {
                 //
                 // Spec: AOUSD Core §6.6.2.1, §12.3.6, §13.3.2.4 (fallback
                 // value resolution).
-                let fallback_value = match fallback.as_ref() {
-                    Some(FieldValue::Value(value)) => Some(value),
-                    _ => None,
-                };
                 if let Some(resolved) = self.resolve_default(
                     field,
                     opinions,
                     index.property_type_for(&field),
-                    fallback_value,
+                    fallback.as_ref(),
                 ) {
                     return Some(resolved);
                 }
@@ -1456,11 +1495,8 @@ impl Stage {
 
         Some(Resolved {
             value: match fallback {
-                FieldValue::Value(Value::Dictionary(d)) => {
-                    ResolvedValue::Dictionary(combine_dictionary_chain([d]))
-                }
-                FieldValue::Value(v) => ResolvedValue::Scalar(v),
-                list => resolve_field_list(&list, core::iter::once(&list))?,
+                Value::Dictionary(d) => ResolvedValue::Dictionary(combine_dictionary_chain([d])),
+                v => ResolvedValue::Scalar(v),
             },
             provenance: None,
         })
@@ -1477,11 +1513,8 @@ impl Stage {
         prim: PathId,
         field: TokenId,
         store: &dyn LayerStore,
-        registry: &SchemaRegistry,
-        api_schemas_token: Option<TokenId>,
     ) -> Option<Resolved<Value>> {
-        let resolved =
-            self.resolve_value_with_schema(prim, field, store, registry, api_schemas_token)?;
+        let resolved = self.resolve_value_with_schema(prim, field, store)?;
         match resolved.value {
             ResolvedValue::Scalar(v) => Some(Resolved {
                 value: v,
@@ -1519,8 +1552,6 @@ impl Stage {
     /// divergence `sampled-block-drops-fallback`
     /// (`docs/generic-sparse-composition.md`, "Divergences From OpenUSD").
     ///
-    /// `api_schemas_token` is as for [`Stage::resolve_value_with_schema`].
-    ///
     /// Spec: AOUSD Core §12.3.2 (time-based resolution), §12.3.5 (fallback
     /// values), §12.3.6 (blocked attributes), §13.3.2.4 (fallback value
     /// resolution), §16.2.16.3 (blocked time samples).
@@ -1532,25 +1563,23 @@ impl Stage {
         time: f64,
         interp: InterpolationType,
         store: &dyn LayerStore,
-        registry: &SchemaRegistry,
-        api_schemas_token: Option<TokenId>,
     ) -> Option<Resolved<Value>> {
-        let fallback = self.schema_fallback(prim, field, store, registry, api_schemas_token);
-        let seed = match &fallback {
-            Some(FieldValue::Value(value)) => Some(value),
-            _ => None,
-        };
-        if let Some(resolved) =
-            self.resolve_value_at_time_by(prim, field, time, interp, Lookup::Property, seed)
-        {
+        let fallback = self.schema_fallback(prim, field, store);
+        if let Some(resolved) = self.resolve_value_at_time_by(
+            prim,
+            field,
+            time,
+            interp,
+            Lookup::Property,
+            fallback.as_ref(),
+        ) {
             return Some(resolved);
         }
         let value = match fallback? {
-            FieldValue::Value(Value::Dictionary(entries)) => {
+            Value::Dictionary(entries) => {
                 Value::Dictionary(combine_dictionary_chain([entries.as_slice()]))
             }
-            FieldValue::Value(value) => value,
-            _ => return None,
+            value => value,
         };
         Some(Resolved {
             value,
@@ -1558,8 +1587,7 @@ impl Stage {
         })
     }
 
-    /// The schema fallback for `field` on `prim`: from its resolved type name
-    /// and, when `api_schemas_token` is given, its applied API schemas.
+    /// The schema fallback for `field` on `prim`.
     ///
     /// Spec: AOUSD Core §13.3.2.4 (fallback value resolution).
     fn schema_fallback(
@@ -1567,15 +1595,98 @@ impl Stage {
         prim: PathId,
         field: TokenId,
         store: &dyn LayerStore,
-        registry: &SchemaRegistry,
-        api_schemas_token: Option<TokenId>,
-    ) -> Option<FieldValue> {
+    ) -> Option<Value> {
+        self.property_definition(prim, field, store)?.fallback
+    }
+
+    /// The prim definition of `prim`: its typed schema (or none: it is
+    /// typeless), its applied schemas in strength order, and the properties
+    /// they define. Empty when the stage has no schemas
+    /// ([`StageOptions::schemas`]); `None` when `prim` is not on the stage.
+    ///
+    /// Each call builds the definition anew, from the prim's resolved type
+    /// name ([`Stage::resolve_type_name`]) and its composed `apiSchemas`
+    /// metadata ([`SchemaRegistry::prim_definition`]); nothing is cached.
+    /// To look up one property without building the whole definition, use
+    /// [`Stage::property_definition`].
+    ///
+    /// ```
+    /// use std::sync::Arc;
+    ///
+    /// use layerstack::{
+    ///     InMemoryStore, Layer, LayerId, PrimSpec, PropertyDefinition, SchemaDefinition,
+    ///     SchemaRegistry, Stage, StageOptions,
+    /// };
+    ///
+    /// let mut store = InMemoryStore::default();
+    /// let (tile, width) = (store.tokens.intern("Tile"), store.tokens.intern("width"));
+    /// let prim = store.path("/Floor");
+    /// let mut layer = Layer::new(LayerId(1));
+    /// layer.insert_prim(prim, PrimSpec::def().with_type_name(tile));
+    /// store.insert_layer(layer);
+    ///
+    /// let mut builder = SchemaRegistry::builder();
+    /// builder.register(SchemaDefinition::typed(tile).with_property(
+    ///     PropertyDefinition::attribute(width).with_fallback(1.0_f32),
+    /// ));
+    /// let options = StageOptions {
+    ///     schemas: Some(Arc::new(builder.build(&mut store.tokens))),
+    ///     ..StageOptions::default()
+    /// };
+    /// let stage = Stage::compose(&mut store, LayerId(1), options);
+    ///
+    /// let definition = stage.prim_definition(prim, &store).expect("on the stage");
+    /// assert!(definition.is_a(tile));
+    /// assert!(definition.property(width).is_some());
+    /// ```
+    ///
+    /// Spec: AOUSD Core §13.3.1 (typeless prims), §13.3.2.3 (the prim
+    /// definition). OpenUSD: `UsdPrim::GetPrimDefinition`.
+    #[must_use]
+    pub fn prim_definition(&self, prim: PathId, store: &dyn LayerStore) -> Option<PrimDefinition> {
+        if !self.has_prim(prim) {
+            return None;
+        }
+        let Some(schemas) = self.schemas.as_deref() else {
+            return Some(PrimDefinition::default());
+        };
         let type_name = self.resolve_type_name(prim, store);
-        let applied = api_schemas_token
-            .and_then(|tok| self.resolve_token_list(prim, tok))
-            .map(|r| r.value)
-            .unwrap_or_default();
-        registry.resolve_fallback(type_name, &applied, field)
+        let applied = self.applied_schema_names(prim, store);
+        Some(schemas.prim_definition(type_name, &applied, store.tokens()))
+    }
+
+    /// The definition the schemas of `prim` give its property `property`:
+    /// its kind, declared type, variability and fallback, as its prim
+    /// definition ([`Stage::prim_definition`]) has it. `None` when no
+    /// schema of the prim defines it, the stage has no schemas or `prim` is
+    /// not on the stage.
+    ///
+    /// Spec: AOUSD Core §13.3.2.3 (the prim definition), §13.3.2.4
+    /// (fallback values in its order).
+    #[must_use]
+    pub fn property_definition(
+        &self,
+        prim: PathId,
+        property: TokenId,
+        store: &dyn LayerStore,
+    ) -> Option<PropertyDefinition> {
+        let schemas = self.schemas.as_deref()?;
+        let type_name = self.resolve_type_name(prim, store);
+        let applied = self.applied_schema_names(prim, store);
+        schemas.property_definition(type_name, &applied, property, store.tokens())
+    }
+
+    /// The composed `apiSchemas` metadata of `prim`.
+    ///
+    /// Spec: AOUSD Core §13.2.1.2 (`apiSchemas`), §13.3.2 (it composes as a
+    /// list op).
+    fn applied_schema_names(&self, prim: PathId, store: &dyn LayerStore) -> Vec<TokenId> {
+        store
+            .tokens()
+            .lookup("apiSchemas")
+            .and_then(|field| self.resolve_token_list(prim, field))
+            .map(|resolved| resolved.value)
+            .unwrap_or_default()
     }
 
     /// Resolves a dictionary-valued field on a prim, combining opinions.
@@ -1616,7 +1727,7 @@ impl Stage {
 /// (`pxr/base/tf/stringUtils.h`) does for the ASCII names of properties:
 /// letters ignoring case, `_` before letters, runs of digits by value, and
 /// ties by bytes.
-fn dictionary_cmp(a: &str, b: &str) -> core::cmp::Ordering {
+pub(crate) fn dictionary_cmp(a: &str, b: &str) -> core::cmp::Ordering {
     use core::cmp::Ordering;
     let (x, y) = (a.as_bytes(), b.as_bytes());
     /// The end of the run of digits at `start`, and its digits without
@@ -2057,13 +2168,7 @@ mod tests {
     /// (strongest first) and whose schema fallback is `[5, 6]`.
     fn schema_fallback_fixture(
         opinions: Vec<FieldValue>,
-    ) -> (
-        Stage,
-        crate::doc::InMemoryStore,
-        SchemaRegistry,
-        PathId,
-        TokenId,
-    ) {
+    ) -> (Stage, crate::doc::InMemoryStore, PathId, TokenId) {
         schema_fallback_fixture_of(opinions, array_value(&[5, 6]), int_array_type())
     }
 
@@ -2073,13 +2178,7 @@ mod tests {
         opinions: Vec<FieldValue>,
         fallback: Value,
         property_type: PropertyType,
-    ) -> (
-        Stage,
-        crate::doc::InMemoryStore,
-        SchemaRegistry,
-        PathId,
-        TokenId,
-    ) {
+    ) -> (Stage, crate::doc::InMemoryStore, PathId, TokenId) {
         let mut store = crate::doc::InMemoryStore::default();
         let prim = store.path("/A");
         let field = store.tokens.intern("x");
@@ -2095,9 +2194,12 @@ mod tests {
         );
         store.insert_layer(layer);
 
-        let mut registry = SchemaRegistry::new();
-        registry
-            .register(crate::schema::SchemaDefinition::typed(mesh).with_property(field, fallback));
+        let mut builder = SchemaRegistry::builder();
+        builder.register(
+            crate::schema::SchemaDefinition::typed(mesh)
+                .with_property(PropertyDefinition::attribute(field).with_fallback(fallback)),
+        );
+        let registry = builder.build(&mut store.tokens);
 
         let mut index = PrimIndex::default();
         let key = test_key(LayerId(1), prim);
@@ -2122,8 +2224,10 @@ mod tests {
             });
         }
 
-        let stage = Stage::from_parts(HashMap::from([(prim, index)]), HashMap::new(), false, None);
-        (stage, store, registry, prim, field)
+        let mut stage =
+            Stage::from_parts(HashMap::from([(prim, index)]), HashMap::new(), false, None);
+        stage.schemas = Some(Arc::new(registry));
+        (stage, store, prim, field)
     }
 
     /// A path expression's `%_` composes over the next weaker opinion, and
@@ -2135,7 +2239,7 @@ mod tests {
     #[test]
     fn path_expressions_compose_over_the_schema_fallback() {
         let expression = |text: &str| Value::PathExpression(text.into());
-        let (stage, store, registry, prim, field) = schema_fallback_fixture_of(
+        let (stage, store, prim, field) = schema_fallback_fixture_of(
             vec![
                 FieldValue::Value(expression("/Strong %_")),
                 FieldValue::Value(expression("%_ /Weak")),
@@ -2159,7 +2263,7 @@ mod tests {
         );
         assert_eq!(
             stage
-                .resolve_value_with_schema(prim, field, &store, &registry, None)
+                .resolve_value_with_schema(prim, field, &store)
                 .map(|r| r.value),
             Some(ResolvedValue::Scalar(composed.clone()))
         );
@@ -2171,14 +2275,12 @@ mod tests {
                     1.0,
                     InterpolationType::Held,
                     &store,
-                    &registry,
-                    None
                 )
                 .map(|r| r.value),
             Some(composed.clone())
         );
         let explained = stage
-            .explain_value_with_schema(prim, field, &store, &registry, None)
+            .explain_value_with_schema(prim, field, &store)
             .expect("authored");
         assert_eq!(
             explained.value,
@@ -2187,15 +2289,7 @@ mod tests {
         assert!(explained.seeded_by_fallback);
         assert_eq!(explained.contributors().count(), 2);
         let explained = stage
-            .explain_value_at_time_with_schema(
-                prim,
-                field,
-                1.0,
-                InterpolationType::Held,
-                &store,
-                &registry,
-                None,
-            )
+            .explain_value_at_time_with_schema(prim, field, 1.0, InterpolationType::Held, &store)
             .expect("authored");
         assert_eq!(explained.value, Some(composed));
         assert_eq!(explained.contributors().count(), 2);
@@ -2216,7 +2310,7 @@ mod tests {
     /// proposal, "Value Resolution").
     #[test]
     fn stronger_array_edit_over_block_materializes_over_fallback() {
-        let (stage, store, registry, prim, field) = schema_fallback_fixture(vec![
+        let (stage, store, prim, field) = schema_fallback_fixture(vec![
             FieldValue::Value(append_edit(7)),
             FieldValue::Value(Value::Blocked),
             FieldValue::Value(array_value(&[1, 2])),
@@ -2232,7 +2326,7 @@ mod tests {
         );
 
         let with_schema = stage
-            .resolve_value_with_schema(prim, field, &store, &registry, None)
+            .resolve_value_with_schema(prim, field, &store)
             .expect("edit resolves");
         assert_eq!(
             with_schema.value,
@@ -2243,7 +2337,7 @@ mod tests {
 
     #[test]
     fn strongest_array_block_resolves_to_schema_fallback() {
-        let (stage, store, registry, prim, field) = schema_fallback_fixture(vec![
+        let (stage, store, prim, field) = schema_fallback_fixture(vec![
             FieldValue::Value(Value::Blocked),
             FieldValue::Value(append_edit(7)),
             FieldValue::Value(array_value(&[1, 2])),
@@ -2254,7 +2348,7 @@ mod tests {
             None
         );
         let with_schema = stage
-            .resolve_value_with_schema(prim, field, &store, &registry, None)
+            .resolve_value_with_schema(prim, field, &store)
             .expect("fallback resolves");
         assert_eq!(
             with_schema.value,
@@ -2271,22 +2365,20 @@ mod tests {
     /// value resolution).
     #[test]
     fn time_query_with_schema_shares_the_fallback_contract() {
-        let resolve = |stage: &Stage, store, registry, prim, field| {
+        let resolve = |stage: &Stage, store, prim, field| {
             [InterpolationType::Held, InterpolationType::Linear].map(|interp| {
                 stage
-                    .resolve_value_at_time_with_schema(
-                        prim, field, 1.0, interp, store, registry, None,
-                    )
+                    .resolve_value_at_time_with_schema(prim, field, 1.0, interp, store)
                     .map(|resolved| resolved.value)
             })
         };
-        let (stage, store, registry, prim, field) = schema_fallback_fixture(vec![
+        let (stage, store, prim, field) = schema_fallback_fixture(vec![
             FieldValue::Value(append_edit(7)),
             FieldValue::Value(Value::Blocked),
             FieldValue::Value(array_value(&[1, 2])),
         ]);
         assert_eq!(
-            resolve(&stage, &store, &registry, prim, field),
+            resolve(&stage, &store, prim, field),
             [Some(array_value(&[5, 6, 7])), Some(array_value(&[5, 6, 7]))],
             "the edit composes over the fallback, never over the blocked [1, 2]"
         );
@@ -2302,12 +2394,12 @@ mod tests {
             "without a schema the edit composes over the empty array"
         );
 
-        let (stage, store, registry, prim, field) = schema_fallback_fixture(vec![
+        let (stage, store, prim, field) = schema_fallback_fixture(vec![
             FieldValue::Value(Value::Blocked),
             FieldValue::Value(array_value(&[1, 2])),
         ]);
         assert_eq!(
-            resolve(&stage, &store, &registry, prim, field),
+            resolve(&stage, &store, prim, field),
             [Some(array_value(&[5, 6])), Some(array_value(&[5, 6]))],
             "a strongest block resolves the fallback unmodified"
         );

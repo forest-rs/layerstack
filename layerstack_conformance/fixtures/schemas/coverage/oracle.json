@@ -1,0 +1,1600 @@
+{
+ "openusd_version": "0.26.8",
+ "prims": [
+  {
+   "applied_schemas": [
+    "LabelAPI",
+    "StyleAPI",
+    "ColorAPI",
+    "PinAPI:auto"
+   ],
+   "has_api": {
+    "AutoFirstAPI": false,
+    "AutoSecondAPI": false,
+    "ColorAPI": true,
+    "CycleOneAPI": false,
+    "CycleTwoAPI": false,
+    "LabelAPI": true,
+    "OverrideAPI": false,
+    "PinAPI": true,
+    "SlotAPI": false,
+    "StyleAPI": true
+   },
+   "has_api_instance": [
+    [
+     "SlotAPI",
+     "absent",
+     false
+    ],
+    [
+     "SlotAPI",
+     "auto",
+     false
+    ],
+    [
+     "PinAPI",
+     "absent",
+     false
+    ],
+    [
+     "PinAPI",
+     "auto",
+     true
+    ]
+   ],
+   "is_a": {
+    "Panel": false,
+    "Shape": false,
+    "Tile": false
+   },
+   "path": "/Typeless",
+   "properties": {
+    "auto:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "color:source": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "color:value": {
+     "defined": true,
+     "fallback": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "kind": "attribute",
+     "type_name": "color3f",
+     "value": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "variability": "varying"
+    },
+    "label:note": {
+     "defined": true,
+     "fallback": "from color",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "from color",
+     "variability": "varying"
+    },
+    "label:size": {
+     "defined": true,
+     "fallback": 12,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 12,
+     "variability": "varying"
+    },
+    "label:text": {
+     "defined": true,
+     "fallback": "untitled",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "untitled",
+     "variability": "varying"
+    },
+    "pin:auto:offset": {
+     "defined": true,
+     "fallback": 0.25,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.25,
+     "variability": "varying"
+    },
+    "style:rank": {
+     "defined": true,
+     "fallback": 1,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 1,
+     "variability": "varying"
+    },
+    "style:weight": {
+     "defined": true,
+     "fallback": "regular",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "regular",
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "auto:pinned",
+    "color:source",
+    "color:value",
+    "label:note",
+    "label:size",
+    "label:text",
+    "pin:auto:offset",
+    "style:rank",
+    "style:weight"
+   ],
+   "schema_type": "",
+   "type_name": ""
+  },
+  {
+   "applied_schemas": [
+    "StyleAPI",
+    "ColorAPI"
+   ],
+   "has_api": {
+    "AutoFirstAPI": false,
+    "AutoSecondAPI": false,
+    "ColorAPI": true,
+    "CycleOneAPI": false,
+    "CycleTwoAPI": false,
+    "LabelAPI": false,
+    "OverrideAPI": false,
+    "PinAPI": false,
+    "SlotAPI": false,
+    "StyleAPI": true
+   },
+   "has_api_instance": [
+    [
+     "SlotAPI",
+     "absent",
+     false
+    ],
+    [
+     "PinAPI",
+     "absent",
+     false
+    ]
+   ],
+   "is_a": {
+    "Panel": false,
+    "Shape": false,
+    "Tile": false
+   },
+   "path": "/Unknown",
+   "properties": {
+    "color:source": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "color:value": {
+     "defined": true,
+     "fallback": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "kind": "attribute",
+     "type_name": "color3f",
+     "value": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "variability": "varying"
+    },
+    "extra": {
+     "defined": false,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "double",
+     "value": 1.0,
+     "variability": "varying"
+    },
+    "label:note": {
+     "defined": true,
+     "fallback": "from color",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "from color",
+     "variability": "varying"
+    },
+    "label:text": {
+     "defined": true,
+     "fallback": "colored",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "colored",
+     "variability": "varying"
+    },
+    "style:rank": {
+     "defined": true,
+     "fallback": 1,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 1,
+     "variability": "varying"
+    },
+    "style:weight": {
+     "defined": true,
+     "fallback": "regular",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "regular",
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "color:source",
+    "color:value",
+    "extra",
+    "label:note",
+    "label:text",
+    "style:rank",
+    "style:weight"
+   ],
+   "schema_type": "",
+   "type_name": "Mystery"
+  },
+  {
+   "applied_schemas": [],
+   "has_api": {
+    "AutoFirstAPI": false,
+    "AutoSecondAPI": false,
+    "ColorAPI": false,
+    "CycleOneAPI": false,
+    "CycleTwoAPI": false,
+    "LabelAPI": false,
+    "OverrideAPI": false,
+    "PinAPI": false,
+    "SlotAPI": false,
+    "StyleAPI": false
+   },
+   "has_api_instance": [
+    [
+     "SlotAPI",
+     "absent",
+     false
+    ],
+    [
+     "PinAPI",
+     "absent",
+     false
+    ]
+   ],
+   "is_a": {
+    "Panel": false,
+    "Shape": false,
+    "Tile": false
+   },
+   "path": "/AbstractTyped",
+   "properties": {},
+   "property_names": [],
+   "schema_type": "",
+   "type_name": "Shape"
+  },
+  {
+   "applied_schemas": [
+    "LabelAPI",
+    "StyleAPI",
+    "ColorAPI",
+    "PinAPI:auto",
+    "SlotAPI:main",
+    "PinAPI:main",
+    "PinAPI:main:extra",
+    "AutoSecondAPI",
+    "AutoFirstAPI"
+   ],
+   "has_api": {
+    "AutoFirstAPI": true,
+    "AutoSecondAPI": true,
+    "ColorAPI": true,
+    "CycleOneAPI": false,
+    "CycleTwoAPI": false,
+    "LabelAPI": true,
+    "OverrideAPI": false,
+    "PinAPI": true,
+    "SlotAPI": true,
+    "StyleAPI": true
+   },
+   "has_api_instance": [
+    [
+     "SlotAPI",
+     "absent",
+     false
+    ],
+    [
+     "SlotAPI",
+     "auto",
+     false
+    ],
+    [
+     "SlotAPI",
+     "main",
+     true
+    ],
+    [
+     "SlotAPI",
+     "main:extra",
+     false
+    ],
+    [
+     "PinAPI",
+     "absent",
+     false
+    ],
+    [
+     "PinAPI",
+     "auto",
+     true
+    ],
+    [
+     "PinAPI",
+     "main",
+     true
+    ],
+    [
+     "PinAPI",
+     "main:extra",
+     true
+    ]
+   ],
+   "is_a": {
+    "Panel": false,
+    "Shape": true,
+    "Tile": true
+   },
+   "path": "/Tile",
+   "properties": {
+    "auto:enabled": {
+     "defined": true,
+     "fallback": false,
+     "kind": "attribute",
+     "type_name": "bool",
+     "value": false,
+     "variability": "varying"
+    },
+    "auto:first": {
+     "defined": true,
+     "fallback": 1,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 1,
+     "variability": "varying"
+    },
+    "auto:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "color:source": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "color:value": {
+     "defined": true,
+     "fallback": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "kind": "attribute",
+     "type_name": "color3f",
+     "value": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "variability": "varying"
+    },
+    "label:note": {
+     "defined": true,
+     "fallback": "from color",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "from color",
+     "variability": "varying"
+    },
+    "label:size": {
+     "defined": true,
+     "fallback": 12,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 12,
+     "variability": "varying"
+    },
+    "label:text": {
+     "defined": true,
+     "fallback": "tile",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "tile",
+     "variability": "varying"
+    },
+    "main:extra:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "main:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "pin:auto:offset": {
+     "defined": true,
+     "fallback": 0.25,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.25,
+     "variability": "varying"
+    },
+    "pin:main:extra:offset": {
+     "defined": true,
+     "fallback": 0.25,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.25,
+     "variability": "varying"
+    },
+    "pin:main:offset": {
+     "defined": true,
+     "fallback": 0.5,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.5,
+     "variability": "varying"
+    },
+    "shading": {
+     "defined": true,
+     "fallback": "flat",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "flat",
+     "variability": "uniform"
+    },
+    "sides": {
+     "defined": true,
+     "fallback": 3,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 3,
+     "variability": "varying"
+    },
+    "slot:main": {
+     "defined": true,
+     "fallback": "empty",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "empty",
+     "variability": "uniform"
+    },
+    "slot:main:index": {
+     "defined": true,
+     "fallback": 0,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 0,
+     "variability": "varying"
+    },
+    "slot:main:targets": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "style:rank": {
+     "defined": true,
+     "fallback": 1,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 1,
+     "variability": "varying"
+    },
+    "style:weight": {
+     "defined": true,
+     "fallback": "regular",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "regular",
+     "variability": "varying"
+    },
+    "width": {
+     "defined": true,
+     "fallback": 1.0,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 1.0,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "auto:enabled",
+    "auto:first",
+    "auto:pinned",
+    "color:source",
+    "color:value",
+    "label:note",
+    "label:size",
+    "label:text",
+    "main:extra:pinned",
+    "main:pinned",
+    "pin:auto:offset",
+    "pin:main:extra:offset",
+    "pin:main:offset",
+    "shading",
+    "sides",
+    "slot:main",
+    "slot:main:index",
+    "slot:main:targets",
+    "style:rank",
+    "style:weight",
+    "width"
+   ],
+   "schema_type": "Tile",
+   "type_name": "Tile"
+  },
+  {
+   "applied_schemas": [
+    "StyleAPI",
+    "ColorAPI",
+    "LabelAPI",
+    "PinAPI:auto",
+    "SlotAPI:main",
+    "PinAPI:main",
+    "PinAPI:main:extra",
+    "AutoSecondAPI",
+    "AutoFirstAPI",
+    "OverrideAPI",
+    "SlotAPI:left:upper",
+    "PinAPI:left:upper",
+    "PinAPI:left:upper:extra",
+    "SlotAPI:right",
+    "PinAPI:right",
+    "PinAPI:right:extra"
+   ],
+   "has_api": {
+    "AutoFirstAPI": true,
+    "AutoSecondAPI": true,
+    "ColorAPI": true,
+    "CycleOneAPI": false,
+    "CycleTwoAPI": false,
+    "LabelAPI": true,
+    "OverrideAPI": true,
+    "PinAPI": true,
+    "SlotAPI": true,
+    "StyleAPI": true
+   },
+   "has_api_instance": [
+    [
+     "SlotAPI",
+     "absent",
+     false
+    ],
+    [
+     "SlotAPI",
+     "auto",
+     false
+    ],
+    [
+     "SlotAPI",
+     "left:upper",
+     true
+    ],
+    [
+     "SlotAPI",
+     "left:upper:extra",
+     false
+    ],
+    [
+     "SlotAPI",
+     "main",
+     true
+    ],
+    [
+     "SlotAPI",
+     "main:extra",
+     false
+    ],
+    [
+     "SlotAPI",
+     "right",
+     true
+    ],
+    [
+     "SlotAPI",
+     "right:extra",
+     false
+    ],
+    [
+     "PinAPI",
+     "absent",
+     false
+    ],
+    [
+     "PinAPI",
+     "auto",
+     true
+    ],
+    [
+     "PinAPI",
+     "left:upper",
+     true
+    ],
+    [
+     "PinAPI",
+     "left:upper:extra",
+     true
+    ],
+    [
+     "PinAPI",
+     "main",
+     true
+    ],
+    [
+     "PinAPI",
+     "main:extra",
+     true
+    ],
+    [
+     "PinAPI",
+     "right",
+     true
+    ],
+    [
+     "PinAPI",
+     "right:extra",
+     true
+    ]
+   ],
+   "is_a": {
+    "Panel": true,
+    "Shape": true,
+    "Tile": true
+   },
+   "path": "/Panel",
+   "properties": {
+    "auto:enabled": {
+     "defined": true,
+     "fallback": false,
+     "kind": "attribute",
+     "type_name": "bool",
+     "value": false,
+     "variability": "varying"
+    },
+    "auto:first": {
+     "defined": true,
+     "fallback": 1,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 1,
+     "variability": "varying"
+    },
+    "auto:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "color:source": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "color:value": {
+     "defined": true,
+     "fallback": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "kind": "attribute",
+     "type_name": "color3f",
+     "value": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "variability": "varying"
+    },
+    "depth": {
+     "defined": true,
+     "fallback": 0.5,
+     "kind": "attribute",
+     "type_name": "double",
+     "value": null,
+     "variability": "varying"
+    },
+    "label:note": {
+     "defined": true,
+     "fallback": "from color",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "from color",
+     "variability": "varying"
+    },
+    "label:size": {
+     "defined": true,
+     "fallback": 12,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 12,
+     "variability": "varying"
+    },
+    "label:text": {
+     "defined": true,
+     "fallback": "tile",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "tile",
+     "variability": "varying"
+    },
+    "left:upper:extra:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "left:upper:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "main:extra:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "main:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "override:mode": {
+     "defined": true,
+     "fallback": "strict",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "strict",
+     "variability": "varying"
+    },
+    "pin:auto:offset": {
+     "defined": true,
+     "fallback": 0.25,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.25,
+     "variability": "varying"
+    },
+    "pin:left:upper:extra:offset": {
+     "defined": true,
+     "fallback": 0.25,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.25,
+     "variability": "varying"
+    },
+    "pin:left:upper:offset": {
+     "defined": true,
+     "fallback": 0.5,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.5,
+     "variability": "varying"
+    },
+    "pin:main:extra:offset": {
+     "defined": true,
+     "fallback": 0.25,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.25,
+     "variability": "varying"
+    },
+    "pin:main:offset": {
+     "defined": true,
+     "fallback": 0.5,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.5,
+     "variability": "varying"
+    },
+    "pin:right:extra:offset": {
+     "defined": true,
+     "fallback": 0.25,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.25,
+     "variability": "varying"
+    },
+    "pin:right:offset": {
+     "defined": true,
+     "fallback": 0.5,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.5,
+     "variability": "varying"
+    },
+    "right:extra:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "right:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "shading": {
+     "defined": true,
+     "fallback": "flat",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "flat",
+     "variability": "uniform"
+    },
+    "sides": {
+     "defined": true,
+     "fallback": 3,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 3,
+     "variability": "varying"
+    },
+    "slot:left:upper": {
+     "defined": true,
+     "fallback": "empty",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "empty",
+     "variability": "uniform"
+    },
+    "slot:left:upper:index": {
+     "defined": true,
+     "fallback": 0,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 0,
+     "variability": "varying"
+    },
+    "slot:left:upper:targets": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "slot:main": {
+     "defined": true,
+     "fallback": "empty",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "empty",
+     "variability": "uniform"
+    },
+    "slot:main:index": {
+     "defined": true,
+     "fallback": 0,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 0,
+     "variability": "varying"
+    },
+    "slot:main:targets": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "slot:right": {
+     "defined": true,
+     "fallback": "empty",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "empty",
+     "variability": "uniform"
+    },
+    "slot:right:index": {
+     "defined": true,
+     "fallback": 0,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 7,
+     "variability": "varying"
+    },
+    "slot:right:targets": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "style:rank": {
+     "defined": true,
+     "fallback": 1,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 1,
+     "variability": "varying"
+    },
+    "style:weight": {
+     "defined": true,
+     "fallback": "regular",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "regular",
+     "variability": "varying"
+    },
+    "width": {
+     "defined": true,
+     "fallback": 1.0,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 5.0,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "auto:enabled",
+    "auto:first",
+    "auto:pinned",
+    "color:source",
+    "color:value",
+    "depth",
+    "label:note",
+    "label:size",
+    "label:text",
+    "left:upper:extra:pinned",
+    "left:upper:pinned",
+    "main:extra:pinned",
+    "main:pinned",
+    "override:mode",
+    "pin:auto:offset",
+    "pin:left:upper:extra:offset",
+    "pin:left:upper:offset",
+    "pin:main:extra:offset",
+    "pin:main:offset",
+    "pin:right:extra:offset",
+    "pin:right:offset",
+    "right:extra:pinned",
+    "right:pinned",
+    "shading",
+    "sides",
+    "slot:left:upper",
+    "slot:left:upper:index",
+    "slot:left:upper:targets",
+    "slot:main",
+    "slot:main:index",
+    "slot:main:targets",
+    "slot:right",
+    "slot:right:index",
+    "slot:right:targets",
+    "style:rank",
+    "style:weight",
+    "width"
+   ],
+   "schema_type": "Panel",
+   "type_name": "Panel"
+  },
+  {
+   "applied_schemas": [
+    "StyleAPI",
+    "ColorAPI",
+    "LabelAPI",
+    "PinAPI:auto",
+    "SlotAPI:main",
+    "PinAPI:main",
+    "PinAPI:main:extra",
+    "AutoSecondAPI",
+    "AutoFirstAPI",
+    "SlotAPI:left:upper",
+    "PinAPI:left:upper",
+    "PinAPI:left:upper:extra",
+    "SlotAPI:right",
+    "PinAPI:right",
+    "PinAPI:right:extra",
+    "PinAPI:tail"
+   ],
+   "has_api": {
+    "AutoFirstAPI": true,
+    "AutoSecondAPI": true,
+    "ColorAPI": true,
+    "CycleOneAPI": false,
+    "CycleTwoAPI": false,
+    "LabelAPI": true,
+    "OverrideAPI": false,
+    "PinAPI": true,
+    "SlotAPI": true,
+    "StyleAPI": true
+   },
+   "has_api_instance": [
+    [
+     "SlotAPI",
+     "absent",
+     false
+    ],
+    [
+     "SlotAPI",
+     "auto",
+     false
+    ],
+    [
+     "SlotAPI",
+     "left:upper",
+     true
+    ],
+    [
+     "SlotAPI",
+     "left:upper:extra",
+     false
+    ],
+    [
+     "SlotAPI",
+     "main",
+     true
+    ],
+    [
+     "SlotAPI",
+     "main:extra",
+     false
+    ],
+    [
+     "SlotAPI",
+     "right",
+     true
+    ],
+    [
+     "SlotAPI",
+     "right:extra",
+     false
+    ],
+    [
+     "SlotAPI",
+     "tail",
+     false
+    ],
+    [
+     "PinAPI",
+     "absent",
+     false
+    ],
+    [
+     "PinAPI",
+     "auto",
+     true
+    ],
+    [
+     "PinAPI",
+     "left:upper",
+     true
+    ],
+    [
+     "PinAPI",
+     "left:upper:extra",
+     true
+    ],
+    [
+     "PinAPI",
+     "main",
+     true
+    ],
+    [
+     "PinAPI",
+     "main:extra",
+     true
+    ],
+    [
+     "PinAPI",
+     "right",
+     true
+    ],
+    [
+     "PinAPI",
+     "right:extra",
+     true
+    ],
+    [
+     "PinAPI",
+     "tail",
+     true
+    ]
+   ],
+   "is_a": {
+    "Panel": true,
+    "Shape": true,
+    "Tile": true
+   },
+   "path": "/Composed",
+   "properties": {
+    "auto:enabled": {
+     "defined": true,
+     "fallback": false,
+     "kind": "attribute",
+     "type_name": "bool",
+     "value": false,
+     "variability": "varying"
+    },
+    "auto:first": {
+     "defined": true,
+     "fallback": 1,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 1,
+     "variability": "varying"
+    },
+    "auto:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "color:source": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "color:value": {
+     "defined": true,
+     "fallback": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "kind": "attribute",
+     "type_name": "color3f",
+     "value": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "variability": "varying"
+    },
+    "depth": {
+     "defined": true,
+     "fallback": 0.5,
+     "kind": "attribute",
+     "type_name": "double",
+     "value": null,
+     "variability": "varying"
+    },
+    "label:note": {
+     "defined": true,
+     "fallback": "from color",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "from color",
+     "variability": "varying"
+    },
+    "label:size": {
+     "defined": true,
+     "fallback": 12,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 12,
+     "variability": "varying"
+    },
+    "label:text": {
+     "defined": true,
+     "fallback": "tile",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "tile",
+     "variability": "varying"
+    },
+    "left:upper:extra:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "left:upper:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "main:extra:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "main:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "pin:auto:offset": {
+     "defined": true,
+     "fallback": 0.25,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.25,
+     "variability": "varying"
+    },
+    "pin:left:upper:extra:offset": {
+     "defined": true,
+     "fallback": 0.25,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.25,
+     "variability": "varying"
+    },
+    "pin:left:upper:offset": {
+     "defined": true,
+     "fallback": 0.5,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.5,
+     "variability": "varying"
+    },
+    "pin:main:extra:offset": {
+     "defined": true,
+     "fallback": 0.25,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.25,
+     "variability": "varying"
+    },
+    "pin:main:offset": {
+     "defined": true,
+     "fallback": 0.5,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.5,
+     "variability": "varying"
+    },
+    "pin:right:extra:offset": {
+     "defined": true,
+     "fallback": 0.25,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.25,
+     "variability": "varying"
+    },
+    "pin:right:offset": {
+     "defined": true,
+     "fallback": 0.5,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.5,
+     "variability": "varying"
+    },
+    "pin:tail:offset": {
+     "defined": true,
+     "fallback": 0.25,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.25,
+     "variability": "varying"
+    },
+    "right:extra:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "right:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "shading": {
+     "defined": true,
+     "fallback": "flat",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "flat",
+     "variability": "uniform"
+    },
+    "sides": {
+     "defined": true,
+     "fallback": 3,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 3,
+     "variability": "varying"
+    },
+    "slot:left:upper": {
+     "defined": true,
+     "fallback": "empty",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "empty",
+     "variability": "uniform"
+    },
+    "slot:left:upper:index": {
+     "defined": true,
+     "fallback": 0,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 0,
+     "variability": "varying"
+    },
+    "slot:left:upper:targets": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "slot:main": {
+     "defined": true,
+     "fallback": "empty",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "empty",
+     "variability": "uniform"
+    },
+    "slot:main:index": {
+     "defined": true,
+     "fallback": 0,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 0,
+     "variability": "varying"
+    },
+    "slot:main:targets": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "slot:right": {
+     "defined": true,
+     "fallback": "empty",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "empty",
+     "variability": "uniform"
+    },
+    "slot:right:index": {
+     "defined": true,
+     "fallback": 0,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 7,
+     "variability": "varying"
+    },
+    "slot:right:targets": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "style:rank": {
+     "defined": true,
+     "fallback": 1,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 1,
+     "variability": "varying"
+    },
+    "style:weight": {
+     "defined": true,
+     "fallback": "regular",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "regular",
+     "variability": "varying"
+    },
+    "tail:pinned": {
+     "defined": true,
+     "fallback": "no",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "no",
+     "variability": "varying"
+    },
+    "width": {
+     "defined": true,
+     "fallback": 1.0,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 5.0,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "auto:enabled",
+    "auto:first",
+    "auto:pinned",
+    "color:source",
+    "color:value",
+    "depth",
+    "label:note",
+    "label:size",
+    "label:text",
+    "left:upper:extra:pinned",
+    "left:upper:pinned",
+    "main:extra:pinned",
+    "main:pinned",
+    "pin:auto:offset",
+    "pin:left:upper:extra:offset",
+    "pin:left:upper:offset",
+    "pin:main:extra:offset",
+    "pin:main:offset",
+    "pin:right:extra:offset",
+    "pin:right:offset",
+    "pin:tail:offset",
+    "right:extra:pinned",
+    "right:pinned",
+    "shading",
+    "sides",
+    "slot:left:upper",
+    "slot:left:upper:index",
+    "slot:left:upper:targets",
+    "slot:main",
+    "slot:main:index",
+    "slot:main:targets",
+    "slot:right",
+    "slot:right:index",
+    "slot:right:targets",
+    "style:rank",
+    "style:weight",
+    "tail:pinned",
+    "width"
+   ],
+   "schema_type": "Panel",
+   "type_name": "Panel"
+  },
+  {
+   "applied_schemas": [
+    "CycleOneAPI",
+    "CycleTwoAPI"
+   ],
+   "has_api": {
+    "AutoFirstAPI": false,
+    "AutoSecondAPI": false,
+    "ColorAPI": false,
+    "CycleOneAPI": true,
+    "CycleTwoAPI": true,
+    "LabelAPI": false,
+    "OverrideAPI": false,
+    "PinAPI": false,
+    "SlotAPI": false,
+    "StyleAPI": false
+   },
+   "has_api_instance": [
+    [
+     "SlotAPI",
+     "absent",
+     false
+    ],
+    [
+     "PinAPI",
+     "absent",
+     false
+    ]
+   ],
+   "is_a": {
+    "Panel": false,
+    "Shape": false,
+    "Tile": false
+   },
+   "path": "/CycleFromOne",
+   "properties": {
+    "cycle:one": {
+     "defined": true,
+     "fallback": 1,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 1,
+     "variability": "varying"
+    },
+    "cycle:two": {
+     "defined": true,
+     "fallback": 2,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 2,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "cycle:one",
+    "cycle:two"
+   ],
+   "schema_type": "",
+   "type_name": ""
+  },
+  {
+   "applied_schemas": [
+    "CycleTwoAPI",
+    "CycleOneAPI"
+   ],
+   "has_api": {
+    "AutoFirstAPI": false,
+    "AutoSecondAPI": false,
+    "ColorAPI": false,
+    "CycleOneAPI": true,
+    "CycleTwoAPI": true,
+    "LabelAPI": false,
+    "OverrideAPI": false,
+    "PinAPI": false,
+    "SlotAPI": false,
+    "StyleAPI": false
+   },
+   "has_api_instance": [
+    [
+     "SlotAPI",
+     "absent",
+     false
+    ],
+    [
+     "PinAPI",
+     "absent",
+     false
+    ]
+   ],
+   "is_a": {
+    "Panel": false,
+    "Shape": false,
+    "Tile": false
+   },
+   "path": "/CycleFromTwo",
+   "properties": {
+    "cycle:one": {
+     "defined": true,
+     "fallback": 22,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 22,
+     "variability": "varying"
+    },
+    "cycle:two": {
+     "defined": true,
+     "fallback": 2,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 2,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "cycle:one",
+    "cycle:two"
+   ],
+   "schema_type": "",
+   "type_name": ""
+  }
+ ],
+ "set": "coverage"
+}

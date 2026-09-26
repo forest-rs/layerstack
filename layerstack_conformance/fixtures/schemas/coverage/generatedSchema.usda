@@ -1,0 +1,122 @@
+#usda 1.0
+(
+    "Test schemas for layerstack's prim definition oracle; written as usdGenSchema writes generatedSchema.usda."
+)
+
+class "Shape"
+{
+    uniform token shading = "flat"
+    int sides = 3
+}
+
+class Tile "Tile" (
+    apiSchemas = ["LabelAPI", "SlotAPI:main"]
+    customData = {
+        token[] apiSchemaOverridePropertyNames = ["label:text", "style:weight"]
+    }
+)
+{
+    uniform string label:text = "tile"
+    uniform token shading = "flat"
+    int sides = 3
+    double style:weight = 2
+    float width = 1
+}
+
+class Panel "Panel" (
+    apiSchemas = ["StyleAPI", "LabelAPI", "SlotAPI:main"]
+    customData = {
+        token[] apiSchemaOverridePropertyNames = ["label:text", "style:weight"]
+    }
+)
+{
+    double depth = 0.5
+    uniform string label:text = "tile"
+    uniform token shading = "flat"
+    int sides = 3
+    double style:weight = 2
+    float width = 1
+}
+
+class "LabelAPI" (
+    apiSchemas = ["StyleAPI"]
+)
+{
+    string label:note
+    int label:size = 12
+    string label:text = "untitled"
+}
+
+class "StyleAPI" (
+    apiSchemas = ["ColorAPI"]
+)
+{
+    int style:rank = 1
+    token style:weight = "regular"
+}
+
+class "ColorAPI"
+{
+    rel color:source
+    color3f color:value = (1, 1, 1)
+    string label:note = "from color"
+    string label:text = "colored"
+    float style:rank = 2
+}
+
+class "OverrideAPI" (
+    apiSchemas = ["LabelAPI"]
+    customData = {
+        token[] apiSchemaOverridePropertyNames = ["ghost", "label:size"]
+    }
+)
+{
+    int ghost = 5
+    uniform int label:size = 20
+    token override:mode = "strict"
+}
+
+class "AutoFirstAPI"
+{
+    bool auto:enabled = 1
+    int auto:first = 1
+}
+
+class "AutoSecondAPI"
+{
+    bool auto:enabled = 0
+}
+
+class "SlotAPI" (
+    apiSchemas = ["PinAPI:__INSTANCE_NAME__", "PinAPI:__INSTANCE_NAME__:extra"]
+    customData = {
+        token[] apiSchemaOverridePropertyNames = ["pin:__INSTANCE_NAME__:offset"]
+    }
+)
+{
+    float pin:__INSTANCE_NAME__:offset = 0.5
+    uniform token slot:__INSTANCE_NAME__ = "empty"
+    int slot:__INSTANCE_NAME__:index = 0
+    rel slot:__INSTANCE_NAME__:targets
+}
+
+class "PinAPI"
+{
+    string __INSTANCE_NAME__:pinned = "no"
+    float pin:__INSTANCE_NAME__:offset = 0.25
+}
+
+class "CycleOneAPI" (
+    apiSchemas = ["CycleTwoAPI"]
+)
+{
+    int cycle:one = 1
+}
+
+class "CycleTwoAPI" (
+    apiSchemas = ["CycleOneAPI"]
+)
+{
+    int cycle:one = 22
+    int cycle:two = 2
+}

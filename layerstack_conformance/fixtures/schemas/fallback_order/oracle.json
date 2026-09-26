@@ -1,0 +1,125 @@
+{
+ "openusd_version": "0.26.8",
+ "prims": [
+  {
+   "applied_schemas": [
+    "FooBar",
+    "BarBaz:myInstance",
+    "BazFoo:otherInstance",
+    "BarBaz:otherInstance"
+   ],
+   "has_api": {
+    "BarBaz": true,
+    "BazFoo": true,
+    "FooBar": true
+   },
+   "has_api_instance": [
+    [
+     "BarBaz",
+     "absent",
+     false
+    ],
+    [
+     "BarBaz",
+     "myInstance",
+     true
+    ],
+    [
+     "BarBaz",
+     "otherInstance",
+     true
+    ],
+    [
+     "BazFoo",
+     "absent",
+     false
+    ],
+    [
+     "BazFoo",
+     "myInstance",
+     false
+    ],
+    [
+     "BazFoo",
+     "otherInstance",
+     true
+    ]
+   ],
+   "is_a": {
+    "Bar": true,
+    "Foo": true
+   },
+   "path": "/myFoo",
+   "properties": {
+    "barprop": {
+     "defined": true,
+     "fallback": 1.0,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 1.0,
+     "variability": "varying"
+    },
+    "bazfooprop:otherInstance": {
+     "defined": true,
+     "fallback": 1,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 1,
+     "variability": "varying"
+    },
+    "foobarprop": {
+     "defined": true,
+     "fallback": 0.5,
+     "kind": "attribute",
+     "type_name": "half",
+     "value": 0.5,
+     "variability": "varying"
+    },
+    "fooprop": {
+     "defined": true,
+     "fallback": 0,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 0,
+     "variability": "varying"
+    },
+    "myFoo:prop": {
+     "defined": false,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "double",
+     "value": 5.0,
+     "variability": "varying"
+    },
+    "myInstance:barbazprop": {
+     "defined": true,
+     "fallback": "",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "",
+     "variability": "varying"
+    },
+    "otherInstance:barbazprop": {
+     "defined": true,
+     "fallback": "",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "",
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "barprop",
+    "bazfooprop:otherInstance",
+    "foobarprop",
+    "fooprop",
+    "myFoo:prop",
+    "myInstance:barbazprop",
+    "otherInstance:barbazprop"
+   ],
+   "schema_type": "Bar",
+   "type_name": "Bar"
+  }
+ ],
+ "set": "fallback_order"
+}

@@ -2586,6 +2586,9 @@ fn enclosing_variant_selections(
         let selections = cache
             .entry(host)
             .or_insert_with(|| match dest {
+                // A host without variant sets in the arc's layer stack has
+                // no branch to select, whatever the stronger sites select.
+                Some(_) if !declares_variant_sets(store, remote_stack, host) => HashMap::new(),
                 Some(dest_host) => {
                     // Every authored selection first, then the fallbacks.
                     let sources = out
@@ -2625,6 +2628,17 @@ fn enclosing_variant_selections(
         remote = parent_of(host);
     }
     enclosing
+}
+
+/// Whether a spec for `path` in `stack`, in or outside a variant branch,
+/// authors a variant set.
+fn declares_variant_sets(store: &dyn LayerStore, stack: &LayerStack, path: PathId) -> bool {
+    stack
+        .layers
+        .iter()
+        .filter_map(|id| store.layer(*id))
+        .flat_map(|layer| layer.prim_specs(path))
+        .any(|spec| !spec.variant_sets.is_empty())
 }
 
 /// The arcs authored for one prim of an arc's target namespace, admitted for
@@ -5949,12 +5963,6 @@ fn relocate_opinion_target_paths(
     src_root: PathId,
     value: &mut OpinionValue,
 ) {
-    if walk.is_empty() {
-        let dest_root = store.paths().resolve(dest_root).clone();
-        let src_root = store.paths().resolve(src_root).clone();
-        remap_opinion_target_paths(store, &dest_root, &src_root, value);
-        return;
-    }
     let list = match value {
         OpinionValue::Field(FieldValue::PathListOp(list)) => list,
         OpinionValue::Property(spec) => match spec.targets.as_mut() {
@@ -5963,6 +5971,12 @@ fn relocate_opinion_target_paths(
         },
         OpinionValue::Field(_) => return,
     };
+    if walk.is_empty() {
+        let dest_root = store.paths().resolve(dest_root).clone();
+        let src_root = store.paths().resolve(src_root).clone();
+        remap_opinion_target_paths(store, &dest_root, &src_root, value);
+        return;
+    }
     let map_path = |store: &mut dyn LayerStore, path: PathId| {
         let rel = {
             let paths = store.paths();
@@ -6423,15 +6437,20 @@ fn add_reference_edge_opinions(
                         ));
                 }
 
-                let selections = arc_target_variant_selections(
-                    store,
-                    fallbacks,
-                    stage_stack,
-                    &out[dest_path_id],
-                    *dest_path_id,
-                    &remote_stack,
-                    *remote_path_id,
-                );
+                // Selections only pick among the spec's own variant sets.
+                let selections = if remote_spec.variant_sets.is_empty() {
+                    HashMap::new()
+                } else {
+                    arc_target_variant_selections(
+                        store,
+                        fallbacks,
+                        stage_stack,
+                        &out[dest_path_id],
+                        *dest_path_id,
+                        &remote_stack,
+                        *remote_path_id,
+                    )
+                };
                 for (set, selected) in &selections {
                     if let Some(set_spec) = remote_spec.variant_sets.get(set)
                         && let Some(variant_spec) = set_spec.variants.get(selected)
@@ -7154,15 +7173,20 @@ fn add_payload_edge_opinions(
                         ));
                 }
 
-                let selections = arc_target_variant_selections(
-                    store,
-                    fallbacks,
-                    stage_stack,
-                    &out[dest_path_id],
-                    *dest_path_id,
-                    &remote_stack,
-                    *remote_path_id,
-                );
+                // Selections only pick among the spec's own variant sets.
+                let selections = if remote_spec.variant_sets.is_empty() {
+                    HashMap::new()
+                } else {
+                    arc_target_variant_selections(
+                        store,
+                        fallbacks,
+                        stage_stack,
+                        &out[dest_path_id],
+                        *dest_path_id,
+                        &remote_stack,
+                        *remote_path_id,
+                    )
+                };
                 for (set, selected) in &selections {
                     if let Some(set_spec) = remote_spec.variant_sets.get(set)
                         && let Some(variant_spec) = set_spec.variants.get(selected)

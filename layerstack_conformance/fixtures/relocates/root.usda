@@ -244,9 +244,17 @@ def "Crate" (
 # `kite.usda` relocates `/Kite/Tail`, which its reference to `frame.usda`
 # brings, to `/Kite/Streamer`. This layer relocates both: `/Ribbon`
 # composes the relocated tail, and `/Knot` relocates a prohibited child,
-# so it composes nothing and is reported.
+# so it composes nothing and is reported. `kite.usda`'s opinion at its
+# source is reported on each prim whose arcs reach the relocated tail:
+# `/Ribbon`, and `/Bowline`, which references a child of it.
 def "Flyer" (
     references = @./kite.usda@</Kite>
+)
+{
+}
+
+def "Bowline" (
+    references = </Ribbon/Bow>
 )
 {
 }

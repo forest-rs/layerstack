@@ -13,4 +13,9 @@ def "Kite" (
     {
         int width = 2
     }
+
+    over "Tail"
+    {
+        int length = 9
+    }
 }

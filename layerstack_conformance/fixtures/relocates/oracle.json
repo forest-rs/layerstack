@@ -718,6 +718,19 @@
    ]
   },
   {
+   "path": "/Bowline",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Bowline"
+    ],
+    [
+     "frame.usda",
+     "/Frame/Tail/Bow"
+    ]
+   ]
+  },
+  {
    "path": "/Chain",
    "prim_stack": [
     [
@@ -874,6 +887,7 @@
   "/Crate/Gear.size": 1,
   "/Crate/Gear.teeth": 0,
   "/Crate/Parts/Spring.coils": 2,
+  "/Bowline.loops": 1,
   "/Chain/Tail_2.length": 1,
   "/Chain/Tail_2/Bow.loops": 1,
   "/Chain_1/Tail_2.length": 1,
@@ -910,7 +924,19 @@
   },
   {
    "kind": "OpinionAtRelocationSource",
+   "prim": "/Bowline"
+  },
+  {
+   "kind": "OpinionAtRelocationSource",
+   "prim": "/Ribbon"
+  },
+  {
+   "kind": "OpinionAtRelocationSource",
    "prim": "/Robot/Anim/Wrist"
+  },
+  {
+   "kind": "OpinionAtRelocationSource",
+   "prim": "/SpareWrist"
   }
  ]
 }

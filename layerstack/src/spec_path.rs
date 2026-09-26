@@ -278,6 +278,28 @@ impl SpecPath {
         }
     }
 
+    /// Returns this prim spec path with the prim names `names` appended:
+    /// `/Rock{shape=jagged}` joined with `[Child]` is
+    /// `/Rock{shape=jagged}Child`. The property suffix is kept.
+    #[must_use]
+    pub(crate) fn join_prims(&self, names: &[TokenId], paths: &mut PathInterner) -> Self {
+        if names.is_empty() {
+            return self.clone();
+        }
+        let prim_path = paths.intern(paths.resolve(self.prim_path).join(names));
+        let components = self
+            .components
+            .iter()
+            .copied()
+            .chain(names.iter().copied().map(SpecComponent::Prim))
+            .collect();
+        Self {
+            prim_path,
+            components,
+            property: self.property,
+        }
+    }
+
     /// Returns a copy of this path with a property suffix attached.
     #[must_use]
     pub fn with_property(&self, property: TokenId) -> Self {

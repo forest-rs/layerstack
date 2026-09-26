@@ -15,6 +15,9 @@
 //!   specializes (LIVERPS)
 //! - **Incremental recomposition** — via [`LiveStage`] and the `invalidation`
 //!   dependency graph
+//! - **Authoring** — via [`edit`]: edit targets through any node of a
+//!   prim's composition, and atomic transactions of spec edits that
+//!   return their inverses and check preconditions
 //! - **Schema fallbacks** — via [`SchemaRegistry`]
 //! - **Value explanations** — [`Stage::explain_property_value`] and its
 //!   siblings say why a value is what it is: every consulted opinion with its
@@ -77,6 +80,7 @@ pub(crate) mod compose;
 pub mod composition_error;
 pub mod dependency_map;
 pub mod doc;
+pub mod edit;
 pub mod half;
 pub mod interner;
 pub mod layer_stack;
@@ -111,6 +115,7 @@ pub use doc::{
     VariantSetSpec, VariantSpec, combine_dictionaries, combine_dictionary_chain, get_field,
     get_field_mut, insert_field_if_absent, remove_field, set_field_vec,
 };
+pub use edit::{Address, Applied, EditError, EditTarget, Transaction};
 pub use interner::{TokenId, TokenInterner};
 pub use layer_stack::LayerStack;
 pub use listop::ListOp;

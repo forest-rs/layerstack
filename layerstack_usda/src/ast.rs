@@ -392,6 +392,8 @@ pub struct ListOpArc<'a> {
 /// A composition arc reference (used by references and payloads).
 #[derive(Debug)]
 pub struct ArcRef<'a> {
+    /// Source span of the arc entry.
+    pub span: Span,
     /// Optional asset path.
     pub asset: Option<&'a str>,
     /// Target prim path.

@@ -45,6 +45,7 @@ pub fn load_entry_usdc(entry: &Path) -> LoadedStage {
         store,
         root_layer,
         layer_names: resolver.layer_names,
+        invalid: Vec::new(),
     }
 }
 

@@ -1,0 +1,88 @@
+#usda 1.0
+(
+    subLayers = [@./selection_weak.usda@]
+)
+
+# Branches rank by variant node, then by layer: `a=x`, authored in the
+# weaker sublayer, is the stronger node, so its `c=red` wins over the
+# `c=blue` the root layer's `b=x` authors, and only the `red` branch's
+# reference composes.
+def "Mast" (
+    variantSets = ["a", "b", "c"]
+    variants = {
+        string a = "x"
+        string b = "x"
+    }
+)
+{
+    variantSet "b" = {
+        "x" (
+            variants = {
+                string c = "blue"
+            }
+        ) {
+        }
+    }
+    variantSet "c" = {
+        "red" (
+            references = @./selection_ref.usda@</Red>
+        ) {
+            int value = 1
+        }
+        "blue" (
+            references = @./selection_ref.usda@</Blue>
+        ) {
+            int value = 2
+        }
+    }
+}
+
+# The same with the branches authored in the other layers: `a=x`, now in
+# the root layer, still wins.
+def "Boom" (
+    variantSets = ["a", "b", "c"]
+    variants = {
+        string a = "x"
+        string b = "x"
+    }
+)
+{
+    variantSet "a" = {
+        "x" (
+            variants = {
+                string c = "red"
+            }
+        ) {
+        }
+    }
+    variantSet "c" = {
+        "red" (
+            references = @./selection_ref.usda@</Red>
+        ) {
+            int value = 1
+        }
+        "blue" (
+            references = @./selection_ref.usda@</Blue>
+        ) {
+            int value = 2
+        }
+    }
+}
+
+# Both selected branches add a reference: `a=x`'s, in the weaker
+# sublayer, is the stronger variant node, so its `tone` wins.
+def "Hull" (
+    variantSets = ["a", "b"]
+    variants = {
+        string a = "x"
+        string b = "x"
+    }
+)
+{
+    variantSet "b" = {
+        "x" (
+            references = @./selection_ref.usda@</BlueTone>
+        ) {
+        }
+    }
+}

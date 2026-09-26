@@ -40,13 +40,18 @@
 //!   `shape=cube`, selected by a weaker reference, selects `size` over that
 //!   reference, and `/Boom` declares the sets the other way around;
 //!   `/Hull` and `/Keel` take a set declared in that branch from the
-//!   reference or the branch, `/Spar` chains three sets, and `/Deck`
-//!   references `/Mast`.
+//!   reference or the branch, `/Spar` chains three sets, `/Deck` references
+//!   `/Mast`, and `/Pier`'s selected branch, selected through its payload,
+//!   adds a reference, also through `/Quay`'s reference to it.
 //!   `selection_fallbacks.usda` adds fallbacks: `/Mast`'s fallback branch
 //!   selects `size` after the referenced selection has, and `/Boom`'s
 //!   referenced selection selects a branch whose selection outranks the
 //!   fallback. [`LiveStage`] recomposes edits of `/Mast`'s selections as a
-//!   full composition does.
+//!   full composition does. `selection_layers.usda` authors branches
+//!   across a sublayer: they rank by variant node before layer, so
+//!   `/Mast`'s and `/Boom`'s `a=x` selects `c=red` and its reference's
+//!   child over the `c=blue` of `b=x`, whichever layer authors each, and
+//!   `/Hull`'s `a=x` reference is stronger than `b=x`'s.
 //! - Each `invalid_*.usda` layer authors an arc, relocates or target path
 //!   with a variant selection, which the text parser rejects;
 //!   `variant_connection.usda` authors the relative connection inside a

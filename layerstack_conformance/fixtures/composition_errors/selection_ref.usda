@@ -43,3 +43,37 @@ def "Shaped" (
 )
 {
 }
+
+def "Red"
+{
+    def "RedChild"
+    {
+    }
+}
+
+def "Blue"
+{
+    def "BlueChild"
+    {
+    }
+}
+
+def "RedTone"
+{
+    int tone = 1
+}
+
+def "BlueTone"
+{
+    int tone = 2
+}
+
+def "Small"
+{
+    int scale = 1
+}
+
+def "Large"
+{
+    int scale = 2
+}

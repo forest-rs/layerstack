@@ -1,0 +1,21 @@
+#usda 1.0
+(
+    "Test schemas for layerstack's prim definition oracle; written as usdGenSchema writes generatedSchema.usda."
+)
+
+class "FooBar"
+{
+    half foobarprop = 0.5
+}
+
+class "BarBaz"
+{
+    string __INSTANCE_NAME__:barbazprop = ""
+}
+
+class "BazFoo" (
+    apiSchemas = ["BarBaz:__INSTANCE_NAME__"]
+)
+{
+    int bazfooprop:__INSTANCE_NAME__ = 1
+}

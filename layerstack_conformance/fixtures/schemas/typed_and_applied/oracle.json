@@ -1,0 +1,277 @@
+{
+ "openusd_version": "0.26.8",
+ "prims": [
+  {
+   "applied_schemas": [],
+   "has_api": {
+    "BarBaz": false,
+    "FooBar": false
+   },
+   "has_api_instance": [
+    [
+     "BarBaz",
+     "absent",
+     false
+    ]
+   ],
+   "is_a": {
+    "Bar": true,
+    "Baz": false,
+    "Foo": true
+   },
+   "path": "/bar1",
+   "properties": {
+    "bar1prop": {
+     "defined": false,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "",
+     "variability": "varying"
+    },
+    "barprop": {
+     "defined": true,
+     "fallback": 1.0,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 1.0,
+     "variability": "varying"
+    },
+    "fooprop": {
+     "defined": true,
+     "fallback": 0,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 0,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "bar1prop",
+    "barprop",
+    "fooprop"
+   ],
+   "schema_type": "Bar",
+   "type_name": "Bar"
+  },
+  {
+   "applied_schemas": [],
+   "has_api": {
+    "BarBaz": false,
+    "FooBar": false
+   },
+   "has_api_instance": [
+    [
+     "BarBaz",
+     "absent",
+     false
+    ]
+   ],
+   "is_a": {
+    "Bar": false,
+    "Baz": true,
+    "Foo": true
+   },
+   "path": "/baz1",
+   "properties": {
+    "baz1prop": {
+     "defined": false,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "float2",
+     "value": [
+      0.0,
+      0.0
+     ],
+     "variability": "varying"
+    },
+    "fooprop": {
+     "defined": true,
+     "fallback": 0,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 0,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "baz1prop",
+    "fooprop"
+   ],
+   "schema_type": "Baz",
+   "type_name": "Baz"
+  },
+  {
+   "applied_schemas": [
+    "FooBar"
+   ],
+   "has_api": {
+    "BarBaz": false,
+    "FooBar": true
+   },
+   "has_api_instance": [
+    [
+     "BarBaz",
+     "absent",
+     false
+    ]
+   ],
+   "is_a": {
+    "Bar": false,
+    "Baz": false,
+    "Foo": false
+   },
+   "path": "/foo",
+   "properties": {
+    "foobarprop": {
+     "defined": true,
+     "fallback": 0.5,
+     "kind": "attribute",
+     "type_name": "half",
+     "value": 0.5,
+     "variability": "varying"
+    },
+    "pt": {
+     "defined": false,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "double3",
+     "value": null,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "foobarprop",
+    "pt"
+   ],
+   "schema_type": "",
+   "type_name": ""
+  },
+  {
+   "applied_schemas": [
+    "FooBar",
+    "BarBaz:my_instance"
+   ],
+   "has_api": {
+    "BarBaz": true,
+    "FooBar": true
+   },
+   "has_api_instance": [
+    [
+     "BarBaz",
+     "absent",
+     false
+    ],
+    [
+     "BarBaz",
+     "my_instance",
+     true
+    ]
+   ],
+   "is_a": {
+    "Bar": false,
+    "Baz": false,
+    "Foo": false
+   },
+   "path": "/bar",
+   "properties": {
+    "anotherString": {
+     "defined": false,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "default",
+     "variability": "varying"
+    },
+    "foobarprop": {
+     "defined": true,
+     "fallback": 0.5,
+     "kind": "attribute",
+     "type_name": "half",
+     "value": 0.5,
+     "variability": "varying"
+    },
+    "my_instance:barbazprop": {
+     "defined": true,
+     "fallback": "",
+     "kind": "attribute",
+     "type_name": "string",
+     "value": "",
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "anotherString",
+    "foobarprop",
+    "my_instance:barbazprop"
+   ],
+   "schema_type": "",
+   "type_name": ""
+  },
+  {
+   "applied_schemas": [
+    "FooBar"
+   ],
+   "has_api": {
+    "BarBaz": false,
+    "FooBar": true
+   },
+   "has_api_instance": [
+    [
+     "BarBaz",
+     "absent",
+     false
+    ]
+   ],
+   "is_a": {
+    "Bar": true,
+    "Baz": false,
+    "Foo": true
+   },
+   "path": "/myFoo",
+   "properties": {
+    "barprop": {
+     "defined": true,
+     "fallback": 1.0,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 1.0,
+     "variability": "varying"
+    },
+    "foobarprop": {
+     "defined": true,
+     "fallback": 0.5,
+     "kind": "attribute",
+     "type_name": "half",
+     "value": 0.5,
+     "variability": "varying"
+    },
+    "fooprop": {
+     "defined": true,
+     "fallback": 0,
+     "kind": "attribute",
+     "type_name": "int",
+     "value": 0,
+     "variability": "varying"
+    },
+    "myFoo:prop": {
+     "defined": false,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "double",
+     "value": 5.0,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "barprop",
+    "foobarprop",
+    "fooprop",
+    "myFoo:prop"
+   ],
+   "schema_type": "Bar",
+   "type_name": "Bar"
+  }
+ ],
+ "set": "typed_and_applied"
+}

@@ -10,9 +10,9 @@ use std::sync::Arc;
 use layerstack::{
     ArcKind, ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, Contribution, DictionaryMerge,
     ExplainedOpinion, IgnoreCause, InMemoryStore, InterpolationType, Layer, LayerId, LayerOffset,
-    OpinionRole, PrimSpec, PropertySpec, PropertyType, Reference, ResolvedValue, SampleUse,
-    SchemaDefinition, SchemaRegistry, Stage, StageOptions, SublayerEntry, TokenId, Value,
-    ValueSource,
+    OpinionRole, PrimSpec, PropertyDefinition, PropertySpec, PropertyType, Reference,
+    ResolvedValue, SampleUse, SchemaDefinition, SchemaRegistry, Stage, StageOptions, SublayerEntry,
+    TokenId, Value, ValueSource,
 };
 
 const VALUE: OpinionRole = OpinionRole::Contributed(Contribution::Value);
@@ -58,6 +58,15 @@ fn write(value: i32, index: i64) -> Value {
 /// A root layer (1) over sublayers 2, 3, …, each authoring `/Tree` with the
 /// spec `specs` gives it, strongest first.
 fn layered(store: &mut InMemoryStore, specs: Vec<PrimSpec>) -> Stage {
+    layered_with_schemas(store, specs, Vec::new())
+}
+
+/// [`layered`], composed with the schemas `schemas`.
+fn layered_with_schemas(
+    store: &mut InMemoryStore,
+    specs: Vec<PrimSpec>,
+    schemas: Vec<SchemaDefinition>,
+) -> Stage {
     let tree = store.path("/Tree");
     let mut root = Layer::new(LayerId(1));
     root.sublayers = (0..specs.len())
@@ -70,7 +79,25 @@ fn layered(store: &mut InMemoryStore, specs: Vec<PrimSpec>) -> Stage {
         layer.insert_prim(tree, spec);
         store.insert_layer(layer);
     }
-    Stage::compose(store, LayerId(1), StageOptions::default())
+    let options = with_schemas(store, schemas);
+    Stage::compose(store, LayerId(1), options)
+}
+
+/// Stage options with a registry of `schemas`.
+fn with_schemas(store: &mut InMemoryStore, schemas: Vec<SchemaDefinition>) -> StageOptions {
+    let mut builder = SchemaRegistry::builder();
+    for schema in schemas {
+        builder.register(schema);
+    }
+    StageOptions {
+        schemas: Some(Arc::new(builder.build(&mut store.tokens))),
+        ..StageOptions::default()
+    }
+}
+
+/// A varying attribute definition named `name` with `fallback`.
+fn defined(name: TokenId, fallback: impl Into<Value>) -> PropertyDefinition {
+    PropertyDefinition::attribute(name).with_fallback(fallback)
 }
 
 #[test]
@@ -595,25 +622,24 @@ fn schema_fallback_is_explained() {
     let height = store.tokens.intern("height");
     let points = store.tokens.intern("points");
     let tree_type = store.tokens.intern("Tree");
-    let mut registry = SchemaRegistry::new();
-    registry.register(
-        SchemaDefinition::typed(tree_type)
-            .with_property(height, Value::Double(1.0))
-            .with_property(points, ints(&[1, 2, 3])),
-    );
-    let stage = layered(
+    let stage = layered_with_schemas(
         &mut store,
         vec![
             PrimSpec::def()
                 .with_type_name(tree_type)
                 .with_property(points, int_array(write(9, 0))),
         ],
+        vec![
+            SchemaDefinition::typed(tree_type)
+                .with_property(defined(height, 1.0))
+                .with_property(defined(points, ints(&[1, 2, 3]))),
+        ],
     );
     let tree = store.path("/Tree");
 
     // Nothing authored: the fallback alone.
     let explained = stage
-        .explain_value_with_schema(tree, height, &store, &registry, None)
+        .explain_value_with_schema(tree, height, &store)
         .expect("fallback");
     assert_eq!(
         explained.value,
@@ -624,7 +650,7 @@ fn schema_fallback_is_explained() {
 
     // An authored edit composes over the fallback seed.
     let explained = stage
-        .explain_value_with_schema(tree, points, &store, &registry, None)
+        .explain_value_with_schema(tree, points, &store)
         .expect("authored");
     assert_eq!(
         explained.value,
@@ -635,15 +661,7 @@ fn schema_fallback_is_explained() {
     assert_eq!(roles(&explained.opinions), vec![(LayerId(2), EDIT)]);
 
     let at_time = stage
-        .explain_value_at_time_with_schema(
-            tree,
-            height,
-            3.0,
-            InterpolationType::Linear,
-            &store,
-            &registry,
-            None,
-        )
+        .explain_value_at_time_with_schema(tree, height, 3.0, InterpolationType::Linear, &store)
         .expect("fallback");
     assert_eq!(at_time.value, Some(Value::Double(1.0)));
     assert_eq!(at_time.source, ValueSource::Fallback);
@@ -654,9 +672,7 @@ fn a_block_resolves_the_schema_fallback() {
     let mut store = InMemoryStore::default();
     let height = store.tokens.intern("height");
     let tree_type = store.tokens.intern("Tree");
-    let mut registry = SchemaRegistry::new();
-    registry.register(SchemaDefinition::typed(tree_type).with_property(height, Value::Double(1.0)));
-    let stage = layered(
+    let stage = layered_with_schemas(
         &mut store,
         vec![
             PrimSpec::def().with_type_name(tree_type).with_property(
@@ -665,10 +681,11 @@ fn a_block_resolves_the_schema_fallback() {
             ),
             PrimSpec::over().with_property(height, double(2.0)),
         ],
+        vec![SchemaDefinition::typed(tree_type).with_property(defined(height, 1.0))],
     );
     let tree = store.path("/Tree");
     let explained = stage
-        .explain_value_with_schema(tree, height, &store, &registry, None)
+        .explain_value_with_schema(tree, height, &store)
         .expect("authored");
     assert_eq!(
         explained.value,
@@ -714,17 +731,13 @@ fn list_ops_report_each_edit() {
 
 /// A typed `/Tree` whose schema gives `points` the fallback `[10, 20]` and
 /// `height` none, with the given authored properties.
-fn typed_tree(
-    store: &mut InMemoryStore,
-    properties: Vec<(&str, PropertySpec)>,
-) -> (Stage, SchemaRegistry) {
+fn typed_tree(store: &mut InMemoryStore, properties: Vec<(&str, PropertySpec)>) -> Stage {
     let points = store.tokens.intern("points");
     let tree_type = store.tokens.intern("Tree");
-    let mut registry = SchemaRegistry::new();
-    registry.register(SchemaDefinition::typed(tree_type).with_property(
+    let schemas = vec![SchemaDefinition::typed(tree_type).with_property(defined(
         points,
         Value::Array(vec![Value::Float(10.0), Value::Float(20.0)]),
-    ));
+    ))];
     let tree = store.path("/Tree");
     let mut spec = PrimSpec::def().with_type_name(tree_type);
     for (name, property) in properties {
@@ -733,8 +746,8 @@ fn typed_tree(
     let mut root = Layer::new(LayerId(1));
     root.insert_prim(tree, spec);
     store.insert_layer(root);
-    let stage = Stage::compose(store, LayerId(1), StageOptions::default());
-    (stage, registry)
+    let options = with_schemas(store, schemas);
+    Stage::compose(store, LayerId(1), options)
 }
 
 fn floats(values: &[f32]) -> Value {
@@ -753,7 +766,7 @@ fn write_float(value: f32, index: i64) -> Value {
 #[test]
 fn blocks_without_a_fallback_are_still_explained() {
     let mut store = InMemoryStore::default();
-    let (stage, registry) = typed_tree(
+    let stage = typed_tree(
         &mut store,
         vec![
             (
@@ -775,7 +788,7 @@ fn blocks_without_a_fallback_are_still_explained() {
 
     // An authored default block, at a numeric time and at the default time.
     let at_time = stage
-        .explain_value_at_time_with_schema(tree, height, 5.0, linear, &store, &registry, None)
+        .explain_value_at_time_with_schema(tree, height, 5.0, linear, &store)
         .expect("the authored block is explained");
     assert_eq!(at_time.value, None);
     assert_eq!(at_time.source, ValueSource::None);
@@ -784,7 +797,7 @@ fn blocks_without_a_fallback_are_still_explained() {
         vec![(LayerId(1), OpinionRole::Block)]
     );
     let default = stage
-        .explain_value_with_schema(tree, height, &store, &registry, None)
+        .explain_value_with_schema(tree, height, &store)
         .expect("the authored block is explained");
     assert_eq!(default.value, None);
     assert_eq!(
@@ -802,7 +815,7 @@ fn blocks_without_a_fallback_are_still_explained() {
 
     // A blocked sample held at the query time.
     let sampled = stage
-        .explain_value_at_time_with_schema(tree, width, 5.0, linear, &store, &registry, None)
+        .explain_value_at_time_with_schema(tree, width, 5.0, linear, &store)
         .expect("the blocked sample is explained");
     assert_eq!(sampled.value, None);
     assert_eq!(sampled.source, ValueSource::None);
@@ -814,12 +827,12 @@ fn blocks_without_a_fallback_are_still_explained() {
     // Nothing authored and no fallback: nothing to explain.
     assert!(
         stage
-            .explain_value_at_time_with_schema(tree, depth, 5.0, linear, &store, &registry, None)
+            .explain_value_at_time_with_schema(tree, depth, 5.0, linear, &store)
             .is_none()
     );
     assert!(
         stage
-            .explain_value_with_schema(tree, depth, &store, &registry, None)
+            .explain_value_with_schema(tree, depth, &store)
             .is_none()
     );
 }
@@ -832,7 +845,7 @@ fn blocks_without_a_fallback_are_still_explained() {
 )]
 fn check_mixed_samples(samples: Vec<(f64, Value)>, lower_seeded: bool) {
     let mut store = InMemoryStore::default();
-    let (stage, registry) = typed_tree(
+    let stage = typed_tree(
         &mut store,
         vec![(
             "points",
@@ -846,14 +859,14 @@ fn check_mixed_samples(samples: Vec<(f64, Value)>, lower_seeded: bool) {
     let linear = InterpolationType::Linear;
 
     let explained = stage
-        .explain_value_at_time_with_schema(tree, points, 5.0, linear, &store, &registry, None)
+        .explain_value_at_time_with_schema(tree, points, 5.0, linear, &store)
         .expect("authored");
     // `[0, 0]` and `[30, 20]`, the fallback supplying the `20`.
     assert_eq!(explained.value, Some(floats(&[15.0, 10.0])));
     assert_eq!(
         explained.value,
         stage
-            .resolve_value_at_time_with_schema(tree, points, 5.0, linear, &store, &registry, None)
+            .resolve_value_at_time_with_schema(tree, points, 5.0, linear, &store)
             .map(|resolved| resolved.value)
     );
     assert!(explained.seeded_by_fallback);

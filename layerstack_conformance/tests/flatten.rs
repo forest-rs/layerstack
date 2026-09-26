@@ -38,6 +38,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::Arc;
 
 use layerstack::stage::flatten::{
     AssetPaths, ExternalDependency, FindingKind, FlattenError, FlattenReport, FlattenRequirements,
@@ -46,7 +47,8 @@ use layerstack::stage::flatten::{
 };
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, Layer, LayerId, ListOp, PathInterner,
-    ResolvedAsset, SchemaDefinition, SchemaRegistry, Stage, StageOptions, TokenInterner, Value,
+    PropertyDefinition, ResolvedAsset, SchemaDefinition, SchemaKind, SchemaRegistry, Stage,
+    StageOptions, TokenInterner, Value,
 };
 use layerstack_conformance::{usda_real::load_entry_usda, workspace_root};
 
@@ -203,7 +205,10 @@ fn flatten_with(
     requirements: FlattenRequirements<'_>,
 ) -> Result<Flattened, FlattenError> {
     let mut loaded = load_entry_usda(&case.entry);
-    let options = options(&mut loaded.store, case.fallbacks);
+    let options = StageOptions {
+        schemas: Some(Arc::new(schemas(&mut loaded.store))),
+        ..options(&mut loaded.store, case.fallbacks)
+    };
     let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
     let id = LayerId(loaded.store.layers.keys().map(|id| id.0).max().unwrap_or(0) + 1);
     let directory = case_directory(case);
@@ -214,10 +219,8 @@ fn flatten_with(
             .map(|(&id, name)| (id, directory.join(name).to_string_lossy().into_owned()))
             .collect(),
     };
-    let schemas = schemas(&mut loaded.store);
     let requirements = FlattenRequirements {
         asset_paths: AssetPaths::Anchored(&locations),
-        schemas: Some(&schemas),
         ..requirements
     };
     let flat = stage.flatten(&mut loaded.store, loaded.root_layer, id, &requirements)?;
@@ -238,21 +241,21 @@ fn schemas(store: &mut InMemoryStore) -> SchemaRegistry {
     let (visibility, purpose, order) =
         (token("visibility"), token("purpose"), token("xformOpOrder"));
     let (inherited, default) = (token("inherited"), token("default"));
-    let mut registry = SchemaRegistry::new();
-    registry.register(
-        SchemaDefinition::typed(imageable)
-            .with_abstract(true)
-            .with_property(visibility, Value::Token(inherited))
-            .with_uniform_property(purpose, Value::Token(default)),
-    );
-    registry.register(
-        SchemaDefinition::typed(xformable)
-            .with_abstract(true)
-            .with_parent(imageable)
-            .with_uniform_property(order, Value::Array(Vec::new())),
-    );
-    registry.register(SchemaDefinition::typed(xform).with_parent(xformable));
-    registry
+    let property = |name, fallback| PropertyDefinition::attribute(name).with_fallback(fallback);
+    let mut builder = SchemaRegistry::builder();
+    builder
+        .register(
+            SchemaDefinition::new(imageable, SchemaKind::AbstractTyped)
+                .with_property(property(visibility, Value::Token(inherited)))
+                .with_property(property(purpose, Value::Token(default)).uniform()),
+        )
+        .register(
+            SchemaDefinition::new(xformable, SchemaKind::AbstractTyped)
+                .with_parent(imageable)
+                .with_property(property(order, Value::Array(Vec::new())).uniform()),
+        )
+        .register(SchemaDefinition::typed(xform).with_parent(xformable));
+    builder.build(&mut store.tokens)
 }
 
 /// The directory of a case's entry layer, canonical as OpenUSD resolves

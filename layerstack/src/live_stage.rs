@@ -651,6 +651,7 @@ impl LiveStage {
             with_provenance: self.options.with_provenance,
             with_dependencies: true,
             variant_fallbacks: self.options.variant_fallbacks.clone(),
+            schemas: self.options.schemas.clone(),
         };
         Stage::compose(store, self.root, scoped_opts)
     }

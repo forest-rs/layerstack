@@ -56,6 +56,7 @@
 //!
 //! Spec: AOUSD Core §16.3 (crate file format).
 
+mod array_dedup;
 mod compress;
 pub mod document;
 mod encode;

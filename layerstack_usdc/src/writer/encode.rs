@@ -14,7 +14,12 @@
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::string::String;
 use alloc::vec::Vec;
+use core::hash::BuildHasher;
 
+use layerstack::HashMap;
+use smallvec::SmallVec;
+
+use super::array_dedup::{Array, ArrayDedup};
 use super::compress::{IntWidth, LZ4_MAX_TOTAL_INPUT, compressed_ints, lz4_compress};
 use super::error::UsdcWriteError;
 use super::path::{CratePath, Element, path_tree};
@@ -91,9 +96,10 @@ fn index(len: usize) -> Result<u32, UsdcWriteError> {
 }
 
 /// The tables and value data of a file being written.
-struct Packer {
+struct Packer<'a> {
     /// Bootstrap placeholder, then value data, then sections.
     out: Vec<u8>,
+    arrays: ArrayDedup<'a>,
     tokens: Vec<String>,
     token_index: BTreeMap<String, u32>,
     /// Token index of each string (`_strings`).
@@ -112,13 +118,12 @@ struct Packer {
     fieldset_index: BTreeMap<Vec<u32>, u32>,
     /// `(path index, field set index, spec form)`.
     specs: Vec<(u32, u32, u32)>,
-    /// Stored value data by `(value type, representation flags, bytes)`,
-    /// so identical values are written once (the `_valueDedup` and
-    /// `_arrayDedup` tables).
-    blobs: BTreeMap<(u8, u64, Vec<u8>), u64>,
+    /// Non-array candidates by `(value type, representation flags, length, hash)`.
+    /// Retain offsets into `out`, not a second copy of every encoded payload.
+    blobs: HashMap<(u8, u64, usize, u64), SmallVec<[usize; 1]>>,
 }
 
-impl Packer {
+impl<'a> Packer<'a> {
     fn new() -> Self {
         let mut packer = Self {
             out: alloc::vec![0; BOOTSTRAP_SIZE],
@@ -134,7 +139,8 @@ impl Packer {
             fieldsets: Vec::new(),
             fieldset_index: BTreeMap::new(),
             specs: Vec::new(),
-            blobs: BTreeMap::new(),
+            blobs: HashMap::default(),
+            arrays: ArrayDedup::default(),
         };
         // `CrateFile::StartPacking`: token 0 is one that can never be a
         // property name, because the path tree marks property elements by
@@ -228,26 +234,49 @@ impl Packer {
         bytes: Vec<u8>,
         align: bool,
     ) -> Result<u64, UsdcWriteError> {
-        let key = (ty as u8, flags, bytes);
-        if let Some(&offset) = self.blobs.get(&key) {
-            return Ok(rep(ty, flags, offset));
+        let index = if align {
+            self.out.len().next_multiple_of(8)
+        } else {
+            self.out.len()
+        };
+        let key = (
+            ty as u8,
+            flags,
+            bytes.len(),
+            self.blobs.hasher().hash_one(&bytes),
+        );
+        let candidates = self.blobs.entry(key).or_default();
+        for &offset in candidates.iter() {
+            if self.out[offset..offset + bytes.len()] == bytes {
+                return Ok(rep(ty, flags, offset as u64));
+            }
         }
-        if align {
-            let padded = self.out.len().next_multiple_of(8);
-            self.out.resize(padded, 0);
-        }
-        let offset = self.out.len() as u64;
+        candidates.push(index);
+        let offset = index as u64;
         if offset > MAX_PAYLOAD {
             return Err(UsdcWriteError::TooLarge);
         }
-        self.out.extend_from_slice(&key.2);
-        self.blobs.insert(key, offset);
+        self.out.resize(index, 0);
+        self.out.extend_from_slice(&bytes);
         Ok(rep(ty, flags, offset))
     }
 
     // ── Values (`_PackValue`, `_ValueHandler::Pack`) ────────────────────
 
-    fn pack(&mut self, value: &Value, site: Site<'_>) -> Result<u64, UsdcWriteError> {
+    fn pack(&mut self, value: &'a Value, site: Site<'_>) -> Result<u64, UsdcWriteError> {
+        if let Some(array) = Array::from_value(value) {
+            let (found, hash) = self.arrays.lookup(array);
+            if let Some(rep) = found {
+                return Ok(rep);
+            }
+            let rep = self.pack_value(value, site)?;
+            self.arrays.insert(array, hash, rep);
+            return Ok(rep);
+        }
+        self.pack_value(value, site)
+    }
+
+    fn pack_value(&mut self, value: &'a Value, site: Site<'_>) -> Result<u64, UsdcWriteError> {
         use ValueType as T;
         Ok(match value {
             // `_IsAlwaysInlined`: a bitwise type of at most four bytes is
@@ -510,10 +539,9 @@ impl Packer {
                     offset: 0.0,
                     scale: 1.0,
                 };
-                self.pack(
-                    &Value::Payload(items.first().unwrap_or(&none).clone()),
-                    site,
-                )?
+                let mut bytes = Vec::new();
+                self.reference(items.first().unwrap_or(&none), true, site, &mut bytes)?;
+                self.blob(T::Payload, 0, bytes, false)?
             }
             Value::PayloadListOp(op) => {
                 let bytes = self.list_op(op, site, |packer, item, out| {
@@ -576,7 +604,7 @@ impl Packer {
     /// any data the part itself needs.
     fn time_samples(
         &mut self,
-        samples: &[(f64, Value)],
+        samples: &'a [(f64, Value)],
         site: Site<'_>,
     ) -> Result<u64, UsdcWriteError> {
         if samples
@@ -683,12 +711,12 @@ impl Packer {
         }
         let mut bytes = (len as u64).to_le_bytes().to_vec();
         elements(&mut bytes);
-        self.blob(ty, ARRAY_BIT, bytes, true)
+        self.array_blob(ty, ARRAY_BIT, &bytes, true)
     }
 
     /// Uncompressed math/timecode arrays need no numeric staging for
-    /// compression decisions. Encode components directly into the array blob,
-    /// preserving their bit patterns (including half NaNs and signed zero).
+    /// compression decisions. After input deduplication, encode directly into
+    /// the output, preserving bit patterns (including half NaNs and signed zero).
     /// Keep the encoder generic so component conversion can inline/vectorize;
     /// an indirect function call per component defeats that optimization.
     /// OpenUSD: `_WriteUncompressedArray` writes the count and contiguous data.
@@ -707,13 +735,42 @@ impl Packer {
             .checked_mul(N)
             .and_then(|bytes| bytes.checked_add(8))
             .ok_or(UsdcWriteError::TooLarge)?;
-        let mut bytes = Vec::new();
-        bytes
-            .try_reserve_exact(size)
+        let index = self.out.len().next_multiple_of(8);
+        if index as u64 > MAX_PAYLOAD {
+            return Err(UsdcWriteError::TooLarge);
+        }
+        self.out
+            .try_reserve(
+                size.checked_add(index - self.out.len())
+                    .ok_or(UsdcWriteError::TooLarge)?,
+            )
             .map_err(|_| UsdcWriteError::TooLarge)?;
-        bytes.extend_from_slice(&(len as u64).to_le_bytes());
-        bytes.extend(components.iter().flat_map(|&component| encode(component)));
-        self.blob(ty, ARRAY_BIT, bytes, true)
+        self.out.resize(index, 0);
+        self.out.extend_from_slice(&(len as u64).to_le_bytes());
+        self.out
+            .extend(components.iter().flat_map(|&component| encode(component)));
+        Ok(rep(ty, ARRAY_BIT, index as u64))
+    }
+
+    /// Arrays have already been deduplicated by borrowed input value.
+    fn array_blob(
+        &mut self,
+        ty: ValueType,
+        flags: u64,
+        bytes: &[u8],
+        align: bool,
+    ) -> Result<u64, UsdcWriteError> {
+        let index = if align {
+            self.out.len().next_multiple_of(8)
+        } else {
+            self.out.len()
+        };
+        if index as u64 > MAX_PAYLOAD {
+            return Err(UsdcWriteError::TooLarge);
+        }
+        self.out.resize(index, 0);
+        self.out.extend_from_slice(bytes);
+        Ok(rep(ty, flags, index as u64))
     }
 
     /// `_WritePossiblyCompressedArray` for (u)int and (u)int64 arrays:
@@ -736,10 +793,10 @@ impl Packer {
             for v in values {
                 bytes.extend_from_slice(&v.to_le_bytes()[..size]);
             }
-            return self.blob(ty, ARRAY_BIT, bytes, false);
+            return self.array_blob(ty, ARRAY_BIT, &bytes, false);
         }
         bytes.extend_from_slice(&checked_ints(values, width)?);
-        self.blob(ty, ARRAY_BIT | COMPRESSED_BIT, bytes, false)
+        self.array_blob(ty, ARRAY_BIT | COMPRESSED_BIT, &bytes, false)
     }
 
     /// `_WritePossiblyCompressedArray` for half, float and double arrays:
@@ -760,7 +817,7 @@ impl Packer {
         {
             bytes.push(b'i');
             bytes.extend_from_slice(&checked_ints(&ints, IntWidth::W32)?);
-            return self.blob(ty, ARRAY_BIT | COMPRESSED_BIT, bytes, false);
+            return self.array_blob(ty, ARRAY_BIT | COMPRESSED_BIT, &bytes, false);
         }
         // Give up on a lookup table once it would hold more than a quarter
         // of the elements (at most 1024), as OpenUSD does.
@@ -794,7 +851,7 @@ impl Packer {
             bytes.extend_from_slice(element(j));
         }
         bytes.extend_from_slice(&checked_ints(&indexes, IntWidth::W32)?);
-        self.blob(ty, ARRAY_BIT | COMPRESSED_BIT, bytes, false)
+        self.array_blob(ty, ARRAY_BIT | COMPRESSED_BIT, &bytes, false)
     }
 
     /// `WriteMap(VtDictionary)`: count, then per entry (in key order) the
@@ -804,7 +861,7 @@ impl Packer {
     /// inlined.
     fn dictionary(
         &mut self,
-        entries: &[(String, Value)],
+        entries: &'a [(String, Value)],
         site: Site<'_>,
     ) -> Result<u64, UsdcWriteError> {
         if entries.is_empty() {
@@ -843,7 +900,7 @@ impl Packer {
     /// `_RecursiveWrite`, as a dictionary entry's value is — a relative
     /// offset to the value representation, preceded by any data the value
     /// itself needs.
-    fn unregistered(&mut self, inner: &Value, site: Site<'_>) -> Result<u64, UsdcWriteError> {
+    fn unregistered(&mut self, inner: &'a Value, site: Site<'_>) -> Result<u64, UsdcWriteError> {
         let offset = self.out.len() as u64;
         if offset > MAX_PAYLOAD {
             return Err(UsdcWriteError::TooLarge);
@@ -1069,10 +1126,10 @@ impl Packer {
 }
 
 /// A list op item stored as the `u32` index `add` gives its text.
-fn text_item<'a>(
+fn text_item<'a, 'input: 'a>(
     site: Site<'a>,
-    add: fn(&mut Packer, &str) -> Result<u32, UsdcWriteError>,
-) -> impl Fn(&mut Packer, &String, &mut Vec<u8>) -> Result<(), UsdcWriteError> + 'a {
+    add: fn(&mut Packer<'input>, &str) -> Result<u32, UsdcWriteError>,
+) -> impl Fn(&mut Packer<'input>, &String, &mut Vec<u8>) -> Result<(), UsdcWriteError> + 'a {
     move |packer, text, out| {
         site.check_text(text)?;
         out.extend_from_slice(&add(packer, text)?.to_le_bytes());
@@ -1083,7 +1140,7 @@ fn text_item<'a>(
 /// A list op item stored as its own little-endian bytes.
 fn le_item<T: Copy, const N: usize>(
     bytes: fn(T) -> [u8; N],
-) -> impl Fn(&mut Packer, &T, &mut Vec<u8>) -> Result<(), UsdcWriteError> {
+) -> impl Fn(&mut Packer<'_>, &T, &mut Vec<u8>) -> Result<(), UsdcWriteError> {
     move |_, item, out| {
         out.extend_from_slice(&bytes(*item));
         Ok(())
@@ -1339,4 +1396,76 @@ pub(super) fn write(specs: &[Spec]) -> Result<Vec<u8>, UsdcWriteError> {
             .push((path_index, fieldset, u32::from(spec.form as u8)));
     }
     packer.finish(required_version(specs))
+}
+
+#[cfg(test)]
+mod blob_tests {
+    use super::*;
+
+    #[test]
+    fn nested_arrays_share_the_write_session_cache() {
+        let array = Value::Vec3fArray(alloc::vec![[1.25, -0.0, f32::from_bits(0x7fc0_0001)]; 129]);
+        let nested =
+            Value::UnregisteredValue(alloc::boxed::Box::new(Value::Dictionary(alloc::vec![(
+                "samples".into(),
+                Value::TimeSamples(alloc::vec![(0.0, array.clone()), (1.0, array.clone())])
+            ),])));
+        let mut packer = Packer::new();
+        let site = Site {
+            path: "/Root",
+            field: "customData",
+        };
+        packer.pack(&nested, site).unwrap();
+        let end = packer.out.len();
+        let first = packer.pack(&array, site).unwrap();
+        assert_eq!(packer.out.len(), end, "nested array was already encoded");
+        assert_eq!(packer.pack(&array, site).unwrap(), first);
+        assert_eq!(packer.out.len(), end);
+    }
+
+    #[test]
+    fn collision_candidates_are_verified_against_output() {
+        let mut packer = Packer::new();
+        let first_bytes = [1, 2, 3, 4];
+        let second_bytes = [1, 2, 3, 5];
+        let first = packer
+            .blob(ValueType::Vec2h, 0, first_bytes.to_vec(), true)
+            .unwrap();
+        let first_offset = usize::try_from(first & MAX_PAYLOAD).unwrap();
+        // Force an unequal candidate into the second value's hash bucket.
+        let key = (
+            ValueType::Vec2h as u8,
+            0,
+            4,
+            packer.blobs.hasher().hash_one(second_bytes.as_slice()),
+        );
+        packer.blobs.entry(key).or_default().push(first_offset);
+        let second = packer
+            .blob(ValueType::Vec2h, 0, second_bytes.to_vec(), true)
+            .unwrap();
+        assert_ne!(first, second, "unequal bytes must not deduplicate");
+        let end = packer.out.len();
+        assert_eq!(
+            packer
+                .blob(ValueType::Vec2h, 0, second_bytes.to_vec(), true)
+                .unwrap(),
+            second
+        );
+        assert_eq!(packer.out.len(), end);
+        packer.out.extend_from_slice(&[0; 4096]);
+        assert_eq!(
+            packer
+                .blob(ValueType::Vec2h, 0, first_bytes.to_vec(), true)
+                .unwrap(),
+            first
+        );
+        let other_type = packer
+            .blob(ValueType::Vec2f, 0, first_bytes.to_vec(), true)
+            .unwrap();
+        let other_flags = packer
+            .blob(ValueType::Vec2h, ARRAY_BIT, first_bytes.to_vec(), true)
+            .unwrap();
+        assert_ne!(other_type & MAX_PAYLOAD, first & MAX_PAYLOAD);
+        assert_ne!(other_flags & MAX_PAYLOAD, first & MAX_PAYLOAD);
+    }
 }

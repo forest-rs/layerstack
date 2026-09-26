@@ -1294,3 +1294,55 @@ fn uncompressed_math_arrays_preserve_component_bits() {
         );
     }
 }
+
+#[test]
+fn repeated_arrays_reuse_representations_across_all_supported_types() {
+    for (name, value) in every_kind() {
+        if array_dedup::Array::from_value(&value).is_none() {
+            continue;
+        }
+        let values = [("first", value.clone()), ("second", value)];
+        let file = Decoded::new(write_crate(&layer_with(&values)).unwrap());
+        assert_eq!(
+            file.rep("/Root.first", "default").payload(),
+            file.rep("/Root.second", "default").payload(),
+            "{name}"
+        );
+        assert_eq!(
+            alloc::format!("{:?}", file.value("/Root.first", "default")),
+            alloc::format!("{:?}", file.value("/Root.second", "default")),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn text_arrays_keep_their_types_when_interleaved() {
+    let texts = vec!["shared".into(), "asset.png".into()];
+    let values = [
+        ("a", Value::StringArray(texts.clone())),
+        ("b", Value::TokenArray(texts.clone())),
+        ("c", Value::AssetArray(texts.clone())),
+        ("d", Value::StringArray(texts.clone())),
+        ("e", Value::TokenArray(texts.clone())),
+        ("f", Value::AssetArray(texts)),
+    ];
+    let file = Decoded::new(write_crate(&layer_with(&values)).unwrap());
+    for (name, value) in values {
+        assert_eq!(
+            file.value(&alloc::format!("/Root.{name}"), "default"),
+            value
+        );
+    }
+    for (first, second, ty) in [
+        ("a", "d", ValueType::String),
+        ("b", "e", ValueType::Token),
+        ("c", "f", ValueType::AssetPath),
+    ] {
+        let first = file.rep(&alloc::format!("/Root.{first}"), "default");
+        let second = file.rep(&alloc::format!("/Root.{second}"), "default");
+        assert_eq!(first.value_type().unwrap(), ty);
+        assert_eq!(second.value_type().unwrap(), ty);
+        assert_eq!(first.payload(), second.payload());
+    }
+}

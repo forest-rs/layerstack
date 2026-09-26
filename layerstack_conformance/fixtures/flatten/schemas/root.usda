@@ -1,0 +1,19 @@
+#usda 1.0
+(
+    defaultPrim = "Grove"
+)
+
+# A property a schema defines is written as the schema declares it: not
+# custom, with the schema's variability. Any other property keeps the
+# weakest opinion's `custom`.
+def Xform "Grove"
+{
+    def Xform "Tree" (
+        references = @./tree.usda@
+    )
+    {
+        custom double height = 4
+        custom token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        double3 xformOp:scale = (1, 2, 1)
+    }
+}

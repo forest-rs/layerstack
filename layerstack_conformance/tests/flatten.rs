@@ -46,7 +46,7 @@ use layerstack::stage::flatten::{
 };
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, Layer, LayerId, ListOp, PathInterner,
-    ResolvedAsset, Stage, StageOptions, TokenInterner,
+    ResolvedAsset, SchemaDefinition, SchemaRegistry, Stage, StageOptions, TokenInterner, Value,
 };
 use layerstack_conformance::{usda_real::load_entry_usda, workspace_root};
 
@@ -189,8 +189,9 @@ struct Flattened {
     report: FlattenReport,
 }
 
-/// Flattens `case` with its asset paths anchored, as OpenUSD's flatten
-/// anchors them, under otherwise default requirements.
+/// Flattens `case` with its asset paths anchored and its schema
+/// properties declared, as OpenUSD's flatten writes them, under otherwise
+/// default requirements.
 fn flatten(case: &Case) -> Result<Flattened, String> {
     flatten_with(case, FlattenRequirements::default()).map_err(|e| e.to_string())
 }
@@ -213,8 +214,10 @@ fn flatten_with(
             .map(|(&id, name)| (id, directory.join(name).to_string_lossy().into_owned()))
             .collect(),
     };
+    let schemas = schemas(&mut loaded.store);
     let requirements = FlattenRequirements {
         asset_paths: AssetPaths::Anchored(&locations),
+        schemas: Some(&schemas),
         ..requirements
     };
     let flat = stage.flatten(&mut loaded.store, loaded.root_layer, id, &requirements)?;
@@ -224,6 +227,32 @@ fn flatten_with(
         layer: flat.layer,
         report: flat.report,
     })
+}
+
+/// The `UsdGeom` schema properties the cases author, as OpenUSD 26.8
+/// defines them (`pxr/usd/usdGeom/schema.usda`): `Imageable`'s `visibility`
+/// and uniform `purpose`, and `Xformable`'s uniform `xformOpOrder`.
+fn schemas(store: &mut InMemoryStore) -> SchemaRegistry {
+    let mut token = |name: &str| store.tokens.intern(name);
+    let (imageable, xformable, xform) = (token("Imageable"), token("Xformable"), token("Xform"));
+    let (visibility, purpose, order) =
+        (token("visibility"), token("purpose"), token("xformOpOrder"));
+    let (inherited, default) = (token("inherited"), token("default"));
+    let mut registry = SchemaRegistry::new();
+    registry.register(
+        SchemaDefinition::typed(imageable)
+            .with_abstract(true)
+            .with_property(visibility, Value::Token(inherited))
+            .with_uniform_property(purpose, Value::Token(default)),
+    );
+    registry.register(
+        SchemaDefinition::typed(xformable)
+            .with_abstract(true)
+            .with_parent(imageable)
+            .with_uniform_property(order, Value::Array(Vec::new())),
+    );
+    registry.register(SchemaDefinition::typed(xform).with_parent(xformable));
+    registry
 }
 
 /// The directory of a case's entry layer, canonical as OpenUSD resolves
@@ -655,6 +684,45 @@ fn asset_paths_are_anchored_and_reported() {
     assert!(flat.report.is_lossless());
 }
 
+/// The properties of `fixtures/flatten/schemas` are declared as OpenUSD's
+/// flatten declares them, and the report says which differ from the
+/// stage's declarations.
+#[test]
+fn declarations_follow_the_schema_and_the_weakest_opinion() {
+    let case = fixture_cases("flatten")
+        .into_iter()
+        .find(|case| case.name == "schemas")
+        .expect("the schemas scene");
+    let flat = flatten(&case).expect("flattens");
+    let declared: Vec<String> = flat
+        .report
+        .transformed()
+        .filter(|finding| {
+            matches!(
+                finding.kind,
+                FindingKind::Transformed(
+                    Transformation::CustomFromWeakestOpinion { .. }
+                        | Transformation::DefinedBySchema { .. }
+                )
+            )
+        })
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(
+        declared,
+        [
+            "/Grove/Tree.height: transformed: custom = false, from the weakest opinion \
+             (layer 1, /Grove/Tree.height)",
+            "/Grove/Tree.purpose: transformed: declared by its schema (Uniform, not custom) \
+             (layer 2, /Tree.purpose)",
+            "/Grove/Tree.visibility: transformed: declared by its schema (Varying, not custom) \
+             (layer 2, /Tree.visibility)",
+            "/Grove/Tree.xformOpOrder: transformed: declared by its schema (Uniform, not \
+             custom) (layer 1, /Grove/Tree.xformOpOrder)",
+        ]
+    );
+}
+
 /// The flattened layer saved as USDA and as USDC.
 fn save(layer: &Layer, store: &InMemoryStore) -> (Result<String, String>, Result<Vec<u8>, String>) {
     let (tokens, paths) = (&store.tokens, &store.paths);
@@ -806,9 +874,7 @@ fn flatten_matches_openusd() {
     assert!(failures.is_empty(), "{}", failures.join("\n\n"));
 }
 
-/// A stage dump without each property's `custom`, which OpenUSD's flatten
-/// takes from the weakest opinion while this flatten, as `IsCustom` does,
-/// from any, and without the property metadata fields `fields`.
+/// A stage dump without the property metadata fields `fields`.
 fn without(dump: &serde_json::Value, fields: &[&str]) -> serde_json::Value {
     let mut dump = dump.clone();
     for prim in dump
@@ -821,7 +887,6 @@ fn without(dump: &serde_json::Value, fields: &[&str]) -> serde_json::Value {
             let Some(property) = property.as_object_mut() else {
                 continue;
             };
-            property.remove("custom");
             if let Some(metadata) = property.get_mut("metadata").and_then(|m| m.as_object_mut()) {
                 for field in fields {
                     metadata.remove(*field);

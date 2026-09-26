@@ -17,6 +17,7 @@ use crate::{
     interner::{TokenId, TokenInterner},
     path::{PathId, PathInterner, PropertyPath, TargetPath},
     prim_index::FieldKey,
+    property::Variability,
     stage::{ResolvedValue, Stage, stage_time::map_leaves},
 };
 
@@ -52,7 +53,10 @@ impl FlattenVerification {
 /// Nothing else is: splines are compared through their values at those
 /// times only, and the prototypes a flatten adds are compared through the
 /// instances that reference them. An asset path the report records as
-/// anchored ([`Transformation::AssetPathAnchored`]) is expected anchored.
+/// anchored ([`Transformation::AssetPathAnchored`]) is expected anchored,
+/// and a property declared as OpenUSD's flatten declares it
+/// ([`Transformation::CustomFromWeakestOpinion`],
+/// [`Transformation::DefinedBySchema`]) is expected declared so.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct VerifiedScope {
     /// Prims compared.
@@ -196,6 +200,7 @@ impl Stage {
             prototypes: report.prototypes().map(String::from).collect(),
             skips: skips(report),
             anchors: anchors(report),
+            declarations: declarations(report),
             out: FlattenVerification::default(),
             sample_times: Vec::new(),
         };
@@ -221,6 +226,24 @@ fn anchors(report: &FlattenReport) -> Vec<(String, Arc<str>, Arc<str>)> {
                     Arc::from(authored.as_str()),
                     Arc::from(anchored.as_str()),
                 ))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// The properties the report records as declared other than the stage
+/// declares them.
+fn declarations(report: &FlattenReport) -> Vec<(String, bool, Option<Variability>)> {
+    report
+        .findings
+        .iter()
+        .filter_map(|finding| match &finding.kind {
+            FindingKind::Transformed(Transformation::CustomFromWeakestOpinion { custom }) => {
+                Some((finding.path.to_string(), *custom, None))
+            }
+            FindingKind::Transformed(Transformation::DefinedBySchema { variability }) => {
+                Some((finding.path.to_string(), false, Some(*variability)))
             }
             _ => None,
         })
@@ -254,6 +277,9 @@ struct Verifier<'a> {
     skips: Vec<(String, SkipReason)>,
     /// Each object's anchored asset paths: as authored, and as written.
     anchors: Vec<(String, Arc<str>, Arc<str>)>,
+    /// Each property declared other than the stage declares it: its
+    /// `custom` and, from a schema, its variability.
+    declarations: Vec<(String, bool, Option<Variability>)>,
     out: FlattenVerification,
     sample_times: Vec<f64>,
 }
@@ -490,6 +516,15 @@ impl Verifier<'_> {
             return;
         };
         self.out.scope.properties += 1;
+        let mut declaration = declaration;
+        for (declared, custom, variability) in &self.declarations {
+            if *declared == path {
+                declaration.custom = *custom;
+                if let Some(variability) = variability {
+                    declaration.variability = *variability;
+                }
+            }
+        }
         self.compare(
             &path,
             MismatchKind::Declaration,

@@ -34,12 +34,21 @@
 //!   layer stack, each arc with its own offset and scale, and one of the
 //!   sampled attributes authored in a sublayer with an offset: every
 //!   transform applies once (AOUSD Core §12.3.2.1).
+//! - `/Vineyard/Cane/Bud` reaches `trellis.usda`'s `/Row/Cane/Bud`,
+//!   `/Cane/Bud` and `/Bud` through arcs authored on `vine.usda /Vine` and
+//!   its descendants, each site declaring the variant set `bloom` with a
+//!   selection of its own. The variant sets are selected once the prim
+//!   index holds every site, so `/Bud`, the strongest, selects `open` for
+//!   all three. Edits to those selections recompose, through a
+//!   [`LiveStage`], as a full composition does.
 //! - `/Hut/Loft` references `loft.usda /Hut`, which has the same name as
 //!   the stage's `/Hut`. Its target paths map once, into `/Hut/Loft`,
-//!   whichever arc brings them: the reference; a class the target
-//!   inherits; a class a child specializes; a prim a child references
-//!   internally. A path beneath the internal reference's destination does
-//!   not map back through it, and is dropped and reported.
+//!   whichever arc brings them: the reference; a class the target inherits,
+//!   itself or from the branch of its variant set added once the prim
+//!   index is complete; a reference that branch authors; a class a child
+//!   specializes; a prim a child references internally. A path beneath
+//!   the internal reference's destination does not map back through it,
+//!   and is dropped and reported.
 //!
 //! Spec: AOUSD Core §10.2 and §10.4; OpenUSD `_AddArc` with
 //! `includeAncestralOpinions` and `_BuildInitialPrimIndexFromAncestor` in
@@ -49,7 +58,7 @@
 
 use std::collections::BTreeMap;
 
-use layerstack::{CompositionError, InterpolationType, Stage, StageOptions, Value};
+use layerstack::{CompositionError, InterpolationType, LiveStage, Stage, StageOptions, Value};
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
     workspace_root,
@@ -92,15 +101,15 @@ fn compose(oracle: &Oracle) -> (LoadedStage, Stage) {
             .join("layerstack_conformance/fixtures/ancestral_arcs")
             .join(&oracle.root),
     );
-    let stage = Stage::compose(
-        &mut loaded.store,
-        loaded.root_layer,
-        StageOptions {
-            with_provenance: true,
-            ..StageOptions::default()
-        },
-    );
+    let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options());
     (loaded, stage)
+}
+
+fn options() -> StageOptions {
+    StageOptions {
+        with_provenance: true,
+        ..StageOptions::default()
+    }
 }
 
 /// A layer's file name without its directory.
@@ -245,4 +254,106 @@ fn time_samples_compose_every_enclosing_offset() {
         "time samples differ from OpenUSD:\n{}",
         mismatches.join("\n")
     );
+}
+
+/// The prim stacks and `int` values of every prim of `stage`, in traversal
+/// order.
+fn snapshot(loaded: &mut LoadedStage, stage: &Stage) -> Vec<String> {
+    let pseudo_root = loaded.store.path("/");
+    let mut lines = Vec::new();
+    for prim in stage
+        .traverse(pseudo_root)
+        .filter(|prim| *prim != pseudo_root)
+    {
+        let stack: Vec<String> = stage
+            .explain_prim(prim)
+            .expect("composed prim")
+            .iter()
+            .map(|key| {
+                format!(
+                    "{} {}",
+                    layer_name(loaded, key.layer_id),
+                    key.spec_path.display(&loaded.store.tokens)
+                )
+            })
+            .collect();
+        let path = loaded.store.paths.display(prim, &loaded.store.tokens);
+        lines.push(format!("{path}: {stack:?}"));
+    }
+    lines
+}
+
+/// Sets the selection of `set` authored on `prim` in the layer `layer` (a
+/// file name), and recomposes `live`, which must then match a full
+/// composition. A selection that adds children is a structural change
+/// (see [`LiveStage::recompose`]).
+fn select(
+    live: &mut LiveStage,
+    loaded: &mut LoadedStage,
+    (layer, prim): (&str, &str),
+    (set, variant): (&str, &str),
+    adds_children: bool,
+) {
+    let layer = *loaded
+        .layer_names
+        .iter()
+        .find(|(_, name)| name.rsplit('/').next() == Some(layer))
+        .expect("layer")
+        .0;
+    let prim = loaded.store.path(prim);
+    let set = loaded.store.tokens.intern(set);
+    let variant = loaded.store.tokens.intern(variant);
+    loaded
+        .store
+        .layers
+        .get_mut(&layer)
+        .and_then(|layer| layer.prims.get_mut(&prim))
+        .expect("prim spec")
+        .variant_selections
+        .insert(set, variant);
+    if adds_children {
+        live.notify_structural_change();
+    } else {
+        live.notify_layer_prim_edits(layer, &[prim]);
+    }
+    live.recompose(&mut loaded.store);
+    let fresh = Stage::compose(&mut loaded.store, loaded.root_layer, options());
+    assert_eq!(
+        snapshot(loaded, live.stage()),
+        snapshot(loaded, &fresh),
+        "recomposed after selecting {variant:?}"
+    );
+}
+
+#[test]
+fn selection_edits_recompose_like_a_full_composition() {
+    // Spec: AOUSD Core §10.3.2.5. `/Vineyard/Cane/Bud` selects the variants
+    // of the sites its ancestors' arcs reach from its complete prim index:
+    // editing the strongest selection, or authoring a stronger one,
+    // recomposes as a full composition does.
+    let oracle = oracle();
+    let (mut loaded, _) = compose(&oracle);
+    let mut live = LiveStage::compose(&mut loaded.store, loaded.root_layer, options());
+    let petals = loaded.store.property_path("/Vineyard/Cane/Bud.petals");
+    let resolved = |live: &LiveStage| {
+        live.stage()
+            .resolve_field_path(petals)
+            .map(|resolved| resolved.value)
+    };
+    assert_eq!(resolved(&live), Some(Value::Int(5)));
+    let petal = loaded.store.path("/Vineyard/Cane/Bud/Petal");
+    // A weaker selection changes nothing.
+    let cane = ("trellis.usda", "/Cane/Bud");
+    select(&mut live, &mut loaded, cane, ("bloom", "open"), false);
+    assert_eq!(resolved(&live), Some(Value::Int(5)));
+    // The strongest selection picks every site's branch.
+    let bud = ("trellis.usda", "/Bud");
+    select(&mut live, &mut loaded, bud, ("bloom", "dormant"), false);
+    assert_eq!(resolved(&live), Some(Value::Int(0)));
+    assert!(!live.stage().has_prim(petal));
+    // A stronger site selects over it.
+    let vine = ("vine.usda", "/Vine/Cane/Bud");
+    select(&mut live, &mut loaded, vine, ("bloom", "open"), true);
+    assert_eq!(resolved(&live), Some(Value::Int(5)));
+    assert!(live.stage().has_prim(petal));
 }

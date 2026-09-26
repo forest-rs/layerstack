@@ -112,10 +112,24 @@ def "Quarry"
     }
 }
 
+# `vine.usda /Vine` references `trellis.usda /Row`, `/Vine/Cane`
+# references `/Cane` and `/Vine/Cane/Bud` references `/Bud`, so
+# `/Vineyard/Cane/Bud` reaches `/Row/Cane/Bud`, `/Cane/Bud` and `/Bud`,
+# each declaring the variant set `bloom` with a selection of its own.
+# `/Bud`, reached through the deepest arc, is the strongest: its `open`
+# selects the branch of every site, once the prim index holds them all.
+def "Vineyard" (
+    references = @./vine.usda@</Vine>
+)
+{
+}
+
 # `/Hut/Loft` references `loft.usda /Hut`, a target with the same name as
-# the stage's `/Hut`. Its relationships, those of the class it inherits,
-# and those of the class its `Stool` specializes and of the prim its
-# `Shelf` references internally, map once, into `/Hut/Loft`.
+# the stage's `/Hut`. Its relationships and connections, those of the
+# classes it inherits, one from the `lit` branch of its variant set, which
+# is added once the prim index is complete, of the reference that branch
+# authors, and those of the class its `Stool` specializes and of the prim
+# its `Shelf` references internally, map once, into `/Hut/Loft`.
 def "Hut"
 {
     def "Loft" (

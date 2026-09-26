@@ -176,6 +176,67 @@ def "Branch" (
         }
     }
 }
+
+# `beacon.usda /Beacon` inherits `/_class_Beacon` and selects `lens =
+# "clear"`. The class implied into this layer stack selects `tinted`,
+# which is stronger: the `tinted` branch and the reference it authors
+# compose, once the class is implied.
+def "Beacon" (
+    references = @./beacon.usda@</Beacon>
+)
+{
+}
+
+class "_class_Beacon" (
+    variants = {
+        string lens = "tinted"
+    }
+)
+{
+}
+''',
+    "beacon": '''#usda 1.0
+
+def "Beacon" (
+    inherits = </_class_Beacon>
+    variantSets = "lens"
+    variants = {
+        string lens = "clear"
+    }
+)
+{
+    variantSet "lens" = {
+        "clear" (
+            references = @./lens.usda@</Clear>
+        ) {
+        }
+        "tinted" (
+            references = @./lens.usda@</Tinted>
+        ) {
+        }
+    }
+}
+
+class "_class_Beacon"
+{
+}
+''',
+    "lens": '''#usda 1.0
+
+def "Clear"
+{
+    int shade = 1
+}
+
+def "Tinted"
+{
+    int shade = 2
+
+    def "Filter"
+    {
+        int density = 2
+    }
+}
 ''',
     "stand": '''#usda 1.0
 

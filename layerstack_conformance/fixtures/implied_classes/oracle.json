@@ -572,6 +572,53 @@
      "/Bough/_class_Twig/Leaf"
     ]
    ]
+  },
+  {
+   "path": "/Beacon",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Beacon"
+    ],
+    [
+     "root.usda",
+     "/_class_Beacon"
+    ],
+    [
+     "beacon.usda",
+     "/Beacon"
+    ],
+    [
+     "beacon.usda",
+     "/_class_Beacon"
+    ],
+    [
+     "beacon.usda",
+     "/Beacon{lens=tinted}"
+    ],
+    [
+     "lens.usda",
+     "/Tinted"
+    ]
+   ]
+  },
+  {
+   "path": "/Beacon/Filter",
+   "prim_stack": [
+    [
+     "lens.usda",
+     "/Tinted/Filter"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Beacon",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Beacon"
+    ]
+   ]
   }
  ],
  "values": {
@@ -616,6 +663,8 @@
   "/Branch/LeftTwig/Leaf.size": 1,
   "/Branch/LeftTwig/Leaf.vein": 1,
   "/Branch/LeftTwig/Bud.size": 2,
-  "/Branch/LeftTwig/Bud.vein": 1
+  "/Branch/LeftTwig/Bud.vein": 1,
+  "/Beacon.shade": 2,
+  "/Beacon/Filter.density": 2
  }
 }

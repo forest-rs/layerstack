@@ -32,6 +32,7 @@ use alloc::{rc::Rc, vec::Vec};
 use hashbrown::{HashMap, HashSet};
 
 use crate::{
+    compose::LateBranches,
     composition_error::{ArcCycle, ArcCycleSite, CompositionError, OpinionAtRelocationSource},
     doc::{LayerId, LayerStore},
     expression_variables::{ExpressionScope, VariableReads, expression_error},
@@ -200,6 +201,14 @@ impl ArcChain {
     }
 }
 
+/// The chain of arcs a [`CycleDetector`] follows, saved to resume it later
+/// (see [`CycleDetector::resume`]).
+#[derive(Clone, Debug)]
+pub(crate) struct ChainState {
+    chain: ArcChain,
+    arcs: Vec<ArcKind>,
+}
+
 /// Detects arc cycles during composition and collects the composition
 /// errors found (see [`report`](Self::report)).
 ///
@@ -227,6 +236,9 @@ pub(crate) struct CycleDetector {
     /// The expression variables read evaluating sublayer and arc asset
     /// paths.
     reads: VariableReads,
+    /// The variant branches left for the late variant pass, each with the
+    /// chain of arcs to its site.
+    late_branches: Vec<LateBranches>,
 }
 
 impl CycleDetector {
@@ -242,6 +254,7 @@ impl CycleDetector {
             seen: HashSet::new(),
             class_internal_targets: HashSet::new(),
             reads: VariableReads::default(),
+            late_branches: Vec::new(),
         }
     }
 
@@ -364,6 +377,33 @@ impl CycleDetector {
     /// ([`ArcChain::stacks_for`]).
     pub(crate) fn stacks_for(&self, root: LayerId) -> Vec<LayerId> {
         self.chain.stacks_for(root)
+    }
+
+    /// The chain of arcs followed so far, to [`resume`](Self::resume)
+    /// later.
+    pub(crate) fn chain_state(&self) -> ChainState {
+        ChainState {
+            chain: self.chain.clone(),
+            arcs: self.arcs.clone(),
+        }
+    }
+
+    /// Resumes following the chain of arcs `state` saved.
+    pub(crate) fn resume(&mut self, state: ChainState) {
+        self.chain = state.chain;
+        self.arcs = state.arcs;
+    }
+
+    /// Leaves `late` for the late variant pass, which follows the arcs its
+    /// branches author from the chain saved with it.
+    pub(crate) fn defer_branches(&mut self, late: LateBranches) {
+        self.late_branches.push(late);
+    }
+
+    /// Takes the variant branches left for the late variant pass, in the
+    /// order they were left.
+    pub(crate) fn take_late_branches(&mut self) -> Vec<LateBranches> {
+        core::mem::take(&mut self.late_branches)
     }
 
     /// The scope the arcs authored in the layer stack at the end of the

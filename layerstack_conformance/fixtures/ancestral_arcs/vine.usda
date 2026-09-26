@@ -1,0 +1,17 @@
+#usda 1.0
+
+def "Vine" (
+    references = @./trellis.usda@</Row>
+)
+{
+    over "Cane" (
+        references = @./trellis.usda@</Cane>
+    )
+    {
+        over "Bud" (
+            references = @./trellis.usda@</Bud>
+        )
+        {
+        }
+    }
+}

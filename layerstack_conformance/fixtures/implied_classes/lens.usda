@@ -1,0 +1,16 @@
+#usda 1.0
+
+def "Clear"
+{
+    int shade = 1
+}
+
+def "Tinted"
+{
+    int shade = 2
+
+    def "Filter"
+    {
+        int density = 2
+    }
+}

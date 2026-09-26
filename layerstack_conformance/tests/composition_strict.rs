@@ -62,16 +62,13 @@
 //! sources reported), asset paths authored as variable
 //! expressions, evaluated with the expression variables of the referencing
 //! layer stacks, variant sets nested in other branches, each branch a
-//! variant spec of its own, and variant selections, including fallbacks
-//! and those a specialized class authors, that do not depend on the
-//! features below.
+//! variant spec of its own, and variant selections, including fallbacks,
+//! those a specialized class or a class implied across an arc authors,
+//! and those of the sites the arcs of a prim's ancestors reach, each made
+//! once the prim's index holds every other arc.
 //!
-//! # Not supported
-//!
-//! - Implied classes in population and variant selection
-//!   ([`Cause::ImpliedClasses`]).
-//! - Variant selections of the sites ancestral arcs reach, made before the
-//!   prim's index is complete ([`Cause::AncestralArcs`]).
+//! Every fixture matches, so [`KNOWN`] is empty and [`Cause`] names no
+//! cause; a new mismatch needs both.
 //!
 //! The test prints the per-cause tally and the list of exact matches.
 
@@ -483,29 +480,13 @@ fn observe(name: &str) -> Observed {
     observed
 }
 
-/// Root causes of known strict mismatches, grouped as in the module docs.
+/// Root causes of known strict mismatches.
 ///
 /// A fixture lists every cause that contributes to its mismatch, strongest
-/// contributor first.
+/// contributor first. Entries name causes as `C::` and differences as
+/// `D::`, as the test prints their shape.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum Cause {
-    // Ordering: strength order differs from OpenUSD's node graph.
-    /// Class arcs (inherits, specializes) authored inside referenced content
-    /// are implied onto each stronger layer stack and ranked with that
-    /// stack's node (AOUSD Core §10.4.2.4; `pxr/usd/pcp/primIndex.cpp`,
-    /// `_EvalImpliedClasses`).
-    /// Layerstack implies inherits that way, but the variant selections of
-    /// an arc's target are resolved before the classes implied across that
-    /// arc are known.
-    ImpliedClasses,
-    // Missing sources or extra opinions.
-    /// The variant sets of a site that an arc authored on a namespace
-    /// ancestor reaches are selected when that arc is expanded, before the
-    /// prim's stronger sites are known; OpenUSD evaluates them once the
-    /// prim's arcs are all added (`_EvalNodeAncestralVariantSets` in
-    /// `pxr/usd/pcp/primIndex.cpp`).
-    AncestralArcs,
-}
+enum Cause {}
 
 /// A fixture known to mismatch the oracle, with its exact mismatch shape.
 struct Known {
@@ -522,8 +503,8 @@ struct Known {
     reason: &'static str,
 }
 
-use Cause as C;
-use Diff as D;
+#[expect(unused_imports, reason = "for `KNOWN` entries, none at present")]
+use {Cause as C, Diff as D};
 
 /// Fixtures that are not compared: OpenUSD rejects the entry layer, so
 /// `pcp.txt` composes no prims. Layerstack's USDA reader must reject it too
@@ -549,26 +530,7 @@ const SKIPPED: &[(&str, &str)] = &[
 ];
 
 /// Every fixture that does not match the oracle exactly.
-const KNOWN: &[Known] = &[
-    Known {
-        fixture: "TrickyVariantAncestralSelection_root",
-        causes: &[C::AncestralArcs],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingSite],
-        reason: "`/Root/B/C` selects the variants of `ref2.usd /A/B/C` and `/B/C`, reached through its ancestors' references, before its index is complete, so it misses their `{v1=C}` and `{v2=Z}`",
-    },
-    Known {
-        fixture: "TypicalReferenceToRiggedModel_root",
-        causes: &[C::ImpliedClasses],
-        prims: 2,
-        props: 2,
-        values: 1,
-        diffs: &[D::MissingPrim, D::MissingSite, D::ExtraSite],
-        reason: "implied `root.usd /Class` selects `pin=latest` in OpenUSD; here `mcat.usd`'s `pin=stable` wins",
-    },
-];
+const KNOWN: &[Known] = &[];
 
 fn shape(prims: usize, props: usize, values: usize, diffs: &[Diff]) -> String {
     let diffs: Vec<String> = diffs.iter().map(|d| format!("D::{d:?}")).collect();

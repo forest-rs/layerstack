@@ -33,15 +33,22 @@
 //!   it. OpenUSD adds an implied class after its origin's subtree and skips
 //!   the site the second time, so the leaf stays beneath the authored
 //!   inherit and ranks after `Bud`.
+//! - `/Beacon` references `beacon.usda /Beacon`, which inherits
+//!   `/_class_Beacon` and selects `lens = "clear"`. The class implied into
+//!   `root.usda` selects `tinted`: the referenced variant set is selected
+//!   once the class is implied, so the `tinted` branch and the reference it
+//!   authors compose. Edits to the class's selection recompose, through a
+//!   [`LiveStage`], as a full composition does.
 //!
-//! Spec: AOUSD Core §10.4.2.4 (implied class arcs); OpenUSD
-//! `_EvalImpliedClasses` in `pxr/usd/pcp/primIndex.cpp`.
+//! Spec: AOUSD Core §10.4.2.4 (implied class arcs), §10.3.2.5 (variant
+//! selection); OpenUSD `_EvalImpliedClasses` and `_EvalNodeVariantSets`
+//! in `pxr/usd/pcp/primIndex.cpp`.
 
 #![allow(missing_docs, reason = "integration tests")]
 
 use std::collections::BTreeMap;
 
-use layerstack::{Stage, StageOptions, Value};
+use layerstack::{LiveStage, Stage, StageOptions, Value};
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
     workspace_root,
@@ -80,15 +87,15 @@ fn compose(oracle: &Oracle) -> (LoadedStage, Stage) {
             .join("layerstack_conformance/fixtures/implied_classes")
             .join(&oracle.root),
     );
-    let stage = Stage::compose(
-        &mut loaded.store,
-        loaded.root_layer,
-        StageOptions {
-            with_provenance: true,
-            ..StageOptions::default()
-        },
-    );
+    let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options());
     (loaded, stage)
+}
+
+fn options() -> StageOptions {
+    StageOptions {
+        with_provenance: true,
+        ..StageOptions::default()
+    }
 }
 
 /// A layer's file name without its directory.
@@ -188,4 +195,99 @@ fn implied_classes_reached_through_an_arc_keep_their_origins() {
             );
         }
     }
+}
+
+/// The prim stacks and `int` values of every prim of `stage`, in traversal
+/// order.
+fn snapshot(loaded: &mut LoadedStage, stage: &Stage) -> Vec<String> {
+    let pseudo_root = loaded.store.path("/");
+    let mut lines = Vec::new();
+    for prim in stage
+        .traverse(pseudo_root)
+        .filter(|prim| *prim != pseudo_root)
+    {
+        let stack: Vec<String> = stage
+            .explain_prim(prim)
+            .expect("composed prim")
+            .iter()
+            .map(|key| {
+                format!(
+                    "{} {}",
+                    layer_name(loaded, key.layer_id),
+                    key.spec_path.display(&loaded.store.tokens)
+                )
+            })
+            .collect();
+        let path = loaded.store.paths.display(prim, &loaded.store.tokens);
+        lines.push(format!("{path}: {stack:?}"));
+    }
+    lines
+}
+
+/// Sets the selection of `set` authored on `prim` in the layer `layer` (a
+/// file name), and recomposes `live`, which must then match a full
+/// composition. A selection that adds children is a structural change
+/// (see [`LiveStage::recompose`]).
+fn select(
+    live: &mut LiveStage,
+    loaded: &mut LoadedStage,
+    (layer, prim): (&str, &str),
+    (set, variant): (&str, &str),
+    adds_children: bool,
+) {
+    let layer = *loaded
+        .layer_names
+        .iter()
+        .find(|(_, name)| name.rsplit('/').next() == Some(layer))
+        .expect("layer")
+        .0;
+    let prim = loaded.store.path(prim);
+    let set = loaded.store.tokens.intern(set);
+    let variant = loaded.store.tokens.intern(variant);
+    loaded
+        .store
+        .layers
+        .get_mut(&layer)
+        .and_then(|layer| layer.prims.get_mut(&prim))
+        .expect("prim spec")
+        .variant_selections
+        .insert(set, variant);
+    if adds_children {
+        live.notify_structural_change();
+    } else {
+        live.notify_layer_prim_edits(layer, &[prim]);
+    }
+    live.recompose(&mut loaded.store);
+    let fresh = Stage::compose(&mut loaded.store, loaded.root_layer, options());
+    assert_eq!(
+        snapshot(loaded, live.stage()),
+        snapshot(loaded, &fresh),
+        "recomposed after selecting {variant:?}"
+    );
+}
+
+#[test]
+fn selection_edits_recompose_like_a_full_composition() {
+    // Spec: AOUSD Core §10.3.2.5, §10.4.2.4. `/Beacon` selects its
+    // referenced variant set from its complete prim index, the class
+    // implied into this layer stack included: editing the class's
+    // selection recomposes as a full composition does.
+    let oracle = oracle();
+    let (mut loaded, _) = compose(&oracle);
+    let mut live = LiveStage::compose(&mut loaded.store, loaded.root_layer, options());
+    let shade = loaded.store.property_path("/Beacon.shade");
+    let filter = loaded.store.path("/Beacon/Filter");
+    let resolved = |live: &LiveStage| {
+        live.stage()
+            .resolve_field_path(shade)
+            .map(|resolved| resolved.value)
+    };
+    assert_eq!(resolved(&live), Some(Value::Int(2)));
+    let class = ("root.usda", "/_class_Beacon");
+    select(&mut live, &mut loaded, class, ("lens", "clear"), false);
+    assert_eq!(resolved(&live), Some(Value::Int(1)));
+    assert!(!live.stage().has_prim(filter));
+    select(&mut live, &mut loaded, class, ("lens", "tinted"), true);
+    assert_eq!(resolved(&live), Some(Value::Int(2)));
+    assert!(live.stage().has_prim(filter));
 }

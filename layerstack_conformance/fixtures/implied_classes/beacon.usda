@@ -1,0 +1,25 @@
+#usda 1.0
+
+def "Beacon" (
+    inherits = </_class_Beacon>
+    variantSets = "lens"
+    variants = {
+        string lens = "clear"
+    }
+)
+{
+    variantSet "lens" = {
+        "clear" (
+            references = @./lens.usda@</Clear>
+        ) {
+        }
+        "tinted" (
+            references = @./lens.usda@</Tinted>
+        ) {
+        }
+    }
+}
+
+class "_class_Beacon"
+{
+}

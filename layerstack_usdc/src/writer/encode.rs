@@ -366,9 +366,9 @@ impl Packer {
             Value::FloatArray(v) => self.float_array(T::Float, &floats(v))?,
             Value::DoubleArray(v) => self.float_array(T::Double, &doubles(v))?,
             // `GfTimeCode` arrays have no compressed form.
-            Value::TimeCodeArray(v) => self.plain_array(T::TimeCode, v.len(), |out| {
-                out.extend_from_slice(&doubles(v).bytes);
-            })?,
+            Value::TimeCodeArray(v) => {
+                self.math_array(T::TimeCode, v.len(), v, f64::to_le_bytes)?
+            }
             Value::StringArray(v) => {
                 let indexes = self.text_indexes(v, site, Self::string)?;
                 self.plain_array(T::String, v.len(), |out| out.extend_from_slice(&indexes))?
@@ -381,43 +381,68 @@ impl Packer {
                 let indexes = self.text_indexes(v, site, Self::string)?;
                 self.plain_array(T::AssetPath, v.len(), |out| out.extend_from_slice(&indexes))?
             }
-            Value::Vec2hArray(v) => self.math_array(T::Vec2h, v.len(), halves(v.as_flattened()))?,
-            Value::Vec3hArray(v) => self.math_array(T::Vec3h, v.len(), halves(v.as_flattened()))?,
-            Value::Vec4hArray(v) => self.math_array(T::Vec4h, v.len(), halves(v.as_flattened()))?,
-            Value::Vec2fArray(v) => self.math_array(T::Vec2f, v.len(), floats(v.as_flattened()))?,
-            Value::Vec3fArray(v) => self.math_array(T::Vec3f, v.len(), floats(v.as_flattened()))?,
-            Value::Vec4fArray(v) => self.math_array(T::Vec4f, v.len(), floats(v.as_flattened()))?,
+            Value::Vec2hArray(v) => {
+                self.math_array(T::Vec2h, v.len(), v.as_flattened(), u16::to_le_bytes)?
+            }
+            Value::Vec3hArray(v) => {
+                self.math_array(T::Vec3h, v.len(), v.as_flattened(), u16::to_le_bytes)?
+            }
+            Value::Vec4hArray(v) => {
+                self.math_array(T::Vec4h, v.len(), v.as_flattened(), u16::to_le_bytes)?
+            }
+            Value::Vec2fArray(v) => {
+                self.math_array(T::Vec2f, v.len(), v.as_flattened(), f32::to_le_bytes)?
+            }
+            Value::Vec3fArray(v) => {
+                self.math_array(T::Vec3f, v.len(), v.as_flattened(), f32::to_le_bytes)?
+            }
+            Value::Vec4fArray(v) => {
+                self.math_array(T::Vec4f, v.len(), v.as_flattened(), f32::to_le_bytes)?
+            }
             Value::Vec2dArray(v) => {
-                self.math_array(T::Vec2d, v.len(), doubles(v.as_flattened()))?
+                self.math_array(T::Vec2d, v.len(), v.as_flattened(), f64::to_le_bytes)?
             }
             Value::Vec3dArray(v) => {
-                self.math_array(T::Vec3d, v.len(), doubles(v.as_flattened()))?
+                self.math_array(T::Vec3d, v.len(), v.as_flattened(), f64::to_le_bytes)?
             }
             Value::Vec4dArray(v) => {
-                self.math_array(T::Vec4d, v.len(), doubles(v.as_flattened()))?
+                self.math_array(T::Vec4d, v.len(), v.as_flattened(), f64::to_le_bytes)?
             }
-            Value::Vec2iArray(v) => self.math_array(T::Vec2i, v.len(), ints(v.as_flattened()))?,
-            Value::Vec3iArray(v) => self.math_array(T::Vec3i, v.len(), ints(v.as_flattened()))?,
-            Value::Vec4iArray(v) => self.math_array(T::Vec4i, v.len(), ints(v.as_flattened()))?,
-            Value::QuathArray(v) => self.math_array(T::Quath, v.len(), halves(v.as_flattened()))?,
-            Value::QuatfArray(v) => self.math_array(T::Quatf, v.len(), floats(v.as_flattened()))?,
+            Value::Vec2iArray(v) => {
+                self.math_array(T::Vec2i, v.len(), v.as_flattened(), i32::to_le_bytes)?
+            }
+            Value::Vec3iArray(v) => {
+                self.math_array(T::Vec3i, v.len(), v.as_flattened(), i32::to_le_bytes)?
+            }
+            Value::Vec4iArray(v) => {
+                self.math_array(T::Vec4i, v.len(), v.as_flattened(), i32::to_le_bytes)?
+            }
+            Value::QuathArray(v) => {
+                self.math_array(T::Quath, v.len(), v.as_flattened(), u16::to_le_bytes)?
+            }
+            Value::QuatfArray(v) => {
+                self.math_array(T::Quatf, v.len(), v.as_flattened(), f32::to_le_bytes)?
+            }
             Value::QuatdArray(v) => {
-                self.math_array(T::Quatd, v.len(), doubles(v.as_flattened()))?
+                self.math_array(T::Quatd, v.len(), v.as_flattened(), f64::to_le_bytes)?
             }
             Value::Matrix2dArray(v) => self.math_array(
                 T::Matrix2d,
                 v.len(),
-                doubles(v.as_flattened().as_flattened()),
+                v.as_flattened().as_flattened(),
+                f64::to_le_bytes,
             )?,
             Value::Matrix3dArray(v) => self.math_array(
                 T::Matrix3d,
                 v.len(),
-                doubles(v.as_flattened().as_flattened()),
+                v.as_flattened().as_flattened(),
+                f64::to_le_bytes,
             )?,
             Value::Matrix4dArray(v) => self.math_array(
                 T::Matrix4d,
                 v.len(),
-                doubles(v.as_flattened().as_flattened()),
+                v.as_flattened().as_flattened(),
+                f64::to_le_bytes,
             )?,
             Value::Dictionary(entries) => self.dictionary(entries, site)?,
             // `Write(std::vector<TfToken>)`: count, then token indexes.
@@ -661,13 +686,34 @@ impl Packer {
         self.blob(ty, ARRAY_BIT, bytes, true)
     }
 
-    fn math_array(
+    /// Uncompressed math/timecode arrays need no numeric staging for
+    /// compression decisions. Encode components directly into the array blob,
+    /// preserving their bit patterns (including half NaNs and signed zero).
+    /// Keep the encoder generic so component conversion can inline/vectorize;
+    /// an indirect function call per component defeats that optimization.
+    /// OpenUSD: `_WriteUncompressedArray` writes the count and contiguous data.
+    fn math_array<T: Copy, const N: usize>(
         &mut self,
         ty: ValueType,
         len: usize,
-        elems: Elems,
+        components: &[T],
+        encode: impl Fn(T) -> [u8; N],
     ) -> Result<u64, UsdcWriteError> {
-        self.plain_array(ty, len, |out| out.extend_from_slice(&elems.bytes))
+        if len == 0 {
+            return Ok(rep(ty, ARRAY_BIT, 0));
+        }
+        let size = components
+            .len()
+            .checked_mul(N)
+            .and_then(|bytes| bytes.checked_add(8))
+            .ok_or(UsdcWriteError::TooLarge)?;
+        let mut bytes = Vec::new();
+        bytes
+            .try_reserve_exact(size)
+            .map_err(|_| UsdcWriteError::TooLarge)?;
+        bytes.extend_from_slice(&(len as u64).to_le_bytes());
+        bytes.extend(components.iter().flat_map(|&component| encode(component)));
+        self.blob(ty, ARRAY_BIT, bytes, true)
     }
 
     /// `_WritePossiblyCompressedArray` for (u)int and (u)int64 arrays:

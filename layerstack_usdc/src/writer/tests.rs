@@ -1235,3 +1235,62 @@ fn variant_specs_round_trip() {
         "the branch's child prim spec"
     );
 }
+
+/// Uncompressed components are stored verbatim, not converted through f64.
+/// AOUSD Core §16.3; OpenUSD `_WriteUncompressedArray`.
+#[test]
+fn uncompressed_math_arrays_preserve_component_bits() {
+    let f32_bits = [0x8000_0000_u32, 0x7fc0_0123, 0x0000_0001];
+    let half_bits = [0x8000_u16, 0x7c01, 0x0001, 0xfc00];
+    let f64_bits = [0x8000_0000_0000_0000_u64, 0x7ff0_0000_0000_0123];
+    let matrix = [[f64::from_bits(f64_bits[0]), f64::from_bits(f64_bits[1])]; 2];
+    let cases = [
+        (
+            "v",
+            Value::Vec3fArray(vec![f32_bits.map(f32::from_bits)]),
+            f32_bits
+                .into_iter()
+                .flat_map(u32::to_le_bytes)
+                .collect::<Vec<_>>(),
+        ),
+        (
+            "q",
+            Value::QuathArray(vec![half_bits]),
+            half_bits.into_iter().flat_map(u16::to_le_bytes).collect(),
+        ),
+        (
+            "m",
+            Value::Matrix2dArray(vec![matrix]),
+            f64_bits
+                .repeat(2)
+                .into_iter()
+                .flat_map(u64::to_le_bytes)
+                .collect(),
+        ),
+        (
+            "t",
+            Value::TimeCodeArray(vec![f64::from_bits(f64_bits[1])]),
+            f64_bits[1].to_le_bytes().to_vec(),
+        ),
+    ];
+    for (name, value, expected) in cases {
+        let file = Decoded::new(write_crate(&layer_with(&[(name, value)])).unwrap());
+        let rep = file.rep(&alloc::format!("/Root.{name}"), "default");
+        assert!(
+            rep.is_array() && !rep.is_compressed(),
+            "{name}: plain array"
+        );
+        let start = payload(rep);
+        assert_eq!(start % 8, 0, "{name}: alignment");
+        assert_eq!(
+            &file.data[start..start + 8],
+            &1_u64.to_le_bytes(),
+            "{name}: count"
+        );
+        assert_eq!(
+            &file.data[start + 8..start + 8 + expected.len()],
+            expected,
+            "{name}: raw bits"
+        );
+    }
+}

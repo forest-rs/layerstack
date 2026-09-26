@@ -548,9 +548,8 @@ impl LiveStage {
         // Replace only the recomposed prim indexes; hierarchy is unchanged.
         self.stage.merge_prims_from(partial, &affected);
 
-        // Incrementally update dependency edges for each affected prim.
+        self.update_prim_edges(&affected, &partial_deps);
         for &prim in &affected {
-            self.update_prim_edges(prim, &partial_deps);
             self.reindex_sources(prim);
         }
 
@@ -563,12 +562,55 @@ impl LiveStage {
         &self.stage
     }
 
-    /// Removes all edges involving `prim` (as target) and re-adds them from
-    /// the partial composition's dependency data.
-    fn update_prim_edges(&mut self, prim: PathId, partial: &CompositionDeps) {
-        // Remove old arc metadata for this prim (as target).
-        self.arc_metadata.retain(|a| a.target != prim);
+    /// Replaces dependency data for the affected batch, leaving other
+    /// dependents intact. Scan global metadata once, not once per prim.
+    fn update_prim_edges(&mut self, affected: &[PathId], partial: &CompositionDeps) {
+        let affected_set: HashSet<_> = affected.iter().copied().collect();
+        self.arc_metadata
+            .retain(|arc| !affected_set.contains(&arc.target));
+        let mut new_arcs: Vec<_> = partial
+            .arcs
+            .iter()
+            .filter(|arc| affected_set.contains(&arc.target))
+            .copied()
+            .collect();
+        new_arcs.sort_unstable_by_key(|arc| arc.target);
 
+        for &prim in affected {
+            let start = new_arcs.partition_point(|arc| arc.target < prim);
+            let end = new_arcs.partition_point(|arc| arc.target <= prim);
+            self.update_prim_graph_edges(prim, partial, &new_arcs[start..end]);
+        }
+        self.arc_metadata.extend(new_arcs);
+
+        // Scoped composition also holds supporting source prims. Only
+        // replace dependencies for prims whose indexes were merged.
+        for dependents in self.default_prim_dependents.values_mut() {
+            dependents.retain(|prim| !affected_set.contains(prim));
+        }
+        for (layer, dependents) in &partial.default_prim_dependents {
+            for prim in dependents
+                .iter()
+                .filter(|&prim| affected_set.contains(prim))
+            {
+                self.default_prim_dependents
+                    .entry(*layer)
+                    .or_default()
+                    .insert(*prim);
+            }
+        }
+        self.default_prim_dependents
+            .retain(|_, dependents| !dependents.is_empty());
+    }
+
+    /// Replaces one dependent's graph and layer edges from the partial
+    /// composition, using the batch's already grouped arc metadata.
+    fn update_prim_graph_edges(
+        &mut self,
+        prim: PathId,
+        partial: &CompositionDeps,
+        new_arcs: &[ArcDependency],
+    ) {
         // Remove old graph edges where prim is the dependent.
         let old_deps: Vec<PathId> = self
             .tracker
@@ -588,15 +630,7 @@ impl LiveStage {
             }
         }
 
-        // Add new arcs from the partial composition.
-        let new_arcs: Vec<ArcDependency> = partial
-            .arcs
-            .iter()
-            .filter(|a| a.target == prim)
-            .copied()
-            .collect();
-        for arc in &new_arcs {
-            self.arc_metadata.insert(*arc);
+        for arc in new_arcs {
             let _ = self
                 .tracker
                 .add_dependency(arc.target, arc.source, OPINION_EDIT);
@@ -613,21 +647,6 @@ impl LiveStage {
         if !layers_for_prim.is_empty() {
             self.prim_to_layers.insert(prim, layers_for_prim);
         }
-
-        // Replace the prim's `defaultPrim` dependencies.
-        for dependents in self.default_prim_dependents.values_mut() {
-            dependents.remove(&prim);
-        }
-        for (layer, dependents) in &partial.default_prim_dependents {
-            if dependents.contains(&prim) {
-                self.default_prim_dependents
-                    .entry(*layer)
-                    .or_default()
-                    .insert(prim);
-            }
-        }
-        self.default_prim_dependents
-            .retain(|_, dependents| !dependents.is_empty());
     }
 
     /// Composes `affected` with a population mask that also holds the arc
@@ -1967,6 +1986,21 @@ mod tests {
         );
         assert_matches_fresh(&live, &mut store, &[field_x]);
 
+        // Repeat the shared-source batch, then edit the untouched source.
+        // Dependency replacement must preserve both future propagation paths.
+        for (site, expected) in [(source, vec![a, b]), (other, vec![d])] {
+            store
+                .layers
+                .get_mut(&LayerId(2))
+                .unwrap()
+                .set_property(PropertyPath::new(site, field_x), attr(11));
+            live.notify_layer_prim_edits(LayerId(2), &[site]);
+            let mut updated = live.recompose(&mut store);
+            updated.sort_unstable();
+            assert_eq!(updated, expected);
+            assert_matches_fresh(&live, &mut store, &[field_x]);
+        }
+
         // Destination paths are not source paths of the library layer.
         live.notify_layer_prim_edits(LayerId(2), &[a]);
         assert!(live.recompose(&mut store).is_empty());
@@ -2883,6 +2917,16 @@ mod tests {
         let mut live = LiveStage::compose(&mut store, LayerId(1), options);
         assert_eq!(live.prims_using_default_prim(LayerId(2)), [a, b]);
         assert!(live.prims_using_default_prim(LayerId(1)).is_empty());
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+
+        store
+            .layers
+            .get_mut(&LayerId(2))
+            .unwrap()
+            .set_property(PropertyPath::new(model, field_x), attr(3));
+        live.notify_layer_prim_edits(LayerId(2), &[model]);
+        live.recompose(&mut store);
+        assert_eq!(live.prims_using_default_prim(LayerId(2)), [a, b]);
         assert_matches_fresh(&live, &mut store, &[field_x]);
 
         let a_child = |live: &LiveStage, store: &mut InMemoryStore, name: &str| {

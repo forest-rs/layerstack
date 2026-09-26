@@ -15,8 +15,8 @@ extern crate alloc;
 
 use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 use layerstack::{
-    HashMap, InMemoryStore, Layer, LayerId, PrimSpec, Reference, Stage, StageOptions, Value,
-    VariantSetSpec, VariantSpec,
+    HashMap, InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, Reference, Stage, StageOptions,
+    Value, VariantSetSpec, VariantSpec,
 };
 
 /// Builds a store whose root layer (`LayerId(1)`) holds `n` trees under
@@ -144,5 +144,32 @@ fn bench_arcs(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_arcs);
+fn bench_arc_edits(c: &mut Criterion) {
+    let mut group = c.benchmark_group("nested_arcs_edit");
+    for &n in &[10, 100, 250] {
+        let mut store = build_forest(n);
+        let bark = store.path("/Bark");
+        let roughness = store.tokens.intern("roughness");
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let mut value = 0.25;
+        group.bench_function(BenchmarkId::from_parameter(n), |b| {
+            b.iter(|| {
+                value = 1.0 - value;
+                store
+                    .layers
+                    .get_mut(&LayerId(3))
+                    .unwrap()
+                    .prims
+                    .get_mut(&bark)
+                    .unwrap()
+                    .set_field(roughness, Value::Double(value));
+                live.notify_layer_prim_edits(LayerId(3), &[bark]);
+                std::hint::black_box(live.recompose(&mut store));
+            });
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(benches, bench_arcs, bench_arc_edits);
 criterion_main!(benches);

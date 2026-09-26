@@ -363,36 +363,70 @@ fn exact_animation_alone_refuses_under_refuse_required() {
 }
 
 #[test]
-fn sparse_array_edit_samples_are_lost() {
+fn sparse_array_edit_samples_are_baked() {
     use crate::array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
 
-    let edits = |store: &mut InMemoryStore, spec: &mut PrimSpec| {
-        let name = store.tokens.intern("ids");
-        let edit = ArrayEdit {
-            ops: vec![ArrayEditOp::Write {
-                src: ArrayEditOperand::Literal(Value::Int(9)),
-                index: ArrayIndex::Position(0),
-            }],
-        };
-        spec.set_property(
-            name,
-            PropertySpec::typed_attribute(PropertyType::new("int", true, Value::Int(0)))
-                .with_time_samples(vec![(0.0, Value::ArrayEdit(edit))]),
-        );
-    };
-    assert_eq!(
-        unmet(flatten_edited(
-            LayerOffset::IDENTITY,
-            &FlattenRequirements::default(),
-            edits
-        )),
-        [(
-            Requirement::ExactAnimation,
-            "/World/Tree.ids".into(),
-            Loss::ArrayEditSamples,
-            "/Asset.ids".into()
-        )]
+    // The asset samples dense arrays at 0 and 10; the referencing layer
+    // edits the first element at 5. Each edit composes over the weaker
+    // sample held at its time, and each weaker sample under the edit held
+    // at its time: 0 and 10 are edited too.
+    let mut store = InMemoryStore::default();
+    referenced_scene(&mut store, LayerOffset::IDENTITY);
+    let ids = store.tokens.intern("ids");
+    let ints = PropertyType::new("int", true, Value::Int(0));
+    let array = |items: &[i32]| Value::Array(items.iter().map(|&i| Value::Int(i)).collect());
+    let asset = store.path("/Asset");
+    let asset_spec = store
+        .layers
+        .get_mut(&LayerId(2))
+        .unwrap()
+        .prims
+        .get_mut(&asset)
+        .unwrap();
+    asset_spec.set_property(
+        ids,
+        PropertySpec::typed_attribute(ints.clone())
+            .with_time_samples(vec![(0.0, array(&[1, 2, 3])), (10.0, array(&[4, 5, 6]))]),
     );
+    let tree = store.path("/World/Tree");
+    let edit = ArrayEdit {
+        ops: vec![ArrayEditOp::Write {
+            src: ArrayEditOperand::Literal(Value::Int(9)),
+            index: ArrayIndex::Position(0),
+        }],
+    };
+    let tree_spec = store
+        .layers
+        .get_mut(&LayerId(1))
+        .unwrap()
+        .prims
+        .get_mut(&tree)
+        .unwrap();
+    tree_spec.set_property(
+        ids,
+        PropertySpec::typed_attribute(ints).with_time_samples(vec![(5.0, Value::ArrayEdit(edit))]),
+    );
+    let flat = flatten(&mut store, &FlattenRequirements::default()).expect("flattens");
+    let samples = flat.layer.prims[&tree]
+        .property(ids)
+        .unwrap()
+        .time_samples
+        .clone();
+    assert_eq!(
+        samples,
+        Some(vec![
+            (0.0, array(&[9, 2, 3])),
+            (5.0, array(&[9, 2, 3])),
+            (10.0, array(&[9, 5, 6])),
+        ])
+    );
+    let baked: Vec<String> = flat
+        .report
+        .transformed()
+        .filter(|f| f.kind == FindingKind::Transformed(Transformation::ArrayEditsBaked))
+        .map(|f| f.path.to_string())
+        .collect();
+    assert_eq!(baked, ["/World/Tree.ids"]);
 }
 
 #[test]

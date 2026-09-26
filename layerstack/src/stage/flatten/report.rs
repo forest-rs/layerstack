@@ -450,6 +450,10 @@ pub enum Transformation {
         /// The field (`apiSchemas`, `targetPaths`, `connectionPaths`).
         field: String,
     },
+    /// Time samples composed from sparse array edits, written as the dense
+    /// arrays they compose to at each sample time, as OpenUSD's flatten
+    /// writes them.
+    ArrayEditsBaked,
     /// Time samples moved from layer time into stage time.
     ///
     /// Spec: AOUSD Core §12.3.2.1 (a layer's time `t` is stage time
@@ -536,6 +540,7 @@ impl fmt::Display for Transformation {
             }
             Self::InstanceShared { prototype } => write!(f, "instance of {prototype}"),
             Self::InstanceExpanded => f.write_str("instance expanded"),
+            Self::ArrayEditsBaked => f.write_str("sparse array edits baked into each sample"),
             Self::AssetPathAnchored { authored, anchored } => {
                 write!(f, "@{authored}@ anchored as @{anchored}@")
             }
@@ -552,9 +557,6 @@ impl fmt::Display for Transformation {
 /// Composed content a flattened layer does not hold.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Loss {
-    /// Time samples composed from sparse array edits, which would have to
-    /// be composed into dense arrays sample by sample.
-    ArrayEditSamples,
     /// A spline read through a layer offset or scale, whose knots would
     /// have to be retimed.
     RetimedSpline,
@@ -575,9 +577,7 @@ impl Loss {
     #[must_use]
     pub fn requirement(self) -> Option<Requirement> {
         match self {
-            Self::ArrayEditSamples | Self::RetimedSpline | Self::ValueClips => {
-                Some(Requirement::ExactAnimation)
-            }
+            Self::RetimedSpline | Self::ValueClips => Some(Requirement::ExactAnimation),
             Self::UnanchoredAssetPath => Some(Requirement::AnchoredAssetPaths),
             Self::UntypedAttribute => None,
         }
@@ -587,7 +587,6 @@ impl Loss {
 impl fmt::Display for Loss {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Self::ArrayEditSamples => "time samples with sparse array edits",
             Self::RetimedSpline => "a spline through a layer offset",
             Self::ValueClips => "value clips",
             Self::UntypedAttribute => "an attribute without a type",

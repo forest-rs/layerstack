@@ -60,8 +60,9 @@
 //! nodes, their sources prohibited), asset paths authored as variable
 //! expressions, evaluated with the expression variables of the referencing
 //! layer stacks, variant sets nested in other branches, each branch a
-//! variant spec of its own, and variant selections, including fallbacks,
-//! that do not depend on the features below.
+//! variant spec of its own, and variant selections, including fallbacks
+//! and those a specialized class authors, that do not depend on the
+//! features below.
 //!
 //! # Not supported
 //!
@@ -69,8 +70,7 @@
 //! - Implied classes in population and variant selection
 //!   ([`Cause::ImpliedClasses`]).
 //! - Variant selections of the sites ancestral arcs reach, made before the
-//!   prim's index is complete ([`Cause::AncestralArcs`]), and variant
-//!   sets a specialized class selects ([`Cause::VariantSpecs`]).
+//!   prim's index is complete ([`Cause::AncestralArcs`]).
 //!
 //! The test prints the per-cause tally and the list of exact matches.
 
@@ -504,11 +504,6 @@ enum Cause {
     /// prim's arcs are all added (`_EvalNodeAncestralVariantSets` in
     /// `pxr/usd/pcp/primIndex.cpp`).
     AncestralArcs,
-    /// A variant set selected only by a class the prim specializes is not
-    /// selected: the prim's variant selections are resolved without its
-    /// specializes targets, which OpenUSD adds before any variant set is
-    /// evaluated (`Task::PriorityOrder` in `pxr/usd/pcp/primIndex.cpp`).
-    VariantSpecs,
 
     // Unsupported features.
     /// Relocates (AOUSD Core §10.3.2.6) move a prim's ancestral opinions
@@ -588,15 +583,6 @@ const KNOWN: &[Known] = &[
         values: 0,
         diffs: &[D::MissingPrim],
         reason: "under `/ChainedReferences`, where `root.usd` relocates `Child` and the internal references relocate it too, neither relocated child is composed",
-    },
-    Known {
-        fixture: "SpecializesAndVariants3_root",
-        causes: &[C::VariantSpecs],
-        prims: 3,
-        props: 3,
-        values: 3,
-        diffs: &[D::MissingSite],
-        reason: "`/implementation` misses its own `{testVariantSet=testVariant}` branch, selected by the specialized class, so `variantAttr` has no value",
     },
     Known {
         fixture: "SubrootReferenceAndRelocates_root",

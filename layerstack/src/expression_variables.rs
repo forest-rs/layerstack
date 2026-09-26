@@ -174,6 +174,10 @@ pub(crate) fn composed_variables(
     stacks: &[LayerId],
 ) -> ExpressionVariables {
     let mut variables = ExpressionVariables::new();
+    if store.tokens().lookup(EXPRESSION_VARIABLES).is_none() {
+        // No layer authors `expressionVariables`.
+        return variables;
+    }
     for root in stacks {
         if let Some(layer) = store.layer(*root) {
             variables.compose_over(&layer_expression_variables(layer, store.tokens()));
@@ -569,9 +573,20 @@ pub(crate) fn same_context(
     a: NodeId,
     b: NodeId,
 ) -> bool {
-    a == b
-        || composed_variables(store, &node_chain(graph, a))
-            == composed_variables(store, &node_chain(graph, b))
+    a == b || node_variables(store, graph, a) == node_variables(store, graph, b)
+}
+
+/// The expression variables `node` of `graph` reads its layer stack with:
+/// those composed along its chain ([`node_chain`]).
+pub(crate) fn node_variables(
+    store: &dyn LayerStore,
+    graph: &PrimIndexGraph,
+    node: NodeId,
+) -> ExpressionVariables {
+    if store.tokens().lookup(EXPRESSION_VARIABLES).is_none() {
+        return ExpressionVariables::new();
+    }
+    composed_variables(store, &node_chain(graph, node))
 }
 
 /// The variant selections `selections`, authored at a site read in

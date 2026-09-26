@@ -277,6 +277,16 @@ over "Clay" (
 # `path.usda`, which sublayers `${PICK}`: at one destination the two
 # contexts gather two layer stacks, each bringing its own child, directly
 # and through the class `/Trail` inherits.
+# `camp_a.usda` and `camp_b.usda` set LEVEL differently and both reference
+# `base.usda`, whose `/Camp` inherits `/Lodge/Room`: the class's ancestral
+# reference reaches `hut.usda` from each context, and OpenUSD keeps both
+# sites, one per layer stack.
+def "Tent" (
+    references = [@./camp_a.usda@</Camp>, @./camp_b.usda@</Camp>]
+)
+{
+}
+
 def "Hike" (
     references = [@./trail_a.usda@</Trail>, @./trail_b.usda@</Trail>]
 )
@@ -397,6 +407,78 @@ over "Paint"
 over "Paint"
 {
     int shade = 2
+}
+''',
+    "camp_a": '''#usda 1.0
+(
+    expressionVariables = {
+        string LEVEL = "./floor_a.usda"
+    }
+)
+
+def "Camp" (
+    references = @./base.usda@</Camp>
+)
+{
+}
+''',
+    "camp_b": '''#usda 1.0
+(
+    expressionVariables = {
+        string LEVEL = "./floor_b.usda"
+    }
+)
+
+def "Camp" (
+    references = @./base.usda@</Camp>
+)
+{
+}
+''',
+    "base": '''#usda 1.0
+(
+    subLayers = [
+        @`"${LEVEL}"`@
+    ]
+)
+
+def "Camp" (
+    inherits = </Lodge/Room>
+)
+{
+}
+
+def "Lodge" (
+    references = @./hut.usda@</Hut>
+)
+{
+    def "Room"
+    {
+    }
+}
+''',
+    "floor_a": '''#usda 1.0
+
+over "Camp"
+{
+    int height = 1
+}
+''',
+    "floor_b": '''#usda 1.0
+
+over "Camp"
+{
+    int width = 2
+}
+''',
+    "hut": '''#usda 1.0
+
+def "Hut"
+{
+    def "Room"
+    {
+        int size = 1
+    }
 }
 ''',
     "trail_a": '''#usda 1.0

@@ -1,0 +1,12 @@
+#usda 1.0
+(
+    expressionVariables = {
+        string LEVEL = "./floor_b.usda"
+    }
+)
+
+def "Camp" (
+    references = @./base.usda@</Camp>
+)
+{
+}

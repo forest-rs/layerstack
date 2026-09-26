@@ -467,6 +467,55 @@
    ]
   },
   {
+   "path": "/Tent",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Tent"
+    ],
+    [
+     "camp_a.usda",
+     "/Camp"
+    ],
+    [
+     "base.usda",
+     "/Camp"
+    ],
+    [
+     "floor_a.usda",
+     "/Camp"
+    ],
+    [
+     "base.usda",
+     "/Lodge/Room"
+    ],
+    [
+     "hut.usda",
+     "/Hut/Room"
+    ],
+    [
+     "camp_b.usda",
+     "/Camp"
+    ],
+    [
+     "base.usda",
+     "/Camp"
+    ],
+    [
+     "floor_b.usda",
+     "/Camp"
+    ],
+    [
+     "base.usda",
+     "/Lodge/Room"
+    ],
+    [
+     "hut.usda",
+     "/Hut/Room"
+    ]
+   ]
+  },
+  {
    "path": "/Hike",
    "prim_stack": [
     [
@@ -639,6 +688,9 @@
   "/Meadow.bloom": 3,
   "/Clearing.bloom": 3,
   "/Canvas.shade": 2,
+  "/Tent.height": 1,
+  "/Tent.size": 1,
+  "/Tent.width": 2,
   "/Hike/PostB.value": 1,
   "/Hike/B.value": 1,
   "/Hike/PostA.value": 1,

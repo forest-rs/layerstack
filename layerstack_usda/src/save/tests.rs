@@ -786,6 +786,38 @@ def "A" (
     );
 }
 
+/// `permission`, `hasOwnedSubLayers` and `timecode` metadata values save
+/// as authored and read back the same.
+#[test]
+fn saves_permissions_and_timecode_metadata() {
+    let source = r#"#usda 1.0
+(
+    hasOwnedSubLayers = true
+)
+
+def "A" (
+    permission = private
+    customData = {
+        timecode "cue" = 12
+        dictionary "season" = {
+            timecode[] "frost" = [1, 9.5]
+        }
+    }
+)
+{
+    double x = 1 (
+        permission = public
+    )
+    rel r (
+        permission = private
+    )
+}
+"#;
+    let text = Imported::new(source).save().unwrap();
+    assert_eq!(text, source, "saved text");
+    assert_eq!(Imported::new(&text).layer, Imported::new(source).layer);
+}
+
 /// A property spec added through the API, a relationship between
 /// attributes, lands where it was authored.
 #[test]

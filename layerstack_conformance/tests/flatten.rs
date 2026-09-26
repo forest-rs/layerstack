@@ -38,7 +38,7 @@ use std::process::Command;
 
 use layerstack::stage::flatten::{
     FindingKind, FlattenError, FlattenReport, FlattenRequirements, FlattenVerification, Loss,
-    LossPolicy, Preserved, Requirement, SkipReason,
+    LossPolicy, MismatchKind, Preserved, Requirement, SkipReason,
 };
 use layerstack::{
     AssetResolveError, AssetResolver, InMemoryStore, Layer, LayerId, ListOp, PathInterner,
@@ -66,21 +66,11 @@ fn not_exact() -> Vec<&'static str> {
         .collect()
 }
 
-/// Cases whose flattened layer a writer rejects, with the field the
-/// rejection names. Flattening itself succeeds; the savers report what they
-/// cannot write instead of dropping it.
-const UNSAVED: &[(&str, &str)] = &[
-    // Layer metadata the USDC writer does not register.
-    ("BasicOwner_root", "hasOwnedSubLayers"),
-    ("ErrorOwner_root", "hasOwnedSubLayers"),
-    // Attribute metadata OpenUSD does not register, which the USDC writer
-    // cannot store as the text parser does.
-    ("BasicVariantWithConnections_root", "avar"),
-    // Property `permission`, whose USDA syntax the writers do not produce.
-    ("ErrorConnectionPermissionDenied_root", "permission"),
-    ("ErrorPermissionDenied_root", "permission"),
-    ("TrickyListEditedTargetPaths_root", "permission"),
-];
+/// Unregistered metadata the cases author. The USDA reader types its value
+/// from its text; a USDC file holds the text, as OpenUSD's text parser
+/// records it (an `SdfUnregisteredValue` string), so it reads back from the
+/// USDC as a string. Each must still differ that way.
+const UNREGISTERED: &[(&str, &str)] = &[("BasicVariantWithConnections_root", "avar")];
 
 /// Cases where OpenUSD's composition differs from Layerstack's in what the
 /// strict comparison does not cover, so the flattened layers differ too.
@@ -370,9 +360,11 @@ fn flattened_layers_compose_the_flattened_stage() {
             failures.push(format!("{name}: arcs left at {arcs:?}"));
         }
         let (usda, usdc) = save(&flat.layer, &flat.store);
-        let unsaved = UNSAVED.iter().find(|(case, _)| case == name);
-        if let Err(e) = check_saved(unsaved, &usda, &usdc) {
-            failures.push(format!("{name}: {e}"));
+        for error in [usda.as_ref().err(), usdc.as_ref().err()]
+            .into_iter()
+            .flatten()
+        {
+            failures.push(format!("{name}: cannot save: {error}"));
         }
         let base = flat.layer.id.0;
         flat.store.insert_layer(flat.layer.clone());
@@ -390,7 +382,24 @@ fn flattened_layers_compose_the_flattened_stage() {
                 failures.push(format!("{name}: cannot read the {format} back: {e}"));
                 continue;
             }
-            match verify(&mut flat, id) {
+            let unregistered: Vec<&str> = UNREGISTERED
+                .iter()
+                .filter(|(case, _)| format == "usdc" && case == name)
+                .map(|(_, field)| *field)
+                .collect();
+            let verified = verify(&mut flat, id).map(|mut verification| {
+                let before = verification.mismatches.len();
+                verification.mismatches.retain(|m| {
+                    !matches!(&m.kind, MismatchKind::PropertyMetadata { field }
+                        if unregistered.contains(&field.as_str())
+                            && m.found.starts_with("String("))
+                });
+                if !unregistered.is_empty() && before == verification.mismatches.len() {
+                    failures.push(format!("{name}: {unregistered:?} now reads back typed"));
+                }
+                verification
+            });
+            match verified {
                 Err(e) => failures.push(format!("{name} ({format}): {e}")),
                 Ok(verification) if !verification.is_equivalent() => failures.push(format!(
                     "{name} ({format}): composes differently\n{}",
@@ -511,31 +520,6 @@ fn save(layer: &Layer, store: &InMemoryStore) -> (Result<String, String>, Result
     )
 }
 
-/// Checks that a save fails only for a case [`UNSAVED`] lists, naming the
-/// field it lists, and that such a case still fails to save.
-fn check_saved(
-    unsaved: Option<&(&str, &str)>,
-    usda: &Result<String, String>,
-    usdc: &Result<Vec<u8>, String>,
-) -> Result<(), String> {
-    let errors: Vec<(&str, &String)> =
-        [("usda", usda.as_ref().err()), ("usdc", usdc.as_ref().err())]
-            .into_iter()
-            .filter_map(|(format, e)| Some((format, e?)))
-            .collect();
-    match unsaved {
-        None if errors.is_empty() => Ok(()),
-        None => Err(format!("cannot save: {errors:?}")),
-        Some((_, key)) if errors.is_empty() => {
-            Err(format!("now saves {key}; remove it from UNSAVED"))
-        }
-        Some((_, key)) => match errors.iter().find(|(_, e)| !e.contains(key)) {
-            Some((format, e)) => Err(format!("cannot save the {format}: {e}")),
-            None => Ok(()),
-        },
-    }
-}
-
 /// A per-test directory under Cargo's integration-test scratch space.
 ///
 /// Under WASI only the crate directory and its parent are preopened (see
@@ -606,7 +590,7 @@ fn flatten_matches_openusd() {
                 std::fs::write(&usda, text).unwrap();
                 std::fs::write(&usdc, bytes).unwrap();
             }
-            // `flattened_layers_compose_the_flattened_stage` checks why.
+            // `flattened_layers_compose_the_flattened_stage` reports why.
             _ => continue,
         }
         let fallbacks = if case.fallbacks {

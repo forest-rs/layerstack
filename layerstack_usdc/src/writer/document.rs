@@ -41,13 +41,16 @@
 //!   `double` field would print as `0.1` in USDA, parse as the double
 //!   `0.1`, but widen to `0.10000000149011612` here;
 //! - a `timecode` / `timecode[]` default or time sample is an
-//!   `SdfTimeCode` value (crate version 0.9.0); every other value keeps its
-//!   own type.
+//!   `SdfTimeCode` value (crate version 0.9.0), as is a `timecode` metadata
+//!   value or dictionary entry; every other value keeps its own type;
+//! - `permission` is an `SdfPermission`.
 //!
-//! Metadata keys outside the table in [`metadata_field`] are rejected: the
-//! text parser would store them as unregistered values, which this writer
-//! does not produce, with one deliberate exception: prim `profilesInfo`
-//! ([`FieldType::UnregisteredDictionary`]).
+//! Metadata keys outside the table in [`metadata_field`] are stored as the
+//! text parser stores them, as an `SdfUnregisteredValue`: a dictionary as
+//! itself (prim `profilesInfo` among them,
+//! [`FieldType::UnregisteredDictionary`]) and any other value as the text
+//! of its USDA value. An unregistered list op has no such form and is
+//! rejected.
 //!
 //! Spec: AOUSD Core §7.4 (metadata), §7.6 (core fields), §16.3 (crate
 //! format).
@@ -78,9 +81,9 @@ use super::{ListOp, Reference, Spec, SpecForm, Specifier, Value, Variability, wr
 /// # Errors
 ///
 /// [`UsdcWriteError::Document`] when the USDA writer would reject the
-/// document; [`UsdcWriteError::UnknownMetadata`] and
-/// [`UsdcWriteError::MetadataType`] for metadata the crate lowering cannot
-/// type; otherwise the errors of [`write_crate`].
+/// document; [`UsdcWriteError::UnknownMetadata`] for an unregistered list
+/// op and [`UsdcWriteError::MetadataType`] for metadata of the wrong type;
+/// otherwise the errors of [`write_crate`].
 pub fn write_document(doc: &Document) -> Result<Vec<u8>, UsdcWriteError> {
     write_crate(&document_specs(doc)?)
 }
@@ -96,9 +99,7 @@ pub fn write_document(doc: &Document) -> Result<Vec<u8>, UsdcWriteError> {
 /// # Errors
 ///
 /// [`UsdcWriteError::Save`] for what the lowering rejects, before any
-/// output; otherwise the errors of [`write_document`] (notably
-/// [`UsdcWriteError::UnknownMetadata`] for metadata OpenUSD does not
-/// register).
+/// output; otherwise the errors of [`write_document`].
 pub fn save_layer(
     layer: &Layer,
     tokens: &TokenInterner,
@@ -362,6 +363,7 @@ fn natural(value: &UsdaValue) -> Value {
         U::Half(v) => Value::Half(*v),
         U::Float(v) => Value::Float(*v),
         U::Double(v) => Value::Double(*v),
+        U::TimeCode(v) => Value::TimeCode(*v),
         U::String(v) => Value::String(v.clone()),
         U::Token(v) => Value::Token(v.clone()),
         U::Asset(v) => Value::Asset(v.clone()),
@@ -392,6 +394,7 @@ fn natural(value: &UsdaValue) -> Value {
         U::HalfArray(v) => Value::HalfArray(v.clone()),
         U::FloatArray(v) => Value::FloatArray(v.clone()),
         U::DoubleArray(v) => Value::DoubleArray(v.clone()),
+        U::TimeCodeArray(v) => Value::TimeCodeArray(v.clone()),
         U::StringArray(v) => Value::StringArray(v.clone()),
         U::TokenArray(v) => Value::TokenArray(v.clone()),
         U::AssetArray(v) => Value::AssetArray(v.clone()),
@@ -477,6 +480,8 @@ pub enum FieldType {
     /// stores an unregistered dictionary literal, an `SdfUnregisteredValue`
     /// holding the `VtDictionary`.
     UnregisteredDictionary,
+    /// `SdfPermission`; a USDA `public` or `private`.
+    Permission,
 }
 
 /// The crate field name and registered type of the USDA metadata `key` on
@@ -513,6 +518,7 @@ pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldTyp
     // `SdfSchema` registers these for prims and both property forms.
     let named = match (owner, key) {
         (Owner::Layer, _) => None,
+        (_, "permission") => Some(("permission", F::Permission)),
         (_, "prefix") => Some(("prefix", F::String)),
         (_, "suffix") => Some(("suffix", F::String)),
         (_, "symmetricPeer") => Some(("symmetricPeer", F::String)),
@@ -521,6 +527,7 @@ pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldTyp
     let specific = match owner {
         Owner::Layer => match key {
             "defaultPrim" => Some(("defaultPrim", F::Token)),
+            "hasOwnedSubLayers" => Some(("hasOwnedSubLayers", F::Bool)),
             "customLayerData" => Some(("customLayerData", F::Dictionary)),
             "fallbackPrimTypes" => Some(("fallbackPrimTypes", F::Dictionary)),
             "expressionVariables" => Some(("expressionVariables", F::Dictionary)),
@@ -606,9 +613,28 @@ pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldTyp
 /// token is quoted text either way).
 fn metadatum(owner: Owner, path: &str, entry: &Metadatum) -> Result<super::Field, UsdcWriteError> {
     let Some((name, ty)) = metadata_field(owner, &entry.key) else {
-        return Err(UsdcWriteError::UnknownMetadata {
-            path: path.into(),
-            key: entry.key.clone(),
+        // OpenUSD's text parser keeps metadata no schema registers as an
+        // `SdfUnregisteredValue`: a dictionary as itself, anything else as
+        // the text of its value (`textParserHelpers.cpp`), which a crate
+        // stores as it is.
+        let value = match &entry.value {
+            v @ UsdaValue::Dictionary(_) => natural(v),
+            UsdaValue::TokenListOp(_)
+            | UsdaValue::StringListOp(_)
+            | UsdaValue::IntListOp(_)
+            | UsdaValue::UIntListOp(_)
+            | UsdaValue::Int64ListOp(_)
+            | UsdaValue::UInt64ListOp(_) => {
+                return Err(UsdcWriteError::UnknownMetadata {
+                    path: path.into(),
+                    key: entry.key.clone(),
+                });
+            }
+            v => Value::String(v.to_usda_text()),
+        };
+        return Ok(super::Field {
+            name: entry.key.clone(),
+            value: Value::UnregisteredValue(Box::new(value)),
         });
     };
     use UsdaValue as U;
@@ -636,6 +662,11 @@ fn metadatum(owner: Owner, path: &str, entry: &Metadatum) -> Result<super::Field
         (FieldType::UnregisteredDictionary, v @ U::Dictionary(_)) => {
             Some(Value::UnregisteredValue(Box::new(natural(v))))
         }
+        (FieldType::Permission, U::Token(v) | U::String(v)) => match v.as_str() {
+            "public" => Some(Value::Permission(super::Permission::Public)),
+            "private" => Some(Value::Permission(super::Permission::Private)),
+            _ => None,
+        },
         _ => None,
     };
     let value = value.ok_or_else(|| UsdcWriteError::MetadataType {
@@ -1150,17 +1181,17 @@ mod tests {
         let keys: Vec<&str> = entries.iter().map(|(k, _)| k.as_str()).collect();
         assert_eq!(keys, ["capabilityUsages", "profileCompatibility"], "keys");
 
-        // Other unregistered keys are still rejected, dictionary or not.
+        // Any other unregistered dictionary is transported the same way.
         let mut doc = doc;
         doc.prims[0]
             .metadata
             .push(Metadatum::new("exedraInfo", hints));
+        let specs = document_specs(&doc).unwrap();
         assert!(
-            matches!(
-                document_specs(&doc),
-                Err(UsdcWriteError::UnknownMetadata { .. })
-            ),
-            "only profilesInfo is transported unregistered"
+            specs[1].fields.iter().any(|f| f.name == "exedraInfo"
+                && matches!(&f.value, Value::UnregisteredValue(inner)
+                    if matches!(**inner, Value::Dictionary(_)))),
+            "exedraInfo is transported as an unregistered dictionary"
         );
     }
 
@@ -1304,13 +1335,19 @@ mod tests {
 (
     "A layer."
     defaultPrim = "A"
+    hasOwnedSubLayers = true
     upAxis = "Z"
 )
 
 reorder rootPrims = ["A"]
 
 def Xform "A" (
+    permission = private
     prepend apiSchemas = ["ClaimsAPI", "exedra:Tagged:one"]
+    customData = {
+        timecode cue = 12
+        timecode[] marks = [1, 2.5]
+    }
     profilesInfo = {
         dictionary capabilityUsages = {
             string "usd.geom.mesh" = "hard"
@@ -1329,7 +1366,9 @@ def Xform "A" (
         }
     )
     delete float y.connect = </A.x>
-    custom double z = None
+    custom double z = None (
+        permission = public
+    )
     timecode t = 24
     asset[] files = [@./a.png@, @b/c.exr@]
 
@@ -1527,18 +1566,6 @@ def Xform "A" (
             )),
             "the USDA save's error, before any output"
         );
-        // Unregistered metadata is saved as USDA but has no crate form.
-        let (layer, tokens, paths) =
-            import_usda("#usda 1.0\ndef \"A\" (\n    exedraNote = \"n\"\n)\n{\n}\n");
-        assert!(layerstack_usda::save::save_usda(&layer, &tokens, &paths).is_ok());
-        assert_eq!(
-            save_layer(&layer, &tokens, &paths),
-            Err(UsdcWriteError::UnknownMetadata {
-                path: "/A".into(),
-                key: "exedraNote".into()
-            }),
-            "unregistered metadata"
-        );
     }
 
     #[test]
@@ -1552,27 +1579,45 @@ def Xform "A" (
             })),
             "document validation"
         );
+        // Unregistered metadata is stored as the text parser stores it: the
+        // text of its value; an unregistered list op has no crate form.
         let mut doc = mesh_doc();
         doc.metadata
             .push(Metadatum::new("fooBar", UsdaValue::String("x".into())));
+        assert!(
+            document_specs(&doc).unwrap()[0]
+                .fields
+                .contains(&Field::new(
+                    "fooBar",
+                    Value::UnregisteredValue(Box::new(Value::String("\"x\"".into())))
+                )),
+            "unregistered layer metadata"
+        );
+        let mut doc = mesh_doc();
+        doc.prims[0].metadata.push(Metadatum::new(
+            "fooBar",
+            UsdaValue::TokenListOp(layerstack_usda::writer::ListOp::prepend(vec!["x".into()])),
+        ));
         assert_eq!(
             document_specs(&doc),
             Err(UsdcWriteError::UnknownMetadata {
-                path: "/".into(),
+                path: "/Root".into(),
                 key: "fooBar".into()
             }),
-            "unregistered layer metadata"
+            "unregistered list op"
         );
         let mut doc = mesh_doc();
         doc.prims[0]
             .metadata
             .push(Metadatum::new("elementSize", UsdaValue::Int(2)));
         assert!(
-            matches!(
-                document_specs(&doc),
-                Err(UsdcWriteError::UnknownMetadata { .. })
-            ),
-            "elementSize is attribute metadata"
+            document_specs(&doc).unwrap()[1]
+                .fields
+                .contains(&Field::new(
+                    "elementSize",
+                    Value::UnregisteredValue(Box::new(Value::String("2".into())))
+                )),
+            "elementSize is attribute metadata, unregistered on a prim"
         );
         // A registered type is required, not converted to: USDA would print
         // a `float` 0.1 as `0.1`, which parses as the double 0.1, while

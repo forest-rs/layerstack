@@ -877,6 +877,10 @@ pub enum Value {
     Float(f32),
     /// `double` (also accepted for `timecode`).
     Double(f64),
+    /// `timecode`: a time, written like a `double`. An attribute declared
+    /// `timecode` may hold a [`Self::Double`] too; a dictionary entry needs
+    /// this to be typed `timecode`.
+    TimeCode(f64),
     /// `string`.
     String(String),
     /// `token`.
@@ -941,6 +945,8 @@ pub enum Value {
     FloatArray(Vec<f32>),
     /// `double[]`.
     DoubleArray(Vec<f64>),
+    /// `timecode[]`, as [`Self::TimeCode`] is to [`Self::Double`].
+    TimeCodeArray(Vec<f64>),
     /// `string[]`.
     StringArray(Vec<String>),
     /// `token[]`.
@@ -1182,8 +1188,8 @@ pub enum WriteError {
     /// ([`Prim::references`], [`Document::sublayers`], ...) as are the
     /// variant fields ([`Prim::variant_selections`] and
     /// [`Prim::variant_set_names`]), and what this writer does not produce:
-    /// relocates, identifier-valued
-    /// fields (`permission`, `symmetryFunction`) and the substitution maps.
+    /// relocates, the identifier-valued `symmetryFunction`, a `permission`
+    /// other than `public` or `private`, and the substitution maps.
     /// A quoted `key = value` statement would not parse.
     ReservedMetadata {
         /// Path of the owning object.
@@ -1453,8 +1459,9 @@ fn validate_order(
 /// Metadata keys with dedicated USDA syntax that a quoted `key = value`
 /// statement cannot express (OpenUSD `pxr/usd/sdf/textFileFormat.peg`):
 /// composition arcs, sublayers and variant fields (written from their own
-/// members), relocates, the identifier-valued `permission` and
-/// `symmetryFunction`, and the string-to-string substitution maps.
+/// members), relocates, the identifier-valued `symmetryFunction`, and the
+/// string-to-string substitution maps. `permission` is written bare when
+/// its value is `public` or `private` ([`PERMISSIONS`]).
 const RESERVED_METADATA: &[&str] = &[
     "references",
     "payload",
@@ -1464,11 +1471,17 @@ const RESERVED_METADATA: &[&str] = &[
     "variantSets",
     "subLayers",
     "relocates",
-    "permission",
     "symmetryFunction",
     "prefixSubstitutions",
     "suffixSubstitutions",
 ];
+
+/// The values of the `permission` field (`SdfPermission`), which USDA
+/// writes as a bare identifier: `permission = private`.
+///
+/// Spec: AOUSD Core §7.6.2 and §7.6.3 (the prim and property `permission`
+/// fields), §16.2.19 (`PermissionMetadata`, legacy content).
+pub const PERMISSIONS: &[&str] = &["public", "private"];
 
 /// Validates metadata keys and values; `list_ops` admits list-op entries
 /// (prim and property metadata only).
@@ -1497,7 +1510,11 @@ fn validate_metadata<'a>(
                 name: entry.key.clone(),
             });
         }
-        if RESERVED_METADATA.contains(&entry.key.as_str()) {
+        let permission = entry.key == "permission"
+            && matches!(&entry.value, Value::Token(v) | Value::String(v) if PERMISSIONS.contains(&v.as_str()));
+        if RESERVED_METADATA.contains(&entry.key.as_str())
+            || (entry.key == "permission" && !permission)
+        {
             return Err(WriteError::ReservedMetadata {
                 path: path.into(),
                 key: entry.key.clone(),
@@ -1658,6 +1675,15 @@ fn parse_type_name(type_name: &str) -> Option<Shape> {
 }
 
 impl Value {
+    /// The value as USDA writes it (`1.5`, `"text"`, `[1, 2]`), as OpenUSD's
+    /// text parser records an unregistered metadata value.
+    #[must_use]
+    pub fn to_usda_text(&self) -> String {
+        let mut out = String::new();
+        Writer { out: &mut out }.value(self, 0);
+        out
+    }
+
     /// An empty array of the declared array type `type_name` (such as
     /// `point3f[]`), or `None` when the name is not an array type this
     /// writer has a [`Value`] for.
@@ -1721,7 +1747,7 @@ impl Value {
             Self::UInt64(_) => (Elem::UInt64, 1, false),
             Self::Half(_) => (Elem::Half, 1, false),
             Self::Float(_) => (Elem::Float, 1, false),
-            Self::Double(_) => (Elem::Double, 1, false),
+            Self::Double(_) | Self::TimeCode(_) => (Elem::Double, 1, false),
             Self::String(_) => (Elem::String, 1, false),
             Self::Token(_) => (Elem::Token, 1, false),
             Self::Asset(_) => (Elem::Asset, 1, false),
@@ -1751,7 +1777,7 @@ impl Value {
             Self::UInt64Array(_) => (Elem::UInt64, 1, true),
             Self::HalfArray(_) => (Elem::Half, 1, true),
             Self::FloatArray(_) => (Elem::Float, 1, true),
-            Self::DoubleArray(_) => (Elem::Double, 1, true),
+            Self::DoubleArray(_) | Self::TimeCodeArray(_) => (Elem::Double, 1, true),
             Self::StringArray(_) => (Elem::String, 1, true),
             Self::TokenArray(_) => (Elem::Token, 1, true),
             Self::AssetArray(_) => (Elem::Asset, 1, true),
@@ -1800,6 +1826,7 @@ impl Value {
             Self::Half(_) => "half",
             Self::Float(_) => "float",
             Self::Double(_) => "double",
+            Self::TimeCode(_) => "timecode",
             Self::String(_) => "string",
             Self::Token(_) => "token",
             Self::Asset(_) => "asset",
@@ -1830,6 +1857,7 @@ impl Value {
             Self::HalfArray(_) => "half[]",
             Self::FloatArray(_) => "float[]",
             Self::DoubleArray(_) => "double[]",
+            Self::TimeCodeArray(_) => "timecode[]",
             Self::StringArray(_) => "string[]",
             Self::TokenArray(_) => "token[]",
             Self::AssetArray(_) => "asset[]",
@@ -1955,7 +1983,10 @@ impl Writer<'_> {
             }
             self.out.push_str(&entry.key);
             self.out.push_str(" = ");
-            self.value(&entry.value, depth);
+            match (key, &entry.value) {
+                ("permission", Value::Token(v) | Value::String(v)) => self.out.push_str(v),
+                _ => self.value(&entry.value, depth),
+            }
             self.out.push('\n');
         }
     }
@@ -2336,7 +2367,7 @@ impl Writer<'_> {
             Value::UInt64(v) => self.display(v),
             Value::Half(v) => self.half(*v),
             Value::Float(v) => self.f32(*v),
-            Value::Double(v) => self.f64(*v),
+            Value::Double(v) | Value::TimeCode(v) => self.f64(*v),
             Value::String(v) | Value::Token(v) => self.string(v),
             Value::Asset(v) => self.asset(v),
             Value::Float2(v) => self.tuple(v, Self::f32),
@@ -2367,7 +2398,7 @@ impl Writer<'_> {
             Value::UInt64Array(v) => self.array(v, |w, x| w.display(x)),
             Value::HalfArray(v) => self.array(v, |w, x| w.half(*x)),
             Value::FloatArray(v) => self.array(v, |w, x| w.f32(*x)),
-            Value::DoubleArray(v) => self.array(v, |w, x| w.f64(*x)),
+            Value::DoubleArray(v) | Value::TimeCodeArray(v) => self.array(v, |w, x| w.f64(*x)),
             Value::StringArray(v) | Value::TokenArray(v) => self.array(v, |w, s| w.string(s)),
             Value::AssetArray(v) => self.array(v, |w, s| w.asset(s)),
             Value::Float2Array(v) => self.array(v, |w, t| w.tuple(t, Self::f32)),

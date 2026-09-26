@@ -67,9 +67,9 @@
 //! - [`SaveError::Unsupported`]: splines; sparse array edits (as a
 //!   default or a time sample); list ops mixing an explicit list with
 //!   edits; `varying` relationships; path list-op metadata; and values the
-//!   writers have no representation for (`pathExpression`, `opaque`,
-//!   `timecode` outside an attribute value, and arrays whose element type
-//!   is not recorded, such as an empty array in a dictionary);
+//!   writers have no representation for (`pathExpression`, `opaque`, and
+//!   arrays whose element type is not recorded, such as an empty array in
+//!   a dictionary);
 //! - [`SaveError::Invalid`]: a layer the file formats cannot hold as it
 //!   stands, such as a prim spec that no parent or variant lists among its
 //!   children, an attribute without a type, a relationship with time
@@ -864,7 +864,9 @@ impl Lowering<'_> {
             // The writers hold a `timecode` default as a double and store
             // it as `SdfTimeCode` from the declared type.
             L::TimeCode(v) if matches!(site, Site::Value(_)) => Value::Double(*v),
-            L::TimeCode(_) => return no("timecode"),
+            // Elsewhere (a metadata value or a dictionary entry) the value
+            // carries the type.
+            L::TimeCode(v) => Value::TimeCode(*v),
             L::String(v) => Value::String(String::from(&**v)),
             L::Token(v) => Value::Token(self.name(*v)),
             L::Asset(v) => Value::Asset(String::from(&**v)),
@@ -997,6 +999,9 @@ fn layer_offset(offset: LayerLayerOffset) -> LayerOffset {
 
 /// The empty array of `element`'s type, if the writers have one.
 fn empty_array_like(element: &Value) -> Option<Value> {
+    if matches!(element, Value::TimeCode(_)) {
+        return Some(Value::TimeCodeArray(Vec::new()));
+    }
     Value::empty_array_of(&format!("{}[]", element.canonical_type_name()))
 }
 
@@ -1026,6 +1031,7 @@ fn push_element(array: &mut Value, element: Value) -> bool {
         (Value::Matrix4dArray(a), Value::Matrix4d(v)) => a.push(v),
         (Value::FloatArray(a), Value::Float(v)) => a.push(v),
         (Value::DoubleArray(a), Value::Double(v)) => a.push(v),
+        (Value::TimeCodeArray(a), Value::TimeCode(v)) => a.push(v),
         (Value::StringArray(a), Value::String(v)) => a.push(v),
         (Value::TokenArray(a), Value::Token(v)) => a.push(v),
         (Value::AssetArray(a), Value::Asset(v)) => a.push(v),

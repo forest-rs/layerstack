@@ -7,6 +7,7 @@
 
 mod explain;
 pub mod flatten;
+mod stage_time;
 
 pub use explain::{
     Contribution, DictionaryMerge, ExplainedOpinion, IgnoreCause, KeyPath, OpinionRole, SampleUse,
@@ -761,6 +762,10 @@ impl Stage {
         property_type: Option<&PropertyType>,
         fallback: Option<&Value>,
     ) -> Option<Resolved<ResolvedValue>> {
+        // Spec: AOUSD Core §12.3.2.1 (`timecode` values are read in stage
+        // time, through each opinion's layer offset).
+        let opinions = stage_time::opinions_in_stage_time(opinions, property_type);
+        let opinions: &[Opinion] = &opinions;
         let strongest_default = opinions
             .iter()
             .find(|opinion| opinion.value.default_value().is_some());
@@ -853,6 +858,31 @@ impl Stage {
         fallback: Option<&Value>,
     ) -> Option<Resolved<Value>> {
         let (index, opinions) = self.opinions(prim, field, lookup)?;
+        self.resolve_at_time_over(
+            field,
+            opinions,
+            index.property_type_for(&field),
+            time,
+            interp,
+            fallback,
+        )
+    }
+
+    /// Resolves a chain of opinions at numeric `time`, as
+    /// [`Stage::resolve_value_at_time`] does.
+    fn resolve_at_time_over(
+        &self,
+        field: TokenId,
+        opinions: &[Opinion],
+        property_type: Option<&PropertyType>,
+        time: f64,
+        interp: InterpolationType,
+        fallback: Option<&Value>,
+    ) -> Option<Resolved<Value>> {
+        // Spec: AOUSD Core §12.3.2.1 (`timecode` values are read in stage
+        // time, through each opinion's layer offset).
+        let opinions = stage_time::opinions_in_stage_time(opinions, property_type);
+        let opinions: &[Opinion] = &opinions;
 
         // Spec: AOUSD Core §12.3 (a path expression's `%_` composes over
         // the next weaker one at every time).
@@ -871,7 +901,7 @@ impl Stage {
                 interp,
                 fallback,
             },
-            index.property_type_for(&field),
+            property_type,
         ) {
             SparseResolveResult::Resolved(value) => {
                 return Some(Resolved {
@@ -912,6 +942,9 @@ impl Stage {
         key: TokenId,
     ) -> Option<Resolved<ResolvedValue>> {
         let opinions = self.prims.get(&prim)?.property_opinions(property)?;
+        // Spec: AOUSD Core §12.3.2.1 (`timecode` values in stage time).
+        let property_type = self.prims.get(&prim)?.property_type_for(&property);
+        let opinions = stage_time::opinions_in_stage_time(opinions, property_type);
         let authored: Vec<(&Opinion, &FieldValue)> = opinions
             .iter()
             .filter_map(|op| Some((op, op.value.as_property()?.metadata(key)?)))
@@ -2300,5 +2333,105 @@ mod tests {
             [(LayerId(2), spec.clone()), (LayerId(2), spec.clone())]
         );
         assert_eq!(stage.prim_stack(prim), Some(vec![(LayerId(2), spec)]));
+    }
+
+    /// `timecode` values read through a reference's offset (`offset = 5`,
+    /// `scale = 2`) are in stage time wherever they are: an attribute
+    /// default, time samples, prim metadata and property metadata, and the
+    /// explanations report the same values.
+    #[test]
+    fn timecode_values_are_read_in_stage_time() {
+        use crate::{InMemoryStore, Layer, PrimSpec, Reference, stage::StageOptions};
+
+        let mut store = InMemoryStore::default();
+        let (tree, asset) = (store.path("/Tree"), store.path("/Asset"));
+        let (bloom, cues, custom_data) = (
+            store.tokens.intern("bloom"),
+            store.tokens.intern("cues"),
+            store.tokens.intern("customData"),
+        );
+        let mut root = Layer::new(LayerId(1));
+        let mut reference = Reference::new(LayerId(2), asset);
+        reference.asset = Some("./asset.usda".into());
+        reference.layer_offset = LayerOffset {
+            offset: 5.0,
+            scale: 2.0,
+        };
+        root.insert_prim(tree, PrimSpec::def().with_reference(reference));
+        store.insert_layer(root);
+        let timecode = PropertyType::new("timecode", false, Value::TimeCode(0.0));
+        let timecodes = PropertyType::new("timecode", true, Value::TimeCode(0.0));
+        let mut layer = Layer::new(LayerId(2));
+        layer.insert_prim(
+            asset,
+            PrimSpec::def()
+                .with_field(
+                    custom_data,
+                    Value::Dictionary(vec![("budded".into(), Value::TimeCode(2.0))]),
+                )
+                .with_property(
+                    bloom,
+                    PropertySpec::typed_attribute(timecode)
+                        .with_default(Value::TimeCode(4.0))
+                        .with_metadata(
+                            custom_data,
+                            Value::Dictionary(vec![("peak".into(), Value::TimeCode(6.0))]),
+                        ),
+                )
+                .with_property(
+                    cues,
+                    PropertySpec::typed_attribute(timecodes).with_time_samples(vec![
+                        (0.0, Value::Array(vec![Value::TimeCode(1.0)])),
+                        (10.0, Value::Array(vec![Value::TimeCode(3.0)])),
+                    ]),
+                ),
+        );
+        store.insert_layer(layer);
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+
+        let bloom = PropertyPath::new(tree, bloom);
+        let default = Some(ResolvedValue::Scalar(Value::TimeCode(13.0)));
+        assert_eq!(stage.resolve_property_path(bloom).map(|r| r.value), default);
+        assert_eq!(
+            stage.explain_property_value(bloom).and_then(|e| e.value),
+            default
+        );
+        assert_eq!(
+            stage
+                .resolve_property_metadata(tree, bloom.property(), custom_data)
+                .map(|r| r.value),
+            Some(ResolvedValue::Dictionary(vec![(
+                "peak".into(),
+                Value::TimeCode(17.0)
+            )]))
+        );
+        let budded = Some(ResolvedValue::Dictionary(vec![(
+            "budded".into(),
+            Value::TimeCode(9.0),
+        )]));
+        assert_eq!(
+            stage.resolve_value(tree, custom_data).map(|r| r.value),
+            budded
+        );
+        assert_eq!(
+            stage.explain_value(tree, custom_data).and_then(|e| e.value),
+            budded
+        );
+
+        // The sample at layer time 10 is at stage time 25.
+        let cues = PropertyPath::new(tree, cues);
+        let at_25 = Some(Value::Array(vec![Value::TimeCode(11.0)]));
+        assert_eq!(
+            stage
+                .resolve_property_path_at_time(cues, 25.0, InterpolationType::Held)
+                .map(|r| r.value),
+            at_25
+        );
+        assert_eq!(
+            stage
+                .explain_property_value_at_time(cues, 25.0, InterpolationType::Held)
+                .and_then(|e| e.value),
+            at_25
+        );
     }
 }

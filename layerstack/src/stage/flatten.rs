@@ -42,7 +42,8 @@
 //!   source is time samples, its spline when that is a spline, and its
 //!   default whenever an opinion authors one, as the resolved default or a
 //!   value block. Times and `timecode` values are mapped through the layer
-//!   offset of the opinion that provides them, so they are in stage time.
+//!   offset of the opinion that provides them, so they are in stage time,
+//!   as the stage resolves them.
 //! - A relationship keeps its composed targets, and an attribute its
 //!   composed connections, as explicit lists in stage namespace.
 //! - References, payloads, inherits, specializes, variant sets, variant
@@ -90,11 +91,12 @@ use alloc::{format, string::String, sync::Arc, vec::Vec};
 
 use hashbrown::HashMap;
 
-use super::{ResolvedValue, Stage};
+use super::{
+    ResolvedValue, Stage,
+    stage_time::{retime_value, to_stage_time},
+};
 use crate::{
-    doc::{
-        FieldEntry, FieldValue, Layer, LayerId, LayerOffset, LayerStore, PrimSpec, Reference, Value,
-    },
+    doc::{FieldEntry, FieldValue, Layer, LayerId, LayerStore, PrimSpec, Reference, Value},
     interner::TokenId,
     listop::ListOp,
     path::{Path, PathId, PropertyPath, TargetPath},
@@ -341,6 +343,33 @@ impl Flattener<'_, '_> {
 
     fn lost(&mut self, path: String, loss: Loss, source: Option<FindingSource>) {
         self.note(path, FindingKind::Lost(loss), source);
+    }
+
+    /// Records that `opinion`'s default or metadata value holds `timecode`
+    /// values the resolved value moved into stage time. Returns `true` when
+    /// it holds none, so the value is written as authored.
+    ///
+    /// Spec: AOUSD Core §12.3.2.1.
+    fn note_retimed(
+        &mut self,
+        path: &str,
+        opinion: &Opinion,
+        source: Option<&FindingSource>,
+    ) -> bool {
+        let Some(value) = opinion.value.default_value() else {
+            return true;
+        };
+        if retime_value(value, opinion.layer_offset).is_none() {
+            return true;
+        }
+        self.transformed(
+            path.into(),
+            Transformation::TimeCodesRetimed {
+                offset: opinion.layer_offset,
+            },
+            source.cloned(),
+        );
+        false
     }
 
     /// Records each asset path in `value` as an external dependency, and,
@@ -627,7 +656,9 @@ impl Flattener<'_, '_> {
                     Transformation::ListOpMadeExplicit { field },
                     source.clone(),
                 );
-            } else {
+            } else if strongest
+                .is_none_or(|opinion| self.note_retimed(&path, opinion, source.as_ref()))
+            {
                 self.report.preserved.metadata_fields += 1;
             }
             let value = self.field_value(resolved.value, authored, remap);
@@ -755,20 +786,12 @@ impl Flattener<'_, '_> {
                 None => Value::Blocked,
             };
             let source = self.source(authored, true);
-            let retimed = retime(value.clone(), authored.layer_offset);
-            if retimed == value {
+            // The resolved value is in stage time already.
+            if self.note_retimed(&path, authored, Some(&source)) {
                 self.report.preserved.defaults += 1;
-            } else {
-                self.transformed(
-                    path.clone(),
-                    Transformation::TimeCodesRetimed {
-                        offset: authored.layer_offset,
-                    },
-                    Some(source.clone()),
-                );
             }
-            self.note_assets(&path, &retimed, Some(&source));
-            spec.default = Some(retimed);
+            self.note_assets(&path, &value, Some(&source));
+            spec.default = Some(value);
         }
         Some(spec)
     }
@@ -788,7 +811,10 @@ impl Flattener<'_, '_> {
         let offset = source.layer_offset;
         let out: Vec<(f64, Value)> = samples
             .iter()
-            .map(|(time, value)| (to_stage_time(offset, *time), retime(value.clone(), offset)))
+            .map(|(time, value)| {
+                let value = retime_value(value, offset).unwrap_or_else(|| value.clone());
+                (to_stage_time(offset, *time), value)
+            })
             .collect();
         if offset.is_identity() {
             self.report.preserved.time_samples += out.len();
@@ -851,11 +877,22 @@ impl Flattener<'_, '_> {
                 .find_map(|opinion| Some((opinion, opinion.value.as_property()?.metadata(key)?)));
             let source = strongest.map(|(opinion, _)| self.source(opinion, true));
             let authored = strongest.map(|(_, value)| value);
+            let retimed = strongest.is_some_and(|(opinion, value)| {
+                matches!(value, FieldValue::Value(value) if retime_value(value, opinion.layer_offset).is_some())
+            });
             if authored.is_some_and(|value| !is_explicit(value)) {
                 let field = String::from(self.store.tokens().resolve(key));
                 self.transformed(
                     path.into(),
                     Transformation::ListOpMadeExplicit { field },
+                    source.clone(),
+                );
+            } else if let (true, Some((opinion, _))) = (retimed, strongest) {
+                self.transformed(
+                    path.into(),
+                    Transformation::TimeCodesRetimed {
+                        offset: opinion.layer_offset,
+                    },
                     source.clone(),
                 );
             } else {
@@ -1004,32 +1041,6 @@ fn is_absolute_asset_path(path: &str) -> bool {
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
     })
-}
-
-/// Maps a layer time to stage time through `offset`: the inverse of
-/// [`LayerOffset::map_time`].
-fn to_stage_time(offset: LayerOffset, time: f64) -> f64 {
-    time * offset.scale + offset.offset
-}
-
-/// Maps `timecode` values (alone, in arrays or in dictionaries) to stage
-/// time, as OpenUSD's value resolution does (`Usd_ApplyLayerOffsetToValue`,
-/// `pxr/usd/usd/utils.h`).
-fn retime(value: Value, offset: LayerOffset) -> Value {
-    if offset.is_identity() {
-        return value;
-    }
-    match value {
-        Value::TimeCode(time) => Value::TimeCode(to_stage_time(offset, time)),
-        Value::Array(items) => Value::Array(items.into_iter().map(|v| retime(v, offset)).collect()),
-        Value::Dictionary(entries) => Value::Dictionary(
-            entries
-                .into_iter()
-                .map(|(key, v)| (key, retime(v, offset)))
-                .collect(),
-        ),
-        other => other,
-    }
 }
 
 #[cfg(test)]

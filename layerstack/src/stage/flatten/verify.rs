@@ -10,7 +10,7 @@ use alloc::{
 };
 use core::fmt::Write as _;
 
-use super::{FindingKind, FlattenReport, Loss, ObjectPath, Transformation};
+use super::{FindingKind, FlattenReport, Loss, ObjectPath};
 use crate::{
     doc::{InterpolationType, LayerStore, Value},
     interner::{TokenId, TokenInterner},
@@ -86,10 +86,6 @@ pub enum SkipReason {
     /// The report records it as lost, so the flattened layer does not hold
     /// it; its values and metadata are not compared.
     Lost(Loss),
-    /// The flatten mapped its `timecode` values into stage time, which the
-    /// stage's value resolution does not do yet; its values are not
-    /// compared.
-    TimeCodesRetimed,
 }
 
 /// A difference between the stage and the flattened stage.
@@ -217,9 +213,6 @@ fn skips(report: &FlattenReport) -> Vec<(String, SkipReason)> {
         let reason = match &finding.kind {
             FindingKind::Lost(Loss::UnanchoredAssetPath) => continue,
             FindingKind::Lost(loss) => SkipReason::Lost(*loss),
-            FindingKind::Transformed(Transformation::TimeCodesRetimed { .. }) => {
-                SkipReason::TimeCodesRetimed
-            }
             _ => continue,
         };
         let path = finding.path.to_string();
@@ -423,9 +416,7 @@ impl Verifier<'_> {
                 path: ObjectPath::from_composed(&path),
                 reason,
             });
-            if matches!(reason, SkipReason::Lost(_)) {
-                return;
-            }
+            return;
         }
         let Some(declaration) = source.resolve_property_declaration(prim, name) else {
             return;
@@ -474,9 +465,6 @@ impl Verifier<'_> {
         let (want, got) = (targets(source), targets(flattened));
         self.compare(&path, MismatchKind::Targets, want, got);
 
-        if self.skip_reason(&path).is_some() {
-            return;
-        }
         self.out.scope.values += 1;
         let want = self.resolved(source.resolve_property_path(property).map(|r| r.value));
         let got = self.resolved(flattened.resolve_property_path(property).map(|r| r.value));
@@ -622,7 +610,7 @@ fn sample_times(stage: &Stage, property: PropertyPath) -> Vec<f64> {
                 .time_samples()
                 .unwrap_or_default()
                 .iter()
-                .map(move |(time, _)| super::to_stage_time(offset, *time))
+                .map(move |(time, _)| super::super::stage_time::to_stage_time(offset, *time))
         })
         .collect()
 }

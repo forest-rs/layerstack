@@ -363,6 +363,7 @@ impl Stage {
                 };
                 self.explain_default(
                     index,
+                    field,
                     opinions,
                     index.property_type_for(&field),
                     fallback_value,
@@ -464,11 +465,42 @@ impl Stage {
             }
             OpinionValue::Field(_) | OpinionValue::Property(_) => {}
         }
-        Some(self.explain_default(index, opinions, index.property_type_for(&field), None))
+        Some(self.explain_default(
+            index,
+            field,
+            opinions,
+            index.property_type_for(&field),
+            None,
+        ))
     }
 
     /// Mirrors the default-time resolution of a chain of opinions.
+    ///
+    /// Opinions read through a layer offset are explained as authored; the
+    /// value is the resolved one, `timecode` values in stage time (AOUSD
+    /// Core §12.3.2.1).
     fn explain_default<'s>(
+        &self,
+        index: &'s PrimIndex,
+        field: TokenId,
+        opinions: &'s [Opinion],
+        property_type: Option<&PropertyType>,
+        fallback: Option<&Value>,
+    ) -> ValueExplanation<'s, ResolvedValue> {
+        let mut explained =
+            self.explain_default_as_authored(index, opinions, property_type, fallback);
+        if matches!(
+            super::stage_time::opinions_in_stage_time(opinions, property_type),
+            alloc::borrow::Cow::Owned(_)
+        ) {
+            explained.value = self
+                .resolve_default(field, opinions, property_type, fallback)
+                .map(|resolved| resolved.value);
+        }
+        explained
+    }
+
+    fn explain_default_as_authored<'s>(
         &self,
         index: &'s PrimIndex,
         opinions: &'s [Opinion],
@@ -540,7 +572,40 @@ impl Stage {
     }
 
     /// Mirrors [`Stage::resolve_value_at_time`] over one chain of opinions.
+    ///
+    /// Opinions read through a layer offset are explained as authored; the
+    /// value is the resolved one, `timecode` values in stage time (AOUSD
+    /// Core §12.3.2.1).
     fn explain_at_time<'s>(
+        &self,
+        index: &'s PrimIndex,
+        field: TokenId,
+        opinions: &'s [Opinion],
+        time: f64,
+        interp: InterpolationType,
+        fallback: Option<&Value>,
+    ) -> ValueExplanation<'s, Value> {
+        let mut explained =
+            self.explain_at_time_as_authored(index, field, opinions, time, interp, fallback);
+        if matches!(
+            super::stage_time::opinions_in_stage_time(opinions, index.property_type_for(&field)),
+            alloc::borrow::Cow::Owned(_)
+        ) {
+            explained.value = self
+                .resolve_at_time_over(
+                    field,
+                    opinions,
+                    index.property_type_for(&field),
+                    time,
+                    interp,
+                    fallback,
+                )
+                .map(|resolved| resolved.value);
+        }
+        explained
+    }
+
+    fn explain_at_time_as_authored<'s>(
         &self,
         index: &'s PrimIndex,
         field: TokenId,

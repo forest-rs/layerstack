@@ -1,0 +1,455 @@
+{
+ "generator": "layerstack_conformance/scripts/variant_specs_oracle.py",
+ "openusd_version": "0.26.8",
+ "root": "root.usda",
+ "prims": [
+  {
+   "path": "/Stone",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Stone"
+    ],
+    [
+     "root.usda",
+     "/Stone{finish=rough}"
+    ],
+    [
+     "root.usda",
+     "/Stone{finish=rough}{grain=coarse}"
+    ],
+    [
+     "root.usda",
+     "/Stone{finish=rough}{grain=coarse}{finish=rough}"
+    ]
+   ],
+   "selections": {
+    "finish": "rough",
+    "grain": "coarse"
+   }
+  },
+  {
+   "path": "/Stone/Dust",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Stone{finish=rough}{grain=coarse}{finish=rough}Dust"
+    ]
+   ],
+   "selections": {}
+  },
+  {
+   "path": "/Stone/Flake",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Stone{finish=rough}{grain=coarse}Flake"
+    ]
+   ],
+   "selections": {}
+  },
+  {
+   "path": "/Stone/Chip",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Stone{finish=rough}Chip"
+    ]
+   ],
+   "selections": {}
+  },
+  {
+   "path": "/_class_Tree",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Tree"
+    ]
+   ],
+   "selections": {}
+  },
+  {
+   "path": "/Oak",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Oak"
+    ],
+    [
+     "root.usda",
+     "/_class_Tree"
+    ],
+    [
+     "root.usda",
+     "/_class_Tree{season=winter}"
+    ],
+    [
+     "root.usda",
+     "/_class_Tree{season=winter}{canopy=full}"
+    ]
+   ],
+   "selections": {
+    "canopy": "full",
+    "season": "winter"
+   }
+  },
+  {
+   "path": "/Oak/Snow",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Tree{season=winter}{canopy=full}Snow"
+    ]
+   ],
+   "selections": {}
+  },
+  {
+   "path": "/Elm",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Elm"
+    ],
+    [
+     "root.usda",
+     "/_class_Tree"
+    ],
+    [
+     "root.usda",
+     "/_class_Tree{season=summer}"
+    ],
+    [
+     "root.usda",
+     "/_class_Tree{season=summer}{canopy=full}"
+    ]
+   ],
+   "selections": {
+    "canopy": "full",
+    "season": "summer"
+   }
+  },
+  {
+   "path": "/Elm/Leaves",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Tree{season=summer}{canopy=full}Leaves"
+    ]
+   ],
+   "selections": {}
+  },
+  {
+   "path": "/River",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/River"
+    ],
+    [
+     "root.usda",
+     "/River{flow=fast}"
+    ],
+    [
+     "root.usda",
+     "/River{flow=fast}{depth=deep}"
+    ],
+    [
+     "root.usda",
+     "/River{flow=fast}{depth=deep}{bed=rocky}"
+    ]
+   ],
+   "selections": {
+    "bed": "rocky",
+    "depth": "deep",
+    "flow": "fast"
+   }
+  },
+  {
+   "path": "/River/Boulder",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/River{flow=fast}{depth=deep}{bed=rocky}Boulder"
+    ]
+   ],
+   "selections": {}
+  },
+  {
+   "path": "/_class_Weave",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Weave"
+    ]
+   ],
+   "selections": {}
+  },
+  {
+   "path": "/Plain",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Plain"
+    ],
+    [
+     "root.usda",
+     "/_class_Weave"
+    ],
+    [
+     "root.usda",
+     "/_class_Weave{pattern=plain}"
+    ],
+    [
+     "root.usda",
+     "/_class_Weave{pattern=plain}{warp=on}"
+    ],
+    [
+     "root.usda",
+     "/_class_Weave{pattern=plain}{weft=on}"
+    ]
+   ],
+   "selections": {
+    "pattern": "plain",
+    "warp": "on",
+    "weft": "on"
+   }
+  },
+  {
+   "path": "/Twill",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Twill"
+    ],
+    [
+     "root.usda",
+     "/_class_Weave"
+    ],
+    [
+     "root.usda",
+     "/_class_Weave{pattern=twill}"
+    ],
+    [
+     "root.usda",
+     "/_class_Weave{pattern=twill}{weft=on}"
+    ],
+    [
+     "root.usda",
+     "/_class_Weave{pattern=twill}{warp=on}"
+    ]
+   ],
+   "selections": {
+    "pattern": "twill",
+    "warp": "on",
+    "weft": "on"
+   }
+  },
+  {
+   "path": "/_class_Knot",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Knot"
+    ]
+   ],
+   "selections": {}
+  },
+  {
+   "path": "/Loop",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Loop"
+    ],
+    [
+     "root.usda",
+     "/_class_Knot"
+    ],
+    [
+     "root.usda",
+     "/_class_Knot{tie=loop}"
+    ],
+    [
+     "root.usda",
+     "/_class_Knot{tie=loop}{hue=on}"
+    ],
+    [
+     "root.usda",
+     "/_class_Knot{tie=loop}{tone=on}"
+    ],
+    [
+     "root.usda",
+     "/_class_Knot{tie=loop}{grain=on}"
+    ]
+   ],
+   "selections": {
+    "grain": "on",
+    "hue": "on",
+    "tie": "loop",
+    "tone": "on"
+   }
+  },
+  {
+   "path": "/Hitch",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Hitch"
+    ],
+    [
+     "root.usda",
+     "/_class_Knot"
+    ],
+    [
+     "root.usda",
+     "/_class_Knot{tie=hitch}"
+    ],
+    [
+     "root.usda",
+     "/_class_Knot{tie=hitch}{grain=on}"
+    ],
+    [
+     "root.usda",
+     "/_class_Knot{tie=hitch}{hue=on}"
+    ],
+    [
+     "root.usda",
+     "/_class_Knot{tie=hitch}{tone=on}"
+    ]
+   ],
+   "selections": {
+    "grain": "on",
+    "hue": "on",
+    "tie": "hitch",
+    "tone": "on"
+   }
+  },
+  {
+   "path": "/Bend",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Bend"
+    ],
+    [
+     "root.usda",
+     "/_class_Knot"
+    ],
+    [
+     "root.usda",
+     "/_class_Knot{tie=bend}"
+    ],
+    [
+     "root.usda",
+     "/_class_Knot{tie=bend}{tone=on}"
+    ],
+    [
+     "root.usda",
+     "/_class_Knot{tie=bend}{grain=on}"
+    ],
+    [
+     "root.usda",
+     "/_class_Knot{tie=bend}{hue=on}"
+    ]
+   ],
+   "selections": {
+    "grain": "on",
+    "hue": "on",
+    "tie": "bend",
+    "tone": "on"
+   }
+  },
+  {
+   "path": "/Grove",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Grove"
+    ],
+    [
+     "model.usda",
+     "/Model"
+    ],
+    [
+     "model.usda",
+     "/Model{light=dim}"
+    ],
+    [
+     "model.usda",
+     "/Model{light=dim}{shade=dark}"
+    ]
+   ],
+   "selections": {
+    "light": "dim",
+    "shade": "dark"
+   }
+  },
+  {
+   "path": "/Grove/Shadow",
+   "prim_stack": [
+    [
+     "model.usda",
+     "/Model{light=dim}{shade=dark}Shadow"
+    ]
+   ],
+   "selections": {}
+  },
+  {
+   "path": "/Copse",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Copse"
+    ],
+    [
+     "model.usda",
+     "/Model"
+    ],
+    [
+     "model.usda",
+     "/Model{light=dim}"
+    ],
+    [
+     "model.usda",
+     "/Model{light=dim}{shade=pale}"
+    ]
+   ],
+   "selections": {
+    "light": "dim",
+    "shade": "pale"
+   }
+  },
+  {
+   "path": "/Copse/Mist",
+   "prim_stack": [
+    [
+     "model.usda",
+     "/Model{light=dim}{shade=pale}Mist"
+    ]
+   ],
+   "selections": {}
+  }
+ ],
+ "values": {
+  "/Stone.depth": 1,
+  "/Stone.inner": 3,
+  "/Stone.middle": 2,
+  "/Stone.outer": 1,
+  "/Oak.leaves": 0,
+  "/Oak.snow": 1,
+  "/Elm.leaves": 10,
+  "/River.grit": 7,
+  "/River.level": 2,
+  "/River.speed": 9,
+  "/River/Boulder.size": 3,
+  "/Plain.thread": 1,
+  "/Twill.thread": 4,
+  "/Loop.strand": 1,
+  "/Hitch.strand": 6,
+  "/Bend.strand": 8,
+  "/Grove.glow": 1,
+  "/Grove.tone": 2,
+  "/Copse.glow": 1,
+  "/Copse.tone": 1
+ }
+}

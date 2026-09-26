@@ -1,0 +1,25 @@
+#usda 1.0
+(
+    defaultPrim = "Birch"
+)
+
+def Xform "Birch" (
+    assetInfo = {
+        asset identifier = @./birch.usda@
+    }
+)
+{
+    asset bark = @./textures/bark.png@
+    asset[] leaves = [@../shared/leaf.png@, @/opt/assets/leaf.png@]
+    asset lichen = @textures/lichen.png@
+    asset fungus = @textures/fungus.png@
+    asset shadow.timeSamples = {
+        0: @./shadow0.png@,
+        5: @./shadow5.png@,
+    }
+    asset glow = @./glow.png@ (
+        customData = {
+            asset mask = @./mask.png@
+        }
+    )
+}

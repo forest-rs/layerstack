@@ -3,6 +3,7 @@
 
 use super::*;
 use crate::{
+    asset::AssetResolver,
     doc::{InMemoryStore, LayerOffset, Specifier},
     property::PropertyType,
     spline::{CurveType, Extrapolation, SplineData, SplineDataType},
@@ -420,8 +421,11 @@ fn asset_paths_are_external_and_anchoring_is_required_when_declared() {
         ["/World/Tree.texture: external: @./bark.png@ (layer 2, /Asset.texture)"]
     );
 
-    struct Nowhere;
-    impl crate::asset::AssetResolver for Nowhere {
+    /// Knows where the asset layer is when `known`.
+    struct Located {
+        known: bool,
+    }
+    impl AssetResolver for Located {
         fn resolve(
             &mut self,
             _: &str,
@@ -431,12 +435,12 @@ fn asset_paths_are_external_and_anchoring_is_required_when_declared() {
         ) -> Result<crate::asset::ResolvedAsset, crate::asset::AssetResolveError> {
             Err(crate::asset::AssetResolveError::NotFound)
         }
-        fn resolved_path(&self, _: LayerId) -> Option<&str> {
-            None
+        fn resolved_path(&self, id: LayerId) -> Option<&str> {
+            (self.known && id == LayerId(2)).then_some("/assets/trees/asset.usda")
         }
     }
     let anchored = FlattenRequirements {
-        asset_paths: AssetPaths::Anchored(&Nowhere),
+        asset_paths: AssetPaths::Anchored(&Located { known: false }),
         ..FlattenRequirements::default()
     };
     assert_eq!(
@@ -447,6 +451,27 @@ fn asset_paths_are_external_and_anchoring_is_required_when_declared() {
             Loss::UnanchoredAssetPath,
             "/Asset.texture".into()
         )]
+    );
+
+    let located = Located { known: true };
+    let anchored = FlattenRequirements {
+        asset_paths: AssetPaths::Anchored(&located),
+        ..FlattenRequirements::default()
+    };
+    let flat = flatten_edited(LayerOffset::IDENTITY, &anchored, texture).expect("anchors");
+    let findings: Vec<String> = flat
+        .report
+        .findings
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+    assert_eq!(
+        findings,
+        [
+            "/World/Tree.texture: transformed: @./bark.png@ anchored as \
+             @/assets/trees/bark.png@ (layer 2, /Asset.texture)",
+            "/World/Tree.texture: external: @/assets/trees/bark.png@ (layer 2, /Asset.texture)",
+        ]
     );
 }
 

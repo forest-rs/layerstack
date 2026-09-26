@@ -6,17 +6,18 @@
 use alloc::{
     format,
     string::{String, ToString},
+    sync::Arc,
     vec::Vec,
 };
 use core::fmt::Write as _;
 
-use super::{FindingKind, FlattenReport, Loss, ObjectPath};
+use super::{FindingKind, FlattenReport, Loss, ObjectPath, Transformation};
 use crate::{
     doc::{InterpolationType, LayerStore, Value},
     interner::{TokenId, TokenInterner},
     path::{PathId, PathInterner, PropertyPath, TargetPath},
     prim_index::FieldKey,
-    stage::{ResolvedValue, Stage},
+    stage::{ResolvedValue, Stage, stage_time::map_leaves},
 };
 
 /// The outcome of [`Stage::verify_flattened`]: what was compared, and every
@@ -50,7 +51,8 @@ impl FlattenVerification {
 /// time and at each of [`VerifiedScope::times`], interpolated linearly.
 /// Nothing else is: splines are compared through their values at those
 /// times only, and the prototypes a flatten adds are compared through the
-/// instances that reference them.
+/// instances that reference them. An asset path the report records as
+/// anchored ([`Transformation::AssetPathAnchored`]) is expected anchored.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct VerifiedScope {
     /// Prims compared.
@@ -193,6 +195,7 @@ impl Stage {
             store,
             prototypes: report.prototypes().map(String::from).collect(),
             skips: skips(report),
+            anchors: anchors(report),
             out: FlattenVerification::default(),
             sample_times: Vec::new(),
         };
@@ -204,6 +207,24 @@ impl Stage {
         verifier.out.scope.sample_times = sample_times.len();
         verifier.out
     }
+}
+
+/// The asset paths the report records as anchored, by object path.
+fn anchors(report: &FlattenReport) -> Vec<(String, Arc<str>, Arc<str>)> {
+    report
+        .findings
+        .iter()
+        .filter_map(|finding| match &finding.kind {
+            FindingKind::Transformed(Transformation::AssetPathAnchored { authored, anchored }) => {
+                Some((
+                    finding.path.to_string(),
+                    Arc::from(authored.as_str()),
+                    Arc::from(anchored.as_str()),
+                ))
+            }
+            _ => None,
+        })
+        .collect()
 }
 
 /// The paths the report says not to compare, with why.
@@ -231,6 +252,8 @@ struct Verifier<'a> {
     tokens: &'a TokenInterner,
     prototypes: Vec<String>,
     skips: Vec<(String, SkipReason)>,
+    /// Each object's anchored asset paths: as authored, and as written.
+    anchors: Vec<(String, Arc<str>, Arc<str>)>,
     out: FlattenVerification,
     sample_times: Vec<f64>,
 }
@@ -247,6 +270,40 @@ impl Verifier<'_> {
                     .strip_prefix(prototype.as_str())
                     .is_some_and(|rest| rest.starts_with('/'))
         })
+    }
+
+    /// `value` of the stage at `path` as the flattened layer should hold
+    /// it: with the asset paths the report records as anchored anchored.
+    fn expected_value(&self, path: &str, value: Option<Value>) -> Option<Value> {
+        let value = value?;
+        let anchors: Vec<&(String, Arc<str>, Arc<str>)> =
+            self.anchors.iter().filter(|(p, ..)| p == path).collect();
+        if anchors.is_empty() {
+            return Some(value);
+        }
+        let mapped = map_leaves(&value, &mut |leaf| match leaf {
+            Value::Asset(asset) => anchors
+                .iter()
+                .find(|(_, authored, _)| authored == asset)
+                .map(|(_, _, anchored)| Value::Asset(anchored.clone())),
+            _ => None,
+        });
+        Some(mapped.unwrap_or(value))
+    }
+
+    fn expected(&self, path: &str, value: Option<ResolvedValue>) -> Option<ResolvedValue> {
+        match value? {
+            ResolvedValue::Scalar(value) => self
+                .expected_value(path, Some(value))
+                .map(ResolvedValue::Scalar),
+            ResolvedValue::Dictionary(entries) => {
+                match self.expected_value(path, Some(Value::Dictionary(entries)))? {
+                    Value::Dictionary(entries) => Some(ResolvedValue::Dictionary(entries)),
+                    other => Some(ResolvedValue::Scalar(other)),
+                }
+            }
+            other => Some(other),
+        }
     }
 
     fn skip_reason(&self, path: &str) -> Option<SkipReason> {
@@ -383,7 +440,9 @@ impl Verifier<'_> {
         } else {
             for key in metadata_keys(source, flattened, prim) {
                 self.out.scope.metadata_fields += 1;
-                let want = self.resolved(source.resolve_value(prim, key).map(|r| r.value));
+                let want = self.resolved(
+                    self.expected(&path, source.resolve_value(prim, key).map(|r| r.value)),
+                );
                 let got = self.resolved(flattened.resolve_value(prim, key).map(|r| r.value));
                 let field = String::from(self.tokens.resolve(key));
                 self.compare(&path, MismatchKind::Metadata { field }, want, got);
@@ -441,9 +500,12 @@ impl Verifier<'_> {
         for key in property_metadata_keys(source, flattened, prim, name) {
             self.out.scope.metadata_fields += 1;
             let want = self.resolved(
-                source
-                    .resolve_property_metadata(prim, name, key)
-                    .map(|r| r.value),
+                self.expected(
+                    &path,
+                    source
+                        .resolve_property_metadata(prim, name, key)
+                        .map(|r| r.value),
+                ),
             );
             let got = self.resolved(
                 flattened
@@ -466,7 +528,10 @@ impl Verifier<'_> {
         self.compare(&path, MismatchKind::Targets, want, got);
 
         self.out.scope.values += 1;
-        let want = self.resolved(source.resolve_property_path(property).map(|r| r.value));
+        let want = self.resolved(self.expected(
+            &path,
+            source.resolve_property_path(property).map(|r| r.value),
+        ));
         let got = self.resolved(flattened.resolve_property_path(property).map(|r| r.value));
         self.compare(&path, MismatchKind::Default, want, got);
 
@@ -483,7 +548,8 @@ impl Verifier<'_> {
                     .resolve_property_path_at_time(property, time, InterpolationType::Linear)
                     .map(|r| r.value)
             };
-            let (want, got) = (self.value(value(source)), self.value(value(flattened)));
+            let want = self.value(self.expected_value(&path, value(source)));
+            let got = self.value(value(flattened));
             self.compare(&path, MismatchKind::ValueAt { time }, want, got);
         }
     }

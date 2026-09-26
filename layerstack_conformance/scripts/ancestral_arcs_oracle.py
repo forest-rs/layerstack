@@ -18,7 +18,8 @@ reach `/T/B` with its name appended to their sites, beneath the arc's node
 and `_BuildInitialPrimIndexFromAncestor` in `pxr/usd/pcp/primIndex.cpp`).
 
 For every composed prim the vectors record its prim stack, repeats
-included, and for every attribute its resolved default. For an attribute
+included, for every attribute its resolved default, and for every
+relationship and connected attribute its target paths. For an attribute
 with time samples they record, at each composed sample time, at the
 midpoints between them and one unit beyond either end, its value with
 linear interpolation.
@@ -145,6 +146,82 @@ def "Quarry"
     {
         int grain = 5
         int hardness = 5
+    }
+}
+
+# `/Hut/Loft` references `loft.usda /Hut`, a target with the same name as
+# the stage's `/Hut`. Its relationships, those of the class it inherits,
+# and those of the class its `Stool` specializes and of the prim its
+# `Shelf` references internally, map once, into `/Hut/Loft`.
+def "Hut"
+{
+    def "Loft" (
+        references = @./loft.usda@</Hut>
+    )
+    {
+    }
+}
+''',
+    "loft": '''#usda 1.0
+
+# Every target path below maps once, into `/Hut/Loft`'s namespace: through
+# the reference alone, or first through the arc that brings its opinion
+# (a class it inherits, a specialized class, an internal reference), then
+# through the reference. `stray` lies beneath `Shelf`, the internal
+# reference's destination, which that reference does not map back:
+# `Shelf` drops it, `_proto_Jar` keeps it.
+def "Hut" (
+    prepend inherits = </_class_Beam>
+)
+{
+    rel door = </Hut/Wick>
+
+    def "Wick"
+    {
+        int flame = 1
+    }
+
+    def "Shelf" (
+        references = </Hut/_proto_Jar>
+    )
+    {
+    }
+
+    def "Stool" (
+        specializes = </Hut/_base_Stool>
+    )
+    {
+    }
+
+    class "_proto_Jar"
+    {
+        rel lid = </Hut/_proto_Jar/Cap>
+        rel wick = </Hut/Wick>
+        rel stray = </Hut/Shelf/Cap>
+
+        def "Cap"
+        {
+        }
+    }
+
+    class "_base_Stool"
+    {
+        rel seat = </Hut/_base_Stool/Cushion>
+        rel wick = </Hut/Wick>
+
+        def "Cushion"
+        {
+        }
+    }
+}
+
+class "_class_Beam"
+{
+    rel beam = </_class_Beam/Ray>
+
+    def "Ray"
+    {
+        int width = 1
     }
 }
 ''',
@@ -328,7 +405,13 @@ def compose(directory):
     prims = []
     values = {}
     samples = {}
+    targets = {}
     for prim in stage.TraverseAll():
+        for rel in prim.GetRelationships():
+            targets[str(rel.GetPath())] = [str(t) for t in rel.GetTargets()]
+        for attr in prim.GetAttributes():
+            if attr.HasAuthoredConnections():
+                targets[str(attr.GetPath())] = [str(t) for t in attr.GetConnections()]
         prims.append({
             "path": str(prim.GetPath()),
             "prim_stack": [[layer_name(spec.layer.identifier), str(spec.path)]
@@ -346,7 +429,7 @@ def compose(directory):
             samples[str(attr.GetPath())] = [[t, attr.Get(t)] for t in probes]
     if stage.GetCompositionErrors():
         sys.exit(f"unexpected composition errors: {stage.GetCompositionErrors()}")
-    return {"prims": prims, "values": values, "samples": samples}
+    return {"prims": prims, "values": values, "samples": samples, "targets": targets}
 
 
 def main():

@@ -25,7 +25,6 @@ use crate::{
     interner::TokenId,
     path::{Path, PathId, PropertyPath, TargetPath},
     prim_index::{ArcKind, FieldKey, OpinionKey, OpinionValue, PrimIndex},
-    relocates::Walk,
     spec_path::SpecPath,
 };
 
@@ -152,90 +151,27 @@ pub(crate) fn drop_inconsistent_property_kinds(
         .retain(|_, declarations| !declarations.is_empty());
 }
 
-/// How an arc maps paths authored beneath its target onto its destination.
-#[derive(Clone, Copy, Debug)]
+/// How an arc maps the paths its specs author into the stage namespace:
+/// through its own map function composed with those of the arcs above it
+/// (see `TargetMap` in `compose.rs`).
+///
+/// OpenUSD: a node's map-to-root function (`PcpNodeRef::GetMapToRoot`,
+/// `PcpMapExpression` in `pxr/usd/pcp/mapExpression.cpp`).
+#[derive(Clone, Copy)]
 pub(crate) struct ArcPathMap<'a> {
     /// The arc.
     pub(crate) arc: ArcKind,
     /// The arc's target prim, in the namespace its specs are authored in.
     pub(crate) source: &'a Path,
-    /// The arc's destination prim.
-    pub(crate) dest: &'a Path,
-    /// How a path beneath `source` maps.
-    pub(crate) inside: Inside<'a>,
-    /// What the arc does with a path outside `source`.
-    pub(crate) outside: Outside,
-    /// The relocations of the arc target's layer stack, as `(target,
-    /// source)` pairs in the namespace paths are authored in. Under
-    /// [`Outside::Identity`], a path at or beneath a target whose source
-    /// lies beneath `dest` does not map: it is content of the destination
-    /// that a relocation moved, which would not map back.
-    pub(crate) relocated: &'a [(PathId, PathId)],
-}
-
-/// How an [`ArcPathMap`] maps a path beneath the arc's target.
-#[derive(Clone, Copy, Debug)]
-pub(crate) enum Inside<'a> {
-    /// Onto the same path beneath the destination.
-    Join,
-    /// Through the relocations the arc's walk passes (see [`Walk::map`]),
-    /// beneath the destination prim with this path: relocates first, then
-    /// the arc's scope.
-    Relocate(&'a Walk<'a>, PathId),
-    /// Left as authored, for a later pass over the arc's opinions to map;
-    /// only a path outside the target is checked.
-    Keep,
-}
-
-/// What an [`ArcPathMap`] does with a path outside the arc's target.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Outside {
-    /// It does not map: a reference or payload to another layer stack.
-    Unmapped,
-    /// It maps to itself unless it is beneath the destination, which is in
-    /// the same namespace: an internal reference or payload, an inherit or
-    /// a specializes authored in the stage's namespace.
-    Identity,
-    /// It maps to itself; the destination is in another namespace, so a
-    /// path beneath it is not recognized. Nested class and internal arcs
-    /// under-report rather than drop a path that maps.
-    IdentityUnchecked,
+    /// Maps a path authored in the arc's target namespace to the stage
+    /// namespace; `None` when the arcs cannot map it.
+    pub(crate) map: &'a dyn Fn(&mut dyn LayerStore, PathId) -> Option<PathId>,
 }
 
 impl ArcPathMap<'_> {
-    /// Maps `path`, or returns `None` when the arc cannot map it.
+    /// Maps `path`, or returns `None` when the arcs cannot map it.
     fn map(&self, store: &mut dyn LayerStore, path: PathId) -> Option<PathId> {
-        let resolved = store.paths().resolve(path);
-        if let Some(rel) = resolved.strip_prefix(self.source) {
-            return match self.inside {
-                Inside::Join => {
-                    let mapped = self.dest.join(rel);
-                    Some(store.paths_mut().intern(mapped))
-                }
-                Inside::Relocate(walk, dest_root) => {
-                    let rel = rel.to_vec();
-                    walk.map(store, dest_root, &rel)
-                }
-                Inside::Keep => Some(path),
-            };
-        }
-        match self.outside {
-            Outside::Unmapped => None,
-            Outside::Identity if resolved.strip_prefix(self.dest).is_some() => None,
-            Outside::Identity if self.moved_from_dest(store, path) => None,
-            Outside::Identity | Outside::IdentityUnchecked => Some(path),
-        }
-    }
-
-    /// Whether `path` lies at or beneath a relocation target whose source
-    /// lies beneath `dest` (see [`Self::relocated`]).
-    fn moved_from_dest(&self, store: &dyn LayerStore, path: PathId) -> bool {
-        let paths = store.paths();
-        let resolved = paths.resolve(path);
-        self.relocated.iter().any(|&(target, source)| {
-            paths.resolve(target).is_prefix_of(resolved)
-                && self.dest.is_prefix_of(paths.resolve(source))
-        })
+        (self.map)(store, path)
     }
 
     /// Whether `target` is authored beneath the arc's target.
@@ -289,16 +225,12 @@ pub(crate) fn map_arc_targets(
             None => return,
         },
         OpinionValue::Field(FieldValue::PathListOp(list)) => {
-            let keep = ArcPathMap {
-                outside: Outside::IdentityUnchecked,
-                ..map
-            };
             for items in [&mut list.prepend, &mut list.append, &mut list.delete]
                 .into_iter()
                 .chain(list.explicit.as_mut())
             {
                 for item in items.iter_mut() {
-                    *item = keep.map_target(store, *item).unwrap_or(*item);
+                    *item = map.map_target(store, *item).unwrap_or(*item);
                 }
             }
             return;
@@ -538,7 +470,6 @@ pub(crate) fn drop_instance_targets(
 mod tests {
     use alloc::{vec, vec::Vec};
 
-    use super::{ArcPathMap, Inside, Outside};
     use crate::{
         composition_error::{CompositionError, InconsistentPropertyType, UnresolvedPrimPath},
         doc::{InMemoryStore, Layer, LayerId, PrimSpec, Reference, Value},
@@ -705,50 +636,6 @@ mod tests {
                     conflicting_spec: lamp_spec(wick),
                 }),
             ]
-        );
-    }
-
-    /// Spec: AOUSD Core §10.3.2; OpenUSD's `PcpMapFunction` maps an arc's
-    /// target onto its destination and, for internal and class arcs, every
-    /// other path to itself unless that would not map back.
-    #[test]
-    fn arcs_map_target_paths_like_openusd() {
-        let mut store = InMemoryStore::default();
-        let [tools, saw, shed, shed_saw, door, pebble] = [
-            "/Tools",
-            "/Tools/Saw",
-            "/Shed",
-            "/Shed/Saw",
-            "/Shed/Door",
-            "/Pebble",
-        ]
-        .map(|path| store.path(path));
-        let (source, dest) = (
-            store.paths.resolve(tools).clone(),
-            store.paths.resolve(shed).clone(),
-        );
-        let map = |outside| ArcPathMap {
-            arc: ArcKind::References,
-            source: &source,
-            dest: &dest,
-            inside: Inside::Join,
-            outside,
-            relocated: &[],
-        };
-        let mapped = |store: &mut InMemoryStore, outside, path| map(outside).map(store, path);
-        for outside in [
-            Outside::Unmapped,
-            Outside::Identity,
-            Outside::IdentityUnchecked,
-        ] {
-            assert_eq!(mapped(&mut store, outside, saw), Some(shed_saw));
-        }
-        assert_eq!(mapped(&mut store, Outside::Unmapped, pebble), None);
-        assert_eq!(mapped(&mut store, Outside::Identity, pebble), Some(pebble));
-        assert_eq!(mapped(&mut store, Outside::Identity, door), None);
-        assert_eq!(
-            mapped(&mut store, Outside::IdentityUnchecked, door),
-            Some(door)
         );
     }
 }

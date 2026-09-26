@@ -111,3 +111,16 @@ def "Quarry"
         int hardness = 5
     }
 }
+
+# `/Hut/Loft` references `loft.usda /Hut`, a target with the same name as
+# the stage's `/Hut`. Its relationships, those of the class it inherits,
+# and those of the class its `Stool` specializes and of the prim its
+# `Shelf` references internally, map once, into `/Hut/Loft`.
+def "Hut"
+{
+    def "Loft" (
+        references = @./loft.usda@</Hut>
+    )
+    {
+    }
+}

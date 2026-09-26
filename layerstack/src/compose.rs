@@ -29,24 +29,21 @@ use crate::{
         spec_arcs_apply,
     },
     composition_checks::{
-        ArcPathMap, Inside, Outside, TargetOwner, TargetSpecsCheck,
-        drop_inconsistent_property_kinds, drop_instance_targets, map_arc_targets,
-        target_error_applies,
+        ArcPathMap, TargetOwner, TargetSpecsCheck, drop_inconsistent_property_kinds,
+        drop_instance_targets, map_arc_targets, target_error_applies,
     },
     composition_error::{
         ArcToProhibitedChild, CompositionError, UnresolvedAsset, UnresolvedDefaultPrim,
     },
     dependency_map::{ArcDependency, DependencyBuilder},
-    doc::{
-        FieldValue, LayerId, LayerOffset, LayerStore, Reference, ReferenceTarget, composed_entries,
-    },
+    doc::{LayerId, LayerOffset, LayerStore, Reference, ReferenceTarget, composed_entries},
     expression_variables::{
         ArcAnchor, ExpressionScope, SiteContext, composed_variables, node_variables,
         read_selections, same_context, site_selections,
     },
     interner::TokenId,
     layer_stack::LayerStack,
-    path::{PathId, PropertyPath, TargetPath},
+    path::PathId,
     population::populate,
     prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue, PrimIndex},
     prim_index_graph::{NodeArc, NodeId, PrimIndexGraph, PrimNode},
@@ -236,7 +233,6 @@ pub(crate) fn compose_stage(
         &stage_relocates,
         &[],
         &stage_relocates,
-        Outside::IdentityUnchecked,
         &mut prims,
         &mut prim_order_opinions,
         &mut authored_children_opinions,
@@ -3062,8 +3058,8 @@ fn root_layer_stack(out: &HashMap<PathId, PrimIndex>, path: PathId) -> LayerId {
 /// the layer stack and the entry's source path"). OpenUSD: the relocate arc
 /// `_EvalNodeRelocations` adds includes the source's ancestral opinions
 /// (`includeAncestralOpinions` in `pxr/usd/pcp/primIndex.cpp`), the variant
-/// nodes of its ancestors among them. `targets` maps the target paths of
-/// those opinions (see [`RelocateTargets`]).
+/// nodes of its ancestors among them. The arcs above the relocate node map
+/// the target paths of those opinions (see [`TargetMap`]).
 fn add_source_ancestral_variant_specs(
     store: &mut dyn LayerStore,
     stack: &LayerStack,
@@ -3072,7 +3068,6 @@ fn add_source_ancestral_variant_specs(
     dest: PathId,
     (source, source_view): (PathId, PathId),
     base_offset: LayerOffset,
-    targets: Option<RelocateTargets>,
     authored_children_out: &mut HashMap<PathId, ChildOrderOpinions>,
     prim_order_out: &mut HashMap<PathId, ChildOrderOpinions>,
     cycles: &mut CycleDetector,
@@ -3163,89 +3158,38 @@ fn add_source_ancestral_variant_specs(
             }
         }
         for mut opinion in pending {
-            if let Some(map) = targets {
-                map.map(store, dest, layer_id, &mut opinion, cycles);
-            }
+            // The relocate node maps nothing itself; the arcs above it map
+            // its opinions' targets.
+            let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
+            let source = store.paths().resolve(source_view).clone();
+            // Errors name the nearest arc above that maps.
+            let arc = nodes
+                .path
+                .iter()
+                .rev()
+                .map(|step| step.arc_kind)
+                .find(|kind| !matches!(kind, ArcKind::Relocates | ArcKind::Variants))
+                .unwrap_or(ArcKind::Relocates);
+            map_arc_targets(
+                store,
+                &mut opinion.value,
+                ArcPathMap {
+                    arc,
+                    source: &source,
+                    map: &|store, path| targets.map(store, path),
+                },
+                TargetOwner {
+                    prim: dest,
+                    property: opinion.field,
+                    layer: layer_id,
+                    spec: opinion.key.spec_path.clone(),
+                },
+                cycles,
+            );
             out.get_mut(&dest)
                 .expect("path exists")
                 .add_opinion(opinion);
         }
-    }
-}
-
-/// How the arc above a relocate node maps the target paths of the
-/// opinions the node brings: onto the arc's destination as its namespace
-/// maps them, the relocate node's own mapping being the identity.
-///
-/// OpenUSD: `_EvalNodeRelocations` adds the relocate arc with an identity
-/// map expression, so only the arcs above it map its opinions' targets
-/// (`pxr/usd/pcp/primIndex.cpp`, `pxr/usd/pcp/targetIndex.cpp`).
-#[derive(Clone, Copy)]
-struct RelocateTargets {
-    /// The kind of the arc.
-    arc: ArcKind,
-    /// The arc's target, in the namespace its specs are authored in.
-    source: PathId,
-    /// The arc's destination prim.
-    dest: PathId,
-    /// What the arc does with a path outside its target.
-    outside: Outside,
-}
-
-impl RelocateTargets {
-    /// The mapping of the nearest arc on `path` above its relocate and
-    /// variant steps, which does `outside` with a path outside its target;
-    /// `None` for the stage's own relocations, whose targets are authored
-    /// in the stage namespace.
-    fn of(path: &[ArcStep], outside: Outside) -> Option<Self> {
-        path.iter()
-            .rev()
-            .filter(|step| !matches!(step.arc_kind, ArcKind::Relocates | ArcKind::Variants))
-            .find_map(|step| match step.target {
-                StepTarget::Namespace {
-                    dest_root,
-                    target_root,
-                } => Some(Self {
-                    arc: step.arc_kind,
-                    source: target_root,
-                    dest: dest_root,
-                    outside,
-                }),
-                _ => None,
-            })
-    }
-
-    /// Maps the target paths of `opinion`, authored in `layer`, of the
-    /// composed prim `prim` (see [`map_arc_targets`]).
-    fn map(
-        self,
-        store: &mut dyn LayerStore,
-        prim: PathId,
-        layer: LayerId,
-        opinion: &mut Opinion,
-        cycles: &mut CycleDetector,
-    ) {
-        let source = store.paths().resolve(self.source).clone();
-        let dest = store.paths().resolve(self.dest).clone();
-        map_arc_targets(
-            store,
-            &mut opinion.value,
-            ArcPathMap {
-                arc: self.arc,
-                source: &source,
-                dest: &dest,
-                inside: Inside::Join,
-                outside: self.outside,
-                relocated: &[],
-            },
-            TargetOwner {
-                prim,
-                property: opinion.field,
-                layer,
-                spec: opinion.key.spec_path.clone(),
-            },
-            cycles,
-        );
     }
 }
 
@@ -3267,13 +3211,11 @@ fn add_relocated_variant_opinions(
     relocates: &LiftedSet,
     parent: &[ArcStep],
     stage_relocates: &Rc<LiftedSet>,
-    outside: Outside,
     out: &mut HashMap<PathId, PrimIndex>,
     prim_order_out: &mut HashMap<PathId, ChildOrderOpinions>,
     authored_children_out: &mut HashMap<PathId, ChildOrderOpinions>,
     cycles: &mut CycleDetector,
 ) {
-    let targets = RelocateTargets::of(parent, outside);
     // Stage target → (relocating layer stack, source in its namespace).
     let by_target: HashMap<PathId, (LayerId, PathId)> = relocates
         .iter()
@@ -3347,7 +3289,6 @@ fn add_relocated_variant_opinions(
             path,
             (source, source_view),
             layer_offset,
-            targets,
             authored_children_out,
             prim_order_out,
             cycles,
@@ -3748,7 +3689,6 @@ fn add_inherit_opinions(
                 &mut visited_specializes,
                 prim_order_out,
                 authored_children_out,
-                None,
                 None,
                 LayerOffset::IDENTITY,
                 cycles,
@@ -4835,6 +4775,22 @@ impl ArcNodes {
     /// The arc path to this arc's selected branches `sites`, for arcs
     /// authored inside them (see [`Self::variant_node`]); to this arc for
     /// arcs authored outside every branch.
+    /// How the paths this arc's opinions author map into the stage
+    /// namespace (see [`TargetMap`]), in a stage whose layer stack is
+    /// rooted at `stage_stack`; `relocated` as there.
+    fn target_map<'a>(
+        &'a self,
+        stage_stack: LayerId,
+        relocated: &'a [(PathId, PathId)],
+    ) -> TargetMap<'a> {
+        TargetMap {
+            stage: &self.stage_relocates,
+            stage_stack,
+            steps: &self.path,
+            relocated,
+        }
+    }
+
     fn branch_path(&self, sites: &[VariantSelectionSite]) -> Cow<'_, [ArcStep]> {
         if sites.is_empty() {
             return Cow::Borrowed(&self.path);
@@ -5026,15 +4982,9 @@ struct AncestralArcs<'a> {
     target: PathId,
     /// The offset of the arc, applied to class arcs nested in it.
     layer_offset: LayerOffset,
-    /// The namespace the arc maps, for class arcs nested in it (see
-    /// `add_inherit_edge_opinions`).
-    ref_remap: Option<(&'a crate::path::Path, &'a crate::path::Path)>,
     /// `true` for a class arc, whose ancestral arcs add no node for a site
     /// the prim index uses already (see [`Self::used_sites`]).
     class_arc: bool,
-    /// What the arc does with a target path authored outside its target,
-    /// for the opinions its relocate nodes bring (see [`RelocateTargets`]).
-    targets_outside: Outside,
 }
 
 impl AncestralArcs<'_> {
@@ -5335,7 +5285,6 @@ impl AncestralArcs<'_> {
             &own,
             &nodes.path,
             &nodes.stage_relocates,
-            self.targets_outside,
             out,
             prim_order_out,
             authored_children_out,
@@ -5550,7 +5499,6 @@ impl AncestralArcs<'_> {
                     visited_specializes,
                     prim_order_out,
                     authored_children_out,
-                    self.ref_remap,
                     None,
                     self.layer_offset,
                     cycles,
@@ -5623,7 +5571,6 @@ impl AncestralArcs<'_> {
         );
         // The destination and the prims beneath it, each reading the
         // source extended as far.
-        let targets = RelocateTargets::of(&nodes.path, self.targets_outside);
         let mut dests: Vec<(PathId, PathId)> = alloc::vec![(self.dest_root, source_view)];
         {
             let dest_path = store.paths().resolve(self.dest_root).clone();
@@ -5649,7 +5596,6 @@ impl AncestralArcs<'_> {
                 dest,
                 (source, view),
                 self.layer_offset,
-                targets,
                 authored_children_out,
                 prim_order_out,
                 cycles,
@@ -5838,8 +5784,6 @@ fn add_inherit_edge_opinions(
     visited_specializes: &mut VisitedClasses,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
-    // Optional reference namespace for remapping field values (dest, src).
-    ref_remap: Option<(&crate::path::Path, &crate::path::Path)>,
     // Optional source-namespace remap for provenance spec paths (dest, src).
     provenance_remap: Option<(PathId, PathId)>,
     // Accumulated offset from outer arcs (references/payloads). Composed with
@@ -5954,7 +5898,6 @@ fn add_inherit_edge_opinions(
             prim_order_out,
             authored_children_out,
             None,
-            None,
             implied.step.layer_offset,
             cycles,
             deps.as_deref_mut(),
@@ -5978,8 +5921,6 @@ fn add_inherit_edge_opinions(
     let stage_relocates = cycles.relocations().stage();
 
     let inherited_path = store.paths().resolve(inherited_root).clone();
-    // The destination prim, onto which target paths map.
-    let base_path = store.paths().resolve(dest_root).clone();
 
     let mut remote_paths: Vec<PathId> = local_stack
         .layers
@@ -6038,20 +5979,6 @@ fn add_inherit_edge_opinions(
 
     let mut nodes = ArcNodes::new(parent, step, stage_relocates);
     record_offset_layers(deps.as_deref_mut(), &nodes.step().offset_layers, &mapping);
-    // A class maps every path outside itself to itself, except content of
-    // the inheriting prim (see `Outside::Identity`). Nested in a reference,
-    // that prim is checked in the namespace the class's specs are authored
-    // in, the reference's target namespace.
-    let class_dest = ref_remap.and_then(|(ref_dest, ref_src)| {
-        base_path
-            .strip_prefix(ref_dest)
-            .map(|rel| ref_src.join(rel))
-    });
-    let class_outside = if class_dest.is_some() {
-        Outside::Identity
-    } else {
-        targets_outside_arc(&nodes.path, true)
-    };
     let class_relocated: Vec<(PathId, PathId)> = cycles
         .relocation_table(store, arc_stack)
         .iter()
@@ -6215,17 +6142,14 @@ fn add_inherit_edge_opinions(
                 continue;
             }
             let mut value = value;
-            let walk = arc_walk(&nodes.stage_relocates, &nodes.path);
+            let targets = nodes.target_map(cycles.stage_layer_stack(), &class_relocated);
             map_arc_targets(
                 store,
                 &mut value,
                 ArcPathMap {
                     arc: ArcKind::Inherits,
                     source: &inherited_path,
-                    dest: class_dest.as_ref().unwrap_or(&base_path),
-                    inside: Inside::Relocate(&walk, dest_root),
-                    outside: class_outside,
-                    relocated: &class_relocated,
+                    map: &|store, path| targets.map(store, path),
                 },
                 TargetOwner {
                     prim: dest_path_id,
@@ -6235,15 +6159,6 @@ fn add_inherit_edge_opinions(
                 },
                 cycles,
             );
-            // Also apply the enclosing reference's namespace mapping, through
-            // the relocations it passes, to the paths outside the class.
-            if let Some((ref_dest, ref_src)) = ref_remap {
-                let ref_walk =
-                    arc_walk(&nodes.stage_relocates, &nodes.path[..nodes.path.len() - 1]);
-                let ref_dest = store.paths_mut().intern(ref_dest.clone());
-                let ref_src = store.paths_mut().intern(ref_src.clone());
-                relocate_opinion_target_paths(store, &ref_walk, ref_dest, ref_src, &mut value);
-            }
             let key = OpinionKey {
                 node,
                 layer_strength,
@@ -6309,7 +6224,6 @@ fn add_inherit_edge_opinions(
                 visited_specializes,
                 prim_order_out,
                 authored_children_out,
-                ref_remap,
                 None,
                 base_offset,
                 cycles,
@@ -6421,9 +6335,7 @@ fn add_inherit_edge_opinions(
         dest_root,
         target: inherited_root,
         layer_offset: base_offset,
-        ref_remap,
         class_arc: true,
-        targets_outside: class_outside,
     }
     .expand(
         store,
@@ -6440,148 +6352,142 @@ fn add_inherit_edge_opinions(
     cycles.exit();
 }
 
-/// Maps the target paths an opinion authors (a metadata path list op, or a
-/// property's connection or relationship target paths) from `src_root` into
-/// `dest_root`, in place.
+/// The map function of the arc at the end of `steps`, composed with those
+/// of the arcs above it: how a path its specs author maps into the stage
+/// namespace, once, as they are added.
 ///
-/// Spec: AOUSD Core §10 (arcs map paths authored inside the arc's target
-/// namespace into the destination namespace).
-fn remap_opinion_target_paths(
-    store: &mut dyn LayerStore,
-    dest_root: &crate::path::Path,
-    src_root: &crate::path::Path,
-    value: &mut OpinionValue,
-) {
-    let list = match value {
-        OpinionValue::Field(FieldValue::PathListOp(list)) => list,
-        OpinionValue::Property(spec) => match spec.targets.as_mut() {
-            Some(list) => list,
-            None => return,
-        },
-        OpinionValue::Field(_) => return,
-    };
-    let remap = |store: &mut dyn LayerStore, items: &mut Vec<TargetPath>| {
-        for item in items.iter_mut() {
-            *item = remap_target_path(store, dest_root, src_root, *item);
-        }
-    };
-    if let Some(explicit) = list.explicit.as_mut() {
-        remap(store, explicit);
-    }
-    remap(store, &mut list.prepend);
-    remap(store, &mut list.append);
-    remap(store, &mut list.delete);
+/// Each arc maps its target, and the paths beneath it, onto its
+/// destination, through the relocations of the layer stacks on the way
+/// (see [`Walk::map`]): the destination is a stage path, so the path is
+/// mapped. A class arc, or an internal reference or payload, maps every
+/// other path to itself, in the namespace of the arc authoring it, where
+/// the next arc up maps it in turn; any other arc maps nothing else.
+/// Variant branches and relocate nodes map nothing themselves. A path the
+/// stage's own layer stack keeps is a stage path.
+///
+/// An arc that maps a path to itself does not map one at or beneath its
+/// destination, in the namespace the arc is authored in: that path would
+/// not map back (OpenUSD's bijection check); nor, for the innermost arc,
+/// one at or beneath a relocation target of its layer stack whose source
+/// lies beneath the destination (`relocated`). An implied class maps its
+/// paths to themselves unchecked, its destination being in another layer
+/// stack.
+///
+/// Spec: AOUSD Core §10.3.2 (arcs map namespaces), §10.3.2.6.1 (relocates
+/// add to the mapping), §12.4 (target paths map through the arcs of their
+/// opinions). OpenUSD: `PcpNodeRef::GetMapToRoot`, built from each arc's
+/// `_CreateMapExpressionForArc` with `AddRootIdentity` for internal and
+/// class arcs (`pxr/usd/pcp/primIndex.cpp`, `pxr/usd/pcp/mapExpression.cpp`).
+struct TargetMap<'a> {
+    /// The relocations of the stage's layer stack.
+    stage: &'a LiftedSet,
+    /// Root layer of the stage's layer stack.
+    stage_stack: LayerId,
+    /// The arc path to the arc, the arc last.
+    steps: &'a [ArcStep],
+    /// The relocations of the innermost arc's layer stack, as `(target,
+    /// source)` pairs.
+    relocated: &'a [(PathId, PathId)],
 }
 
-/// Maps the target paths an opinion authors (see
-/// [`remap_opinion_target_paths`]) from beneath the arc target `src_root`
-/// into the stage namespace beneath the arc's `dest_root`, through the
-/// relocations `walk` passes: a path beneath a relocation source maps to
-/// its target, as the arc's namespace mapping maps it.
-///
-/// Spec: AOUSD Core §10.3.2.6.1 (relocates add to the namespace mapping of
-/// arcs), §12.4 (target paths map through the arcs of their opinions).
-fn relocate_opinion_target_paths(
-    store: &mut dyn LayerStore,
-    walk: &Walk<'_>,
-    dest_root: PathId,
-    src_root: PathId,
-    value: &mut OpinionValue,
-) {
-    let list = match value {
-        OpinionValue::Field(FieldValue::PathListOp(list)) => list,
-        OpinionValue::Property(spec) => match spec.targets.as_mut() {
-            Some(list) => list,
-            None => return,
-        },
-        OpinionValue::Field(_) => return,
-    };
-    if walk.is_empty() {
-        let dest_root = store.paths().resolve(dest_root).clone();
-        let src_root = store.paths().resolve(src_root).clone();
-        remap_opinion_target_paths(store, &dest_root, &src_root, value);
-        return;
+impl TargetMap<'_> {
+    /// Maps `path`, authored in the namespace of the innermost arc's
+    /// target, into the stage namespace; `None` when the arcs map nothing
+    /// there.
+    fn map(&self, store: &mut dyn LayerStore, path: PathId) -> Option<PathId> {
+        self.map_through(store, self.steps, path)
     }
-    let map_path = |store: &mut dyn LayerStore, path: PathId| {
-        let rel = {
+
+    /// Maps `path` through the arcs `steps`, innermost last (see
+    /// [`Self::map`]).
+    fn map_through(
+        &self,
+        store: &mut dyn LayerStore,
+        steps: &[ArcStep],
+        mut path: PathId,
+    ) -> Option<PathId> {
+        let within = |store: &dyn LayerStore, path: PathId, root: PathId| {
             let paths = store.paths();
             paths
                 .resolve(path)
-                .strip_prefix(paths.resolve(src_root))
+                .strip_prefix(paths.resolve(root))
                 .map(<[_]>::to_vec)
         };
-        match rel {
-            Some(rel) => walk.map(store, dest_root, &rel).unwrap_or(path),
-            None => path,
+        let mut innermost = true;
+        for (at, step) in steps.iter().enumerate().rev() {
+            // A specializes node propagated to the root maps as its
+            // placeholder does, beneath the arcs that author it.
+            if let Some(placeholder) = propagated_from(step) {
+                return self.map_through(store, placeholder, path);
+            }
+            let StepTarget::Namespace {
+                dest_root,
+                target_root,
+            } = step.target
+            else {
+                continue;
+            };
+            if step.arc_kind == ArcKind::Relocates {
+                continue;
+            }
+            if let Some(rel) = within(store, path, target_root) {
+                return arc_walk(self.stage, &steps[..=at]).map(store, dest_root, &rel);
+            }
+            // The arc authored on an ancestor of another arc's target maps
+            // as authored, onto that ancestor (see `ArcStep::ancestral`).
+            if let Some((ancestor, authored)) = step.ancestral
+                && let Some(rel) = within(store, path, authored)
+            {
+                let joined = store.paths().resolve(ancestor).join(&rel);
+                path = store.paths_mut().intern(joined);
+                innermost = false;
+                continue;
+            }
+            // The arc that authors this one, and its namespace.
+            let above = steps[..at].iter().rev().find_map(|step| match step.target {
+                StepTarget::Namespace {
+                    dest_root,
+                    target_root,
+                } if step.arc_kind != ArcKind::Relocates => {
+                    Some((step.layer_stack, dest_root, target_root))
+                }
+                _ => None,
+            });
+            let authoring_stack = above.map_or(self.stage_stack, |(stack, _, _)| stack);
+            let identity = matches!(step.arc_kind, ArcKind::Inherits | ArcKind::Specializes)
+                || step.layer_stack == authoring_stack;
+            if !identity {
+                return None;
+            }
+            if !step.implied {
+                // The destination, in the namespace the arc is authored in.
+                let dest = match (step.ancestral, above) {
+                    (Some((ancestor, _)), _) => Some(ancestor),
+                    (None, Some((_, above_dest, above_target))) => {
+                        within(store, dest_root, above_dest).map(|rel| {
+                            let joined = store.paths().resolve(above_target).join(&rel);
+                            store.paths_mut().intern(joined)
+                        })
+                    }
+                    (None, None) => Some(dest_root),
+                };
+                if let Some(dest) = dest {
+                    let paths = store.paths();
+                    let (resolved, dest) = (paths.resolve(path), paths.resolve(dest));
+                    let moved = innermost
+                        && self.relocated.iter().any(|&(target, source)| {
+                            paths.resolve(target).is_prefix_of(resolved)
+                                && dest.is_prefix_of(paths.resolve(source))
+                        });
+                    if dest.is_prefix_of(resolved) || moved {
+                        return None;
+                    }
+                }
+            }
+            innermost = false;
         }
-    };
-    let items = list
-        .explicit
-        .iter_mut()
-        .flatten()
-        .chain(list.prepend.iter_mut())
-        .chain(list.append.iter_mut())
-        .chain(list.delete.iter_mut());
-    for item in items {
-        *item = match *item {
-            TargetPath::Prim(path) => TargetPath::Prim(map_path(store, path)),
-            TargetPath::Property(path) => TargetPath::Property(PropertyPath::new(
-                map_path(store, path.prim_path()),
-                path.property(),
-            )),
-        };
+        Some(path)
     }
-}
-
-/// What the arc at the end of `path` does with a target path authored
-/// beneath its target but outside it (see [`Outside`]): `identity` for an
-/// internal reference or payload and for class arcs, which map such a path
-/// to itself.
-///
-/// The destination is in the namespace such a path is authored in only
-/// when every arc above this one is a variant of the composed prim's own
-/// layer stack, and the arc is not implied.
-///
-/// Spec: AOUSD Core §10.3.2; OpenUSD adds the root identity to internal
-/// and class arcs (`_EvalRefOrPayloadArcs` and `_AddClassBasedArcs` in
-/// `pxr/usd/pcp/primIndex.cpp`).
-fn targets_outside_arc(path: &[ArcStep], identity: bool) -> Outside {
-    let Some((arc, above)) = path.split_last() else {
-        return Outside::IdentityUnchecked;
-    };
-    if !identity {
-        Outside::Unmapped
-    } else if !arc.implied && above.iter().all(|step| step.arc_kind == ArcKind::Variants) {
-        Outside::Identity
-    } else {
-        Outside::IdentityUnchecked
-    }
-}
-
-fn remap_target_path(
-    store: &mut dyn LayerStore,
-    dest_root: &crate::path::Path,
-    src_root: &crate::path::Path,
-    path: TargetPath,
-) -> TargetPath {
-    match path {
-        TargetPath::Prim(path) => TargetPath::Prim(remap_path_id(store, dest_root, src_root, path)),
-        TargetPath::Property(path) => {
-            TargetPath::Property(remap_property_path(store, dest_root, src_root, path))
-        }
-    }
-}
-
-fn remap_property_path(
-    store: &mut dyn LayerStore,
-    dest_root: &crate::path::Path,
-    src_root: &crate::path::Path,
-    path: PropertyPath,
-) -> PropertyPath {
-    PropertyPath::new(
-        remap_path_id(store, dest_root, src_root, path.prim_path()),
-        path.property(),
-    )
 }
 
 fn remap_path_id(
@@ -6766,7 +6672,6 @@ fn add_reference_edge_opinions(
     let remote_stack = cycles.gather_layer_stack(store, reference.layer);
     let combined_stack = stage_stack.joined(&remote_stack);
     let target_root = store.paths().resolve(reference_path).clone();
-    let dest_root_path = store.paths().resolve(dest_root).clone();
     let offset_layers = parent.offset_layers_within(arc.layer);
     // The relocations of the target's layer stack apply to the namespace
     // the arc maps (AOUSD Core §10.3.2.6.1).
@@ -6800,7 +6705,6 @@ fn add_reference_edge_opinions(
         },
         cycles.relocations().stage(),
     );
-    let targets_outside = targets_outside_arc(&nodes.path, reference.asset.is_none());
 
     let mut remote_paths: Vec<PathId> = remote_stack
         .layers
@@ -7006,16 +6910,14 @@ fn add_reference_edge_opinions(
                             field: entry.name(),
                             value: {
                                 let mut value = entry.value();
+                                let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
                                 map_arc_targets(
                                     store,
                                     &mut value,
                                     ArcPathMap {
                                         arc: ArcKind::References,
                                         source: &target_root,
-                                        dest: &dest_root_path,
-                                        inside: Inside::Keep,
-                                        outside: targets_outside,
-                                        relocated: &[],
+                                        map: &|store, path| targets.map(store, path),
                                     },
                                     TargetOwner {
                                         prim: *dest_path_id,
@@ -7039,7 +6941,7 @@ fn add_reference_edge_opinions(
                 .expect("path exists")
                 .add_source(key);
         }
-        let walk = arc_walk(&nodes.stage_relocates, &nodes.path);
+        let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
         for (dest_path_id, field, key, value, property_type, offset) in pending_fields {
             let mut value = value;
             map_arc_targets(
@@ -7048,10 +6950,7 @@ fn add_reference_edge_opinions(
                 ArcPathMap {
                     arc: ArcKind::References,
                     source: &target_root,
-                    dest: &dest_root_path,
-                    inside: Inside::Relocate(&walk, dest_root),
-                    outside: targets_outside,
-                    relocated: &[],
+                    map: &|store, path| targets.map(store, path),
                 },
                 TargetOwner {
                     prim: dest_path_id,
@@ -7098,7 +6997,6 @@ fn add_reference_edge_opinions(
 
             // The class is implied into each stronger layer stack by its own
             // expansion (see `implied_classes`).
-            let ref_remap = Some((&dest_root_path, &target_root));
             add_inherit_edge_opinions(
                 store,
                 fallbacks,
@@ -7115,7 +7013,6 @@ fn add_reference_edge_opinions(
                 visited_specializes,
                 prim_order_out,
                 authored_children_out,
-                ref_remap,
                 None,
                 reference.layer_offset,
                 cycles,
@@ -7226,9 +7123,7 @@ fn add_reference_edge_opinions(
         dest_root,
         target: reference_path,
         layer_offset: reference.layer_offset,
-        ref_remap: Some((&dest_root_path, &target_root)),
         class_arc: false,
-        targets_outside,
     };
     ancestral.expand(
         store,
@@ -7253,27 +7148,6 @@ fn add_reference_edge_opinions(
         deps,
     );
 
-    // Post-process: remap any PathListOp values in opinions on mapped
-    // dest prims that still reference the source namespace. This covers
-    // field values brought in by nested arcs (inherits, nested references)
-    // within this reference context.
-    let walk = arc_walk(&nodes.stage_relocates, &nodes.path);
-    for (_, dest_path_id) in &mapping {
-        let Some(index) = out.get_mut(dest_path_id) else {
-            continue;
-        };
-        for opinions in index.opinions_by_field.values_mut() {
-            for opinion in opinions.iter_mut() {
-                relocate_opinion_target_paths(
-                    store,
-                    &walk,
-                    dest_root,
-                    reference_path,
-                    &mut opinion.value,
-                );
-            }
-        }
-    }
     if let Some(check) = target_specs {
         check.finish(out, cycles);
     }
@@ -7462,7 +7336,6 @@ fn add_payload_edge_opinions(
     let remote_stack = cycles.gather_layer_stack(store, reference.layer);
     let combined_stack = stage_stack.joined(&remote_stack);
     let target_root = store.paths().resolve(reference_path).clone();
-    let dest_root_path = store.paths().resolve(dest_root).clone();
     let offset_layers = parent.offset_layers_within(arc.layer);
     // The relocations of the target's layer stack apply to the namespace
     // the arc maps (AOUSD Core §10.3.2.6.1).
@@ -7496,7 +7369,6 @@ fn add_payload_edge_opinions(
         },
         cycles.relocations().stage(),
     );
-    let targets_outside = targets_outside_arc(&nodes.path, reference.asset.is_none());
 
     let mut remote_paths: Vec<PathId> = remote_stack
         .layers
@@ -7594,16 +7466,14 @@ fn add_payload_edge_opinions(
                         field: entry.name(),
                         value: {
                             let mut value = entry.value();
+                            let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
                             map_arc_targets(
                                 store,
                                 &mut value,
                                 ArcPathMap {
                                     arc: ArcKind::Payloads,
                                     source: &target_root,
-                                    dest: &dest_root_path,
-                                    inside: Inside::Join,
-                                    outside: targets_outside,
-                                    relocated: &[],
+                                    map: &|store, path| targets.map(store, path),
                                 },
                                 TargetOwner {
                                     prim: *dest_path_id,
@@ -7722,16 +7592,14 @@ fn add_payload_edge_opinions(
                             field: entry.name(),
                             value: {
                                 let mut value = entry.value();
+                                let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
                                 map_arc_targets(
                                     store,
                                     &mut value,
                                     ArcPathMap {
                                         arc: ArcKind::Payloads,
                                         source: &target_root,
-                                        dest: &dest_root_path,
-                                        inside: Inside::Join,
-                                        outside: targets_outside,
-                                        relocated: &[],
+                                        map: &|store, path| targets.map(store, path),
                                     },
                                     TargetOwner {
                                         prim: *dest_path_id,
@@ -7782,7 +7650,6 @@ fn add_payload_edge_opinions(
 
             // The class is implied into each stronger layer stack by its own
             // expansion (see `implied_classes`).
-            let ref_remap = Some((&dest_root_path, &target_root));
             add_inherit_edge_opinions(
                 store,
                 fallbacks,
@@ -7799,7 +7666,6 @@ fn add_payload_edge_opinions(
                 visited_specializes,
                 prim_order_out,
                 authored_children_out,
-                ref_remap,
                 None,
                 reference.layer_offset,
                 cycles,
@@ -7902,9 +7768,7 @@ fn add_payload_edge_opinions(
         dest_root,
         target: reference_path,
         layer_offset: reference.layer_offset,
-        ref_remap: Some((&dest_root_path, &target_root)),
         class_arc: false,
-        targets_outside,
     };
     ancestral.expand(
         store,
@@ -8171,8 +8035,6 @@ fn add_specializes_edge_opinions(
 
     let selection_base_path = store.paths().resolve(selection_root).clone();
     let specialized_path = store.paths().resolve(specialized_root).clone();
-    // The destination prim, onto which target paths map.
-    let base_path = store.paths().resolve(dest_root).clone();
 
     let mut remote_paths: Vec<PathId> = local_stack
         .layers
@@ -8248,7 +8110,6 @@ fn add_specializes_edge_opinions(
     // authored inside it nest under that node.
     let mut nodes = ArcNodes::new(parent, ArcStep { relocates, ..step }, stage_relocates);
     record_offset_layers(deps.as_deref_mut(), &nodes.step().offset_layers, &mapping);
-    let targets_outside = targets_outside_arc(&nodes.path, true);
 
     for (layer_strength_idx, layer_id) in local_stack.layers.iter().copied().enumerate() {
         let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
@@ -8419,17 +8280,14 @@ fn add_specializes_edge_opinions(
                 continue;
             }
             let mut value = value;
-            let walk = arc_walk(&nodes.stage_relocates, &nodes.path);
+            let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
             map_arc_targets(
                 store,
                 &mut value,
                 ArcPathMap {
                     arc: ArcKind::Specializes,
                     source: &specialized_path,
-                    dest: &base_path,
-                    inside: Inside::Relocate(&walk, dest_root),
-                    outside: targets_outside,
-                    relocated: &[],
+                    map: &|store, path| targets.map(store, path),
                 },
                 TargetOwner {
                     prim: dest_path_id,
@@ -8582,7 +8440,6 @@ fn add_specializes_edge_opinions(
                 prim_order_out,
                 authored_children_out,
                 None,
-                None,
                 base_offset,
                 cycles,
                 deps.as_deref_mut(),
@@ -8690,9 +8547,7 @@ fn add_specializes_edge_opinions(
         dest_root,
         target: specialized_root,
         layer_offset: base_offset,
-        ref_remap: None,
         class_arc: true,
-        targets_outside,
     }
     .expand(
         store,
@@ -9954,7 +9809,7 @@ mod default_prim_tests {
             assert_eq!(sites(&stage, &mut store, path), [(ROOT, prim)]);
             assert!(
                 stage
-                    .resolve_field_path(PropertyPath::new(prim, value))
+                    .resolve_field_path(crate::path::PropertyPath::new(prim, value))
                     .is_none(),
                 "{path} resolves no value"
             );

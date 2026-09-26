@@ -278,6 +278,130 @@
      "/Quarry/_class_Rock"
     ]
    ]
+  },
+  {
+   "path": "/Hut",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Hut"
+    ]
+   ]
+  },
+  {
+   "path": "/Hut/Loft",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Hut/Loft"
+    ],
+    [
+     "loft.usda",
+     "/Hut"
+    ],
+    [
+     "loft.usda",
+     "/_class_Beam"
+    ]
+   ]
+  },
+  {
+   "path": "/Hut/Loft/Ray",
+   "prim_stack": [
+    [
+     "loft.usda",
+     "/_class_Beam/Ray"
+    ]
+   ]
+  },
+  {
+   "path": "/Hut/Loft/Wick",
+   "prim_stack": [
+    [
+     "loft.usda",
+     "/Hut/Wick"
+    ]
+   ]
+  },
+  {
+   "path": "/Hut/Loft/Shelf",
+   "prim_stack": [
+    [
+     "loft.usda",
+     "/Hut/Shelf"
+    ],
+    [
+     "loft.usda",
+     "/Hut/_proto_Jar"
+    ]
+   ]
+  },
+  {
+   "path": "/Hut/Loft/Shelf/Cap",
+   "prim_stack": [
+    [
+     "loft.usda",
+     "/Hut/_proto_Jar/Cap"
+    ]
+   ]
+  },
+  {
+   "path": "/Hut/Loft/Stool",
+   "prim_stack": [
+    [
+     "loft.usda",
+     "/Hut/Stool"
+    ],
+    [
+     "loft.usda",
+     "/Hut/_base_Stool"
+    ]
+   ]
+  },
+  {
+   "path": "/Hut/Loft/Stool/Cushion",
+   "prim_stack": [
+    [
+     "loft.usda",
+     "/Hut/_base_Stool/Cushion"
+    ]
+   ]
+  },
+  {
+   "path": "/Hut/Loft/_proto_Jar",
+   "prim_stack": [
+    [
+     "loft.usda",
+     "/Hut/_proto_Jar"
+    ]
+   ]
+  },
+  {
+   "path": "/Hut/Loft/_proto_Jar/Cap",
+   "prim_stack": [
+    [
+     "loft.usda",
+     "/Hut/_proto_Jar/Cap"
+    ]
+   ]
+  },
+  {
+   "path": "/Hut/Loft/_base_Stool",
+   "prim_stack": [
+    [
+     "loft.usda",
+     "/Hut/_base_Stool"
+    ]
+   ]
+  },
+  {
+   "path": "/Hut/Loft/_base_Stool/Cushion",
+   "prim_stack": [
+    [
+     "loft.usda",
+     "/Hut/_base_Stool/Cushion"
+    ]
+   ]
   }
  ],
  "values": {
@@ -307,7 +431,9 @@
   "/Quarry/Stone.weight": 5,
   "/Quarry/Stone/Chip.size": 5,
   "/Quarry/_class_Rock.grain": 5,
-  "/Quarry/_class_Rock.hardness": 5
+  "/Quarry/_class_Rock.hardness": 5,
+  "/Hut/Loft/Ray.width": 1,
+  "/Hut/Loft/Wick.flame": 1
  },
  "samples": {
   "/Clock.angle": [
@@ -397,6 +523,42 @@
     14.5,
     4.0
    ]
+  ]
+ },
+ "targets": {
+  "/Hut/Loft.beam": [
+   "/Hut/Loft/Ray"
+  ],
+  "/Hut/Loft.door": [
+   "/Hut/Loft/Wick"
+  ],
+  "/Hut/Loft/Shelf.lid": [
+   "/Hut/Loft/Shelf/Cap"
+  ],
+  "/Hut/Loft/Shelf.stray": [],
+  "/Hut/Loft/Shelf.wick": [
+   "/Hut/Loft/Wick"
+  ],
+  "/Hut/Loft/Stool.seat": [
+   "/Hut/Loft/Stool/Cushion"
+  ],
+  "/Hut/Loft/Stool.wick": [
+   "/Hut/Loft/Wick"
+  ],
+  "/Hut/Loft/_proto_Jar.lid": [
+   "/Hut/Loft/_proto_Jar/Cap"
+  ],
+  "/Hut/Loft/_proto_Jar.stray": [
+   "/Hut/Loft/Shelf/Cap"
+  ],
+  "/Hut/Loft/_proto_Jar.wick": [
+   "/Hut/Loft/Wick"
+  ],
+  "/Hut/Loft/_base_Stool.seat": [
+   "/Hut/Loft/_base_Stool/Cushion"
+  ],
+  "/Hut/Loft/_base_Stool.wick": [
+   "/Hut/Loft/Wick"
   ]
  }
 }

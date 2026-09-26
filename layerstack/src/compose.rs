@@ -6973,6 +6973,12 @@ fn add_reference_edge_opinions(
         }
     }
 
+    let nested = NestedArcs {
+        remote_stack: &remote_stack,
+        combined_stack: &combined_stack,
+        anchor: reference.layer,
+        layer_offset: reference.layer_offset,
+    };
     for &(remote_path_id, dest_path_id) in &mapping {
         let arcs = admitted_arcs(
             store,
@@ -6988,128 +6994,21 @@ fn add_reference_edge_opinions(
             reference.layer,
             cycles,
         );
-        let inherits = arcs.inherits;
-        for (inherit_index, (inherited_root, sites)) in inherits.into_iter().enumerate() {
-            let branch = nodes.branch_path(&sites);
-            let inherit_index = u16::try_from(inherit_index).unwrap_or(u16::MAX);
-            let namespace_depth =
-                u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
-
-            // The class is implied into each stronger layer stack by its own
-            // expansion (see `implied_classes`).
-            add_inherit_edge_opinions(
-                store,
-                fallbacks,
-                &remote_stack,
-                &combined_stack,
-                dest_path_id,
-                inherited_root,
-                reference.layer,
-                namespace_depth,
-                inherit_index,
-                ArcParent::nested(&branch),
-                out,
-                visited_inherits,
-                visited_specializes,
-                prim_order_out,
-                authored_children_out,
-                None,
-                reference.layer_offset,
-                cycles,
-                deps.as_deref_mut(),
-            );
-        }
-
-        // Direct references, references on the prim's selected branch
-        // headers, and references authored for it inside its parent's
-        // selected branches.
-        let all_nested = arcs.references;
-        for (nested_index, (nested_ref, sites)) in all_nested.into_iter().enumerate() {
-            let branch = nodes.branch_path(&sites);
-            let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
-            let namespace_depth =
-                u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
-            add_reference_edge_opinions(
-                store,
-                fallbacks,
-                &combined_stack,
-                dest_path_id,
-                nested_ref,
-                namespace_depth,
-                nested_index,
-                ArcParent::nested(&branch),
-                out,
-                visited_inherits,
-                visited_specializes,
-                prim_order_out,
-                authored_children_out,
-                None,
-                cycles,
-                deps.as_deref_mut(),
-            );
-        }
-
-        // Handle nested payloads inside referenced content.
-        let nested_payloads = arcs.payloads;
-        for (nested_index, (nested_payload, sites)) in nested_payloads.into_iter().enumerate() {
-            let branch = nodes.branch_path(&sites);
-            let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
-            let namespace_depth =
-                u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
-            add_payload_edge_opinions(
-                store,
-                fallbacks,
-                &combined_stack,
-                dest_path_id,
-                nested_payload,
-                namespace_depth,
-                nested_index,
-                ArcParent::nested(&branch),
-                out,
-                visited_inherits,
-                visited_specializes,
-                prim_order_out,
-                authored_children_out,
-                None,
-                cycles,
-                deps.as_deref_mut(),
-            );
-        }
-
-        // Specializes authored in the referenced content. Their opinions
-        // are weaker than every other opinion of the prim, not only than
-        // this reference's: each leaves a placeholder beneath this
-        // reference's node and is propagated to the root, and is implied into
-        // each stronger layer stack (see `nest_step` and `implied_classes`).
-        //
-        // Spec: AOUSD Core §10.4.1, §10.4.2.4; OpenUSD
-        // `_EvalImpliedSpecializes` in `pxr/usd/pcp/primIndex.cpp`.
-        for (spec_index, (specialized_root, sites)) in arcs.specializes.into_iter().enumerate() {
-            let branch = nodes.branch_path(&sites);
-            let spec_index = u16::try_from(spec_index).unwrap_or(u16::MAX);
-            let namespace_depth =
-                u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
-            add_specializes_edge_opinions(
-                store,
-                fallbacks,
-                &combined_stack,
-                dest_path_id,
-                remote_path_id,
-                specialized_root,
-                reference.layer,
-                namespace_depth,
-                spec_index,
-                ArcParent::nested(&branch),
-                out,
-                visited_specializes,
-                prim_order_out,
-                authored_children_out,
-                None,
-                reference.layer_offset,
-                cycles,
-                deps.as_deref_mut(),
-            );
-        }
+        nested.expand(
+            store,
+            fallbacks,
+            &nodes,
+            remote_path_id,
+            dest_path_id,
+            arcs,
+            out,
+            visited_inherits,
+            visited_specializes,
+            prim_order_out,
+            authored_children_out,
+            cycles,
+            deps.as_deref_mut(),
+        );
     }
 
     // The arcs the target's ancestors author, and those of the relocation
@@ -7152,6 +7051,159 @@ fn add_reference_edge_opinions(
         check.finish(out, cycles);
     }
     cycles.exit();
+}
+
+/// `arcs`, each with its index among them.
+fn indexed<T>(
+    arcs: Vec<(T, Vec<VariantSelectionSite>)>,
+) -> impl Iterator<Item = (u16, T, Vec<VariantSelectionSite>)> {
+    arcs.into_iter()
+        .enumerate()
+        .map(|(index, (arc, sites))| (u16::try_from(index).unwrap_or(u16::MAX), arc, sites))
+}
+
+/// The arcs authored for the prims of a reference or payload target's
+/// namespace, expanded beneath the arc's nodes (see [`Self::expand`]).
+struct NestedArcs<'a> {
+    /// The target layer stack, which authors the arcs.
+    remote_stack: &'a LayerStack,
+    /// The layers that select the variants of the arcs' targets: those of
+    /// the stronger layer stacks, then `remote_stack`'s.
+    combined_stack: &'a LayerStack,
+    /// Root layer of the target layer stack; internal arcs target it.
+    anchor: LayerId,
+    /// The offset of the arc, applied to the class arcs nested in it.
+    layer_offset: LayerOffset,
+}
+
+impl NestedArcs<'_> {
+    /// Expands `arcs`, those authored for `remote_path` of the target
+    /// namespace, beneath `nodes` for the composed prim `dest` it maps onto,
+    /// each at its place among the arcs of its kind.
+    ///
+    /// Spec: AOUSD Core §10.4 (an arc's target ranks beneath the site that
+    /// authors it). OpenUSD: `_EvalRefOrPayloadArcs` and
+    /// `_AddClassBasedArcs` in `pxr/usd/pcp/primIndex.cpp`.
+    fn expand(
+        &self,
+        store: &mut dyn LayerStore,
+        fallbacks: &VariantFallbacks,
+        nodes: &ArcNodes,
+        remote_path: PathId,
+        dest: PathId,
+        arcs: AdmittedArcs,
+        out: &mut HashMap<PathId, PrimIndex>,
+        visited_inherits: &mut VisitedClasses,
+        visited_specializes: &mut VisitedClasses,
+        prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
+        authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
+        cycles: &mut CycleDetector,
+        mut deps: Option<&mut DependencyBuilder>,
+    ) {
+        let namespace_depth =
+            u16::try_from(store.paths().resolve(dest).depth()).unwrap_or(u16::MAX);
+        for (index, class, sites) in indexed(arcs.inherits) {
+            let branch = nodes.branch_path(&sites);
+            // The class is implied into each stronger layer stack by its own
+            // expansion (see `implied_classes`).
+            add_inherit_edge_opinions(
+                store,
+                fallbacks,
+                self.remote_stack,
+                self.combined_stack,
+                dest,
+                class,
+                self.anchor,
+                namespace_depth,
+                index,
+                ArcParent::nested(&branch),
+                out,
+                visited_inherits,
+                visited_specializes,
+                prim_order_out,
+                authored_children_out,
+                None,
+                self.layer_offset,
+                cycles,
+                deps.as_deref_mut(),
+            );
+        }
+        // Direct references, references on the prim's selected branches, and
+        // references authored for it inside its parent's selected branches.
+        for (index, reference, sites) in indexed(arcs.references) {
+            let branch = nodes.branch_path(&sites);
+            add_reference_edge_opinions(
+                store,
+                fallbacks,
+                self.combined_stack,
+                dest,
+                reference,
+                namespace_depth,
+                index,
+                ArcParent::nested(&branch),
+                out,
+                visited_inherits,
+                visited_specializes,
+                prim_order_out,
+                authored_children_out,
+                None,
+                cycles,
+                deps.as_deref_mut(),
+            );
+        }
+        for (index, payload, sites) in indexed(arcs.payloads) {
+            let branch = nodes.branch_path(&sites);
+            add_payload_edge_opinions(
+                store,
+                fallbacks,
+                self.combined_stack,
+                dest,
+                payload,
+                namespace_depth,
+                index,
+                ArcParent::nested(&branch),
+                out,
+                visited_inherits,
+                visited_specializes,
+                prim_order_out,
+                authored_children_out,
+                None,
+                cycles,
+                deps.as_deref_mut(),
+            );
+        }
+        // Specializes authored in the target's namespace. Their opinions are
+        // weaker than every other opinion of the prim, not only than this
+        // arc's: each leaves a placeholder beneath this arc's node and is
+        // propagated to the root, and is implied into each stronger layer
+        // stack (see `nest_step` and `implied_classes`).
+        //
+        // Spec: AOUSD Core §10.4.1, §10.4.2.4; OpenUSD
+        // `_EvalImpliedSpecializes` in `pxr/usd/pcp/primIndex.cpp`.
+        for (index, specialized, sites) in indexed(arcs.specializes) {
+            let branch = nodes.branch_path(&sites);
+            add_specializes_edge_opinions(
+                store,
+                fallbacks,
+                self.combined_stack,
+                dest,
+                remote_path,
+                specialized,
+                self.anchor,
+                namespace_depth,
+                index,
+                ArcParent::nested(&branch),
+                out,
+                visited_specializes,
+                prim_order_out,
+                authored_children_out,
+                None,
+                self.layer_offset,
+                cycles,
+                deps.as_deref_mut(),
+            );
+        }
+    }
 }
 
 fn add_payload_opinions(
@@ -7625,8 +7677,13 @@ fn add_payload_edge_opinions(
         }
     }
 
-    // Handle nested arcs inside payload targets.
-    for (remote_path_id, dest_path_id) in mapping {
+    let nested = NestedArcs {
+        remote_stack: &remote_stack,
+        combined_stack: &combined_stack,
+        anchor: reference.layer,
+        layer_offset: reference.layer_offset,
+    };
+    for &(remote_path_id, dest_path_id) in &mapping {
         let arcs = admitted_arcs(
             store,
             fallbacks,
@@ -7641,121 +7698,21 @@ fn add_payload_edge_opinions(
             reference.layer,
             cycles,
         );
-        let inherits = arcs.inherits;
-        for (inherit_index, (inherited_root, sites)) in inherits.into_iter().enumerate() {
-            let branch = nodes.branch_path(&sites);
-            let inherit_index = u16::try_from(inherit_index).unwrap_or(u16::MAX);
-            let namespace_depth =
-                u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
-
-            // The class is implied into each stronger layer stack by its own
-            // expansion (see `implied_classes`).
-            add_inherit_edge_opinions(
-                store,
-                fallbacks,
-                &remote_stack,
-                &combined_stack,
-                dest_path_id,
-                inherited_root,
-                reference.layer,
-                namespace_depth,
-                inherit_index,
-                ArcParent::nested(&branch),
-                out,
-                visited_inherits,
-                visited_specializes,
-                prim_order_out,
-                authored_children_out,
-                None,
-                reference.layer_offset,
-                cycles,
-                deps.as_deref_mut(),
-            );
-        }
-
-        // Direct references and those authored for this prim inside its own
-        // or its parent's selected variant branches.
-        let nested = arcs.references;
-        for (nested_index, (nested_ref, sites)) in nested.into_iter().enumerate() {
-            let branch = nodes.branch_path(&sites);
-            let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
-            let namespace_depth =
-                u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
-            add_reference_edge_opinions(
-                store,
-                fallbacks,
-                &combined_stack,
-                dest_path_id,
-                nested_ref,
-                namespace_depth,
-                nested_index,
-                ArcParent::nested(&branch),
-                out,
-                visited_inherits,
-                visited_specializes,
-                prim_order_out,
-                authored_children_out,
-                None,
-                cycles,
-                deps.as_deref_mut(),
-            );
-        }
-
-        // Handle nested payloads inside payload targets.
-        let nested_payloads = arcs.payloads;
-        for (nested_index, (nested_payload, sites)) in nested_payloads.into_iter().enumerate() {
-            let branch = nodes.branch_path(&sites);
-            let nested_index = u16::try_from(nested_index).unwrap_or(u16::MAX);
-            let namespace_depth =
-                u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
-            add_payload_edge_opinions(
-                store,
-                fallbacks,
-                &combined_stack,
-                dest_path_id,
-                nested_payload,
-                namespace_depth,
-                nested_index,
-                ArcParent::nested(&branch),
-                out,
-                visited_inherits,
-                visited_specializes,
-                prim_order_out,
-                authored_children_out,
-                None,
-                cycles,
-                deps.as_deref_mut(),
-            );
-        }
-
-        // Handle nested specializes inside payload targets, placed as for
-        // references (AOUSD Core §10.4.1).
-        for (spec_index, (specialized_root, sites)) in arcs.specializes.into_iter().enumerate() {
-            let branch = nodes.branch_path(&sites);
-            let spec_index = u16::try_from(spec_index).unwrap_or(u16::MAX);
-            let namespace_depth =
-                u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
-            add_specializes_edge_opinions(
-                store,
-                fallbacks,
-                &combined_stack,
-                dest_path_id,
-                remote_path_id,
-                specialized_root,
-                reference.layer,
-                namespace_depth,
-                spec_index,
-                ArcParent::nested(&branch),
-                out,
-                visited_specializes,
-                prim_order_out,
-                authored_children_out,
-                None,
-                reference.layer_offset,
-                cycles,
-                deps.as_deref_mut(),
-            );
-        }
+        nested.expand(
+            store,
+            fallbacks,
+            &nodes,
+            remote_path_id,
+            dest_path_id,
+            arcs,
+            out,
+            visited_inherits,
+            visited_specializes,
+            prim_order_out,
+            authored_children_out,
+            cycles,
+            deps.as_deref_mut(),
+        );
     }
     // The arcs the target's ancestors author, and those of the relocation
     // sources outside the target (see `AncestralArcs`).

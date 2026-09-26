@@ -49,7 +49,13 @@ The sets:
   cycle, invalid `apiSchemas` entries, fallbacks shadowed by an
   authored value and by a default block, and where applied schemas may be
   applied (`apiSchemaCanOnlyApplyTo`, `apiSchemaAllowedInstanceNames` and a
-  per-instance `apiSchemaCanOnlyApplyTo`).
+  per-instance `apiSchemaCanOnlyApplyTo`);
+- `openusd`: no plugin of its own but OpenUSD's own schemas, which
+  `layerstack_schemas` ships: a mesh, a sphere, a material with a shader,
+  a light, a prim applying `CollectionAPI:foo` and `MaterialBindingAPI`, a
+  skeleton with a skinned mesh, a physics rigid body and a revolute joint
+  with multiple-apply drive and limit instances, a volume with a field,
+  render settings and a product, and a semantics label.
 
 For every prim the vectors also record `CanApplyAPI` for each applied
 schema, with a set of instance names for multiple-apply ones, and for the
@@ -57,6 +63,7 @@ set `IsAllowedAPISchemaInstanceName` and `GetAPISchemaCanOnlyApplyToTypeNames`
 for the same schemas and instance names.
 """
 import json
+import math
 import os
 import subprocess
 import sys
@@ -462,6 +469,154 @@ def "CycleFromTwo" (
 }
 ''',
     },
+    "openusd": {
+        "builtin": True,
+        "schemas": [
+            ("Typed", "abstractTyped", None, []),
+            ("Imageable", "abstractTyped", None, []),
+            ("Xformable", "abstractTyped", None, []),
+            ("Boundable", "abstractTyped", None, []),
+            ("Gprim", "abstractTyped", None, []),
+            ("PointBased", "abstractTyped", None, []),
+            ("Mesh", "concreteTyped", None, []),
+            ("Sphere", "concreteTyped", None, []),
+            ("Xform", "concreteTyped", None, []),
+            ("Scope", "concreteTyped", None, []),
+            ("NodeGraph", "concreteTyped", None, []),
+            ("Material", "concreteTyped", None, []),
+            ("Shader", "concreteTyped", None, []),
+            ("BoundableLightBase", "abstractTyped", None, []),
+            ("SphereLight", "concreteTyped", None, []),
+            ("MaterialBindingAPI", "singleApplyAPI", None, []),
+            ("LightAPI", "singleApplyAPI", None, []),
+            ("ShadowAPI", "singleApplyAPI", None, []),
+            ("ShapingAPI", "singleApplyAPI", None, []),
+            ("VisibilityAPI", "singleApplyAPI", None, []),
+            ("GeomModelAPI", "singleApplyAPI", None, []),
+            ("CollectionAPI", "multipleApplyAPI", None, []),
+            ("SkelRoot", "concreteTyped", None, []),
+            ("Skeleton", "concreteTyped", None, []),
+            ("SkelBindingAPI", "singleApplyAPI", None, []),
+            ("PhysicsJoint", "concreteTyped", None, []),
+            ("PhysicsRevoluteJoint", "concreteTyped", None, []),
+            ("PhysicsRigidBodyAPI", "singleApplyAPI", None, []),
+            ("PhysicsMassAPI", "singleApplyAPI", None, []),
+            ("PhysicsCollisionAPI", "singleApplyAPI", None, []),
+            ("PhysicsDriveAPI", "multipleApplyAPI", None, []),
+            ("PhysicsLimitAPI", "multipleApplyAPI", None, []),
+            ("Volume", "concreteTyped", None, []),
+            ("FieldBase", "abstractTyped", None, []),
+            ("OpenVDBAsset", "concreteTyped", None, []),
+            ("RenderSettingsBase", "abstractTyped", None, []),
+            ("RenderSettings", "concreteTyped", None, []),
+            ("RenderProduct", "concreteTyped", None, []),
+            ("SemanticsLabelsAPI", "multipleApplyAPI", None, []),
+            ("HydraGenerativeProceduralAPI", "singleApplyAPI", None, []),
+            ("ParticleField", "concreteTyped", None, []),
+        ],
+        "instance_probes": [
+            "foo", "angular", "linear", "transX", "rotX", "category",
+            "lightLink", "includes", "x:y", "1st",
+        ],
+        "auto_apply": {},
+        "scene": '''#usda 1.0
+
+def Xform "World"
+{
+    def Mesh "Mesh"
+    {
+        int[] faceVertexCounts = [4]
+    }
+
+    def Sphere "Ball"
+    {
+        double radius = 2
+    }
+
+    def Material "Material"
+    {
+        token outputs:surface.connect = </World/Material/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            token outputs:surface
+        }
+    }
+
+    def SphereLight "Light"
+    {
+        float inputs:intensity = 5
+    }
+
+    def Scope "Group" (
+        prepend apiSchemas = ["CollectionAPI:foo", "MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </World/Material>
+    }
+
+    def SkelRoot "Character"
+    {
+        def Skeleton "Skeleton"
+        {
+            uniform token[] joints = ["root", "root/arm"]
+        }
+
+        def Mesh "Skin" (
+            prepend apiSchemas = ["SkelBindingAPI"]
+        )
+        {
+            rel skel:skeleton = </World/Character/Skeleton>
+        }
+    }
+
+    def Xform "Body" (
+        prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsCollisionAPI"]
+    )
+    {
+        float physics:mass = 2
+    }
+
+    def PhysicsRevoluteJoint "Hinge" (
+        prepend apiSchemas = ["PhysicsDriveAPI:angular", "PhysicsLimitAPI:angular"]
+    )
+    {
+        rel physics:body0 = </World/Body>
+        float drive:angular:physics:stiffness = 10
+    }
+
+    def Volume "Smoke"
+    {
+        rel field:density = </World/Smoke/Density>
+
+        def OpenVDBAsset "Density"
+        {
+            token fieldName = "density"
+        }
+    }
+
+    def Scope "Render"
+    {
+        def RenderSettings "Settings"
+        {
+            rel products = </World/Render/Product>
+        }
+
+        def RenderProduct "Product"
+        {
+        }
+    }
+
+    def Xform "Labeled" (
+        prepend apiSchemas = ["SemanticsLabelsAPI:category"]
+    )
+    {
+        token[] semantics:labels:category = ["prop"]
+    }
+}
+''',
+    },
 }
 
 
@@ -523,13 +678,15 @@ def plug_info(spec):
 def write_set(out_dir, name, spec):
     directory = os.path.join(out_dir, name)
     os.makedirs(directory, exist_ok=True)
+    with open(os.path.join(directory, "scene.usda"), "w") as f:
+        f.write(spec["scene"])
+    if spec.get("builtin"):
+        return directory
     with open(os.path.join(directory, "plugInfo.json"), "w") as f:
         json.dump(plug_info(spec), f, indent=4, sort_keys=True)
         f.write("\n")
     with open(os.path.join(directory, "generatedSchema.usda"), "w") as f:
         f.write(GENERATED_HEADER + spec["generated"])
-    with open(os.path.join(directory, "scene.usda"), "w") as f:
-        f.write(spec["scene"])
     return directory
 
 
@@ -539,10 +696,19 @@ def encode(value):
 
     if value is None:
         return None
+    if isinstance(value, float) and not math.isfinite(value):
+        # JSON has no infinities: `inf`, `-inf` and `nan` as strings.
+        return str(value)
     if isinstance(value, (bool, int, float, str)):
         return value
     if isinstance(value, Sdf.AssetPath):
         return value.path
+    if isinstance(value, Sdf.PathExpression):
+        return value.GetText()
+    if isinstance(value, (Gf.Quatd, Gf.Quatf, Gf.Quath)):
+        return [float(value.GetReal())] + [float(x) for x in value.GetImaginary()]
+    if isinstance(value, (Gf.Matrix2d, Gf.Matrix3d, Gf.Matrix4d)):
+        return [float(x) for row in value for x in row]
     try:
         return [encode(v) for v in value]
     except TypeError:
@@ -560,6 +726,7 @@ def record(name, spec, directory):
     from pxr import Usd
 
     registry = Usd.SchemaRegistry()
+    probes = spec.get("instance_probes", INSTANCE_PROBES)
     typed = [i for i, kind, _, _ in spec["schemas"] if kind.endswith("Typed")]
     single = [i for i, kind, _, _ in spec["schemas"] if kind == "singleApplyAPI"]
     multiple = [i for i, kind, _, _ in spec["schemas"] if kind == "multipleApplyAPI"]
@@ -608,7 +775,7 @@ def record(name, spec, directory):
                 [s, "", bool(prim.CanApplyAPI(s))] for s in single
             ] + [
                 [s, instance, bool(prim.CanApplyAPI(s, instance))]
-                for s in multiple for instance in INSTANCE_PROBES
+                for s in multiple for instance in probes
             ],
         })
     return {
@@ -617,7 +784,7 @@ def record(name, spec, directory):
         "prims": prims,
         "allowed_instance_names": [
             [s, instance, bool(Usd.SchemaRegistry.IsAllowedAPISchemaInstanceName(s, instance))]
-            for s in multiple for instance in INSTANCE_PROBES
+            for s in multiple for instance in probes
         ],
         "can_only_apply_to": [
             [s, "", [str(t) for t in Usd.SchemaRegistry.GetAPISchemaCanOnlyApplyToTypeNames(s)]]
@@ -625,23 +792,25 @@ def record(name, spec, directory):
         ] + [
             [s, instance, [str(t) for t in
                            Usd.SchemaRegistry.GetAPISchemaCanOnlyApplyToTypeNames(s, instance)]]
-            for s in multiple for instance in INSTANCE_PROBES
+            for s in multiple for instance in probes
         ],
     }
 
 
 def main():
-    if len(sys.argv) == 3 and sys.argv[1] == "--record":
-        name = sys.argv[2]
-        directory = os.environ["PXR_PLUGINPATH_NAME"]
+    if len(sys.argv) == 4 and sys.argv[1] == "--record":
+        name, directory = sys.argv[2], sys.argv[3]
         json.dump(record(name, SETS[name], directory), sys.stdout)
         return
     out_dir = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_OUT
     for name, spec in SETS.items():
         directory = os.path.abspath(write_set(out_dir, name, spec))
-        env = dict(os.environ, PXR_PLUGINPATH_NAME=directory)
+        env = dict(os.environ)
+        env.pop("PXR_PLUGINPATH_NAME", None)
+        if not spec.get("builtin"):
+            env["PXR_PLUGINPATH_NAME"] = directory
         result = subprocess.run(
-            [sys.executable, os.path.abspath(__file__), "--record", name],
+            [sys.executable, os.path.abspath(__file__), "--record", name, directory],
             env=env, check=True, capture_output=True, text=True)
         if result.stderr.strip():
             # OpenUSD warns about the inclusion cycle, the invalid

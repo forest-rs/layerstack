@@ -280,6 +280,82 @@
    ]
   },
   {
+   "path": "/Vineyard",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Vineyard"
+    ],
+    [
+     "vine.usda",
+     "/Vine"
+    ],
+    [
+     "trellis.usda",
+     "/Row"
+    ]
+   ]
+  },
+  {
+   "path": "/Vineyard/Cane",
+   "prim_stack": [
+    [
+     "vine.usda",
+     "/Vine/Cane"
+    ],
+    [
+     "trellis.usda",
+     "/Cane"
+    ],
+    [
+     "trellis.usda",
+     "/Row/Cane"
+    ]
+   ]
+  },
+  {
+   "path": "/Vineyard/Cane/Bud",
+   "prim_stack": [
+    [
+     "vine.usda",
+     "/Vine/Cane/Bud"
+    ],
+    [
+     "trellis.usda",
+     "/Bud"
+    ],
+    [
+     "trellis.usda",
+     "/Bud{bloom=open}"
+    ],
+    [
+     "trellis.usda",
+     "/Cane/Bud"
+    ],
+    [
+     "trellis.usda",
+     "/Cane/Bud{bloom=open}"
+    ],
+    [
+     "trellis.usda",
+     "/Row/Cane/Bud"
+    ],
+    [
+     "trellis.usda",
+     "/Row/Cane/Bud{bloom=open}"
+    ]
+   ]
+  },
+  {
+   "path": "/Vineyard/Cane/Bud/Petal",
+   "prim_stack": [
+    [
+     "trellis.usda",
+     "/Bud{bloom=open}Petal"
+    ]
+   ]
+  },
+  {
    "path": "/Hut",
    "prim_stack": [
     [
@@ -302,6 +378,36 @@
     [
      "loft.usda",
      "/_class_Beam"
+    ],
+    [
+     "loft.usda",
+     "/Hut{lamp=lit}"
+    ],
+    [
+     "loft.usda",
+     "/_class_Glow"
+    ],
+    [
+     "shade.usda",
+     "/Shade"
+    ]
+   ]
+  },
+  {
+   "path": "/Hut/Loft/Fringe",
+   "prim_stack": [
+    [
+     "shade.usda",
+     "/Shade/Fringe"
+    ]
+   ]
+  },
+  {
+   "path": "/Hut/Loft/Halo",
+   "prim_stack": [
+    [
+     "loft.usda",
+     "/_class_Glow/Halo"
     ]
    ]
   },
@@ -432,6 +538,11 @@
   "/Quarry/Stone/Chip.size": 5,
   "/Quarry/_class_Rock.grain": 5,
   "/Quarry/_class_Rock.hardness": 5,
+  "/Vineyard/Cane/Bud.petals": 5,
+  "/Vineyard/Cane/Bud/Petal.width": 5,
+  "/Hut/Loft.heat": 1,
+  "/Hut/Loft.radius": 1,
+  "/Hut/Loft/Halo.size": 2,
   "/Hut/Loft/Ray.width": 1,
   "/Hut/Loft/Wick.flame": 1
  },
@@ -531,6 +642,21 @@
   ],
   "/Hut/Loft.door": [
    "/Hut/Loft/Wick"
+  ],
+  "/Hut/Loft.fringe": [
+   "/Hut/Loft/Fringe"
+  ],
+  "/Hut/Loft.glow": [
+   "/Hut/Loft/Halo"
+  ],
+  "/Hut/Loft.shine": [
+   "/Hut/Loft/Wick"
+  ],
+  "/Hut/Loft.heat": [
+   "/Hut/Loft/Wick.flame"
+  ],
+  "/Hut/Loft.radius": [
+   "/Hut/Loft/Halo.size"
   ],
   "/Hut/Loft/Shelf.lid": [
    "/Hut/Loft/Shelf/Cap"

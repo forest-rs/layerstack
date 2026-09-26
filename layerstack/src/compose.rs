@@ -17,7 +17,7 @@ use hashbrown::{HashMap, HashSet};
 use crate::variable_expression::ExpressionVariables;
 use crate::variant_fallbacks::{VariantFallbacks, apply_variant_fallbacks};
 use crate::{
-    arc_cycle::CycleDetector,
+    arc_cycle::{ChainState, CycleDetector},
     arcs::{
         ArcAuthoring, AuthoredReference, HostSpec, SelectionScope, VariantNodeOrder,
         anchor_internal_arcs, lookup_reference_target_path, resolve_branch_payloads_in,
@@ -38,7 +38,7 @@ use crate::{
     dependency_map::{ArcDependency, DependencyBuilder},
     doc::{LayerId, LayerOffset, LayerStore, Reference, ReferenceTarget, composed_entries},
     expression_variables::{
-        ArcAnchor, ExpressionScope, SiteContext, composed_variables, node_variables,
+        ArcAnchor, ExpressionScope, SiteContext, composed_variables, node_chain, node_variables,
         read_selections, same_context, site_selections,
     },
     interner::TokenId,
@@ -276,6 +276,16 @@ pub(crate) fn compose_stage(
         fallbacks,
         &layer_stack,
         &paths,
+        &mut prims,
+        &mut prim_order_opinions,
+        &mut authored_children_opinions,
+        &mut cycles,
+        dep_builder.as_mut(),
+    );
+    add_late_variant_branches(
+        store,
+        fallbacks,
+        &layer_stack,
         &mut prims,
         &mut prim_order_opinions,
         &mut authored_children_opinions,
@@ -2923,67 +2933,113 @@ fn resolve_forwarded_variant_selections(
     selections
 }
 
-/// The variant selections for the variant sets of `source_path`, the site
-/// in `weaker_stack` an arc reaches for the composed prim `selection_path`:
-/// those `stronger_stack` authors for the prim, then those of the sites
-/// composed for it so far, strongest first, then those `weaker_stack`
-/// authors at `source_path`, then the fallbacks.
+/// The variant selections for the variant sets of `remote_path`, the site
+/// of the node `own` in the target layer stack `remote_stack`, from the
+/// complete prim index of the composed prim `dest`, which must be ranked,
+/// in a stage whose layer stack is `stage_stack`.
 ///
-/// The sites composed so far include the classes implied into the stronger
-/// layer stacks, which a class arc's expansion adds before the arcs
-/// authored inside the class: a selection such a class authors for a set
-/// of a reference the class makes applies to that reference. Only the
-/// sites outside every variant branch count, as a branch's own selection
-/// counts only once the branch is known to be selected.
+/// The sites are the index's sources, strongest first, with the site's own
+/// variant branches ranked where their nodes go: beneath `own`, after its
+/// specs and the classes it inherits, and before its other arcs (AOUSD
+/// Core §10.4, LIVERPS). [`evaluate_variant_sets`] resolves them, so a
+/// branch a weaker arc selects still selects the sets evaluated after it;
+/// any other selection a source authors, then the fallbacks, fill in the
+/// rest.
 ///
-/// Spec: AOUSD Core §10.3.2.5 (the strongest selection wins), §10.4.2.4
-/// (implied classes). OpenUSD: `_ComposeVariantSelection` in
-/// `pxr/usd/pcp/primIndex.cpp` searches the prim index built so far.
-fn arc_target_variant_selections(
+/// Spec: AOUSD Core §10.3.2.5 (the strongest selection in the prim index
+/// wins). OpenUSD searches the whole index strongest first
+/// (`_ComposeVariantSelection` in `pxr/usd/pcp/primIndex.cpp`), once every
+/// arc of the prim is added.
+fn late_variant_selections(
     store: &dyn LayerStore,
     fallbacks: &VariantFallbacks,
-    stronger_stack: &LayerStack,
-    so_far: &PrimIndex,
-    selection_path: PathId,
-    weaker_stack: &LayerStack,
-    source_path: PathId,
+    stage_stack: &LayerStack,
+    out: &HashMap<PathId, PrimIndex>,
+    dest: PathId,
+    own: NodeId,
+    remote_stack: &LayerStack,
+    remote_path: PathId,
 ) -> HashMap<TokenId, TokenId> {
-    let mut selections =
-        authored_full_variant_selections(store, fallbacks, stronger_stack, selection_path);
-    let mut sources: Vec<OpinionKey> = so_far
+    let index = &out[&dest];
+    let graph = &index.graph;
+    // The specs inside an ancestor's unselected branch compose nothing
+    // (see `prune_unselected_variant_specs`).
+    let mut cache = HashMap::new();
+    let mut sources: Vec<OpinionKey> = index
         .sources
         .iter()
         .filter(|key| {
-            !key.spec_path.components().iter().any(|component| {
-                matches!(
-                    component,
-                    crate::spec_path::SpecComponent::VariantSelection { .. }
-                )
-            })
+            spec_path_branches_selected(
+                store,
+                fallbacks,
+                stage_stack,
+                out,
+                &mut cache,
+                dest,
+                key.node,
+                key.layer_id,
+                &key.spec_path,
+                BranchHosts::Ancestors,
+            )
         })
         .cloned()
         .collect();
-    so_far.graph.sort_keys(&mut sources);
-    for (set, variant) in
-        authored_strength_ordered_variant_selections(store, &so_far.graph, &sources)
-    {
-        selections.entry(set).or_insert(variant);
-    }
-    for (set, variant) in
-        authored_full_variant_selections(store, fallbacks, weaker_stack, source_path)
-    {
+    graph.sort_keys(&mut sources);
+    // Whether a source ranks ahead of the branches of `own`.
+    let ahead = |node: NodeId| {
+        let mut child = node;
+        while let Some(parent) = graph.node(child).and_then(PrimNode::parent) {
+            if parent == own {
+                return graph
+                    .node(child)
+                    .is_some_and(|child| child.arc_kind() == ArcKind::Inherits);
+            }
+            child = parent;
+        }
+        node == own || graph.cmp_nodes(node, own).is_lt()
+    };
+    let at = sources
+        .iter()
+        .position(|key| !ahead(key.node))
+        .unwrap_or(sources.len());
+    let site_of = |key: &OpinionKey| {
+        let spec = store.layer(key.layer_id).and_then(|layer| {
+            layer.source_prim_spec(key.lookup_path, &key.spec_path, store.paths())
+        })?;
+        let context = SiteContext::Node(graph, key.node);
+        Some(VariantSite::of_spec(
+            store,
+            spec,
+            key.spec_path.variant_chain(),
+            context,
+        ))
+    };
+    // The site's own specs, read in the context of its node.
+    let own_chain = node_chain(graph, own);
+    let own_specs: Vec<HostSpec<'_, '_>> = remote_stack
+        .layers
+        .iter()
+        .filter_map(|id| store.layer(*id))
+        .flat_map(|layer| layer.prim_specs(remote_path))
+        .map(|spec| (spec, own_chain.as_slice()))
+        .collect();
+    let sites: Vec<VariantSite<'_>> = sources[..at]
+        .iter()
+        .filter_map(site_of)
+        .chain(VariantSite::branches_of_node(store, &own_specs))
+        .chain(sources[at..].iter().filter_map(site_of))
+        .collect();
+    let mut selections = evaluate_variant_sets(&sites);
+    for (set, variant) in authored_composed_variant_selections(store, graph, &sources) {
         selections.entry(set).or_insert(variant);
     }
     apply_fallbacks_at(
         store,
         fallbacks,
         &mut selections,
-        &PrimIndexGraph::default(),
-        &[],
-        &[
-            (stronger_stack, selection_path),
-            (weaker_stack, source_path),
-        ],
+        graph,
+        &sources,
+        &[(remote_stack, remote_path)],
     );
     selections
 }
@@ -4008,7 +4064,7 @@ fn intern_steps(
         let chain = match step.target {
             StepTarget::Variant(_) | StepTarget::LocalVariant(_) => {
                 let graph = &out[&dest].graph;
-                let mut chain = crate::expression_variables::node_chain(graph, cursor.node);
+                let mut chain = node_chain(graph, cursor.node);
                 if chain.last() != Some(&step.layer_stack) {
                     chain.push(step.layer_stack);
                 }
@@ -6751,6 +6807,8 @@ fn add_reference_edge_opinions(
     //
     // Spec: §12.3.2.1 (sublayer offsets compose when nested).
     let mut host_selection_cache = HashMap::new();
+    let mut late_sites = Vec::new();
+    let mut late_seen = HashSet::new();
     for (layer_strength_idx, remote_layer_id) in remote_stack.layers.iter().copied().enumerate() {
         let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
         let ref_offset = reference
@@ -6846,92 +6904,12 @@ fn add_reference_edge_opinions(
                         ));
                 }
 
-                // Selections only pick among the spec's own variant sets.
-                let selections = if remote_spec.variant_sets.is_empty() {
-                    HashMap::new()
-                } else {
-                    arc_target_variant_selections(
-                        store,
-                        fallbacks,
-                        stage_stack,
-                        &out[dest_path_id],
-                        *dest_path_id,
-                        &remote_stack,
-                        *remote_path_id,
-                    )
-                };
-                for branch in remote_spec.selected_variant_branches(&selections) {
-                    let variant_spec = branch.spec;
-                    let branch_selections =
-                        branch.sites(&remote_spec.outer_variant_sites, *remote_path_id);
-                    let branch_path = normalized_variant_spec_path(
-                        store,
-                        *remote_path_id,
-                        &branch_selections,
-                        provenance_remap,
-                    );
-                    let variant_node =
-                        nodes.variant_node(store, out, *dest_path_id, &branch_selections);
-                    pending_sources.push((
-                        *dest_path_id,
-                        OpinionKey {
-                            node: variant_node,
-                            layer_strength,
-                            layer_id: remote_layer_id,
-                            lookup_path: *remote_path_id,
-                            spec_path: branch_path.clone(),
-                        },
-                    ));
-
-                    for entry in composed_entries(&variant_spec.fields, &variant_spec.properties) {
-                        let key = OpinionKey {
-                            node: variant_node,
-                            layer_strength,
-                            layer_id: remote_layer_id,
-                            lookup_path: *remote_path_id,
-                            spec_path: normalized_variant_property_spec_path(
-                                store,
-                                *remote_path_id,
-                                &branch_selections,
-                                entry.name(),
-                                provenance_remap,
-                            ),
-                        };
-                        let index = out.get_mut(dest_path_id).expect("path exists");
-                        if let Some(property_type) = entry.property_type() {
-                            index.add_property_type(
-                                entry.name(),
-                                key.clone(),
-                                property_type.clone(),
-                            );
-                        }
-                        index.add_opinion(Opinion {
-                            key: key.clone(),
-                            field: entry.name(),
-                            value: {
-                                let mut value = entry.value();
-                                let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
-                                map_arc_targets(
-                                    store,
-                                    &mut value,
-                                    ArcPathMap {
-                                        arc: ArcKind::References,
-                                        source: &target_root,
-                                        map: &|store, path| targets.map(store, path),
-                                    },
-                                    TargetOwner {
-                                        prim: *dest_path_id,
-                                        property: entry.name(),
-                                        layer: remote_layer_id,
-                                        spec: key.spec_path.clone(),
-                                    },
-                                    cycles,
-                                );
-                                value
-                            },
-                            layer_offset: ref_offset,
-                        });
-                    }
+                // The spec's own variant sets are selected once the prim
+                // index is complete (see `LateBranches`).
+                if !remote_spec.variant_sets.is_empty()
+                    && late_seen.insert((*remote_path_id, *dest_path_id))
+                {
+                    late_sites.push((*remote_path_id, *dest_path_id));
                 }
             }
         }
@@ -6994,6 +6972,8 @@ fn add_reference_edge_opinions(
             reference.layer,
             cycles,
         );
+        // The arcs of the prim's own branches follow their selection (see
+        // `LateBranches`).
         nested.expand(
             store,
             fallbacks,
@@ -7001,6 +6981,7 @@ fn add_reference_edge_opinions(
             remote_path_id,
             dest_path_id,
             arcs,
+            |sites| !in_own_branch(sites, remote_path_id),
             out,
             visited_inherits,
             visited_specializes,
@@ -7047,19 +7028,45 @@ fn add_reference_edge_opinions(
         deps,
     );
 
+    if !late_sites.is_empty() {
+        LateArc {
+            arc: ArcKind::References,
+            path: nodes.path.clone(),
+            stage_relocates: Rc::clone(&nodes.stage_relocates),
+            stage_stack: stage_stack.clone(),
+            combined_stack: combined_stack.clone(),
+            remote_stack: remote_stack.clone(),
+            anchor: reference.layer,
+            layer_offset: reference.layer_offset,
+            target_root: reference_path,
+            provenance_remap,
+            chain: cycles.chain_state(),
+        }
+        .defer(cycles, late_sites);
+    }
     if let Some(check) = target_specs {
         check.finish(out, cycles);
     }
     cycles.exit();
 }
 
-/// `arcs`, each with its index among them.
-fn indexed<T>(
+/// Whether an arc authored inside the variant branches `sites` (outermost
+/// first) is authored inside a branch of `host`'s own variant sets.
+fn in_own_branch(sites: &[VariantSelectionSite], host: PathId) -> bool {
+    sites.iter().any(|site| site.host_path == host)
+}
+
+/// The arcs of `arcs` whose variant branches `keep` accepts, each with its
+/// index among `arcs`.
+fn kept<T>(
     arcs: Vec<(T, Vec<VariantSelectionSite>)>,
-) -> impl Iterator<Item = (u16, T, Vec<VariantSelectionSite>)> {
+    keep: &impl Fn(&[VariantSelectionSite]) -> bool,
+) -> Vec<(u16, T, Vec<VariantSelectionSite>)> {
     arcs.into_iter()
         .enumerate()
+        .filter(|(_, (_, sites))| keep(sites))
         .map(|(index, (arc, sites))| (u16::try_from(index).unwrap_or(u16::MAX), arc, sites))
+        .collect()
 }
 
 /// The arcs authored for the prims of a reference or payload target's
@@ -7078,8 +7085,10 @@ struct NestedArcs<'a> {
 
 impl NestedArcs<'_> {
     /// Expands `arcs`, those authored for `remote_path` of the target
-    /// namespace, beneath `nodes` for the composed prim `dest` it maps onto,
-    /// each at its place among the arcs of its kind.
+    /// namespace, beneath `nodes` for the composed prim `dest` it maps onto:
+    /// each arc `keep` accepts by the variant branches authoring it. Each
+    /// keeps its place among the arcs of its kind, the arcs `keep` rejects
+    /// included.
     ///
     /// Spec: AOUSD Core §10.4 (an arc's target ranks beneath the site that
     /// authors it). OpenUSD: `_EvalRefOrPayloadArcs` and
@@ -7092,6 +7101,7 @@ impl NestedArcs<'_> {
         remote_path: PathId,
         dest: PathId,
         arcs: AdmittedArcs,
+        keep: impl Fn(&[VariantSelectionSite]) -> bool,
         out: &mut HashMap<PathId, PrimIndex>,
         visited_inherits: &mut VisitedClasses,
         visited_specializes: &mut VisitedClasses,
@@ -7102,7 +7112,7 @@ impl NestedArcs<'_> {
     ) {
         let namespace_depth =
             u16::try_from(store.paths().resolve(dest).depth()).unwrap_or(u16::MAX);
-        for (index, class, sites) in indexed(arcs.inherits) {
+        for (index, class, sites) in kept(arcs.inherits, &keep) {
             let branch = nodes.branch_path(&sites);
             // The class is implied into each stronger layer stack by its own
             // expansion (see `implied_classes`).
@@ -7130,7 +7140,7 @@ impl NestedArcs<'_> {
         }
         // Direct references, references on the prim's selected branches, and
         // references authored for it inside its parent's selected branches.
-        for (index, reference, sites) in indexed(arcs.references) {
+        for (index, reference, sites) in kept(arcs.references, &keep) {
             let branch = nodes.branch_path(&sites);
             add_reference_edge_opinions(
                 store,
@@ -7151,7 +7161,7 @@ impl NestedArcs<'_> {
                 deps.as_deref_mut(),
             );
         }
-        for (index, payload, sites) in indexed(arcs.payloads) {
+        for (index, payload, sites) in kept(arcs.payloads, &keep) {
             let branch = nodes.branch_path(&sites);
             add_payload_edge_opinions(
                 store,
@@ -7180,7 +7190,7 @@ impl NestedArcs<'_> {
         //
         // Spec: AOUSD Core §10.4.1, §10.4.2.4; OpenUSD
         // `_EvalImpliedSpecializes` in `pxr/usd/pcp/primIndex.cpp`.
-        for (index, specialized, sites) in indexed(arcs.specializes) {
+        for (index, specialized, sites) in kept(arcs.specializes, &keep) {
             let branch = nodes.branch_path(&sites);
             add_specializes_edge_opinions(
                 store,
@@ -7199,6 +7209,278 @@ impl NestedArcs<'_> {
                 authored_children_out,
                 None,
                 self.layer_offset,
+                cycles,
+                deps.as_deref_mut(),
+            );
+        }
+    }
+}
+
+/// A reference or payload whose target sites' own variant sets are left
+/// for the late variant pass (see [`LateBranches`]).
+#[derive(Debug)]
+struct LateArc {
+    /// References or payloads.
+    arc: ArcKind,
+    /// The arc path to the arc, the arc last.
+    path: Vec<ArcStep>,
+    /// The relocations of the stage's layer stack.
+    stage_relocates: Rc<LiftedSet>,
+    /// The layers of the stronger layer stacks, which select the variants
+    /// of the hosts enclosing the target's sites (see
+    /// [`enclosing_variant_selections`]).
+    stage_stack: LayerStack,
+    /// `stage_stack`'s layers, then `remote_stack`'s.
+    combined_stack: LayerStack,
+    /// The arc's target layer stack.
+    remote_stack: LayerStack,
+    /// Root layer of the target layer stack; internal arcs target it.
+    anchor: LayerId,
+    /// The arc's offset.
+    layer_offset: LayerOffset,
+    /// The arc's target.
+    target_root: PathId,
+    /// How spec paths are recorded (see [`normalized_prim_spec_path`]).
+    provenance_remap: Option<(PathId, PathId)>,
+    /// The chain of arcs to the arc, the arc included.
+    chain: ChainState,
+}
+
+/// The variant sets a site of an arc's target namespace declares, for the
+/// composed prim it maps onto, selected once the prim index holds every
+/// other arc.
+///
+/// An arc expansion maps its target's specs onto each composed prim, but
+/// leaves the branches of their own variant sets, with the arcs authored
+/// inside them, to [`add_late_variant_branches`]: a stronger site that
+/// selects them may still be missing, such as a class implied across the
+/// arc, or a site an arc authored deeper in namespace reaches.
+///
+/// Spec: AOUSD Core §10.3.2.5 (the strongest selection in the prim index
+/// wins). OpenUSD evaluates a node's variant sets after the prim index's
+/// other arcs and implied classes (`EvalNodeVariantSets` in `Task::Type`,
+/// `_EvalNodeVariantSets` in `pxr/usd/pcp/primIndex.cpp`), searching the
+/// whole index for each selection (`_ComposeVariantSelection`).
+#[derive(Debug)]
+pub(crate) struct LateBranches {
+    arc: Rc<LateArc>,
+    /// The site, in the target layer stack.
+    remote_path: PathId,
+    /// The composed prim the site maps onto.
+    dest: PathId,
+}
+
+impl LateArc {
+    /// Leaves the variant sets of each `(remote path, composed prim)` of
+    /// `sites` for the late variant pass.
+    fn defer(self, cycles: &mut CycleDetector, sites: Vec<(PathId, PathId)>) {
+        let arc = Rc::new(self);
+        for (remote_path, dest) in sites {
+            cycles.defer_branches(LateBranches {
+                arc: Rc::clone(&arc),
+                remote_path,
+                dest,
+            });
+        }
+    }
+}
+
+impl LateBranches {
+    /// Adds the branches the composed prim's index selects, with the arcs
+    /// authored inside them, beneath the arc's node.
+    fn add(
+        &self,
+        store: &mut dyn LayerStore,
+        fallbacks: &VariantFallbacks,
+        stage_stack: &LayerStack,
+        out: &mut HashMap<PathId, PrimIndex>,
+        visited_inherits: &mut VisitedClasses,
+        visited_specializes: &mut VisitedClasses,
+        prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
+        authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
+        cycles: &mut CycleDetector,
+        deps: Option<&mut DependencyBuilder>,
+    ) {
+        let (arc, remote_path, dest) = (&*self.arc, self.remote_path, self.dest);
+        if !out.contains_key(&dest) {
+            return;
+        }
+        cycles.resume(arc.chain.clone());
+        let mut nodes = ArcNodes {
+            path: arc.path.clone(),
+            nodes: HashMap::new(),
+            stage_relocates: Rc::clone(&arc.stage_relocates),
+        };
+        let own = nodes.cursor(store, out, dest).node;
+        out.get_mut(&dest).expect("path exists").graph.rank();
+        let selections = late_variant_selections(
+            store,
+            fallbacks,
+            stage_stack,
+            out,
+            dest,
+            own,
+            &arc.remote_stack,
+            remote_path,
+        );
+        let target_root = store.paths().resolve(arc.target_root).clone();
+        for (at, layer_id) in arc.remote_stack.layers.iter().copied().enumerate() {
+            let layer_strength = u16::try_from(at).unwrap_or(u16::MAX);
+            let layer_offset = arc.layer_offset.compose(arc.remote_stack.offset_at(at));
+            let specs: Vec<crate::doc::PrimSpec> = store
+                .layer(layer_id)
+                .map(|layer| layer.prim_specs(remote_path).cloned().collect())
+                .unwrap_or_default();
+            for spec in &specs {
+                for branch in spec.selected_variant_branches(&selections) {
+                    let sites = branch.sites(&spec.outer_variant_sites, remote_path);
+                    let node = nodes.variant_node(store, out, dest, &sites);
+                    let key = OpinionKey {
+                        node,
+                        layer_strength,
+                        layer_id,
+                        lookup_path: remote_path,
+                        spec_path: normalized_variant_spec_path(
+                            store,
+                            remote_path,
+                            &sites,
+                            arc.provenance_remap,
+                        ),
+                    };
+                    out.get_mut(&dest)
+                        .expect("path exists")
+                        .add_source(key.clone());
+                    for entry in composed_entries(&branch.spec.fields, &branch.spec.properties) {
+                        let key =
+                            key.clone()
+                                .with_spec_path(normalized_variant_property_spec_path(
+                                    store,
+                                    remote_path,
+                                    &sites,
+                                    entry.name(),
+                                    arc.provenance_remap,
+                                ));
+                        let mut value = entry.value();
+                        let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
+                        map_arc_targets(
+                            store,
+                            &mut value,
+                            ArcPathMap {
+                                arc: arc.arc,
+                                source: &target_root,
+                                map: &|store, path| targets.map(store, path),
+                            },
+                            TargetOwner {
+                                prim: dest,
+                                property: entry.name(),
+                                layer: layer_id,
+                                spec: key.spec_path.clone(),
+                            },
+                            cycles,
+                        );
+                        let index = out.get_mut(&dest).expect("path exists");
+                        if let Some(property_type) = entry.property_type() {
+                            index.add_property_type(
+                                entry.name(),
+                                key.clone(),
+                                property_type.clone(),
+                            );
+                        }
+                        index.add_opinion(Opinion {
+                            key,
+                            field: entry.name(),
+                            value,
+                            layer_offset,
+                        });
+                    }
+                }
+            }
+        }
+
+        // The arcs authored inside the selected branches.
+        let mut cache = HashMap::new();
+        let mut enclosing = enclosing_variant_selections(
+            store,
+            fallbacks,
+            out,
+            &arc.stage_stack,
+            &arc.remote_stack,
+            &arc.remote_stack,
+            arc.target_root,
+            remote_path,
+            dest,
+            &mut cache,
+        );
+        enclosing.insert(remote_path, selections);
+        let scope = cycles.expression_scope();
+        let arcs = arcs_admitted_by(
+            store,
+            fallbacks,
+            &arc.remote_stack,
+            remote_path,
+            &enclosing,
+            ArcAnchor::new(arc.anchor, Some(&scope)),
+        );
+        cycles.absorb(scope, dest);
+        NestedArcs {
+            remote_stack: &arc.remote_stack,
+            combined_stack: &arc.combined_stack,
+            anchor: arc.anchor,
+            layer_offset: arc.layer_offset,
+        }
+        .expand(
+            store,
+            fallbacks,
+            &nodes,
+            remote_path,
+            dest,
+            arcs,
+            |sites| in_own_branch(sites, remote_path),
+            out,
+            visited_inherits,
+            visited_specializes,
+            prim_order_out,
+            authored_children_out,
+            cycles,
+            deps,
+        );
+    }
+}
+
+/// Adds the variant branches left for late evaluation (see
+/// [`LateBranches`]), with the arcs authored inside them, until the arcs
+/// those add leave none.
+///
+/// Spec: AOUSD Core §10.3.2.5. OpenUSD processes the variant tasks of a
+/// prim index after its arc tasks, and those of the nodes a variant arc
+/// adds as they come (`Pcp_PrimIndexer` in `pxr/usd/pcp/primIndex.cpp`).
+fn add_late_variant_branches(
+    store: &mut dyn LayerStore,
+    fallbacks: &VariantFallbacks,
+    stage_stack: &LayerStack,
+    out: &mut HashMap<PathId, PrimIndex>,
+    prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
+    authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
+    cycles: &mut CycleDetector,
+    mut deps: Option<&mut DependencyBuilder>,
+) {
+    let mut visited_inherits = VisitedClasses::new();
+    let mut visited_specializes = VisitedClasses::new();
+    loop {
+        let late = cycles.take_late_branches();
+        if late.is_empty() {
+            break;
+        }
+        for branches in late {
+            branches.add(
+                store,
+                fallbacks,
+                stage_stack,
+                out,
+                &mut visited_inherits,
+                &mut visited_specializes,
+                prim_order_out,
+                authored_children_out,
                 cycles,
                 deps.as_deref_mut(),
             );
@@ -7462,6 +7744,8 @@ fn add_payload_edge_opinions(
     record_offset_layers(deps.as_deref_mut(), &nodes.step().offset_layers, &mapping);
 
     let mut host_selection_cache = HashMap::new();
+    let mut late_sites = Vec::new();
+    let mut late_seen = HashSet::new();
     for (layer_strength_idx, remote_layer_id) in remote_stack.layers.iter().copied().enumerate() {
         let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
         let payload_offset = reference
@@ -7580,92 +7864,12 @@ fn add_payload_edge_opinions(
                         ));
                 }
 
-                // Selections only pick among the spec's own variant sets.
-                let selections = if remote_spec.variant_sets.is_empty() {
-                    HashMap::new()
-                } else {
-                    arc_target_variant_selections(
-                        store,
-                        fallbacks,
-                        stage_stack,
-                        &out[dest_path_id],
-                        *dest_path_id,
-                        &remote_stack,
-                        *remote_path_id,
-                    )
-                };
-                for branch in remote_spec.selected_variant_branches(&selections) {
-                    let variant_spec = branch.spec;
-                    let branch_selections =
-                        branch.sites(&remote_spec.outer_variant_sites, *remote_path_id);
-                    let branch_path = normalized_variant_spec_path(
-                        store,
-                        *remote_path_id,
-                        &branch_selections,
-                        provenance_remap,
-                    );
-                    let variant_node =
-                        nodes.variant_node(store, out, *dest_path_id, &branch_selections);
-                    pending_sources.push((
-                        *dest_path_id,
-                        OpinionKey {
-                            node: variant_node,
-                            layer_strength,
-                            layer_id: remote_layer_id,
-                            lookup_path: *remote_path_id,
-                            spec_path: branch_path.clone(),
-                        },
-                    ));
-
-                    for entry in composed_entries(&variant_spec.fields, &variant_spec.properties) {
-                        let key = OpinionKey {
-                            node: variant_node,
-                            layer_strength,
-                            layer_id: remote_layer_id,
-                            lookup_path: *remote_path_id,
-                            spec_path: normalized_variant_property_spec_path(
-                                store,
-                                *remote_path_id,
-                                &branch_selections,
-                                entry.name(),
-                                provenance_remap,
-                            ),
-                        };
-                        let index = out.get_mut(dest_path_id).expect("path exists");
-                        if let Some(property_type) = entry.property_type() {
-                            index.add_property_type(
-                                entry.name(),
-                                key.clone(),
-                                property_type.clone(),
-                            );
-                        }
-                        index.add_opinion(Opinion {
-                            key: key.clone(),
-                            field: entry.name(),
-                            value: {
-                                let mut value = entry.value();
-                                let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
-                                map_arc_targets(
-                                    store,
-                                    &mut value,
-                                    ArcPathMap {
-                                        arc: ArcKind::Payloads,
-                                        source: &target_root,
-                                        map: &|store, path| targets.map(store, path),
-                                    },
-                                    TargetOwner {
-                                        prim: *dest_path_id,
-                                        property: entry.name(),
-                                        layer: remote_layer_id,
-                                        spec: key.spec_path.clone(),
-                                    },
-                                    cycles,
-                                );
-                                value
-                            },
-                            layer_offset: payload_offset,
-                        });
-                    }
+                // The spec's own variant sets are selected once the prim
+                // index is complete (see `LateBranches`).
+                if !remote_spec.variant_sets.is_empty()
+                    && late_seen.insert((*remote_path_id, *dest_path_id))
+                {
+                    late_sites.push((*remote_path_id, *dest_path_id));
                 }
             }
         }
@@ -7698,6 +7902,8 @@ fn add_payload_edge_opinions(
             reference.layer,
             cycles,
         );
+        // The arcs of the prim's own branches follow their selection (see
+        // `LateBranches`).
         nested.expand(
             store,
             fallbacks,
@@ -7705,6 +7911,7 @@ fn add_payload_edge_opinions(
             remote_path_id,
             dest_path_id,
             arcs,
+            |sites| !in_own_branch(sites, remote_path_id),
             out,
             visited_inherits,
             visited_specializes,
@@ -7750,6 +7957,22 @@ fn add_payload_edge_opinions(
         deps,
     );
 
+    if !late_sites.is_empty() {
+        LateArc {
+            arc: ArcKind::Payloads,
+            path: nodes.path.clone(),
+            stage_relocates: Rc::clone(&nodes.stage_relocates),
+            stage_stack: stage_stack.clone(),
+            combined_stack: combined_stack.clone(),
+            remote_stack: remote_stack.clone(),
+            anchor: reference.layer,
+            layer_offset: reference.layer_offset,
+            target_root: reference_path,
+            provenance_remap,
+            chain: cycles.chain_state(),
+        }
+        .defer(cycles, late_sites);
+    }
     if let Some(check) = target_specs {
         check.finish(out, cycles);
     }

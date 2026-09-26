@@ -149,10 +149,24 @@ def "Quarry"
     }
 }
 
+# `vine.usda /Vine` references `trellis.usda /Row`, `/Vine/Cane`
+# references `/Cane` and `/Vine/Cane/Bud` references `/Bud`, so
+# `/Vineyard/Cane/Bud` reaches `/Row/Cane/Bud`, `/Cane/Bud` and `/Bud`,
+# each declaring the variant set `bloom` with a selection of its own.
+# `/Bud`, reached through the deepest arc, is the strongest: its `open`
+# selects the branch of every site, once the prim index holds them all.
+def "Vineyard" (
+    references = @./vine.usda@</Vine>
+)
+{
+}
+
 # `/Hut/Loft` references `loft.usda /Hut`, a target with the same name as
-# the stage's `/Hut`. Its relationships, those of the class it inherits,
-# and those of the class its `Stool` specializes and of the prim its
-# `Shelf` references internally, map once, into `/Hut/Loft`.
+# the stage's `/Hut`. Its relationships and connections, those of the
+# classes it inherits, one from the `lit` branch of its variant set, which
+# is added once the prim index is complete, of the reference that branch
+# authors, and those of the class its `Stool` specializes and of the prim
+# its `Shelf` references internally, map once, into `/Hut/Loft`.
 def "Hut"
 {
     def "Loft" (
@@ -166,12 +180,17 @@ def "Hut"
 
 # Every target path below maps once, into `/Hut/Loft`'s namespace: through
 # the reference alone, or first through the arc that brings its opinion
-# (a class it inherits, a specialized class, an internal reference), then
-# through the reference. `stray` lies beneath `Shelf`, the internal
-# reference's destination, which that reference does not map back:
-# `Shelf` drops it, `_proto_Jar` keeps it.
+# (a class inherited eagerly or from the `lit` branch, a specialized
+# class, an internal reference), then through the reference; or through
+# the reference to `shade.usda` the `lit` branch authors alone. `stray`
+# lies beneath `Shelf`, the internal reference's destination, which that
+# reference does not map back: `Shelf` drops it, `_proto_Jar` keeps it.
 def "Hut" (
     prepend inherits = </_class_Beam>
+    variantSets = "lamp"
+    variants = {
+        string lamp = "lit"
+    }
 )
 {
     rel door = </Hut/Wick>
@@ -213,6 +232,17 @@ def "Hut" (
         {
         }
     }
+
+    variantSet "lamp" = {
+        "lit" (
+            prepend inherits = </_class_Glow>
+            prepend references = @./shade.usda@</Shade>
+        ) {
+            rel shine = </Hut/Wick>
+            int heat = 1
+            prepend int heat.connect = </Hut/Wick.flame>
+        }
+    }
 }
 
 class "_class_Beam"
@@ -222,6 +252,114 @@ class "_class_Beam"
     def "Ray"
     {
         int width = 1
+    }
+}
+
+class "_class_Glow"
+{
+    rel glow = </_class_Glow/Halo>
+    int radius = 1
+    prepend int radius.connect = </_class_Glow/Halo.size>
+
+    def "Halo"
+    {
+        int size = 2
+    }
+}
+''',
+    "shade": '''#usda 1.0
+
+def "Shade"
+{
+    rel fringe = </Shade/Fringe>
+
+    def "Fringe"
+    {
+    }
+}
+''',
+    "vine": '''#usda 1.0
+
+def "Vine" (
+    references = @./trellis.usda@</Row>
+)
+{
+    over "Cane" (
+        references = @./trellis.usda@</Cane>
+    )
+    {
+        over "Bud" (
+            references = @./trellis.usda@</Bud>
+        )
+        {
+        }
+    }
+}
+''',
+    "trellis": '''#usda 1.0
+
+def "Row"
+{
+    def "Cane"
+    {
+        def "Bud" (
+            variantSets = "bloom"
+            variants = {
+                string bloom = "dormant"
+            }
+        )
+        {
+            variantSet "bloom" = {
+                "dormant" {
+                    int petals = 0
+                }
+                "open" {
+                    int petals = 3
+                }
+            }
+        }
+    }
+}
+
+def "Cane"
+{
+    def "Bud" (
+        variantSets = "bloom"
+        variants = {
+            string bloom = "swelling"
+        }
+    )
+    {
+        variantSet "bloom" = {
+            "swelling" {
+                int petals = 1
+            }
+            "open" {
+                int petals = 4
+            }
+        }
+    }
+}
+
+def "Bud" (
+    variantSets = "bloom"
+    variants = {
+        string bloom = "open"
+    }
+)
+{
+    variantSet "bloom" = {
+        "dormant" {
+            int petals = 0
+        }
+        "open" {
+            int petals = 5
+
+            def "Petal"
+            {
+                int width = 5
+            }
+        }
     }
 }
 ''',

@@ -2,12 +2,17 @@
 
 # Every target path below maps once, into `/Hut/Loft`'s namespace: through
 # the reference alone, or first through the arc that brings its opinion
-# (a class it inherits, a specialized class, an internal reference), then
-# through the reference. `stray` lies beneath `Shelf`, the internal
-# reference's destination, which that reference does not map back:
-# `Shelf` drops it, `_proto_Jar` keeps it.
+# (a class inherited eagerly or from the `lit` branch, a specialized
+# class, an internal reference), then through the reference; or through
+# the reference to `shade.usda` the `lit` branch authors alone. `stray`
+# lies beneath `Shelf`, the internal reference's destination, which that
+# reference does not map back: `Shelf` drops it, `_proto_Jar` keeps it.
 def "Hut" (
     prepend inherits = </_class_Beam>
+    variantSets = "lamp"
+    variants = {
+        string lamp = "lit"
+    }
 )
 {
     rel door = </Hut/Wick>
@@ -49,6 +54,17 @@ def "Hut" (
         {
         }
     }
+
+    variantSet "lamp" = {
+        "lit" (
+            prepend inherits = </_class_Glow>
+            prepend references = @./shade.usda@</Shade>
+        ) {
+            rel shine = </Hut/Wick>
+            int heat = 1
+            prepend int heat.connect = </Hut/Wick.flame>
+        }
+    }
 }
 
 class "_class_Beam"
@@ -58,5 +74,17 @@ class "_class_Beam"
     def "Ray"
     {
         int width = 1
+    }
+}
+
+class "_class_Glow"
+{
+    rel glow = </_class_Glow/Halo>
+    int radius = 1
+    prepend int radius.connect = </_class_Glow/Halo.size>
+
+    def "Halo"
+    {
+        int size = 2
     }
 }

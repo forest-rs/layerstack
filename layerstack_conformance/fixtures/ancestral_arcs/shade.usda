@@ -1,0 +1,10 @@
+#usda 1.0
+
+def "Shade"
+{
+    rel fringe = </Shade/Fringe>
+
+    def "Fringe"
+    {
+    }
+}

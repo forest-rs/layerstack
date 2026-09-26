@@ -1,0 +1,66 @@
+#usda 1.0
+
+def "Row"
+{
+    def "Cane"
+    {
+        def "Bud" (
+            variantSets = "bloom"
+            variants = {
+                string bloom = "dormant"
+            }
+        )
+        {
+            variantSet "bloom" = {
+                "dormant" {
+                    int petals = 0
+                }
+                "open" {
+                    int petals = 3
+                }
+            }
+        }
+    }
+}
+
+def "Cane"
+{
+    def "Bud" (
+        variantSets = "bloom"
+        variants = {
+            string bloom = "swelling"
+        }
+    )
+    {
+        variantSet "bloom" = {
+            "swelling" {
+                int petals = 1
+            }
+            "open" {
+                int petals = 4
+            }
+        }
+    }
+}
+
+def "Bud" (
+    variantSets = "bloom"
+    variants = {
+        string bloom = "open"
+    }
+)
+{
+    variantSet "bloom" = {
+        "dormant" {
+            int petals = 0
+        }
+        "open" {
+            int petals = 5
+
+            def "Petal"
+            {
+                int width = 5
+            }
+        }
+    }
+}

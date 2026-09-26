@@ -22,13 +22,13 @@ source contributes nothing; both are composition errors (AOUSD Core
 For every composed prim the vectors record its prim stack, repeats
 included; for every attribute its resolved default; for every
 relationship its targets; and for every composition error its kind and
-the prim it was found on.
+the composed prim whose prim index reports it.
 """
 import json
 import os
 import sys
 
-from pxr import Usd
+from pxr import Pcp, Sdf, Usd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_OUT = os.path.normpath(os.path.join(HERE, "..", "fixtures", "relocates"))
@@ -280,9 +280,17 @@ def "Crate" (
 # `kite.usda` relocates `/Kite/Tail`, which its reference to `frame.usda`
 # brings, to `/Kite/Streamer`. This layer relocates both: `/Ribbon`
 # composes the relocated tail, and `/Knot` relocates a prohibited child,
-# so it composes nothing and is reported.
+# so it composes nothing and is reported. `kite.usda`'s opinion at its
+# source is reported on each prim whose arcs reach the relocated tail:
+# `/Ribbon`, and `/Bowline`, which references a child of it.
 def "Flyer" (
     references = @./kite.usda@</Kite>
+)
+{
+}
+
+def "Bowline" (
+    references = </Ribbon/Bow>
 )
 {
 }
@@ -327,6 +335,11 @@ def "Kite" (
     over "Streamer"
     {
         int width = 2
+    }
+
+    over "Tail"
+    {
+        int length = 9
     }
 }
 ''',
@@ -585,15 +598,36 @@ def write_layers(directory):
             f.write(text)
 
 
-def error_record(error):
-    """The kind of a composition error (`ErrorArcToProhibitedChild` is
-    `ArcToProhibitedChild`) and the prim it was found on."""
-    kind = type(error).__name__.removeprefix("Error")
-    return (kind, str(error.rootSite.path))
+def error_kind(error):
+    """The `PcpErrorType` name of a composition error
+    (`ErrorArcToProhibitedChild` is `ArcToProhibitedChild`)."""
+    return type(error).__name__.removeprefix("Error")
+
+
+def composition_errors(root):
+    """Every composition error, as its kind and the composed prim whose
+    prim index reports it (`/` for the root layer stack's).
+
+    A prim index reports the errors of the prim indexes its arcs compute
+    from scratch too, whose own root site `rootSite` names."""
+    cache = Pcp.Cache(Pcp.LayerStackIdentifier(root), usd=True)
+    _, errs = cache.ComputeLayerStack(cache.GetLayerStackIdentifier())
+    errors = {(error_kind(error), "/") for error in errs}
+
+    def walk(path):
+        index, errs = cache.ComputePrimIndex(path)
+        errors.update((error_kind(error), str(path)) for error in errs)
+        names, _prohibited = index.ComputePrimChildNames()
+        for name in names:
+            walk(path.AppendChild(name))
+
+    walk(Sdf.Path.absoluteRootPath)
+    return sorted(errors)
 
 
 def compose(directory):
-    stage = Usd.Stage.Open(os.path.join(directory, "root.usda"))
+    root = Sdf.Layer.FindOrOpen(os.path.join(directory, "root.usda"))
+    stage = Usd.Stage.Open(root)
     prims = []
     values = {}
     targets = {}
@@ -609,9 +643,7 @@ def compose(directory):
                 values[str(attr.GetPath())] = value
         for rel in prim.GetRelationships():
             targets[str(rel.GetPath())] = [str(t) for t in rel.GetTargets()]
-    # OpenUSD may report one error once per prim index that reaches it.
-    errors = [{"kind": kind, "prim": prim} for kind, prim in
-              sorted({error_record(error) for error in stage.GetCompositionErrors()})]
+    errors = [{"kind": kind, "prim": prim} for kind, prim in composition_errors(root)]
     return {"prims": prims, "values": values, "targets": targets, "errors": errors}
 
 

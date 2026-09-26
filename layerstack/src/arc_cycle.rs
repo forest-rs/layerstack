@@ -29,7 +29,7 @@
 
 use alloc::{rc::Rc, vec::Vec};
 
-use hashbrown::HashSet;
+use hashbrown::{HashMap, HashSet};
 
 use crate::{
     composition_error::{ArcCycle, ArcCycleSite, CompositionError, OpinionAtRelocationSource},
@@ -38,7 +38,8 @@ use crate::{
     interner::TokenId,
     layer_stack::LayerStack,
     path::{Path, PathId, PathInterner, TargetPath},
-    prim_index::ArcKind,
+    prim_index::{ArcKind, PrimIndex},
+    prim_index_graph::PrimNode,
     relocates::{LiftedSet, RelocationTable, Relocations, Walk},
 };
 
@@ -438,23 +439,86 @@ impl CycleDetector {
             let Some(prim) = relocate.stage_target else {
                 continue;
             };
-            let stack = self.gather_layer_stack(store, relocate.layer_stack);
-            for &layer in &stack.layers {
-                // A spec at the source itself, not inside a variant branch.
-                let authored = store.layer(layer).is_some_and(|layer| {
-                    layer
-                        .prim_specs(relocate.source)
-                        .any(|spec| spec.outer_variant_sites.is_empty())
-                });
-                if authored {
-                    self.report(CompositionError::OpinionAtRelocationSource(
-                        OpinionAtRelocationSource {
-                            prim,
-                            layer,
-                            path: relocate.source,
-                        },
-                    ));
+            self.report_opinions_at_source(store, prim, relocate.layer_stack, relocate.source);
+        }
+    }
+
+    /// Records an [`OpinionAtRelocationSource`] on each composed prim of
+    /// `prims` whose own arcs reach a relocate node, for each layer of the
+    /// relocating layer stack with a prim spec at the relocation source at
+    /// or above the node's site.
+    ///
+    /// OpenUSD computes the prim index an arc targets from scratch, with
+    /// the indexes of the target's namespace ancestors, and adds a relocate
+    /// node, reporting the opinions at its source, wherever one of those
+    /// sites is a relocation target: a prim referencing a relocated prim,
+    /// or a descendant of one, reports them too. The relocate nodes a prim
+    /// takes over from its namespace parent report nothing again.
+    ///
+    /// Spec: AOUSD Core §10.3.2.6. OpenUSD: `_EvalNodeRelocations` and
+    /// `_BuildInitialPrimIndexFromAncestor` in `pxr/usd/pcp/primIndex.cpp`.
+    pub(crate) fn report_relocate_node_opinions(
+        &mut self,
+        store: &dyn LayerStore,
+        prims: &HashMap<PathId, PrimIndex>,
+    ) {
+        let mut paths: Vec<PathId> = prims.keys().copied().collect();
+        paths.sort_unstable();
+        for prim in paths {
+            let graph = &prims[&prim].graph;
+            let depth = store.paths().resolve(prim).depth();
+            // Whether the arcs from the root down to `node` were added at
+            // the prim's own depth, not taken over from its parent.
+            let own = |node: &PrimNode| {
+                let mut cursor = Some(node);
+                while let Some(node) = cursor.filter(|node| node.parent().is_some()) {
+                    if usize::from(node.namespace_depth()) == depth {
+                        return true;
+                    }
+                    cursor = node.parent().and_then(|parent| graph.node(parent));
                 }
+                false
+            };
+            let sites: Vec<(LayerId, PathId)> = graph
+                .nodes()
+                .filter(|(_, node)| node.arc_kind() == ArcKind::Relocates && own(node))
+                .map(|(_, node)| (node.layer_stack(), node.site().prim_path()))
+                .collect();
+            for (layer_stack, site) in sites {
+                let table = self.relocation_table(store, layer_stack);
+                if let Some(source) = table.source_at_or_above(store.paths(), site) {
+                    self.report_opinions_at_source(store, prim, layer_stack, source);
+                }
+            }
+        }
+    }
+
+    /// Records an [`OpinionAtRelocationSource`] on `prim` for each layer of
+    /// the layer stack rooted at `layer_stack` with a prim spec at its
+    /// relocation source `source`, outside variant branches.
+    fn report_opinions_at_source(
+        &mut self,
+        store: &dyn LayerStore,
+        prim: PathId,
+        layer_stack: LayerId,
+        source: PathId,
+    ) {
+        let stack = self.gather_layer_stack(store, layer_stack);
+        for &layer in &stack.layers {
+            // A spec at the source itself, not inside a variant branch.
+            let authored = store.layer(layer).is_some_and(|layer| {
+                layer
+                    .prim_specs(source)
+                    .any(|spec| spec.outer_variant_sites.is_empty())
+            });
+            if authored {
+                self.report(CompositionError::OpinionAtRelocationSource(
+                    OpinionAtRelocationSource {
+                        prim,
+                        layer,
+                        path: source,
+                    },
+                ));
             }
         }
     }

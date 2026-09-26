@@ -296,6 +296,7 @@ pub(crate) fn compose_stage(
         );
         prim.finalize();
     }
+    cycles.report_relocate_node_opinions(store, &prims);
 
     prune_unselected_variant_specs(store, fallbacks, &layer_stack, &mut prims);
 

@@ -48,10 +48,17 @@
 //!   `frame.usda` brings, to `/Kite/Streamer`, and `root.usda` relocates
 //!   both paths again through `/Flyer`: `/Ribbon` composes the relocated
 //!   tail, and `/Knot`, relocated from a relocation source, composes
-//!   nothing and is reported.
+//!   nothing and is reported. `kite.usda`'s opinion at its source is
+//!   reported on `/Ribbon` and on `/Bowline`, which references beneath it,
+//!   as `root.usda`'s is on `/SpareWrist`, which references
+//!   `/Robot/Anim/Wrist`: each prim index computes the relocated prim's
+//!   index afresh.
 //! - `/Chain` reaches `/Chain_2/Tail`, a relocation source, through two
 //!   internal references, so relocating `/Chain/Tail` too composes nothing
 //!   at `/Chain/Tail_1`, not even `/Chain_1/Tail`.
+//!
+//! Composition errors are compared by kind and the composed prim whose
+//! prim index reports them.
 //!
 //! The same scene recomposed by a [`LiveStage`] after opinion edits at
 //! relocation targets and sources and in the classes implied through them,
@@ -407,6 +414,7 @@ fn opinion_edits_at_relocation_targets_and_sources_recompose_in_scope() {
         // and one relocated through internal references.
         ("frame.usda", "/Frame/Tail", "length", "/Ribbon"),
         ("frame.usda", "/Frame/Tail", "length", "/Chain/Tail_2"),
+        ("frame.usda", "/Frame/Tail/Bow", "loops", "/Bowline"),
     ];
     for (layer, prim, attr, relocated) in edits {
         let source = set_int(&mut loaded, layer, prim, attr, 42);

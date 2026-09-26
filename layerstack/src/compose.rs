@@ -14,6 +14,7 @@ use core::cmp::Ordering;
 
 use hashbrown::{HashMap, HashSet};
 
+use crate::variable_expression::ExpressionVariables;
 use crate::variant_fallbacks::{VariantFallbacks, apply_variant_fallbacks};
 use crate::{
     arc_cycle::CycleDetector,
@@ -40,8 +41,8 @@ use crate::{
         FieldValue, LayerId, LayerOffset, LayerStore, Reference, ReferenceTarget, composed_entries,
     },
     expression_variables::{
-        ArcAnchor, ExpressionScope, SiteContext, composed_variables, read_selections, same_context,
-        site_selections,
+        ArcAnchor, ExpressionScope, SiteContext, composed_variables, node_variables,
+        read_selections, same_context, site_selections,
     },
     interner::TokenId,
     layer_stack::LayerStack,
@@ -284,7 +285,7 @@ pub(crate) fn compose_stage(
     );
 
     for (path, prim) in &mut prims {
-        drop_skipped_duplicates(prim);
+        drop_skipped_duplicates(store, prim);
         prune_skipped_nodes(
             prim,
             [
@@ -406,7 +407,12 @@ fn enclosing_arc(graph: &PrimIndexGraph, node: NodeId) -> Option<&PrimNode> {
 /// duplicate registrations once the graph is complete. A class implied from
 /// a node comes after that node's subtree, so a site both reach stays
 /// beneath the node, however strong the implied class is.
-fn drop_skipped_duplicates(prim: &mut PrimIndex) {
+///
+/// Two registrations are of one site only when their nodes read the layer
+/// with the same expression variables: a layer stack reached with other
+/// variables is another layer stack
+/// (`PcpLayerStackIdentifier::expressionVariablesOverrideSource`).
+fn drop_skipped_duplicates(store: &dyn LayerStore, prim: &mut PrimIndex) {
     let registration = |key: &OpinionKey| OpinionKey {
         spec_path: key.spec_path.prim_spec(),
         ..key.clone()
@@ -422,15 +428,25 @@ fn drop_skipped_duplicates(prim: &mut PrimIndex) {
         let mut sources: Vec<&OpinionKey> = prim.sources.iter().collect();
         sources.sort_by(|a, b| graph.cmp_keys(a, b));
         sources.dedup();
-        let kept: HashSet<(LayerId, &SpecPath)> = sources
+        // A site: its layer and spec path, in its node's context.
+        let mut contexts: HashMap<NodeId, ExpressionVariables> = HashMap::new();
+        let mut site = |key: &OpinionKey| {
+            let variables = contexts
+                .entry(key.node)
+                .or_insert_with(|| node_variables(store, graph, key.node))
+                .clone();
+            (key.layer_id, key.spec_path.clone(), variables)
+        };
+        let kept: HashSet<(LayerId, SpecPath, ExpressionVariables)> = sources
             .iter()
             .filter(|key| !skips(key.node))
-            .map(|key| (key.layer_id, &key.spec_path))
+            .map(|key| site(key))
             .collect();
         // The registration OpenUSD adds first, else the strongest.
-        let mut first: HashMap<(LayerId, &SpecPath), &OpinionKey> = HashMap::new();
+        let mut first: HashMap<(LayerId, SpecPath, ExpressionVariables), &OpinionKey> =
+            HashMap::new();
         for key in sources.iter().filter(|key| skips(key.node)) {
-            let site = (key.layer_id, &key.spec_path);
+            let site = site(key);
             if kept.contains(&site) {
                 continue;
             }
@@ -442,10 +458,7 @@ fn drop_skipped_duplicates(prim: &mut PrimIndex) {
         sources
             .into_iter()
             .filter(|key| {
-                skips(key.node)
-                    && first
-                        .get(&(key.layer_id, &key.spec_path))
-                        .is_none_or(|winner| *winner != *key)
+                skips(key.node) && first.get(&site(key)).is_none_or(|winner| *winner != *key)
             })
             .cloned()
             .collect()
@@ -1062,16 +1075,20 @@ fn prune_unselected_variant_specs(
     prim_paths.sort_unstable();
     for (_, prim_path) in prim_paths {
         for hosts in [BranchHosts::Ancestors, BranchHosts::Own] {
-            let mut rejected: HashSet<(LayerId, SpecPath)> = HashSet::new();
+            // A spec is checked once per expression variable context its
+            // nodes read it in: its selections may differ by context.
+            let mut rejected: HashSet<(LayerId, SpecPath, ExpressionVariables)> = HashSet::new();
             {
                 let index = &prims[&prim_path];
-                let mut checked: HashSet<(LayerId, &SpecPath)> = HashSet::new();
+                let mut checked: HashSet<(LayerId, &SpecPath, ExpressionVariables)> =
+                    HashSet::new();
                 let all_keys = index
                     .sources
                     .iter()
                     .chain(index.opinions_by_field.values().flatten().map(|op| &op.key));
                 for key in all_keys {
-                    if !checked.insert((key.layer_id, &key.spec_path)) {
+                    let variables = node_variables(store, &index.graph, key.node);
+                    if !checked.insert((key.layer_id, &key.spec_path, variables.clone())) {
                         continue;
                     }
                     if !spec_path_branches_selected(
@@ -1086,7 +1103,7 @@ fn prune_unselected_variant_specs(
                         &key.spec_path,
                         hosts,
                     ) {
-                        rejected.insert((key.layer_id, key.spec_path.clone()));
+                        rejected.insert((key.layer_id, key.spec_path.clone(), variables));
                     }
                 }
             }
@@ -1094,12 +1111,13 @@ fn prune_unselected_variant_specs(
                 continue;
             }
 
-            let is_rejected =
-                |key: &OpinionKey| rejected.contains(&(key.layer_id, key.spec_path.clone()));
             prims
                 .get_mut(&prim_path)
                 .expect("prim exists")
-                .retain_keys(|_, key| !is_rejected(key));
+                .retain_keys(|graph, key| {
+                    let variables = node_variables(store, graph, key.node);
+                    !rejected.contains(&(key.layer_id, key.spec_path.clone(), variables))
+                });
             // Read this prim's selections again from what remains.
             selection_cache.remove(&prim_path);
         }
@@ -4682,13 +4700,29 @@ impl ArcNodes {
 /// A class site is the same only in the same expression variable context,
 /// in which its layer stack gathers the same sublayers and its arcs
 /// evaluate alike.
-type VisitedClasses = HashSet<(
-    PathId,
-    LayerId,
-    PathId,
-    bool,
-    crate::variable_expression::ExpressionVariables,
-)>;
+/// The sites a class arc's ancestral arcs do not add again (see
+/// `AncestralArcs::used_sites`): a layer stack's root layer, a prim path,
+/// and the expression variables the layer stack is read with.
+type UsedSites = HashSet<(LayerId, PathId, ExpressionVariables)>;
+
+/// The expression variables of the layer stack of the last of `steps`, a
+/// prefix of an arc path from the composed prim, whose layer stack is
+/// rooted at `root` (see `ArcChain::stacks_for`).
+fn step_variables(store: &dyn LayerStore, root: LayerId, steps: &[ArcStep]) -> ExpressionVariables {
+    let Some(last) = steps.last() else {
+        return composed_variables(store, &[root]);
+    };
+    let mut chain: Vec<LayerId> = core::iter::once(root)
+        .chain(steps.iter().map(|step| step.layer_stack))
+        .collect();
+    if let Some(end) = chain.iter().position(|stack| *stack == last.layer_stack) {
+        chain.truncate(end + 1);
+    }
+    chain.dedup();
+    composed_variables(store, &chain)
+}
+
+type VisitedClasses = HashSet<(PathId, LayerId, PathId, bool, ExpressionVariables)>;
 
 /// An opinion of a class arc's target, held until the sources of its layer
 /// are added: the destination prim, the source prim, the spec path, the
@@ -4773,29 +4807,37 @@ impl AncestralArcs<'_> {
         nodes: &ArcNodes,
         own: NodeId,
         out: &HashMap<PathId, PrimIndex>,
-    ) -> HashSet<(LayerId, PathId)> {
+    ) -> UsedSites {
         let graph = &out[&self.dest_root].graph;
-        let mut used: HashSet<(LayerId, PathId)> = graph
+        let mut used: UsedSites = graph
             .nodes()
             .filter(|(id, node)| {
                 node.arc_kind() != ArcKind::Variants && !graph.implied_after(own, *id)
             })
-            .map(|(_, node)| (node.layer_stack(), node.site().prim_path()))
+            .map(|(id, node)| {
+                (
+                    node.layer_stack(),
+                    node.site().prim_path(),
+                    node_variables(store, graph, id),
+                )
+            })
             .collect();
+        let root = root_layer_stack(out, self.dest_root);
         let mut pending: Vec<&[ArcStep]> = nodes
             .path
             .iter()
             .filter_map(|step| step.origin.as_deref())
             .collect();
         while let Some(path) = pending.pop() {
-            for step in path {
+            for (index, step) in path.iter().enumerate() {
                 if let StepTarget::Namespace {
                     dest_root,
                     target_root,
                 } = step.target
                 {
                     let site = map_namespace(store, self.dest_root, dest_root, target_root);
-                    used.insert((step.layer_stack, site));
+                    let variables = step_variables(store, root, &path[..=index]);
+                    used.insert((step.layer_stack, site, variables));
                 }
                 pending.extend(step.origin.as_deref());
             }
@@ -4947,7 +4989,7 @@ impl AncestralArcs<'_> {
         store: &mut dyn LayerStore,
         arc: AuthoredReference,
         rel: &[TokenId],
-        used: &HashSet<(LayerId, PathId)>,
+        used: &UsedSites,
         kind: ArcKind,
         cycles: &mut CycleDetector,
         deps: Option<&mut DependencyBuilder>,
@@ -4956,7 +4998,8 @@ impl AncestralArcs<'_> {
         let path = resolve_arc_target(store, reference, self.dest_root, kind, cycles, deps)?;
         let joined = store.paths().resolve(path).join(rel);
         let path = store.paths_mut().intern(joined);
-        if used.contains(&(reference.layer, path)) {
+        let variables = composed_variables(store, &cycles.stacks_for(reference.layer));
+        if used.contains(&(reference.layer, path, variables)) {
             return None;
         }
         Some(AuthoredReference {
@@ -5037,8 +5080,10 @@ impl AncestralArcs<'_> {
             );
             self.used_sites(store, nodes, cursor.node, out)
         } else {
-            HashSet::new()
+            UsedSites::new()
         };
+        // The context the ancestral arcs' classes are read in.
+        let class_variables = composed_variables(store, &cycles.stacks_for(self.arc_stack));
         let target_path = store.paths().resolve(self.target).clone();
         let dest_depth = store.paths().resolve(self.dest_root).depth();
         let mut ancestors = Vec::new();
@@ -5148,7 +5193,7 @@ impl AncestralArcs<'_> {
             }
             for (index, (class, sites)) in arcs.inherits.into_iter().enumerate() {
                 let (authored, class) = (class, mapped(store, class));
-                if used.contains(&(self.arc_stack, class)) {
+                if used.contains(&(self.arc_stack, class, class_variables.clone())) {
                     continue;
                 }
                 let branch = nodes.branch_path(&sites);
@@ -5177,7 +5222,7 @@ impl AncestralArcs<'_> {
             }
             for (index, (specialized, sites)) in arcs.specializes.into_iter().enumerate() {
                 let (authored, specialized) = (specialized, mapped(store, specialized));
-                if used.contains(&(self.arc_stack, specialized)) {
+                if used.contains(&(self.arc_stack, specialized, class_variables.clone())) {
                     continue;
                 }
                 let branch = nodes.branch_path(&sites);

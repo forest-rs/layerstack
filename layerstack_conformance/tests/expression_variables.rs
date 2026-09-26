@@ -16,7 +16,9 @@
 //! referenced layer stack's own sublayer path), one layer whose selection
 //! two referencing contexts evaluate to two variants, one layer that two
 //! contexts reach at one destination gathering two sets of sublayers (each
-//! bringing its own children, directly and through an inherited class), a
+//! bringing its own children, directly and through an inherited class),
+//! one class's ancestral reference reached from two such contexts (both
+//! sites kept), a
 //! variable passing through a layer stack in between, a variable that is
 //! not set, an expression that does not parse, one that evaluates to no
 //! value and one that evaluates to another type than string, a stronger

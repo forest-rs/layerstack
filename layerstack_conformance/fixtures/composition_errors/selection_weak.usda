@@ -1,0 +1,35 @@
+#usda 1.0
+
+over "Mast"
+{
+    variantSet "a" = {
+        "x" (
+            variants = {
+                string c = "red"
+            }
+        ) {
+        }
+    }
+}
+
+over "Boom"
+{
+    variantSet "b" = {
+        "x" (
+            variants = {
+                string c = "blue"
+            }
+        ) {
+        }
+    }
+}
+
+over "Hull"
+{
+    variantSet "a" = {
+        "x" (
+            references = @./selection_ref.usda@</RedTone>
+        ) {
+        }
+    }
+}

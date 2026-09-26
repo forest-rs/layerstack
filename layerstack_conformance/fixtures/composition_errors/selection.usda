@@ -149,3 +149,37 @@ def "Deck" (
 )
 {
 }
+
+# The payload selects `shape=cube`, whose branch selects `size=small`,
+# which adds a reference of its own.
+def "Pier" (
+    payload = @./selection_ref.usda@</Mast>
+    variantSets = ["shape", "size"]
+)
+{
+    variantSet "shape" = {
+        "cube" (
+            variants = {
+                string size = "small"
+            }
+        ) {
+        }
+    }
+    variantSet "size" = {
+        "small" (
+            references = @./selection_ref.usda@</Small>
+        ) {
+        }
+        "large" (
+            references = @./selection_ref.usda@</Large>
+        ) {
+        }
+    }
+}
+
+# `/Pier` referenced: the branch's reference is followed there too.
+def "Quay" (
+    references = </Pier>
+)
+{
+}

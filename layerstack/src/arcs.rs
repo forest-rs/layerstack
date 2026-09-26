@@ -774,6 +774,12 @@ pub(crate) fn resolve_direct_references_for_prim(
     resolve_list_chain::<Reference>(&[], ops)
 }
 
+/// Resolves the references arc list of `prim` across `local_stack`: its
+/// specs', its selected branches' and its specs' in its parent's selected
+/// branches, with the selections of its own variant sets resolved in
+/// `local_stack` ([`resolve_variant_selections_for_prim`]).
+///
+/// Spec: AOUSD Core §10 (references arc), §10.3.2.5 (variants).
 pub(crate) fn resolve_references_for_prim(
     store: &dyn LayerStore,
     fallbacks: &VariantFallbacks,
@@ -781,6 +787,32 @@ pub(crate) fn resolve_references_for_prim(
     prim: PathId,
     scope: SelectionScope<'_>,
     anchor: LayerId,
+) -> Vec<Reference> {
+    let selections = resolve_variant_selections_for_prim(store, fallbacks, local_stack, prim);
+    resolve_references_for_prim_selected(
+        store,
+        fallbacks,
+        local_stack,
+        prim,
+        scope,
+        anchor,
+        &selections,
+    )
+}
+
+/// Resolves the references of `prim` as [`resolve_references_for_prim`]
+/// does, with `selections` for its own variant sets: the selections
+/// composed for the prim, which weaker arcs may author.
+///
+/// Spec: AOUSD Core §10.3.2.5 (arcs authored in a selected branch apply).
+pub(crate) fn resolve_references_for_prim_selected(
+    store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
+    local_stack: &LayerStack,
+    prim: PathId,
+    scope: SelectionScope<'_>,
+    anchor: LayerId,
+    selections: &HashMap<TokenId, TokenId>,
 ) -> Vec<Reference> {
     let mut ops = Vec::new();
     for layer_id in &local_stack.layers {
@@ -792,26 +824,33 @@ pub(crate) fn resolve_references_for_prim(
         }
     }
 
-    // Also check this prim's own variant branch-level references.
-    // When a variant branch header has `(add references = ...)`, those references
-    // apply to the prim owning the variant set when selected.
-    let selections = resolve_variant_selections_for_prim(store, fallbacks, local_stack, prim);
-    for layer_id in &local_stack.layers {
-        let Some(layer) = store.layer(*layer_id) else {
-            continue;
-        };
-        for spec in variant_host_specs(store, fallbacks, local_stack, layer, prim, scope) {
-            for (set_tok, selected_variant) in &selections {
-                if let Some(set_spec) = spec.variant_sets.get(set_tok)
-                    && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                {
-                    let vr = &variant_spec.references;
-                    if vr.explicit.is_some() || !vr.prepend.is_empty() || !vr.append.is_empty() {
-                        ops.push(anchor_internal_arcs(vr, *layer_id, anchor));
-                    }
-                }
-            }
-        }
+    // Then those of this prim's own selected branches: a branch header's
+    // `(references = ...)` applies to the prim hosting the variant set.
+    let specs: Vec<(LayerId, &PrimSpec)> = local_stack
+        .layers
+        .iter()
+        .filter_map(|id| store.layer(*id))
+        .flat_map(|layer| {
+            variant_host_specs(store, fallbacks, local_stack, layer, prim, scope)
+                .into_iter()
+                .map(move |spec| (layer.id, spec))
+        })
+        .collect();
+    let branches = selected_branch_arcs(
+        &specs,
+        prim,
+        selections,
+        |branch| &branch.references,
+        |op, layer| anchor_internal_arcs(op, layer, anchor),
+    );
+    // Discovery takes each list on its own, so the branches' list can join
+    // them.
+    let discover = matches!(scope, SelectionScope::Discover);
+    if discover {
+        ops.push(ListOp {
+            explicit: Some(branches.clone()),
+            ..ListOp::default()
+        });
     }
 
     // Also check the prim's specs inside its parent's selected branches.
@@ -831,7 +870,7 @@ pub(crate) fn resolve_references_for_prim(
         }
     }
 
-    finish_arc_list(
+    let mut references = finish_arc_list(
         store,
         local_stack,
         prim,
@@ -840,7 +879,15 @@ pub(crate) fn resolve_references_for_prim(
         |v| &v.references,
         |spec| &spec.references,
         |op, layer| anchor_internal_arcs(op, layer, anchor),
-    )
+    );
+    if !discover {
+        for reference in branches {
+            if !references.contains(&reference) {
+                references.push(reference);
+            }
+        }
+    }
+    references
 }
 
 /// Resolves the references authored for `prim` inside its parent's variant
@@ -1124,106 +1171,42 @@ pub(crate) fn collect_all_variant_branch_references(
     all_refs
 }
 
-/// Resolves variant branch-level payloads using a separate stack for variant
-/// selection resolution. Similar to `resolve_variant_branch_references` but
-/// for payload arcs on variant branch headers.
+/// Resolves the payloads authored on the selected variant branches of
+/// `prim` and of its inherit targets in `stack`, for `selections`, the
+/// selections composed for the prim.
+///
+/// Spec: AOUSD Core §10.3.2.5 (arcs authored in a selected branch apply).
 pub(crate) fn resolve_variant_branch_payloads(
     store: &dyn LayerStore,
     fallbacks: &VariantFallbacks,
-    data_stack: &LayerStack,
-    selections_stack: &LayerStack,
+    stack: &LayerStack,
     prim: PathId,
     anchor: LayerId,
+    selections: &HashMap<TokenId, TokenId>,
 ) -> Vec<Reference> {
-    let inherits = resolve_inherits_for_prim(
-        store,
-        fallbacks,
-        selections_stack,
-        prim,
-        SelectionScope::Stack,
-    );
-    let mut selections = HashMap::new();
-    for layer_id in &selections_stack.layers {
-        let Some(layer) = store.layer(*layer_id) else {
-            continue;
-        };
-        if let Some(spec) = layer.prims.get(&prim) {
-            for (set, variant) in &spec.variant_selections {
-                selections.entry(*set).or_insert(*variant);
-            }
-        }
-        for inherit_target in &inherits {
-            if let Some(inherit_spec) = layer.prims.get(inherit_target) {
-                for (set, variant) in &inherit_spec.variant_selections {
-                    selections.entry(*set).or_insert(*variant);
-                }
+    let inherits = resolve_inherits_for_prim(store, fallbacks, stack, prim, SelectionScope::Stack);
+    let check_paths = core::iter::once(prim).chain(inherits.iter().copied());
+    let mut payloads = Vec::new();
+    for check_path in check_paths {
+        let specs: Vec<(LayerId, &PrimSpec)> = stack
+            .layers
+            .iter()
+            .filter_map(|id| store.layer(*id))
+            .filter_map(|layer| Some((layer.id, layer.prims.get(&check_path)?)))
+            .collect();
+        for payload in selected_branch_arcs(
+            &specs,
+            check_path,
+            selections,
+            |branch| &branch.payloads,
+            |op, layer| anchor_internal_arcs(op, layer, anchor),
+        ) {
+            if !payloads.contains(&payload) {
+                payloads.push(payload);
             }
         }
     }
-
-    // Also chain through variant branch selections (from inherited variant sets too).
-    let check_paths: Vec<PathId> = core::iter::once(prim)
-        .chain(inherits.iter().copied())
-        .collect();
-    loop {
-        let mut new_sels = HashMap::new();
-        for &check_path in &check_paths {
-            for layer_id in &selections_stack.layers {
-                let Some(layer) = store.layer(*layer_id) else {
-                    continue;
-                };
-                let Some(spec) = layer.prims.get(&check_path) else {
-                    continue;
-                };
-                for (set, selected_variant) in &selections {
-                    if let Some(set_spec) = spec.variant_sets.get(set)
-                        && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                    {
-                        for (inner_set, inner_variant) in &variant_spec.variant_selections {
-                            if !selections.contains_key(inner_set) {
-                                new_sels.entry(*inner_set).or_insert(*inner_variant);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        if new_sels.is_empty() {
-            break;
-        }
-        selections.extend(new_sels);
-    }
-    apply_site_fallbacks(
-        store,
-        fallbacks,
-        selections_stack,
-        &check_paths,
-        &mut selections,
-    );
-
-    let mut ops = Vec::new();
-    for &check_path in &check_paths {
-        for layer_id in &data_stack.layers {
-            let Some(layer) = store.layer(*layer_id) else {
-                continue;
-            };
-            let Some(spec) = layer.prims.get(&check_path) else {
-                continue;
-            };
-            for (set_tok, selected_variant) in &selections {
-                if let Some(set_spec) = spec.variant_sets.get(set_tok)
-                    && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                {
-                    let vp = &variant_spec.payloads;
-                    if vp.explicit.is_some() || !vp.prepend.is_empty() || !vp.append.is_empty() {
-                        ops.push(anchor_internal_arcs(vp, *layer_id, anchor));
-                    }
-                }
-            }
-        }
-    }
-
-    resolve_list_chain::<Reference>(&[], ops)
+    payloads
 }
 
 /// The strength order of the variant nodes beneath one node of a prim
@@ -1288,6 +1271,61 @@ impl VariantNodeOrder {
             .chain([position(set)])
             .collect()
     }
+}
+
+/// The arcs `arcs` authored on the branches `selections` selects of the
+/// specs `specs` of the prim `host`, stronger layers first, each with the
+/// layer authoring it.
+///
+/// Each branch is its own variant node, so each composes its own list
+/// across the layer stack, and the lists follow in node order
+/// ([`VariantNodeOrder`]): an explicit list in one branch does not replace
+/// another branch's.
+///
+/// Spec: AOUSD Core §10.3.2.5 (arcs authored in a selected branch apply),
+/// §12.4 (list ops). OpenUSD evaluates the arcs of each variant node on its
+/// own (`_EvalNodeReferences`, `_EvalNodePayloads` in
+/// `pxr/usd/pcp/primIndex.cpp`).
+fn selected_branch_arcs<T: Clone + Eq>(
+    specs: &[(LayerId, &PrimSpec)],
+    host: PathId,
+    selections: &HashMap<TokenId, TokenId>,
+    arcs: fn(&VariantSpec) -> &ListOp<T>,
+    edit: impl Fn(&ListOp<T>, LayerId) -> ListOp<T>,
+) -> Vec<T> {
+    let order = VariantNodeOrder::new(specs.iter().map(|(_, spec)| *spec));
+    let mut nodes: Vec<(Vec<usize>, TokenId, Vec<ListOp<T>>)> = Vec::new();
+    for (layer, spec) in specs {
+        for (set, variant) in selections {
+            let Some(branch) = spec
+                .variant_sets
+                .get(set)
+                .and_then(|set_spec| set_spec.variants.get(variant))
+            else {
+                continue;
+            };
+            let list = arcs(branch);
+            if list.explicit.is_none() && list.prepend.is_empty() && list.append.is_empty() {
+                continue;
+            }
+            let rank = order.rank(host, *set, branch);
+            let op = edit(list, *layer);
+            match nodes.iter_mut().find(|(r, s, _)| *r == rank && s == set) {
+                Some((_, _, ops)) => ops.push(op),
+                None => nodes.push((rank, *set, alloc::vec![op])),
+            }
+        }
+    }
+    nodes.sort_by(|a, b| a.0.cmp(&b.0));
+    let mut all: Vec<T> = Vec::new();
+    for (_, _, ops) in nodes {
+        for item in resolve_list_chain::<T>(&[], ops) {
+            if !all.contains(&item) {
+                all.push(item);
+            }
+        }
+    }
+    all
 }
 
 /// Collects ALL variant branch-level payloads for a prim from all variant

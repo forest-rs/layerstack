@@ -22,9 +22,10 @@ use crate::{
         lookup_reference_target_path, resolve_branch_payloads_in,
         resolve_direct_references_for_prim, resolve_inherits_for_prim,
         resolve_inherits_for_prim_in, resolve_payloads_for_prim, resolve_payloads_for_prim_in,
-        resolve_references_for_prim, resolve_specializes_for_prim, resolve_specializes_for_prim_in,
-        resolve_variant_branch_payloads, resolve_variant_child_references,
-        resolve_variant_references_in, selection_host_specs, spec_arcs_apply,
+        resolve_references_for_prim_selected, resolve_specializes_for_prim,
+        resolve_specializes_for_prim_in, resolve_variant_branch_payloads,
+        resolve_variant_child_references, resolve_variant_references_in, selection_host_specs,
+        spec_arcs_apply,
     },
     composition_checks::{
         ArcPathMap, Inside, Outside, TargetOwner, TargetSpecsCheck,
@@ -3106,13 +3107,17 @@ fn add_reference_opinions(
         cycles.begin(dest_root);
         // Internal arcs authored in the stage's layer stack target it.
         let anchor = cycles.stage_layer_stack();
-        let refs = resolve_references_for_prim(
+        // The prim's own branches follow the selections composed for it,
+        // which its weaker arcs may author (`authored_full_variant_selections`).
+        let selections = resolve_full_variant_selections(store, fallbacks, local_stack, dest_root);
+        let refs = resolve_references_for_prim_selected(
             store,
             fallbacks,
             local_stack,
             dest_root,
             SelectionScope::Stack,
             anchor,
+            &selections,
         );
         // Also resolve variant child references with full selection chaining.
         let variant_child_refs = resolve_variant_child_references(
@@ -3124,7 +3129,6 @@ fn add_reference_opinions(
             anchor,
         );
         let all_refs = refs.into_iter().chain(variant_child_refs);
-        let selections = resolve_full_variant_selections(store, fallbacks, local_stack, dest_root);
         for (arc_list_index, reference) in all_refs.enumerate() {
             let arc_list_index = u16::try_from(arc_list_index).unwrap_or(u16::MAX);
             let namespace_depth =
@@ -6499,17 +6503,18 @@ fn add_payload_opinions(
             SelectionScope::Stack,
             anchor,
         );
-        // Also resolve variant branch-level payloads.
+        // Also resolve variant branch-level payloads, for the selections
+        // composed for the prim (`authored_full_variant_selections`).
+        let selections = resolve_full_variant_selections(store, fallbacks, local_stack, dest_root);
         let branch_payloads = resolve_variant_branch_payloads(
             store,
             fallbacks,
             local_stack,
-            local_stack,
             dest_root,
             anchor,
+            &selections,
         );
         let all_payloads = payloads.into_iter().chain(branch_payloads);
-        let selections = resolve_full_variant_selections(store, fallbacks, local_stack, dest_root);
         for (arc_list_index, payload) in all_payloads.enumerate() {
             let arc_list_index = u16::try_from(arc_list_index).unwrap_or(u16::MAX);
             let namespace_depth =

@@ -663,6 +663,40 @@ def "Deck" (
 )
 {
 }
+
+# The payload selects `shape=cube`, whose branch selects `size=small`,
+# which adds a reference of its own.
+def "Pier" (
+    payload = @./selection_ref.usda@</Mast>
+    variantSets = ["shape", "size"]
+)
+{
+    variantSet "shape" = {
+        "cube" (
+            variants = {
+                string size = "small"
+            }
+        ) {
+        }
+    }
+    variantSet "size" = {
+        "small" (
+            references = @./selection_ref.usda@</Small>
+        ) {
+        }
+        "large" (
+            references = @./selection_ref.usda@</Large>
+        ) {
+        }
+    }
+}
+
+# `/Pier` referenced: the branch's reference is followed there too.
+def "Quay" (
+    references = </Pier>
+)
+{
+}
 ''',
     "selection_ref": '''#usda 1.0
 
@@ -708,6 +742,165 @@ def "Shaped" (
     }
 )
 {
+}
+
+def "Red"
+{
+    def "RedChild"
+    {
+    }
+}
+
+def "Blue"
+{
+    def "BlueChild"
+    {
+    }
+}
+
+def "RedTone"
+{
+    int tone = 1
+}
+
+def "BlueTone"
+{
+    int tone = 2
+}
+
+def "Small"
+{
+    int scale = 1
+}
+
+def "Large"
+{
+    int scale = 2
+}
+''',
+    "selection_layers": '''#usda 1.0
+(
+    subLayers = [@./selection_weak.usda@]
+)
+
+# Branches rank by variant node, then by layer: `a=x`, authored in the
+# weaker sublayer, is the stronger node, so its `c=red` wins over the
+# `c=blue` the root layer's `b=x` authors, and only the `red` branch's
+# reference composes.
+def "Mast" (
+    variantSets = ["a", "b", "c"]
+    variants = {
+        string a = "x"
+        string b = "x"
+    }
+)
+{
+    variantSet "b" = {
+        "x" (
+            variants = {
+                string c = "blue"
+            }
+        ) {
+        }
+    }
+    variantSet "c" = {
+        "red" (
+            references = @./selection_ref.usda@</Red>
+        ) {
+            int value = 1
+        }
+        "blue" (
+            references = @./selection_ref.usda@</Blue>
+        ) {
+            int value = 2
+        }
+    }
+}
+
+# The same with the branches authored in the other layers: `a=x`, now in
+# the root layer, still wins.
+def "Boom" (
+    variantSets = ["a", "b", "c"]
+    variants = {
+        string a = "x"
+        string b = "x"
+    }
+)
+{
+    variantSet "a" = {
+        "x" (
+            variants = {
+                string c = "red"
+            }
+        ) {
+        }
+    }
+    variantSet "c" = {
+        "red" (
+            references = @./selection_ref.usda@</Red>
+        ) {
+            int value = 1
+        }
+        "blue" (
+            references = @./selection_ref.usda@</Blue>
+        ) {
+            int value = 2
+        }
+    }
+}
+
+# Both selected branches add a reference: `a=x`'s, in the weaker
+# sublayer, is the stronger variant node, so its `tone` wins.
+def "Hull" (
+    variantSets = ["a", "b"]
+    variants = {
+        string a = "x"
+        string b = "x"
+    }
+)
+{
+    variantSet "b" = {
+        "x" (
+            references = @./selection_ref.usda@</BlueTone>
+        ) {
+        }
+    }
+}
+''',
+    "selection_weak": '''#usda 1.0
+
+over "Mast"
+{
+    variantSet "a" = {
+        "x" (
+            variants = {
+                string c = "red"
+            }
+        ) {
+        }
+    }
+}
+
+over "Boom"
+{
+    variantSet "b" = {
+        "x" (
+            variants = {
+                string c = "blue"
+            }
+        ) {
+        }
+    }
+}
+
+over "Hull"
+{
+    variantSet "a" = {
+        "x" (
+            references = @./selection_ref.usda@</RedTone>
+        ) {
+        }
+    }
 }
 ''',
     "selection_fallbacks": '''#usda 1.0
@@ -881,6 +1074,7 @@ ENTRIES = {
         "shape": ["cube"],
         "size": ["large", "small"],
     },
+    "selection_layers.usda": {},
 }
 
 

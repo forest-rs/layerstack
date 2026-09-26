@@ -1565,6 +1565,88 @@
        "value": 1
       }
      ]
+    },
+    {
+     "path": "/Pier",
+     "prim_stack": [
+      [
+       "selection.usda",
+       "/Pier"
+      ],
+      [
+       "selection.usda",
+       "/Pier{shape=cube}"
+      ],
+      [
+       "selection.usda",
+       "/Pier{size=small}"
+      ],
+      [
+       "selection_ref.usda",
+       "/Small"
+      ],
+      [
+       "selection_ref.usda",
+       "/Mast"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "scale",
+       "kind": "attribute",
+       "stack": [
+        [
+         "selection_ref.usda",
+         "/Small.scale"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    },
+    {
+     "path": "/Quay",
+     "prim_stack": [
+      [
+       "selection.usda",
+       "/Quay"
+      ],
+      [
+       "selection.usda",
+       "/Pier"
+      ],
+      [
+       "selection.usda",
+       "/Pier{shape=cube}"
+      ],
+      [
+       "selection.usda",
+       "/Pier{size=small}"
+      ],
+      [
+       "selection_ref.usda",
+       "/Small"
+      ],
+      [
+       "selection_ref.usda",
+       "/Mast"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "scale",
+       "kind": "attribute",
+       "stack": [
+        [
+         "selection_ref.usda",
+         "/Small.scale"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
     }
    ],
    "errors": []
@@ -1644,6 +1726,166 @@
         [
          "selection_fallbacks.usda",
          "/Boom{size=small}.scale"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    }
+   ],
+   "errors": []
+  },
+  {
+   "root": "selection_layers.usda",
+   "fallbacks": {},
+   "prims": [
+    {
+     "path": "/Mast",
+     "prim_stack": [
+      [
+       "selection_layers.usda",
+       "/Mast"
+      ],
+      [
+       "selection_weak.usda",
+       "/Mast"
+      ],
+      [
+       "selection_weak.usda",
+       "/Mast{a=x}"
+      ],
+      [
+       "selection_layers.usda",
+       "/Mast{b=x}"
+      ],
+      [
+       "selection_layers.usda",
+       "/Mast{c=red}"
+      ],
+      [
+       "selection_ref.usda",
+       "/Red"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "value",
+       "kind": "attribute",
+       "stack": [
+        [
+         "selection_layers.usda",
+         "/Mast{c=red}.value"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    },
+    {
+     "path": "/Mast/RedChild",
+     "prim_stack": [
+      [
+       "selection_ref.usda",
+       "/Red/RedChild"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Boom",
+     "prim_stack": [
+      [
+       "selection_layers.usda",
+       "/Boom"
+      ],
+      [
+       "selection_weak.usda",
+       "/Boom"
+      ],
+      [
+       "selection_layers.usda",
+       "/Boom{a=x}"
+      ],
+      [
+       "selection_weak.usda",
+       "/Boom{b=x}"
+      ],
+      [
+       "selection_layers.usda",
+       "/Boom{c=red}"
+      ],
+      [
+       "selection_ref.usda",
+       "/Red"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "value",
+       "kind": "attribute",
+       "stack": [
+        [
+         "selection_layers.usda",
+         "/Boom{c=red}.value"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    },
+    {
+     "path": "/Boom/RedChild",
+     "prim_stack": [
+      [
+       "selection_ref.usda",
+       "/Red/RedChild"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Hull",
+     "prim_stack": [
+      [
+       "selection_layers.usda",
+       "/Hull"
+      ],
+      [
+       "selection_weak.usda",
+       "/Hull"
+      ],
+      [
+       "selection_weak.usda",
+       "/Hull{a=x}"
+      ],
+      [
+       "selection_ref.usda",
+       "/RedTone"
+      ],
+      [
+       "selection_layers.usda",
+       "/Hull{b=x}"
+      ],
+      [
+       "selection_ref.usda",
+       "/BlueTone"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "tone",
+       "kind": "attribute",
+       "stack": [
+        [
+         "selection_ref.usda",
+         "/RedTone.tone"
+        ],
+        [
+         "selection_ref.usda",
+         "/BlueTone.tone"
         ]
        ],
        "targets": [],

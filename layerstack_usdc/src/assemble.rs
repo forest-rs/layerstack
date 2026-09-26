@@ -13,6 +13,7 @@
 //! [`Layer`]: layerstack::doc::Layer
 //! [`PrimSpec`]: layerstack::doc::PrimSpec
 
+use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use alloc::string::String;
 use alloc::sync::Arc;
@@ -222,9 +223,9 @@ impl<'a> AssembleCtx<'a> {
             .collect::<Result<_, _>>()?;
 
         // Build a path-to-spec-index map grouped by prim path for child lookup.
-        let mut prim_specs_map: HashMap<String, PrimSpec> = HashMap::new();
+        let mut prim_specs_map: HashMap<&str, PrimSpec> = HashMap::new();
         // Authored property order (`propertyChildren`) per prim path.
-        let mut property_children: HashMap<String, Vec<TokenId>> = HashMap::new();
+        let mut property_children: HashMap<&str, Vec<TokenId>> = HashMap::new();
 
         // Process PseudoRoot specs first.
         for (i, spec) in self.sections.specs.iter().enumerate() {
@@ -245,9 +246,9 @@ impl<'a> AssembleCtx<'a> {
                 }
                 let (prim, children) = self.build_prim_spec(path_str, &spec_fields[i])?;
                 if let Some(children) = children {
-                    property_children.insert(String::from(path_str), children);
+                    property_children.insert(path_str, children);
                 }
-                prim_specs_map.insert(String::from(path_str), prim);
+                prim_specs_map.insert(path_str, prim);
             }
         }
 
@@ -267,44 +268,42 @@ impl<'a> AssembleCtx<'a> {
                 // here.
                 match path_str.rsplit_once('.') {
                     Some((prim, _)) if prim.ends_with('}') => continue,
-                    Some((prim, name)) => (String::from(prim), String::from(name)),
+                    Some((prim, name)) => (prim, name),
                     None => {
                         self.report(path_str, None, "property spec path could not be parsed")?;
                         continue;
                     }
                 }
             } else {
-                let Ok(property_path) = PropertyPath::parse(path_str, self.tokens, self.paths)
-                else {
+                let Ok(_) = PropertyPath::parse(path_str, self.tokens, self.paths) else {
                     self.report(path_str, None, "property spec path could not be parsed")?;
                     continue;
                 };
-                (
-                    self.paths.display(property_path.prim_path(), self.tokens),
-                    String::from(self.tokens.resolve(property_path.property())),
-                )
+                // Parsing validates and interns without normalizing the spelling.
+                // Borrow the original text
+                // instead of formatting the interned path back into a String.
+                path_str.rsplit_once('.').expect("validated property path")
             };
-            let Some(mut prim) = prim_specs_map.remove(&prim_path) else {
+            let Some(prim) = prim_specs_map.get_mut(prim_path) else {
                 self.report(path_str, None, "property spec has no owning prim spec")?;
                 continue;
             };
             if is_attribute {
-                self.apply_attribute_fields(path_str, &spec_fields[i], &name, &mut prim)?;
+                self.apply_attribute_fields(path_str, &spec_fields[i], name, prim)?;
             } else {
-                self.apply_relationship_fields(path_str, &spec_fields[i], &name, &mut prim)?;
+                self.apply_relationship_fields(path_str, &spec_fields[i], name, prim)?;
             }
-            prim_specs_map.insert(prim_path, prim);
         }
 
         // Process Connection specs — add connection paths to attribute on parent.
         for (i, spec) in self.sections.specs.iter().enumerate() {
             if spec.form == SpecForm::Connection {
                 let path_str = self.lookup_path(spec.path_index)?;
-                if let Ok(property_path) = PropertyPath::parse(path_str, self.tokens, self.paths) {
-                    let prim_path = self.paths.display(property_path.prim_path(), self.tokens);
-                    let attr_name = String::from(self.tokens.resolve(property_path.property()));
-                    if let Some(prim) = prim_specs_map.get_mut(&prim_path) {
-                        self.apply_connection_fields(&spec_fields[i], &attr_name, prim)?;
+                if PropertyPath::parse(path_str, self.tokens, self.paths).is_ok() {
+                    let (prim_path, attr_name) =
+                        path_str.rsplit_once('.').expect("validated property path");
+                    if let Some(prim) = prim_specs_map.get_mut(prim_path) {
+                        self.apply_connection_fields(&spec_fields[i], attr_name, prim)?;
                     }
                 }
             }
@@ -353,14 +352,14 @@ impl<'a> AssembleCtx<'a> {
         //
         // Spec: AOUSD Core §7.3.6 (variant specs contain prim specs).
         let mut prim_specs: Vec<_> = prim_specs_map.into_iter().collect();
-        prim_specs.sort_by(|a, b| a.0.cmp(&b.0));
+        prim_specs.sort_by(|a, b| a.0.cmp(b.0));
         for (path_str, mut prim) in prim_specs {
-            let namespace = match split_branch_path(&path_str) {
+            let namespace = match split_branch_path(path_str) {
                 Some((namespace, sites)) => {
                     prim.outer_variant_sites = self.branch_sites(&namespace, &sites)?;
-                    namespace
+                    Cow::Owned(namespace)
                 }
-                None => path_str,
+                None => Cow::Borrowed(path_str),
             };
             if let Ok(path) = Path::parse_absolute(&namespace, self.tokens) {
                 let path_id = self.paths.intern(path);
@@ -738,7 +737,7 @@ impl<'a> AssembleCtx<'a> {
     fn process_variant_specs(
         &mut self,
         spec_fields: &[Fields<'_>],
-        prim_specs: &mut HashMap<String, PrimSpec>,
+        prim_specs: &mut HashMap<&str, PrimSpec>,
     ) -> Result<(), UsdcError> {
         // Collect variant set names per owning prim spec.
         let mut variant_sets: Vec<(&str, TokenId)> = Vec::new();
@@ -907,13 +906,13 @@ impl<'a> AssembleCtx<'a> {
     }
 
     /// Builds parent-child relationships by examining prim paths.
-    fn build_child_relationships(&mut self, prim_specs: &mut HashMap<String, PrimSpec>) {
+    fn build_child_relationships(&mut self, prim_specs: &mut HashMap<&str, PrimSpec>) {
         // Collect all prim paths, in a stable order.
-        let mut prim_paths: Vec<String> = prim_specs.keys().cloned().collect();
+        let mut prim_paths: Vec<&str> = prim_specs.keys().copied().collect();
         prim_paths.sort_unstable();
 
-        let mut children: HashMap<String, Vec<TokenId>> = HashMap::new();
-        for path in &prim_paths {
+        let mut children: HashMap<&str, Vec<TokenId>> = HashMap::new();
+        for path in prim_paths {
             if path == "/" {
                 continue;
             }
@@ -933,7 +932,7 @@ impl<'a> AssembleCtx<'a> {
         // Only add to parent's authored_children if not already present
         // (the prim's own primChildren field is authoritative).
         for (parent_path, names) in children {
-            if let Some(parent) = prim_specs.get_mut(&parent_path) {
+            if let Some(parent) = prim_specs.get_mut(parent_path) {
                 append_unique(&mut parent.authored_children, names);
             }
         }
@@ -1915,7 +1914,7 @@ fn semantic_component_count(name: &str) -> usize {
 }
 
 /// Returns the parent prim path for a path like `/A/B` → `/A`, `/A` → `/`.
-fn parent_prim_path(path: &str) -> Option<String> {
+fn parent_prim_path(path: &str) -> Option<&str> {
     if path == "/" {
         return None;
     }
@@ -1925,9 +1924,9 @@ fn parent_prim_path(path: &str) -> Option<String> {
     }
     if let Some(last_slash) = path.rfind('/') {
         if last_slash == 0 {
-            Some(String::from("/"))
+            Some("/")
         } else {
-            Some(String::from(&path[..last_slash]))
+            Some(&path[..last_slash])
         }
     } else {
         None
@@ -2412,6 +2411,26 @@ mod tests {
     }
 
     #[test]
+    fn validated_property_text_matches_interned_spelling() {
+        // Borrowed keys must be identical to the previous display/resolve
+        // keys, including namespace separators and text the parser permits.
+        for text in [
+            "/World/Mesh.primvars:st",
+            "/World/Mesh.material:binding",
+            "/世界/形状.displayColor",
+            "/P[x].a[b]",
+            "/P.a b",
+        ] {
+            let mut tokens = TokenInterner::default();
+            let mut paths = PathInterner::default();
+            let property = PropertyPath::parse(text, &mut tokens, &mut paths).unwrap();
+            let (prim, name) = text.rsplit_once('.').unwrap();
+            assert_eq!(prim, paths.display(property.prim_path(), &tokens));
+            assert_eq!(name, tokens.resolve(property.property()));
+        }
+    }
+
+    #[test]
     fn split_property_simple() {
         let mut tokens = TokenInterner::default();
         let mut paths = PathInterner::default();
@@ -2492,15 +2511,12 @@ mod tests {
 
     #[test]
     fn parent_prim_path_root_child() {
-        assert_eq!(parent_prim_path("/Cube"), Some(String::from("/")));
+        assert_eq!(parent_prim_path("/Cube"), Some("/"));
     }
 
     #[test]
     fn parent_prim_path_nested() {
-        assert_eq!(
-            parent_prim_path("/World/Cube"),
-            Some(String::from("/World"))
-        );
+        assert_eq!(parent_prim_path("/World/Cube"), Some("/World"));
     }
 
     #[test]

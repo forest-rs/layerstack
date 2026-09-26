@@ -685,7 +685,7 @@ impl Flattener<'_, '_> {
             }
         }
 
-        for name in self.stage.property_names(source, &*self.store) {
+        for name in self.stage.authored_property_names(source, &*self.store) {
             if let Some(property) = self.copy_property(source, name, remap) {
                 spec.properties.push(PropertyEntry {
                     name,

@@ -491,11 +491,11 @@ impl Verifier<'_> {
             }
         }
 
-        let names = source.property_names(prim, store);
+        let names = source.authored_property_names(prim, store);
         for &name in &names {
             self.property(prim, name, times);
         }
-        for name in flattened.property_names(prim, store) {
+        for name in flattened.authored_property_names(prim, store) {
             if !names.contains(&name) {
                 let path = PropertyPath::new(prim, name).display(self.paths, self.tokens);
                 self.mismatch(

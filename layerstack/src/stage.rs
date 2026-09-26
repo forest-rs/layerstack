@@ -1182,33 +1182,69 @@ impl Stage {
         self.explain_property_path(property_path).is_some()
     }
 
-    /// Returns the names of the composed properties of `prim`, attributes
-    /// and relationships together, in dictionary order: letters ignoring
-    /// case, runs of digits by value. Empty when `prim` is not on the stage.
+    /// Returns the names of the properties of `prim`: those any opinion
+    /// authors and those its schemas define ([`Stage::prim_definition`]),
+    /// attributes and relationships together, in dictionary order: letters
+    /// ignoring case, runs of digits by value. Empty when `prim` is not on
+    /// the stage.
+    ///
+    /// This builds the prim's definition ([`Stage::prim_definition`]);
+    /// nothing is cached. Without schemas ([`StageOptions::schemas`]) these
+    /// are the authored names alone ([`Stage::authored_property_names`]).
     ///
     /// The order is OpenUSD's `UsdPrim::GetPropertyNames` before it applies
     /// `reorder properties` ([`Stage::resolve_property_order`]).
     ///
     /// Spec: AOUSD Core §7.3.3 (a prim's properties share one name space),
-    /// §12 (the composed prim holds every property any opinion authors).
+    /// §12 (the composed prim holds every property any opinion authors),
+    /// §13.3.2.3 (and every property its prim definition defines).
     #[must_use]
     pub fn property_names(&self, prim: PathId, store: &dyn LayerStore) -> Vec<TokenId> {
+        let mut names = self.authored_names(prim);
+        if let Some(definition) = self.prim_definition(prim, store) {
+            let authored: HashSet<TokenId> = names.iter().copied().collect();
+            names.extend(
+                definition
+                    .properties()
+                    .iter()
+                    .map(|property| property.name)
+                    .filter(|name| !authored.contains(name)),
+            );
+        }
+        sort_property_names(&mut names, store.tokens());
+        names
+    }
+
+    /// Returns the names of the properties some opinion of `prim` authors,
+    /// in the order of [`Stage::property_names`], leaving out those only its
+    /// schemas define.
+    ///
+    /// OpenUSD: `UsdPrim::GetAuthoredPropertyNames`.
+    ///
+    /// Spec: AOUSD Core §12 (the composed prim holds every property any
+    /// opinion authors).
+    #[must_use]
+    pub fn authored_property_names(&self, prim: PathId, store: &dyn LayerStore) -> Vec<TokenId> {
+        let mut names = self.authored_names(prim);
+        sort_property_names(&mut names, store.tokens());
+        names
+    }
+
+    /// The names of the properties opinions of `prim` author, unsorted.
+    fn authored_names(&self, prim: PathId) -> Vec<TokenId> {
         use crate::prim_index::FieldKey;
 
         let Some(index) = self.prims.get(&prim) else {
             return Vec::new();
         };
-        let mut names: Vec<TokenId> = index
+        index
             .opinions_by_field
             .keys()
             .filter_map(|key| match key {
                 FieldKey::Property(name) => Some(*name),
                 FieldKey::Metadata(_) => None,
             })
-            .collect();
-        let tokens = store.tokens();
-        names.sort_by(|a, b| dictionary_cmp(tokens.resolve(*a), tokens.resolve(*b)));
-        names
+            .collect()
     }
 
     /// Traverses prims in a deterministic preorder.
@@ -1721,6 +1757,12 @@ impl Stage {
             field,
         })
     }
+}
+
+/// Sorts property names as OpenUSD's `UsdPrim::GetPropertyNames` does
+/// ([`dictionary_cmp`]).
+fn sort_property_names(names: &mut [TokenId], tokens: &crate::interner::TokenInterner) {
+    names.sort_by(|a, b| dictionary_cmp(tokens.resolve(*a), tokens.resolve(*b)));
 }
 
 /// Orders names as OpenUSD's `TfDictionaryLessThan`

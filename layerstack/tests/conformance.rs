@@ -1940,6 +1940,68 @@ fn schema_builtin_api_fallback() {
     assert_eq!(resolved.value, Value::Int(42));
 }
 
+/// A prim's property names are those authored and those its schemas
+/// define, merged in dictionary order; its authored names leave the
+/// defined ones out. Without schemas the two agree.
+///
+/// Spec: AOUSD Core §13.3.2.3 (the prim definition determines "the final
+/// set of properties present on the prim"). OpenUSD:
+/// `UsdPrim::GetPropertyNames`, `UsdPrim::GetAuthoredPropertyNames`.
+#[test]
+fn property_names_merge_authored_and_defined_properties() {
+    let mut store = InMemoryStore::default();
+    let tile = store.tokens.intern("Tile");
+    let slot = store.tokens.intern("SlotAPI");
+    let slot_main = store.tokens.intern("SlotAPI:main");
+    let api_schemas = store.tokens.intern("apiSchemas");
+    let slot_left = store.tokens.intern("SlotAPI:left:upper");
+    let [width, zeta, index] =
+        ["width", "zeta", "slot:__INSTANCE_NAME__:index"].map(|name| store.tokens.intern(name));
+    let p = store.path("/P");
+
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(
+        p,
+        PrimSpec::def()
+            .with_type_name(tile)
+            .with_field(
+                api_schemas,
+                FieldValue::TokenListOp(ListOp::prepended(vec![slot_left])),
+            )
+            .with_property(width, PropertySpec::attribute().with_default(2.0))
+            .with_property(zeta, PropertySpec::attribute().custom().with_default(1)),
+    );
+    store.insert_layer(layer);
+
+    let schemas = [
+        SchemaDefinition::typed(tile)
+            .with_built_in(slot_main)
+            .with_property(defined(width, 1.0)),
+        SchemaDefinition::new(slot, layerstack::SchemaKind::MultipleApplyApi)
+            .with_property(defined(index, 0)),
+    ];
+    let stage = compose_with_schemas(&mut store, schemas);
+    let names = |names: Vec<layerstack::TokenId>, store: &InMemoryStore| -> Vec<String> {
+        names
+            .into_iter()
+            .map(|name| store.tokens.resolve(name).to_string())
+            .collect()
+    };
+    let all = stage.property_names(p, &store);
+    assert_eq!(
+        names(all, &store),
+        ["slot:left:upper:index", "slot:main:index", "width", "zeta"]
+    );
+    let authored = stage.authored_property_names(p, &store);
+    assert_eq!(names(authored, &store), ["width", "zeta"]);
+
+    let plain = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    assert_eq!(
+        plain.property_names(p, &store),
+        plain.authored_property_names(p, &store)
+    );
+}
+
 // ── Dictionary combining ──────────────────────────────────────────────
 
 fn dict_entry(key: &str, val: Value) -> (Arc<str>, Value) {

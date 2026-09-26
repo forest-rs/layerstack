@@ -1,0 +1,16 @@
+#usda 1.0
+
+def "Stream"
+{
+    def "Bend"
+    {
+        int depth = 1
+    }
+}
+
+def "Spring" (
+    references = </Absent>
+)
+{
+    int flow = 2
+}

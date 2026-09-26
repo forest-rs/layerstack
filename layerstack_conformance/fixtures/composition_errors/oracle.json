@@ -1,0 +1,1345 @@
+{
+ "generator": "layerstack_conformance/scripts/composition_errors_oracle.py",
+ "openusd_version": "0.26.8",
+ "compositions": [
+  {
+   "root": "root.usda",
+   "fallbacks": {},
+   "prims": [
+    {
+     "path": "/Stone",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Stone"
+      ],
+      [
+       "root.usda",
+       "/Pebble"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "weight",
+       "kind": "attribute",
+       "stack": [
+        [
+         "root.usda",
+         "/Pebble.weight"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    },
+    {
+     "path": "/Pebble",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Pebble"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "weight",
+       "kind": "attribute",
+       "stack": [
+        [
+         "root.usda",
+         "/Pebble.weight"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    },
+    {
+     "path": "/Brook",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Brook"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/River",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/River"
+      ],
+      [
+       "stream.usda",
+       "/Spring"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "flow",
+       "kind": "attribute",
+       "stack": [
+        [
+         "stream.usda",
+         "/Spring.flow"
+        ]
+       ],
+       "targets": [],
+       "value": 2
+      }
+     ]
+    },
+    {
+     "path": "/Nest",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Nest"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Nest/Egg",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Nest/Egg"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Nest/Egg/Shell",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Nest/Egg/Shell"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Roost",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Roost"
+      ],
+      [
+       "root.usda",
+       "/Nest"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Roost/Egg",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Nest/Egg"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Roost/Egg/Shell",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Nest/Egg/Shell"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Delta",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Delta"
+      ],
+      [
+       "stream.usda",
+       "/Stream/Bend"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "depth",
+       "kind": "attribute",
+       "stack": [
+        [
+         "stream.usda",
+         "/Stream/Bend.depth"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    },
+    {
+     "path": "/Lantern",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Lantern"
+      ],
+      [
+       "lamp.usda",
+       "/Lamp"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "flame",
+       "kind": "attribute",
+       "stack": [
+        [
+         "lamp.usda",
+         "/Lamp.flame"
+        ]
+       ],
+       "targets": [],
+       "value": 5
+      },
+      {
+       "name": "glow",
+       "kind": "attribute",
+       "stack": [
+        [
+         "root.usda",
+         "/Lantern.glow"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      },
+      {
+       "name": "wick",
+       "kind": "relationship",
+       "stack": [
+        [
+         "root.usda",
+         "/Lantern.wick"
+        ]
+       ],
+       "targets": [
+        "/Pebble"
+       ]
+      }
+     ]
+    },
+    {
+     "path": "/Yard",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Yard"
+      ],
+      [
+       "garden.usda",
+       "/Garden"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "fence",
+       "kind": "relationship",
+       "stack": [
+        [
+         "garden.usda",
+         "/Garden.fence"
+        ]
+       ],
+       "targets": [
+        "/Yard/Bed"
+       ]
+      },
+      {
+       "name": "soil",
+       "kind": "attribute",
+       "stack": [
+        [
+         "garden.usda",
+         "/Garden.soil"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      },
+      {
+       "name": "water",
+       "kind": "attribute",
+       "stack": [
+        [
+         "garden.usda",
+         "/Garden.water"
+        ]
+       ],
+       "targets": [
+        "/Yard.soil"
+       ]
+      }
+     ]
+    },
+    {
+     "path": "/Yard/Bed",
+     "prim_stack": [
+      [
+       "garden.usda",
+       "/Garden/Bed"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Hedge",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Hedge"
+      ],
+      [
+       "garden.usda",
+       "/Plot"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "border",
+       "kind": "relationship",
+       "stack": [
+        [
+         "root.usda",
+         "/Hedge.border"
+        ],
+        [
+         "garden.usda",
+         "/Plot.border"
+        ]
+       ],
+       "targets": [
+        "/Pebble"
+       ]
+      }
+     ]
+    },
+    {
+     "path": "/Pattern",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Pattern"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "outline",
+       "kind": "relationship",
+       "stack": [
+        [
+         "root.usda",
+         "/Pattern.outline"
+        ]
+       ],
+       "targets": [
+        "/Tracing/Edge"
+       ]
+      }
+     ]
+    },
+    {
+     "path": "/Tracing",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Tracing"
+      ],
+      [
+       "root.usda",
+       "/Pattern"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "outline",
+       "kind": "relationship",
+       "stack": [
+        [
+         "root.usda",
+         "/Tracing.outline"
+        ],
+        [
+         "root.usda",
+         "/Pattern.outline"
+        ]
+       ],
+       "targets": []
+      }
+     ]
+    },
+    {
+     "path": "/Stencil",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Stencil"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "outline",
+       "kind": "relationship",
+       "stack": [
+        [
+         "root.usda",
+         "/Stencil.outline"
+        ]
+       ],
+       "targets": [
+        "/Sketch/Edge"
+       ]
+      }
+     ]
+    },
+    {
+     "path": "/Sketch",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Sketch"
+      ],
+      [
+       "root.usda",
+       "/Stencil"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "outline",
+       "kind": "relationship",
+       "stack": [
+        [
+         "root.usda",
+         "/Sketch.outline"
+        ],
+        [
+         "root.usda",
+         "/Stencil.outline"
+        ]
+       ],
+       "targets": [
+        "/Pebble"
+       ]
+      }
+     ]
+    },
+    {
+     "path": "/Bench",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Bench"
+      ],
+      [
+       "kit.usda",
+       "/Kit"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Bench/Side",
+     "prim_stack": [
+      [
+       "kit.usda",
+       "/Kit/Side"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Bench/Side/Gauge",
+     "prim_stack": [
+      [
+       "kit.usda",
+       "/Kit/Side/Gauge"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "level",
+       "kind": "attribute",
+       "stack": [
+        [
+         "kit.usda",
+         "/Kit/Side/Gauge.level"
+        ]
+       ],
+       "targets": [
+        "/Bench/Parts/Right.value",
+        "/Bench/Parts/Left.value"
+       ],
+       "value": 1
+      }
+     ]
+    },
+    {
+     "path": "/Bench/Side/Parts",
+     "prim_stack": [
+      [
+       "kit.usda",
+       "/Kit/Side/Parts"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Bench/Side/Parts/Part",
+     "prim_stack": [
+      [
+       "kit.usda",
+       "/Kit/Side/Parts/Part"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Bench/Left",
+     "prim_stack": [
+      [
+       "kit.usda",
+       "/Kit/Left"
+      ],
+      [
+       "kit.usda",
+       "/Kit/Side"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Bench/Left/Gauge",
+     "prim_stack": [
+      [
+       "kit.usda",
+       "/Kit/Side/Gauge"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "level",
+       "kind": "attribute",
+       "stack": [
+        [
+         "kit.usda",
+         "/Kit/Side/Gauge.level"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    },
+    {
+     "path": "/Bench/Left/Parts",
+     "prim_stack": [
+      [
+       "kit.usda",
+       "/Kit/Side/Parts"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Bench/Right",
+     "prim_stack": [
+      [
+       "kit.usda",
+       "/Kit/Right"
+      ],
+      [
+       "kit.usda",
+       "/Kit/Side"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Bench/Right/Gauge",
+     "prim_stack": [
+      [
+       "kit.usda",
+       "/Kit/Side/Gauge"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "level",
+       "kind": "attribute",
+       "stack": [
+        [
+         "kit.usda",
+         "/Kit/Side/Gauge.level"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    },
+    {
+     "path": "/Bench/Right/Parts",
+     "prim_stack": [
+      [
+       "kit.usda",
+       "/Kit/Side/Parts"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Bench/Parts",
+     "prim_stack": [
+      [
+       "kit.usda",
+       "/Kit/Parts"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Bench/Parts/Left",
+     "prim_stack": [
+      [
+       "kit.usda",
+       "/Kit/Side/Parts/Part"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Bench/Parts/Right",
+     "prim_stack": [
+      [
+       "kit.usda",
+       "/Kit/Side/Parts/Part"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Shed",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Shed"
+      ],
+      [
+       "root.usda",
+       "/Tools"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "owner",
+       "kind": "relationship",
+       "stack": [
+        [
+         "root.usda",
+         "/Tools.owner"
+        ]
+       ],
+       "targets": [
+        "/Pebble",
+        "/Shed/Saw"
+       ]
+      }
+     ]
+    },
+    {
+     "path": "/Shed/Saw",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Tools/Saw"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Tools",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Tools"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "owner",
+       "kind": "relationship",
+       "stack": [
+        [
+         "root.usda",
+         "/Tools.owner"
+        ]
+       ],
+       "targets": [
+        "/Pebble",
+        "/Tools/Saw",
+        "/Shed/Door"
+       ]
+      }
+     ]
+    },
+    {
+     "path": "/Tools/Saw",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Tools/Saw"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/_class_Tree",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/_class_Tree"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "height",
+       "kind": "attribute",
+       "stack": [
+        [
+         "root.usda",
+         "/_class_Tree.height"
+        ]
+       ],
+       "targets": [
+        "/Orchard.age"
+       ]
+      }
+     ]
+    },
+    {
+     "path": "/Orchard",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Orchard"
+      ],
+      [
+       "root.usda",
+       "/_class_Tree"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "age",
+       "kind": "attribute",
+       "stack": [
+        [
+         "root.usda",
+         "/Orchard.age"
+        ]
+       ],
+       "targets": [],
+       "value": 3
+      },
+      {
+       "name": "height",
+       "kind": "attribute",
+       "stack": [
+        [
+         "root.usda",
+         "/_class_Tree.height"
+        ]
+       ],
+       "targets": []
+      }
+     ]
+    },
+    {
+     "path": "/Grove",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Grove"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Grove/Kind",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Grove/Kind"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "x",
+       "kind": "attribute",
+       "stack": [
+        [
+         "root.usda",
+         "/Grove/Kind.x"
+        ]
+       ],
+       "targets": [
+        "/Grove/Oak.y"
+       ]
+      }
+     ]
+    },
+    {
+     "path": "/Grove/Oak",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Grove/Oak"
+      ],
+      [
+       "root.usda",
+       "/Grove/Kind"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "x",
+       "kind": "attribute",
+       "stack": [
+        [
+         "root.usda",
+         "/Grove/Kind.x"
+        ]
+       ],
+       "targets": []
+      },
+      {
+       "name": "y",
+       "kind": "attribute",
+       "stack": [
+        [
+         "root.usda",
+         "/Grove/Oak.y"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    },
+    {
+     "path": "/Grove/Elm",
+     "prim_stack": [
+      [
+       "root.usda",
+       "/Grove/Elm"
+      ],
+      [
+       "root.usda",
+       "/Grove/Kind"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "x",
+       "kind": "attribute",
+       "stack": [
+        [
+         "root.usda",
+         "/Grove/Kind.x"
+        ]
+       ],
+       "targets": []
+      },
+      {
+       "name": "y",
+       "kind": "attribute",
+       "stack": [
+        [
+         "root.usda",
+         "/Grove/Elm.y"
+        ]
+       ],
+       "targets": [],
+       "value": 2
+      }
+     ]
+    }
+   ],
+   "errors": [
+    [
+     "ArcCycle",
+     "/Nest/Egg/Shell"
+    ],
+    [
+     "ArcCycle",
+     "/Roost/Egg/Shell"
+    ],
+    [
+     "InconsistentPropertyType",
+     "/Lantern"
+    ],
+    [
+     "InvalidExternalTargetPath",
+     "/Bench/Left/Gauge"
+    ],
+    [
+     "InvalidExternalTargetPath",
+     "/Bench/Right/Gauge"
+    ],
+    [
+     "InvalidExternalTargetPath",
+     "/Grove/Oak"
+    ],
+    [
+     "InvalidExternalTargetPath",
+     "/Orchard"
+    ],
+    [
+     "InvalidExternalTargetPath",
+     "/Shed"
+    ],
+    [
+     "InvalidExternalTargetPath",
+     "/Sketch"
+    ],
+    [
+     "InvalidExternalTargetPath",
+     "/Yard"
+    ],
+    [
+     "InvalidInstanceTargetPath",
+     "/Bench/Left/Gauge"
+    ],
+    [
+     "InvalidInstanceTargetPath",
+     "/Bench/Right/Gauge"
+    ],
+    [
+     "InvalidInstanceTargetPath",
+     "/Grove/Elm"
+    ],
+    [
+     "UnresolvedPrimPath",
+     "/Brook"
+    ],
+    [
+     "UnresolvedPrimPath",
+     "/Nest/Egg/Shell"
+    ],
+    [
+     "UnresolvedPrimPath",
+     "/River"
+    ],
+    [
+     "UnresolvedPrimPath",
+     "/Stone"
+    ]
+   ]
+  },
+  {
+   "root": "fallbacks.usda",
+   "fallbacks": {
+    "shape": [
+     "cone",
+     "cube"
+    ],
+    "size": [
+     "large",
+     "small"
+    ],
+    "color": [
+     "red"
+    ]
+   },
+   "prims": [
+    {
+     "path": "/Block",
+     "prim_stack": [
+      [
+       "fallbacks.usda",
+       "/Block"
+      ],
+      [
+       "fallbacks.usda",
+       "/Block{shape=cube}"
+      ],
+      [
+       "fallbacks.usda",
+       "/Block{size=small}"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "scale",
+       "kind": "attribute",
+       "stack": [
+        [
+         "fallbacks.usda",
+         "/Block{size=small}.scale"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      },
+      {
+       "name": "sides",
+       "kind": "attribute",
+       "stack": [
+        [
+         "fallbacks.usda",
+         "/Block{shape=cube}.sides"
+        ]
+       ],
+       "targets": [],
+       "value": 6
+      }
+     ]
+    },
+    {
+     "path": "/Ball",
+     "prim_stack": [
+      [
+       "fallbacks.usda",
+       "/Ball"
+      ],
+      [
+       "fallbacks.usda",
+       "/Ball{shape=sphere}"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "sides",
+       "kind": "attribute",
+       "stack": [
+        [
+         "fallbacks.usda",
+         "/Ball{shape=sphere}.sides"
+        ]
+       ],
+       "targets": [],
+       "value": 0
+      }
+     ]
+    },
+    {
+     "path": "/Crate",
+     "prim_stack": [
+      [
+       "fallbacks.usda",
+       "/Crate"
+      ],
+      [
+       "crate.usda",
+       "/Crate"
+      ],
+      [
+       "crate.usda",
+       "/Crate{shape=sphere}"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "sides",
+       "kind": "attribute",
+       "stack": [
+        [
+         "crate.usda",
+         "/Crate{shape=sphere}.sides"
+        ]
+       ],
+       "targets": [],
+       "value": 0
+      }
+     ]
+    },
+    {
+     "path": "/Box",
+     "prim_stack": [
+      [
+       "fallbacks.usda",
+       "/Box"
+      ],
+      [
+       "crate.usda",
+       "/Plain"
+      ],
+      [
+       "crate.usda",
+       "/Plain{shape=cube}"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "sides",
+       "kind": "attribute",
+       "stack": [
+        [
+         "crate.usda",
+         "/Plain{shape=cube}.sides"
+        ]
+       ],
+       "targets": [],
+       "value": 6
+      }
+     ]
+    },
+    {
+     "path": "/Tower",
+     "prim_stack": [
+      [
+       "fallbacks.usda",
+       "/Tower"
+      ],
+      [
+       "fallbacks.usda",
+       "/Tower{shape=cube}"
+      ],
+      [
+       "crate.usda",
+       "/Lid"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "hinge",
+       "kind": "attribute",
+       "stack": [
+        [
+         "crate.usda",
+         "/Lid.hinge"
+        ]
+       ],
+       "targets": [],
+       "value": 2
+      }
+     ]
+    },
+    {
+     "path": "/Tower/Flag",
+     "prim_stack": [
+      [
+       "fallbacks.usda",
+       "/Tower{shape=cube}Flag"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "height",
+       "kind": "attribute",
+       "stack": [
+        [
+         "fallbacks.usda",
+         "/Tower{shape=cube}Flag.height"
+        ]
+       ],
+       "targets": [],
+       "value": 3
+      }
+     ]
+    },
+    {
+     "path": "/Mast",
+     "prim_stack": [
+      [
+       "fallbacks.usda",
+       "/Mast"
+      ],
+      [
+       "fallbacks.usda",
+       "/Mast{shape=cube}"
+      ],
+      [
+       "fallbacks.usda",
+       "/Mast{size=small}"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "scale",
+       "kind": "attribute",
+       "stack": [
+        [
+         "fallbacks.usda",
+         "/Mast{size=small}.scale"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    },
+    {
+     "path": "/Boom",
+     "prim_stack": [
+      [
+       "fallbacks.usda",
+       "/Boom"
+      ],
+      [
+       "fallbacks.usda",
+       "/Boom{size=large}"
+      ],
+      [
+       "fallbacks.usda",
+       "/Boom{shape=cube}"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "scale",
+       "kind": "attribute",
+       "stack": [
+        [
+         "fallbacks.usda",
+         "/Boom{size=large}.scale"
+        ]
+       ],
+       "targets": [],
+       "value": 2
+      }
+     ]
+    },
+    {
+     "path": "/Hull",
+     "prim_stack": [
+      [
+       "fallbacks.usda",
+       "/Hull"
+      ],
+      [
+       "fallbacks.usda",
+       "/Hull{shape=cube}"
+      ],
+      [
+       "fallbacks.usda",
+       "/Hull{shape=cube}{color=red}"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "hue",
+       "kind": "attribute",
+       "stack": [
+        [
+         "fallbacks.usda",
+         "/Hull{shape=cube}{color=red}.hue"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    },
+    {
+     "path": "/Hull/Flag",
+     "prim_stack": [
+      [
+       "fallbacks.usda",
+       "/Hull{shape=cube}{color=red}Flag"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "height",
+       "kind": "attribute",
+       "stack": [
+        [
+         "fallbacks.usda",
+         "/Hull{shape=cube}{color=red}Flag.height"
+        ]
+       ],
+       "targets": [],
+       "value": 4
+      }
+     ]
+    }
+   ],
+   "errors": []
+  },
+  {
+   "root": "variant_connection.usda",
+   "fallbacks": {},
+   "prims": [
+    {
+     "path": "/Hill",
+     "prim_stack": [
+      [
+       "variant_connection.usda",
+       "/Hill"
+      ],
+      [
+       "variant_connection.usda",
+       "/Hill{v=x}"
+      ]
+     ],
+     "properties": []
+    },
+    {
+     "path": "/Hill/Rock",
+     "prim_stack": [
+      [
+       "variant_connection.usda",
+       "/Hill{v=x}Rock"
+      ]
+     ],
+     "properties": [
+      {
+       "name": "x",
+       "kind": "attribute",
+       "stack": [
+        [
+         "variant_connection.usda",
+         "/Hill{v=x}Rock.x"
+        ]
+       ],
+       "targets": [
+        "/Hill/Rock.y"
+       ]
+      },
+      {
+       "name": "y",
+       "kind": "attribute",
+       "stack": [
+        [
+         "variant_connection.usda",
+         "/Hill{v=x}Rock.y"
+        ]
+       ],
+       "targets": [],
+       "value": 1
+      }
+     ]
+    }
+   ],
+   "errors": []
+  }
+ ],
+ "rejected": {
+  "invalid_inherit.usda": "Inherit paths cannot contain variant selections",
+  "invalid_specializes.usda": "Specializes paths cannot contain variant selections",
+  "invalid_reference.usda": "Reference paths cannot contain variant selections",
+  "invalid_payload.usda": "Payload paths cannot contain variant selections",
+  "invalid_relocates.usda": "'/Hill{v=x}Rock' is not a valid relocates source path",
+  "invalid_target.usda": "Relationship target paths cannot contain variant selections",
+  "invalid_connection.usda": "'/Hill{v=x}Rock.y' is not a valid prim or property scene path"
+ }
+}

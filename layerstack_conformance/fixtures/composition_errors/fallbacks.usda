@@ -1,0 +1,159 @@
+#usda 1.0
+
+# No selection is authored: the first fallback that names a variant of the
+# set, `cube`, is selected.
+def "Block" (
+    variantSets = ["shape", "size"]
+)
+{
+    variantSet "shape" = {
+        "cube" {
+            int sides = 6
+        }
+        "sphere" {
+            int sides = 0
+        }
+    }
+    variantSet "size" = {
+        "small" {
+            int scale = 1
+        }
+    }
+}
+
+# An authored selection wins over the fallbacks.
+def "Ball" (
+    variants = {
+        string shape = "sphere"
+    }
+    variantSets = ["shape"]
+)
+{
+    variantSet "shape" = {
+        "cube" {
+            int sides = 6
+        }
+        "sphere" {
+            int sides = 0
+        }
+    }
+}
+
+# A selection authored in a referenced layer stack also wins.
+def "Crate" (
+    references = @./crate.usda@</Crate>
+)
+{
+}
+
+# A referenced prim without a selection takes the fallback.
+def "Box" (
+    references = @./crate.usda@</Plain>
+)
+{
+}
+
+# The branch a fallback selects composes its arcs and child prims.
+def "Tower" (
+    variantSets = ["shape"]
+)
+{
+    variantSet "shape" = {
+        "cube" (
+            references = @./crate.usda@</Lid>
+        ) {
+            def "Flag"
+            {
+                int height = 3
+            }
+        }
+        "sphere" {
+        }
+    }
+}
+
+# A selection authored in the branch a fallback selects outranks the
+# fallback of a set declared after it.
+def "Mast" (
+    variantSets = ["shape", "size"]
+)
+{
+    variantSet "shape" = {
+        "cube" (
+            variants = {
+                string size = "small"
+            }
+        ) {
+        }
+        "sphere" {
+        }
+    }
+    variantSet "size" = {
+        "small" {
+            int scale = 1
+        }
+        "large" {
+            int scale = 2
+        }
+    }
+}
+
+# The same sets declared the other way around: `size` falls back to
+# `large` before the `shape=cube` branch is selected, so that branch's
+# selection of `size` comes too late and `size=large` is kept.
+def "Boom" (
+    variantSets = ["size", "shape"]
+)
+{
+    variantSet "shape" = {
+        "cube" (
+            variants = {
+                string size = "small"
+            }
+        ) {
+        }
+        "sphere" {
+        }
+    }
+    variantSet "size" = {
+        "small" {
+            int scale = 1
+        }
+        "large" {
+            int scale = 2
+        }
+    }
+}
+
+# The branch a fallback selects declares a set of its own, which falls
+# back too; its branch composes a child prim.
+def "Hull" (
+    variantSets = ["shape"]
+)
+{
+    variantSet "shape" = {
+        "cube" (
+            variantSets = ["color"]
+        ) {
+            variantSet "color" = {
+                "red" {
+                    int hue = 1
+
+                    def "Flag"
+                    {
+                        int height = 4
+                    }
+                }
+                "blue" {
+                    int hue = 2
+
+                    def "Pennant"
+                    {
+                    }
+                }
+            }
+        }
+        "sphere" {
+        }
+    }
+}

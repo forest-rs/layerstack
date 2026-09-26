@@ -1,0 +1,37 @@
+#usda 1.0
+
+def "Crate" (
+    variants = {
+        string shape = "sphere"
+    }
+    variantSets = ["shape"]
+)
+{
+    variantSet "shape" = {
+        "cube" {
+            int sides = 6
+        }
+        "sphere" {
+            int sides = 0
+        }
+    }
+}
+
+def "Lid"
+{
+    int hinge = 2
+}
+
+def "Plain" (
+    variantSets = ["shape"]
+)
+{
+    variantSet "shape" = {
+        "cube" {
+            int sides = 6
+        }
+        "sphere" {
+            int sides = 0
+        }
+    }
+}

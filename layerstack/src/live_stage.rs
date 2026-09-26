@@ -486,6 +486,7 @@ impl LiveStage {
             mask: Some(PopulationMask { include: mask_vec }),
             with_provenance: self.options.with_provenance,
             with_dependencies: true,
+            variant_fallbacks: self.options.variant_fallbacks.clone(),
         };
         let mut partial = Stage::compose(store, self.root, scoped_opts);
 

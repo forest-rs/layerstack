@@ -16,7 +16,7 @@ use alloc::vec::Vec;
 
 use hashbrown::HashMap;
 
-use crate::variant_fallbacks::VariantFallbacks;
+use crate::variant_fallbacks::{VariantFallbacks, apply_variant_fallbacks};
 use crate::{
     doc::{
         Layer, LayerId, LayerStore, PrimSpec, Reference, ReferenceTarget, VariantSpec,
@@ -642,12 +642,72 @@ pub(crate) fn resolve_inherits_for_prim_in(
     )
 }
 
+/// Applies `fallbacks` to `selections`, found for the prims `paths` in
+/// `stack`, for the variant sets of their specs there (see
+/// [`apply_variant_fallbacks`]).
+fn apply_site_fallbacks(
+    store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
+    stack: &LayerStack,
+    paths: &[PathId],
+    selections: &mut HashMap<TokenId, TokenId>,
+) {
+    if fallbacks.is_empty() {
+        return;
+    }
+    let specs: Vec<&PrimSpec> = stack
+        .layers
+        .iter()
+        .filter_map(|id| store.layer(*id))
+        .flat_map(|layer| paths.iter().filter_map(|path| layer.prims.get(path)))
+        .collect();
+    apply_variant_fallbacks(fallbacks, selections, &specs);
+}
+
+/// Resolves the variant selections of `prim` in `local_stack`: the
+/// selections authored for it ([`authored_variant_selections_for_prim`]),
+/// completed with `fallbacks` for its variant sets there
+/// ([`apply_variant_fallbacks`]).
+///
+/// Spec: AOUSD Core §10.3.2.5.1 (computing variant selection).
+pub(crate) fn resolve_variant_selections_for_prim(
+    store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
+    local_stack: &LayerStack,
+    prim: PathId,
+) -> HashMap<TokenId, TokenId> {
+    let mut selected = authored_variant_selections_for_prim(store, fallbacks, local_stack, prim);
+    if !fallbacks.is_empty() {
+        let specs: Vec<&PrimSpec> = local_stack
+            .layers
+            .iter()
+            .filter_map(|id| store.layer(*id))
+            .flat_map(|layer| {
+                variant_host_specs(
+                    store,
+                    fallbacks,
+                    local_stack,
+                    layer,
+                    prim,
+                    SelectionScope::Stack,
+                )
+            })
+            .collect();
+        apply_variant_fallbacks(fallbacks, &mut selected, &specs);
+    }
+    selected
+}
+
 /// Resolves the variant selections authored for `prim` in `local_stack`:
 /// on its specs outside any variant branch and on its specs inside selected
 /// branches (`/P{v=x}C (variants = ...)`), stronger layers first.
 ///
+/// Callers that go on to add weaker selections from other layer stacks use
+/// this, and apply fallbacks once every authored selection is known.
+/// `fallbacks` only decides which branches enclosing a spec are selected.
+///
 /// Spec: AOUSD Core §10.3.2.5.1 (computing variant selection).
-pub(crate) fn resolve_variant_selections_for_prim(
+pub(crate) fn authored_variant_selections_for_prim(
     store: &dyn LayerStore,
     fallbacks: &VariantFallbacks,
     local_stack: &LayerStack,
@@ -940,6 +1000,13 @@ pub(crate) fn resolve_variant_child_references(
         }
         parent_selections.extend(new_sels);
     }
+    apply_site_fallbacks(
+        store,
+        fallbacks,
+        selections_stack,
+        &check_paths,
+        &mut parent_selections,
+    );
 
     let mut ops = Vec::new();
     // Check the branches of the parent and of its inherit targets.
@@ -1106,6 +1173,13 @@ pub(crate) fn resolve_variant_branch_payloads(
         }
         selections.extend(new_sels);
     }
+    apply_site_fallbacks(
+        store,
+        fallbacks,
+        selections_stack,
+        &check_paths,
+        &mut selections,
+    );
 
     let mut ops = Vec::new();
     for &check_path in &check_paths {

@@ -34,8 +34,10 @@
 //!   site whose layer authors a default, read from the ingested layer data
 //!   (see [`derive_scalars`]). Checked against OpenUSD 26.3's
 //!   `UsdAttribute::Get()`, these derived expectations agree except where
-//!   ingestion stores a `bool` as an integer, and where `pcp.txt`'s variant
-//!   fallback selects a branch that `UsdStage` without fallbacks would not.
+//!   ingestion stores a `bool` as an integer.
+//!
+//! Every fixture is composed with the same variant fallbacks as `pcp.txt`
+//! ([`StageOptions::variant_fallbacks`]).
 //!
 //! [`KNOWN`] records every fixture that does not match, with the exact shape
 //! of its mismatch (counts and [`Diff`] kinds), its [`Cause`]s and a
@@ -54,8 +56,8 @@
 //! target paths, specializes propagated to the root of the graph and
 //! implied like inherits, relocates of the stage's and of referenced layer
 //! stacks (relocated prims composed at their targets beneath relocate
-//! nodes, their sources prohibited), and variant selections that do not
-//! depend on the features below.
+//! nodes, their sources prohibited), and variant selections, including
+//! fallbacks, that do not depend on the features below.
 //!
 //! # Not supported
 //!
@@ -65,9 +67,8 @@
 //! - One site per arc path ([`Cause::CollapsedNodes`]).
 //! - Variant selections of the sites ancestral arcs reach, made before the
 //!   prim's index is complete ([`Cause::AncestralArcs`]),
-//!   some nested variant specs ([`Cause::VariantSpecs`]), asset-path
-//!   expressions ([`Cause::ExpressionVariables`]) and variant fallbacks
-//!   ([`Cause::FallbackVariants`]).
+//!   some nested variant specs ([`Cause::VariantSpecs`]) and asset-path
+//!   expressions ([`Cause::ExpressionVariables`]).
 //!
 //! The test prints the per-cause tally and the list of exact matches.
 
@@ -390,11 +391,16 @@ fn observe(name: &str) -> Observed {
         ));
     }
 
+    // `testPcpCompositionResults.py`'s variant fallbacks, which `pcp.txt`
+    // was composed with.
+    let standin = loaded.store.tokens.intern("standin");
+    let render = loaded.store.tokens.intern("render");
     let stage = Stage::compose(
         &mut loaded.store,
         loaded.root_layer,
         StageOptions {
             with_provenance: true,
+            variant_fallbacks: [(standin, vec![render])].into_iter().collect(),
             ..StageOptions::default()
         },
     );
@@ -518,9 +524,6 @@ enum Cause {
     Relocates,
     /// Asset-path variable expressions are not evaluated.
     ExpressionVariables,
-    /// `testPcpCompositionResults.py` composes with the variant fallback
-    /// `{'standin': ['render']}`; Layerstack has no fallback selections.
-    FallbackVariants,
 }
 
 /// A fixture known to mismatch the oracle, with its exact mismatch shape.
@@ -784,7 +787,7 @@ const KNOWN: &[Known] = &[
     },
     Known {
         fixture: "TypicalReferenceToRiggedModel_root",
-        causes: &[C::ImpliedClasses, C::FallbackVariants],
+        causes: &[C::ImpliedClasses],
         prims: 2,
         props: 2,
         values: 1,
@@ -799,15 +802,6 @@ const KNOWN: &[Known] = &[
         values: 0,
         diffs: &[D::MissingPrim, D::MissingSite],
         reason: "classes implied into the pigeon's toe rigs through relocation sources are not composed, so `/Pigeon/Rig/ToesRig/LToesRig/ThumbToeLOCALRig` is missing and the relocated `/Pigeon/Anim/Legs/LToes/Thumb` composes no opinions",
-    },
-    Known {
-        fixture: "case1_root",
-        causes: &[C::FallbackVariants],
-        prims: 11,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingPrim, D::MissingSite],
-        reason: "`standin=render` comes from the test harness's variant fallbacks, not from scene description",
     },
 ];
 

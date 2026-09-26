@@ -4,9 +4,25 @@
     timeCodesPerSecond = 30
 )
 
-def Xform "Tree"
+def Xform "Tree" (
+    customData = {
+        timecode budded = 2
+        dictionary season = {
+            timecode[] frost = [1, 9]
+        }
+    }
+)
 {
     double blocked = 2
+    timecode bloom = 4 (
+        customData = {
+            timecode peak = 6
+        }
+    )
+    timecode[] cues.timeSamples = {
+        0: [1, 2],
+        8: [5, 6],
+    }
     double growth = 1
     double growth.timeSamples = {
         0: 1,

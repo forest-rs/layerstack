@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::{
-    doc::{InMemoryStore, Specifier},
+    doc::{InMemoryStore, LayerOffset, Specifier},
     property::PropertyType,
     spline::{CurveType, Extrapolation, SplineData, SplineDataType},
     stage::StageOptions,
@@ -581,19 +581,5 @@ fn instances_share_a_prototype_or_expand() {
             FindingKind::Transformed(Transformation::InstanceExpanded),
             FindingKind::Transformed(Transformation::InstanceExpanded),
         ]
-    );
-}
-
-#[test]
-fn stage_time_inverts_map_time() {
-    let offset = LayerOffset {
-        offset: 2.0,
-        scale: 2.0,
-    };
-    assert_eq!(offset.map_time(to_stage_time(offset, 10.0)), 10.0);
-    assert_eq!(
-        retime(Value::TimeCode(5.0), offset),
-        Value::TimeCode(12.0),
-        "timecode values move with the samples"
     );
 }

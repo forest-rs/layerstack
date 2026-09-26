@@ -45,12 +45,39 @@ import json
 import re
 import sys
 
-from pxr import Sdf, Usd
+from pxr import Sdf, Ts, Usd
 
 PROTOTYPE = re.compile(r"Flattened_Prototype_(\d+)(?!\d)")
 
 
+def fmt_spline(spline):
+    """A spline's every field: `TsSpline`'s `repr` names only the object."""
+    def extrapolation(e):
+        # `loopBoundaryTime` has no Python binding.
+        return [repr(e.mode), repr(e.slope)]
+    loop = spline.GetInnerLoopParams()
+    return {
+        "valueType": spline.GetValueTypeName(),
+        "curveType": repr(spline.GetCurveType()),
+        "pre": extrapolation(spline.GetPreExtrapolation()),
+        "post": extrapolation(spline.GetPostExtrapolation()),
+        "loop": [repr(loop.protoStart), repr(loop.protoEnd), loop.numPreLoops,
+                 loop.numPostLoops, repr(loop.valueOffset)],
+        "knots": [
+            [repr(k.GetTime()), repr(k.GetValue()),
+             repr(k.GetPreValue()) if k.IsDualValued() else None,
+             repr(k.GetNextInterpolation()),
+             repr(k.GetPreTanWidth()), repr(k.GetPreTanSlope()),
+             repr(k.GetPostTanWidth()), repr(k.GetPostTanSlope()),
+             repr(k.GetPreTanAlgorithm()), repr(k.GetPostTanAlgorithm())]
+            for k in spline.GetKnots().values()
+        ],
+    }
+
+
 def fmt(value):
+    if isinstance(value, Ts.Spline):
+        return fmt_spline(value)
     if hasattr(value, "ApplyOperations"):
         return [fmt(item) for item in value.ApplyOperations([])]
     if isinstance(value, Sdf.Reference):

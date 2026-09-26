@@ -810,9 +810,15 @@ impl Flattener<'_, '_> {
             if source.value.time_samples().is_none()
                 && let Some(spline) = source.value.spline()
             {
-                if source.layer_offset.is_identity() {
+                let offset = source.layer_offset;
+                if offset.is_identity() {
                     spec.spline = Some(spline.clone());
                     self.report.preserved.splines += 1;
+                } else if let Some(retimed) = spline.retimed(offset) {
+                    // Spec: AOUSD Core §12.3.2.1: the spline in stage time.
+                    spec.spline = Some(retimed);
+                    let t = Transformation::SplineRetimed { offset };
+                    self.transformed(path.clone(), t, Some(finding_source));
                 } else {
                     self.lost(path.clone(), Loss::RetimedSpline, Some(finding_source));
                 }

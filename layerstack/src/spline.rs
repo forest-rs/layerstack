@@ -155,6 +155,59 @@ pub struct SplineData {
 }
 
 impl SplineData {
+    /// The spline moved from a layer's timeline into the stage's through
+    /// `offset`: what the spline is at stage time `t * scale + offset` is
+    /// the retimed spline at that time. Knot times and inner-loop
+    /// prototype times are mapped; tangent widths scale; slopes, of the
+    /// knots and of sloped extrapolation, divide by the scale. Values are
+    /// unchanged. `None` for a scale that is not positive, which would
+    /// reverse the spline.
+    ///
+    /// OpenUSD: `Ts_TypedSplineData::ApplyOffsetAndScale`
+    /// (`pxr/base/ts/splineData.h`), which OpenUSD's flatten applies to a
+    /// spline read through a layer offset.
+    ///
+    /// Spec: AOUSD Core §12.3.2.1 (layer offset and scale), §12.3.3
+    /// (splines).
+    #[must_use]
+    pub fn retimed(&self, offset: crate::doc::LayerOffset) -> Option<Self> {
+        let (shift, scale) = (offset.offset, offset.scale);
+        if scale <= 0.0 || !scale.is_finite() {
+            return None;
+        }
+        let time = |t: f64| t * scale + shift;
+        let slope = |e: Extrapolation| match e {
+            Extrapolation::Sloped(s) => Extrapolation::Sloped(s / scale),
+            other => other,
+        };
+        let loop_params = self.loop_params.map(|mut lp| {
+            if lp.proto_end > lp.proto_start {
+                lp.proto_start = time(lp.proto_start);
+                lp.proto_end = time(lp.proto_end);
+            }
+            lp
+        });
+        let knots = self
+            .knots
+            .iter()
+            .map(|knot| Knot {
+                time: time(knot.time),
+                pre_tan_width: knot.pre_tan_width * scale,
+                post_tan_width: knot.post_tan_width * scale,
+                pre_tan_slope: knot.pre_tan_slope / scale,
+                post_tan_slope: knot.post_tan_slope / scale,
+                ..knot.clone()
+            })
+            .collect();
+        Some(Self {
+            pre_extrapolation: slope(self.pre_extrapolation),
+            post_extrapolation: slope(self.post_extrapolation),
+            loop_params,
+            knots,
+            ..self.clone()
+        })
+    }
+
     /// Evaluate the spline at the given time, returning the interpolated value.
     ///
     /// Returns `None` for empty splines or `Block` extrapolation regions.
@@ -541,6 +594,69 @@ mod tests {
     use alloc::vec;
 
     use super::*;
+
+    #[test]
+    fn retimed_splines_evaluate_at_mapped_times() {
+        let spline = SplineData {
+            data_type: SplineDataType::Double,
+            default_curve_type: CurveType::Bezier,
+            pre_extrapolation: Extrapolation::Sloped(0.5),
+            post_extrapolation: Extrapolation::Linear,
+            loop_params: None,
+            knots: vec![
+                Knot {
+                    time: 0.0,
+                    value: 1.0,
+                    pre_value: None,
+                    next_interp: KnotInterp::Curve,
+                    curve_type: CurveType::Bezier,
+                    pre_tan_maya_form: false,
+                    post_tan_maya_form: false,
+                    pre_tan_width: 1.0,
+                    post_tan_width: 2.0,
+                    pre_tan_slope: 0.5,
+                    post_tan_slope: 1.0,
+                },
+                Knot {
+                    time: 8.0,
+                    value: 3.0,
+                    pre_value: None,
+                    next_interp: KnotInterp::Linear,
+                    curve_type: CurveType::Bezier,
+                    pre_tan_maya_form: false,
+                    post_tan_maya_form: false,
+                    pre_tan_width: 2.0,
+                    post_tan_width: 0.0,
+                    pre_tan_slope: -1.0,
+                    post_tan_slope: 0.0,
+                },
+            ],
+        };
+        let offset = crate::doc::LayerOffset {
+            offset: 4.0,
+            scale: 2.0,
+        };
+        let retimed = spline.retimed(offset).expect("a positive scale");
+        assert_eq!(retimed.knots[1].time, 20.0);
+        assert_eq!(retimed.knots[0].post_tan_width, 4.0);
+        assert_eq!(retimed.knots[0].post_tan_slope, 0.5);
+        assert_eq!(retimed.pre_extrapolation, Extrapolation::Sloped(0.25));
+        for t in [-4.0, 0.0, 2.5, 4.0, 8.0, 13.0, 20.0, 31.0] {
+            let (want, got) = (spline.evaluate(offset.map_time(t)), retimed.evaluate(t));
+            let close = match (want, got) {
+                (Some(a), Some(b)) => (a - b).abs() < 1e-9,
+                (a, b) => a == b,
+            };
+            assert!(close, "at {t}: {want:?} / {got:?}");
+        }
+        assert_eq!(
+            spline.retimed(crate::doc::LayerOffset {
+                offset: 0.0,
+                scale: -1.0
+            }),
+            None
+        );
+    }
 
     /// Helper to build a simple spline with given knots.
     fn simple_spline(knots: Vec<Knot>) -> SplineData {

@@ -462,6 +462,14 @@ pub enum Transformation {
         /// The layer offset they were read through.
         offset: LayerOffset,
     },
+    /// A spline moved from layer time into stage time: its knot times,
+    /// tangents, inner loops and sloped extrapolation.
+    ///
+    /// Spec: AOUSD Core §12.3.2.1, §12.3.3 (splines).
+    SplineRetimed {
+        /// The layer offset it was read through.
+        offset: LayerOffset,
+    },
     /// `timecode` values moved from layer time into stage time.
     ///
     /// Spec: AOUSD Core §12.3.2.1.
@@ -526,6 +534,11 @@ impl fmt::Display for Transformation {
                 "time samples retimed (offset {}, scale {})",
                 offset.offset, offset.scale
             ),
+            Self::SplineRetimed { offset } => write!(
+                f,
+                "spline retimed (offset {}, scale {})",
+                offset.offset, offset.scale
+            ),
             Self::TimeCodesRetimed { offset } => write!(
                 f,
                 "timecode values retimed (offset {}, scale {})",
@@ -557,8 +570,8 @@ impl fmt::Display for Transformation {
 /// Composed content a flattened layer does not hold.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Loss {
-    /// A spline read through a layer offset or scale, whose knots would
-    /// have to be retimed.
+    /// A spline read through a layer offset whose scale is not positive,
+    /// which would reverse it.
     RetimedSpline,
     /// Value clips (`clips`, `clipSets` and the legacy `clip*` fields),
     /// which composition does not read, so their values cannot be baked.
@@ -587,7 +600,7 @@ impl Loss {
 impl fmt::Display for Loss {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(match self {
-            Self::RetimedSpline => "a spline through a layer offset",
+            Self::RetimedSpline => "a spline through a reversing layer offset",
             Self::ValueClips => "value clips",
             Self::UntypedAttribute => "an attribute without a type",
             Self::UnanchoredAssetPath => "an asset path that could not be anchored",

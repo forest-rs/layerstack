@@ -3288,7 +3288,6 @@ fn add_reference_opinions(
 ) {
     // Spec: AOUSD Core §10 (references arcs). For v0.1 we expand references
     // recursively so that nested references contribute opinions.
-    let mut visited: HashSet<(PathId, LayerId, PathId)> = HashSet::new();
     let mut visited_inherits: VisitedClasses = VisitedClasses::new();
     let mut visited_specializes = VisitedClasses::new();
     for dest_root in paths.iter().copied() {
@@ -3316,6 +3315,12 @@ fn add_reference_opinions(
             dest_root,
             anchor,
         );
+        // Both lists read the prim's specs inside its parent's selected
+        // branches; each reference there is one arc, listed once.
+        let variant_child_refs: Vec<Reference> = variant_child_refs
+            .into_iter()
+            .filter(|reference| !refs.contains(reference))
+            .collect();
         let all_refs = refs.into_iter().chain(variant_child_refs);
         for (arc_list_index, reference) in all_refs.enumerate() {
             let arc_list_index = u16::try_from(arc_list_index).unwrap_or(u16::MAX);
@@ -3357,7 +3362,6 @@ fn add_reference_opinions(
                 arc_list_index,
                 ArcParent::nested(&branch),
                 out,
-                &mut visited,
                 &mut visited_inherits,
                 &mut visited_specializes,
                 prim_order_out,
@@ -3384,7 +3388,6 @@ fn add_inherit_opinions(
     // Spec: AOUSD Core §10 (inherits arc).
     let mut visited: VisitedClasses = VisitedClasses::new();
     let mut visited_specializes = VisitedClasses::new();
-    let mut visited_refs: HashSet<(PathId, LayerId, PathId)> = HashSet::new();
     for dest_root in paths.iter().copied() {
         cycles.begin(dest_root);
         let inherits = resolve_inherits_for_prim(
@@ -3435,7 +3438,6 @@ fn add_inherit_opinions(
                 out,
                 &mut visited,
                 &mut visited_specializes,
-                &mut visited_refs,
                 prim_order_out,
                 authored_children_out,
                 None,
@@ -4862,7 +4864,6 @@ impl AncestralArcs<'_> {
         store: &mut dyn LayerStore,
         nodes: &ArcNodes,
         out: &mut HashMap<PathId, PrimIndex>,
-        visited_refs: &mut HashSet<(PathId, LayerId, PathId)>,
         visited_inherits: &mut VisitedClasses,
         visited_specializes: &mut VisitedClasses,
         prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
@@ -4874,7 +4875,6 @@ impl AncestralArcs<'_> {
             store,
             nodes,
             out,
-            visited_refs,
             visited_inherits,
             visited_specializes,
             prim_order_out,
@@ -4905,7 +4905,6 @@ impl AncestralArcs<'_> {
         store: &mut dyn LayerStore,
         nodes: &ArcNodes,
         out: &mut HashMap<PathId, PrimIndex>,
-        visited_refs: &mut HashSet<(PathId, LayerId, PathId)>,
         visited_inherits: &mut VisitedClasses,
         visited_specializes: &mut VisitedClasses,
         prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
@@ -4992,7 +4991,6 @@ impl AncestralArcs<'_> {
                     u16::try_from(index).unwrap_or(u16::MAX),
                     self.parent(&branch).authored_on(ancestor, authored),
                     out,
-                    visited_refs,
                     visited_inherits,
                     visited_specializes,
                     prim_order_out,
@@ -5028,7 +5026,6 @@ impl AncestralArcs<'_> {
                     u16::try_from(index).unwrap_or(u16::MAX),
                     self.parent(&branch).authored_on(ancestor, authored),
                     out,
-                    visited_refs,
                     visited_inherits,
                     visited_specializes,
                     prim_order_out,
@@ -5058,7 +5055,6 @@ impl AncestralArcs<'_> {
                     out,
                     visited_inherits,
                     visited_specializes,
-                    visited_refs,
                     prim_order_out,
                     authored_children_out,
                     self.ref_remap,
@@ -5140,7 +5136,6 @@ impl AncestralArcs<'_> {
             store,
             &relocate_nodes,
             out,
-            visited_refs,
             visited_inherits,
             visited_specializes,
             prim_order_out,
@@ -5305,7 +5300,6 @@ fn add_inherit_edge_opinions(
     out: &mut HashMap<PathId, PrimIndex>,
     visited: &mut VisitedClasses,
     visited_specializes: &mut VisitedClasses,
-    visited_refs: &mut HashSet<(PathId, LayerId, PathId)>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     // Optional reference namespace for remapping field values (dest, src).
@@ -5414,7 +5408,6 @@ fn add_inherit_edge_opinions(
             out,
             visited,
             visited_specializes,
-            visited_refs,
             prim_order_out,
             authored_children_out,
             None,
@@ -5779,7 +5772,6 @@ fn add_inherit_edge_opinions(
                 out,
                 visited,
                 visited_specializes,
-                visited_refs,
                 prim_order_out,
                 authored_children_out,
                 ref_remap,
@@ -5845,7 +5837,6 @@ fn add_inherit_edge_opinions(
                 ref_index,
                 ArcParent::nested(&branch),
                 out,
-                visited_refs,
                 visited,
                 visited_specializes,
                 prim_order_out,
@@ -5874,7 +5865,6 @@ fn add_inherit_edge_opinions(
                 payload_index,
                 ArcParent::nested(&branch),
                 out,
-                visited_refs,
                 visited,
                 visited_specializes,
                 prim_order_out,
@@ -5903,7 +5893,6 @@ fn add_inherit_edge_opinions(
         store,
         &nodes,
         out,
-        visited_refs,
         visited,
         visited_specializes,
         prim_order_out,
@@ -6166,7 +6155,6 @@ fn add_reference_edge_opinions(
     // The arcs this arc is authored inside, and whether it is implied.
     parent: ArcParent<'_>,
     out: &mut HashMap<PathId, PrimIndex>,
-    visited: &mut HashSet<(PathId, LayerId, PathId)>,
     visited_inherits: &mut VisitedClasses,
     visited_specializes: &mut VisitedClasses,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
@@ -6216,12 +6204,6 @@ fn add_reference_edge_opinions(
         reference.layer,
         reference_path,
     ) {
-        return;
-    }
-    // TODO(graph): CollapsedNodes. A site reached twice (a diamond, or an
-    // arc listed twice with different offsets) is one arc path per
-    // occurrence in OpenUSD, each with its own node; this expands it once.
-    if !visited.insert((dest_root, reference.layer, reference_path)) {
         return;
     }
     let target_specs = TargetSpecsCheck::begin(
@@ -6618,7 +6600,6 @@ fn add_reference_edge_opinions(
                 out,
                 visited_inherits,
                 visited_specializes,
-                visited,
                 prim_order_out,
                 authored_children_out,
                 ref_remap,
@@ -6648,7 +6629,6 @@ fn add_reference_edge_opinions(
                 nested_index,
                 ArcParent::nested(&branch),
                 out,
-                visited,
                 visited_inherits,
                 visited_specializes,
                 prim_order_out,
@@ -6676,7 +6656,6 @@ fn add_reference_edge_opinions(
                 nested_index,
                 ArcParent::nested(&branch),
                 out,
-                visited,
                 visited_inherits,
                 visited_specializes,
                 prim_order_out,
@@ -6740,7 +6719,6 @@ fn add_reference_edge_opinions(
         store,
         &nodes,
         out,
-        visited,
         visited_inherits,
         visited_specializes,
         prim_order_out,
@@ -6790,7 +6768,6 @@ fn add_payload_opinions(
     // Spec: AOUSD Core §10 (payloads arc, §5.1.22). Payloads are structurally
     // identical to references for composition purposes but sit at a weaker
     // position in LIVERPS (between References and Specializes).
-    let mut visited: HashSet<(PathId, LayerId, PathId)> = HashSet::new();
     let mut visited_inherits: VisitedClasses = VisitedClasses::new();
     let mut visited_specializes = VisitedClasses::new();
     for dest_root in paths.iter().copied() {
@@ -6857,7 +6834,6 @@ fn add_payload_opinions(
                 arc_list_index,
                 ArcParent::nested(&branch),
                 out,
-                &mut visited,
                 &mut visited_inherits,
                 &mut visited_specializes,
                 prim_order_out,
@@ -6881,7 +6857,6 @@ fn add_payload_edge_opinions(
     // The arcs this arc is authored inside, and whether it is implied.
     parent: ArcParent<'_>,
     out: &mut HashMap<PathId, PrimIndex>,
-    visited: &mut HashSet<(PathId, LayerId, PathId)>,
     visited_inherits: &mut VisitedClasses,
     visited_specializes: &mut VisitedClasses,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
@@ -6932,12 +6907,6 @@ fn add_payload_edge_opinions(
         reference.layer,
         reference_path,
     ) {
-        return;
-    }
-    // TODO(graph): CollapsedNodes. A site reached twice (a diamond, or an
-    // arc listed twice with different offsets) is one arc path per
-    // occurrence in OpenUSD, each with its own node; this expands it once.
-    if !visited.insert((dest_root, reference.layer, reference_path)) {
         return;
     }
     let target_specs = TargetSpecsCheck::begin(
@@ -7322,7 +7291,6 @@ fn add_payload_edge_opinions(
                 out,
                 visited_inherits,
                 visited_specializes,
-                visited,
                 prim_order_out,
                 authored_children_out,
                 ref_remap,
@@ -7351,7 +7319,6 @@ fn add_payload_edge_opinions(
                 nested_index,
                 ArcParent::nested(&branch),
                 out,
-                visited,
                 visited_inherits,
                 visited_specializes,
                 prim_order_out,
@@ -7379,7 +7346,6 @@ fn add_payload_edge_opinions(
                 nested_index,
                 ArcParent::nested(&branch),
                 out,
-                visited,
                 visited_inherits,
                 visited_specializes,
                 prim_order_out,
@@ -7436,7 +7402,6 @@ fn add_payload_edge_opinions(
         store,
         &nodes,
         out,
-        visited,
         visited_inherits,
         visited_specializes,
         prim_order_out,
@@ -8044,7 +8009,6 @@ fn add_specializes_edge_opinions(
     //
     // Spec: AOUSD Core §10.4.1 ("opinions from composition arcs that are
     // introduced by prim B").
-    let mut visited_refs: HashSet<(PathId, LayerId, PathId)> = HashSet::new();
     let mut visited_inherits: VisitedClasses = VisitedClasses::new();
     for &(remote_path_id, dest_path_id) in &mapping {
         let selection_path_id = {
@@ -8096,7 +8060,6 @@ fn add_specializes_edge_opinions(
                 out,
                 &mut visited_inherits,
                 visited,
-                &mut visited_refs,
                 prim_order_out,
                 authored_children_out,
                 None,
@@ -8158,7 +8121,6 @@ fn add_specializes_edge_opinions(
                 ref_index,
                 ArcParent::nested(&branch),
                 out,
-                &mut visited_refs,
                 &mut visited_inherits,
                 visited,
                 prim_order_out,
@@ -8186,7 +8148,6 @@ fn add_specializes_edge_opinions(
                 payload_index,
                 ArcParent::nested(&branch),
                 out,
-                &mut visited_refs,
                 &mut visited_inherits,
                 visited,
                 prim_order_out,
@@ -8216,7 +8177,6 @@ fn add_specializes_edge_opinions(
         store,
         &nodes,
         out,
-        &mut visited_refs,
         &mut visited_inherits,
         visited,
         prim_order_out,

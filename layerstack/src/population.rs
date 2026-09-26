@@ -554,7 +554,12 @@ fn expand_reference_paths(
     if chain.closes_cycle(store.paths(), dest_root, reference.layer, reference_path) {
         return;
     }
-    if !visited.insert((dest_root, reference.layer, reference_path)) {
+    // Each occurrence of a site is a node of its own (AOUSD Core §10.4;
+    // OpenUSD `_AddArc` in `pxr/usd/pcp/primIndex.cpp` adds expressed
+    // arcs without skipping duplicate sites), but one discovers the same
+    // paths as another unless relocations lifted along the chain move
+    // them.
+    if !chain.lifts_relocations() && !visited.insert((dest_root, reference.layer, reference_path)) {
         return;
     }
     let remote_stack = LayerStack::gather(store, reference.layer);
@@ -1047,6 +1052,12 @@ impl<'r> Chain<'r> {
             self.relocations.propose(lifted);
         }
         self.lifted.push(lifted);
+    }
+
+    /// Whether an arc on the chain lifts relocations, which move the paths
+    /// the arcs beneath it map.
+    fn lifts_relocations(&self) -> bool {
+        self.lifted.iter().any(Option::is_some)
     }
 
     fn pop(&mut self) {

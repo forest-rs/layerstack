@@ -689,7 +689,9 @@ impl<'a> Walk<'a> {
 /// may add the paths of targets, but never remove the paths of sources.
 #[derive(Debug, Default)]
 pub(crate) struct Relocations {
-    tables: HashMap<LayerId, Rc<RelocationTable>>,
+    /// The table of each layer stack, by its layers: one root layer
+    /// reached in two expression variable contexts may gather two stacks.
+    tables: HashMap<Vec<LayerId>, Rc<RelocationTable>>,
     stage: Rc<LiftedSet>,
     /// Stage paths of lifted relocation sources: prims that do not exist.
     prohibited: HashSet<PathId>,
@@ -729,14 +731,14 @@ impl Relocations {
         store: &dyn LayerStore,
         stack: &LayerStack,
     ) -> Rc<RelocationTable> {
-        let Some(&root) = stack.layers.first() else {
+        if stack.layers.is_empty() {
             return Rc::default();
-        };
-        if let Some(table) = self.tables.get(&root) {
+        }
+        if let Some(table) = self.tables.get(&stack.layers) {
             return Rc::clone(table);
         }
         let table = Rc::new(RelocationTable::compute(store, stack, &mut self.errors));
-        self.tables.insert(root, Rc::clone(&table));
+        self.tables.insert(stack.layers.clone(), Rc::clone(&table));
         self.layers.extend(stack.layers.iter().copied());
         table
     }
@@ -745,11 +747,6 @@ impl Relocations {
     /// layers of each layer stack it reached.
     pub(crate) fn layers(&self) -> impl Iterator<Item = LayerId> + '_ {
         self.layers.iter().copied()
-    }
-
-    /// The table of the layer stack rooted at `root`, if already computed.
-    pub(crate) fn cached_table(&self, root: LayerId) -> Option<Rc<RelocationTable>> {
-        self.tables.get(&root).cloned()
     }
 
     /// The relocations of the stage's own layer stack.

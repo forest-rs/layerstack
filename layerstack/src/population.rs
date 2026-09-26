@@ -22,12 +22,22 @@ use crate::{
     },
     doc::LayerStore,
     doc::{LayerId, Reference, ReferenceTarget},
-    expression_variables::{ArcAnchor, ExpressionScope},
+    expression_variables::{ArcAnchor, ExpressionScope, composed_variables},
     layer_stack::LayerStack,
     path::{Path, PathId, PathInterner},
     relocates::{LiftedSet, Relocations, Walk},
     stage::PopulationMask,
+    variable_expression::ExpressionVariables,
 };
+
+/// A reference or payload population followed: the destination, the
+/// target layer stack's root layer and path, and the expression variables
+/// that layer stack is reached with.
+type VisitedArc = (PathId, LayerId, PathId, ExpressionVariables);
+
+/// An inherit or specializes population followed: the destination, the
+/// class path and the expression variables of its layer stack.
+type VisitedClass = (PathId, PathId, ExpressionVariables);
 
 /// Produces the set of populated prim paths and a parent→children index.
 ///
@@ -188,8 +198,8 @@ fn gather_populated_paths(
     let stage_layer_stack = layer_stack_root(local_stack);
     let mut queue: Vec<PathId> = paths.iter().copied().collect();
     let mut idx = 0_usize;
-    let mut visited_refs: HashSet<(PathId, LayerId, PathId)> = HashSet::new();
-    let mut visited_inherits: HashSet<(PathId, PathId)> = HashSet::new();
+    let mut visited_refs: HashSet<VisitedArc> = HashSet::new();
+    let mut visited_inherits: HashSet<VisitedClass> = HashSet::new();
     let mut mapped_from = MappedFrom::new();
     let mut implied_inherits: HashSet<(PathId, PathId)> = HashSet::new();
     while idx < queue.len() {
@@ -353,10 +363,13 @@ fn gather_populated_paths(
     // The visited_inherits set contains all (dest, src) inherit/specializes
     // pairs discovered during population, and the classes they imply into
     // the stronger layer stacks, in the stage namespace.
-    let inherit_pairs: Vec<(PathId, PathId)> = visited_inherits
+    let mut inherit_pairs: Vec<(PathId, PathId)> = visited_inherits
         .into_iter()
+        .map(|(dest, class, _)| (dest, class))
         .chain(implied_inherits)
         .collect();
+    inherit_pairs.sort_unstable();
+    inherit_pairs.dedup();
     propagate_populated_through_inherits(
         store,
         &inherit_pairs,
@@ -403,7 +416,7 @@ fn expand_inherit_paths(
     inherited_root: PathId,
     paths: &mut BTreeSet<PathId>,
     queue: &mut Vec<PathId>,
-    visited: &mut HashSet<(PathId, PathId)>,
+    visited: &mut HashSet<VisitedClass>,
     chain: &mut Chain<'_>,
     mapped_from: &mut MappedFrom,
 ) {
@@ -413,7 +426,10 @@ fn expand_inherit_paths(
     if chain.closes_cycle(store.paths(), dest_root, layer_stack, inherited_root) {
         return;
     }
-    if !visited.insert((dest_root, inherited_root)) {
+    // The same class in another expression variable context may bring
+    // other sublayers and arcs.
+    let variables = composed_variables(store, &chain.arcs.stacks_for(layer_stack));
+    if !visited.insert((dest_root, inherited_root, variables)) {
         return;
     }
     // The class is implied into each stronger layer stack on the chain, and
@@ -537,8 +553,8 @@ fn expand_reference_paths(
     reference: Reference,
     paths: &mut BTreeSet<PathId>,
     queue: &mut Vec<PathId>,
-    visited: &mut HashSet<(PathId, LayerId, PathId)>,
-    visited_inherits: &mut HashSet<(PathId, PathId)>,
+    visited: &mut HashSet<VisitedArc>,
+    visited_inherits: &mut HashSet<VisitedClass>,
     chain: &mut Chain<'_>,
     mapped_from: &mut MappedFrom,
 ) {
@@ -555,17 +571,20 @@ fn expand_reference_paths(
     // arcs without skipping duplicate sites), but one discovers the same
     // paths as another unless relocations lifted along the chain move
     // them.
-    if !chain.lifts_relocations() && !visited.insert((dest_root, reference.layer, reference_path)) {
+    // A site is the same only in the same expression variable context: the
+    // target layer stack reached with other variables may gather other
+    // sublayers and follow other arcs (OpenUSD identifies it with its
+    // `PcpLayerStackIdentifier::expressionVariablesOverrideSource`).
+    let stacks = chain.arcs.stacks_for(reference.layer);
+    let variables = composed_variables(store, &stacks);
+    if !chain.lifts_relocations()
+        && !visited.insert((dest_root, reference.layer, reference_path, variables))
+    {
         return;
     }
     // The target layer stack as this chain reaches it: its sublayer asset
     // path expressions see the variables of the stacks referencing it.
-    let remote_stack = LayerStack::gather_recording(
-        store,
-        &chain.arcs.stacks_for(reference.layer),
-        &mut Vec::new(),
-        None,
-    );
+    let remote_stack = LayerStack::gather_recording(store, &stacks, &mut Vec::new(), None);
     chain.push(store, &remote_stack, reference_path, dest_root);
     let expressions = chain.expression_scope();
     let anchor = ArcAnchor::new(reference.layer, Some(&expressions));
@@ -780,9 +799,9 @@ fn expand_reference_paths(
     // to expand those here so the mapped paths get populated.
     //
     // Spec: AOUSD Core §10 (inherit propagation through references).
-    let new_inherits: Vec<(PathId, PathId)> = visited_inherits
+    let mut new_inherits: Vec<(PathId, PathId)> = visited_inherits
         .iter()
-        .copied()
+        .map(|(dest, class, _)| (*dest, *class))
         .filter(|(dest, _src)| {
             // Only process inherits whose destination is under (or equal to)
             // our reference destination root.
@@ -792,6 +811,8 @@ fn expand_reference_paths(
             }
         })
         .collect();
+    new_inherits.sort_unstable();
+    new_inherits.dedup();
 
     for (inherit_dest, inherit_src) in new_inherits {
         // Use a fresh visited set: the same (dest, src) pair may have been
@@ -829,8 +850,8 @@ fn expand_ancestral_paths(
     target: PathId,
     paths: &mut BTreeSet<PathId>,
     queue: &mut Vec<PathId>,
-    visited_refs: &mut HashSet<(PathId, LayerId, PathId)>,
-    visited_inherits: &mut HashSet<(PathId, PathId)>,
+    visited_refs: &mut HashSet<VisitedArc>,
+    visited_inherits: &mut HashSet<VisitedClass>,
     chain: &mut Chain<'_>,
     mapped_from: &mut MappedFrom,
 ) {
@@ -864,8 +885,8 @@ fn expand_ancestral_paths_from(
     target: PathId,
     paths: &mut BTreeSet<PathId>,
     queue: &mut Vec<PathId>,
-    visited_refs: &mut HashSet<(PathId, LayerId, PathId)>,
-    visited_inherits: &mut HashSet<(PathId, PathId)>,
+    visited_refs: &mut HashSet<VisitedArc>,
+    visited_inherits: &mut HashSet<VisitedClass>,
     chain: &mut Chain<'_>,
     mapped_from: &mut MappedFrom,
     skip: usize,

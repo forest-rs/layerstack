@@ -1,0 +1,17 @@
+#usda 1.0
+
+over "Trail"
+{
+    def "B"
+    {
+        int value = 1
+    }
+}
+
+over "_Marker"
+{
+    def "PostB"
+    {
+        int value = 1
+    }
+}

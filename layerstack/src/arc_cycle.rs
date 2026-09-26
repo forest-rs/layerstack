@@ -29,7 +29,7 @@
 
 use alloc::{rc::Rc, vec::Vec};
 
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashSet;
 
 use crate::{
     composition_error::{ArcCycle, ArcCycleSite, CompositionError, OpinionAtRelocationSource},
@@ -214,8 +214,6 @@ pub(crate) struct CycleDetector {
     chain: ArcChain,
     /// The arc that introduced each site on `chain` after its root.
     arcs: Vec<ArcKind>,
-    /// The layers of each layer stack gathered so far, by root layer.
-    stack_layers: HashMap<LayerId, HashSet<LayerId>>,
     /// The relocation tables of the layer stacks reached so far, and the
     /// stage paths relocations prohibit.
     relocations: Relocations,
@@ -238,7 +236,6 @@ impl CycleDetector {
             stage_layer_stack,
             chain: ArcChain { sites: Vec::new() },
             arcs: Vec::new(),
-            stack_layers: HashMap::new(),
             relocations: Relocations::default(),
             errors: Vec::new(),
             seen: HashSet::new(),
@@ -315,6 +312,13 @@ impl CycleDetector {
         self.arcs.pop();
     }
 
+    /// The root layers of the layer stacks whose expression variables
+    /// apply to the layer stack rooted at `root` as the chain reaches it
+    /// ([`ArcChain::stacks_for`]).
+    pub(crate) fn stacks_for(&self, root: LayerId) -> Vec<LayerId> {
+        self.chain.stacks_for(root)
+    }
+
     /// The scope the arcs authored in the layer stack at the end of the
     /// chain evaluate their asset path expressions in: that layer stack's
     /// variables, composed along the chain ([`ArcChain::expression_stacks`]).
@@ -374,9 +378,6 @@ impl CycleDetector {
         for error in errors {
             self.report(error);
         }
-        self.stack_layers
-            .entry(root)
-            .or_insert_with(|| stack.layers.iter().copied().collect());
         stack
     }
 
@@ -455,20 +456,16 @@ impl CycleDetector {
         }
     }
 
-    /// The relocation table of the layer stack rooted at `layer_stack`,
-    /// computed on first use; its errors are recorded.
+    /// The relocation table of the layer stack rooted at `layer_stack`, as
+    /// the chain reaches it ([`Self::gather_layer_stack`]), computed once
+    /// per layer stack; its errors are recorded.
     pub(crate) fn relocation_table(
         &mut self,
         store: &dyn LayerStore,
         layer_stack: LayerId,
     ) -> Rc<RelocationTable> {
-        let table = match self.relocations.cached_table(layer_stack) {
-            Some(table) => table,
-            None => {
-                let stack = self.gather_layer_stack(store, layer_stack);
-                self.relocations.table(store, &stack)
-            }
-        };
+        let stack = self.gather_layer_stack(store, layer_stack);
+        let table = self.relocations.table(store, &stack);
         for error in self.relocations.take_errors() {
             self.report(error);
         }

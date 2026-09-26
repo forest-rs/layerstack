@@ -40,7 +40,8 @@ use crate::{
         FieldValue, LayerId, LayerOffset, LayerStore, Reference, ReferenceTarget, composed_entries,
     },
     expression_variables::{
-        ArcAnchor, ExpressionScope, SiteContext, read_selections, site_selections,
+        ArcAnchor, ExpressionScope, SiteContext, composed_variables, read_selections, same_context,
+        site_selections,
     },
     interner::TokenId,
     layer_stack::LayerStack,
@@ -4677,7 +4678,17 @@ impl ArcNodes {
 /// An implied class and an authored one at the same site are expanded
 /// separately, whichever comes first; [`retain_new_class_sites`] keeps the
 /// stronger registration of each site.
-type VisitedClasses = HashSet<(PathId, LayerId, PathId, bool)>;
+///
+/// A class site is the same only in the same expression variable context,
+/// in which its layer stack gathers the same sublayers and its arcs
+/// evaluate alike.
+type VisitedClasses = HashSet<(
+    PathId,
+    LayerId,
+    PathId,
+    bool,
+    crate::variable_expression::ExpressionVariables,
+)>;
 
 /// An opinion of a class arc's target, held until the sources of its layer
 /// are added: the destination prim, the source prim, the spec path, the
@@ -5294,7 +5305,13 @@ impl AncestralArcs<'_> {
 /// `pxr/usd/pcp/primIndex.cpp`). OpenUSD adds arcs in strength order, so
 /// the registration it keeps is the strongest one; expansion order here is
 /// not strength order, so strength decides which registration stays.
+///
+/// A site is the same only in the same expression variable context: a
+/// layer stack reached with other variables is another layer stack
+/// (`PcpLayerStackIdentifier::expressionVariablesOverrideSource`), so its
+/// class sites are other sites ([`same_context`]).
 fn retain_new_class_sites(
+    store: &dyn LayerStore,
     out: &mut HashMap<PathId, PrimIndex>,
     pending: &mut Vec<(PathId, OpinionKey)>,
 ) -> HashSet<(PathId, LayerId, SpecPath)> {
@@ -5316,7 +5333,10 @@ fn retain_new_class_sites(
         let graph = &index.graph;
         let mut registered = false;
         for known in &index.sources {
-            if known.layer_id != key.layer_id || known.spec_path != key.spec_path {
+            if known.layer_id != key.layer_id
+                || known.spec_path != key.spec_path
+                || !same_context(store, graph, known.node, key.node)
+            {
                 continue;
             }
             // Registrations of nodes skipping duplicates give way (see
@@ -5435,7 +5455,14 @@ fn add_inherit_edge_opinions(
     }
     // One expansion per class site and layer stack, authored or implied.
     let layers_read = local_stack.layers.first().copied().unwrap_or(arc_stack);
-    if !visited.insert((dest_root, layers_read, inherited_root, parent.implied)) {
+    let variables = composed_variables(store, &cycles.stacks_for(layers_read));
+    if !visited.insert((
+        dest_root,
+        layers_read,
+        inherited_root,
+        parent.implied,
+        variables,
+    )) {
         return;
     }
     let step = ArcStep {
@@ -5768,7 +5795,7 @@ fn add_inherit_edge_opinions(
             }
         }
 
-        let redundant = retain_new_class_sites(out, &mut pending_sources);
+        let redundant = retain_new_class_sites(store, out, &mut pending_sources);
         for (dest_path_id, key) in pending_sources {
             out.get_mut(&dest_path_id)
                 .expect("path exists")
@@ -7628,7 +7655,14 @@ fn add_specializes_edge_opinions(
     ) {
         return;
     }
-    if !visited.insert((dest_root, arc_stack, specialized_root, parent.implied)) {
+    let variables = composed_variables(store, &cycles.stacks_for(arc_stack));
+    if !visited.insert((
+        dest_root,
+        arc_stack,
+        specialized_root,
+        parent.implied,
+        variables,
+    )) {
         return;
     }
     let local_stack = cycles.gather_layer_stack(store, arc_stack);
@@ -7969,7 +8003,7 @@ fn add_specializes_edge_opinions(
             }
         }
 
-        let redundant = retain_new_class_sites(out, &mut pending_sources);
+        let redundant = retain_new_class_sites(store, out, &mut pending_sources);
         for (dest_path_id, key) in pending_sources {
             out.get_mut(&dest_path_id)
                 .expect("path exists")

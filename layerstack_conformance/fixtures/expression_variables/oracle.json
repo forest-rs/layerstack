@@ -467,6 +467,91 @@
    ]
   },
   {
+   "path": "/Hike",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Hike"
+    ],
+    [
+     "trail_a.usda",
+     "/Trail"
+    ],
+    [
+     "path.usda",
+     "/Trail"
+    ],
+    [
+     "step_a.usda",
+     "/Trail"
+    ],
+    [
+     "path.usda",
+     "/_Marker"
+    ],
+    [
+     "step_a.usda",
+     "/_Marker"
+    ],
+    [
+     "trail_b.usda",
+     "/Trail"
+    ],
+    [
+     "path.usda",
+     "/Trail"
+    ],
+    [
+     "step_b.usda",
+     "/Trail"
+    ],
+    [
+     "path.usda",
+     "/_Marker"
+    ],
+    [
+     "step_b.usda",
+     "/_Marker"
+    ]
+   ]
+  },
+  {
+   "path": "/Hike/PostB",
+   "prim_stack": [
+    [
+     "step_b.usda",
+     "/_Marker/PostB"
+    ]
+   ]
+  },
+  {
+   "path": "/Hike/B",
+   "prim_stack": [
+    [
+     "step_b.usda",
+     "/Trail/B"
+    ]
+   ]
+  },
+  {
+   "path": "/Hike/PostA",
+   "prim_stack": [
+    [
+     "step_a.usda",
+     "/_Marker/PostA"
+    ]
+   ]
+  },
+  {
+   "path": "/Hike/A",
+   "prim_stack": [
+    [
+     "step_a.usda",
+     "/Trail/A"
+    ]
+   ]
+  },
+  {
    "path": "/Dawn",
    "prim_stack": [
     [
@@ -554,6 +639,10 @@
   "/Meadow.bloom": 3,
   "/Clearing.bloom": 3,
   "/Canvas.shade": 2,
+  "/Hike/PostB.value": 1,
+  "/Hike/B.value": 1,
+  "/Hike/PostA.value": 1,
+  "/Hike/A.value": 1,
   "/Dawn.level": 1,
   "/Dusk.level": 2,
   "/Swatch.shade": 1

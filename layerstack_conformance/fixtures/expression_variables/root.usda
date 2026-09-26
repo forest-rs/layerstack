@@ -225,6 +225,16 @@ over "Clay" (
 # `tint_a.usda` and `tint_b.usda` set TONE differently and both reference
 # `shade.usda`, whose selection reads TONE: each context selects its own
 # variant of the one layer.
+# `trail_a.usda` and `trail_b.usda` set PICK differently and both reference
+# `path.usda`, which sublayers `${PICK}`: at one destination the two
+# contexts gather two layer stacks, each bringing its own child, directly
+# and through the class `/Trail` inherits.
+def "Hike" (
+    references = [@./trail_a.usda@</Trail>, @./trail_b.usda@</Trail>]
+)
+{
+}
+
 def "Dawn" (
     references = @./tint_a.usda@
 )

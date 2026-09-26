@@ -273,6 +273,16 @@ over "Clay" (
 # `tint_a.usda` and `tint_b.usda` set TONE differently and both reference
 # `shade.usda`, whose selection reads TONE: each context selects its own
 # variant of the one layer.
+# `trail_a.usda` and `trail_b.usda` set PICK differently and both reference
+# `path.usda`, which sublayers `${PICK}`: at one destination the two
+# contexts gather two layer stacks, each bringing its own child, directly
+# and through the class `/Trail` inherits.
+def "Hike" (
+    references = [@./trail_a.usda@</Trail>, @./trail_b.usda@</Trail>]
+)
+{
+}
+
 def "Dawn" (
     references = @./tint_a.usda@
 )
@@ -387,6 +397,86 @@ over "Paint"
 over "Paint"
 {
     int shade = 2
+}
+''',
+    "trail_a": '''#usda 1.0
+(
+    expressionVariables = {
+        string PICK = "./step_a.usda"
+    }
+)
+
+def "Trail" (
+    references = @./path.usda@</Trail>
+)
+{
+}
+''',
+    "trail_b": '''#usda 1.0
+(
+    expressionVariables = {
+        string PICK = "./step_b.usda"
+    }
+)
+
+def "Trail" (
+    references = @./path.usda@</Trail>
+)
+{
+}
+''',
+    "path": '''#usda 1.0
+(
+    subLayers = [
+        @`"${PICK}"`@
+    ]
+)
+
+# The class each context's sublayer fills in differently.
+def "Trail" (
+    inherits = </_Marker>
+)
+{
+}
+
+class "_Marker"
+{
+}
+''',
+    "step_a": '''#usda 1.0
+
+over "Trail"
+{
+    def "A"
+    {
+        int value = 1
+    }
+}
+
+over "_Marker"
+{
+    def "PostA"
+    {
+        int value = 1
+    }
+}
+''',
+    "step_b": '''#usda 1.0
+
+over "Trail"
+{
+    def "B"
+    {
+        int value = 1
+    }
+}
+
+over "_Marker"
+{
+    def "PostB"
+    {
+        int value = 1
+    }
 }
 ''',
     "tint_a": '''#usda 1.0

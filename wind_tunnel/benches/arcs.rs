@@ -171,5 +171,31 @@ fn bench_arc_edits(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_arcs, bench_arc_edits);
+fn bench_inherit_payload(c: &mut Criterion) {
+    let mut group = c.benchmark_group("nested_arcs_unrelated_array");
+    for &len in &[0, 65_536] {
+        group.bench_with_input(BenchmarkId::from_parameter(len), &len, |b, &len| {
+            b.iter_batched(
+                || {
+                    let mut store = build_forest(100);
+                    let unrelated = store.path("/Unrelated");
+                    let points = store.tokens.intern("points");
+                    store.layers.get_mut(&LayerId(1)).unwrap().insert_prim(
+                        unrelated,
+                        PrimSpec::def().with_field(
+                            points,
+                            Value::Array(vec![Value::Vec3f([1.0, 2.0, 3.0]); len]),
+                        ),
+                    );
+                    store
+                },
+                |mut store| Stage::compose(&mut store, LayerId(1), StageOptions::default()),
+                BatchSize::LargeInput,
+            );
+        });
+    }
+    group.finish();
+}
+
+criterion_group!(benches, bench_arcs, bench_arc_edits, bench_inherit_payload);
 criterion_main!(benches);

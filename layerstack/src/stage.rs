@@ -6,10 +6,14 @@
 //! Spec: AOUSD Core §11–§12 (stage population and value resolution).
 
 mod explain;
+pub mod flatten;
 
 pub use explain::{
     Contribution, DictionaryMerge, ExplainedOpinion, IgnoreCause, KeyPath, OpinionRole, SampleUse,
     ValueExplanation, ValueSource,
+};
+pub use flatten::{
+    FlattenError, FlattenReport, FlattenRequirements, FlattenVerification, Flattened,
 };
 
 use alloc::{sync::Arc, vec, vec::Vec};
@@ -1091,6 +1095,35 @@ impl Stage {
         self.explain_property_path(property_path).is_some()
     }
 
+    /// Returns the names of the composed properties of `prim`, attributes
+    /// and relationships together, in dictionary order: letters ignoring
+    /// case, runs of digits by value. Empty when `prim` is not on the stage.
+    ///
+    /// The order is OpenUSD's `UsdPrim::GetPropertyNames` before it applies
+    /// `reorder properties` ([`Stage::resolve_property_order`]).
+    ///
+    /// Spec: AOUSD Core §7.3.3 (a prim's properties share one name space),
+    /// §12 (the composed prim holds every property any opinion authors).
+    #[must_use]
+    pub fn property_names(&self, prim: PathId, store: &dyn LayerStore) -> Vec<TokenId> {
+        use crate::prim_index::FieldKey;
+
+        let Some(index) = self.prims.get(&prim) else {
+            return Vec::new();
+        };
+        let mut names: Vec<TokenId> = index
+            .opinions_by_field
+            .keys()
+            .filter_map(|key| match key {
+                FieldKey::Property(name) => Some(*name),
+                FieldKey::Metadata(_) => None,
+            })
+            .collect();
+        let tokens = store.tokens();
+        names.sort_by(|a, b| dictionary_cmp(tokens.resolve(*a), tokens.resolve(*b)));
+        names
+    }
+
     /// Traverses prims in a deterministic preorder.
     pub fn traverse(&self, root: PathId) -> Traverse<'_> {
         Traverse::new(self, root)
@@ -1540,6 +1573,52 @@ impl Stage {
     }
 }
 
+/// Orders names as OpenUSD's `TfDictionaryLessThan`
+/// (`pxr/base/tf/stringUtils.h`) does for the ASCII names of properties:
+/// letters ignoring case, `_` before letters, runs of digits by value, and
+/// ties by bytes.
+fn dictionary_cmp(a: &str, b: &str) -> core::cmp::Ordering {
+    use core::cmp::Ordering;
+    let (x, y) = (a.as_bytes(), b.as_bytes());
+    /// The end of the run of digits at `start`, and its digits without
+    /// leading zeros.
+    fn digits(s: &[u8], start: usize) -> (usize, &[u8]) {
+        let end = s[start..]
+            .iter()
+            .position(|c| !c.is_ascii_digit())
+            .map_or(s.len(), |n| start + n);
+        let zeros = s[start..end].iter().take_while(|&&c| c == b'0').count();
+        (end, &s[start + zeros..end])
+    }
+    let (mut i, mut j) = (0, 0);
+    while i < x.len() && j < y.len() {
+        let (l, r) = (x[i], y[j]);
+        if l.is_ascii_digit() && r.is_ascii_digit() {
+            let (x_end, x_run) = digits(x, i);
+            let (y_end, y_run) = digits(y, j);
+            let order = x_run.len().cmp(&y_run.len()).then_with(|| x_run.cmp(y_run));
+            if order != Ordering::Equal {
+                return order;
+            }
+            (i, j) = (x_end, y_end);
+            continue;
+        }
+        if l != r {
+            let letter_zone = (0x40..0x80).contains(&l) && (0x40..0x80).contains(&r);
+            if letter_zone && (l & !0x20) != (r & !0x20) {
+                // `(c + 5) & 31` puts `_` before every letter.
+                return (l.wrapping_add(5) & 31).cmp(&(r.wrapping_add(5) & 31));
+            }
+            if !(l.is_ascii_alphabetic() && r.is_ascii_alphabetic()) {
+                return l.cmp(&r);
+            }
+        }
+        i += 1;
+        j += 1;
+    }
+    (x.len() - i).cmp(&(y.len() - j)).then_with(|| a.cmp(b))
+}
+
 /// An iterator for deterministic preorder stage traversal.
 ///
 /// Yields each [`PathId`] starting from the root, visiting children in
@@ -1751,6 +1830,18 @@ mod tests {
         store.insert_layer(other);
         let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
         assert_eq!(stage.resolve_type_name(a, &store), Some(tree));
+    }
+
+    #[test]
+    fn property_names_sort_as_openusd_does() {
+        // As `sorted(names, key=cmp_to_key(Tf.DictionaryStrcmp))` orders
+        // them in OpenUSD 26.8.
+        let mut names = vec!["b", "A", "a10", "a2", "_x", "a_b", "aB", "a:b", "a1b", "a"];
+        names.sort_by(|a, b| dictionary_cmp(a, b));
+        assert_eq!(
+            names,
+            ["_x", "A", "a", "a1b", "a2", "a10", "a:b", "a_b", "aB", "b"]
+        );
     }
 
     /// Test-only opinion payload: a property authoring only time samples.

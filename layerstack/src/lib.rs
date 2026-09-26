@@ -136,7 +136,8 @@ pub use schema::{PropertyDefinition, SchemaDefinition, SchemaRegistry};
 pub use spec_path::{SpecComponent, SpecPath, SpecPathError};
 pub use spline::SplineData;
 pub use stage::{
-    Contribution, DictionaryMerge, ExplainedOpinion, IgnoreCause, KeyPath, OpinionRole,
+    Contribution, DictionaryMerge, ExplainedOpinion, FlattenError, FlattenReport,
+    FlattenRequirements, FlattenVerification, Flattened, IgnoreCause, KeyPath, OpinionRole,
     PopulationMask, PropertyDeclaration, Provenance, Resolved, ResolvedValue, SampleUse, Stage,
     StageOptions, Traverse, ValueExplanation, ValueSource,
 };

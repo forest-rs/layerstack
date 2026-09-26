@@ -39,7 +39,7 @@ use crate::error::UsdcError;
 use crate::section::CrateSections;
 use crate::value_rep::{
     CrateArrayEdit, CrateArrayEditOp, CrateListOp, CrateValue, DecodeBudget, DecodedField,
-    FloatArray, RawValueRep, decode_field_within,
+    FloatArray, MathArray, RawValueRep, decode_field_within,
 };
 use crate::value_type::{SpecForm, ValueType};
 
@@ -955,12 +955,7 @@ impl<'a> AssembleCtx<'a> {
             DecodedField::IntegerArray(array) => {
                 convert_integer_array(array.value_type, &array.values)
             }
-            DecodedField::MathArray(array) => Value::Array(
-                array
-                    .elements()
-                    .map(|bytes| convert_math_value(array.value_type, bytes))
-                    .collect(),
-            ),
+            DecodedField::MathArray(array) => convert_math_array(array),
         }
     }
 
@@ -1959,6 +1954,41 @@ fn convert_integer_array(vtype: ValueType, values: &[i64]) -> Value {
         ValueType::UInt64 => values.iter().map(|&v| Value::UInt64(v as u64)).collect(),
         _ => unreachable!("integer array types are selected by decode_field_within"),
     })
+}
+
+/// Dispatches once per array so each element is constructed directly in its
+/// destination rather than passing through the scalar type switch.
+fn convert_math_array(array: &MathArray<'_>) -> Value {
+    macro_rules! convert {
+        ($($variant:ident => $read:expr),* $(,)?) => {
+            Value::Array(match array.value_type {
+                $(ValueType::$variant => array.elements()
+                    .map(|bytes| Value::$variant(($read)(bytes)))
+                    .collect(),)*
+                _ => unreachable!("math array types are selected by decode_field_within"),
+            })
+        };
+    }
+    convert! {
+        Vec2d => read_f64x2,
+        Vec3d => read_f64x3,
+        Vec4d => read_f64x4,
+        Vec2f => read_f32x2,
+        Vec3f => read_f32x3,
+        Vec4f => read_f32x4,
+        Vec2h => read_u16x2,
+        Vec3h => read_u16x3,
+        Vec4h => read_u16x4,
+        Vec2i => read_i32x2,
+        Vec3i => read_i32x3,
+        Vec4i => read_i32x4,
+        Quatd => read_f64x4,
+        Quatf => read_f32x4,
+        Quath => read_u16x4,
+        Matrix2d => |bytes| Box::new(read_f64_array::<4>(bytes)),
+        Matrix3d => |bytes| Box::new(read_f64_array::<9>(bytes)),
+        Matrix4d => |bytes| Box::new(read_f64_array::<16>(bytes)),
+    }
 }
 
 /// Converts USDC opaque math bytes into a typed [`Value`] variant.

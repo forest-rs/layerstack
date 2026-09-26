@@ -12,6 +12,11 @@ Small runnable programs that demonstrate how to use the `layerstack` API, and th
   (explains the values of a tree asset referenced into a grove: a local override, a sparse edit
   on its points from a sublayer, time samples through the reference's layer offset, combined
   `customData` and an inherited attribute)
+- `cargo run -p layerstack_examples --example flatten`
+  (flattens a grove of referenced trees, one retimed, with a sublayer's overrides, into a single
+  USDA file with no composition arcs, as `usdcat --flatten` does, prints the report of what it
+  wrote exactly and what it transformed, and verifies that the file composes the same values on
+  its own)
 - `cargo run -p layerstack_examples --example light_rig_slots`
   (sparse edits to a typed `Vec` of light rig slots with `opinionated` alone: insert a light,
   duplicate the last slot, and resize with an unlit light as the host-supplied fill)

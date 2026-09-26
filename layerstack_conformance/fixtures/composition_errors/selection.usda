@@ -1,0 +1,151 @@
+#usda 1.0
+
+# Variant sets are evaluated in `variantSets` order, each from the
+# strongest selection among the sites composed so far. `size` is
+# evaluated after `shape=cube` is selected by the weaker reference, and
+# that branch, a variant arc of `/Mast`, is stronger than the reference:
+# its `size=small` wins over the referenced `size=large`.
+def "Mast" (
+    references = @./selection_ref.usda@</Mast>
+    variantSets = ["shape", "size"]
+)
+{
+    variantSet "shape" = {
+        "cube" (
+            variants = {
+                string size = "small"
+            }
+        ) {
+        }
+    }
+    variantSet "size" = {
+        "small" {
+            int scale = 1
+        }
+        "large" {
+            int scale = 2
+        }
+    }
+}
+
+# The same sets declared the other way around: `size` is evaluated
+# first, before any branch is selected, and takes the referenced
+# `size=large`.
+def "Boom" (
+    references = @./selection_ref.usda@</Mast>
+    variantSets = ["size", "shape"]
+)
+{
+    variantSet "shape" = {
+        "cube" (
+            variants = {
+                string size = "small"
+            }
+        ) {
+        }
+    }
+    variantSet "size" = {
+        "small" {
+            int scale = 1
+        }
+        "large" {
+            int scale = 2
+        }
+    }
+}
+
+# The reference selects `shape=cube` and `color`, a set the `cube` branch
+# declares: nothing stronger selects `color`, so the referenced `blue`
+# holds.
+def "Hull" (
+    references = @./selection_ref.usda@</Hull>
+    variantSets = ["shape"]
+)
+{
+    variantSet "shape" = {
+        "cube" (
+            variantSets = ["color"]
+        ) {
+            variantSet "color" = {
+                "red" {
+                    int hue = 1
+                }
+                "blue" {
+                    int hue = 2
+                }
+            }
+        }
+    }
+}
+
+# The same, with the `cube` branch selecting `color=red` itself, over the
+# weaker reference.
+def "Keel" (
+    references = @./selection_ref.usda@</Hull>
+    variantSets = ["shape"]
+)
+{
+    variantSet "shape" = {
+        "cube" (
+            variants = {
+                string color = "red"
+            }
+            variantSets = ["color"]
+        ) {
+            variantSet "color" = {
+                "red" {
+                    int hue = 1
+                }
+                "blue" {
+                    int hue = 2
+                }
+            }
+        }
+    }
+}
+
+# A chain: the referenced `shape=cube` selects a branch that selects
+# `size=small`, whose branch selects `color=red`; each wins over the
+# reference's selection for the next set.
+def "Spar" (
+    references = @./selection_ref.usda@</Spar>
+    variantSets = ["shape", "size", "color"]
+)
+{
+    variantSet "shape" = {
+        "cube" (
+            variants = {
+                string size = "small"
+            }
+        ) {
+        }
+    }
+    variantSet "size" = {
+        "small" (
+            variants = {
+                string color = "red"
+            }
+        ) {
+            int scale = 1
+        }
+        "large" {
+            int scale = 2
+        }
+    }
+    variantSet "color" = {
+        "red" {
+            int hue = 1
+        }
+        "blue" {
+            int hue = 2
+        }
+    }
+}
+
+# `/Mast` referenced: its sets are evaluated the same way at the
+# referenced node.
+def "Deck" (
+    references = </Mast>
+)
+{
+}

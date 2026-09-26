@@ -714,21 +714,41 @@ pub(crate) fn authored_variant_selections_for_prim(
     prim: PathId,
 ) -> HashMap<TokenId, TokenId> {
     let mut selected = HashMap::new();
-    for layer in local_stack.layers.iter().filter_map(|id| store.layer(*id)) {
-        for spec in variant_host_specs(
-            store,
-            fallbacks,
-            local_stack,
-            layer,
-            prim,
-            SelectionScope::Stack,
-        ) {
-            for (set, variant) in &spec.variant_selections {
-                selected.entry(*set).or_insert(*variant);
-            }
+    for spec in selection_host_specs(store, fallbacks, local_stack, prim) {
+        for (set, variant) in &spec.variant_selections {
+            selected.entry(*set).or_insert(*variant);
         }
     }
     selected
+}
+
+/// Returns the specs of `prim` in `local_stack`, stronger layers first,
+/// whose variant selections and variant sets compose: its specs outside any
+/// variant branch and its specs inside selected branches of its ancestors
+/// (`/P{v=x}C`).
+///
+/// Spec: AOUSD Core §7.3.6 (variant specs contain prim specs), §10.3.2.5.
+pub(crate) fn selection_host_specs<'a>(
+    store: &'a dyn LayerStore,
+    fallbacks: &VariantFallbacks,
+    local_stack: &LayerStack,
+    prim: PathId,
+) -> Vec<&'a PrimSpec> {
+    local_stack
+        .layers
+        .iter()
+        .filter_map(|id| store.layer(*id))
+        .flat_map(|layer| {
+            variant_host_specs(
+                store,
+                fallbacks,
+                local_stack,
+                layer,
+                prim,
+                SelectionScope::Stack,
+            )
+        })
+        .collect()
 }
 
 /// Resolves only the direct PrimSpec.references for a prim, without variant
@@ -1204,6 +1224,70 @@ pub(crate) fn resolve_variant_branch_payloads(
     }
 
     resolve_list_chain::<Reference>(&[], ops)
+}
+
+/// The strength order of the variant nodes beneath one node of a prim
+/// index, from the specs of that node's layer stack.
+///
+/// Each selected branch is a variant node of its own: branches rank by
+/// node, in `variantSets` order across the layer stack (the sets no layer
+/// names last, by token), with a set nested in a branch beneath it. Only
+/// the specs of one node rank by layer, so a weaker layer's branch of an
+/// earlier set is stronger than a stronger layer's branch of a later set.
+///
+/// Spec: AOUSD Core §10.4 (LIVERPS), §10.3.2.5 (variants). OpenUSD adds a
+/// variant arc per set beneath the node declaring it, with the set's index
+/// as its sibling number (`_AddVariantArc` and `Task::PriorityOrder` in
+/// `pxr/usd/pcp/primIndex.cpp`), and ranks sibling arcs of one type by that
+/// number (`PcpCompareSiblingNodeStrength` in
+/// `pxr/usd/pcp/strengthOrdering.cpp`).
+pub(crate) struct VariantNodeOrder {
+    /// The node's variant sets, strongest first.
+    sets: Vec<TokenId>,
+}
+
+impl VariantNodeOrder {
+    /// The order of the variant nodes of the node whose layer stack holds
+    /// `specs`, stronger layers first.
+    pub(crate) fn new<'s>(specs: impl IntoIterator<Item = &'s PrimSpec> + Clone) -> Self {
+        let mut sets: Vec<TokenId> = Vec::new();
+        for spec in specs.clone() {
+            for set in &spec.variant_set_order {
+                if !sets.contains(set) {
+                    sets.push(*set);
+                }
+            }
+        }
+        let mut unordered: Vec<TokenId> = specs
+            .into_iter()
+            .flat_map(|spec| spec.variant_sets.keys().copied())
+            .filter(|set| !sets.contains(set))
+            .collect();
+        unordered.sort_unstable();
+        unordered.dedup();
+        sets.extend(unordered);
+        Self { sets }
+    }
+
+    /// The rank of the variant node of the branch `branch` of the set `set`
+    /// on the prim `host`: the ranks of the sets it lies in, outermost
+    /// first. A branch ranks after the branches it is nested in and before
+    /// the next set's.
+    pub(crate) fn rank(&self, host: PathId, set: TokenId, branch: &VariantSpec) -> Vec<usize> {
+        let position = |set: TokenId| {
+            self.sets
+                .iter()
+                .position(|s| *s == set)
+                .unwrap_or(self.sets.len())
+        };
+        branch
+            .outer_variant_sites
+            .iter()
+            .filter(|site| site.host_path == host)
+            .map(|site| position(site.set))
+            .chain([position(set)])
+            .collect()
+    }
 }
 
 /// Collects ALL variant branch-level payloads for a prim from all variant

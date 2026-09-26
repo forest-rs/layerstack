@@ -35,6 +35,18 @@
 //!   the order the prim declares its variant sets: `/Mast` and `/Boom`
 //!   declare the same sets in both orders, and `/Hull`'s fallback branch
 //!   declares a set that falls back in turn.
+//! - `selection.usda` evaluates variant sets one at a time, in the order
+//!   each prim declares them, from the sites composed so far: `/Mast`'s
+//!   `shape=cube`, selected by a weaker reference, selects `size` over that
+//!   reference, and `/Boom` declares the sets the other way around;
+//!   `/Hull` and `/Keel` take a set declared in that branch from the
+//!   reference or the branch, `/Spar` chains three sets, and `/Deck`
+//!   references `/Mast`.
+//!   `selection_fallbacks.usda` adds fallbacks: `/Mast`'s fallback branch
+//!   selects `size` after the referenced selection has, and `/Boom`'s
+//!   referenced selection selects a branch whose selection outranks the
+//!   fallback. [`LiveStage`] recomposes edits of `/Mast`'s selections as a
+//!   full composition does.
 //! - Each `invalid_*.usda` layer authors an arc, relocates or target path
 //!   with a variant selection, which the text parser rejects;
 //!   `variant_connection.usda` authors the relative connection inside a
@@ -49,7 +61,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use layerstack::{
-    CompositionError, PropertyKind, PropertyPath, Stage, StageOptions, TargetPath, Value,
+    CompositionError, LayerId, LiveStage, PathId, PropertyKind, PropertyPath, Stage, StageOptions,
+    TargetPath, TokenId, Value,
 };
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
@@ -140,7 +153,7 @@ fn compose(composition: &Composition) -> (LoadedStage, Stage) {
 }
 
 /// A layer's file name without its directory.
-fn layer_name(loaded: &LoadedStage, layer: layerstack::LayerId) -> String {
+fn layer_name(loaded: &LoadedStage, layer: LayerId) -> String {
     let name = &loaded.layer_names[&layer];
     name.rsplit('/').next().unwrap_or(name).to_string()
 }
@@ -295,6 +308,136 @@ fn layers_openusd_rejects_are_rejected() {
                 .any(|reason| reason.contains(message.as_str())),
             "{layer}: expected rejection {message:?}, got {:?}",
             loaded.invalid
+        );
+    }
+}
+
+/// Each prim `stage` composes, with its prim stack and the values of the
+/// `scale` and `hue` attributes `selection.usda` authors.
+fn selection_snapshot(loaded: &LoadedStage, stage: &Stage) -> Vec<String> {
+    let pseudo_root = loaded
+        .store
+        .paths
+        .lookup(&layerstack::Path::root())
+        .expect("pseudo-root");
+    let attributes: Vec<TokenId> = ["scale", "hue"]
+        .into_iter()
+        .filter_map(|name| loaded.store.tokens.lookup(name))
+        .collect();
+    stage
+        .traverse(pseudo_root)
+        .filter(|prim| *prim != pseudo_root)
+        .map(|prim| {
+            let stack: Vec<(String, String)> = stage
+                .explain_prim(prim)
+                .expect("composed prim")
+                .iter()
+                .map(|key| {
+                    (
+                        layer_name(loaded, key.layer_id),
+                        key.spec_path.display(&loaded.store.tokens),
+                    )
+                })
+                .collect();
+            let values: Vec<Option<Value>> = attributes
+                .iter()
+                .map(|name| {
+                    stage
+                        .resolve_field_path(PropertyPath::new(prim, *name))
+                        .map(|resolved| resolved.value)
+                })
+                .collect();
+            format!(
+                "{} {stack:?} {values:?}",
+                loaded.store.paths.display(prim, &loaded.store.tokens)
+            )
+        })
+        .collect()
+}
+
+/// Sets (`Some`) or removes (`None`) the selection of `set` authored on the
+/// prim spec at `prim` in `layer`, and recomposes the prims `live` draws
+/// from that spec; returns them.
+fn edit_selection(
+    live: &mut LiveStage,
+    loaded: &mut LoadedStage,
+    layer: LayerId,
+    prim: PathId,
+    set: TokenId,
+    variant: Option<TokenId>,
+) -> Vec<PathId> {
+    let selections = &mut loaded
+        .store
+        .layers
+        .get_mut(&layer)
+        .and_then(|layer| layer.prims.get_mut(&prim))
+        .expect("prim spec")
+        .variant_selections;
+    match variant {
+        Some(variant) => selections.insert(set, variant),
+        None => selections.remove(&set),
+    };
+    live.notify_layer_prim_edits(layer, &[prim]);
+    live.recompose(&mut loaded.store)
+}
+
+#[test]
+fn selection_edits_recompose_like_a_full_compose() {
+    // Spec: AOUSD Core §10.3.2.5.1. `/Mast` evaluates `size` after the
+    // referenced `shape=cube` selects the branch that selects `size=small`.
+    // Editing either selection recomposes the prims drawing on the edited
+    // spec, and they must compose what a full composition does.
+    let mut loaded = load("selection.usda");
+    let root = loaded.root_layer;
+    let options = || StageOptions {
+        with_provenance: true,
+        ..StageOptions::default()
+    };
+    let mut live = LiveStage::compose(&mut loaded.store, root, options());
+    let reference = *loaded
+        .layer_names
+        .iter()
+        .find(|(_, name)| name.ends_with("selection_ref.usda"))
+        .expect("selection_ref.usda")
+        .0;
+    let (mast, hull, deck) = (
+        loaded.store.path("/Mast"),
+        loaded.store.path("/Hull"),
+        loaded.store.path("/Deck"),
+    );
+    let tokens = &mut loaded.store.tokens;
+    let (shape, size) = (tokens.intern("shape"), tokens.intern("size"));
+    let (cube, large, scale) = (
+        tokens.intern("cube"),
+        tokens.intern("large"),
+        tokens.intern("scale"),
+    );
+
+    // Without the referenced `shape=cube`, the referenced `size=large`
+    // holds; with it again, `size=small`; then a local `size=large` is
+    // stronger than the branch's selection.
+    let edits = [
+        (reference, shape, None, 2),
+        (reference, shape, Some(cube), 1),
+        (root, size, Some(large), 2),
+    ];
+    for (layer, set, variant, expected) in edits {
+        let updated = edit_selection(&mut live, &mut loaded, layer, mast, set, variant);
+        assert!(
+            updated.contains(&mast) && updated.contains(&deck),
+            "{updated:?}"
+        );
+        assert!(!updated.contains(&hull), "{updated:?}");
+        assert_eq!(
+            live.stage()
+                .resolve_field_path(PropertyPath::new(mast, scale))
+                .map(|resolved| resolved.value),
+            Some(Value::Int(expected))
+        );
+        let fresh = Stage::compose(&mut loaded.store, root, options());
+        assert_eq!(
+            selection_snapshot(&loaded, live.stage()),
+            selection_snapshot(&loaded, &fresh)
         );
     }
 }

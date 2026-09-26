@@ -190,6 +190,7 @@ fn gather_populated_paths(
     let mut visited_refs: HashSet<(PathId, LayerId, PathId)> = HashSet::new();
     let mut visited_inherits: HashSet<(PathId, PathId)> = HashSet::new();
     let mut mapped_from = MappedFrom::new();
+    let mut implied_inherits: HashSet<(PathId, PathId)> = HashSet::new();
     while idx < queue.len() {
         let path = queue[idx];
         idx += 1;
@@ -349,14 +350,19 @@ fn gather_populated_paths(
                 &mut mapped_from,
             );
         }
+        implied_inherits.extend(chain.implied.drain(..));
     }
 
     // Second pass: propagate reference-introduced paths through inherits.
     // After the main loop, some paths may have been introduced by references
     // under an inherit source but not yet mapped to the inherit destination.
     // The visited_inherits set contains all (dest, src) inherit/specializes
-    // pairs discovered during population.
-    let inherit_pairs: Vec<(PathId, PathId)> = visited_inherits.into_iter().collect();
+    // pairs discovered during population, and the classes they imply into
+    // the stronger layer stacks, in the stage namespace.
+    let inherit_pairs: Vec<(PathId, PathId)> = visited_inherits
+        .into_iter()
+        .chain(implied_inherits)
+        .collect();
     propagate_populated_through_inherits(
         store,
         &inherit_pairs,
@@ -415,6 +421,13 @@ fn expand_inherit_paths(
     }
     if !visited.insert((dest_root, inherited_root)) {
         return;
+    }
+    // The class is implied into each stronger layer stack on the chain, and
+    // lastly into the stage's, where it is the stage prim its path maps to:
+    // that prim's children are the implied classes' children.
+    let stage_class = chain.arcs.stage_path(store.paths_mut(), inherited_root);
+    if stage_class != inherited_root {
+        chain.implied.push((dest_root, stage_class));
     }
     chain.push(store, stack, inherited_root, dest_root);
 
@@ -983,6 +996,10 @@ struct Chain<'r> {
     stage: Rc<LiftedSet>,
     /// The relocations lifted by each arc on the chain, outermost first.
     lifted: Vec<Option<Rc<LiftedSet>>>,
+    /// The class arcs found on the chain whose class is implied into the
+    /// stage's layer stack at another path: `(destination, stage path of
+    /// the class)` (AOUSD Core §10.4.2.4).
+    implied: Vec<(PathId, PathId)>,
 }
 
 impl<'r> Chain<'r> {
@@ -993,6 +1010,7 @@ impl<'r> Chain<'r> {
             relocations,
             stage,
             lifted: Vec::new(),
+            implied: Vec::new(),
         }
     }
 

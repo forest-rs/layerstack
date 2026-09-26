@@ -18,6 +18,7 @@ use hashbrown::{HashMap, HashSet};
 
 use invalidation::InvalidationGraph;
 
+use crate::variant_fallbacks::VariantFallbacks;
 use crate::{
     composition_error::CompositionError,
     dependency_map::{ArcDependency, CompositionDeps},
@@ -233,6 +234,21 @@ pub struct StageOptions {
     pub with_provenance: bool,
     /// Whether to record dependency edges during composition.
     pub with_dependencies: bool,
+    /// Variant fallback selections: for each variant set name, the variant
+    /// names to select, in order of preference, where no opinion selects a
+    /// variant of that set. Empty by default, so a set without a selection
+    /// contributes nothing.
+    ///
+    /// Where a prim's composition finds no selection for a set, the first
+    /// fallback that names a variant of the set at the prim is selected;
+    /// a selection authored anywhere in the prim's composition, in any
+    /// layer stack, wins over it.
+    ///
+    /// Spec: AOUSD Core §10.3.2.5.1 selects only from opinions; fallbacks
+    /// follow OpenUSD's `PcpCache::SetVariantFallbacks` and
+    /// `UsdStage::SetGlobalVariantFallbacks` (see
+    /// [`crate::variant_fallbacks`]).
+    pub variant_fallbacks: VariantFallbacks,
 }
 
 /// A composed stage: read-only facade over composition results.
@@ -268,6 +284,9 @@ pub struct Stage {
     /// The prims composed as instances, whose descendants hold only the
     /// opinions of the instance's own arcs.
     instances: HashSet<PathId>,
+    /// The variant fallbacks the stage was composed with
+    /// ([`StageOptions::variant_fallbacks`]).
+    variant_fallbacks: VariantFallbacks,
 }
 
 impl Stage {
@@ -289,7 +308,14 @@ impl Stage {
             deps,
             errors: Vec::new(),
             instances: HashSet::new(),
+            variant_fallbacks: VariantFallbacks::default(),
         }
+    }
+
+    /// Records the variant fallbacks the stage was composed with.
+    pub(crate) fn with_variant_fallbacks(mut self, fallbacks: VariantFallbacks) -> Self {
+        self.variant_fallbacks = fallbacks;
+        self
     }
 
     /// Records the prims composed as instances.
@@ -1107,14 +1133,18 @@ impl Stage {
     /// Returns the variant selections that govern the composed prim
     /// `prim`, keyed by variant set: for each set, the strongest selection
     /// authored on any site of the prim's index, including selections
-    /// authored inside selected variants. Empty when `prim` is not on the
-    /// stage or selects nothing.
+    /// authored inside selected variants, and for a declared set without
+    /// one, the variant the stage's fallbacks select
+    /// ([`StageOptions::variant_fallbacks`]). Empty when `prim` is not on
+    /// the stage or selects nothing.
     ///
-    /// A selection is reported whether or not the variant it names exists.
+    /// An authored selection is reported whether or not the variant it
+    /// names exists.
     ///
-    /// OpenUSD: `UsdVariantSets::GetAllVariantSelections`
-    /// (`pxr/usd/usd/variantSets.h`), which reads the same strongest
-    /// opinion from the prim index.
+    /// OpenUSD: `UsdVariantSet::GetVariantSelection`
+    /// (`pxr/usd/usd/variantSets.h`), which reports the variant composition
+    /// selected, fallbacks included; `UsdVariantSets::GetAllVariantSelections`
+    /// reports the authored selections alone.
     ///
     /// Spec: AOUSD Core §10.5 (variant selection).
     #[must_use]
@@ -1128,7 +1158,7 @@ impl Stage {
             .map(|index| {
                 crate::compose::strength_ordered_variant_selections(
                     store,
-                    &crate::VariantFallbacks::default(),
+                    &self.variant_fallbacks,
                     index,
                 )
             })

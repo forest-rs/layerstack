@@ -1320,3 +1320,76 @@ fn relocated_prims_edit_through_the_nodes_they_read() {
     );
     assert_live_matches_fresh(&live, &mut store, "relocated edit");
 }
+
+/// A branch the stage's variant fallbacks select is edited through its
+/// variant node like any other: `/Rock` authors no `shape` selection, the
+/// fallback `shape=[jagged]` selects `jagged`, and an edit through
+/// `/World/RockA`'s variant node lands in `/Rock{shape=jagged}`. The live
+/// stage then equals a fresh composition with the same fallbacks.
+///
+/// Spec: AOUSD Core §10.3.2.5; OpenUSD `PcpCache::SetVariantFallbacks`.
+#[test]
+fn live_stage_edits_a_branch_selected_by_a_fallback() {
+    let mut store = rocks();
+    let (rock, rock_a) = (store.path("/Rock"), store.path("/World/RockA"));
+    let (shape, jagged, roughness) = (
+        store.tokens.intern("shape"),
+        store.tokens.intern("jagged"),
+        store.tokens.intern("roughness"),
+    );
+    store
+        .layers
+        .get_mut(&ROCK)
+        .and_then(|layer| layer.prims.get_mut(&rock))
+        .expect("/Rock")
+        .variant_selections
+        .clear();
+    let options = StageOptions {
+        variant_fallbacks: [(shape, vec![jagged])].into_iter().collect(),
+        ..StageOptions::default()
+    };
+    let mut live = crate::LiveStage::compose(&mut store, SCENE, options.clone());
+    assert_eq!(
+        live.stage().variant_selections(rock_a, &store).get(&shape),
+        Some(&jagged),
+        "the fallback is the selection"
+    );
+
+    let in_jagged = EditTarget::for_node(
+        live.stage(),
+        rock_a,
+        node(live.stage(), rock_a, ArcKind::Variants),
+    )
+    .expect("variant node");
+    let roughness_a = store.property_path("/World/RockA.roughness");
+    let mut edit = Transaction::new();
+    edit.set_default(in_jagged.property(roughness_a), Value::Double(0.95));
+    live.apply(&mut store, &edit).expect("edit");
+    assert_eq!(
+        authored_default(&mut store, ROCK, "/Rock{shape=jagged}.roughness"),
+        Some(Value::Double(0.95))
+    );
+
+    let fresh = Stage::compose(&mut store, SCENE, options);
+    let stage = live.stage();
+    let root = store.path("/");
+    let order: Vec<PathId> = stage.traverse(root).collect();
+    assert_eq!(order, fresh.traverse(root).collect::<Vec<_>>());
+    for prim in order {
+        assert_eq!(
+            stage.variant_selections(prim, &store),
+            fresh.variant_selections(prim, &store)
+        );
+        let property = crate::PropertyPath::new(prim, roughness);
+        assert_eq!(
+            stage.resolve_field_path(property),
+            fresh.resolve_field_path(property)
+        );
+    }
+    assert_eq!(
+        stage
+            .resolve_field_path(roughness_a)
+            .map(|resolved| resolved.value),
+        Some(Value::Double(0.95))
+    );
+}

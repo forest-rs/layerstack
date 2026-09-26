@@ -1,0 +1,28 @@
+#usda 1.0
+
+def "Seam" (
+    variants = {
+        string cut = "x"
+        string hem = "on"
+        string pleat = "on"
+    }
+    prepend variantSets = "cut"
+)
+{
+    variantSet "cut" = {
+        "x" (
+            prepend variantSets = ["pleat", "hem"]
+        ) {
+            variantSet "hem" = {
+                "on" {
+                    int stitch = 1
+                }
+            }
+            variantSet "pleat" = {
+                "on" {
+                    int stitch = 2
+                }
+            }
+        }
+    }
+}

@@ -428,6 +428,36 @@
     ]
    ],
    "selections": {}
+  },
+  {
+   "path": "/Hem",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Hem"
+    ],
+    [
+     "seam_pleat.usda",
+     "/Seam"
+    ],
+    [
+     "seam_pleat.usda",
+     "/Seam{cut=x}"
+    ],
+    [
+     "seam_pleat.usda",
+     "/Seam{cut=x}{pleat=on}"
+    ],
+    [
+     "seam_pleat.usda",
+     "/Seam{cut=x}{hem=on}"
+    ]
+   ],
+   "selections": {
+    "cut": "x",
+    "hem": "on",
+    "pleat": "on"
+   }
   }
  ],
  "values": {
@@ -450,6 +480,7 @@
   "/Grove.glow": 1,
   "/Grove.tone": 2,
   "/Copse.glow": 1,
-  "/Copse.tone": 1
+  "/Copse.tone": 1,
+  "/Hem.stitch": 2
  }
 }

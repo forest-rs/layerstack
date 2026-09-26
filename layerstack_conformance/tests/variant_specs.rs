@@ -29,6 +29,11 @@
 //!   `/Hitch` and `/Bend` three sets in three orders. Each nested set ranks
 //!   by its position in the `variantSets` of the branch declaring it, so
 //!   each prim's prim stack and value follow its own branch's order.
+//! - `/Hem` references `seam.usda`, which sublayers the layer its `SEAM`
+//!   expression variable names; `root.usda` overrides it, selecting a
+//!   sublayer that orders the nested sets the other way. The nested sets
+//!   rank by the layer stack as the referencing context gathers it
+//!   (`PcpLayerStackIdentifier::expressionVariablesOverrideSource`).
 //!
 //! Spec: AOUSD Core §7.3.6 (variant specs may contain variant set specs),
 //! §10.3.2.5 (variants). OpenUSD: `SdfVariantSetSpec` and `SdfVariantSpec`
@@ -200,18 +205,26 @@ fn values_match_openusd() {
 /// Two branches declaring the same nested sets in opposite orders do not
 /// interfere: each prim takes the opinion of the set its own branch lists
 /// first, as OpenUSD 26.08 does (`/Plain.thread = 1`, `/Twill.thread = 4`),
-/// and three sets in three orders likewise. The prim stacks are compared
-/// exactly by `prim_stacks_hold_every_nested_variant_spec`.
+/// and three sets in three orders likewise; `/Hem` ranks them by the
+/// sublayer its referencing context's expression variables select
+/// (`/Hem.stitch = 2`). The prim stacks are compared exactly by
+/// `prim_stacks_hold_every_nested_variant_spec`.
 #[test]
 fn nested_sets_rank_by_the_branch_declaring_them() {
     let oracle = oracle();
     let (mut loaded, stage) = compose(&oracle);
+    assert!(
+        stage.composition_errors().is_empty(),
+        "{:?}",
+        stage.composition_errors()
+    );
     for (attr, expected) in [
         ("/Plain.thread", 1),
         ("/Twill.thread", 4),
         ("/Loop.strand", 1),
         ("/Hitch.strand", 6),
         ("/Bend.strand", 8),
+        ("/Hem.stitch", 2),
     ] {
         assert_eq!(oracle.values.get(attr), Some(&expected), "oracle {attr}");
         let property = loaded.store.property_path(attr);

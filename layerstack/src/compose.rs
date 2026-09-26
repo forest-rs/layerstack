@@ -3006,7 +3006,8 @@ fn local_variant_node(
                 layer_stack,
                 site: SpecPath::from_variant_selection_sites(path, &variants, paths),
                 namespace_depth: u16::try_from(host.depth()).unwrap_or(u16::MAX),
-                sibling_index: declared_variant_set_index(store, layer_stack, *site, &enclosing),
+                // The stage's layer stack is read with its own variables.
+                sibling_index: declared_variant_set_index(store, &[layer_stack], *site, &enclosing),
                 implied: false,
                 skips_duplicates: false,
             },
@@ -3526,11 +3527,16 @@ impl ArcStep {
     /// The node this step adds beneath `cursor` for the composed prim `dest`,
     /// moving `cursor` to its site; `None` for a variant hosted outside the
     /// cursor's site, which the step cannot reach.
+    ///
+    /// `chain` is the context the step's layer stack is read in: the root
+    /// layers of the layer stacks on the arcs to it, outermost first,
+    /// ending with its own (see [`LayerStack::gather_recording`]).
     fn arc(
         &self,
         store: &mut dyn LayerStore,
         dest: PathId,
         cursor: &mut PathCursor,
+        chain: &[LayerId],
     ) -> Option<NodeArc> {
         let mut sibling_index = self.sibling_index;
         let (site, namespace_depth) = match self.target {
@@ -3557,8 +3563,7 @@ impl ArcStep {
                 }
                 let enclosing = enclosing_branches(&cursor.variants, site);
                 cursor.variants.push(site);
-                sibling_index =
-                    declared_variant_set_index(store, self.layer_stack, site, &enclosing);
+                sibling_index = declared_variant_set_index(store, chain, site, &enclosing);
                 let paths = store.paths();
                 let site =
                     SpecPath::from_variant_selection_sites(cursor.prim, &cursor.variants, paths);
@@ -3626,14 +3631,18 @@ fn enclosing_branches(
 }
 
 /// The position of `site`'s variant set among the variant sets declared
-/// where it is authored, in the layer stack rooted at `layer_stack`,
-/// strongest layer first: by the host's prim spec for a set of its own, or
-/// by the variant spec of the branches `enclosing` (outermost first) for a
-/// set nested in them. This ranks the branches of different sets at one
-/// site; sets declared nowhere follow every declared one.
+/// where it is authored, strongest layer first: by the host's prim spec for
+/// a set of its own, or by the variant spec of the branches `enclosing`
+/// (outermost first) for a set nested in them. This ranks the branches of
+/// different sets at one site; sets declared nowhere follow every declared
+/// one.
 ///
 /// Each branch declares its nested sets on its own, so two branches that
-/// declare the same sets in different orders rank them differently.
+/// declare the same sets in different orders rank them differently. The
+/// layer stack is the one `chain` reaches (the root layers of the layer
+/// stacks on the arcs to it, outermost first, ending with its own),
+/// gathered with the expression variables composed along it, so a sublayer
+/// that an overriding variable selects declares the order.
 ///
 /// Spec: AOUSD Core §10.3.2.5 (variant sets are evaluated in the order of
 /// the `variantSetNames` list op), §7.3.6 (variant specs may contain variant
@@ -3641,19 +3650,20 @@ fn enclosing_branches(
 /// siblings by `GetSiblingNumAtOrigin`, the set's index in
 /// `PcpComposeSiteVariantSets` at the node the arc is added beneath
 /// (`pxr/usd/pcp/strengthOrdering.cpp`, `_AddVariantArc` in
-/// `pxr/usd/pcp/primIndex.cpp`).
+/// `pxr/usd/pcp/primIndex.cpp`); that node's layer stack is identified with
+/// the source of its variables
+/// (`PcpLayerStackIdentifier::expressionVariablesOverrideSource`).
 fn declared_variant_set_index(
     store: &dyn LayerStore,
-    layer_stack: LayerId,
+    chain: &[LayerId],
     site: VariantSelectionSite,
     enclosing: &[(TokenId, TokenId)],
 ) -> u16 {
     let mut declared: Vec<TokenId> = Vec::new();
-    for layer in LayerStack::gather(store, layer_stack)
-        .layers
-        .iter()
-        .filter_map(|id| store.layer(*id))
-    {
+    // Errors and variable reads of the gather are recorded where the node's
+    // layer stack is gathered for its opinions, in the same context.
+    let stack = LayerStack::gather_recording(store, chain, &mut Vec::new(), None);
+    for layer in stack.layers.iter().filter_map(|id| store.layer(*id)) {
         for spec in layer.prim_specs(site.host_path) {
             let Some((_, order)) = spec.variant_sets_in(enclosing) else {
                 continue;
@@ -3724,7 +3734,20 @@ fn intern_steps(
             }
             _ => dest,
         };
-        let Some(mut arc) = step.arc(store, view, cursor) else {
+        // A variant step ranks its set in its layer stack as read beneath
+        // `cursor`: with the expression variables of the arcs reaching it.
+        let chain = match step.target {
+            StepTarget::Variant(_) | StepTarget::LocalVariant(_) => {
+                let graph = &out[&dest].graph;
+                let mut chain = crate::expression_variables::node_chain(graph, cursor.node);
+                if chain.last() != Some(&step.layer_stack) {
+                    chain.push(step.layer_stack);
+                }
+                chain
+            }
+            StepTarget::Namespace { .. } => Vec::new(),
+        };
+        let Some(mut arc) = step.arc(store, view, cursor, &chain) else {
             continue;
         };
         if let Some(depth) = spooky_depth {

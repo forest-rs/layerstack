@@ -42,7 +42,11 @@ LAYERS = {
         </Robot/Rig/Debug>: <>,
         </Boulder/Chip>: </Nowhere/Flake>,
         </Rubble/Chip>: </Heap/Flake>,
-        </Gravel/Chip>: </Bin/Tray/Flake>
+        </Gravel/Chip>: </Bin/Tray/Flake>,
+        </Flyer/Streamer>: </Ribbon>,
+        </Flyer/Tail>: </Knot>,
+        </Chain_2/Tail>: </Chain_2/Tail_2>,
+        </Chain/Tail>: </Chain/Tail_1>
     }
 )
 
@@ -270,6 +274,74 @@ def "Crate" (
     over "Gear"
     {
         int teeth = 0
+    }
+}
+
+# `kite.usda` relocates `/Kite/Tail`, which its reference to `frame.usda`
+# brings, to `/Kite/Streamer`. This layer relocates both: `/Ribbon`
+# composes the relocated tail, and `/Knot` relocates a prohibited child,
+# so it composes nothing and is reported.
+def "Flyer" (
+    references = @./kite.usda@</Kite>
+)
+{
+}
+
+# `/Chain` references `/Chain_1`, which references `/Chain_2`, and both
+# `/Chain/Tail` and `/Chain_2/Tail` are relocated here. `/Chain/Tail`
+# reaches `/Chain_2/Tail`, a relocation source, so `/Chain/Tail_1` composes
+# nothing, not even `/Chain_1/Tail`, and `/Chain/Tail_2` composes the tail.
+def "Chain" (
+    references = </Chain_1>
+)
+{
+}
+
+def "Chain_1" (
+    references = </Chain_2>
+)
+{
+    def "Tail"
+    {
+        int length = 5
+    }
+}
+
+def "Chain_2" (
+    references = @./frame.usda@</Frame>
+)
+{
+}
+''',
+    "kite": '''#usda 1.0
+(
+    relocates = {
+        </Kite/Tail>: </Kite/Streamer>
+    }
+)
+
+def "Kite" (
+    references = @./frame.usda@</Frame>
+)
+{
+    over "Streamer"
+    {
+        int width = 2
+    }
+}
+''',
+    "frame": '''#usda 1.0
+
+def "Frame"
+{
+    def "Tail"
+    {
+        int length = 1
+
+        def "Bow"
+        {
+            int loops = 1
+        }
     }
 }
 ''',

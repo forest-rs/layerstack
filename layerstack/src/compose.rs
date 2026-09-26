@@ -275,7 +275,17 @@ pub(crate) fn compose_stage(
         dep_builder.as_mut(),
     );
 
+    let blocked = cycles.relocations().blocked();
     for (path, prim) in &mut prims {
+        crate::relocates::elide_blocked(
+            prim,
+            store.paths(),
+            blocked,
+            [
+                prim_order_opinions.get_mut(path),
+                authored_children_opinions.get_mut(path),
+            ],
+        );
         drop_skipped_duplicates(store, prim);
         prune_skipped_nodes(
             prim,
@@ -477,7 +487,7 @@ fn drop_skipped_duplicates(store: &dyn LayerStore, prim: &mut PrimIndex) {
 
 /// The child-order opinions (`reorder nameChildren`, or authored children)
 /// of one composed prim, each with its key.
-type ChildOrderOpinions = Vec<(OpinionKey, Vec<TokenId>)>;
+pub(crate) type ChildOrderOpinions = Vec<(OpinionKey, Vec<TokenId>)>;
 
 /// Removes from the prim's graph the nodes skipping duplicates (see
 /// [`drop_skipped_duplicates`]) that no opinion, source or declaration
@@ -8229,7 +8239,9 @@ fn add_specializes_edge_opinions(
 /// the parent's node of the relocating layer stack, before the names that
 /// node's own specs author, in name order among the names added there. One
 /// that renames a prim within its parent renames it in place, keeping its
-/// position.
+/// position, among the names that the parent's node of the relocating
+/// layer stack and the nodes beneath it author: of two layer stacks
+/// renaming one name, the weaker renames it.
 ///
 /// Spec: AOUSD Core §11.3.1 (relocates "rename" children in place and
 /// "extend" a prim with sorted children). OpenUSD:
@@ -8242,6 +8254,9 @@ fn relocated_child_names(
 ) {
     let paths = store.paths();
     let mut added: HashMap<(PathId, NodeId), (LayerId, Vec<TokenId>)> = HashMap::new();
+    // Renames: the parent, the node of the relocating layer stack, and the
+    // old and new names.
+    let mut renames: Vec<(PathId, Option<NodeId>, TokenId, TokenId)> = Vec::new();
     for (target, source, relocate) in relocations.targets() {
         let (target_path, source_path) = (paths.resolve(target), paths.resolve(source));
         let (Some(parent_path), Some(name)) = (target_path.parent(), target_path.leaf()) else {
@@ -8257,11 +8272,21 @@ fn relocated_child_names(
             let Some(old) = source_path.leaf() else {
                 continue;
             };
-            for (_, names) in authored_children.get_mut(&parent).into_iter().flatten() {
-                for authored in names.iter_mut().filter(|authored| **authored == old) {
-                    *authored = name;
-                }
-            }
+            // A rename applies at the parent's node of the relocating layer
+            // stack, to the names that node and the nodes beneath it add.
+            let site = paths
+                .resolve(relocate.source)
+                .parent()
+                .and_then(|site| paths.lookup(&site));
+            let node = index
+                .graph
+                .nodes()
+                .find(|(_, node)| {
+                    node.layer_stack() == relocate.layer_stack
+                        && Some(node.site().prim_path()) == site
+                })
+                .map(|(id, _)| id);
+            renames.push((parent, node, old, name));
             continue;
         }
         // The parent's node of the relocating layer stack.
@@ -8279,6 +8304,35 @@ fn relocated_child_names(
             .or_insert_with(|| (relocate.layer_stack, Vec::new()))
             .1
             .push(name);
+    }
+    // Deepest node first: a name a weaker layer stack renames is renamed
+    // before the stronger ones see it.
+    renames.sort_by_cached_key(|(parent, node, _, _)| {
+        core::cmp::Reverse(node.map(|node| prims[parent].graph.arc_path(node).len()))
+    });
+    for (parent, node, old, name) in renames {
+        let graph = &prims[&parent].graph;
+        let beneath = |key: &OpinionKey| {
+            let Some(node) = node else {
+                return true;
+            };
+            let mut cursor = Some(key.node);
+            while let Some(at) = cursor {
+                if at == node {
+                    return true;
+                }
+                cursor = graph.node(at).and_then(PrimNode::parent);
+            }
+            false
+        };
+        for (key, names) in authored_children.get_mut(&parent).into_iter().flatten() {
+            if !beneath(key) {
+                continue;
+            }
+            for authored in names.iter_mut().filter(|authored| **authored == old) {
+                *authored = name;
+            }
+        }
     }
     for ((parent, node), (layer, mut names)) in added {
         names.sort_by(|a, b| store.tokens().resolve(*a).cmp(store.tokens().resolve(*b)));

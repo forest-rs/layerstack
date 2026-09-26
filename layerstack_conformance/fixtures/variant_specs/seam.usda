@@ -1,0 +1,9 @@
+#usda 1.0
+(
+    expressionVariables = {
+        string SEAM = "seam_hem.usda"
+    }
+    subLayers = [
+        @`"./${SEAM}"`@
+    ]
+)

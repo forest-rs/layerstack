@@ -543,7 +543,7 @@ impl SiteContext<'_> {
 /// `node`, outermost first, up to the first node of `node`'s layer stack:
 /// the chain whose variables `node`'s layer stack composes (see
 /// [`composed_variables`]).
-fn node_chain(graph: &PrimIndexGraph, node: NodeId) -> Vec<LayerId> {
+pub(crate) fn node_chain(graph: &PrimIndexGraph, node: NodeId) -> Vec<LayerId> {
     let mut stacks = Vec::new();
     let mut cursor = Some(node);
     while let Some(id) = cursor {

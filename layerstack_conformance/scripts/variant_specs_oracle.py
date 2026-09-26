@@ -21,7 +21,8 @@ branches is two sets with their own contents. A nested branch composes as a
 variant node beneath the node of the branch enclosing it, ranked by its
 set's position in the `variantSets` of that branch, so two branches may
 order the same nested sets differently (`_AddVariantArc` in
-`pxr/usd/pcp/primIndex.cpp`).
+`pxr/usd/pcp/primIndex.cpp`), in the layer stack as the referencing
+context's expression variables gather it.
 
 For every composed prim the oracle records its prim stack, repeats
 included, its variant selections, and for every attribute its resolved
@@ -39,6 +40,11 @@ DEFAULT_OUT = os.path.normpath(
 
 LAYERS = {
     "root": '''#usda 1.0
+(
+    expressionVariables = {
+        string SEAM = "seam_pleat.usda"
+    }
+)
 
 # Directly nested sets reusing a name: `finish=rough` nests `grain`, whose
 # `coarse` branch nests another `finish` set. Each of the three branches is
@@ -403,6 +409,84 @@ def "Copse" (
     references = @./model.usda@</Model>
 )
 {
+}
+
+# The referenced `seam.usda` sublayers the layer its `SEAM` variable names:
+# `seam_hem.usda` by default, `seam_pleat.usda` as this layer overrides it.
+# The two author the same nested sets in opposite orders, so the nested
+# sets rank by the sublayer the referencing context selects.
+def "Hem" (
+    references = @./seam.usda@</Seam>
+)
+{
+}
+''',
+    "seam": '''#usda 1.0
+(
+    expressionVariables = {
+        string SEAM = "seam_hem.usda"
+    }
+    subLayers = [
+        @`"./${SEAM}"`@
+    ]
+)
+''',
+    "seam_hem": '''#usda 1.0
+
+def "Seam" (
+    variants = {
+        string cut = "x"
+        string hem = "on"
+        string pleat = "on"
+    }
+    prepend variantSets = "cut"
+)
+{
+    variantSet "cut" = {
+        "x" (
+            prepend variantSets = ["hem", "pleat"]
+        ) {
+            variantSet "hem" = {
+                "on" {
+                    int stitch = 1
+                }
+            }
+            variantSet "pleat" = {
+                "on" {
+                    int stitch = 2
+                }
+            }
+        }
+    }
+}
+''',
+    "seam_pleat": '''#usda 1.0
+
+def "Seam" (
+    variants = {
+        string cut = "x"
+        string hem = "on"
+        string pleat = "on"
+    }
+    prepend variantSets = "cut"
+)
+{
+    variantSet "cut" = {
+        "x" (
+            prepend variantSets = ["pleat", "hem"]
+        ) {
+            variantSet "hem" = {
+                "on" {
+                    int stitch = 1
+                }
+            }
+            variantSet "pleat" = {
+                "on" {
+                    int stitch = 2
+                }
+            }
+        }
+    }
 }
 ''',
     "model": '''#usda 1.0

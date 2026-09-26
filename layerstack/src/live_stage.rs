@@ -30,6 +30,65 @@ pub const OPINION_EDIT: Channel = Channel::new(0);
 /// Structural changes fall back to a full rebuild.
 pub const STRUCTURAL: Channel = Channel::new(1);
 
+/// A layer's [`Layer::generation`](crate::Layer::generation) and
+/// [`Layer::structural_generation`](crate::Layer::structural_generation).
+type LayerGenerations = (u64, u64);
+
+fn generations_of(store: &dyn LayerStore, layer: LayerId) -> Option<LayerGenerations> {
+    store
+        .layer(layer)
+        .map(|found| (found.generation(), found.structural_generation()))
+}
+
+/// Every layer a stage rooted at `root` reads or would read: the root's
+/// layer stack, and, transitively, the layer stacks every reference and
+/// payload authored in them targets, whether or not they contribute
+/// opinions yet. Layers the store does not hold are included too.
+///
+/// Spec: AOUSD Core §9 (layer stacks), §10.3.2.1 and §10.3.2.2
+/// (references and payloads).
+fn participating_layers(store: &dyn LayerStore, root: LayerId) -> HashSet<LayerId> {
+    fn arc_layers(
+        references: &crate::ListOp<crate::Reference>,
+        payloads: &crate::ListOp<crate::Reference>,
+        pending: &mut Vec<LayerId>,
+    ) {
+        for list in [references, payloads] {
+            let items = list
+                .explicit
+                .iter()
+                .flatten()
+                .chain(&list.prepend)
+                .chain(&list.append);
+            pending.extend(items.map(|arc| arc.layer));
+        }
+    }
+    let mut seen = HashSet::new();
+    let mut pending = alloc::vec![root];
+    while let Some(id) = pending.pop() {
+        if id == LayerId::UNRESOLVED || !seen.insert(id) {
+            continue;
+        }
+        let Some(layer) = store.layer(id) else {
+            continue;
+        };
+        pending.extend(layer.sublayers.iter().map(|entry| entry.layer));
+        for spec in layer
+            .prims
+            .values()
+            .chain(layer.variant_prims.values().flatten())
+        {
+            arc_layers(&spec.references, &spec.payloads, &mut pending);
+            for set in spec.variant_sets.values() {
+                for variant in set.variants.values() {
+                    arc_layers(&variant.references, &variant.payloads, &mut pending);
+                }
+            }
+        }
+    }
+    seen
+}
+
 /// A mutable composition stage that supports incremental recomposition.
 ///
 /// `LiveStage` owns a fully composed [`Stage`] and an
@@ -61,6 +120,10 @@ pub struct LiveStage {
     default_prim_dependents: HashMap<LayerId, HashSet<PathId>>,
     /// Layers whose `layerRelocates` the last full composition consulted.
     relocation_layers: HashSet<LayerId>,
+    /// The generation and structural generation of every layer the stage
+    /// reads, as this stage last saw them; `None` for a layer the store
+    /// did not hold (see [`LiveStage::notify_changed_layers`]).
+    generations: HashMap<LayerId, Option<LayerGenerations>>,
     root: LayerId,
     options: StageOptions,
     needs_full_rebuild: bool,
@@ -88,12 +151,70 @@ impl LiveStage {
             prim_to_sources: HashMap::new(),
             default_prim_dependents: deps.default_prim_dependents,
             relocation_layers: deps.relocation_layers,
+            generations: HashMap::new(),
             root,
             options,
             needs_full_rebuild: false,
         };
         live.reindex_all_sources();
+        live.record_generations(store);
         live
+    }
+
+    /// Notifies the edits of every layer the stage reads whose
+    /// [`Layer::generation`](crate::Layer::generation) moved since this
+    /// stage last saw it, and returns those layers, sorted.
+    ///
+    /// A layer whose [`Layer::structural_generation`](crate::Layer::structural_generation)
+    /// moved too may have gained or lost specs, children, arcs or variant
+    /// sets, so it is notified as a structural change
+    /// ([`notify_structural_change`](Self::notify_structural_change)), as
+    /// is a layer that joined or left the store. A layer whose other edits
+    /// only changed opinion values is notified with
+    /// [`notify_layer_edit`](Self::notify_layer_edit), which recomposes the
+    /// prims drawing on it.
+    ///
+    /// The layers the stage reads are its root layer stack and every layer
+    /// stack a reference or payload authored in them targets, including
+    /// layers that contribute no opinions yet, such as an empty sublayer.
+    /// The stage sees their generations when it composes or rebuilds. So
+    /// after edits made through [`Layer`](crate::Layer) methods by code
+    /// that does not notify the stage, this finds the layers they changed,
+    /// and the next [`recompose`](Self::recompose) stops serving what those
+    /// layers no longer hold.
+    ///
+    /// Generations cannot tell which prims changed, so this is coarser than
+    /// the notifications that name them, and a layer edited by a host that
+    /// did notify precisely is reported again. Writes into the public
+    /// fields of a layer do not move its generations and are not found.
+    ///
+    /// OpenUSD: `UsdStage` handles `SdfNotice::LayersDidChange`, resyncing
+    /// the prims of significant changes and updating the info of the rest.
+    pub fn notify_changed_layers(&mut self, store: &dyn LayerStore) -> Vec<LayerId> {
+        let mut changed: Vec<(LayerId, Option<LayerGenerations>)> = self
+            .generations
+            .iter()
+            .map(|(layer, seen)| (*layer, *seen, generations_of(store, *layer)))
+            .filter(|(_, seen, found)| seen != found)
+            .map(|(layer, _, found)| (layer, found))
+            .collect();
+        changed.sort_unstable_by_key(|(layer, _)| *layer);
+        for &(layer, found) in &changed {
+            let seen = self.generations.insert(layer, found).flatten();
+            match (seen, found) {
+                (Some(seen), Some(found)) if seen.1 == found.1 => self.notify_layer_edit(layer),
+                _ => self.notify_structural_change(),
+            }
+        }
+        changed.into_iter().map(|(layer, _)| layer).collect()
+    }
+
+    /// Records the generations of every layer the stage reads.
+    fn record_generations(&mut self, store: &dyn LayerStore) {
+        self.generations = participating_layers(store, self.root)
+            .into_iter()
+            .map(|layer| (layer, generations_of(store, layer)))
+            .collect();
     }
 
     /// Notifies that opinions in `layer` have been edited.
@@ -280,6 +401,8 @@ impl LiveStage {
     /// new arcs, a variant selection that adds children) are not visible to a
     /// scoped recomposition and must be reported with
     /// [`notify_structural_change`](Self::notify_structural_change).
+    /// [`notify_changed_layers`](Self::notify_changed_layers) finds layers
+    /// edited without a notification.
     pub fn recompose(&mut self, store: &mut dyn LayerStore) -> Vec<PathId> {
         if self.needs_full_rebuild {
             return self.full_rebuild(store);
@@ -433,6 +556,7 @@ impl LiveStage {
         self.default_prim_dependents = deps.default_prim_dependents;
         self.relocation_layers = deps.relocation_layers;
         self.reindex_all_sources();
+        self.record_generations(store);
 
         // A before/after difference, not an edit log: removed paths are those
         // the old stage had and the new one lacks.
@@ -565,6 +689,209 @@ mod tests {
         live.notify_relocates_edit(LayerId(1));
         live.recompose(&mut store);
         assert!(live.stage().has_prim(b) && !live.stage().has_prim(c));
+    }
+
+    /// Relocates cleared through the public fields and `touch` are found by
+    /// polling, which rebuilds the namespace they moved.
+    #[test]
+    fn polled_relocates_edit_rebuilds_namespace() {
+        let mut store = InMemoryStore::default();
+        let (b, c, field_x) = relocated_scene(&mut store);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let root = store.layers.get_mut(&LayerId(1)).expect("root layer");
+        root.relocates.clear();
+        root.touch();
+        assert_eq!(live.notify_changed_layers(&store), [LayerId(1)]);
+        live.recompose(&mut store);
+        assert!(live.stage().has_prim(b) && !live.stage().has_prim(c));
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+    }
+
+    /// Edits through `Layer` methods move generations, which
+    /// `notify_changed_layers` turns into layer notifications; writes into
+    /// the public fields are not seen.
+    #[test]
+    fn changed_layers_are_found_by_generation() {
+        let mut store = InMemoryStore::default();
+        let field_x = store.tokens.intern("x");
+        let (a, b) = (p(&mut store, "/A"), p(&mut store, "/B"));
+        let mut root = Layer::new(LayerId(1));
+        root.sublayers.push(SublayerEntry::new(LayerId(2)));
+        root.insert_prim(a, PrimSpec::def().with_property(field_x, attr(1)));
+        store.insert_layer(root);
+        let mut sub = Layer::new(LayerId(2));
+        sub.insert_prim(b, PrimSpec::def().with_property(field_x, attr(1)));
+        store.insert_layer(sub);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert_eq!(live.notify_changed_layers(&store), [], "nothing changed");
+
+        let layer = store.layers.get_mut(&LayerId(2)).unwrap();
+        layer.set_property(PropertyPath::new(b, field_x), attr(2));
+        assert_eq!(live.notify_changed_layers(&store), [LayerId(2)]);
+        assert_eq!(
+            live.recompose(&mut store),
+            [b],
+            "the layer's prims recompose"
+        );
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+        assert_eq!(live.notify_changed_layers(&store), [], "reported once");
+
+        let layer = store.layers.get_mut(&LayerId(1)).unwrap();
+        layer.prims.get_mut(&a).unwrap().properties[0].spec.default = Some(Value::Int64(3));
+        assert_eq!(
+            live.notify_changed_layers(&store),
+            [],
+            "a field write moves no generation"
+        );
+        layer_touch(&mut store, LayerId(1));
+        assert_eq!(live.notify_changed_layers(&store), [LayerId(1)]);
+        live.recompose(&mut store);
+        assert_matches_fresh(&live, &mut store, &[field_x]);
+    }
+
+    /// A scene whose root layer has an empty sublayer (3) and references
+    /// `/Rock` of an asset layer (2) at `/World/Rock`, and the live stage
+    /// composed from it.
+    fn rock_scene() -> (InMemoryStore, LiveStage, TokenId) {
+        let mut store = InMemoryStore::default();
+        let size = store.tokens.intern("size");
+        let (world, world_rock, rock) = (
+            p(&mut store, "/World"),
+            p(&mut store, "/World/Rock"),
+            p(&mut store, "/Rock"),
+        );
+        let (world_name, rock_name) = (store.tokens.intern("World"), store.tokens.intern("Rock"));
+        let root_path = p(&mut store, "/");
+        let mut root = Layer::new(LayerId(1));
+        root.sublayers.push(SublayerEntry::new(LayerId(3)));
+        root.insert_prim(
+            root_path,
+            PrimSpec::default().with_children(vec![world_name]),
+        );
+        root.insert_prim(world, PrimSpec::def().with_children(vec![rock_name]));
+        root.insert_prim(
+            world_rock,
+            PrimSpec::def().with_reference(Reference::new(LayerId(2), rock)),
+        );
+        store.insert_layer(root);
+        let mut asset = Layer::new(LayerId(2));
+        asset.insert_prim(rock, PrimSpec::def().with_property(size, attr(1)));
+        store.insert_layer(asset);
+        store.insert_layer(Layer::new(LayerId(3)));
+        let live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        (store, live, size)
+    }
+
+    /// Polls, recomposes and checks the stage against a fresh composition.
+    fn poll(live: &mut LiveStage, store: &mut InMemoryStore, expected: &[LayerId], size: TokenId) {
+        assert_eq!(live.notify_changed_layers(store), expected);
+        live.recompose(store);
+        assert_matches_fresh(live, store, &[size]);
+        assert_eq!(live.notify_changed_layers(store), [], "reported once");
+    }
+
+    /// A prim spec added to a referenced layer adds a composed prim: the
+    /// poll rebuilds the namespace, not only the prims drawing on the
+    /// layer.
+    #[test]
+    fn polled_spec_insertion_rebuilds_namespace() {
+        let (mut store, mut live, size) = rock_scene();
+        let pebble = p(&mut store, "/Rock/Pebble");
+        let pebble_name = store.tokens.intern("Pebble");
+        let rock = p(&mut store, "/Rock");
+        let asset = store.layers.get_mut(&LayerId(2)).unwrap();
+        asset.insert_prim(pebble, PrimSpec::def().with_property(size, attr(2)));
+        asset
+            .prims
+            .get_mut(&rock)
+            .unwrap()
+            .authored_children
+            .push(pebble_name);
+        poll(&mut live, &mut store, &[LayerId(2)], size);
+        let world_pebble = p(&mut store, "/World/Rock/Pebble");
+        assert!(live.stage().has_prim(world_pebble));
+    }
+
+    /// A prim spec removed, through the public fields and `touch`, removes
+    /// its composed prim.
+    #[test]
+    fn polled_spec_removal_rebuilds_namespace() {
+        let (mut store, mut live, size) = rock_scene();
+        let world_rock = p(&mut store, "/World/Rock");
+        let rock_name = store.tokens.intern("Rock");
+        let world = p(&mut store, "/World");
+        let root = store.layers.get_mut(&LayerId(1)).unwrap();
+        root.prims.remove(&world_rock);
+        root.prims
+            .get_mut(&world)
+            .unwrap()
+            .authored_children
+            .retain(|c| *c != rock_name);
+        root.touch();
+        poll(&mut live, &mut store, &[LayerId(1)], size);
+        assert!(!live.stage().has_prim(world_rock));
+    }
+
+    /// A reference retargeted by replacing the prim spec that authors it
+    /// changes the arc, and the prim's opinions follow it.
+    #[test]
+    fn polled_arc_change_recomposes_through_the_new_target() {
+        let (mut store, mut live, size) = rock_scene();
+        let (world_rock, boulder) = (p(&mut store, "/World/Rock"), p(&mut store, "/Boulder"));
+        let asset = store.layers.get_mut(&LayerId(2)).unwrap();
+        asset.insert_prim(boulder, PrimSpec::def().with_property(size, attr(5)));
+        store.layers.get_mut(&LayerId(1)).unwrap().insert_prim(
+            world_rock,
+            PrimSpec::def().with_reference(Reference::new(LayerId(2), boulder)),
+        );
+        poll(&mut live, &mut store, &[LayerId(1), LayerId(2)], size);
+        let value = live
+            .stage()
+            .resolve_property_path(PropertyPath::new(world_rock, size))
+            .unwrap()
+            .value;
+        assert_eq!(value, crate::ResolvedValue::Scalar(Value::Int64(5)));
+    }
+
+    /// A sublayer that is empty when the stage composes is still read by
+    /// it: a prim spec added there later is found.
+    #[test]
+    fn polled_initially_empty_sublayer_is_tracked() {
+        let (mut store, mut live, size) = rock_scene();
+        let (added, added_name) = (p(&mut store, "/Added"), store.tokens.intern("Added"));
+        let root_path = p(&mut store, "/");
+        let sub = store.layers.get_mut(&LayerId(3)).unwrap();
+        sub.insert_prim(
+            root_path,
+            PrimSpec::default().with_children(vec![added_name]),
+        );
+        sub.insert_prim(added, PrimSpec::def().with_property(size, attr(3)));
+        poll(&mut live, &mut store, &[LayerId(3)], size);
+        assert!(live.stage().has_prim(added));
+    }
+
+    /// A layer a reference targets that the store does not hold yet is
+    /// tracked too, and its arrival rebuilds.
+    #[test]
+    fn polled_layer_arrival_rebuilds() {
+        let (mut store, mut live, size) = rock_scene();
+        let (world_rock, rock) = (p(&mut store, "/World/Rock"), p(&mut store, "/Rock"));
+        let root = store.layers.get_mut(&LayerId(1)).unwrap();
+        root.insert_prim(
+            world_rock,
+            PrimSpec::def()
+                .with_reference(Reference::new(LayerId(2), rock))
+                .with_reference(Reference::new(LayerId(4), rock)),
+        );
+        poll(&mut live, &mut store, &[LayerId(1)], size);
+        let mut late = Layer::new(LayerId(4));
+        late.insert_prim(rock, PrimSpec::def().with_property(size, attr(9)));
+        store.insert_layer(late);
+        poll(&mut live, &mut store, &[LayerId(4)], size);
+    }
+
+    fn layer_touch(store: &mut InMemoryStore, id: LayerId) {
+        store.layers.get_mut(&id).unwrap().touch();
     }
 
     #[test]

@@ -6633,6 +6633,40 @@ fn record_offset_layers(
     }
 }
 
+/// The opinions an arc will copy into its stage, detached from the source
+/// store before namespace mapping mutates the path interner. Snapshot only
+/// mapped specs, and clone each opinion once into its eventual stage owner.
+struct ArcSpecSnapshot {
+    outer_variant_sites: Vec<VariantSelectionSite>,
+    entries: Vec<(TokenId, OpinionValue, Option<PropertyType>)>,
+    prim_order: Option<Vec<TokenId>>,
+    authored_children: Vec<TokenId>,
+    has_variant_sets: bool,
+}
+
+fn snapshot_arc_specs(
+    layer: &crate::doc::Layer,
+    mapping: &[(PathId, PathId)],
+) -> Vec<(PathId, PathId, ArcSpecSnapshot)> {
+    mapping
+        .iter()
+        .flat_map(|&(source, dest)| {
+            layer.prim_specs(source).map(move |spec| {
+                let snapshot = ArcSpecSnapshot {
+                    outer_variant_sites: spec.outer_variant_sites.clone(),
+                    entries: composed_entries(&spec.fields, &spec.properties)
+                        .map(|entry| (entry.name(), entry.value(), entry.property_type().cloned()))
+                        .collect(),
+                    prim_order: spec.prim_order.clone(),
+                    authored_children: spec.authored_children.clone(),
+                    has_variant_sets: !spec.variant_sets.is_empty(),
+                };
+                (source, dest, snapshot)
+            })
+        })
+        .collect()
+}
+
 fn add_reference_edge_opinions(
     store: &mut dyn LayerStore,
     fallbacks: &VariantFallbacks,
@@ -6805,9 +6839,11 @@ fn add_reference_edge_opinions(
         let ref_offset = reference
             .layer_offset
             .compose(remote_stack.offset_at(layer_strength_idx));
-        let Some(remote_layer) = store.layer(remote_layer_id).cloned() else {
+        let Some(remote_layer) = store.layer(remote_layer_id) else {
             continue;
         };
+
+        let snapshots = snapshot_arc_specs(remote_layer, &mapping);
 
         let mut pending_sources = Vec::new();
         let mut pending_fields: Vec<(
@@ -6818,90 +6854,85 @@ fn add_reference_edge_opinions(
             Option<PropertyType>,
             LayerOffset,
         )> = Vec::new();
-        for (remote_path_id, dest_path_id) in &mapping {
-            for remote_spec in remote_layer.prim_specs(*remote_path_id) {
-                if let Some(d) = deps.as_deref_mut() {
-                    d.add_layer_opinion(remote_layer_id, *dest_path_id);
-                }
-                let node =
-                    nodes.spec_node(store, out, *dest_path_id, &remote_spec.outer_variant_sites);
-                let base_key = OpinionKey {
-                    node,
-                    layer_strength,
-                    layer_id: remote_layer_id,
-                    lookup_path: *remote_path_id,
-                    spec_path: normalized_prim_spec_path(
-                        store,
-                        *remote_path_id,
-                        &remote_spec.outer_variant_sites,
-                        provenance_remap,
-                    ),
-                };
-                pending_sources.push((*dest_path_id, base_key.clone()));
+        for (remote_path_id, dest_path_id, remote_spec) in snapshots {
+            if let Some(d) = deps.as_deref_mut() {
+                d.add_layer_opinion(remote_layer_id, dest_path_id);
+            }
+            let node = nodes.spec_node(store, out, dest_path_id, &remote_spec.outer_variant_sites);
+            let base_key = OpinionKey {
+                node,
+                layer_strength,
+                layer_id: remote_layer_id,
+                lookup_path: remote_path_id,
+                spec_path: normalized_prim_spec_path(
+                    store,
+                    remote_path_id,
+                    &remote_spec.outer_variant_sites,
+                    provenance_remap,
+                ),
+            };
+            pending_sources.push((dest_path_id, base_key.clone()));
 
-                for entry in composed_entries(&remote_spec.fields, &remote_spec.properties) {
-                    pending_fields.push((
-                        *dest_path_id,
-                        entry.name(),
-                        base_key
-                            .clone()
-                            .with_spec_path(normalized_property_spec_path(
-                                store,
-                                *remote_path_id,
-                                &remote_spec.outer_variant_sites,
-                                entry.name(),
-                                provenance_remap,
-                            )),
-                        entry.value(),
-                        entry.property_type().cloned(),
-                        ref_offset,
-                    ));
-                }
+            for (field, value, property_type) in remote_spec.entries {
+                pending_fields.push((
+                    dest_path_id,
+                    field,
+                    base_key
+                        .clone()
+                        .with_spec_path(normalized_property_spec_path(
+                            store,
+                            remote_path_id,
+                            &remote_spec.outer_variant_sites,
+                            field,
+                            provenance_remap,
+                        )),
+                    value,
+                    property_type,
+                    ref_offset,
+                ));
+            }
 
-                if let Some(order) = &remote_spec.prim_order {
-                    prim_order_out.entry(*dest_path_id).or_default().push((
+            if let Some(order) = remote_spec.prim_order {
+                prim_order_out.entry(dest_path_id).or_default().push((
+                    OpinionKey {
+                        node,
+                        layer_strength,
+                        layer_id: remote_layer_id,
+                        lookup_path: remote_path_id,
+                        spec_path: prim_spec_path(
+                            store,
+                            remote_path_id,
+                            &remote_spec.outer_variant_sites,
+                        ),
+                    },
+                    order,
+                ));
+            }
+
+            if !remote_spec.authored_children.is_empty() {
+                authored_children_out
+                    .entry(dest_path_id)
+                    .or_default()
+                    .push((
                         OpinionKey {
                             node,
                             layer_strength,
                             layer_id: remote_layer_id,
-                            lookup_path: *remote_path_id,
+                            lookup_path: remote_path_id,
                             spec_path: prim_spec_path(
                                 store,
-                                *remote_path_id,
+                                remote_path_id,
                                 &remote_spec.outer_variant_sites,
                             ),
                         },
-                        order.clone(),
+                        remote_spec.authored_children,
                     ));
-                }
+            }
 
-                if !remote_spec.authored_children.is_empty() {
-                    authored_children_out
-                        .entry(*dest_path_id)
-                        .or_default()
-                        .push((
-                            OpinionKey {
-                                node,
-                                layer_strength,
-                                layer_id: remote_layer_id,
-                                lookup_path: *remote_path_id,
-                                spec_path: prim_spec_path(
-                                    store,
-                                    *remote_path_id,
-                                    &remote_spec.outer_variant_sites,
-                                ),
-                            },
-                            remote_spec.authored_children.clone(),
-                        ));
-                }
-
-                // The spec's own variant sets are selected once the prim
-                // index is complete (see `LateBranches`).
-                if !remote_spec.variant_sets.is_empty()
-                    && late_seen.insert((*remote_path_id, *dest_path_id))
-                {
-                    late_sites.push((*remote_path_id, *dest_path_id));
-                }
+            // The spec's own variant sets are selected once the prim
+            // index is complete (see `LateBranches`).
+            if remote_spec.has_variant_sets && late_seen.insert((remote_path_id, dest_path_id)) {
+                late_sites.push((remote_path_id, dest_path_id));
             }
         }
 
@@ -7739,126 +7770,123 @@ fn add_payload_edge_opinions(
         let payload_offset = reference
             .layer_offset
             .compose(remote_stack.offset_at(layer_strength_idx));
-        let Some(remote_layer) = store.layer(remote_layer_id).cloned() else {
+        let Some(remote_layer) = store.layer(remote_layer_id) else {
             continue;
         };
 
+        let snapshots = snapshot_arc_specs(remote_layer, &mapping);
+
         let mut pending_sources = Vec::new();
-        for (remote_path_id, dest_path_id) in &mapping {
-            for remote_spec in remote_layer.prim_specs(*remote_path_id) {
-                if let Some(d) = deps.as_deref_mut() {
-                    d.add_layer_opinion(remote_layer_id, *dest_path_id);
+        for (remote_path_id, dest_path_id, remote_spec) in snapshots {
+            if let Some(d) = deps.as_deref_mut() {
+                d.add_layer_opinion(remote_layer_id, dest_path_id);
+            }
+            let node = nodes.spec_node(store, out, dest_path_id, &remote_spec.outer_variant_sites);
+            pending_sources.push((
+                dest_path_id,
+                OpinionKey {
+                    node,
+                    layer_strength,
+                    layer_id: remote_layer_id,
+                    lookup_path: remote_path_id,
+                    spec_path: normalized_prim_spec_path(
+                        store,
+                        remote_path_id,
+                        &remote_spec.outer_variant_sites,
+                        provenance_remap,
+                    ),
+                },
+            ));
+
+            for (field, value, property_type) in remote_spec.entries {
+                let key = OpinionKey {
+                    node,
+                    layer_strength,
+                    layer_id: remote_layer_id,
+                    lookup_path: remote_path_id,
+                    spec_path: normalized_property_spec_path(
+                        store,
+                        remote_path_id,
+                        &remote_spec.outer_variant_sites,
+                        field,
+                        provenance_remap,
+                    ),
+                };
+                let index = out.get_mut(&dest_path_id).expect("path exists");
+                if let Some(property_type) = property_type {
+                    index.add_property_type(field, key.clone(), property_type);
                 }
-                let node =
-                    nodes.spec_node(store, out, *dest_path_id, &remote_spec.outer_variant_sites);
-                pending_sources.push((
-                    *dest_path_id,
+                index.add_opinion(Opinion {
+                    key: key.clone(),
+                    field,
+                    value: {
+                        let mut value = value;
+                        let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
+                        map_arc_targets(
+                            store,
+                            &mut value,
+                            ArcPathMap {
+                                arc: ArcKind::Payloads,
+                                source: &target_root,
+                                map: &|store, path| targets.map(store, path),
+                            },
+                            TargetOwner {
+                                prim: dest_path_id,
+                                property: field,
+                                layer: remote_layer_id,
+                                spec: key.spec_path.clone(),
+                            },
+                            cycles,
+                        );
+                        value
+                    },
+                    layer_offset: payload_offset,
+                });
+            }
+
+            if let Some(order) = remote_spec.prim_order {
+                prim_order_out.entry(dest_path_id).or_default().push((
                     OpinionKey {
                         node,
                         layer_strength,
                         layer_id: remote_layer_id,
-                        lookup_path: *remote_path_id,
+                        lookup_path: remote_path_id,
                         spec_path: normalized_prim_spec_path(
                             store,
-                            *remote_path_id,
+                            remote_path_id,
                             &remote_spec.outer_variant_sites,
                             provenance_remap,
                         ),
                     },
+                    order,
                 ));
+            }
 
-                for entry in composed_entries(&remote_spec.fields, &remote_spec.properties) {
-                    let key = OpinionKey {
-                        node,
-                        layer_strength,
-                        layer_id: remote_layer_id,
-                        lookup_path: *remote_path_id,
-                        spec_path: normalized_property_spec_path(
-                            store,
-                            *remote_path_id,
-                            &remote_spec.outer_variant_sites,
-                            entry.name(),
-                            provenance_remap,
-                        ),
-                    };
-                    let index = out.get_mut(dest_path_id).expect("path exists");
-                    if let Some(property_type) = entry.property_type() {
-                        index.add_property_type(entry.name(), key.clone(), property_type.clone());
-                    }
-                    index.add_opinion(Opinion {
-                        key: key.clone(),
-                        field: entry.name(),
-                        value: {
-                            let mut value = entry.value();
-                            let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
-                            map_arc_targets(
-                                store,
-                                &mut value,
-                                ArcPathMap {
-                                    arc: ArcKind::Payloads,
-                                    source: &target_root,
-                                    map: &|store, path| targets.map(store, path),
-                                },
-                                TargetOwner {
-                                    prim: *dest_path_id,
-                                    property: entry.name(),
-                                    layer: remote_layer_id,
-                                    spec: key.spec_path.clone(),
-                                },
-                                cycles,
-                            );
-                            value
-                        },
-                        layer_offset: payload_offset,
-                    });
-                }
-
-                if let Some(order) = &remote_spec.prim_order {
-                    prim_order_out.entry(*dest_path_id).or_default().push((
+            if !remote_spec.authored_children.is_empty() {
+                authored_children_out
+                    .entry(dest_path_id)
+                    .or_default()
+                    .push((
                         OpinionKey {
                             node,
                             layer_strength,
                             layer_id: remote_layer_id,
-                            lookup_path: *remote_path_id,
+                            lookup_path: remote_path_id,
                             spec_path: normalized_prim_spec_path(
                                 store,
-                                *remote_path_id,
+                                remote_path_id,
                                 &remote_spec.outer_variant_sites,
                                 provenance_remap,
                             ),
                         },
-                        order.clone(),
+                        remote_spec.authored_children,
                     ));
-                }
+            }
 
-                if !remote_spec.authored_children.is_empty() {
-                    authored_children_out
-                        .entry(*dest_path_id)
-                        .or_default()
-                        .push((
-                            OpinionKey {
-                                node,
-                                layer_strength,
-                                layer_id: remote_layer_id,
-                                lookup_path: *remote_path_id,
-                                spec_path: normalized_prim_spec_path(
-                                    store,
-                                    *remote_path_id,
-                                    &remote_spec.outer_variant_sites,
-                                    provenance_remap,
-                                ),
-                            },
-                            remote_spec.authored_children.clone(),
-                        ));
-                }
-
-                // The spec's own variant sets are selected once the prim
-                // index is complete (see `LateBranches`).
-                if !remote_spec.variant_sets.is_empty()
-                    && late_seen.insert((*remote_path_id, *dest_path_id))
-                {
-                    late_sites.push((*remote_path_id, *dest_path_id));
-                }
+            // The spec's own variant sets are selected once the prim
+            // index is complete (see `LateBranches`).
+            if remote_spec.has_variant_sets && late_seen.insert((remote_path_id, dest_path_id)) {
+                late_sites.push((remote_path_id, dest_path_id));
             }
         }
 

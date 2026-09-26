@@ -310,6 +310,8 @@ fn structure(layer: &Layer) -> String {
         prims,
         variant_prims,
         relocates,
+        // The edit counters are not content.
+        ..
     } = layer;
     let sublayers: Vec<_> = sublayers
         .iter()

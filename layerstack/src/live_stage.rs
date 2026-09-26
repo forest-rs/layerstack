@@ -13,7 +13,7 @@
 use alloc::vec::Vec;
 
 use hashbrown::{HashMap, HashSet};
-use invalidation::{Channel, CycleHandling, InvalidationTracker};
+use invalidation::{Channel, CycleHandling, InvalidationTracker, TraversalScratch};
 
 use crate::{
     dependency_map::{ArcDependency, CompositionDeps},
@@ -123,6 +123,8 @@ pub struct LiveStage {
     stage: Stage,
     /// Tracks dependency topology and dirty prim state.
     tracker: InvalidationTracker<PathId>,
+    /// Reused traversal state for lazy invalidation expansion.
+    traversal_scratch: TraversalScratch<PathId>,
     /// Arc metadata for incremental edge updates and diagnostics.
     arc_metadata: HashSet<ArcDependency>,
     /// Layer → prims that receive opinions from that layer.
@@ -165,6 +167,7 @@ impl LiveStage {
         let mut live = Self {
             stage,
             tracker,
+            traversal_scratch: TraversalScratch::new(),
             arc_metadata: deps.arcs,
             layer_to_prims: deps.layer_to_prims,
             prim_to_layers: deps.prim_to_layers,
@@ -514,7 +517,13 @@ impl LiveStage {
         }
 
         // Drain with lazy expansion: roots → all transitive dependents.
-        let mut affected: Vec<PathId> = self.tracker.drain_affected_sorted(OPINION_EDIT).collect();
+        let mut affected: Vec<PathId> = self
+            .tracker
+            .drain(OPINION_EDIT)
+            .affected()
+            .scratch(&mut self.traversal_scratch)
+            .run()
+            .collect();
         let mut partial = loop {
             let partial = self.compose_scoped(store, &affected);
 
@@ -535,7 +544,13 @@ impl LiveStage {
             for prim in resynced {
                 self.tracker.mark(prim, OPINION_EDIT);
             }
-            affected.extend(self.tracker.drain_affected_sorted(OPINION_EDIT));
+            affected.extend(
+                self.tracker
+                    .drain(OPINION_EDIT)
+                    .affected()
+                    .scratch(&mut self.traversal_scratch)
+                    .run(),
+            );
             affected.sort_unstable();
             affected.dedup();
         };
@@ -611,14 +626,16 @@ impl LiveStage {
         partial: &CompositionDeps,
         new_arcs: &[ArcDependency],
     ) {
-        // Remove old graph edges where prim is the dependent.
-        let old_deps: Vec<PathId> = self
-            .tracker
-            .graph()
-            .dependencies(prim, OPINION_EDIT)
-            .collect();
-        for dep in old_deps {
-            self.tracker.remove_dependency(prim, dep, OPINION_EDIT);
+        // Value edits normally keep the same topology. Let invalidation
+        // preserve those edges, and cycle-check only genuinely new ones.
+        let _ = self.tracker.replace_dependencies(
+            prim,
+            OPINION_EDIT,
+            new_arcs.iter().map(|arc| arc.source),
+        );
+
+        if self.prim_to_layers.get(&prim) == partial.prim_to_layers.get(&prim) {
+            return;
         }
 
         // Remove old layer-opinion edges for this prim.
@@ -628,12 +645,6 @@ impl LiveStage {
                     prim_set.remove(&prim);
                 }
             }
-        }
-
-        for arc in new_arcs {
-            let _ = self
-                .tracker
-                .add_dependency(arc.target, arc.source, OPINION_EDIT);
         }
 
         // Add new layer-opinion edges from the partial composition.
@@ -722,6 +733,15 @@ impl LiveStage {
     /// Replaces the source-site index entries for `prim` with those of its
     /// current prim index.
     fn reindex_sources(&mut self, prim: PathId) {
+        let sites = self.stage.source_sites(prim);
+        if self
+            .prim_to_sources
+            .get(&prim)
+            .is_some_and(|old| *old == sites)
+        {
+            return;
+        }
+
         if let Some(old) = self.prim_to_sources.remove(&prim) {
             for site in old {
                 if let Some(dests) = self.source_to_prims.get_mut(&site) {
@@ -732,7 +752,6 @@ impl LiveStage {
                 }
             }
         }
-        let sites = self.stage.source_sites(prim);
         for &site in &sites {
             self.source_to_prims.entry(site).or_default().insert(prim);
         }
@@ -1861,6 +1880,17 @@ mod tests {
         assert_eq!(live_order, fresh_order, "traversal order differs");
 
         for &prim in &fresh_prims {
+            let live_dependencies: HashSet<_> = live
+                .tracker
+                .graph()
+                .dependencies(prim, OPINION_EDIT)
+                .collect();
+            let fresh_dependencies: HashSet<_> =
+                fresh_deps.graph.dependencies(prim, OPINION_EDIT).collect();
+            assert_eq!(
+                live_dependencies, fresh_dependencies,
+                "invalidation dependencies differ for {prim:?}"
+            );
             assert_eq!(
                 stage.children_of(prim),
                 fresh.children_of(prim),

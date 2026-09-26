@@ -40,6 +40,32 @@ type VisitedArc = (PathId, LayerId, PathId, ExpressionVariables);
 /// class path and the expression variables of its layer stack.
 type VisitedClass = (PathId, PathId, ExpressionVariables);
 
+/// The authored namespace at and below an arc target, ordered by path.
+/// Filter before allocating and sorting: an arc into a small subtree must
+/// not sort every unrelated prim in its source layers. Mapping and
+/// relocation still happen at the call site (AOUSD Core §10.3.2).
+pub(crate) fn subtree_paths(
+    store: &dyn LayerStore,
+    stack: &LayerStack,
+    root: &Path,
+) -> Vec<PathId> {
+    let paths = store.paths();
+    let mut result: Vec<_> = stack
+        .layers
+        .iter()
+        .filter_map(|id| store.layer(*id))
+        .flat_map(|layer| layer.prims.keys().copied())
+        .filter(|path| paths.resolve(*path).strip_prefix(root).is_some())
+        .collect();
+    result.sort_by(|a, b| {
+        paths
+            .resolve(*a)
+            .cmp_with_tokens(paths.resolve(*b), store.tokens())
+    });
+    result.dedup();
+    result
+}
+
 /// Produces the set of populated prim paths and a parent→children index.
 ///
 /// Arcs place their targets' prims through the relocations of the layer
@@ -446,19 +472,7 @@ fn expand_inherit_paths(
 
     let src_root = store.paths().resolve(inherited_root).clone();
 
-    let mut remote_paths: Vec<PathId> = stack
-        .layers
-        .iter()
-        .filter_map(|id| store.layer(*id))
-        .flat_map(|layer| layer.prims.keys().copied())
-        .collect();
-    remote_paths.sort_by(|a, b| {
-        store
-            .paths()
-            .resolve(*a)
-            .cmp_with_tokens(store.paths().resolve(*b), store.tokens())
-    });
-    remote_paths.dedup();
+    let remote_paths = subtree_paths(store, stack, &src_root);
 
     for remote_path_id in remote_paths {
         let rel: Vec<_> = {
@@ -593,19 +607,7 @@ fn expand_reference_paths(
     let target = store.paths().resolve(reference_path).clone();
     let base = store.paths().resolve(dest_root).clone();
 
-    let mut remote_paths: Vec<PathId> = remote_stack
-        .layers
-        .iter()
-        .filter_map(|id| store.layer(*id))
-        .flat_map(|layer| layer.prims.keys().copied())
-        .collect();
-    remote_paths.sort_by(|a, b| {
-        store
-            .paths()
-            .resolve(*a)
-            .cmp_with_tokens(store.paths().resolve(*b), store.tokens())
-    });
-    remote_paths.dedup();
+    let remote_paths = subtree_paths(store, &remote_stack, &target);
 
     for remote_path_id in remote_paths {
         let rel: Vec<_> = {
@@ -1331,6 +1333,32 @@ mod tests {
             .collect();
         names.sort();
         names
+    }
+
+    #[test]
+    fn subtree_paths_are_unique_and_ordered_by_namespace() {
+        let mut store = InMemoryStore::default();
+        // Deliberately intern in a different order from namespace order.
+        let z = store.path("/Rock/Z");
+        let outside = store.path("/Rocks/A");
+        let a = store.path("/Rock/A");
+        let root = store.path("/Rock");
+        let mut strong = Layer::new(LayerId(1));
+        strong.sublayers.push(crate::SublayerEntry::new(LayerId(2)));
+        for path in [z, outside, root] {
+            strong.insert_prim(path, PrimSpec::def());
+        }
+        let mut weak = Layer::new(LayerId(2));
+        for path in [a, z, root] {
+            weak.insert_prim(path, PrimSpec::def());
+        }
+        store.insert_layer(strong);
+        store.insert_layer(weak);
+        let stack = LayerStack::gather(&store, LayerId(1));
+        assert_eq!(
+            subtree_paths(&store, &stack, store.paths.resolve(root)),
+            vec![root, a, z]
+        );
     }
 
     #[test]

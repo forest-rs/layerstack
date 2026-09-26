@@ -44,7 +44,7 @@ use crate::{
     interner::TokenId,
     layer_stack::LayerStack,
     path::PathId,
-    population::populate,
+    population::{populate, subtree_paths},
     prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue, PrimIndex},
     prim_index_graph::{NodeArc, NodeId, PrimIndexGraph, PrimNode},
     property::PropertyType,
@@ -5988,19 +5988,7 @@ fn add_inherit_edge_opinions(
 
     let inherited_path = store.paths().resolve(inherited_root).clone();
 
-    let mut remote_paths: Vec<PathId> = local_stack
-        .layers
-        .iter()
-        .filter_map(|id| store.layer(*id))
-        .flat_map(|layer| layer.prims.keys().copied())
-        .collect();
-    remote_paths.sort_by(|a, b| {
-        store
-            .paths()
-            .resolve(*a)
-            .cmp_with_tokens(store.paths().resolve(*b), store.tokens())
-    });
-    remote_paths.dedup();
+    let remote_paths = subtree_paths(store, local_stack, &inherited_path);
 
     let mut mapping: Vec<(PathId, PathId)> = Vec::new();
     let walk = parent.class_walk(&stage_relocates, step.relocates.as_deref());
@@ -6853,19 +6841,7 @@ fn add_reference_edge_opinions(
         cycles.relocations().stage(),
     );
 
-    let mut remote_paths: Vec<PathId> = remote_stack
-        .layers
-        .iter()
-        .filter_map(|id| store.layer(*id))
-        .flat_map(|layer| layer.prims.keys().copied())
-        .collect();
-    remote_paths.sort_by(|a, b| {
-        store
-            .paths()
-            .resolve(*a)
-            .cmp_with_tokens(store.paths().resolve(*b), store.tokens())
-    });
-    remote_paths.dedup();
+    let remote_paths = subtree_paths(store, &remote_stack, &target_root);
 
     // The arc maps the target and its namespace descendants; the arcs of
     // the target's ancestors follow (see `AncestralArcs`).
@@ -7789,19 +7765,7 @@ fn add_payload_edge_opinions(
         cycles.relocations().stage(),
     );
 
-    let mut remote_paths: Vec<PathId> = remote_stack
-        .layers
-        .iter()
-        .filter_map(|id| store.layer(*id))
-        .flat_map(|layer| layer.prims.keys().copied())
-        .collect();
-    remote_paths.sort_by(|a, b| {
-        store
-            .paths()
-            .resolve(*a)
-            .cmp_with_tokens(store.paths().resolve(*b), store.tokens())
-    });
-    remote_paths.dedup();
+    let remote_paths = subtree_paths(store, &remote_stack, &target_root);
 
     // The arc maps the target and its namespace descendants; the arcs of
     // the target's ancestors follow (see `AncestralArcs`).
@@ -8284,19 +8248,7 @@ fn add_specializes_edge_opinions(
     let selection_base_path = store.paths().resolve(selection_root).clone();
     let specialized_path = store.paths().resolve(specialized_root).clone();
 
-    let mut remote_paths: Vec<PathId> = local_stack
-        .layers
-        .iter()
-        .filter_map(|id| store.layer(*id))
-        .flat_map(|layer| layer.prims.keys().copied())
-        .collect();
-    remote_paths.sort_by(|a, b| {
-        store
-            .paths()
-            .resolve(*a)
-            .cmp_with_tokens(store.paths().resolve(*b), store.tokens())
-    });
-    remote_paths.dedup();
+    let remote_paths = subtree_paths(store, local_stack, &specialized_path);
 
     let mut mapping: Vec<(PathId, PathId)> = Vec::new();
     let walk = parent.class_walk(&stage_relocates, relocates.as_deref());

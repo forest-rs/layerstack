@@ -272,6 +272,17 @@ fn encoded_int_array_size(count: usize, int_size: usize) -> Option<usize> {
 
 /// Reads a signed little-endian integer of 1–8 bytes, sign-extending to i64.
 fn read_signed_le(bytes: &[u8]) -> i64 {
+    // Fixed-width loads express sign extension directly and avoid a dynamic
+    // byte copy for each delta in the compressed integer stream.
+    match bytes {
+        [a] => return i64::from(i8::from_le_bytes([*a])),
+        [a, b] => return i64::from(i16::from_le_bytes([*a, *b])),
+        [a, b, c, d] => return i64::from(i32::from_le_bytes([*a, *b, *c, *d])),
+        [a, b, c, d, e, f, g, h] => {
+            return i64::from_le_bytes([*a, *b, *c, *d, *e, *f, *g, *h]);
+        }
+        _ => {}
+    }
     let len = bytes.len();
     debug_assert!(len <= 8, "read_signed_le: max 8 bytes");
     // Copy into an 8-byte buffer with sign extension.
@@ -288,6 +299,34 @@ fn read_signed_le(bytes: &[u8]) -> i64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn signed_reads_preserve_every_width_and_sign() {
+        for width in 0..=8 {
+            for value in [0_i64, 1, -1, i64::MIN, i64::MAX, 0x1234_5678_9abc_def0] {
+                let bytes = value.to_le_bytes();
+                let expected = if width == 0 {
+                    0
+                } else {
+                    let shift = 64 - width * 8;
+                    (value << shift) >> shift
+                };
+                assert_eq!(read_signed_le(&bytes[..width]), expected);
+            }
+            for high in 0..=u8::MAX {
+                let mut bytes = [0x5a; 8];
+                if width > 0 {
+                    bytes[width - 1] = high;
+                }
+                let mut expected = [if width > 0 && high >= 128 { 0xff } else { 0 }; 8];
+                expected[..width].copy_from_slice(&bytes[..width]);
+                assert_eq!(
+                    read_signed_le(&bytes[..width]),
+                    i64::from_le_bytes(expected)
+                );
+            }
+        }
+    }
 
     #[test]
     fn read_signed_le_positive() {

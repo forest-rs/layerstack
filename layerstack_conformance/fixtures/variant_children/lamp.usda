@@ -1,0 +1,18 @@
+#usda 1.0
+
+def "Lamp"
+{
+    def "Shade"
+    {
+        int height = 7
+
+        def "Bulb"
+        {
+            int watts = 40
+        }
+    }
+
+    def "Base"
+    {
+    }
+}

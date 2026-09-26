@@ -1634,6 +1634,27 @@ impl Layer {
         if self.variant_prims.get(&lookup_path).is_none() {
             return self.prims.get(&lookup_path);
         }
+        self.branch_prim_spec(lookup_path, spec_path, paths)
+            .or_else(|| self.prims.get(&lookup_path))
+    }
+
+    /// Returns the prim spec at `lookup_path` authored in exactly the
+    /// variant branch context the selections in `spec_path` enclosing that
+    /// prim name, or `None` when this layer authors none there.
+    ///
+    /// Unlike [`Layer::source_prim_spec`] this never falls back to another
+    /// branch's spec: a spec path outside any branch names only a spec
+    /// outside any branch, and `/P{v=b}C` only the spec the branch `v=b`
+    /// of `/P` holds.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs contain their own prim
+    /// specs), §10.3.2.5 (only the selected variant contributes).
+    pub(crate) fn branch_prim_spec(
+        &self,
+        lookup_path: PathId,
+        spec_path: &SpecPath,
+        paths: &PathInterner,
+    ) -> Option<&PrimSpec> {
         let depth = paths.resolve(lookup_path).depth();
         let mut segments = Vec::new();
         let mut sites = Vec::new();
@@ -1656,7 +1677,6 @@ impl Layer {
             }
         }
         self.prim_spec_in(lookup_path, &sites)
-            .or_else(|| self.prims.get(&lookup_path))
     }
 
     /// Returns an authored layer metadata field, if present.

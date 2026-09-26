@@ -1,0 +1,245 @@
+#usda 1.0
+
+# An `over` in the unselected branch names a child the base also defines;
+# the selected branch is empty. The child stays.
+def "Shape" (
+    variants = {
+        string look = "Plain"
+    }
+    prepend variantSets = "look"
+)
+{
+    def "Geom"
+    {
+        int sides = 3
+    }
+
+    def "Frame"
+    {
+    }
+
+    variantSet "look" = {
+        "Plain" {
+        }
+        "Tinted" {
+            over "Geom"
+            {
+                int sides = 4
+            }
+        }
+    }
+}
+
+# The same, one level down: the unselected branch also overs a
+# grandchild, which stays with its subtree.
+def "Scene" (
+    variants = {
+        string look = "Plain"
+    }
+    prepend variantSets = "look"
+)
+{
+    def "Geom"
+    {
+        def "Triangle"
+        {
+            int corners = 3
+
+            def "Edge"
+            {
+            }
+        }
+    }
+
+    variantSet "look" = {
+        "Plain" {
+        }
+        "Tinted" {
+            over "Geom"
+            {
+                over "Triangle"
+                {
+                    int corners = 4
+                }
+            }
+        }
+    }
+}
+
+# Children only an unselected branch authors disappear, at any depth.
+def "Tree" (
+    variants = {
+        string season = "Summer"
+    }
+    prepend variantSets = "season"
+)
+{
+    def "Trunk"
+    {
+        int rings = 12
+    }
+
+    variantSet "season" = {
+        "Summer" {
+            def "Leaf"
+            {
+            }
+        }
+        "Winter" {
+            def "Snow"
+            {
+            }
+
+            over "Trunk"
+            {
+                int rings = 13
+
+                def "Icicle"
+                {
+                }
+            }
+        }
+    }
+}
+
+# The base child comes through a reference; the variant is local.
+def "Lamp" (
+    variants = {
+        string power = "Off"
+    }
+    prepend references = @./lamp.usda@</Lamp>
+    prepend variantSets = "power"
+)
+{
+    variantSet "power" = {
+        "Off" {
+        }
+        "On" {
+            over "Shade"
+            {
+                over "Bulb"
+                {
+                    int watts = 60
+                }
+            }
+        }
+    }
+}
+
+# The base child comes through a payload; the variant is local.
+def "Lantern" (
+    variants = {
+        string power = "Off"
+    }
+    prepend payload = @./lamp.usda@</Lamp>
+    prepend variantSets = "power"
+)
+{
+    variantSet "power" = {
+        "Off" {
+        }
+        "On" {
+            over "Shade"
+            {
+                int height = 9
+            }
+        }
+    }
+}
+
+# The variant lives in the referenced asset.
+def "Boulder" (
+    prepend references = @./boulder.usda@</Boulder>
+)
+{
+}
+
+# The unselected branch sits inside a selected one.
+def "Pine" (
+    variants = {
+        string size = "Tall"
+    }
+    prepend variantSets = "size"
+)
+{
+    def "Cone"
+    {
+        int scales = 5
+    }
+
+    variantSet "size" = {
+        "Short" {
+            over "Cone"
+            {
+                int scales = 1
+            }
+        }
+        "Tall" (
+            variants = {
+                string age = "Young"
+            }
+            prepend variantSets = "age"
+        ) {
+            def "Crown"
+            {
+            }
+
+            variantSet "age" = {
+                "Old" {
+                    over "Cone"
+                    {
+                        int scales = 9
+
+                        def "Seed"
+                        {
+                        }
+                    }
+
+                    over "Crown"
+                    {
+                    }
+                }
+                "Young" {
+                }
+            }
+        }
+    }
+}
+
+# A child authored in the base and in the selected branch, beside
+# children only one of the branches authors.
+def "Pebble" (
+    variants = {
+        string grade = "Fine"
+    }
+    prepend variantSets = "grade"
+)
+{
+    def "Chip"
+    {
+        int size = 1
+    }
+
+    variantSet "grade" = {
+        "Coarse" {
+            over "Chip"
+            {
+                int size = 3
+            }
+
+            def "Gravel"
+            {
+            }
+        }
+        "Fine" {
+            def "Dust"
+            {
+            }
+
+            over "Chip"
+            {
+                int size = 2
+            }
+        }
+    }
+}

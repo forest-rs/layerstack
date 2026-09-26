@@ -1,0 +1,41 @@
+#usda 1.0
+
+def "Boulder" (
+    variants = {
+        string weather = "Dry"
+    }
+    prepend variantSets = "weather"
+)
+{
+    def "Moss"
+    {
+        int patches = 2
+
+        def "Spore"
+        {
+        }
+    }
+
+    variantSet "weather" = {
+        "Dry" {
+        }
+        "Wet" {
+            over "Moss"
+            {
+                int patches = 8
+
+                over "Spore"
+                {
+                }
+
+                def "Drop"
+                {
+                }
+            }
+
+            def "Puddle"
+            {
+            }
+        }
+    }
+}

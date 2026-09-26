@@ -1,0 +1,779 @@
+{
+ "generator": "layerstack_conformance/scripts/variant_children_oracle.py",
+ "openusd_version": "0.26.8",
+ "root": "root.usda",
+ "prims": [
+  {
+   "path": "/Shape",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Shape"
+    ],
+    [
+     "root.usda",
+     "/Shape{look=Plain}"
+    ]
+   ],
+   "children": [
+    "Geom",
+    "Frame"
+   ]
+  },
+  {
+   "path": "/Shape/Geom",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Shape/Geom"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Shape/Frame",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Shape/Frame"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Scene",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Scene"
+    ],
+    [
+     "root.usda",
+     "/Scene{look=Plain}"
+    ]
+   ],
+   "children": [
+    "Geom"
+   ]
+  },
+  {
+   "path": "/Scene/Geom",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Scene/Geom"
+    ]
+   ],
+   "children": [
+    "Triangle"
+   ]
+  },
+  {
+   "path": "/Scene/Geom/Triangle",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Scene/Geom/Triangle"
+    ]
+   ],
+   "children": [
+    "Edge"
+   ]
+  },
+  {
+   "path": "/Scene/Geom/Triangle/Edge",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Scene/Geom/Triangle/Edge"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Tree",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Tree"
+    ],
+    [
+     "root.usda",
+     "/Tree{season=Summer}"
+    ]
+   ],
+   "children": [
+    "Leaf",
+    "Trunk"
+   ]
+  },
+  {
+   "path": "/Tree/Leaf",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Tree{season=Summer}Leaf"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Tree/Trunk",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Tree/Trunk"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Lamp",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Lamp"
+    ],
+    [
+     "root.usda",
+     "/Lamp{power=Off}"
+    ],
+    [
+     "lamp.usda",
+     "/Lamp"
+    ]
+   ],
+   "children": [
+    "Shade",
+    "Base"
+   ]
+  },
+  {
+   "path": "/Lamp/Shade",
+   "prim_stack": [
+    [
+     "lamp.usda",
+     "/Lamp/Shade"
+    ]
+   ],
+   "children": [
+    "Bulb"
+   ]
+  },
+  {
+   "path": "/Lamp/Shade/Bulb",
+   "prim_stack": [
+    [
+     "lamp.usda",
+     "/Lamp/Shade/Bulb"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Lamp/Base",
+   "prim_stack": [
+    [
+     "lamp.usda",
+     "/Lamp/Base"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Lantern",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Lantern"
+    ],
+    [
+     "root.usda",
+     "/Lantern{power=Off}"
+    ],
+    [
+     "lamp.usda",
+     "/Lamp"
+    ]
+   ],
+   "children": [
+    "Shade",
+    "Base"
+   ]
+  },
+  {
+   "path": "/Lantern/Shade",
+   "prim_stack": [
+    [
+     "lamp.usda",
+     "/Lamp/Shade"
+    ]
+   ],
+   "children": [
+    "Bulb"
+   ]
+  },
+  {
+   "path": "/Lantern/Shade/Bulb",
+   "prim_stack": [
+    [
+     "lamp.usda",
+     "/Lamp/Shade/Bulb"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Lantern/Base",
+   "prim_stack": [
+    [
+     "lamp.usda",
+     "/Lamp/Base"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Boulder",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Boulder"
+    ],
+    [
+     "boulder.usda",
+     "/Boulder"
+    ],
+    [
+     "boulder.usda",
+     "/Boulder{weather=Dry}"
+    ]
+   ],
+   "children": [
+    "Moss"
+   ]
+  },
+  {
+   "path": "/Boulder/Moss",
+   "prim_stack": [
+    [
+     "boulder.usda",
+     "/Boulder/Moss"
+    ]
+   ],
+   "children": [
+    "Spore"
+   ]
+  },
+  {
+   "path": "/Boulder/Moss/Spore",
+   "prim_stack": [
+    [
+     "boulder.usda",
+     "/Boulder/Moss/Spore"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Pine",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Pine"
+    ],
+    [
+     "root.usda",
+     "/Pine{size=Tall}"
+    ],
+    [
+     "root.usda",
+     "/Pine{size=Tall}{age=Young}"
+    ]
+   ],
+   "children": [
+    "Crown",
+    "Cone"
+   ]
+  },
+  {
+   "path": "/Pine/Crown",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Pine{size=Tall}Crown"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Pine/Cone",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Pine/Cone"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Pebble",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Pebble"
+    ],
+    [
+     "root.usda",
+     "/Pebble{grade=Fine}"
+    ]
+   ],
+   "children": [
+    "Dust",
+    "Chip"
+   ]
+  },
+  {
+   "path": "/Pebble/Dust",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Pebble{grade=Fine}Dust"
+    ]
+   ],
+   "children": []
+  },
+  {
+   "path": "/Pebble/Chip",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Pebble/Chip"
+    ],
+    [
+     "root.usda",
+     "/Pebble{grade=Fine}Chip"
+    ]
+   ],
+   "children": []
+  }
+ ],
+ "values": {
+  "/Shape/Geom.sides": 3,
+  "/Scene/Geom/Triangle.corners": 3,
+  "/Tree/Trunk.rings": 12,
+  "/Lamp/Shade.height": 7,
+  "/Lamp/Shade/Bulb.watts": 40,
+  "/Lantern/Shade.height": 7,
+  "/Lantern/Shade/Bulb.watts": 40,
+  "/Boulder/Moss.patches": 2,
+  "/Pine/Cone.scales": 5,
+  "/Pebble/Chip.size": 1
+ },
+ "switched": {
+  "selections": [
+   [
+    "/Scene",
+    "look",
+    "Tinted"
+   ],
+   [
+    "/Tree",
+    "season",
+    "Winter"
+   ]
+  ],
+  "prims": [
+   {
+    "path": "/Shape",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Shape"
+     ],
+     [
+      "root.usda",
+      "/Shape{look=Plain}"
+     ]
+    ],
+    "children": [
+     "Geom",
+     "Frame"
+    ]
+   },
+   {
+    "path": "/Shape/Geom",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Shape/Geom"
+     ]
+    ],
+    "children": []
+   },
+   {
+    "path": "/Shape/Frame",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Shape/Frame"
+     ]
+    ],
+    "children": []
+   },
+   {
+    "path": "/Scene",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Scene"
+     ],
+     [
+      "root.usda",
+      "/Scene{look=Tinted}"
+     ]
+    ],
+    "children": [
+     "Geom"
+    ]
+   },
+   {
+    "path": "/Scene/Geom",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Scene/Geom"
+     ],
+     [
+      "root.usda",
+      "/Scene{look=Tinted}Geom"
+     ]
+    ],
+    "children": [
+     "Triangle"
+    ]
+   },
+   {
+    "path": "/Scene/Geom/Triangle",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Scene/Geom/Triangle"
+     ],
+     [
+      "root.usda",
+      "/Scene{look=Tinted}Geom/Triangle"
+     ]
+    ],
+    "children": [
+     "Edge"
+    ]
+   },
+   {
+    "path": "/Scene/Geom/Triangle/Edge",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Scene/Geom/Triangle/Edge"
+     ]
+    ],
+    "children": []
+   },
+   {
+    "path": "/Tree",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Tree"
+     ],
+     [
+      "root.usda",
+      "/Tree{season=Winter}"
+     ]
+    ],
+    "children": [
+     "Snow",
+     "Trunk"
+    ]
+   },
+   {
+    "path": "/Tree/Snow",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Tree{season=Winter}Snow"
+     ]
+    ],
+    "children": []
+   },
+   {
+    "path": "/Tree/Trunk",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Tree/Trunk"
+     ],
+     [
+      "root.usda",
+      "/Tree{season=Winter}Trunk"
+     ]
+    ],
+    "children": [
+     "Icicle"
+    ]
+   },
+   {
+    "path": "/Tree/Trunk/Icicle",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Tree{season=Winter}Trunk/Icicle"
+     ]
+    ],
+    "children": []
+   },
+   {
+    "path": "/Lamp",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Lamp"
+     ],
+     [
+      "root.usda",
+      "/Lamp{power=Off}"
+     ],
+     [
+      "lamp.usda",
+      "/Lamp"
+     ]
+    ],
+    "children": [
+     "Shade",
+     "Base"
+    ]
+   },
+   {
+    "path": "/Lamp/Shade",
+    "prim_stack": [
+     [
+      "lamp.usda",
+      "/Lamp/Shade"
+     ]
+    ],
+    "children": [
+     "Bulb"
+    ]
+   },
+   {
+    "path": "/Lamp/Shade/Bulb",
+    "prim_stack": [
+     [
+      "lamp.usda",
+      "/Lamp/Shade/Bulb"
+     ]
+    ],
+    "children": []
+   },
+   {
+    "path": "/Lamp/Base",
+    "prim_stack": [
+     [
+      "lamp.usda",
+      "/Lamp/Base"
+     ]
+    ],
+    "children": []
+   },
+   {
+    "path": "/Lantern",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Lantern"
+     ],
+     [
+      "root.usda",
+      "/Lantern{power=Off}"
+     ],
+     [
+      "lamp.usda",
+      "/Lamp"
+     ]
+    ],
+    "children": [
+     "Shade",
+     "Base"
+    ]
+   },
+   {
+    "path": "/Lantern/Shade",
+    "prim_stack": [
+     [
+      "lamp.usda",
+      "/Lamp/Shade"
+     ]
+    ],
+    "children": [
+     "Bulb"
+    ]
+   },
+   {
+    "path": "/Lantern/Shade/Bulb",
+    "prim_stack": [
+     [
+      "lamp.usda",
+      "/Lamp/Shade/Bulb"
+     ]
+    ],
+    "children": []
+   },
+   {
+    "path": "/Lantern/Base",
+    "prim_stack": [
+     [
+      "lamp.usda",
+      "/Lamp/Base"
+     ]
+    ],
+    "children": []
+   },
+   {
+    "path": "/Boulder",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Boulder"
+     ],
+     [
+      "boulder.usda",
+      "/Boulder"
+     ],
+     [
+      "boulder.usda",
+      "/Boulder{weather=Dry}"
+     ]
+    ],
+    "children": [
+     "Moss"
+    ]
+   },
+   {
+    "path": "/Boulder/Moss",
+    "prim_stack": [
+     [
+      "boulder.usda",
+      "/Boulder/Moss"
+     ]
+    ],
+    "children": [
+     "Spore"
+    ]
+   },
+   {
+    "path": "/Boulder/Moss/Spore",
+    "prim_stack": [
+     [
+      "boulder.usda",
+      "/Boulder/Moss/Spore"
+     ]
+    ],
+    "children": []
+   },
+   {
+    "path": "/Pine",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Pine"
+     ],
+     [
+      "root.usda",
+      "/Pine{size=Tall}"
+     ],
+     [
+      "root.usda",
+      "/Pine{size=Tall}{age=Young}"
+     ]
+    ],
+    "children": [
+     "Crown",
+     "Cone"
+    ]
+   },
+   {
+    "path": "/Pine/Crown",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Pine{size=Tall}Crown"
+     ]
+    ],
+    "children": []
+   },
+   {
+    "path": "/Pine/Cone",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Pine/Cone"
+     ]
+    ],
+    "children": []
+   },
+   {
+    "path": "/Pebble",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Pebble"
+     ],
+     [
+      "root.usda",
+      "/Pebble{grade=Fine}"
+     ]
+    ],
+    "children": [
+     "Dust",
+     "Chip"
+    ]
+   },
+   {
+    "path": "/Pebble/Dust",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Pebble{grade=Fine}Dust"
+     ]
+    ],
+    "children": []
+   },
+   {
+    "path": "/Pebble/Chip",
+    "prim_stack": [
+     [
+      "root.usda",
+      "/Pebble/Chip"
+     ],
+     [
+      "root.usda",
+      "/Pebble{grade=Fine}Chip"
+     ]
+    ],
+    "children": []
+   }
+  ],
+  "values": {
+   "/Shape/Geom.sides": 3,
+   "/Scene/Geom/Triangle.corners": 3,
+   "/Tree/Trunk.rings": 12,
+   "/Lamp/Shade.height": 7,
+   "/Lamp/Shade/Bulb.watts": 40,
+   "/Lantern/Shade.height": 7,
+   "/Lantern/Shade/Bulb.watts": 40,
+   "/Boulder/Moss.patches": 2,
+   "/Pine/Cone.scales": 5,
+   "/Pebble/Chip.size": 1
+  }
+ }
+}

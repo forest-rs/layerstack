@@ -415,6 +415,36 @@
    ]
   },
   {
+   "path": "/Canvas",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Canvas"
+    ],
+    [
+     "paint.usda",
+     "/Paint"
+    ],
+    [
+     "blue.usda",
+     "/Paint"
+    ]
+   ]
+  },
+  {
+   "path": "/Swatch",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Swatch"
+    ],
+    [
+     "red.usda",
+     "/Paint"
+    ]
+   ]
+  },
+  {
    "path": "/Orchard",
    "prim_stack": [
     [
@@ -445,7 +475,9 @@
   "/Canyon/Crystal.facets": 6,
   "/Rubble.hardness": 6,
   "/Meadow.bloom": 3,
-  "/Clearing.bloom": 3
+  "/Clearing.bloom": 3,
+  "/Canvas.shade": 2,
+  "/Swatch.shade": 1
  },
  "errors": [
   [

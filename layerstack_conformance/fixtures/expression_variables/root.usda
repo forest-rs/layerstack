@@ -5,6 +5,7 @@
         string LAYER = "strata"
         bool DEEP = true
         string SEASON = "summer"
+        string COLOR = "blue"
     }
     subLayers = [
         # The sublayer path comes from a variable.
@@ -178,6 +179,22 @@ def "Seam" (
 
 def "Lode" (
     delete payload = @`if(${DEEP}, "./basalt.usda", "./granite.usda")`@</Basalt>
+)
+{
+}
+
+# `paint.usda` sublayers `${COLOR}.usda` and sets COLOR to red; this layer
+# stack's blue overrides it, so the referenced layer stack holds
+# `blue.usda`.
+def "Canvas" (
+    references = @./paint.usda@
+)
+{
+}
+
+# `red.usda` on its own, so a host holds it when the override changes.
+def "Swatch" (
+    references = @./red.usda@</Paint>
 )
 {
 }

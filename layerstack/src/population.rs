@@ -558,7 +558,14 @@ fn expand_reference_paths(
     if !chain.lifts_relocations() && !visited.insert((dest_root, reference.layer, reference_path)) {
         return;
     }
-    let remote_stack = LayerStack::gather(store, reference.layer);
+    // The target layer stack as this chain reaches it: its sublayer asset
+    // path expressions see the variables of the stacks referencing it.
+    let remote_stack = LayerStack::gather_recording(
+        store,
+        &chain.arcs.stacks_for(reference.layer),
+        &mut Vec::new(),
+        None,
+    );
     chain.push(store, &remote_stack, reference_path, dest_root);
     let expressions = chain.expression_scope();
     let anchor = ArcAnchor::new(reference.layer, Some(&expressions));

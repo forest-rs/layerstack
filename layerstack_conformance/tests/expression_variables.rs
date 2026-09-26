@@ -12,7 +12,8 @@
 //!
 //! The fixture covers a sublayer path, reference and payload paths,
 //! variant selections, a referencing layer stack overriding a referenced
-//! one's variable (for an asset path and for a variant selection), a
+//! one's variable (for an asset path, for a variant selection and for the
+//! referenced layer stack's own sublayer path), a
 //! variable passing through a layer stack in between, a variable that is
 //! not set, an expression that does not parse, one that evaluates to no
 //! value and one that evaluates to another type than string, a stronger
@@ -254,6 +255,7 @@ fn live_stage_recomposes_edited_variables() {
             ("LAYER", string("strata")),
             ("DEEP", Value::Bool(true)),
             ("SEASON", string("summer")),
+            ("COLOR", string("blue")),
             ("UNUSED", string("x")),
         ],
     );
@@ -269,6 +271,7 @@ fn live_stage_recomposes_edited_variables() {
             ("LAYER", string("strata")),
             ("DEEP", Value::Bool(true)),
             ("SEASON", string("winter")),
+            ("COLOR", string("blue")),
         ],
     );
     live.notify_expression_variables_edit(&loaded.store, root);
@@ -290,6 +293,7 @@ fn live_stage_recomposes_edited_variables() {
             ("LAYER", string("strata")),
             ("DEEP", Value::Bool(true)),
             ("SEASON", string("winter")),
+            ("COLOR", string("blue")),
         ],
     );
     assert_eq!(
@@ -367,6 +371,73 @@ fn live_stage_reports_a_selection_once_its_branch_is_selected() {
     let errors = expression_errors(live.stage());
     assert!(errors.contains(&sand), "{errors:?}");
     assert_eq!(errors, expression_errors(&full));
+    assert_eq!(
+        prim_stacks(&mut loaded, live.stage()),
+        prim_stacks(&mut loaded, &full)
+    );
+}
+
+/// The layer the loader named `name`.
+fn layer_named(loaded: &LoadedStage, name: &str) -> layerstack::LayerId {
+    loaded
+        .layer_names
+        .iter()
+        .find_map(|(id, layer)| (layer == name).then_some(*id))
+        .unwrap_or_else(|| panic!("no layer {name}"))
+}
+
+/// Editing the project's `COLOR` changes the sublayer the referenced
+/// `paint.usda` layer stack evaluates, and the live stage recomposes it
+/// as a full composition does.
+#[test]
+fn live_stage_recomposes_referenced_sublayers() {
+    let oracle = oracle();
+    let mut loaded = load(&oracle);
+    let root = loaded.root_layer;
+    let mut live = LiveStage::compose(&mut loaded.store, root, options());
+    let shade = loaded.store.property_path("/Canvas.shade");
+    let value = |stage: &Stage| {
+        stage
+            .resolve_field_path(shade)
+            .map(|resolved| resolved.value)
+    };
+    assert_eq!(value(live.stage()), Some(Value::Int(2)));
+
+    // The project now sets COLOR to red, as the asset does.
+    let field = loaded.store.tokens.intern("expressionVariables");
+    let mut variables = match loaded.store.layer(root).and_then(|l| l.metadata(field)) {
+        Some(layerstack::FieldValue::Value(Value::Dictionary(entries))) => entries.clone(),
+        other => panic!("root expressionVariables: {other:?}"),
+    };
+    for (name, value) in &mut variables {
+        if &**name == "COLOR" {
+            *value = Value::String("red".into());
+        }
+    }
+    loaded
+        .store
+        .layer_mut(root)
+        .expect("root")
+        .set_metadata(field, Value::Dictionary(variables));
+
+    // A host loads what the new value names: `red.usda`, anchored to the
+    // asset's root layer.
+    let paint = layer_named(&loaded, "paint.usda");
+    let red = layer_named(&loaded, "red.usda");
+    let missing = layerstack::expression_asset_paths(&loaded.store, root);
+    assert!(
+        missing
+            .iter()
+            .any(|path| path.anchor == paint && path.asset_path == "./red.usda"),
+        "{missing:?}"
+    );
+    loaded.store.insert_asset_layer(paint, "./red.usda", red);
+
+    live.notify_expression_variables_edit(&loaded.store, root);
+    assert!(!live.recompose(&mut loaded.store).is_empty());
+    let full = Stage::compose(&mut loaded.store, root, options());
+    assert_eq!(value(live.stage()), Some(Value::Int(1)));
+    assert_eq!(value(&full), Some(Value::Int(1)));
     assert_eq!(
         prim_stacks(&mut loaded, live.stage()),
         prim_stacks(&mut loaded, &full)

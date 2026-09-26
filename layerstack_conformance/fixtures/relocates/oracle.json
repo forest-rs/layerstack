@@ -1189,6 +1189,46 @@
    ]
   },
   {
+   "path": "/Hive",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Hive"
+    ]
+   ]
+  },
+  {
+   "path": "/Hive/Cell",
+   "prim_stack": []
+  },
+  {
+   "path": "/Hive/Comb",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Hive/Comb"
+    ]
+   ]
+  },
+  {
+   "path": "/Hive/Comb/_class_Comb",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Hive/Comb/_class_Comb"
+    ]
+   ]
+  },
+  {
+   "path": "/Hive/Comb/_class_Comb/Cell",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Hive/Comb/_class_Comb/Cell"
+    ]
+   ]
+  },
+  {
    "path": "/Harbor",
    "prim_stack": [
     [
@@ -1286,7 +1326,8 @@
   "/Stove/Shelf/Pot.temp": 7,
   "/Rack.coat": 3,
   "/Rack.temp": 7,
-  "/Rack/Pot.temp": 7
+  "/Rack/Pot.temp": 7,
+  "/Hive/Comb/_class_Comb/Cell.size": 2
  },
  "targets": {
   "/Robot.debug": [
@@ -1318,6 +1359,14 @@
  },
  "errors": [
   {
+   "kind": "ArcCycle",
+   "prim": "/Hive/Cell"
+  },
+  {
+   "kind": "ArcCycle",
+   "prim": "/Hive/Comb"
+  },
+  {
    "kind": "ArcToProhibitedChild",
    "prim": "/Chain/Tail_1"
   },
@@ -1348,6 +1397,10 @@
   {
    "kind": "OpinionAtRelocationSource",
    "prim": "/Bowline"
+  },
+  {
+   "kind": "OpinionAtRelocationSource",
+   "prim": "/Hive/Cell"
   },
   {
    "kind": "OpinionAtRelocationSource",

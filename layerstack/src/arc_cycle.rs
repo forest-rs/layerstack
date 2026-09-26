@@ -288,7 +288,53 @@ impl CycleDetector {
             path: target,
             arc: Some(arc),
         });
+        // A prim relocated from beneath `dest` composes the ancestral
+        // opinions of its source, and so `dest`'s arcs, again: it meets the
+        // same cycle, reached through its relocate arc.
+        //
+        // Spec: AOUSD Core §10.3.2.6 ("the composition algorithm is
+        // executed with the layer stack and the entry's source path").
+        // OpenUSD: `_EvalNodeRelocations` adds the relocate node with
+        // `includeAncestralOpinions`, whose recursive index reports the
+        // cycle to the relocation target's prim index (`_CheckForCycle` in
+        // `pxr/usd/pcp/primIndex.cpp`).
+        let relocated: Vec<PathId> = self
+            .relocations
+            .stage()
+            .iter()
+            .filter(|relocate| {
+                relocate.stage_source.is_some_and(|source| {
+                    source != dest && paths.resolve(dest).is_prefix_of(paths.resolve(source))
+                })
+            })
+            .filter_map(|relocate| relocate.stage_target)
+            .collect();
+        let errors: Vec<ArcCycle> = relocated
+            .into_iter()
+            .map(|relocation_target| {
+                let mut through = alloc::vec![ArcCycleSite {
+                    layer_stack: self.stage_layer_stack,
+                    path: relocation_target,
+                    arc: None,
+                }];
+                through.extend(sites.iter().enumerate().map(|(at, site)| ArcCycleSite {
+                    arc: if at == 0 {
+                        Some(ArcKind::Relocates)
+                    } else {
+                        site.arc
+                    },
+                    ..*site
+                }));
+                ArcCycle {
+                    prim: relocation_target,
+                    sites: through,
+                }
+            })
+            .collect();
         self.report(CompositionError::ArcCycle(ArcCycle { prim: dest, sites }));
+        for error in errors {
+            self.report(CompositionError::ArcCycle(error));
+        }
         true
     }
 

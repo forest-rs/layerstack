@@ -81,6 +81,10 @@
 //!   relocation out of the namespace `/Harbor`'s reference maps: it is
 //!   dropped and reported. The one `dock.usda` authors is not relocated,
 //!   and maps.
+//! - `/Hive/Comb` inherits a class beneath itself, an arc cycle.
+//!   `/Hive/Cell`, relocated from beneath it, composes the source's
+//!   ancestral opinions, and so the same arc: its prim index reports the
+//!   cycle too.
 //!
 //! Composition errors are compared by kind and the composed prim whose
 //! prim index reports them, or whose property's targets OpenUSD reports
@@ -307,6 +311,7 @@ fn error_kind(error: &CompositionError) -> &'static str {
         CompositionError::InvalidConflictingRelocation(_) => "InvalidConflictingRelocation",
         CompositionError::InvalidSameTargetRelocations(_) => "InvalidSameTargetRelocations",
         CompositionError::InvalidExternalTargetPath(_) => "InvalidExternalTargetPath",
+        CompositionError::ArcCycle(_) => "ArcCycle",
         _ => "Other",
     }
 }
@@ -579,7 +584,7 @@ fn the_store_keeps_relocates_as_authored() {
     let oracle = oracle();
     let loaded = load(&oracle);
     let root = loaded.store.layer(loaded.root_layer).expect("root layer");
-    assert_eq!(root.relocates.len(), 11);
+    assert_eq!(root.relocates.len(), 12);
     assert_eq!(
         root.relocates.iter().filter(|r| r.target.is_none()).count(),
         1

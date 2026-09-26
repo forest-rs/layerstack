@@ -47,7 +47,8 @@ LAYERS = {
         </Flyer/Tail>: </Knot>,
         </Chain_2/Tail>: </Chain_2/Tail_2>,
         </Chain/Tail>: </Chain/Tail_1>,
-        </Belltower/Floor/Bell>: </Belltower/Bell>
+        </Belltower/Floor/Bell>: </Belltower/Bell>,
+        </Hive/Comb/Cell>: </Hive/Cell>
     }
 )
 
@@ -425,6 +426,30 @@ def "Rack" (
     references = @./kiln.usda@</Kiln/Shelf>
 )
 {
+}
+
+# `/Hive/Comb` inherits a class beneath itself, an arc cycle.
+# `/Hive/Cell`, relocated from beneath it, composes the source's ancestral
+# opinions and so meets the same cycle.
+def "Hive"
+{
+    def "Comb" (
+        inherits = </Hive/Comb/_class_Comb>
+    )
+    {
+        class "_class_Comb"
+        {
+            def "Cell"
+            {
+                int size = 2
+            }
+        }
+
+        def "Cell"
+        {
+            int size = 1
+        }
+    }
 }
 
 # `dock.usda` relocates `/Dock/Shed/Net`, which its reference to

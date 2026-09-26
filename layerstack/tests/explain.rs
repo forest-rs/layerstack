@@ -694,17 +694,11 @@ fn list_ops_report_each_edit() {
         vec![
             PrimSpec::over().with_field(
                 api_schemas,
-                FieldValue::TokenListOp(ListOp {
-                    prepend: vec![a],
-                    ..ListOp::default()
-                }),
+                FieldValue::TokenListOp(ListOp::prepended(vec![a])),
             ),
             PrimSpec::def().with_field(
                 api_schemas,
-                FieldValue::TokenListOp(ListOp {
-                    append: vec![b],
-                    ..ListOp::default()
-                }),
+                FieldValue::TokenListOp(ListOp::appended(vec![b])),
             ),
         ],
     );

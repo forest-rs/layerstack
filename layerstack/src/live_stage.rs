@@ -57,13 +57,7 @@ fn participating_layers(store: &dyn LayerStore, root: LayerId) -> HashSet<LayerI
         expressions: &mut bool,
     ) {
         for list in [references, payloads] {
-            let items = list
-                .explicit
-                .iter()
-                .flatten()
-                .chain(&list.prepend)
-                .chain(&list.append);
-            for arc in items {
+            for arc in list.inserted_items() {
                 *expressions |= arc.is_expression();
                 pending.push(arc.layer);
             }

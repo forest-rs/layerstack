@@ -348,22 +348,23 @@ impl EmitCtx<'_> {
         for meta in metadata {
             match meta {
                 ast::PrimMeta::References(arc) => {
-                    merge_ref_listop(&mut spec.references, self.emit_arc_listop(arc, "Reference"));
+                    spec.references
+                        .merge(self.emit_arc_listop(arc, "Reference"));
                 }
                 ast::PrimMeta::Payload(arc) => {
-                    merge_ref_listop(&mut spec.payloads, self.emit_arc_listop(arc, "Payload"));
+                    spec.payloads.merge(self.emit_arc_listop(arc, "Payload"));
                 }
                 ast::PrimMeta::Inherits(paths) => {
-                    merge_path_listop(
-                        &mut spec.inherits,
-                        self.emit_path_listop(paths, prim_path, &sites, "Inherit"),
-                    );
+                    spec.inherits
+                        .merge(self.emit_path_listop(paths, prim_path, &sites, "Inherit"));
                 }
                 ast::PrimMeta::Specializes(paths) => {
-                    merge_path_listop(
-                        &mut spec.specializes,
-                        self.emit_path_listop(paths, prim_path, &sites, "Specializes"),
-                    );
+                    spec.specializes.merge(self.emit_path_listop(
+                        paths,
+                        prim_path,
+                        &sites,
+                        "Specializes",
+                    ));
                 }
                 ast::PrimMeta::Variants(selections) => {
                     for sel in selections {
@@ -628,7 +629,7 @@ impl EmitCtx<'_> {
         }
         if let Some(listop) = connection {
             match spec.targets.as_mut() {
-                Some(existing) => merge_path_listop(existing, listop),
+                Some(existing) => existing.merge(listop),
                 None => spec.targets = Some(listop),
             }
         }
@@ -709,7 +710,7 @@ impl EmitCtx<'_> {
         }
         if let Some(listop) = listop {
             match spec.targets.as_mut() {
-                Some(existing) => merge_path_listop(existing, listop),
+                Some(existing) => existing.merge(listop),
                 None => spec.targets = Some(listop),
             }
         }
@@ -866,28 +867,30 @@ impl EmitCtx<'_> {
         for meta in metadata {
             match meta {
                 ast::PrimMeta::References(arc) => {
-                    merge_ref_listop(
-                        &mut variant_spec.references,
-                        self.emit_arc_listop(arc, "Reference"),
-                    );
+                    variant_spec
+                        .references
+                        .merge(self.emit_arc_listop(arc, "Reference"));
                 }
                 ast::PrimMeta::Payload(arc) => {
-                    merge_ref_listop(
-                        &mut variant_spec.payloads,
-                        self.emit_arc_listop(arc, "Payload"),
-                    );
+                    variant_spec
+                        .payloads
+                        .merge(self.emit_arc_listop(arc, "Payload"));
                 }
                 ast::PrimMeta::Inherits(paths) => {
-                    merge_path_listop(
-                        &mut variant_spec.inherits,
-                        self.emit_path_listop(paths, prim_path, branch_sites, "Inherit"),
-                    );
+                    variant_spec.inherits.merge(self.emit_path_listop(
+                        paths,
+                        prim_path,
+                        branch_sites,
+                        "Inherit",
+                    ));
                 }
                 ast::PrimMeta::Specializes(paths) => {
-                    merge_path_listop(
-                        &mut variant_spec.specializes,
-                        self.emit_path_listop(paths, prim_path, branch_sites, "Specializes"),
-                    );
+                    variant_spec.specializes.merge(self.emit_path_listop(
+                        paths,
+                        prim_path,
+                        branch_sites,
+                        "Specializes",
+                    ));
                 }
                 ast::PrimMeta::Variants(selections) => {
                     for sel in selections {
@@ -922,10 +925,7 @@ impl EmitCtx<'_> {
     fn emit_arc_listop(&mut self, arc_list: &ast::ListOpArc<'_>, arc: &str) -> ListOp<Reference> {
         let Some(items) = &arc_list.items else {
             // `= None` clears the arc list.
-            return ListOp {
-                explicit: Some(Vec::new()),
-                ..ListOp::default()
-            };
+            return ListOp::explicit(Vec::new());
         };
 
         let refs: Vec<Reference> = items
@@ -1025,10 +1025,7 @@ impl EmitCtx<'_> {
         arc: &str,
     ) -> ListOp<PathId> {
         let Some(items) = &paths.items else {
-            return ListOp {
-                explicit: Some(Vec::new()),
-                ..ListOp::default()
-            };
+            return ListOp::explicit(Vec::new());
         };
 
         let path_ids: Vec<PathId> = items
@@ -1619,12 +1616,12 @@ impl MetadataFieldType {
 /// Returns `false` when the two have different element types.
 fn merge_field_list_ops(existing: &mut FieldValue, value: FieldValue) -> bool {
     match (existing, value) {
-        (FieldValue::TokenListOp(a), FieldValue::TokenListOp(b)) => merge_path_listop(a, b),
-        (FieldValue::StringListOp(a), FieldValue::StringListOp(b)) => merge_path_listop(a, b),
-        (FieldValue::IntListOp(a), FieldValue::IntListOp(b)) => merge_path_listop(a, b),
-        (FieldValue::UIntListOp(a), FieldValue::UIntListOp(b)) => merge_path_listop(a, b),
-        (FieldValue::Int64ListOp(a), FieldValue::Int64ListOp(b)) => merge_path_listop(a, b),
-        (FieldValue::UInt64ListOp(a), FieldValue::UInt64ListOp(b)) => merge_path_listop(a, b),
+        (FieldValue::TokenListOp(a), FieldValue::TokenListOp(b)) => a.merge(b),
+        (FieldValue::StringListOp(a), FieldValue::StringListOp(b)) => a.merge(b),
+        (FieldValue::IntListOp(a), FieldValue::IntListOp(b)) => a.merge(b),
+        (FieldValue::UIntListOp(a), FieldValue::UIntListOp(b)) => a.merge(b),
+        (FieldValue::Int64ListOp(a), FieldValue::Int64ListOp(b)) => a.merge(b),
+        (FieldValue::UInt64ListOp(a), FieldValue::UInt64ListOp(b)) => a.merge(b),
         (existing @ FieldValue::Value(_), value) => *existing = value,
         _ => return false,
     }
@@ -2039,24 +2036,6 @@ fn semantic_component_count(name: &str) -> usize {
 }
 
 // ── ListOp merge helpers ────────────────────────────────────────────────
-
-fn merge_ref_listop(target: &mut ListOp<Reference>, source: ListOp<Reference>) {
-    if source.explicit.is_some() {
-        target.explicit = source.explicit;
-    }
-    target.prepend.extend(source.prepend);
-    target.append.extend(source.append);
-    target.delete.extend(source.delete);
-}
-
-fn merge_path_listop<T>(target: &mut ListOp<T>, source: ListOp<T>) {
-    if source.explicit.is_some() {
-        target.explicit = source.explicit;
-    }
-    target.prepend.extend(source.prepend);
-    target.append.extend(source.append);
-    target.delete.extend(source.delete);
-}
 
 fn convert_array_edit_index(index: ast::ArrayEditIndex) -> ArrayIndex {
     match index {
@@ -3658,11 +3637,9 @@ def Xform \"A\" (
         let review = tokens.intern("StudioReviewAPI:main");
         assert_eq!(
             spec.field(api),
-            Some(&FieldValue::TokenListOp(ListOp {
-                prepend: vec![geom],
-                append: vec![review],
-                ..ListOp::default()
-            })),
+            Some(&FieldValue::TokenListOp(
+                ListOp::prepended(vec![geom]).with_appended(vec![review])
+            )),
             "list-op statements for one field combine"
         );
         assert_eq!(
@@ -3695,10 +3672,7 @@ def Xform \"A\" (
         let geom = tokens.intern("GeomModelAPI");
         assert_eq!(
             spec.field(tokens.intern("apiSchemas")),
-            Some(&FieldValue::TokenListOp(ListOp {
-                explicit: Some(vec![geom]),
-                ..ListOp::default()
-            }))
+            Some(&FieldValue::TokenListOp(ListOp::explicit(vec![geom])))
         );
     }
 

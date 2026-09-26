@@ -225,10 +225,7 @@ pub(crate) fn map_arc_targets(
             None => return,
         },
         OpinionValue::Field(FieldValue::PathListOp(list)) => {
-            for items in [&mut list.prepend, &mut list.append, &mut list.delete]
-                .into_iter()
-                .chain(list.explicit.as_mut())
-            {
+            for items in list.lists_mut() {
                 for item in items.iter_mut() {
                     *item = map.map_target(store, *item).unwrap_or(*item);
                 }
@@ -251,10 +248,7 @@ pub(crate) fn map_arc_targets(
             },
         ));
     };
-    for items in [&mut list.prepend, &mut list.append]
-        .into_iter()
-        .chain(list.explicit.as_mut())
-    {
+    for items in list.inserted_lists_mut() {
         *items = items
             .iter()
             .filter_map(|item| {
@@ -392,12 +386,7 @@ pub(crate) fn drop_instance_targets(
                 let dest = prefix(prim_path, depth);
                 let site = paths.resolve(node.arc.site.prim_path());
                 let class = prefix(site, site.depth().saturating_sub(below));
-                let items = targets
-                    .prepend
-                    .iter()
-                    .chain(&targets.append)
-                    .chain(targets.explicit.iter().flatten());
-                for target in items {
+                for target in targets.inserted_items() {
                     if cycles.is_class_internal_target(prim, property, *target) {
                         continue;
                     }
@@ -448,10 +437,7 @@ pub(crate) fn drop_instance_targets(
         let Some(targets) = spec.targets.as_mut() else {
             continue;
         };
-        for items in [&mut targets.prepend, &mut targets.append]
-            .into_iter()
-            .chain(targets.explicit.as_mut())
-        {
+        for items in targets.inserted_lists_mut() {
             items.retain(|item| *item != target);
         }
         cycles.report(CompositionError::InvalidInstanceTargetPath(
@@ -499,23 +485,17 @@ mod tests {
         );
         let mut root = Layer::new(ROOT);
         let mut stone_spec = PrimSpec::def();
-        stone_spec.payloads = ListOp {
-            explicit: Some(vec![
-                Reference::new(ROOT, pebble),
-                Reference::new(ROOT, missing),
-            ]),
-            ..ListOp::default()
-        };
+        stone_spec.payloads = ListOp::explicit(vec![
+            Reference::new(ROOT, pebble),
+            Reference::new(ROOT, missing),
+        ]);
         root.insert_prim(stone, stone_spec);
         root.insert_prim(pebble, PrimSpec::def());
         let mut brook_spec = PrimSpec::def();
-        brook_spec.references = ListOp {
-            explicit: Some(vec![
-                Reference::with_asset(ASSET, nowhere, "asset.usda"),
-                Reference::with_asset(ASSET, spring, "asset.usda"),
-            ]),
-            ..ListOp::default()
-        };
+        brook_spec.references = ListOp::explicit(vec![
+            Reference::with_asset(ASSET, nowhere, "asset.usda"),
+            Reference::with_asset(ASSET, spring, "asset.usda"),
+        ]);
         root.insert_prim(brook, brook_spec);
         store.insert_layer(root);
         let mut asset = Layer::new(ASSET);
@@ -562,15 +542,11 @@ mod tests {
             .with_property(glow, PropertySpec::attribute().with_default(Value::Int(1)))
             .with_property(
                 wick,
-                PropertySpec::relationship().with_targets(ListOp {
-                    explicit: Some(vec![TargetPath::Prim(lamp)]),
-                    ..ListOp::default()
-                }),
+                PropertySpec::relationship()
+                    .with_targets(ListOp::explicit(vec![TargetPath::Prim(lamp)])),
             );
-        lantern_spec.references = ListOp {
-            explicit: Some(vec![Reference::with_asset(ASSET, lamp, "lamp.usda")]),
-            ..ListOp::default()
-        };
+        lantern_spec.references =
+            ListOp::explicit(vec![Reference::with_asset(ASSET, lamp, "lamp.usda")]);
         root.insert_prim(lantern, lantern_spec);
         store.insert_layer(root);
         let mut asset = Layer::new(ASSET);

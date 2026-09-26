@@ -53,7 +53,6 @@ use crate::{
     doc::{FieldValue, Layer, LayerId, LayerStore, Reference, Value},
     interner::{TokenId, TokenInterner},
     layer_stack::LayerStack,
-    listop::ListOp,
     prim_index::{OpinionKey, PrimIndex},
     prim_index_graph::{NodeId, PrimIndexGraph, PrimNode},
     variable_expression::{
@@ -754,24 +753,21 @@ pub(crate) fn declared_variant_sets(store: &dyn LayerStore, index: &PrimIndex) -
 /// branch, as authored, deletions included: a deleted arc is compared by
 /// the asset it resolves to, so its asset must be known.
 fn layer_arcs(layer: &Layer) -> impl Iterator<Item = &Reference> {
-    fn items(list: &ListOp<Reference>) -> impl Iterator<Item = &Reference> {
-        list.explicit
-            .iter()
-            .flatten()
-            .chain(&list.prepend)
-            .chain(&list.append)
-            .chain(&list.delete)
-    }
     layer
         .prims
         .values()
         .chain(layer.variant_prims.values().flatten())
         .flat_map(|spec| {
             let branches = spec.variant_branches().flat_map(|branch| {
-                items(&branch.spec.references).chain(items(&branch.spec.payloads))
+                branch
+                    .spec
+                    .references
+                    .items()
+                    .chain(branch.spec.payloads.items())
             });
-            items(&spec.references)
-                .chain(items(&spec.payloads))
+            spec.references
+                .items()
+                .chain(spec.payloads.items())
                 .chain(branches)
         })
 }

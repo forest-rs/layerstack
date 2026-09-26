@@ -108,18 +108,12 @@ fn scalar_set_over_block_resolves() {
 fn list_composes_until_block() {
     assert_parity(vec![
         (
-            OpinionOp::<&str, &str, &str>::List(ListOp {
-                append: vec!["theme"],
-                ..ListOp::default()
-            }),
+            OpinionOp::<&str, &str, &str>::List(ListOp::appended(vec!["theme"])),
             "user",
         ),
         (OpinionOp::Block, "workspace"),
         (
-            OpinionOp::List(ListOp {
-                explicit: Some(vec!["search"]),
-                ..ListOp::default()
-            }),
+            OpinionOp::List(ListOp::explicit(vec!["search"])),
             "defaults",
         ),
     ]);
@@ -129,25 +123,14 @@ fn list_composes_until_block() {
 fn list_composes_weak_to_strong() {
     assert_parity(vec![
         (
-            OpinionOp::<&str, &str, &str>::List(ListOp {
-                prepend: vec!["theme"],
-                delete: vec!["outline"],
-                ..ListOp::default()
-            }),
+            OpinionOp::<&str, &str, &str>::List(
+                ListOp::prepended(vec!["theme"]).with_deleted(vec!["outline"]),
+            ),
             "user",
         ),
+        (OpinionOp::List(ListOp::appended(vec!["lint"])), "workspace"),
         (
-            OpinionOp::List(ListOp {
-                append: vec!["lint"],
-                ..ListOp::default()
-            }),
-            "workspace",
-        ),
-        (
-            OpinionOp::List(ListOp {
-                explicit: Some(vec!["search", "outline"]),
-                ..ListOp::default()
-            }),
+            OpinionOp::List(ListOp::explicit(vec!["search", "outline"])),
             "defaults",
         ),
     ]);
@@ -157,18 +140,12 @@ fn list_composes_weak_to_strong() {
 fn list_ignores_incompatible_weaker_ops() {
     assert_parity(vec![
         (
-            OpinionOp::<&str, &str, &str>::List(ListOp {
-                append: vec!["theme"],
-                ..ListOp::default()
-            }),
+            OpinionOp::<&str, &str, &str>::List(ListOp::appended(vec!["theme"])),
             "user",
         ),
         (OpinionOp::Set("light"), "workspace"),
         (
-            OpinionOp::List(ListOp {
-                explicit: Some(vec!["search"]),
-                ..ListOp::default()
-            }),
+            OpinionOp::List(ListOp::explicit(vec!["search"])),
             "defaults",
         ),
     ]);
@@ -219,18 +196,12 @@ fn dictionary_ignores_incompatible_weaker_ops() {
 fn report_and_lean_resolutions_agree() {
     let chain = [
         (
-            OpinionOp::<&str, &str, &str>::List(ListOp {
-                append: vec!["theme"],
-                ..ListOp::default()
-            }),
+            OpinionOp::<&str, &str, &str>::List(ListOp::appended(vec!["theme"])),
             "user",
         ),
         (OpinionOp::Set("light"), "workspace"),
         (
-            OpinionOp::List(ListOp {
-                explicit: Some(vec!["search"]),
-                ..ListOp::default()
-            }),
+            OpinionOp::List(ListOp::explicit(vec!["search"])),
             "defaults",
         ),
     ];

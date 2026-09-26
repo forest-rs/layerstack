@@ -19,22 +19,13 @@
 //! ```
 //! use layerstack::listop::{ListOp, resolve_list_chain};
 //!
-//! let op = ListOp {
-//!     prepend: vec![1, 2],
-//!     append: vec![5],
-//!     delete: vec![3],
-//!     ..ListOp::default()
-//! };
+//! let op = ListOp::prepended(vec![1, 2])
+//!     .with_appended(vec![5])
+//!     .with_deleted(vec![3]);
 //! assert_eq!(op.apply_to(&[3, 4]), vec![1, 2, 4, 5]);
 //!
-//! let weak = ListOp {
-//!     append: vec![1_u32, 2],
-//!     ..ListOp::default()
-//! };
-//! let strong = ListOp {
-//!     prepend: vec![0_u32],
-//!     ..ListOp::default()
-//! };
+//! let weak = ListOp::appended(vec![1_u32, 2]);
+//! let strong = ListOp::prepended(vec![0_u32]);
 //!
 //! // Strong op runs last, so 0 ends up at the front.
 //! assert_eq!(resolve_list_chain::<u32>(&[], [strong, weak]), vec![0, 1, 2]);

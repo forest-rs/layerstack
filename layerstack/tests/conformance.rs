@@ -141,10 +141,9 @@ fn target_list_preserves_property_target_identity() {
         material,
         PrimSpec::default().with_field(
             input,
-            FieldValue::PathListOp(ListOp {
-                explicit: Some(vec![store.target_path("/Looks/Shader.outputs:surface")]),
-                ..ListOp::default()
-            }),
+            FieldValue::PathListOp(ListOp::explicit(vec![
+                store.target_path("/Looks/Shader.outputs:surface"),
+            ])),
         ),
     );
     layer.insert_prim(shader, PrimSpec::default());
@@ -180,10 +179,9 @@ fn referenced_property_targets_are_remapped_structurally() {
         asset,
         PrimSpec::default().with_field(
             input,
-            FieldValue::PathListOp(ListOp {
-                explicit: Some(vec![store.target_path("/Asset/Shader.outputs:surface")]),
-                ..ListOp::default()
-            }),
+            FieldValue::PathListOp(ListOp::explicit(vec![
+                store.target_path("/Asset/Shader.outputs:surface"),
+            ])),
         ),
     );
     asset_layer.insert_prim(asset_shader, PrimSpec::default());
@@ -218,17 +216,12 @@ fn property_path_query_helpers_cover_field_and_target_lists() {
         PrimSpec::default()
             .with_field(
                 labels,
-                FieldValue::TokenListOp(ListOp {
-                    explicit: Some(vec![token_a, token_b]),
-                    ..ListOp::default()
-                }),
+                FieldValue::TokenListOp(ListOp::explicit(vec![token_a, token_b])),
             )
             .with_property(
                 input,
-                PropertySpec::attribute().with_targets(ListOp {
-                    explicit: Some(vec![TargetPath::property(shader_output)]),
-                    ..ListOp::default()
-                }),
+                PropertySpec::attribute()
+                    .with_targets(ListOp::explicit(vec![TargetPath::property(shader_output)])),
             ),
     );
     store.insert_layer(layer);
@@ -456,10 +449,7 @@ fn listop_chain_is_applied_strong_to_weak() {
     let mut root_spec = PrimSpec::default();
     root_spec.set_field(
         field_classes,
-        FieldValue::TokenListOp(ListOp {
-            append: vec![class_a],
-            ..ListOp::default()
-        }),
+        FieldValue::TokenListOp(ListOp::appended(vec![class_a])),
     );
     root_layer.insert_prim(prim, root_spec);
     store.insert_layer(root_layer);
@@ -468,10 +458,7 @@ fn listop_chain_is_applied_strong_to_weak() {
     let mut sub_spec = PrimSpec::default();
     sub_spec.set_field(
         field_classes,
-        FieldValue::TokenListOp(ListOp {
-            append: vec![class_b],
-            ..ListOp::default()
-        }),
+        FieldValue::TokenListOp(ListOp::appended(vec![class_b])),
     );
     sub_layer.insert_prim(prim, sub_spec);
     store.insert_layer(sub_layer);
@@ -496,10 +483,7 @@ fn resolve_value_distinguishes_scalar_and_list() {
     let mut spec = PrimSpec::default().with_field(field_x, 123_i64);
     spec.set_field(
         field_classes,
-        FieldValue::TokenListOp(ListOp {
-            append: vec![class_a],
-            ..ListOp::default()
-        }),
+        FieldValue::TokenListOp(ListOp::appended(vec![class_a])),
     );
     layer.insert_prim(prim, spec);
     store.insert_layer(layer);
@@ -648,10 +632,7 @@ fn token_listop_append_reorders_duplicates() {
     let mut root_spec = PrimSpec::default();
     root_spec.set_field(
         field_classes,
-        FieldValue::TokenListOp(ListOp {
-            append: vec![class_a],
-            ..ListOp::default()
-        }),
+        FieldValue::TokenListOp(ListOp::appended(vec![class_a])),
     );
     root_layer.insert_prim(prim, root_spec);
     store.insert_layer(root_layer);
@@ -660,10 +641,7 @@ fn token_listop_append_reorders_duplicates() {
     let mut sub_spec = PrimSpec::default();
     sub_spec.set_field(
         field_classes,
-        FieldValue::TokenListOp(ListOp {
-            explicit: Some(vec![class_a, class_b]),
-            ..ListOp::default()
-        }),
+        FieldValue::TokenListOp(ListOp::explicit(vec![class_a, class_b])),
     );
     sub_layer.insert_prim(prim, sub_spec);
     store.insert_layer(sub_layer);
@@ -699,11 +677,9 @@ fn token_listop_prepend_and_append_match_supplemental_list_editing_order() {
     let mut root_spec = PrimSpec::default();
     root_spec.set_field(
         field_targets,
-        FieldValue::TokenListOp(ListOp {
-            prepend: vec![root_prepend],
-            append: vec![root_append],
-            ..ListOp::default()
-        }),
+        FieldValue::TokenListOp(
+            ListOp::prepended(vec![root_prepend]).with_appended(vec![root_append]),
+        ),
     );
     root_layer.insert_prim(prim, root_spec);
     store.insert_layer(root_layer);
@@ -712,11 +688,9 @@ fn token_listop_prepend_and_append_match_supplemental_list_editing_order() {
     let mut sub1_spec = PrimSpec::default();
     sub1_spec.set_field(
         field_targets,
-        FieldValue::TokenListOp(ListOp {
-            prepend: vec![sub1_prepend],
-            append: vec![sub1_append],
-            ..ListOp::default()
-        }),
+        FieldValue::TokenListOp(
+            ListOp::prepended(vec![sub1_prepend]).with_appended(vec![sub1_append]),
+        ),
     );
     sub1_layer.insert_prim(prim, sub1_spec);
     store.insert_layer(sub1_layer);
@@ -725,11 +699,9 @@ fn token_listop_prepend_and_append_match_supplemental_list_editing_order() {
     let mut sub2_spec = PrimSpec::default();
     sub2_spec.set_field(
         field_targets,
-        FieldValue::TokenListOp(ListOp {
-            prepend: vec![sub2_prepend],
-            append: vec![sub2_append],
-            ..ListOp::default()
-        }),
+        FieldValue::TokenListOp(
+            ListOp::prepended(vec![sub2_prepend]).with_appended(vec![sub2_append]),
+        ),
     );
     sub2_layer.insert_prim(prim, sub2_spec);
     store.insert_layer(sub2_layer);
@@ -768,10 +740,7 @@ fn token_listop_prepend_composes_before_explicit() {
     let mut sub_spec = PrimSpec::default();
     sub_spec.set_field(
         api_schemas,
-        FieldValue::TokenListOp(ListOp {
-            explicit: Some(vec![original]),
-            ..ListOp::default()
-        }),
+        FieldValue::TokenListOp(ListOp::explicit(vec![original])),
     );
     sub_layer.insert_prim(prim, sub_spec);
     store.insert_layer(sub_layer);
@@ -782,10 +751,7 @@ fn token_listop_prepend_composes_before_explicit() {
     let mut root_spec = PrimSpec::default();
     root_spec.set_field(
         api_schemas,
-        FieldValue::TokenListOp(ListOp {
-            prepend: vec![prepended],
-            ..ListOp::default()
-        }),
+        FieldValue::TokenListOp(ListOp::prepended(vec![prepended])),
     );
     root_layer.insert_prim(prim, root_spec);
     store.insert_layer(root_layer);
@@ -1870,10 +1836,7 @@ fn schema_applied_api_provides_fallback() {
         p,
         PrimSpec::def().with_type_name(mesh_tok).with_field(
             api_schemas_tok,
-            FieldValue::TokenListOp(ListOp {
-                append: vec![collection_api_tok],
-                ..ListOp::default()
-            }),
+            FieldValue::TokenListOp(ListOp::appended(vec![collection_api_tok])),
         ),
     );
     store.insert_layer(layer);
@@ -2665,10 +2628,7 @@ fn specializes_inside_reference_populates_class_children() {
     model_spec.authored_children = vec![c_tok, cls_tok];
     lib.insert_prim(model, model_spec);
     let mut c_spec = PrimSpec::def();
-    c_spec.specializes = ListOp {
-        prepend: vec![model_cls],
-        ..ListOp::default()
-    };
+    c_spec.specializes = ListOp::prepended(vec![model_cls]);
     lib.insert_prim(model_c, c_spec);
     let mut cls_spec = PrimSpec::default().with_field(field_x, 10_i64);
     cls_spec.specifier = Some(layerstack::Specifier::Class);
@@ -2781,10 +2741,7 @@ fn property_named_api_schemas_does_not_hide_applied_schemas() {
         PrimSpec::def()
             .with_field(
                 api_schemas,
-                FieldValue::TokenListOp(ListOp {
-                    prepend: vec![test_api],
-                    ..ListOp::default()
-                }),
+                FieldValue::TokenListOp(ListOp::prepended(vec![test_api])),
             )
             .with_property(
                 api_schemas,

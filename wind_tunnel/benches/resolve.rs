@@ -117,10 +117,7 @@ fn build() -> Scene {
             .with_field(custom_data, entry)
             .with_field(
                 api_schemas,
-                FieldValue::TokenListOp(ListOp {
-                    prepend: vec![schema],
-                    ..ListOp::default()
-                }),
+                FieldValue::TokenListOp(ListOp::prepended(vec![schema])),
             );
         let mut layer = Layer::new(LayerId(id));
         layer.insert_prim(prim, spec);

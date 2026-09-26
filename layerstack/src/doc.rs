@@ -866,7 +866,7 @@ impl Reference {
 ///
 /// Spec: AOUSD Core §7.3.6 (variant specs may contain any spec a prim spec
 /// contains), §7.6.7 (variant specs), §10.3.2.5 (variants arc).
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct VariantSpec {
     /// Authored metadata fields on the prim hosting the variant set, within
     /// this variant.
@@ -1001,14 +1001,14 @@ pub(crate) fn composed_entries<'a>(
 }
 
 /// A variant set: a named collection of variants.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct VariantSetSpec {
     /// Variants keyed by variant name.
     pub variants: HashMap<TokenId, VariantSpec>,
 }
 
 /// Opinions for a prim at a path.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct PrimSpec {
     /// The prim specifier (`def`, `over`, or `class`).
     ///
@@ -1332,6 +1332,9 @@ pub fn remove_field(fields: &mut Vec<FieldEntry>, name: TokenId) -> Option<Field
 }
 
 /// A document layer.
+///
+/// Two layers are equal when their content is: the [`Layer::generation`]
+/// and [`Layer::structural_generation`] counters are not compared.
 #[derive(Clone, Debug)]
 pub struct Layer {
     /// Stable identifier for this layer.
@@ -1377,6 +1380,34 @@ pub struct Layer {
     /// Spec: AOUSD Core §7.3.6 (variant specs contain their own prim specs),
     /// §10.5 (only the selected variant contributes).
     pub variant_prims: HashMap<PathId, Vec<PrimSpec>>,
+    /// Counts the edits made to this layer (see [`Layer::generation`]).
+    pub(crate) generation: u64,
+    /// Counts the edits that may change namespace or arcs (see
+    /// [`Layer::structural_generation`]).
+    pub(crate) structure: u64,
+}
+
+impl PartialEq for Layer {
+    fn eq(&self, other: &Self) -> bool {
+        let Self {
+            id,
+            sublayers,
+            default_prim,
+            metadata,
+            prims,
+            variant_prims,
+            relocates,
+            generation: _,
+            structure: _,
+        } = self;
+        *id == other.id
+            && *sublayers == other.sublayers
+            && *default_prim == other.default_prim
+            && *metadata == other.metadata
+            && *prims == other.prims
+            && *variant_prims == other.variant_prims
+            && *relocates == other.relocates
+    }
 }
 
 impl Layer {
@@ -1390,7 +1421,68 @@ impl Layer {
             relocates: Vec::new(),
             prims: HashMap::new(),
             variant_prims: HashMap::new(),
+            generation: 0,
+            structure: 0,
         }
+    }
+
+    /// Returns this layer's generation: a counter that every edit made
+    /// through the layer's own methods moves forward.
+    ///
+    /// A host records the generation when it prepares an edit and checks it
+    /// when it applies the edit, so an edit prepared against content that
+    /// has changed since fails even when the value it would overwrite is
+    /// back to what it was.
+    ///
+    /// The count only moves forward and is not part of the layer's content:
+    /// it is not saved, and [`PartialEq`] ignores it.
+    ///
+    /// Writes straight into the public fields ([`Layer::prims`] and the
+    /// others) bypass the counter: they are the importers' building API,
+    /// not an authoring API. Hosts that write a field after composition
+    /// call [`Layer::touch`].
+    ///
+    /// OpenUSD reports the same edits as `SdfNotice::LayersDidChange`.
+    #[must_use]
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    /// Returns this layer's structural generation: a counter that the
+    /// edits made through the layer's own methods move forward when they
+    /// may change more than opinion values: add or remove prim specs,
+    /// child lists, composition arcs, variant sets or layer metadata.
+    ///
+    /// Every edit that moves it also moves [`Layer::generation`]. A stage
+    /// that finds only [`Layer::generation`] moved can recompose the prims
+    /// drawing on the layer; one that finds this moved must recompose its
+    /// namespace.
+    ///
+    /// OpenUSD tells these apart in `SdfChangeList` entries: a spec added or
+    /// removed, or a composition field changed, is a significant change that
+    /// resyncs prims; a field value change only changes the prims' info.
+    #[must_use]
+    pub fn structural_generation(&self) -> u64 {
+        self.structure
+    }
+
+    /// Moves [`Layer::generation`] and [`Layer::structural_generation`]
+    /// forward, for an edit of unknown kind made through the public fields.
+    pub fn touch(&mut self) {
+        self.touch_structure();
+    }
+
+    /// Moves [`Layer::generation`] forward, for an edit of opinion values
+    /// only.
+    pub(crate) fn touch_values(&mut self) {
+        self.generation += 1;
+    }
+
+    /// Moves both counters forward, for an edit that may change namespace
+    /// or arcs.
+    pub(crate) fn touch_structure(&mut self) {
+        self.generation += 1;
+        self.structure += 1;
     }
 
     /// Inserts a prim spec at the given path, replacing the spec authored in
@@ -1400,6 +1492,7 @@ impl Layer {
     /// one (see [`Layer::variant_prims`]) instead of replacing it; a spec
     /// authored outside any variant branch takes the [`Layer::prims`] slot.
     pub fn insert_prim(&mut self, path: PathId, spec: PrimSpec) {
+        self.touch_structure();
         let displaced = match self.prims.get(&path) {
             Some(existing) if existing.outer_variant_sites == spec.outer_variant_sites => None,
             Some(_) if !spec.outer_variant_sites.is_empty() => {
@@ -1574,6 +1667,7 @@ impl Layer {
 
     /// Inserts or replaces a layer metadata field.
     pub fn set_metadata(&mut self, key: TokenId, value: impl Into<FieldValue>) -> &mut Self {
+        self.touch_structure();
         set_field_vec(&mut self.metadata, key, value.into());
         self
     }
@@ -1581,8 +1675,14 @@ impl Layer {
     /// Inserts or replaces a property spec by concrete [`PropertyPath`].
     ///
     /// If the owning prim does not yet exist in this layer, a default
-    /// [`PrimSpec`] is created first.
+    /// [`PrimSpec`] is created first, which is a structural edit (see
+    /// [`Layer::structural_generation`]).
     pub fn set_property(&mut self, property_path: PropertyPath, spec: PropertySpec) -> &mut Self {
+        if self.prims.contains_key(&property_path.prim_path()) {
+            self.touch_values();
+        } else {
+            self.touch_structure();
+        }
         self.prims
             .entry(property_path.prim_path())
             .or_default()
@@ -1601,7 +1701,11 @@ impl Layer {
 
     /// Returns the property spec at `property_path` mutably, if authored in
     /// this layer.
+    ///
+    /// Moves [`Layer::generation`] forward, since the caller may write
+    /// through the reference.
     pub fn property_mut(&mut self, property_path: PropertyPath) -> Option<&mut PropertySpec> {
+        self.touch_values();
         self.prims
             .get_mut(&property_path.prim_path())?
             .property_mut(property_path.property())
@@ -1624,6 +1728,9 @@ fn insert_branch_spec(specs: &mut Vec<PrimSpec>, spec: PrimSpec) {
 pub trait LayerStore {
     /// Returns a layer, if present.
     fn layer(&self, id: LayerId) -> Option<&Layer>;
+
+    /// Returns a layer mutably, if present, for authoring.
+    fn layer_mut(&mut self, id: LayerId) -> Option<&mut Layer>;
 
     /// Returns the shared token interner.
     fn tokens(&self) -> &TokenInterner;
@@ -1691,6 +1798,10 @@ impl LayerStore for InMemoryStore {
         self.layers.get(&id)
     }
 
+    fn layer_mut(&mut self, id: LayerId) -> Option<&mut Layer> {
+        self.layers.get_mut(&id)
+    }
+
     fn tokens(&self) -> &TokenInterner {
         &self.tokens
     }
@@ -1718,6 +1829,46 @@ mod tests {
 
     fn entry(key: &str, val: Value) -> (Arc<str>, Value) {
         (Arc::from(key), val)
+    }
+
+    #[test]
+    fn layer_methods_move_the_generation_forward() {
+        let mut store = InMemoryStore::default();
+        let size = store.tokens.intern("size");
+        let rock = store.path("/Rock");
+        let mut layer = Layer::new(LayerId(1));
+        let pristine = layer.clone();
+        let mut seen = layer.generation();
+
+        let mut seen_structure = layer.structural_generation();
+        let mut step = |layer: &Layer, what: &str, structural: bool| {
+            assert!(layer.generation() > seen, "{what} moves the generation");
+            assert_eq!(
+                layer.structural_generation() > seen_structure,
+                structural,
+                "{what} is structural: {structural}"
+            );
+            seen = layer.generation();
+            seen_structure = layer.structural_generation();
+        };
+        layer.insert_prim(rock, PrimSpec::def());
+        step(&layer, "insert_prim", true);
+        layer.set_property(PropertyPath::new(rock, size), PropertySpec::attribute());
+        step(&layer, "set_property on an existing prim spec", false);
+        let pebble = store.path("/Rock/Pebble");
+        layer.set_property(PropertyPath::new(pebble, size), PropertySpec::attribute());
+        step(&layer, "set_property creating the prim spec", true);
+        let _ = layer.property_mut(PropertyPath::new(rock, size));
+        step(&layer, "property_mut", false);
+        layer.set_metadata(size, Value::Double(1.0));
+        step(&layer, "set_metadata", true);
+        layer.touch();
+        step(&layer, "touch", true);
+
+        let mut same = pristine.clone();
+        same.touch();
+        assert_eq!(same, pristine, "equality compares content, not generations");
+        assert_ne!(layer, pristine);
     }
 
     #[test]

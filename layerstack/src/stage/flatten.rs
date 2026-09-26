@@ -42,12 +42,15 @@
 //!   although the stage reports a property custom when any opinion is
 //!   (AOUSD Core §12.2.4). With [`FlattenRequirements::schemas`], a
 //!   property the prim's schema defines is written as the schema declares
-//!   it, as OpenUSD writes it. Its time samples are written when its strongest value
-//!   source is time samples, its spline when that is a spline, and its
-//!   default whenever an opinion authors one, as the resolved default or a
-//!   value block. Times and `timecode` values are mapped through the layer
-//!   offset of the opinion that provides them, so they are in stage time,
-//!   as the stage resolves them.
+//!   it, as OpenUSD writes it.
+//! - An attribute's time samples are written when its strongest value
+//!   source is time samples, or a sparse array edit default over weaker
+//!   samples: every sample in stage time, with sparse array edits composed
+//!   into the dense arrays they give at each sample time. Its spline is
+//!   written when that is its strongest value source, retimed into stage
+//!   time. Its default is written whenever an opinion authors one, as the
+//!   resolved default or a value block. `timecode` values are in stage
+//!   time, as the stage resolves them.
 //! - A relationship keeps its composed targets, and an attribute its
 //!   composed connections, as explicit lists in stage namespace.
 //! - References, payloads, inherits, specializes, variant sets, variant
@@ -67,12 +70,17 @@
 //!   `endTimeCode`, `documentation`, `reorder rootPrims` and the rest
 //!   (AOUSD Core §12.2.7).
 //!
-//! What a layer cannot hold yet is a [`Loss`], never dropped silently.
+//! What a flattened layer cannot hold is a [`Loss`], never dropped
+//! silently: value clips, which composition does not read; times authored
+//! at another `timeCodesPerSecond`, which composition does not rescale; and
+//! an attribute no opinion gives a type, which OpenUSD's flatten omits too.
 //!
 //! Where it differs from OpenUSD:
 //!
 //! - OpenUSD also reads the session layer's metadata; a [`Stage`] has no
 //!   session layer.
+//! - OpenUSD's flatten drops metadata no schema registers, which it cannot
+//!   set on a spec; this keeps it.
 //!
 //! Spec: AOUSD Core §10 (composition arcs), §11 (stage population and
 //! instancing, §11.3.3), §12 (value resolution; §12.3.2.1 layer offsets).
@@ -220,8 +228,11 @@ impl Stage {
             prototype_of: HashMap::new(),
             anchored: HashMap::new(),
             unanchored: HashSet::new(),
+            rates: HashMap::new(),
+            root_rate: 24.0,
             report: FlattenReport::default(),
         };
+        flattener.root_rate = flattener.time_codes_per_second(root);
         // The layer metadata's asset paths are anchored to the root layer.
         let mut metadata = core::mem::take(&mut flattener.out.metadata);
         for entry in &mut metadata {
@@ -269,6 +280,10 @@ struct Flattener<'a, 'r> {
     anchored: HashMap<Arc<str>, Arc<str>>,
     /// The authored asset paths that could not be anchored.
     unanchored: HashSet<Arc<str>>,
+    /// Each layer's time codes per second, as read.
+    rates: HashMap<LayerId, f64>,
+    /// The root layer's time codes per second.
+    root_rate: f64,
     report: FlattenReport,
 }
 
@@ -349,6 +364,41 @@ impl Flattener<'_, '_> {
 
     fn lost(&mut self, path: String, loss: Loss, source: Option<FindingSource>) {
         self.note(path, FindingKind::Lost(loss), source);
+    }
+
+    /// A layer's time codes per second: its `timeCodesPerSecond`, else its
+    /// `framesPerSecond`, else 24 (OpenUSD's `SdfLayer::GetTimeCodesPerSecond`).
+    ///
+    /// Spec: AOUSD Core §7.6.1 (layer metadata).
+    fn time_codes_per_second(&mut self, layer: LayerId) -> f64 {
+        if let Some(&rate) = self.rates.get(&layer) {
+            return rate;
+        }
+        let tcps = self.store.tokens_mut().intern("timeCodesPerSecond");
+        let fps = self.store.tokens_mut().intern("framesPerSecond");
+        let read = |key| {
+            let entry = self
+                .store
+                .layer(layer)?
+                .metadata
+                .iter()
+                .find(|e| e.name == key)?;
+            match &entry.value {
+                FieldValue::Value(Value::Double(v)) => Some(*v),
+                FieldValue::Value(Value::Float(v)) => Some(f64::from(*v)),
+                FieldValue::Value(Value::Int(v)) => Some(f64::from(*v)),
+                _ => None,
+            }
+        };
+        let rate = read(tcps).or_else(|| read(fps)).unwrap_or(24.0);
+        self.rates.insert(layer, rate);
+        rate
+    }
+
+    /// Whether OpenUSD would rescale the times `layer` authors: its time
+    /// codes per second differ from the root layer's.
+    fn rescaled(&mut self, layer: LayerId) -> bool {
+        self.time_codes_per_second(layer) != self.root_rate
     }
 
     /// Records that `opinion`'s default or metadata value holds `timecode`
@@ -807,7 +857,18 @@ impl Flattener<'_, '_> {
         if let Some(position) = value_source {
             let source = &opinions[position];
             let finding_source = self.source(source, true);
-            if source.value.time_samples().is_none()
+            let rescaled = opinions[position..]
+                .iter()
+                .filter(|op| op.value.time_samples().is_some() || op.value.spline().is_some())
+                .find(|op| self.rescaled(op.key.layer_id));
+            if let Some(rescaled) = rescaled {
+                // Spec: AOUSD Core §12.3.2.1 (layer time is stage time
+                // through each layer's offset); OpenUSD also scales by
+                // the ratio of the layers' `timeCodesPerSecond`
+                // (`PcpLayerStack`), which composition here does not.
+                let source = self.source(rescaled, true);
+                self.lost(path.clone(), Loss::TimeCodesPerSecond, Some(source));
+            } else if source.value.time_samples().is_none()
                 && let Some(spline) = source.value.spline()
             {
                 let offset = source.layer_offset;

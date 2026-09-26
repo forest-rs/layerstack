@@ -1,0 +1,16 @@
+#usda 1.0
+(
+    defaultPrim = "Hedge"
+    timeCodesPerSecond = 24
+    subLayers = [
+        @./fast.usda@
+    ]
+)
+
+# A sublayer authored at 48 time codes per second, whose times OpenUSD
+# rescales into the root layer's 24; composition here does not rescale
+# them.
+def Xform "Hedge"
+{
+    double height = 2
+}

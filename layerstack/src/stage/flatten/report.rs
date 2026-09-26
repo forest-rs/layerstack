@@ -577,11 +577,18 @@ pub enum Loss {
     /// which composition does not read, so their values cannot be baked.
     ValueClips,
     /// An attribute that no opinion gives a type, which a layer cannot
-    /// declare.
+    /// declare: it is omitted, as OpenUSD's flatten omits it
+    /// (`_CopyProperty` in `pxr/usd/usd/stage.cpp`). No requirement names
+    /// it, so [`LossPolicy::RefuseRequired`] flattens as OpenUSD does.
     UntypedAttribute,
     /// An asset path that [`AssetPaths::Anchored`] requires anchored and
     /// that could not be; it is written as authored.
     UnanchoredAssetPath,
+    /// Time samples or a spline authored in a layer whose
+    /// `timeCodesPerSecond` differs from the root layer's. OpenUSD rescales
+    /// their times by the ratio; composition here does not, so they are
+    /// not written.
+    TimeCodesPerSecond,
 }
 
 impl Loss {
@@ -590,7 +597,9 @@ impl Loss {
     #[must_use]
     pub fn requirement(self) -> Option<Requirement> {
         match self {
-            Self::RetimedSpline | Self::ValueClips => Some(Requirement::ExactAnimation),
+            Self::RetimedSpline | Self::ValueClips | Self::TimeCodesPerSecond => {
+                Some(Requirement::ExactAnimation)
+            }
             Self::UnanchoredAssetPath => Some(Requirement::AnchoredAssetPaths),
             Self::UntypedAttribute => None,
         }
@@ -604,6 +613,7 @@ impl fmt::Display for Loss {
             Self::ValueClips => "value clips",
             Self::UntypedAttribute => "an attribute without a type",
             Self::UnanchoredAssetPath => "an asset path that could not be anchored",
+            Self::TimeCodesPerSecond => "times authored at another timeCodesPerSecond",
         })
     }
 }

@@ -398,6 +398,41 @@ impl Stage {
         })
     }
 
+    /// Returns the composed descendants, outside `recomposed`, of each prim
+    /// in `recomposed` whose contributing specs a partial composition
+    /// changes, sorted by [`PathId`].
+    ///
+    /// A prim's arcs are ancestral to its descendants: selecting another
+    /// branch of `/P`'s variant set changes which `/P{v=x}C` specs `/P/C`
+    /// composes, though `/P/C` draws nothing from the spec that authors the
+    /// selection. Those descendants must be recomposed too.
+    ///
+    /// Spec: AOUSD Core §10.3.2.5 (variants), §10.2 (ancestral arcs).
+    /// OpenUSD treats such an edit as a significant change that resyncs the
+    /// prim's subtree (`PcpChanges::DidChange` in `pxr/usd/pcp/changes.cpp`).
+    pub(crate) fn resynced_descendants(
+        &self,
+        partial: &Self,
+        recomposed: &[PathId],
+    ) -> Vec<PathId> {
+        let recomposed_set: HashSet<PathId> = recomposed.iter().copied().collect();
+        let mut out = Vec::new();
+        for prim in recomposed {
+            let before = self.prims.get(prim).map(|index| &index.sources);
+            let after = partial.prims.get(prim).map(|index| &index.sources);
+            if before == after {
+                continue;
+            }
+            out.extend(
+                self.traverse(*prim)
+                    .filter(|descendant| !recomposed_set.contains(descendant)),
+            );
+        }
+        out.sort_unstable();
+        out.dedup();
+        out
+    }
+
     /// Returns the source sites that contribute specs or opinions to `prim`,
     /// as `(layer, prim path within that layer)` pairs, deduplicated.
     ///

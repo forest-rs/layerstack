@@ -443,6 +443,10 @@ impl LiveStage {
     ///   transitive dependents), performs a scoped recomposition, and updates
     ///   the dependency graph incrementally for the affected prims. Only the
     ///   affected prims' indexes are replaced; the hierarchy is kept.
+    /// - If the scoped recomposition changes an affected prim's contributing
+    ///   specs (for example another variant branch is selected), its
+    ///   descendants and their dependents are recomposed too, and returned
+    ///   with the affected prims.
     /// - If the scoped recomposition shows that an affected prim appeared,
     ///   disappeared, or changed its children (for example `active` or child
     ///   reordering edits), falls back to a full rebuild, with the same return
@@ -465,37 +469,31 @@ impl LiveStage {
         }
 
         // Drain with lazy expansion: roots → all transitive dependents.
-        let affected: Vec<PathId> = self.tracker.drain_affected_sorted(OPINION_EDIT).collect();
+        let mut affected: Vec<PathId> = self.tracker.drain_affected_sorted(OPINION_EDIT).collect();
+        let mut partial = loop {
+            let partial = self.compose_scoped(store, &affected);
 
-        // Expand the affected set to include arc sources so composition can
-        // read inherit/reference targets.
-        // Also include each affected prim's current children, so the masked
-        // composition's child lists for affected prims are complete and
-        // hierarchy changes can be detected below.
-        let mut mask_set: HashSet<PathId> = HashSet::from_iter(affected.iter().copied());
-        for &prim in &affected {
-            for dep in self.tracker.graph().dependencies(prim, OPINION_EDIT) {
-                mask_set.insert(dep);
+            // An opinion edit that turns out to change hierarchy (activation,
+            // child ordering, ...) cannot be patched from a masked
+            // composition, whose child lists are partial by construction.
+            if self.stage.hierarchy_diverges(&partial, &affected) {
+                return self.full_rebuild(store);
             }
-            mask_set.extend(self.stage.children_of(prim).unwrap_or(&[]).iter().copied());
-        }
-        let mask_vec: Vec<PathId> = mask_set.into_iter().collect();
 
-        // Run scoped composition with a population mask.
-        let scoped_opts = StageOptions {
-            mask: Some(PopulationMask { include: mask_vec }),
-            with_provenance: self.options.with_provenance,
-            with_dependencies: true,
-            variant_fallbacks: self.options.variant_fallbacks.clone(),
+            // A prim whose contributing specs change (another variant
+            // branch selected) changes its descendants' prim indexes too:
+            // recompose them, and what depends on them, as well.
+            let resynced = self.stage.resynced_descendants(&partial, &affected);
+            if resynced.is_empty() {
+                break partial;
+            }
+            for prim in resynced {
+                self.tracker.mark(prim, OPINION_EDIT);
+            }
+            affected.extend(self.tracker.drain_affected_sorted(OPINION_EDIT));
+            affected.sort_unstable();
+            affected.dedup();
         };
-        let mut partial = Stage::compose(store, self.root, scoped_opts);
-
-        // An opinion edit that turns out to change hierarchy (activation,
-        // child ordering, ...) cannot be patched from a masked composition,
-        // whose child lists are partial by construction.
-        if self.stage.hierarchy_diverges(&partial, &affected) {
-            return self.full_rebuild(store);
-        }
 
         // Extract partial dependency data before merging the stage.
         let partial_deps = partial.take_deps().unwrap_or_default();
@@ -583,6 +581,31 @@ impl LiveStage {
         }
         self.default_prim_dependents
             .retain(|_, dependents| !dependents.is_empty());
+    }
+
+    /// Composes `affected` with a population mask that also holds the arc
+    /// sources they draw on and their current children.
+    ///
+    /// The arc sources let composition read inherit and reference targets;
+    /// the children make the masked composition's child lists for
+    /// `affected` complete, so [`Stage::hierarchy_diverges`] can detect
+    /// hierarchy changes.
+    fn compose_scoped(&self, store: &mut dyn LayerStore, affected: &[PathId]) -> Stage {
+        let mut mask_set: HashSet<PathId> = HashSet::from_iter(affected.iter().copied());
+        for &prim in affected {
+            for dep in self.tracker.graph().dependencies(prim, OPINION_EDIT) {
+                mask_set.insert(dep);
+            }
+            mask_set.extend(self.stage.children_of(prim).unwrap_or(&[]).iter().copied());
+        }
+        let mask_vec: Vec<PathId> = mask_set.into_iter().collect();
+        let scoped_opts = StageOptions {
+            mask: Some(PopulationMask { include: mask_vec }),
+            with_provenance: self.options.with_provenance,
+            with_dependencies: true,
+            variant_fallbacks: self.options.variant_fallbacks.clone(),
+        };
+        Stage::compose(store, self.root, scoped_opts)
     }
 
     /// Recomposes the whole stage and returns every path in the new stage
@@ -1992,6 +2015,88 @@ mod tests {
         assert_eq!(live.recompose(&mut store), [geom]);
         assert_eq!(x_of(&live), Value::Int64(10), "`low` is not selected");
         assert_matches_fresh(&live, &mut store, &[field_x]);
+    }
+
+    #[test]
+    fn selection_edit_recomposes_the_switched_prims_descendants() {
+        // Spec: AOUSD Core §10.3.2.5. `/Model/Geom` draws nothing from the
+        // `/Model` spec that authors the selection, but selecting `low`
+        // swaps the branch spec it composes: it is recomposed with `/Model`.
+        use crate::{VariantSetSpec, VariantSpec, spec_path::VariantSelectionSite};
+
+        let mut store = InMemoryStore::default();
+        let field_x = store.tokens.intern("x");
+        let lod = store.tokens.intern("lod");
+        let high = store.tokens.intern("high");
+        let low = store.tokens.intern("low");
+        let geom_tok = store.tokens.intern("Geom");
+        let model = p(&mut store, "/Model");
+        let geom = p(&mut store, "/Model/Geom");
+        let other = p(&mut store, "/Other");
+        let site = |variant| VariantSelectionSite {
+            host_path: model,
+            set: lod,
+            variant,
+        };
+
+        let mut layer = Layer::new(LayerId(1));
+        let mut model_spec = PrimSpec::def();
+        let mut set = VariantSetSpec::default();
+        for variant in [high, low] {
+            set.variants.insert(
+                variant,
+                VariantSpec {
+                    authored_children: vec![geom_tok],
+                    ..VariantSpec::default()
+                },
+            );
+        }
+        model_spec.variant_sets.insert(lod, set);
+        model_spec.variant_set_order.push(lod);
+        model_spec.variant_selections.insert(lod, high);
+        model_spec.authored_children.push(geom_tok);
+        layer.insert_prim(model, model_spec);
+        layer.insert_prim(geom, PrimSpec::def());
+        for (variant, value) in [(high, 1_i64), (low, 2_i64)] {
+            layer.insert_prim(
+                geom,
+                PrimSpec {
+                    outer_variant_sites: vec![site(variant)],
+                    ..PrimSpec::over().with_property(field_x, attr(value))
+                },
+            );
+        }
+        layer.insert_prim(other, PrimSpec::def().with_property(field_x, attr(5)));
+        store.insert_layer(layer);
+
+        let options = StageOptions {
+            with_provenance: true,
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+        let x_of = |live: &LiveStage| {
+            live.stage()
+                .resolve_field_path(PropertyPath::new(geom, field_x))
+                .unwrap()
+                .value
+        };
+        assert_eq!(x_of(&live), Value::Int64(1));
+
+        for (variant, value) in [(low, 2), (high, 1)] {
+            store
+                .layers
+                .get_mut(&LayerId(1))
+                .unwrap()
+                .prims
+                .get_mut(&model)
+                .unwrap()
+                .variant_selections
+                .insert(lod, variant);
+            live.notify_layer_prim_edits(LayerId(1), &[model]);
+            assert_eq!(live.recompose(&mut store), [model, geom]);
+            assert_eq!(x_of(&live), Value::Int64(value));
+            assert_matches_fresh(&live, &mut store, &[field_x]);
+        }
     }
 
     /// `/A` references a library prim that specializes `/Class`, and has a

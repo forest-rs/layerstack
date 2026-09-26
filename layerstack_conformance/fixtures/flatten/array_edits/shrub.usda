@@ -1,0 +1,24 @@
+#usda 1.0
+(
+    defaultPrim = "Shrub"
+    subLayers = [
+        @./shrub_base.usda@
+    ]
+)
+
+def Xform "Shrub"
+{
+    int[] leafIds.timeSamples = {
+        0: [1, 2, 3],
+        4: [4, 5, 6],
+    }
+    float[] widths.timeSamples = {
+        1: [1, 2],
+        3: [3],
+    }
+    int[] thorns = None
+    timecode[] cues = [4]
+    int[] rings.timeSamples = {
+        0: edit [append 20],
+    }
+}

@@ -103,7 +103,7 @@ use crate::{
     path::{Path, PathId, PropertyPath, TargetPath},
     prim_index::{ArcKind, FieldKey, Opinion},
     prim_index_graph::NodeId,
-    property::{PropertyEntry, PropertyKind, PropertySpec, Variability},
+    property::{PropertyEntry, PropertyKind, PropertySpec, PropertyType, Variability},
     spec_path::{SpecComponent, SpecPath},
 };
 
@@ -799,37 +799,28 @@ impl Flattener<'_, '_> {
 
         // Spec: AOUSD Core §12.3.2 (per opinion, time samples, then a
         // spline, then the default).
-        let value_source = opinions.iter().find(|opinion| {
+        let value_source = opinions.iter().position(|opinion| {
             opinion.value.time_samples().is_some()
                 || opinion.value.spline().is_some()
                 || opinion.value.default_value().is_some()
         });
-        if let Some(source) = value_source {
+        if let Some(position) = value_source {
+            let source = &opinions[position];
             let finding_source = self.source(source, true);
-            if let Some(samples) = source.value.time_samples() {
-                if samples
-                    .iter()
-                    .any(|(_, value)| matches!(value, Value::ArrayEdit(_)))
-                {
-                    self.lost(path.clone(), Loss::ArrayEditSamples, Some(finding_source));
-                } else {
-                    spec.time_samples =
-                        Some(self.stage_samples(&path, source, samples, &finding_source));
-                }
-            } else if let Some(spline) = source.value.spline() {
+            if source.value.time_samples().is_none()
+                && let Some(spline) = source.value.spline()
+            {
                 if source.layer_offset.is_identity() {
                     spec.spline = Some(spline.clone());
                     self.report.preserved.splines += 1;
                 } else {
                     self.lost(path.clone(), Loss::RetimedSpline, Some(finding_source));
                 }
-            } else if matches!(source.value.default_value(), Some(Value::ArrayEdit(_)))
-                && opinions
-                    .iter()
-                    .any(|opinion| opinion.value.time_samples().is_some())
+            } else if let Some(samples) =
+                composed_samples(&opinions[position..], spec.type_name.as_ref())
             {
-                // A sparse default composes over weaker time samples.
-                self.lost(path.clone(), Loss::ArrayEditSamples, Some(finding_source));
+                spec.time_samples =
+                    Some(self.stage_samples(&path, source, samples, &finding_source));
             }
         }
 
@@ -926,8 +917,9 @@ impl Flattener<'_, '_> {
             .map(|definition| definition.variability)
     }
 
-    /// The time samples of `source` in stage time, with `timecode` values
-    /// retimed too.
+    /// Records how the composed samples of an attribute whose strongest
+    /// value source is `source` were written: exactly, retimed through
+    /// `source`'s layer offset, or with sparse array edits baked.
     ///
     /// Spec: AOUSD Core §12.3.2.1 (a layer's time `t` is stage time
     /// `t * scale + offset`).
@@ -935,41 +927,37 @@ impl Flattener<'_, '_> {
         &mut self,
         path: &str,
         source: &Opinion,
-        samples: &[(f64, Value)],
+        composed: ComposedSamples,
         finding_source: &FindingSource,
     ) -> Vec<(f64, Value)> {
         let offset = source.layer_offset;
-        let out: Vec<(f64, Value)> = samples
-            .iter()
-            .map(|(time, value)| {
-                let value = retime_value(value, offset).unwrap_or_else(|| value.clone());
-                (to_stage_time(offset, *time), value)
-            })
-            .collect();
-        if offset.is_identity() {
-            self.report.preserved.time_samples += out.len();
-        } else {
+        if composed.baked {
+            self.transformed(
+                path.into(),
+                Transformation::ArrayEditsBaked,
+                Some(finding_source.clone()),
+            );
+        }
+        if !offset.is_identity() {
             self.transformed(
                 path.into(),
                 Transformation::SamplesRetimed { offset },
                 Some(finding_source.clone()),
             );
-            if out
-                .iter()
-                .zip(samples)
-                .any(|((_, retimed), (_, value))| retimed != value)
-            {
+            if composed.retimed_timecodes {
                 self.transformed(
                     path.into(),
                     Transformation::TimeCodesRetimed { offset },
                     Some(finding_source.clone()),
                 );
             }
+        } else if !composed.baked {
+            self.report.preserved.time_samples += composed.samples.len();
         }
-        for (_, value) in &out {
+        for (_, value) in &composed.samples {
             self.note_assets(path, value, Some(finding_source));
         }
-        out
+        composed.samples
     }
 
     /// The composed metadata of a property.
@@ -1133,6 +1121,204 @@ impl Flattener<'_, '_> {
             }
         }
     }
+}
+
+/// The time samples OpenUSD's flatten writes for an attribute.
+struct ComposedSamples {
+    /// The samples, in stage time.
+    samples: Vec<(f64, Value)>,
+    /// Whether sparse array edits were composed into dense arrays.
+    baked: bool,
+    /// Whether `timecode` values were moved into stage time.
+    retimed_timecodes: bool,
+}
+
+/// The time samples of an attribute whose strongest value source is the
+/// first of `opinions`, composed as OpenUSD's flatten composes them
+/// (`_TimeSampleMapResolver` in `pxr/usd/usd/stage.cpp`): each opinion's
+/// samples in stage time; a sample of sparse array edits composes over the
+/// weaker samples held at its time, and a weaker default or sample over
+/// the edits of a stronger default, until nothing left can compose; the
+/// edits that remain apply to an empty array. `None` when no samples
+/// result.
+///
+/// Spec: AOUSD Core §12.3.2 (time samples), §12.3.2.1 (layer offsets),
+/// §12.3.6 (blocks); sparse array edits are an OpenUSD extension
+/// (`VtArrayEdit`).
+fn composed_samples(
+    opinions: &[Opinion],
+    property_type: Option<&PropertyType>,
+) -> Option<ComposedSamples> {
+    let mut partial: Vec<(f64, Value)> = Vec::new();
+    let mut partial_default: Option<Value> = None;
+    let mut baked = false;
+    let mut retimed_timecodes = false;
+    for opinion in opinions {
+        let can_compose = if let Some(samples) = opinion.value.time_samples() {
+            let offset = opinion.layer_offset;
+            let weaker: Vec<(f64, Value)> = samples
+                .iter()
+                .map(|(time, value)| {
+                    let retimed = retime_value(value, offset);
+                    retimed_timecodes |= retimed.is_some();
+                    (
+                        to_stage_time(offset, *time),
+                        retimed.unwrap_or_else(|| value.clone()),
+                    )
+                })
+                .collect();
+            if let Some(default) = partial_default.take() {
+                partial = weaker
+                    .into_iter()
+                    .map(|(time, value)| {
+                        let composed = compose_over(&default, &value, property_type);
+                        baked |= composed.is_some();
+                        (time, composed.unwrap_or_else(|| default.clone()))
+                    })
+                    .collect();
+            } else if partial.is_empty() {
+                partial = weaker;
+            } else {
+                partial = compose_series(&partial, &weaker, property_type, &mut baked);
+            }
+            can_compose_over(&partial, partial_default.as_ref())
+        } else if opinion.value.spline().is_some() {
+            break;
+        } else if let Some(default) = opinion.value.default_value() {
+            if *default == Value::Blocked {
+                break;
+            }
+            // A default's `timecode` values are in its layer's time too
+            // (`_FieldValueToStageXf` maps it before it composes).
+            let retimed = retime_value(default, opinion.layer_offset);
+            retimed_timecodes |= retimed.is_some();
+            let default = retimed.as_ref().unwrap_or(default);
+            if partial.is_empty() {
+                partial_default = Some(match partial_default.take() {
+                    Some(stronger) => compose_over(&stronger, default, property_type)
+                        .inspect(|_| baked = true)
+                        .unwrap_or(stronger),
+                    None => default.clone(),
+                });
+            } else {
+                for (_, sample) in &mut partial {
+                    if let Some(composed) = compose_over(sample, default, property_type) {
+                        baked = true;
+                        *sample = composed;
+                    }
+                }
+            }
+            can_compose_over(&partial, partial_default.as_ref())
+        } else {
+            true
+        };
+        if !can_compose {
+            break;
+        }
+    }
+    if partial.is_empty() {
+        return None;
+    }
+    // What still composes composes over the empty array.
+    for (_, sample) in &mut partial {
+        if let Value::ArrayEdit(edit) = sample {
+            *sample = Value::Array(crate::array_edit::apply_to_array(edit, &[], property_type));
+            baked = true;
+        }
+    }
+    Some(ComposedSamples {
+        samples: partial,
+        baked,
+        retimed_timecodes,
+    })
+}
+
+/// Whether anything in the partial result can compose over weaker
+/// opinions: a sparse array edit.
+fn can_compose_over(partial: &[(f64, Value)], default: Option<&Value>) -> bool {
+    if partial.is_empty() {
+        default.is_some_and(|value| matches!(value, Value::ArrayEdit(_)))
+    } else {
+        partial
+            .iter()
+            .any(|(_, value)| matches!(value, Value::ArrayEdit(_)))
+    }
+}
+
+/// `stronger` composed over `weaker`: a sparse array edit over a dense
+/// array or another edit; `None` when `stronger` does not compose.
+fn compose_over(
+    stronger: &Value,
+    weaker: &Value,
+    property_type: Option<&PropertyType>,
+) -> Option<Value> {
+    let Value::ArrayEdit(edit) = stronger else {
+        return None;
+    };
+    match weaker {
+        Value::ArrayEdit(weaker) => Some(Value::ArrayEdit(edit.compose_over(weaker))),
+        Value::Array(items) => Some(Value::Array(crate::array_edit::apply_to_array(
+            edit,
+            items,
+            property_type,
+        ))),
+        _ => None,
+    }
+}
+
+/// Composes a stronger sample series over a weaker one, as
+/// `SdfComposeTimeSampleSeries` does (`pxr/usd/sdf/composeTimeSampleSeries.h`):
+/// at each time either series has a sample, the stronger sample held there
+/// composes over the weaker one held there; a weaker sample under a
+/// stronger one that does not compose is hidden. Times within `1e-6` are
+/// the same time.
+fn compose_series(
+    strong: &[(f64, Value)],
+    weak: &[(f64, Value)],
+    property_type: Option<&PropertyType>,
+    baked: &mut bool,
+) -> Vec<(f64, Value)> {
+    let same = |a: f64, b: f64| (a - b).abs() <= 1e-6;
+    // The sample held at `time`: the one at or before it, else the first.
+    let held = |series: &[(f64, Value)], next: usize, time: f64| -> usize {
+        if next == series.len() || (!same(series[next].0, time) && next != 0) {
+            next - 1
+        } else {
+            next
+        }
+    };
+    let mut out = Vec::with_capacity(strong.len() + weak.len());
+    let (mut s, mut w) = (0, 0);
+    while s < strong.len() || w < weak.len() {
+        let strong_time = strong.get(s).map_or(f64::INFINITY, |(t, _)| *t);
+        let weak_time = weak.get(w).map_or(f64::INFINITY, |(t, _)| *t);
+        if strong_time <= weak_time {
+            let under = &weak[held(weak, w, strong_time)].1;
+            let value = &strong[s].1;
+            let composed = compose_over(value, under, property_type);
+            *baked |= composed.is_some();
+            out.push((strong_time, composed.unwrap_or_else(|| value.clone())));
+        } else {
+            let over = &strong[held(strong, s, weak_time)].1;
+            if let Some(composed) = compose_over(over, &weak[w].1, property_type) {
+                *baked = true;
+                out.push((weak_time, composed));
+            }
+        }
+        if s == strong.len() {
+            w += 1;
+        } else if w == weak.len() {
+            s += 1;
+        } else if same(strong_time, weak_time) {
+            s += 1;
+            w += 1;
+        } else if strong_time < weak_time {
+            s += 1;
+        } else {
+            w += 1;
+        }
+    }
+    out
 }
 
 /// Whether an authored field is written as authored: a plain value, or a

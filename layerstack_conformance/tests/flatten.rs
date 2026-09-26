@@ -531,21 +531,13 @@ fn flattened_layers_compose_the_flattened_stage() {
 fn known_losses_are_reported_exactly() {
     type Unmet = (Requirement, &'static str, Loss, &'static str);
     let expected: &[(&str, &[Unmet])] = &[(
-        "clips_and_edits",
-        &[
-            (
-                Requirement::ExactAnimation,
-                "/Hedge",
-                Loss::ValueClips,
-                "/Hedge",
-            ),
-            (
-                Requirement::ExactAnimation,
-                "/Hedge.leafIds",
-                Loss::ArrayEditSamples,
-                "/Hedge.leafIds",
-            ),
-        ],
+        "clips",
+        &[(
+            Requirement::ExactAnimation,
+            "/Hedge",
+            Loss::ValueClips,
+            "/Hedge",
+        )],
     )];
     let cases = fixture_cases("flatten_losses");
     assert_eq!(

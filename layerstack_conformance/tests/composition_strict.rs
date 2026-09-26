@@ -507,9 +507,8 @@ enum Cause {
 
     // Unsupported features.
     /// Relocates (AOUSD Core §10.3.2.6) move a prim's ancestral opinions
-    /// to its relocation target, but a site reached through two
-    /// relocations of one stage path, variant opinions authored inside a
-    /// relocation source, and the classes of a relocation source outside a
+    /// to its relocation target, but variant opinions authored inside a
+    /// relocation source and the classes of a relocation source outside a
     /// subroot reference's target are not composed as OpenUSD composes them.
     Relocates,
 }
@@ -558,15 +557,6 @@ const SKIPPED: &[(&str, &str)] = &[
 /// Every fixture that does not match the oracle exactly.
 const KNOWN: &[Known] = &[
     Known {
-        fixture: "ErrorInvalidReferenceToRelocationSource_root",
-        causes: &[C::Relocates],
-        prims: 3,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingPrim, D::MissingSite],
-        reason: "`root.usd` relocates `/ReferencedChar/Relocated`, itself relocated from `char.usd /Char/PreRelo`, and `/ReferencedChar/PreRelo`: the second relocation of the same stage path wins, so `/Good_ReloOfRelocated` misses `model.usd /Model/PreRelo` and its child, and `/Bad_ReloOfPreRelo` is not composed",
-    },
-    Known {
         fixture: "ErrorOpinionAtRelocationSource_root",
         causes: &[C::Relocates],
         prims: 3,
@@ -574,15 +564,6 @@ const KNOWN: &[Known] = &[
         values: 0,
         diffs: &[D::MissingSite],
         reason: "`/VariantAtRelocateSource/Sibling` misses the variant opinions `root.usd` authors inside the relocated `/VariantAtRelocateSource/Child`",
-    },
-    Known {
-        fixture: "RelocatePrimsWithSameName_root",
-        causes: &[C::Relocates],
-        prims: 2,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingPrim],
-        reason: "under `/ChainedReferences`, where `root.usd` relocates `Child` and the internal references relocate it too, neither relocated child is composed",
     },
     Known {
         fixture: "SubrootReferenceAndRelocates_root",

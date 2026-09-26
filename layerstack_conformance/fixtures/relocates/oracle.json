@@ -4,6 +4,32 @@
  "root": "root.usda",
  "prims": [
   {
+   "path": "/Knot",
+   "prim_stack": []
+  },
+  {
+   "path": "/Ribbon",
+   "prim_stack": [
+    [
+     "kite.usda",
+     "/Kite/Streamer"
+    ],
+    [
+     "frame.usda",
+     "/Frame/Tail"
+    ]
+   ]
+  },
+  {
+   "path": "/Ribbon/Bow",
+   "prim_stack": [
+    [
+     "frame.usda",
+     "/Frame/Tail/Bow"
+    ]
+   ]
+  },
+  {
    "path": "/Marionette",
    "prim_stack": [
     [
@@ -673,9 +699,138 @@
      "/Parts/Spring"
     ]
    ]
+  },
+  {
+   "path": "/Flyer",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Flyer"
+    ],
+    [
+     "kite.usda",
+     "/Kite"
+    ],
+    [
+     "frame.usda",
+     "/Frame"
+    ]
+   ]
+  },
+  {
+   "path": "/Chain",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Chain"
+    ],
+    [
+     "root.usda",
+     "/Chain_1"
+    ],
+    [
+     "root.usda",
+     "/Chain_2"
+    ],
+    [
+     "frame.usda",
+     "/Frame"
+    ]
+   ]
+  },
+  {
+   "path": "/Chain/Tail_2",
+   "prim_stack": [
+    [
+     "frame.usda",
+     "/Frame/Tail"
+    ]
+   ]
+  },
+  {
+   "path": "/Chain/Tail_2/Bow",
+   "prim_stack": [
+    [
+     "frame.usda",
+     "/Frame/Tail/Bow"
+    ]
+   ]
+  },
+  {
+   "path": "/Chain/Tail_1",
+   "prim_stack": []
+  },
+  {
+   "path": "/Chain_1",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Chain_1"
+    ],
+    [
+     "root.usda",
+     "/Chain_2"
+    ],
+    [
+     "frame.usda",
+     "/Frame"
+    ]
+   ]
+  },
+  {
+   "path": "/Chain_1/Tail_2",
+   "prim_stack": [
+    [
+     "frame.usda",
+     "/Frame/Tail"
+    ]
+   ]
+  },
+  {
+   "path": "/Chain_1/Tail_2/Bow",
+   "prim_stack": [
+    [
+     "frame.usda",
+     "/Frame/Tail/Bow"
+    ]
+   ]
+  },
+  {
+   "path": "/Chain_2",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Chain_2"
+    ],
+    [
+     "frame.usda",
+     "/Frame"
+    ]
+   ]
+  },
+  {
+   "path": "/Chain_2/Tail_2",
+   "prim_stack": [
+    [
+     "frame.usda",
+     "/Frame/Tail"
+    ]
+   ]
+  },
+  {
+   "path": "/Chain_2/Tail_2/Bow",
+   "prim_stack": [
+    [
+     "frame.usda",
+     "/Frame/Tail/Bow"
+    ]
+   ]
   }
  ],
  "values": {
+  "/Ribbon.length": 1,
+  "/Ribbon.width": 2,
+  "/Ribbon/Bow.loops": 1,
   "/Marionette/Strings/SymHand.reach": 0,
   "/Marionette/Strings/SymHand.slack": 0,
   "/Marionette/Strings/SymHand/Tip.bend": 0,
@@ -718,7 +873,13 @@
   "/Crate/Gear.pitch": 2,
   "/Crate/Gear.size": 1,
   "/Crate/Gear.teeth": 0,
-  "/Crate/Parts/Spring.coils": 2
+  "/Crate/Parts/Spring.coils": 2,
+  "/Chain/Tail_2.length": 1,
+  "/Chain/Tail_2/Bow.loops": 1,
+  "/Chain_1/Tail_2.length": 1,
+  "/Chain_1/Tail_2/Bow.loops": 1,
+  "/Chain_2/Tail_2.length": 1,
+  "/Chain_2/Tail_2/Bow.loops": 1
  },
  "targets": {
   "/Robot.debug": [
@@ -735,6 +896,14 @@
   ]
  },
  "errors": [
+  {
+   "kind": "ArcToProhibitedChild",
+   "prim": "/Chain/Tail_1"
+  },
+  {
+   "kind": "ArcToProhibitedChild",
+   "prim": "/Knot"
+  },
   {
    "kind": "ArcToProhibitedChild",
    "prim": "/StaleWrist"

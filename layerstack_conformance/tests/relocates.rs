@@ -44,6 +44,14 @@
 //!   hands and the thumb inherit. That class references `glove.usda`, and
 //!   the variant selection `root.usda` authors on it applies to the
 //!   relocated thumb and left tip; the right hand selects its own.
+//! - `kite.usda` relocates `/Kite/Tail`, which its reference to
+//!   `frame.usda` brings, to `/Kite/Streamer`, and `root.usda` relocates
+//!   both paths again through `/Flyer`: `/Ribbon` composes the relocated
+//!   tail, and `/Knot`, relocated from a relocation source, composes
+//!   nothing and is reported.
+//! - `/Chain` reaches `/Chain_2/Tail`, a relocation source, through two
+//!   internal references, so relocating `/Chain/Tail` too composes nothing
+//!   at `/Chain/Tail_1`, not even `/Chain_1/Tail`.
 //!
 //! The same scene recomposed by a [`LiveStage`] after opinion edits at
 //! relocation targets and sources and in the classes implied through them,
@@ -395,6 +403,10 @@ fn opinion_edits_at_relocation_targets_and_sources_recompose_in_scope() {
             "slack",
             "/Marionette/Controls/Thumb",
         ),
+        // A source relocated by one layer stack and its target by another,
+        // and one relocated through internal references.
+        ("frame.usda", "/Frame/Tail", "length", "/Ribbon"),
+        ("frame.usda", "/Frame/Tail", "length", "/Chain/Tail_2"),
     ];
     for (layer, prim, attr, relocated) in edits {
         let source = set_int(&mut loaded, layer, prim, attr, 42);
@@ -484,7 +496,7 @@ fn the_store_keeps_relocates_as_authored() {
     let oracle = oracle();
     let loaded = load(&oracle);
     let root = loaded.store.layer(loaded.root_layer).expect("root layer");
-    assert_eq!(root.relocates.len(), 6);
+    assert_eq!(root.relocates.len(), 10);
     assert_eq!(
         root.relocates.iter().filter(|r| r.target.is_none()).count(),
         1

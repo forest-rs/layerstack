@@ -419,6 +419,9 @@ impl CycleDetector {
             return None;
         }
         self.relocations.prohibit(&lifted);
+        for &error in lifted.blocked() {
+            self.report(CompositionError::ArcToProhibitedChild(error));
+        }
         self.report_source_opinions(store, &lifted);
         Some(Rc::new(lifted))
     }

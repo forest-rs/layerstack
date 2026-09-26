@@ -29,13 +29,17 @@ use core::cmp::Ordering;
 use hashbrown::{HashMap, HashSet};
 
 use crate::{
+    compose::ChildOrderOpinions,
     composition_error::{
-        CompositionError, InvalidAuthoredRelocation, InvalidConflictingRelocation,
-        InvalidRelocationReason, InvalidSameTargetRelocations, RelocationConflict,
+        ArcToProhibitedChild, CompositionError, InvalidAuthoredRelocation,
+        InvalidConflictingRelocation, InvalidRelocationReason, InvalidSameTargetRelocations,
+        RelocationConflict,
     },
     doc::{LayerId, LayerStore, Relocate},
+    interner::TokenId,
     layer_stack::LayerStack,
     path::{Path, PathId, PathInterner},
+    prim_index::{ArcKind, OpinionKey, PrimIndex},
 };
 
 /// The valid relocates of one layer stack, in both directions.
@@ -339,6 +343,9 @@ pub(crate) struct LiftedSet {
     entries: Vec<LiftedRelocate>,
     by_stage_source: HashMap<PathId, usize>,
     by_stage_target: HashMap<PathId, usize>,
+    /// The errors of the outer relocations whose source is the source of
+    /// one of `entries` (see [`LiftedSet::blocked`]).
+    blocked: Vec<ArcToProhibitedChild>,
 }
 
 impl LiftedSet {
@@ -361,6 +368,20 @@ impl LiftedSet {
     /// The lifted relocations.
     pub(crate) fn iter(&self) -> impl Iterator<Item = &LiftedRelocate> {
         self.entries.iter()
+    }
+
+    /// The outer relocations that relocate the source of one of these,
+    /// each as the error of the prim at its target.
+    ///
+    /// A relocation source is a prohibited child in every namespace its
+    /// layer stack is mapped into, so an outer layer stack cannot relocate
+    /// it again: that relocation reaches the prohibited source and moves
+    /// nothing, and the source keeps the stage path the arc maps it to
+    /// (AOUSD Core §10.3.2.6). OpenUSD reports the relocate arc as
+    /// `PcpErrorArcToProhibitedChild` (`_ComposeIsProhibitedPrimChild` in
+    /// `pxr/usd/pcp/primIndex.cpp`).
+    pub(crate) fn blocked(&self) -> &[ArcToProhibitedChild] {
+        &self.blocked
     }
 
     fn source(&self, stage_path: PathId) -> Option<&LiftedRelocate> {
@@ -419,7 +440,31 @@ impl LiftedSet {
             if source_rel.is_none() && target_rel.is_none() {
                 continue;
             }
-            let stage_source = place(store, source_rel);
+            // An outer relocation whose source is this relocation's source
+            // relocates a prohibited child: it moves nothing, and the
+            // source stays where the arc maps it.
+            let blocking = source_rel.as_deref().and_then(|rel| {
+                let (last, parent) = rel.split_last()?;
+                let (parent, _) = outer.place(store, dest_root, parent)?;
+                let at = store.paths().resolve(parent).join(&[*last]);
+                let at = store.paths_mut().intern(at);
+                Some((at, *outer.outer_source(at)?))
+            });
+            let stage_source = match blocking {
+                Some((at, blocked)) => {
+                    if let Some(prim) = blocked.stage_target {
+                        lifted.blocked.push(ArcToProhibitedChild {
+                            prim,
+                            arc: ArcKind::Relocates,
+                            layer_stack: blocked.layer_stack,
+                            target: blocked.source,
+                            relocation_source: relocate.source,
+                        });
+                    }
+                    Some(at)
+                }
+                None => place(store, source_rel),
+            };
             let stage_target = place(store, target_rel);
             lifted.push(LiftedRelocate {
                 layer_stack,
@@ -534,6 +579,12 @@ impl<'a> Walk<'a> {
         }
     }
 
+    /// The `outer` relocation whose stage source is `path`, the innermost
+    /// one when several are.
+    fn outer_source(&self, path: PathId) -> Option<&LiftedRelocate> {
+        self.outer.iter().rev().find_map(|set| set.source(path))
+    }
+
     /// Places the path `rel` beneath the stage path `dest_root` (see
     /// [`Walk`]): the stage path it lands on, and whether a relocation moved
     /// it; `None` when the walk drops it.
@@ -541,7 +592,7 @@ impl<'a> Walk<'a> {
         &self,
         store: &mut dyn LayerStore,
         dest_root: PathId,
-        rel: &[crate::interner::TokenId],
+        rel: &[TokenId],
     ) -> Option<(PathId, bool)> {
         let mut current = store.paths().resolve(dest_root).clone();
         if self.is_empty() {
@@ -590,7 +641,7 @@ impl<'a> Walk<'a> {
         &self,
         store: &mut dyn LayerStore,
         dest_root: PathId,
-        rel: &[crate::interner::TokenId],
+        rel: &[TokenId],
     ) -> PathId {
         let mut current = store.paths().resolve(dest_root).clone();
         if self.is_empty() {
@@ -709,6 +760,8 @@ pub(crate) struct Relocations {
     reached: HashSet<PathId>,
     /// Errors found computing tables, not yet reported.
     errors: Vec<CompositionError>,
+    /// The outer relocations the lifted sets composition prohibited block.
+    blocked: Vec<ArcToProhibitedChild>,
 }
 
 impl Relocations {
@@ -757,6 +810,11 @@ impl Relocations {
     /// Records the lifted sources of `set` as prohibited stage paths, and
     /// its lifted targets.
     pub(crate) fn prohibit(&mut self, set: &LiftedSet) {
+        for blocked in &set.blocked {
+            if !self.blocked.contains(blocked) {
+                self.blocked.push(*blocked);
+            }
+        }
         for relocate in &set.entries {
             if let Some(source) = relocate.stage_source {
                 self.prohibited.insert(source);
@@ -765,6 +823,12 @@ impl Relocations {
                 }
             }
         }
+    }
+
+    /// The outer relocations composition found relocating the source of
+    /// another relocation (see [`LiftedSet::blocked`]).
+    pub(crate) fn blocked(&self) -> &[ArcToProhibitedChild] {
+        &self.blocked
     }
 
     /// Records the lifted targets of `set`, a set population reaches
@@ -838,6 +902,63 @@ impl Relocations {
     /// Takes the errors found computing tables since the last call.
     pub(crate) fn take_errors(&mut self) -> Vec<CompositionError> {
         core::mem::take(&mut self.errors)
+    }
+}
+
+/// Removes from `prim` the subtree of each relocate node of a `blocked`
+/// relocation, with the opinions composed through it, including those of
+/// `extra`.
+///
+/// A blocked relocation reaches a prohibited child, whose prim index
+/// OpenUSD culls whole: the opinions it moves are known only once the arc
+/// that reaches the other relocation's source has been lifted, so they are
+/// dropped once the prim's arcs are all expanded.
+///
+/// Spec: AOUSD Core §10.3.2.6. OpenUSD: `_ElidePrimIndexIfProhibited` in
+/// `pxr/usd/pcp/primIndex.cpp`.
+pub(crate) fn elide_blocked(
+    prim: &mut PrimIndex,
+    paths: &PathInterner,
+    blocked: &[ArcToProhibitedChild],
+    extra: [Option<&mut ChildOrderOpinions>; 2],
+) {
+    if blocked.is_empty() {
+        return;
+    }
+    let graph = &prim.graph;
+    let mut elided = alloc::vec![false; graph.len()];
+    let mut any = false;
+    for (id, node) in graph.nodes() {
+        let parent_elided = node.parent().is_some_and(|parent| elided[parent.index()]);
+        let blocks = node.arc_kind() == ArcKind::Relocates
+            && blocked.iter().any(|blocked| {
+                blocked.layer_stack == node.layer_stack()
+                    && paths
+                        .resolve(blocked.target)
+                        .is_prefix_of(paths.resolve(node.site().prim_path()))
+            });
+        if parent_elided || blocks {
+            elided[id.index()] = true;
+            any = true;
+        }
+    }
+    if !any {
+        return;
+    }
+    let kept = |key: &OpinionKey| !elided[key.node.index()];
+    prim.sources.retain(kept);
+    for opinions in prim.opinions_by_field.values_mut() {
+        opinions.retain(|opinion| kept(&opinion.key));
+    }
+    prim.opinions_by_field
+        .retain(|_, opinions| !opinions.is_empty());
+    for types in prim.property_types_by_field.values_mut() {
+        types.retain(|(key, _)| kept(key));
+    }
+    prim.property_types_by_field
+        .retain(|_, types| !types.is_empty());
+    for opinions in extra.into_iter().flatten() {
+        opinions.retain(|(key, _)| kept(key));
     }
 }
 
@@ -1154,7 +1275,7 @@ mod tests {
         )
     }
 
-    fn names(store: &mut InMemoryStore, text: &str) -> Vec<crate::interner::TokenId> {
+    fn names(store: &mut InMemoryStore, text: &str) -> Vec<TokenId> {
         text.split('/')
             .filter(|name| !name.is_empty())
             .map(|name| store.tokens.intern(name))

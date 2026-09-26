@@ -9,9 +9,9 @@ extern crate alloc;
 
 use layerstack::{
     ArcKind, ArrayEdit, ArrayEditOp, FieldEntry, FieldValue, InterpolationType, Layer, LayerId,
-    ListOp, NodeId, PrimIndexGraph, PrimSpec, PropertyPath, PropertySpec, PropertyType, Reference,
-    ResolvedValue, SchemaDefinition, SchemaRegistry, Stage, StageOptions, SublayerEntry,
-    TargetPath, Value, VariantSetSpec, VariantSpec, doc::InMemoryStore,
+    ListOp, NodeId, PrimIndexGraph, PrimSpec, PropertyDefinition, PropertyPath, PropertySpec,
+    PropertyType, Reference, ResolvedValue, SchemaDefinition, SchemaRegistry, Stage, StageOptions,
+    SublayerEntry, TargetPath, Value, VariantSetSpec, VariantSpec, doc::InMemoryStore,
 };
 
 /// The arc kinds from the root of `graph` to `node`, outermost first.
@@ -1725,6 +1725,28 @@ fn type_name_none_when_untyped() {
 
 // --- Schema fallback integration tests ---
 
+/// A varying attribute definition named `name` with `fallback`.
+fn defined(name: layerstack::TokenId, fallback: impl Into<Value>) -> PropertyDefinition {
+    PropertyDefinition::attribute(name).with_fallback(fallback)
+}
+
+/// Composes `LayerId(1)` with the schemas `schemas`.
+fn compose_with_schemas(
+    store: &mut InMemoryStore,
+    schemas: impl IntoIterator<Item = SchemaDefinition>,
+) -> Stage {
+    let mut builder = SchemaRegistry::builder();
+    for schema in schemas {
+        builder.register(schema);
+    }
+    let registry = builder.build(&mut store.tokens);
+    let options = StageOptions {
+        schemas: Some(Arc::new(registry)),
+        ..StageOptions::default()
+    };
+    Stage::compose(store, LayerId(1), options)
+}
+
 #[test]
 fn schema_fallback_provides_value_when_no_opinion() {
     // When no authored opinion exists for a field that has a schema fallback,
@@ -1740,16 +1762,15 @@ fn schema_fallback_provides_value_when_no_opinion() {
     layer.insert_prim(p, PrimSpec::def().with_type_name(mesh_tok));
     store.insert_layer(layer);
 
-    let mut registry = SchemaRegistry::new();
-    registry
-        .register(SchemaDefinition::typed(mesh_tok).with_property(extent_tok, Value::Double(0.0)));
-
-    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let stage = compose_with_schemas(
+        &mut store,
+        [SchemaDefinition::typed(mesh_tok).with_property(defined(extent_tok, 0.0))],
+    );
 
     // No authored opinion on "extent" → fallback from schema.
     assert_eq!(stage.resolve_field(p, extent_tok), None);
     let resolved = stage
-        .resolve_field_with_schema(p, extent_tok, &store, &registry, None)
+        .resolve_field_with_schema(p, extent_tok, &store)
         .expect("schema fallback");
     assert_eq!(resolved.value, Value::Double(0.0));
 }
@@ -1774,16 +1795,14 @@ fn authored_opinion_beats_schema_fallback() {
     );
     store.insert_layer(layer);
 
-    let mut registry = SchemaRegistry::new();
-    registry.register(
-        SchemaDefinition::typed(mesh_tok).with_property(double_sided_tok, Value::Bool(false)),
+    let stage = compose_with_schemas(
+        &mut store,
+        [SchemaDefinition::typed(mesh_tok).with_property(defined(double_sided_tok, false))],
     );
-
-    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
     // Authored value wins over schema fallback.
     let resolved = stage
-        .resolve_field_with_schema(p, double_sided_tok, &store, &registry, None)
+        .resolve_field_with_schema(p, double_sided_tok, &store)
         .expect("resolved");
     assert_eq!(resolved.value, Value::Bool(true));
 }
@@ -1804,16 +1823,16 @@ fn schema_isa_inheritance_fallback() {
     layer.insert_prim(p, PrimSpec::def().with_type_name(mesh_tok));
     store.insert_layer(layer);
 
-    let mut registry = SchemaRegistry::new();
-    registry.register(
-        SchemaDefinition::typed(gprim_tok).with_property(visibility_tok, Value::from("inherited")),
+    let stage = compose_with_schemas(
+        &mut store,
+        [
+            SchemaDefinition::typed(gprim_tok).with_property(defined(visibility_tok, "inherited")),
+            SchemaDefinition::typed(mesh_tok).with_parent(gprim_tok),
+        ],
     );
-    registry.register(SchemaDefinition::typed(mesh_tok).with_parent(gprim_tok));
-
-    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
     let resolved = stage
-        .resolve_field_with_schema(p, visibility_tok, &store, &registry, None)
+        .resolve_field_with_schema(p, visibility_tok, &store)
         .expect("inherited fallback");
     assert_eq!(resolved.value, Value::from("inherited"));
 }
@@ -1829,6 +1848,7 @@ fn schema_applied_api_provides_fallback() {
     let includes_tok = store.tokens.intern("includes");
     let api_schemas_tok = store.tokens.intern("apiSchemas");
     let p = store.path("/P");
+    let bare = store.path("/Bare");
 
     let mut layer = Layer::new(LayerId(1));
     // Prim has typeName=Mesh and apiSchemas=[CollectionAPI].
@@ -1839,26 +1859,28 @@ fn schema_applied_api_provides_fallback() {
             FieldValue::TokenListOp(ListOp::appended(vec![collection_api_tok])),
         ),
     );
+    layer.insert_prim(bare, PrimSpec::def().with_type_name(mesh_tok));
     store.insert_layer(layer);
 
-    let mut registry = SchemaRegistry::new();
-    registry.register(SchemaDefinition::typed(mesh_tok));
-    registry.register(
-        SchemaDefinition::api(collection_api_tok).with_property(includes_tok, Value::Null),
+    let stage = compose_with_schemas(
+        &mut store,
+        [
+            SchemaDefinition::typed(mesh_tok),
+            SchemaDefinition::api(collection_api_tok)
+                .with_property(defined(includes_tok, Value::Null)),
+        ],
     );
 
-    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
-
-    // Without apiSchemas token → only typed schema is consulted, no fallback.
+    // Without the applied schema, no fallback.
     assert!(
         stage
-            .resolve_field_with_schema(p, includes_tok, &store, &registry, None)
+            .resolve_field_with_schema(bare, includes_tok, &store)
             .is_none()
     );
 
-    // With apiSchemas token → applied API schema fallback is found.
+    // With it, the applied API schema's fallback is found.
     let resolved = stage
-        .resolve_field_with_schema(p, includes_tok, &store, &registry, Some(api_schemas_tok))
+        .resolve_field_with_schema(p, includes_tok, &store)
         .expect("api schema fallback");
     assert_eq!(resolved.value, Value::Null);
 }
@@ -1876,15 +1898,14 @@ fn schema_no_type_no_fallback() {
     layer.insert_prim(p, PrimSpec::def());
     store.insert_layer(layer);
 
-    let mut registry = SchemaRegistry::new();
-    registry
-        .register(SchemaDefinition::typed(mesh_tok).with_property(extent_tok, Value::Double(0.0)));
-
-    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let stage = compose_with_schemas(
+        &mut store,
+        [SchemaDefinition::typed(mesh_tok).with_property(defined(extent_tok, 0.0))],
+    );
 
     assert!(
         stage
-            .resolve_field_with_schema(p, extent_tok, &store, &registry, None)
+            .resolve_field_with_schema(p, extent_tok, &store)
             .is_none()
     );
 }
@@ -1905,15 +1926,16 @@ fn schema_builtin_api_fallback() {
     layer.insert_prim(p, PrimSpec::def().with_type_name(mesh_tok));
     store.insert_layer(layer);
 
-    let mut registry = SchemaRegistry::new();
-    registry
-        .register(SchemaDefinition::api(some_api_tok).with_property(api_field_tok, Value::Int(42)));
-    registry.register(SchemaDefinition::typed(mesh_tok).with_built_in_api(some_api_tok));
-
-    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let stage = compose_with_schemas(
+        &mut store,
+        [
+            SchemaDefinition::api(some_api_tok).with_property(defined(api_field_tok, 42)),
+            SchemaDefinition::typed(mesh_tok).with_built_in(some_api_tok),
+        ],
+    );
 
     let resolved = stage
-        .resolve_field_with_schema(p, api_field_tok, &store, &registry, None)
+        .resolve_field_with_schema(p, api_field_tok, &store)
         .expect("built-in api fallback");
     assert_eq!(resolved.value, Value::Int(42));
 }
@@ -2318,21 +2340,21 @@ fn dictionary_combines_over_schema_fallback() {
     );
     store.insert_layer(layer);
 
-    let mut registry = SchemaRegistry::new();
-    registry.register(SchemaDefinition::typed(mesh).with_property(
-        field,
-        dict(&[
-            (
-                "settings",
-                dict(&[("a", Value::Int(0)), ("c", Value::Int(3))]),
-            ),
-            ("version", Value::Int(1)),
-        ]),
-    ));
-
-    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let stage = compose_with_schemas(
+        &mut store,
+        [SchemaDefinition::typed(mesh).with_property(defined(
+            field,
+            dict(&[
+                (
+                    "settings",
+                    dict(&[("a", Value::Int(0)), ("c", Value::Int(3))]),
+                ),
+                ("version", Value::Int(1)),
+            ]),
+        ))],
+    );
     let resolved = stage
-        .resolve_value_with_schema(p, field, &store, &registry, None)
+        .resolve_value_with_schema(p, field, &store)
         .expect("customData");
     assert_eq!(
         resolved.value,
@@ -2750,13 +2772,13 @@ fn property_named_api_schemas_does_not_hide_applied_schemas() {
     );
     store.insert_layer(layer);
 
-    let mut registry = SchemaRegistry::new();
-    registry.register(SchemaDefinition::api(test_api).with_property(answer, Value::Int(7)));
-
-    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let stage = compose_with_schemas(
+        &mut store,
+        [SchemaDefinition::api(test_api).with_property(defined(answer, 7))],
+    );
     assert_eq!(
         stage
-            .resolve_field_with_schema(p, answer, &store, &registry, Some(api_schemas))
+            .resolve_field_with_schema(p, answer, &store)
             .map(|r| r.value),
         Some(Value::Int(7)),
         "the applied schema's fallback survives a property named `apiSchemas`"

@@ -48,7 +48,6 @@ use crate::{
     prim_index::{ArcKind, Opinion, OpinionValue, PrimIndex},
     prim_index_graph::PrimNode,
     property::{PropertySpec, PropertyType},
-    schema::SchemaRegistry,
     spec_path::SpecPath,
     value_resolution::{
         SampleFold, SparseQuery, SparseResolveResult, explain_sparse_value, reads_array_family,
@@ -340,12 +339,10 @@ impl Stage {
         prim: PathId,
         field: TokenId,
         store: &dyn LayerStore,
-        registry: &SchemaRegistry,
-        api_schemas_token: Option<TokenId>,
     ) -> Option<ValueExplanation<'_, ResolvedValue>> {
         let index = self.prims.get(&prim);
         let authored = index.and_then(|index| index.property_opinions(field));
-        let fallback = self.schema_fallback(prim, field, store, registry, api_schemas_token);
+        let fallback = self.schema_fallback(prim, field, store);
 
         let mut explained = None;
         if let (Some(index), Some(opinions)) = (index, authored) {
@@ -357,16 +354,12 @@ impl Stage {
                 .as_property()
                 .is_some_and(PropertySpec::is_relationship);
             let explanation = if is_value_field {
-                let fallback_value = match fallback.as_ref() {
-                    Some(FieldValue::Value(value)) => Some(value),
-                    _ => None,
-                };
                 self.explain_default(
                     index,
                     field,
                     opinions,
                     index.property_type_for(&field),
-                    fallback_value,
+                    fallback.as_ref(),
                 )
             } else {
                 self.explain_value_by(prim, field, Lookup::Property)?
@@ -380,13 +373,12 @@ impl Stage {
         let Some(fallback) = fallback else {
             return explained;
         };
-        let value = match fallback {
-            FieldValue::Value(Value::Dictionary(d)) => Some(ResolvedValue::Dictionary(
-                crate::doc::combine_dictionary_chain([d]),
-            )),
-            FieldValue::Value(v) => Some(ResolvedValue::Scalar(v)),
-            list => super::resolve_field_list(&list, core::iter::once(&list)),
-        };
+        let value = Some(match fallback {
+            Value::Dictionary(d) => {
+                ResolvedValue::Dictionary(crate::doc::combine_dictionary_chain([d]))
+            }
+            v => ResolvedValue::Scalar(v),
+        });
         Some(with_fallback(explained, value))
     }
 
@@ -400,10 +392,6 @@ impl Stage {
     /// Spec: AOUSD Core §12.3.5 (fallback values), §12.3.6 (blocks),
     /// §13.3.2.4 (fallback value resolution).
     #[must_use]
-    #[expect(
-        clippy::too_many_arguments,
-        reason = "mirrors resolve_value_at_time_with_schema"
-    )]
     pub fn explain_value_at_time_with_schema(
         &self,
         prim: PathId,
@@ -411,14 +399,9 @@ impl Stage {
         time: f64,
         interp: InterpolationType,
         store: &dyn LayerStore,
-        registry: &SchemaRegistry,
-        api_schemas_token: Option<TokenId>,
     ) -> Option<ValueExplanation<'_, Value>> {
-        let fallback = self.schema_fallback(prim, field, store, registry, api_schemas_token);
-        let seed = match &fallback {
-            Some(FieldValue::Value(value)) => Some(value),
-            _ => None,
-        };
+        let fallback = self.schema_fallback(prim, field, store);
+        let seed = fallback.as_ref();
         let explained = self
             .opinions(prim, field, Lookup::Property)
             .map(|(index, opinions)| {
@@ -432,15 +415,12 @@ impl Stage {
         let Some(fallback) = fallback else {
             return explained;
         };
-        let value = match fallback {
-            FieldValue::Value(Value::Dictionary(entries)) => {
-                Some(Value::Dictionary(crate::doc::combine_dictionary_chain([
-                    entries.as_slice(),
-                ])))
+        let value = Some(match fallback {
+            Value::Dictionary(entries) => {
+                Value::Dictionary(crate::doc::combine_dictionary_chain([entries.as_slice()]))
             }
-            FieldValue::Value(value) => Some(value),
-            _ => None,
-        };
+            value => value,
+        });
         Some(with_fallback(explained, value))
     }
 

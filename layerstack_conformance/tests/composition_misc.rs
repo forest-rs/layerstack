@@ -18,6 +18,21 @@
 //!   layer appends its new children, then reorders the names gathered so
 //!   far; `/Column` keeps the children before the first reordered name in
 //!   front.
+//! - `/Kiln`, and `/Studio`, which references a copy of it, author explicit
+//!   inherits, specializes, references and payloads on the prim and on its
+//!   selected variant branch, and on a child and on its spec in that
+//!   branch. Each node composes the list ops of its own sites, so no
+//!   node's explicit list replaces another's.
+//! - `/Loom/Frame`, and `/Mill/Frame` through a reference to a copy,
+//!   author the same reference, inherit, specializes and payload on the
+//!   prim and on its spec in its parent's selected branch. Each node's
+//!   reference and payload is an arc of its own, so the referenced sites
+//!   compose twice; the class arcs reach a site the prim index already
+//!   uses the second time, which OpenUSD adds once.
+//! - `/Press`'s selected branch adds a reference, an inherit and a payload
+//!   in a sublayer, and deletes them in the root layer: one node's list
+//!   ops chain across its layers, deletes included, so none remains there,
+//!   while the same reference `/Press` itself adds stays.
 //! - `/Sets`, `/Part`, `/Copy` and `/Heir` author path expressions: `%_`
 //!   splices in the next weaker expression, and each expression is anchored
 //!   at the prim authoring it and mapped through the arcs to the stage
@@ -27,9 +42,11 @@
 //!   time samples, and over a block.
 //!
 //! Spec: AOUSD Core §11.3.3 (scene graph instancing), §11 (stage
-//! population), §10 (composition arcs map namespace). OpenUSD:
+//! population), §10 (composition arcs map namespace), §10.3.2.5 (a variant
+//! branch is a site of its own). OpenUSD:
 //! `_ConvertNodeForChild` in `pxr/usd/pcp/primIndex.cpp`,
-//! `PcpComposeSiteChildNames` in `pxr/usd/pcp/composeSite.cpp`,
+//! `PcpComposeSiteChildNames` and `PcpComposeSiteInherits` in
+//! `pxr/usd/pcp/composeSite.cpp`,
 //! `SdfPathExpression::ComposeOver` and `PcpMapFunction::MapSourceToTarget`.
 
 #![allow(missing_docs, reason = "integration tests")]

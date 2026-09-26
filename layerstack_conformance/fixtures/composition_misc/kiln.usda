@@ -1,0 +1,106 @@
+#usda 1.0
+
+def "Kiln" (
+    inherits = </_class_Fire>
+    specializes = </_base_Kiln>
+    references = @./clay.usda@</Clay>
+    payload = @./clay.usda@</Glaze>
+    variantSets = "heat"
+    variants = {
+        string heat = "high"
+    }
+)
+{
+    def "Shelf" (
+        inherits = </_class_Rack>
+        references = @./clay.usda@</Board>
+    )
+    {
+    }
+
+    variantSet "heat" = {
+        "high" (
+            inherits = </_class_Smoke>
+            specializes = </_base_Vent>
+            references = @./clay.usda@</Slip>
+            payload = @./clay.usda@</Ash>
+        ) {
+            over "Shelf" (
+                inherits = </_class_Tray>
+                references = @./clay.usda@</Rim>
+            )
+            {
+            }
+        }
+    }
+}
+
+class "_class_Fire"
+{
+    double fire = 1
+}
+
+class "_class_Smoke"
+{
+    double smoke = 1
+}
+
+class "_base_Kiln"
+{
+    double base = 1
+}
+
+class "_base_Vent"
+{
+    double vent = 1
+}
+
+class "_class_Rack"
+{
+    double rack = 1
+}
+
+class "_class_Tray"
+{
+    double tray = 1
+}
+
+def "Loom" (
+    variantSets = "weave"
+    variants = {
+        string weave = "tight"
+    }
+)
+{
+    def "Frame" (
+        references = @./clay.usda@</Clay>
+        inherits = </_class_Loom>
+        specializes = </_base_Loom>
+        payload = @./clay.usda@</Glaze>
+    )
+    {
+    }
+
+    variantSet "weave" = {
+        "tight" {
+            over "Frame" (
+                references = @./clay.usda@</Clay>
+                inherits = </_class_Loom>
+                specializes = </_base_Loom>
+                payload = @./clay.usda@</Glaze>
+            )
+            {
+            }
+        }
+    }
+}
+
+class "_class_Loom"
+{
+    double loom = 1
+}
+
+class "_base_Loom"
+{
+    double warp = 1
+}

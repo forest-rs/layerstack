@@ -22,6 +22,22 @@ Writes, under `layerstack_conformance/fixtures/composition_misc` by default:
   gathered so far (`PcpComposeSiteChildNames` in
   `pxr/usd/pcp/composeSite.cpp`). Children before the first name a reorder
   lists stay in front (`SdfApplyListOrdering` in `pxr/usd/sdf/listOp.cpp`).
+- `/Kiln`, and `/Studio`, which references a copy of it, author explicit
+  inherits, specializes, references and payloads on the prim and on its
+  selected variant branch, and on a child and on its spec in that branch.
+  Each node composes the list ops of its own sites
+  (`PcpComposeSiteInherits` and the like in
+  `pxr/usd/pcp/composeSite.cpp`), so no node's explicit list replaces
+  another's.
+- `/Loom/Frame`, and `/Mill/Frame` through a reference to a copy, author
+  the same reference, inherit, specializes and payload on the prim and on
+  its spec in its parent's selected branch: each arc is followed once from
+  each of the two nodes.
+- `/Press`'s selected `grip` branch adds a reference, an inherit and a
+  payload in `press.usda`, and deletes them in `root.usda`: the branch is
+  one node, whose list ops chain across the layer stack, deletes
+  included, so none remains there, while the same reference `/Press`
+  itself adds stays.
 - Path expressions: a stronger expression's `%_` splices in the next weaker
   one (`SdfPathExpression::ComposeOver`); a relative expression is anchored
   at the prim that authors it, and every expression is mapped through the
@@ -48,7 +64,8 @@ LAYERS = {
     "root": '''#usda 1.0
 (
     subLayers = [
-        @./rows.usda@
+        @./rows.usda@,
+        @./press.usda@
     ]
 )
 
@@ -185,6 +202,148 @@ class "_class_Heir"
 {
     uniform pathExpression mixed = "/_class_Heir/Pin /Stray Pin"
 }
+
+# Each node composes its arcs from its own sites: `/Kiln` and its
+# selected `heat` branch author explicit inherits, specializes, references
+# and payloads, as do `/Kiln/Shelf` and its spec in that branch, and none
+# replaces another's. `/Studio` references the same prim in `kiln.usda`.
+def "Kiln" (
+    inherits = </_class_Fire>
+    specializes = </_base_Kiln>
+    references = @./clay.usda@</Clay>
+    payload = @./clay.usda@</Glaze>
+    variantSets = "heat"
+    variants = {
+        string heat = "high"
+    }
+)
+{
+    def "Shelf" (
+        inherits = </_class_Rack>
+        references = @./clay.usda@</Board>
+    )
+    {
+    }
+
+    variantSet "heat" = {
+        "high" (
+            inherits = </_class_Smoke>
+            specializes = </_base_Vent>
+            references = @./clay.usda@</Slip>
+            payload = @./clay.usda@</Ash>
+        ) {
+            over "Shelf" (
+                inherits = </_class_Tray>
+                references = @./clay.usda@</Rim>
+            )
+            {
+            }
+        }
+    }
+}
+
+class "_class_Fire"
+{
+    double fire = 1
+}
+
+class "_class_Smoke"
+{
+    double smoke = 1
+}
+
+class "_base_Kiln"
+{
+    double base = 1
+}
+
+class "_base_Vent"
+{
+    double vent = 1
+}
+
+class "_class_Rack"
+{
+    double rack = 1
+}
+
+class "_class_Tray"
+{
+    double tray = 1
+}
+
+def "Studio" (
+    references = @./kiln.usda@</Kiln>
+)
+{
+}
+
+# `/Loom/Frame` and its spec in `/Loom`'s selected `weave` branch each
+# author the same reference, inherit, specializes and payload: each site
+# is a node of its own, so each arc is followed once from each.
+def "Loom" (
+    variantSets = "weave"
+    variants = {
+        string weave = "tight"
+    }
+)
+{
+    def "Frame" (
+        references = @./clay.usda@</Clay>
+        inherits = </_class_Loom>
+        specializes = </_base_Loom>
+        payload = @./clay.usda@</Glaze>
+    )
+    {
+    }
+
+    variantSet "weave" = {
+        "tight" {
+            over "Frame" (
+                references = @./clay.usda@</Clay>
+                inherits = </_class_Loom>
+                specializes = </_base_Loom>
+                payload = @./clay.usda@</Glaze>
+            )
+            {
+            }
+        }
+    }
+}
+
+class "_class_Loom"
+{
+    double loom = 1
+}
+
+class "_base_Loom"
+{
+    double warp = 1
+}
+
+def "Mill" (
+    references = @./kiln.usda@</Loom>
+)
+{
+}
+
+# `/Press`'s `firm` branch adds a reference, an inherit and a payload in
+# `press.usda`, a sublayer; the stronger `root.usda` deletes each of them
+# in the same branch. The branch is one node, whose list ops chain across
+# both layers, so none of the three arcs remains there. `/Press` itself,
+# another node, adds the same reference, which the branch's deletion
+# leaves alone.
+over "Press"
+{
+    variantSet "grip" = {
+        "firm" (
+            delete references = @./clay.usda@</Slip>
+            delete inherits = </_class_Press>
+            delete payload = @./clay.usda@</Ash>
+        ) {
+        }
+    }
+}
 ''',
     "rows": '''#usda 1.0
 
@@ -212,6 +371,170 @@ def "Sets"
         10: "/Stray/Leaf/Bud",
     }
     uniform pathExpression timed = "/Stray"
+}
+''',
+    "kiln": '''#usda 1.0
+
+def "Kiln" (
+    inherits = </_class_Fire>
+    specializes = </_base_Kiln>
+    references = @./clay.usda@</Clay>
+    payload = @./clay.usda@</Glaze>
+    variantSets = "heat"
+    variants = {
+        string heat = "high"
+    }
+)
+{
+    def "Shelf" (
+        inherits = </_class_Rack>
+        references = @./clay.usda@</Board>
+    )
+    {
+    }
+
+    variantSet "heat" = {
+        "high" (
+            inherits = </_class_Smoke>
+            specializes = </_base_Vent>
+            references = @./clay.usda@</Slip>
+            payload = @./clay.usda@</Ash>
+        ) {
+            over "Shelf" (
+                inherits = </_class_Tray>
+                references = @./clay.usda@</Rim>
+            )
+            {
+            }
+        }
+    }
+}
+
+class "_class_Fire"
+{
+    double fire = 1
+}
+
+class "_class_Smoke"
+{
+    double smoke = 1
+}
+
+class "_base_Kiln"
+{
+    double base = 1
+}
+
+class "_base_Vent"
+{
+    double vent = 1
+}
+
+class "_class_Rack"
+{
+    double rack = 1
+}
+
+class "_class_Tray"
+{
+    double tray = 1
+}
+
+def "Loom" (
+    variantSets = "weave"
+    variants = {
+        string weave = "tight"
+    }
+)
+{
+    def "Frame" (
+        references = @./clay.usda@</Clay>
+        inherits = </_class_Loom>
+        specializes = </_base_Loom>
+        payload = @./clay.usda@</Glaze>
+    )
+    {
+    }
+
+    variantSet "weave" = {
+        "tight" {
+            over "Frame" (
+                references = @./clay.usda@</Clay>
+                inherits = </_class_Loom>
+                specializes = </_base_Loom>
+                payload = @./clay.usda@</Glaze>
+            )
+            {
+            }
+        }
+    }
+}
+
+class "_class_Loom"
+{
+    double loom = 1
+}
+
+class "_base_Loom"
+{
+    double warp = 1
+}
+''',
+    "clay": '''#usda 1.0
+
+def "Clay"
+{
+    double clay = 1
+}
+
+def "Glaze"
+{
+    double glaze = 1
+}
+
+def "Slip"
+{
+    double slip = 1
+}
+
+def "Ash"
+{
+    double ash = 1
+}
+
+def "Board"
+{
+    double board = 1
+}
+
+def "Rim"
+{
+    double rim = 1
+}
+''',
+    "press": '''#usda 1.0
+
+def "Press" (
+    prepend references = @./clay.usda@</Slip>
+    variantSets = "grip"
+    variants = {
+        string grip = "firm"
+    }
+)
+{
+    variantSet "grip" = {
+        "firm" (
+            prepend references = @./clay.usda@</Slip>
+            prepend inherits = </_class_Press>
+            prepend payload = @./clay.usda@</Ash>
+        ) {
+        }
+    }
+}
+
+class "_class_Press"
+{
+    double press = 1
 }
 ''',
     "part": '''#usda 1.0

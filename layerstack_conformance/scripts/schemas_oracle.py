@@ -47,7 +47,10 @@ The sets:
   change, which drops the override, and an override of nothing),
   auto-applies to an abstract base and to an API schema, an inclusion
   cycle, invalid `apiSchemas` entries, and fallbacks shadowed by an
-  authored value and by a default block.
+  authored value and by a default block;
+- `openusd`: no plugin of its own but OpenUSD's own schemas, which
+  `layerstack_schemas` ships: a mesh, a sphere, a material with a shader,
+  a light and a prim applying `CollectionAPI:foo` and `MaterialBindingAPI`.
 """
 import json
 import os
@@ -435,6 +438,72 @@ def "CycleFromTwo" (
 }
 ''',
     },
+    "openusd": {
+        "builtin": True,
+        "schemas": [
+            ("Typed", "abstractTyped", None, []),
+            ("Imageable", "abstractTyped", None, []),
+            ("Xformable", "abstractTyped", None, []),
+            ("Boundable", "abstractTyped", None, []),
+            ("Gprim", "abstractTyped", None, []),
+            ("PointBased", "abstractTyped", None, []),
+            ("Mesh", "concreteTyped", None, []),
+            ("Sphere", "concreteTyped", None, []),
+            ("Xform", "concreteTyped", None, []),
+            ("Scope", "concreteTyped", None, []),
+            ("NodeGraph", "concreteTyped", None, []),
+            ("Material", "concreteTyped", None, []),
+            ("Shader", "concreteTyped", None, []),
+            ("BoundableLightBase", "abstractTyped", None, []),
+            ("SphereLight", "concreteTyped", None, []),
+            ("MaterialBindingAPI", "singleApplyAPI", None, []),
+            ("LightAPI", "singleApplyAPI", None, []),
+            ("ShadowAPI", "singleApplyAPI", None, []),
+            ("ShapingAPI", "singleApplyAPI", None, []),
+            ("VisibilityAPI", "singleApplyAPI", None, []),
+            ("GeomModelAPI", "singleApplyAPI", None, []),
+            ("CollectionAPI", "multipleApplyAPI", None, []),
+        ],
+        "auto_apply": {},
+        "scene": '''#usda 1.0
+
+def Xform "World"
+{
+    def Mesh "Mesh"
+    {
+        int[] faceVertexCounts = [4]
+    }
+
+    def Sphere "Ball"
+    {
+        double radius = 2
+    }
+
+    def Material "Material"
+    {
+        token outputs:surface.connect = </World/Material/Surface.outputs:surface>
+
+        def Shader "Surface"
+        {
+            uniform token info:id = "UsdPreviewSurface"
+            token outputs:surface
+        }
+    }
+
+    def SphereLight "Light"
+    {
+        float inputs:intensity = 5
+    }
+
+    def Scope "Group" (
+        prepend apiSchemas = ["CollectionAPI:foo", "MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </World/Material>
+    }
+}
+''',
+    },
 }
 
 
@@ -485,13 +554,15 @@ def plug_info(spec):
 def write_set(out_dir, name, spec):
     directory = os.path.join(out_dir, name)
     os.makedirs(directory, exist_ok=True)
+    with open(os.path.join(directory, "scene.usda"), "w") as f:
+        f.write(spec["scene"])
+    if spec.get("builtin"):
+        return directory
     with open(os.path.join(directory, "plugInfo.json"), "w") as f:
         json.dump(plug_info(spec), f, indent=4, sort_keys=True)
         f.write("\n")
     with open(os.path.join(directory, "generatedSchema.usda"), "w") as f:
         f.write(GENERATED_HEADER + spec["generated"])
-    with open(os.path.join(directory, "scene.usda"), "w") as f:
-        f.write(spec["scene"])
     return directory
 
 
@@ -505,6 +576,12 @@ def encode(value):
         return value
     if isinstance(value, Sdf.AssetPath):
         return value.path
+    if isinstance(value, Sdf.PathExpression):
+        return value.GetText()
+    if isinstance(value, (Gf.Quatd, Gf.Quatf, Gf.Quath)):
+        return [float(value.GetReal())] + [float(x) for x in value.GetImaginary()]
+    if isinstance(value, (Gf.Matrix2d, Gf.Matrix3d, Gf.Matrix4d)):
+        return [float(x) for row in value for x in row]
     try:
         return [encode(v) for v in value]
     except TypeError:
@@ -575,17 +652,19 @@ def record(name, spec, directory):
 
 
 def main():
-    if len(sys.argv) == 3 and sys.argv[1] == "--record":
-        name = sys.argv[2]
-        directory = os.environ["PXR_PLUGINPATH_NAME"]
+    if len(sys.argv) == 4 and sys.argv[1] == "--record":
+        name, directory = sys.argv[2], sys.argv[3]
         json.dump(record(name, SETS[name], directory), sys.stdout)
         return
     out_dir = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_OUT
     for name, spec in SETS.items():
         directory = os.path.abspath(write_set(out_dir, name, spec))
-        env = dict(os.environ, PXR_PLUGINPATH_NAME=directory)
+        env = dict(os.environ)
+        env.pop("PXR_PLUGINPATH_NAME", None)
+        if not spec.get("builtin"):
+            env["PXR_PLUGINPATH_NAME"] = directory
         result = subprocess.run(
-            [sys.executable, os.path.abspath(__file__), "--record", name],
+            [sys.executable, os.path.abspath(__file__), "--record", name, directory],
             env=env, check=True, capture_output=True, text=True)
         if result.stderr.strip():
             # OpenUSD warns about the inclusion cycle, the invalid

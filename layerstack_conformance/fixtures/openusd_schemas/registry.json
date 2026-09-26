@@ -1,0 +1,6814 @@
+{
+ "domains": [
+  "usd",
+  "usdGeom",
+  "usdShade",
+  "usdLux"
+ ],
+ "instances": [
+  "fixture",
+  "outer:inner"
+ ],
+ "openusd_version": "0.26.8",
+ "schemas": [
+  {
+   "definitions": [],
+   "family": "APISchemaBase",
+   "is_a": [],
+   "kind": "AbstractBase",
+   "name": "APISchemaBase",
+   "plugin": "usd",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [
+      "BackPlateAPI:fixture"
+     ],
+     "applied_schemas": [
+      "BackPlateAPI:fixture"
+     ],
+     "properties": {
+      "backPlate:fixture:alpha:image": {
+       "fallback": "",
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "backPlate:fixture:depth:cameraSpaceOffset": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "backPlate:fixture:depth:image": {
+       "fallback": "",
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "backPlate:fixture:depth:minOffset": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "backPlate:fixture:depth:normalizingFactor": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "backPlate:fixture:image": {
+       "fallback": "",
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "backPlate:fixture:luma:gain": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "float3",
+       "variability": "varying"
+      },
+      "backPlate:fixture:luma:gamma": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "float3",
+       "variability": "varying"
+      },
+      "backPlate:fixture:luma:lift": {
+       "fallback": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "kind": "attribute",
+       "type_name": "float3",
+       "variability": "varying"
+      },
+      "backPlate:fixture:plateVisibility": {
+       "fallback": "solo",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "backPlate:fixture:rotateXYZ:tweak": {
+       "fallback": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "kind": "attribute",
+       "type_name": "float3",
+       "variability": "varying"
+      },
+      "backPlate:fixture:scale:tweak": {
+       "fallback": [
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "float2",
+       "variability": "varying"
+      },
+      "backPlate:fixture:translate:tweak": {
+       "fallback": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "kind": "attribute",
+       "type_name": "float3",
+       "variability": "varying"
+      }
+     },
+     "type": ""
+    },
+    {
+     "applied": [
+      "BackPlateAPI:outer:inner"
+     ],
+     "applied_schemas": [
+      "BackPlateAPI:outer:inner"
+     ],
+     "properties": {
+      "backPlate:outer:inner:alpha:image": {
+       "fallback": "",
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "backPlate:outer:inner:depth:cameraSpaceOffset": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "backPlate:outer:inner:depth:image": {
+       "fallback": "",
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "backPlate:outer:inner:depth:minOffset": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "backPlate:outer:inner:depth:normalizingFactor": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "backPlate:outer:inner:image": {
+       "fallback": "",
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "backPlate:outer:inner:luma:gain": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "float3",
+       "variability": "varying"
+      },
+      "backPlate:outer:inner:luma:gamma": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "float3",
+       "variability": "varying"
+      },
+      "backPlate:outer:inner:luma:lift": {
+       "fallback": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "kind": "attribute",
+       "type_name": "float3",
+       "variability": "varying"
+      },
+      "backPlate:outer:inner:plateVisibility": {
+       "fallback": "solo",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "backPlate:outer:inner:rotateXYZ:tweak": {
+       "fallback": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "kind": "attribute",
+       "type_name": "float3",
+       "variability": "varying"
+      },
+      "backPlate:outer:inner:scale:tweak": {
+       "fallback": [
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "float2",
+       "variability": "varying"
+      },
+      "backPlate:outer:inner:translate:tweak": {
+       "fallback": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "kind": "attribute",
+       "type_name": "float3",
+       "variability": "varying"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "BackPlateAPI",
+   "is_a": [],
+   "kind": "MultipleApplyAPI",
+   "name": "BackPlateAPI",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "accelerations": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "basis": {
+       "fallback": "bezier",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "curveVertexCounts": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "int[]",
+       "variability": "varying"
+      },
+      "doubleSided": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "normals": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "normal3f[]",
+       "variability": "varying"
+      },
+      "orientation": {
+       "fallback": "rightHanded",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "points": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "point3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayColor": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "color3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayOpacity": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "type": {
+       "fallback": "cubic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "velocities": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "widths": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "wrap": {
+       "fallback": "nonperiodic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "BasisCurves"
+    }
+   ],
+   "family": "BasisCurves",
+   "is_a": [
+    "BasisCurves",
+    "Boundable",
+    "Curves",
+    "Gprim",
+    "Imageable",
+    "PointBased",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "BasisCurves",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "extent": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "Boundable"
+    }
+   ],
+   "family": "Boundable",
+   "is_a": [
+    "Boundable",
+    "Imageable",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "AbstractTyped",
+   "name": "Boundable",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "LightAPI",
+      "CollectionAPI:lightLink",
+      "CollectionAPI:shadowLink"
+     ],
+     "properties": {
+      "collection:lightLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:lightLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:lightLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "inputs:color": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "color3f",
+       "variability": "varying"
+      },
+      "inputs:colorTemperature": {
+       "fallback": 6500.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:diffuse": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:enableColorTemperature": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:exposure": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:intensity": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:normalize": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:specular": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "light:filters": {
+       "kind": "relationship"
+      },
+      "light:materialSyncMode": {
+       "fallback": "noMaterialResponse",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "light:shaderId": {
+       "fallback": "",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "BoundableLightBase"
+    }
+   ],
+   "family": "BoundableLightBase",
+   "is_a": [
+    "Boundable",
+    "BoundableLightBase",
+    "Imageable",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "AbstractTyped",
+   "name": "BoundableLightBase",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "clippingPlanes": {
+       "fallback": [],
+       "kind": "attribute",
+       "type_name": "float4[]",
+       "variability": "varying"
+      },
+      "clippingRange": {
+       "fallback": [
+        1.0,
+        1000000.0
+       ],
+       "kind": "attribute",
+       "type_name": "float2",
+       "variability": "varying"
+      },
+      "exposure": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "exposure:fStop": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "exposure:iso": {
+       "fallback": 100.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "exposure:responsivity": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "exposure:time": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "fStop": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "focalLength": {
+       "fallback": 50.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "focusDistance": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "horizontalAperture": {
+       "fallback": 20.954999923706055,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "horizontalApertureOffset": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "projection": {
+       "fallback": "perspective",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "shutter:close": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "shutter:open": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "stereoRole": {
+       "fallback": "mono",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "verticalAperture": {
+       "fallback": 15.290800094604492,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "verticalApertureOffset": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "Camera"
+    }
+   ],
+   "family": "Camera",
+   "is_a": [
+    "Camera",
+    "Imageable",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Camera",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "axis": {
+       "fallback": "Z",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "doubleSided": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": [
+        [
+         -0.5,
+         -0.5,
+         -1.0
+        ],
+        [
+         0.5,
+         0.5,
+         1.0
+        ]
+       ],
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "height": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "orientation": {
+       "fallback": "rightHanded",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "primvars:displayColor": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "color3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayOpacity": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "radius": {
+       "fallback": 0.5,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "Capsule"
+    }
+   ],
+   "family": "Capsule",
+   "is_a": [
+    "Boundable",
+    "Capsule",
+    "Gprim",
+    "Imageable",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Capsule",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "axis": {
+       "fallback": "Z",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "doubleSided": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": [
+        [
+         -0.5,
+         -0.5,
+         -1.0
+        ],
+        [
+         0.5,
+         0.5,
+         1.0
+        ]
+       ],
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "height": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "orientation": {
+       "fallback": "rightHanded",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "primvars:displayColor": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "color3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayOpacity": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "radiusBottom": {
+       "fallback": 0.5,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "radiusTop": {
+       "fallback": 0.5,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "Capsule_1"
+    }
+   ],
+   "family": "Capsule",
+   "is_a": [
+    "Boundable",
+    "Capsule_1",
+    "Gprim",
+    "Imageable",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Capsule_1",
+   "plugin": "usdGeom",
+   "version": 1
+  },
+  {
+   "definitions": [],
+   "family": "ClipsAPI",
+   "is_a": [],
+   "kind": "NonAppliedAPI",
+   "name": "ClipsAPI",
+   "plugin": "usd",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [
+      "CollectionAPI:fixture"
+     ],
+     "applied_schemas": [
+      "CollectionAPI:fixture"
+     ],
+     "properties": {
+      "collection:fixture": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:fixture:excludes": {
+       "kind": "relationship"
+      },
+      "collection:fixture:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:fixture:includeRoot": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:fixture:includes": {
+       "kind": "relationship"
+      },
+      "collection:fixture:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:fixture:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      }
+     },
+     "type": ""
+    },
+    {
+     "applied": [
+      "CollectionAPI:outer:inner"
+     ],
+     "applied_schemas": [
+      "CollectionAPI:outer:inner"
+     ],
+     "properties": {
+      "collection:outer:inner": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:outer:inner:excludes": {
+       "kind": "relationship"
+      },
+      "collection:outer:inner:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:outer:inner:includeRoot": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:outer:inner:includes": {
+       "kind": "relationship"
+      },
+      "collection:outer:inner:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:outer:inner:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "CollectionAPI",
+   "is_a": [],
+   "kind": "MultipleApplyAPI",
+   "name": "CollectionAPI",
+   "plugin": "usd",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [
+      "ColorSpaceAPI"
+     ],
+     "applied_schemas": [
+      "ColorSpaceAPI"
+     ],
+     "properties": {
+      "colorSpace:name": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "ColorSpaceAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "ColorSpaceAPI",
+   "plugin": "usd",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [
+      "ColorSpaceDefinitionAPI:fixture"
+     ],
+     "applied_schemas": [
+      "ColorSpaceDefinitionAPI:fixture"
+     ],
+     "properties": {
+      "colorSpaceDefinition:fixture:blueChroma": {
+       "fallback": [
+        0.0,
+        0.0
+       ],
+       "kind": "attribute",
+       "type_name": "float2",
+       "variability": "varying"
+      },
+      "colorSpaceDefinition:fixture:gamma": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "colorSpaceDefinition:fixture:greenChroma": {
+       "fallback": [
+        0.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "float2",
+       "variability": "varying"
+      },
+      "colorSpaceDefinition:fixture:linearBias": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "colorSpaceDefinition:fixture:name": {
+       "fallback": "custom",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "colorSpaceDefinition:fixture:redChroma": {
+       "fallback": [
+        1.0,
+        0.0
+       ],
+       "kind": "attribute",
+       "type_name": "float2",
+       "variability": "varying"
+      },
+      "colorSpaceDefinition:fixture:whitePoint": {
+       "fallback": [
+        0.3333333432674408,
+        0.3333333432674408
+       ],
+       "kind": "attribute",
+       "type_name": "float2",
+       "variability": "varying"
+      }
+     },
+     "type": ""
+    },
+    {
+     "applied": [
+      "ColorSpaceDefinitionAPI:outer:inner"
+     ],
+     "applied_schemas": [
+      "ColorSpaceDefinitionAPI:outer:inner"
+     ],
+     "properties": {
+      "colorSpaceDefinition:outer:inner:blueChroma": {
+       "fallback": [
+        0.0,
+        0.0
+       ],
+       "kind": "attribute",
+       "type_name": "float2",
+       "variability": "varying"
+      },
+      "colorSpaceDefinition:outer:inner:gamma": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "colorSpaceDefinition:outer:inner:greenChroma": {
+       "fallback": [
+        0.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "float2",
+       "variability": "varying"
+      },
+      "colorSpaceDefinition:outer:inner:linearBias": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "colorSpaceDefinition:outer:inner:name": {
+       "fallback": "custom",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "colorSpaceDefinition:outer:inner:redChroma": {
+       "fallback": [
+        1.0,
+        0.0
+       ],
+       "kind": "attribute",
+       "type_name": "float2",
+       "variability": "varying"
+      },
+      "colorSpaceDefinition:outer:inner:whitePoint": {
+       "fallback": [
+        0.3333333432674408,
+        0.3333333432674408
+       ],
+       "kind": "attribute",
+       "type_name": "float2",
+       "variability": "varying"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "ColorSpaceDefinitionAPI",
+   "is_a": [],
+   "kind": "MultipleApplyAPI",
+   "name": "ColorSpaceDefinitionAPI",
+   "plugin": "usd",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "axis": {
+       "fallback": "Z",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "doubleSided": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": [
+        [
+         -1.0,
+         -1.0,
+         -1.0
+        ],
+        [
+         1.0,
+         1.0,
+         1.0
+        ]
+       ],
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "height": {
+       "fallback": 2.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "orientation": {
+       "fallback": "rightHanded",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "primvars:displayColor": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "color3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayOpacity": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "radius": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "Cone"
+    }
+   ],
+   "family": "Cone",
+   "is_a": [
+    "Boundable",
+    "Cone",
+    "Gprim",
+    "Imageable",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Cone",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [],
+   "family": "ConnectableAPI",
+   "is_a": [],
+   "kind": "NonAppliedAPI",
+   "name": "ConnectableAPI",
+   "plugin": "usdShade",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [
+      "CoordSysAPI:fixture"
+     ],
+     "applied_schemas": [
+      "CoordSysAPI:fixture"
+     ],
+     "properties": {
+      "coordSys:fixture:binding": {
+       "kind": "relationship"
+      }
+     },
+     "type": ""
+    },
+    {
+     "applied": [
+      "CoordSysAPI:outer:inner"
+     ],
+     "applied_schemas": [
+      "CoordSysAPI:outer:inner"
+     ],
+     "properties": {
+      "coordSys:outer:inner:binding": {
+       "kind": "relationship"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "CoordSysAPI",
+   "is_a": [],
+   "kind": "MultipleApplyAPI",
+   "name": "CoordSysAPI",
+   "plugin": "usdShade",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "doubleSided": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": [
+        [
+         -1.0,
+         -1.0,
+         -1.0
+        ],
+        [
+         1.0,
+         1.0,
+         1.0
+        ]
+       ],
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "orientation": {
+       "fallback": "rightHanded",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "primvars:displayColor": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "color3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayOpacity": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "size": {
+       "fallback": 2.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "Cube"
+    }
+   ],
+   "family": "Cube",
+   "is_a": [
+    "Boundable",
+    "Cube",
+    "Gprim",
+    "Imageable",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Cube",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "accelerations": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "curveVertexCounts": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "int[]",
+       "variability": "varying"
+      },
+      "doubleSided": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "normals": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "normal3f[]",
+       "variability": "varying"
+      },
+      "orientation": {
+       "fallback": "rightHanded",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "points": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "point3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayColor": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "color3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayOpacity": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "velocities": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "widths": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "Curves"
+    }
+   ],
+   "family": "Curves",
+   "is_a": [
+    "Boundable",
+    "Curves",
+    "Gprim",
+    "Imageable",
+    "PointBased",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "AbstractTyped",
+   "name": "Curves",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "axis": {
+       "fallback": "Z",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "doubleSided": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": [
+        [
+         -1.0,
+         -1.0,
+         -1.0
+        ],
+        [
+         1.0,
+         1.0,
+         1.0
+        ]
+       ],
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "height": {
+       "fallback": 2.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "orientation": {
+       "fallback": "rightHanded",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "primvars:displayColor": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "color3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayOpacity": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "radius": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "Cylinder"
+    }
+   ],
+   "family": "Cylinder",
+   "is_a": [
+    "Boundable",
+    "Cylinder",
+    "Gprim",
+    "Imageable",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Cylinder",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "LightAPI",
+      "CollectionAPI:lightLink",
+      "CollectionAPI:shadowLink"
+     ],
+     "properties": {
+      "collection:lightLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:lightLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:lightLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "inputs:color": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "color3f",
+       "variability": "varying"
+      },
+      "inputs:colorTemperature": {
+       "fallback": 6500.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:diffuse": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:enableColorTemperature": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:exposure": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:intensity": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:length": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:normalize": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:radius": {
+       "fallback": 0.5,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:specular": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "light:filters": {
+       "kind": "relationship"
+      },
+      "light:materialSyncMode": {
+       "fallback": "noMaterialResponse",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "light:shaderId": {
+       "fallback": "CylinderLight",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "treatAsLine": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "CylinderLight"
+    }
+   ],
+   "family": "CylinderLight",
+   "is_a": [
+    "Boundable",
+    "BoundableLightBase",
+    "CylinderLight",
+    "Imageable",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "CylinderLight",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "axis": {
+       "fallback": "Z",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "doubleSided": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": [
+        [
+         -1.0,
+         -1.0,
+         -1.0
+        ],
+        [
+         1.0,
+         1.0,
+         1.0
+        ]
+       ],
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "height": {
+       "fallback": 2.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "orientation": {
+       "fallback": "rightHanded",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "primvars:displayColor": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "color3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayOpacity": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "radiusBottom": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "radiusTop": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "Cylinder_1"
+    }
+   ],
+   "family": "Cylinder",
+   "is_a": [
+    "Boundable",
+    "Cylinder_1",
+    "Gprim",
+    "Imageable",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Cylinder_1",
+   "plugin": "usdGeom",
+   "version": 1
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "LightAPI",
+      "CollectionAPI:lightLink",
+      "CollectionAPI:shadowLink"
+     ],
+     "properties": {
+      "collection:lightLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:lightLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:lightLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "inputs:color": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "color3f",
+       "variability": "varying"
+      },
+      "inputs:colorTemperature": {
+       "fallback": 6500.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:diffuse": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:enableColorTemperature": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:exposure": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:intensity": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:normalize": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:radius": {
+       "fallback": 0.5,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:specular": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "light:filters": {
+       "kind": "relationship"
+      },
+      "light:materialSyncMode": {
+       "fallback": "noMaterialResponse",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "light:shaderId": {
+       "fallback": "DiskLight",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "DiskLight"
+    }
+   ],
+   "family": "DiskLight",
+   "is_a": [
+    "Boundable",
+    "BoundableLightBase",
+    "DiskLight",
+    "Imageable",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "DiskLight",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "LightAPI",
+      "CollectionAPI:lightLink",
+      "CollectionAPI:shadowLink"
+     ],
+     "properties": {
+      "collection:lightLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:lightLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:lightLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "inputs:angle": {
+       "fallback": 0.5299999713897705,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:color": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "color3f",
+       "variability": "varying"
+      },
+      "inputs:colorTemperature": {
+       "fallback": 6500.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:diffuse": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:enableColorTemperature": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:exposure": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:intensity": {
+       "fallback": 50000.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:normalize": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:specular": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "light:filters": {
+       "kind": "relationship"
+      },
+      "light:materialSyncMode": {
+       "fallback": "noMaterialResponse",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "light:shaderId": {
+       "fallback": "DistantLight",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "DistantLight"
+    }
+   ],
+   "family": "DistantLight",
+   "is_a": [
+    "DistantLight",
+    "Imageable",
+    "NonboundableLightBase",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "DistantLight",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "LightAPI",
+      "CollectionAPI:lightLink",
+      "CollectionAPI:shadowLink"
+     ],
+     "properties": {
+      "collection:lightLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:lightLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:lightLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "guideRadius": {
+       "fallback": 100000.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:color": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "color3f",
+       "variability": "varying"
+      },
+      "inputs:colorTemperature": {
+       "fallback": 6500.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:diffuse": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:enableColorTemperature": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:exposure": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:intensity": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:normalize": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:specular": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:texture:file": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "inputs:texture:format": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "light:filters": {
+       "kind": "relationship"
+      },
+      "light:materialSyncMode": {
+       "fallback": "noMaterialResponse",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "light:shaderId": {
+       "fallback": "DomeLight",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "portals": {
+       "kind": "relationship"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "DomeLight"
+    }
+   ],
+   "family": "DomeLight",
+   "is_a": [
+    "DomeLight",
+    "Imageable",
+    "NonboundableLightBase",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "DomeLight",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "LightAPI",
+      "CollectionAPI:lightLink",
+      "CollectionAPI:shadowLink"
+     ],
+     "properties": {
+      "collection:lightLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:lightLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:lightLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "guideRadius": {
+       "fallback": 100000.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:color": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "color3f",
+       "variability": "varying"
+      },
+      "inputs:colorTemperature": {
+       "fallback": 6500.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:diffuse": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:enableColorTemperature": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:exposure": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:intensity": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:normalize": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:specular": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:texture:file": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "inputs:texture:format": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "light:filters": {
+       "kind": "relationship"
+      },
+      "light:materialSyncMode": {
+       "fallback": "noMaterialResponse",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "light:shaderId": {
+       "fallback": "DomeLight",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "poleAxis": {
+       "fallback": "scene",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "portals": {
+       "kind": "relationship"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "DomeLight_1"
+    }
+   ],
+   "family": "DomeLight",
+   "is_a": [
+    "DomeLight_1",
+    "Imageable",
+    "NonboundableLightBase",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "DomeLight_1",
+   "plugin": "usdLux",
+   "version": 1
+  },
+  {
+   "definitions": [
+    {
+     "applied": [
+      "GeomModelAPI"
+     ],
+     "applied_schemas": [
+      "GeomModelAPI"
+     ],
+     "properties": {
+      "model:applyDrawMode": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "model:cardGeometry": {
+       "fallback": "cross",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "model:cardTextureXNeg": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "model:cardTextureXPos": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "model:cardTextureYNeg": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "model:cardTextureYPos": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "model:cardTextureZNeg": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "model:cardTextureZPos": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "model:cardVisibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "model:drawMode": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "model:drawModeColor": {
+       "fallback": [
+        0.18000000715255737,
+        0.18000000715255737,
+        0.18000000715255737
+       ],
+       "kind": "attribute",
+       "type_name": "float3",
+       "variability": "uniform"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "GeomModelAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "GeomModelAPI",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "elementType": {
+       "fallback": "face",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "familyName": {
+       "fallback": "",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "indices": {
+       "fallback": [],
+       "kind": "attribute",
+       "type_name": "int[]",
+       "variability": "varying"
+      }
+     },
+     "type": "GeomSubset"
+    }
+   ],
+   "family": "GeomSubset",
+   "is_a": [
+    "GeomSubset",
+    "Typed"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "GeomSubset",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "LightAPI",
+      "CollectionAPI:lightLink",
+      "CollectionAPI:shadowLink"
+     ],
+     "properties": {
+      "collection:lightLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:lightLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:lightLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "geometry": {
+       "kind": "relationship"
+      },
+      "inputs:color": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "color3f",
+       "variability": "varying"
+      },
+      "inputs:colorTemperature": {
+       "fallback": 6500.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:diffuse": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:enableColorTemperature": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:exposure": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:intensity": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:normalize": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:specular": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "light:filters": {
+       "kind": "relationship"
+      },
+      "light:materialSyncMode": {
+       "fallback": "noMaterialResponse",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "light:shaderId": {
+       "fallback": "GeometryLight",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "GeometryLight"
+    }
+   ],
+   "family": "GeometryLight",
+   "is_a": [
+    "GeometryLight",
+    "Imageable",
+    "NonboundableLightBase",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "GeometryLight",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "doubleSided": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "orientation": {
+       "fallback": "rightHanded",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "primvars:displayColor": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "color3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayOpacity": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "Gprim"
+    }
+   ],
+   "family": "Gprim",
+   "is_a": [
+    "Boundable",
+    "Gprim",
+    "Imageable",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "AbstractTyped",
+   "name": "Gprim",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "accelerations": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "curveVertexCounts": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "int[]",
+       "variability": "varying"
+      },
+      "doubleSided": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "normals": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "normal3f[]",
+       "variability": "varying"
+      },
+      "orientation": {
+       "fallback": "rightHanded",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "points": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "point3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayColor": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "color3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayOpacity": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "tangents": {
+       "fallback": [],
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "velocities": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "widths": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "HermiteCurves"
+    }
+   ],
+   "family": "HermiteCurves",
+   "is_a": [
+    "Boundable",
+    "Curves",
+    "Gprim",
+    "HermiteCurves",
+    "Imageable",
+    "PointBased",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "HermiteCurves",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      }
+     },
+     "type": "Imageable"
+    }
+   ],
+   "family": "Imageable",
+   "is_a": [
+    "Imageable",
+    "Typed"
+   ],
+   "kind": "AbstractTyped",
+   "name": "Imageable",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [
+      "LightAPI"
+     ],
+     "applied_schemas": [
+      "LightAPI",
+      "CollectionAPI:lightLink",
+      "CollectionAPI:shadowLink"
+     ],
+     "properties": {
+      "collection:lightLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:lightLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:lightLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "inputs:color": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "color3f",
+       "variability": "varying"
+      },
+      "inputs:colorTemperature": {
+       "fallback": 6500.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:diffuse": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:enableColorTemperature": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:exposure": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:intensity": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:normalize": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:specular": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "light:filters": {
+       "kind": "relationship"
+      },
+      "light:materialSyncMode": {
+       "fallback": "noMaterialResponse",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "light:shaderId": {
+       "fallback": "",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "LightAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "LightAPI",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "CollectionAPI:filterLink"
+     ],
+     "properties": {
+      "collection:filterLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:filterLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:filterLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:filterLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:filterLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:filterLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:filterLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "lightFilter:shaderId": {
+       "fallback": "",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "LightFilter"
+    }
+   ],
+   "family": "LightFilter",
+   "is_a": [
+    "Imageable",
+    "LightFilter",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "LightFilter",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [
+      "LightListAPI"
+     ],
+     "applied_schemas": [
+      "LightListAPI"
+     ],
+     "properties": {
+      "lightList": {
+       "kind": "relationship"
+      },
+      "lightList:cacheBehavior": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "LightListAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "LightListAPI",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [
+      "ListAPI"
+     ],
+     "applied_schemas": [
+      "ListAPI"
+     ],
+     "properties": {
+      "lightList": {
+       "kind": "relationship"
+      },
+      "lightList:cacheBehavior": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "ListAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "ListAPI",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "outputs:displacement": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "outputs:surface": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "outputs:volume": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      }
+     },
+     "type": "Material"
+    }
+   ],
+   "family": "Material",
+   "is_a": [
+    "Material",
+    "NodeGraph",
+    "Typed"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Material",
+   "plugin": "usdShade",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [
+      "MaterialBindingAPI"
+     ],
+     "applied_schemas": [
+      "MaterialBindingAPI"
+     ],
+     "properties": {},
+     "type": ""
+    }
+   ],
+   "family": "MaterialBindingAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "MaterialBindingAPI",
+   "plugin": "usdShade",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "accelerations": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "cornerIndices": {
+       "fallback": [],
+       "kind": "attribute",
+       "type_name": "int[]",
+       "variability": "varying"
+      },
+      "cornerSharpnesses": {
+       "fallback": [],
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "creaseIndices": {
+       "fallback": [],
+       "kind": "attribute",
+       "type_name": "int[]",
+       "variability": "varying"
+      },
+      "creaseLengths": {
+       "fallback": [],
+       "kind": "attribute",
+       "type_name": "int[]",
+       "variability": "varying"
+      },
+      "creaseSharpnesses": {
+       "fallback": [],
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "doubleSided": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "faceVaryingLinearInterpolation": {
+       "fallback": "cornersPlus1",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "faceVertexCounts": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "int[]",
+       "variability": "varying"
+      },
+      "faceVertexIndices": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "int[]",
+       "variability": "varying"
+      },
+      "holeIndices": {
+       "fallback": [],
+       "kind": "attribute",
+       "type_name": "int[]",
+       "variability": "varying"
+      },
+      "interpolateBoundary": {
+       "fallback": "edgeAndCorner",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "normals": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "normal3f[]",
+       "variability": "varying"
+      },
+      "orientation": {
+       "fallback": "rightHanded",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "points": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "point3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayColor": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "color3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayOpacity": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "subdivisionScheme": {
+       "fallback": "catmullClark",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "triangleSubdivisionRule": {
+       "fallback": "catmullClark",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "velocities": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "Mesh"
+    }
+   ],
+   "family": "Mesh",
+   "is_a": [
+    "Boundable",
+    "Gprim",
+    "Imageable",
+    "Mesh",
+    "PointBased",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Mesh",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [
+      "MeshLightAPI"
+     ],
+     "applied_schemas": [
+      "MeshLightAPI",
+      "LightAPI",
+      "CollectionAPI:lightLink",
+      "CollectionAPI:shadowLink"
+     ],
+     "properties": {
+      "collection:lightLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:lightLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:lightLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "inputs:color": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "color3f",
+       "variability": "varying"
+      },
+      "inputs:colorTemperature": {
+       "fallback": 6500.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:diffuse": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:enableColorTemperature": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:exposure": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:intensity": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:normalize": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:specular": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "light:filters": {
+       "kind": "relationship"
+      },
+      "light:materialSyncMode": {
+       "fallback": "materialGlowTintsLight",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "light:shaderId": {
+       "fallback": "MeshLight",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "MeshLightAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "MeshLightAPI",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [],
+   "family": "ModelAPI",
+   "is_a": [],
+   "kind": "NonAppliedAPI",
+   "name": "ModelAPI",
+   "plugin": "usd",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [
+      "MotionAPI"
+     ],
+     "applied_schemas": [
+      "MotionAPI"
+     ],
+     "properties": {
+      "motion:blurScale": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "motion:nonlinearSampleCount": {
+       "fallback": 3,
+       "kind": "attribute",
+       "type_name": "int",
+       "variability": "varying"
+      },
+      "motion:velocityScale": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "MotionAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "MotionAPI",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [
+      "NodeDefAPI"
+     ],
+     "applied_schemas": [
+      "NodeDefAPI"
+     ],
+     "properties": {
+      "info:id": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "info:implementationSource": {
+       "fallback": "id",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "NodeDefAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "NodeDefAPI",
+   "plugin": "usdShade",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {},
+     "type": "NodeGraph"
+    }
+   ],
+   "family": "NodeGraph",
+   "is_a": [
+    "NodeGraph",
+    "Typed"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "NodeGraph",
+   "plugin": "usdShade",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "LightAPI",
+      "CollectionAPI:lightLink",
+      "CollectionAPI:shadowLink"
+     ],
+     "properties": {
+      "collection:lightLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:lightLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:lightLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "inputs:color": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "color3f",
+       "variability": "varying"
+      },
+      "inputs:colorTemperature": {
+       "fallback": 6500.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:diffuse": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:enableColorTemperature": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:exposure": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:intensity": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:normalize": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:specular": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "light:filters": {
+       "kind": "relationship"
+      },
+      "light:materialSyncMode": {
+       "fallback": "noMaterialResponse",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "light:shaderId": {
+       "fallback": "",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "NonboundableLightBase"
+    }
+   ],
+   "family": "NonboundableLightBase",
+   "is_a": [
+    "Imageable",
+    "NonboundableLightBase",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "AbstractTyped",
+   "name": "NonboundableLightBase",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "accelerations": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "curveVertexCounts": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "int[]",
+       "variability": "varying"
+      },
+      "doubleSided": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "knots": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "double[]",
+       "variability": "varying"
+      },
+      "normals": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "normal3f[]",
+       "variability": "varying"
+      },
+      "order": {
+       "fallback": [],
+       "kind": "attribute",
+       "type_name": "int[]",
+       "variability": "varying"
+      },
+      "orientation": {
+       "fallback": "rightHanded",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "pointWeights": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "double[]",
+       "variability": "varying"
+      },
+      "points": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "point3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayColor": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "color3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayOpacity": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "ranges": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "double2[]",
+       "variability": "varying"
+      },
+      "velocities": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "widths": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "NurbsCurves"
+    }
+   ],
+   "family": "NurbsCurves",
+   "is_a": [
+    "Boundable",
+    "Curves",
+    "Gprim",
+    "Imageable",
+    "NurbsCurves",
+    "PointBased",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "NurbsCurves",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "accelerations": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "doubleSided": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "normals": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "normal3f[]",
+       "variability": "varying"
+      },
+      "orientation": {
+       "fallback": "rightHanded",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "pointWeights": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "double[]",
+       "variability": "varying"
+      },
+      "points": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "point3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayColor": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "color3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayOpacity": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "trimCurve:counts": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "int[]",
+       "variability": "varying"
+      },
+      "trimCurve:knots": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "double[]",
+       "variability": "varying"
+      },
+      "trimCurve:orders": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "int[]",
+       "variability": "varying"
+      },
+      "trimCurve:points": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "double3[]",
+       "variability": "varying"
+      },
+      "trimCurve:ranges": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "double2[]",
+       "variability": "varying"
+      },
+      "trimCurve:vertexCounts": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "int[]",
+       "variability": "varying"
+      },
+      "uForm": {
+       "fallback": "open",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "uKnots": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "double[]",
+       "variability": "varying"
+      },
+      "uOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "int",
+       "variability": "varying"
+      },
+      "uRange": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "double2",
+       "variability": "varying"
+      },
+      "uVertexCount": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "int",
+       "variability": "varying"
+      },
+      "vForm": {
+       "fallback": "open",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "vKnots": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "double[]",
+       "variability": "varying"
+      },
+      "vOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "int",
+       "variability": "varying"
+      },
+      "vRange": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "double2",
+       "variability": "varying"
+      },
+      "vVertexCount": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "int",
+       "variability": "varying"
+      },
+      "velocities": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "NurbsPatch"
+    }
+   ],
+   "family": "NurbsPatch",
+   "is_a": [
+    "Boundable",
+    "Gprim",
+    "Imageable",
+    "NurbsPatch",
+    "PointBased",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "NurbsPatch",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "axis": {
+       "fallback": "Z",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "doubleSided": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": [
+        [
+         -1.0,
+         -1.0,
+         0.0
+        ],
+        [
+         1.0,
+         1.0,
+         0.0
+        ]
+       ],
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "length": {
+       "fallback": 2.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "orientation": {
+       "fallback": "rightHanded",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "primvars:displayColor": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "color3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayOpacity": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "width": {
+       "fallback": 2.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "Plane"
+    }
+   ],
+   "family": "Plane",
+   "is_a": [
+    "Boundable",
+    "Gprim",
+    "Imageable",
+    "Plane",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Plane",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "NodeDefAPI",
+      "LightAPI",
+      "CollectionAPI:lightLink",
+      "CollectionAPI:shadowLink"
+     ],
+     "properties": {
+      "collection:lightLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:lightLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:lightLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "info:id": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "info:implementationSource": {
+       "fallback": "id",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "inputs:color": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "color3f",
+       "variability": "varying"
+      },
+      "inputs:colorTemperature": {
+       "fallback": 6500.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:diffuse": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:enableColorTemperature": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:exposure": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:intensity": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:normalize": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:specular": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "light:filters": {
+       "kind": "relationship"
+      },
+      "light:materialSyncMode": {
+       "fallback": "noMaterialResponse",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "light:shaderId": {
+       "fallback": "",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "PluginLight"
+    }
+   ],
+   "family": "PluginLight",
+   "is_a": [
+    "Imageable",
+    "PluginLight",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "PluginLight",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "NodeDefAPI",
+      "CollectionAPI:filterLink"
+     ],
+     "properties": {
+      "collection:filterLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:filterLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:filterLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:filterLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:filterLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:filterLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:filterLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "info:id": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "info:implementationSource": {
+       "fallback": "id",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "lightFilter:shaderId": {
+       "fallback": "",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "PluginLightFilter"
+    }
+   ],
+   "family": "PluginLightFilter",
+   "is_a": [
+    "Imageable",
+    "LightFilter",
+    "PluginLightFilter",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "PluginLightFilter",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "accelerations": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "doubleSided": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "normals": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "normal3f[]",
+       "variability": "varying"
+      },
+      "orientation": {
+       "fallback": "rightHanded",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "points": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "point3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayColor": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "color3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayOpacity": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "velocities": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "PointBased"
+    }
+   ],
+   "family": "PointBased",
+   "is_a": [
+    "Boundable",
+    "Gprim",
+    "Imageable",
+    "PointBased",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "AbstractTyped",
+   "name": "PointBased",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "accelerations": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "angularVelocities": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "extent": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "ids": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "int64[]",
+       "variability": "varying"
+      },
+      "invisibleIds": {
+       "fallback": [],
+       "kind": "attribute",
+       "type_name": "int64[]",
+       "variability": "varying"
+      },
+      "orientations": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "quath[]",
+       "variability": "varying"
+      },
+      "orientationsf": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "quatf[]",
+       "variability": "varying"
+      },
+      "positions": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "point3f[]",
+       "variability": "varying"
+      },
+      "protoIndices": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "int[]",
+       "variability": "varying"
+      },
+      "prototypes": {
+       "kind": "relationship"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "scales": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "velocities": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "PointInstancer"
+    }
+   ],
+   "family": "PointInstancer",
+   "is_a": [
+    "Boundable",
+    "Imageable",
+    "PointInstancer",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "PointInstancer",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "accelerations": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "doubleSided": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "ids": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "int64[]",
+       "variability": "varying"
+      },
+      "normals": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "normal3f[]",
+       "variability": "varying"
+      },
+      "orientation": {
+       "fallback": "rightHanded",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "points": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "point3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayColor": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "color3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayOpacity": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "velocities": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "widths": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "Points"
+    }
+   ],
+   "family": "Points",
+   "is_a": [
+    "Boundable",
+    "Gprim",
+    "Imageable",
+    "PointBased",
+    "Points",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Points",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "LightAPI",
+      "CollectionAPI:lightLink",
+      "CollectionAPI:shadowLink"
+     ],
+     "properties": {
+      "collection:lightLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:lightLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:lightLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "inputs:color": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "color3f",
+       "variability": "varying"
+      },
+      "inputs:colorTemperature": {
+       "fallback": 6500.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:diffuse": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:enableColorTemperature": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:exposure": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:height": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:intensity": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:normalize": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:specular": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:width": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "light:filters": {
+       "kind": "relationship"
+      },
+      "light:materialSyncMode": {
+       "fallback": "noMaterialResponse",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "light:shaderId": {
+       "fallback": "PortalLight",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "PortalLight"
+    }
+   ],
+   "family": "PortalLight",
+   "is_a": [
+    "Boundable",
+    "BoundableLightBase",
+    "Imageable",
+    "PortalLight",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "PortalLight",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [],
+   "family": "PrimvarsAPI",
+   "is_a": [],
+   "kind": "NonAppliedAPI",
+   "name": "PrimvarsAPI",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "LightAPI",
+      "CollectionAPI:lightLink",
+      "CollectionAPI:shadowLink"
+     ],
+     "properties": {
+      "collection:lightLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:lightLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:lightLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "inputs:color": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "color3f",
+       "variability": "varying"
+      },
+      "inputs:colorTemperature": {
+       "fallback": 6500.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:diffuse": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:enableColorTemperature": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:exposure": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:height": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:intensity": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:normalize": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:specular": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:texture:file": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "inputs:width": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "light:filters": {
+       "kind": "relationship"
+      },
+      "light:materialSyncMode": {
+       "fallback": "noMaterialResponse",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "light:shaderId": {
+       "fallback": "RectLight",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "RectLight"
+    }
+   ],
+   "family": "RectLight",
+   "is_a": [
+    "Boundable",
+    "BoundableLightBase",
+    "Imageable",
+    "RectLight",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "RectLight",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      }
+     },
+     "type": "Scope"
+    }
+   ],
+   "family": "Scope",
+   "is_a": [
+    "Imageable",
+    "Scope",
+    "Typed"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Scope",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "NodeDefAPI"
+     ],
+     "properties": {
+      "info:id": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "info:implementationSource": {
+       "fallback": "id",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      }
+     },
+     "type": "Shader"
+    }
+   ],
+   "family": "Shader",
+   "is_a": [
+    "Shader",
+    "Typed"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Shader",
+   "plugin": "usdShade",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [
+      "ShadowAPI"
+     ],
+     "applied_schemas": [
+      "ShadowAPI"
+     ],
+     "properties": {
+      "inputs:shadow:color": {
+       "fallback": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "kind": "attribute",
+       "type_name": "color3f",
+       "variability": "varying"
+      },
+      "inputs:shadow:distance": {
+       "fallback": -1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:shadow:enable": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:shadow:falloff": {
+       "fallback": -1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:shadow:falloffGamma": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "ShadowAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "ShadowAPI",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [
+      "ShapingAPI"
+     ],
+     "applied_schemas": [
+      "ShapingAPI"
+     ],
+     "properties": {
+      "inputs:shaping:cone:angle": {
+       "fallback": 90.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:shaping:cone:softness": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:shaping:focus": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:shaping:focusTint": {
+       "fallback": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "kind": "attribute",
+       "type_name": "color3f",
+       "variability": "varying"
+      },
+      "inputs:shaping:ies:angleScale": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:shaping:ies:file": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "asset",
+       "variability": "varying"
+      },
+      "inputs:shaping:ies:normalize": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "ShapingAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "ShapingAPI",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "doubleSided": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": [
+        [
+         -1.0,
+         -1.0,
+         -1.0
+        ],
+        [
+         1.0,
+         1.0,
+         1.0
+        ]
+       ],
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "orientation": {
+       "fallback": "rightHanded",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "primvars:displayColor": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "color3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayOpacity": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "radius": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "double",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "Sphere"
+    }
+   ],
+   "family": "Sphere",
+   "is_a": [
+    "Boundable",
+    "Gprim",
+    "Imageable",
+    "Sphere",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Sphere",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [
+      "LightAPI",
+      "CollectionAPI:lightLink",
+      "CollectionAPI:shadowLink"
+     ],
+     "properties": {
+      "collection:lightLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:lightLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:lightLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "inputs:color": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "color3f",
+       "variability": "varying"
+      },
+      "inputs:colorTemperature": {
+       "fallback": 6500.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:diffuse": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:enableColorTemperature": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:exposure": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:intensity": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:normalize": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:radius": {
+       "fallback": 0.5,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:specular": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "light:filters": {
+       "kind": "relationship"
+      },
+      "light:materialSyncMode": {
+       "fallback": "noMaterialResponse",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "light:shaderId": {
+       "fallback": "SphereLight",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "treatAsPoint": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "SphereLight"
+    }
+   ],
+   "family": "SphereLight",
+   "is_a": [
+    "Boundable",
+    "BoundableLightBase",
+    "Imageable",
+    "SphereLight",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "SphereLight",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "accelerations": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "doubleSided": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "extent": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float3[]",
+       "variability": "varying"
+      },
+      "normals": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "normal3f[]",
+       "variability": "varying"
+      },
+      "orientation": {
+       "fallback": "rightHanded",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "points": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "point3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayColor": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "color3f[]",
+       "variability": "varying"
+      },
+      "primvars:displayOpacity": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "float[]",
+       "variability": "varying"
+      },
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "surfaceFaceVertexIndices": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "int3[]",
+       "variability": "varying"
+      },
+      "tetVertexIndices": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "int4[]",
+       "variability": "varying"
+      },
+      "velocities": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "vector3f[]",
+       "variability": "varying"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "TetMesh"
+    }
+   ],
+   "family": "TetMesh",
+   "is_a": [
+    "Boundable",
+    "Gprim",
+    "Imageable",
+    "PointBased",
+    "TetMesh",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "TetMesh",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [],
+   "family": "Typed",
+   "is_a": [
+    "Typed"
+   ],
+   "kind": "AbstractBase",
+   "name": "Typed",
+   "plugin": "usd",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [
+      "VisibilityAPI"
+     ],
+     "applied_schemas": [
+      "VisibilityAPI"
+     ],
+     "properties": {
+      "guideVisibility": {
+       "fallback": "invisible",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "proxyVisibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "renderVisibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "VisibilityAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "VisibilityAPI",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [
+      "VolumeLightAPI"
+     ],
+     "applied_schemas": [
+      "VolumeLightAPI",
+      "LightAPI",
+      "CollectionAPI:lightLink",
+      "CollectionAPI:shadowLink"
+     ],
+     "properties": {
+      "collection:lightLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:lightLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:lightLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:lightLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:lightLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "opaque",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:excludes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:expansionRule": {
+       "fallback": "expandPrims",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includeRoot": {
+       "fallback": true,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:includes": {
+       "kind": "relationship"
+      },
+      "collection:shadowLink:membershipExpression": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "pathExpression",
+       "variability": "uniform"
+      },
+      "collection:shadowLink:mode": {
+       "fallback": "automatic",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "inputs:color": {
+       "fallback": [
+        1.0,
+        1.0,
+        1.0
+       ],
+       "kind": "attribute",
+       "type_name": "color3f",
+       "variability": "varying"
+      },
+      "inputs:colorTemperature": {
+       "fallback": 6500.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:diffuse": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:enableColorTemperature": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:exposure": {
+       "fallback": 0.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:intensity": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "inputs:normalize": {
+       "fallback": false,
+       "kind": "attribute",
+       "type_name": "bool",
+       "variability": "varying"
+      },
+      "inputs:specular": {
+       "fallback": 1.0,
+       "kind": "attribute",
+       "type_name": "float",
+       "variability": "varying"
+      },
+      "light:filters": {
+       "kind": "relationship"
+      },
+      "light:materialSyncMode": {
+       "fallback": "materialGlowTintsLight",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "light:shaderId": {
+       "fallback": "VolumeLight",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "VolumeLightAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "VolumeLightAPI",
+   "plugin": "usdLux",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "Xform"
+    }
+   ],
+   "family": "Xform",
+   "is_a": [
+    "Imageable",
+    "Typed",
+    "Xform",
+    "Xformable"
+   ],
+   "kind": "ConcreteTyped",
+   "name": "Xform",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [],
+   "family": "XformCommonAPI",
+   "is_a": [],
+   "kind": "NonAppliedAPI",
+   "name": "XformCommonAPI",
+   "plugin": "usdGeom",
+   "version": 0
+  },
+  {
+   "definitions": [
+    {
+     "applied": [],
+     "applied_schemas": [],
+     "properties": {
+      "proxyPrim": {
+       "kind": "relationship"
+      },
+      "purpose": {
+       "fallback": "default",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "uniform"
+      },
+      "visibility": {
+       "fallback": "inherited",
+       "kind": "attribute",
+       "type_name": "token",
+       "variability": "varying"
+      },
+      "xformOpOrder": {
+       "fallback": null,
+       "kind": "attribute",
+       "type_name": "token[]",
+       "variability": "uniform"
+      }
+     },
+     "type": "Xformable"
+    }
+   ],
+   "family": "Xformable",
+   "is_a": [
+    "Imageable",
+    "Typed",
+    "Xformable"
+   ],
+   "kind": "AbstractTyped",
+   "name": "Xformable",
+   "plugin": "usdGeom",
+   "version": 0
+  }
+ ]
+}

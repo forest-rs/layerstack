@@ -1,0 +1,1103 @@
+{
+ "openusd_version": "0.26.8",
+ "prims": [
+  {
+   "applied_schemas": [],
+   "has_api": {
+    "CollectionAPI": false,
+    "GeomModelAPI": false,
+    "LightAPI": false,
+    "MaterialBindingAPI": false,
+    "ShadowAPI": false,
+    "ShapingAPI": false,
+    "VisibilityAPI": false
+   },
+   "has_api_instance": [
+    [
+     "CollectionAPI",
+     "absent",
+     false
+    ]
+   ],
+   "is_a": {
+    "Boundable": false,
+    "BoundableLightBase": false,
+    "Gprim": false,
+    "Imageable": true,
+    "Material": false,
+    "Mesh": false,
+    "NodeGraph": false,
+    "PointBased": false,
+    "Scope": false,
+    "Shader": false,
+    "Sphere": false,
+    "SphereLight": false,
+    "Typed": true,
+    "Xform": true,
+    "Xformable": true
+   },
+   "path": "/World",
+   "properties": {
+    "proxyPrim": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "purpose": {
+     "defined": true,
+     "fallback": "default",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "default",
+     "variability": "uniform"
+    },
+    "visibility": {
+     "defined": true,
+     "fallback": "inherited",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "inherited",
+     "variability": "varying"
+    },
+    "xformOpOrder": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "token[]",
+     "value": null,
+     "variability": "uniform"
+    }
+   },
+   "property_names": [
+    "proxyPrim",
+    "purpose",
+    "visibility",
+    "xformOpOrder"
+   ],
+   "schema_type": "Xform",
+   "type_name": "Xform"
+  },
+  {
+   "applied_schemas": [],
+   "has_api": {
+    "CollectionAPI": false,
+    "GeomModelAPI": false,
+    "LightAPI": false,
+    "MaterialBindingAPI": false,
+    "ShadowAPI": false,
+    "ShapingAPI": false,
+    "VisibilityAPI": false
+   },
+   "has_api_instance": [
+    [
+     "CollectionAPI",
+     "absent",
+     false
+    ]
+   ],
+   "is_a": {
+    "Boundable": true,
+    "BoundableLightBase": false,
+    "Gprim": true,
+    "Imageable": true,
+    "Material": false,
+    "Mesh": true,
+    "NodeGraph": false,
+    "PointBased": true,
+    "Scope": false,
+    "Shader": false,
+    "Sphere": false,
+    "SphereLight": false,
+    "Typed": true,
+    "Xform": false,
+    "Xformable": true
+   },
+   "path": "/World/Mesh",
+   "properties": {
+    "accelerations": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "vector3f[]",
+     "value": null,
+     "variability": "varying"
+    },
+    "cornerIndices": {
+     "defined": true,
+     "fallback": [],
+     "kind": "attribute",
+     "type_name": "int[]",
+     "value": [],
+     "variability": "varying"
+    },
+    "cornerSharpnesses": {
+     "defined": true,
+     "fallback": [],
+     "kind": "attribute",
+     "type_name": "float[]",
+     "value": [],
+     "variability": "varying"
+    },
+    "creaseIndices": {
+     "defined": true,
+     "fallback": [],
+     "kind": "attribute",
+     "type_name": "int[]",
+     "value": [],
+     "variability": "varying"
+    },
+    "creaseLengths": {
+     "defined": true,
+     "fallback": [],
+     "kind": "attribute",
+     "type_name": "int[]",
+     "value": [],
+     "variability": "varying"
+    },
+    "creaseSharpnesses": {
+     "defined": true,
+     "fallback": [],
+     "kind": "attribute",
+     "type_name": "float[]",
+     "value": [],
+     "variability": "varying"
+    },
+    "doubleSided": {
+     "defined": true,
+     "fallback": false,
+     "kind": "attribute",
+     "type_name": "bool",
+     "value": false,
+     "variability": "uniform"
+    },
+    "extent": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "float3[]",
+     "value": null,
+     "variability": "varying"
+    },
+    "faceVaryingLinearInterpolation": {
+     "defined": true,
+     "fallback": "cornersPlus1",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "cornersPlus1",
+     "variability": "varying"
+    },
+    "faceVertexCounts": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "int[]",
+     "value": [
+      4
+     ],
+     "variability": "varying"
+    },
+    "faceVertexIndices": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "int[]",
+     "value": null,
+     "variability": "varying"
+    },
+    "holeIndices": {
+     "defined": true,
+     "fallback": [],
+     "kind": "attribute",
+     "type_name": "int[]",
+     "value": [],
+     "variability": "varying"
+    },
+    "interpolateBoundary": {
+     "defined": true,
+     "fallback": "edgeAndCorner",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "edgeAndCorner",
+     "variability": "varying"
+    },
+    "normals": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "normal3f[]",
+     "value": null,
+     "variability": "varying"
+    },
+    "orientation": {
+     "defined": true,
+     "fallback": "rightHanded",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "rightHanded",
+     "variability": "uniform"
+    },
+    "points": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "point3f[]",
+     "value": null,
+     "variability": "varying"
+    },
+    "primvars:displayColor": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "color3f[]",
+     "value": null,
+     "variability": "varying"
+    },
+    "primvars:displayOpacity": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "float[]",
+     "value": null,
+     "variability": "varying"
+    },
+    "proxyPrim": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "purpose": {
+     "defined": true,
+     "fallback": "default",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "default",
+     "variability": "uniform"
+    },
+    "subdivisionScheme": {
+     "defined": true,
+     "fallback": "catmullClark",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "catmullClark",
+     "variability": "uniform"
+    },
+    "triangleSubdivisionRule": {
+     "defined": true,
+     "fallback": "catmullClark",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "catmullClark",
+     "variability": "varying"
+    },
+    "velocities": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "vector3f[]",
+     "value": null,
+     "variability": "varying"
+    },
+    "visibility": {
+     "defined": true,
+     "fallback": "inherited",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "inherited",
+     "variability": "varying"
+    },
+    "xformOpOrder": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "token[]",
+     "value": null,
+     "variability": "uniform"
+    }
+   },
+   "property_names": [
+    "accelerations",
+    "cornerIndices",
+    "cornerSharpnesses",
+    "creaseIndices",
+    "creaseLengths",
+    "creaseSharpnesses",
+    "doubleSided",
+    "extent",
+    "faceVaryingLinearInterpolation",
+    "faceVertexCounts",
+    "faceVertexIndices",
+    "holeIndices",
+    "interpolateBoundary",
+    "normals",
+    "orientation",
+    "points",
+    "primvars:displayColor",
+    "primvars:displayOpacity",
+    "proxyPrim",
+    "purpose",
+    "subdivisionScheme",
+    "triangleSubdivisionRule",
+    "velocities",
+    "visibility",
+    "xformOpOrder"
+   ],
+   "schema_type": "Mesh",
+   "type_name": "Mesh"
+  },
+  {
+   "applied_schemas": [],
+   "has_api": {
+    "CollectionAPI": false,
+    "GeomModelAPI": false,
+    "LightAPI": false,
+    "MaterialBindingAPI": false,
+    "ShadowAPI": false,
+    "ShapingAPI": false,
+    "VisibilityAPI": false
+   },
+   "has_api_instance": [
+    [
+     "CollectionAPI",
+     "absent",
+     false
+    ]
+   ],
+   "is_a": {
+    "Boundable": true,
+    "BoundableLightBase": false,
+    "Gprim": true,
+    "Imageable": true,
+    "Material": false,
+    "Mesh": false,
+    "NodeGraph": false,
+    "PointBased": false,
+    "Scope": false,
+    "Shader": false,
+    "Sphere": true,
+    "SphereLight": false,
+    "Typed": true,
+    "Xform": false,
+    "Xformable": true
+   },
+   "path": "/World/Ball",
+   "properties": {
+    "doubleSided": {
+     "defined": true,
+     "fallback": false,
+     "kind": "attribute",
+     "type_name": "bool",
+     "value": false,
+     "variability": "uniform"
+    },
+    "extent": {
+     "defined": true,
+     "fallback": [
+      [
+       -1.0,
+       -1.0,
+       -1.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ],
+     "kind": "attribute",
+     "type_name": "float3[]",
+     "value": [
+      [
+       -1.0,
+       -1.0,
+       -1.0
+      ],
+      [
+       1.0,
+       1.0,
+       1.0
+      ]
+     ],
+     "variability": "varying"
+    },
+    "orientation": {
+     "defined": true,
+     "fallback": "rightHanded",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "rightHanded",
+     "variability": "uniform"
+    },
+    "primvars:displayColor": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "color3f[]",
+     "value": null,
+     "variability": "varying"
+    },
+    "primvars:displayOpacity": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "float[]",
+     "value": null,
+     "variability": "varying"
+    },
+    "proxyPrim": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "purpose": {
+     "defined": true,
+     "fallback": "default",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "default",
+     "variability": "uniform"
+    },
+    "radius": {
+     "defined": true,
+     "fallback": 1.0,
+     "kind": "attribute",
+     "type_name": "double",
+     "value": 2.0,
+     "variability": "varying"
+    },
+    "visibility": {
+     "defined": true,
+     "fallback": "inherited",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "inherited",
+     "variability": "varying"
+    },
+    "xformOpOrder": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "token[]",
+     "value": null,
+     "variability": "uniform"
+    }
+   },
+   "property_names": [
+    "doubleSided",
+    "extent",
+    "orientation",
+    "primvars:displayColor",
+    "primvars:displayOpacity",
+    "proxyPrim",
+    "purpose",
+    "radius",
+    "visibility",
+    "xformOpOrder"
+   ],
+   "schema_type": "Sphere",
+   "type_name": "Sphere"
+  },
+  {
+   "applied_schemas": [],
+   "has_api": {
+    "CollectionAPI": false,
+    "GeomModelAPI": false,
+    "LightAPI": false,
+    "MaterialBindingAPI": false,
+    "ShadowAPI": false,
+    "ShapingAPI": false,
+    "VisibilityAPI": false
+   },
+   "has_api_instance": [
+    [
+     "CollectionAPI",
+     "absent",
+     false
+    ]
+   ],
+   "is_a": {
+    "Boundable": false,
+    "BoundableLightBase": false,
+    "Gprim": false,
+    "Imageable": false,
+    "Material": true,
+    "Mesh": false,
+    "NodeGraph": true,
+    "PointBased": false,
+    "Scope": false,
+    "Shader": false,
+    "Sphere": false,
+    "SphereLight": false,
+    "Typed": true,
+    "Xform": false,
+    "Xformable": false
+   },
+   "path": "/World/Material",
+   "properties": {
+    "outputs:displacement": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "token",
+     "value": null,
+     "variability": "varying"
+    },
+    "outputs:surface": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "token",
+     "value": null,
+     "variability": "varying"
+    },
+    "outputs:volume": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "token",
+     "value": null,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "outputs:displacement",
+    "outputs:surface",
+    "outputs:volume"
+   ],
+   "schema_type": "Material",
+   "type_name": "Material"
+  },
+  {
+   "applied_schemas": [
+    "NodeDefAPI"
+   ],
+   "has_api": {
+    "CollectionAPI": false,
+    "GeomModelAPI": false,
+    "LightAPI": false,
+    "MaterialBindingAPI": false,
+    "ShadowAPI": false,
+    "ShapingAPI": false,
+    "VisibilityAPI": false
+   },
+   "has_api_instance": [
+    [
+     "CollectionAPI",
+     "absent",
+     false
+    ]
+   ],
+   "is_a": {
+    "Boundable": false,
+    "BoundableLightBase": false,
+    "Gprim": false,
+    "Imageable": false,
+    "Material": false,
+    "Mesh": false,
+    "NodeGraph": false,
+    "PointBased": false,
+    "Scope": false,
+    "Shader": true,
+    "Sphere": false,
+    "SphereLight": false,
+    "Typed": true,
+    "Xform": false,
+    "Xformable": false
+   },
+   "path": "/World/Material/Surface",
+   "properties": {
+    "info:id": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "UsdPreviewSurface",
+     "variability": "uniform"
+    },
+    "info:implementationSource": {
+     "defined": true,
+     "fallback": "id",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "id",
+     "variability": "uniform"
+    },
+    "outputs:surface": {
+     "defined": false,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "token",
+     "value": null,
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "info:id",
+    "info:implementationSource",
+    "outputs:surface"
+   ],
+   "schema_type": "Shader",
+   "type_name": "Shader"
+  },
+  {
+   "applied_schemas": [
+    "LightAPI",
+    "CollectionAPI:lightLink",
+    "CollectionAPI:shadowLink"
+   ],
+   "has_api": {
+    "CollectionAPI": true,
+    "GeomModelAPI": false,
+    "LightAPI": true,
+    "MaterialBindingAPI": false,
+    "ShadowAPI": false,
+    "ShapingAPI": false,
+    "VisibilityAPI": false
+   },
+   "has_api_instance": [
+    [
+     "CollectionAPI",
+     "absent",
+     false
+    ],
+    [
+     "CollectionAPI",
+     "lightLink",
+     true
+    ],
+    [
+     "CollectionAPI",
+     "shadowLink",
+     true
+    ]
+   ],
+   "is_a": {
+    "Boundable": true,
+    "BoundableLightBase": true,
+    "Gprim": false,
+    "Imageable": true,
+    "Material": false,
+    "Mesh": false,
+    "NodeGraph": false,
+    "PointBased": false,
+    "Scope": false,
+    "Shader": false,
+    "Sphere": false,
+    "SphereLight": true,
+    "Typed": true,
+    "Xform": false,
+    "Xformable": true
+   },
+   "path": "/World/Light",
+   "properties": {
+    "collection:lightLink": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "opaque",
+     "value": null,
+     "variability": "uniform"
+    },
+    "collection:lightLink:excludes": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "collection:lightLink:expansionRule": {
+     "defined": true,
+     "fallback": "expandPrims",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "expandPrims",
+     "variability": "uniform"
+    },
+    "collection:lightLink:includeRoot": {
+     "defined": true,
+     "fallback": true,
+     "kind": "attribute",
+     "type_name": "bool",
+     "value": true,
+     "variability": "uniform"
+    },
+    "collection:lightLink:includes": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "collection:lightLink:membershipExpression": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "pathExpression",
+     "value": null,
+     "variability": "uniform"
+    },
+    "collection:lightLink:mode": {
+     "defined": true,
+     "fallback": "automatic",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "automatic",
+     "variability": "uniform"
+    },
+    "collection:shadowLink": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "opaque",
+     "value": null,
+     "variability": "uniform"
+    },
+    "collection:shadowLink:excludes": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "collection:shadowLink:expansionRule": {
+     "defined": true,
+     "fallback": "expandPrims",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "expandPrims",
+     "variability": "uniform"
+    },
+    "collection:shadowLink:includeRoot": {
+     "defined": true,
+     "fallback": true,
+     "kind": "attribute",
+     "type_name": "bool",
+     "value": true,
+     "variability": "uniform"
+    },
+    "collection:shadowLink:includes": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "collection:shadowLink:membershipExpression": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "pathExpression",
+     "value": null,
+     "variability": "uniform"
+    },
+    "collection:shadowLink:mode": {
+     "defined": true,
+     "fallback": "automatic",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "automatic",
+     "variability": "uniform"
+    },
+    "extent": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "float3[]",
+     "value": null,
+     "variability": "varying"
+    },
+    "inputs:color": {
+     "defined": true,
+     "fallback": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "kind": "attribute",
+     "type_name": "color3f",
+     "value": [
+      1.0,
+      1.0,
+      1.0
+     ],
+     "variability": "varying"
+    },
+    "inputs:colorTemperature": {
+     "defined": true,
+     "fallback": 6500.0,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 6500.0,
+     "variability": "varying"
+    },
+    "inputs:diffuse": {
+     "defined": true,
+     "fallback": 1.0,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 1.0,
+     "variability": "varying"
+    },
+    "inputs:enableColorTemperature": {
+     "defined": true,
+     "fallback": false,
+     "kind": "attribute",
+     "type_name": "bool",
+     "value": false,
+     "variability": "varying"
+    },
+    "inputs:exposure": {
+     "defined": true,
+     "fallback": 0.0,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.0,
+     "variability": "varying"
+    },
+    "inputs:intensity": {
+     "defined": true,
+     "fallback": 1.0,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 5.0,
+     "variability": "varying"
+    },
+    "inputs:normalize": {
+     "defined": true,
+     "fallback": false,
+     "kind": "attribute",
+     "type_name": "bool",
+     "value": false,
+     "variability": "varying"
+    },
+    "inputs:radius": {
+     "defined": true,
+     "fallback": 0.5,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 0.5,
+     "variability": "varying"
+    },
+    "inputs:specular": {
+     "defined": true,
+     "fallback": 1.0,
+     "kind": "attribute",
+     "type_name": "float",
+     "value": 1.0,
+     "variability": "varying"
+    },
+    "light:filters": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "light:materialSyncMode": {
+     "defined": true,
+     "fallback": "noMaterialResponse",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "noMaterialResponse",
+     "variability": "uniform"
+    },
+    "light:shaderId": {
+     "defined": true,
+     "fallback": "SphereLight",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "SphereLight",
+     "variability": "uniform"
+    },
+    "proxyPrim": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "purpose": {
+     "defined": true,
+     "fallback": "default",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "default",
+     "variability": "uniform"
+    },
+    "treatAsPoint": {
+     "defined": true,
+     "fallback": false,
+     "kind": "attribute",
+     "type_name": "bool",
+     "value": false,
+     "variability": "varying"
+    },
+    "visibility": {
+     "defined": true,
+     "fallback": "inherited",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "inherited",
+     "variability": "varying"
+    },
+    "xformOpOrder": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "token[]",
+     "value": null,
+     "variability": "uniform"
+    }
+   },
+   "property_names": [
+    "collection:lightLink",
+    "collection:lightLink:excludes",
+    "collection:lightLink:expansionRule",
+    "collection:lightLink:includeRoot",
+    "collection:lightLink:includes",
+    "collection:lightLink:membershipExpression",
+    "collection:lightLink:mode",
+    "collection:shadowLink",
+    "collection:shadowLink:excludes",
+    "collection:shadowLink:expansionRule",
+    "collection:shadowLink:includeRoot",
+    "collection:shadowLink:includes",
+    "collection:shadowLink:membershipExpression",
+    "collection:shadowLink:mode",
+    "extent",
+    "inputs:color",
+    "inputs:colorTemperature",
+    "inputs:diffuse",
+    "inputs:enableColorTemperature",
+    "inputs:exposure",
+    "inputs:intensity",
+    "inputs:normalize",
+    "inputs:radius",
+    "inputs:specular",
+    "light:filters",
+    "light:materialSyncMode",
+    "light:shaderId",
+    "proxyPrim",
+    "purpose",
+    "treatAsPoint",
+    "visibility",
+    "xformOpOrder"
+   ],
+   "schema_type": "SphereLight",
+   "type_name": "SphereLight"
+  },
+  {
+   "applied_schemas": [
+    "CollectionAPI:foo",
+    "MaterialBindingAPI"
+   ],
+   "has_api": {
+    "CollectionAPI": true,
+    "GeomModelAPI": false,
+    "LightAPI": false,
+    "MaterialBindingAPI": true,
+    "ShadowAPI": false,
+    "ShapingAPI": false,
+    "VisibilityAPI": false
+   },
+   "has_api_instance": [
+    [
+     "CollectionAPI",
+     "absent",
+     false
+    ],
+    [
+     "CollectionAPI",
+     "foo",
+     true
+    ]
+   ],
+   "is_a": {
+    "Boundable": false,
+    "BoundableLightBase": false,
+    "Gprim": false,
+    "Imageable": true,
+    "Material": false,
+    "Mesh": false,
+    "NodeGraph": false,
+    "PointBased": false,
+    "Scope": true,
+    "Shader": false,
+    "Sphere": false,
+    "SphereLight": false,
+    "Typed": true,
+    "Xform": false,
+    "Xformable": false
+   },
+   "path": "/World/Group",
+   "properties": {
+    "collection:foo": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "opaque",
+     "value": null,
+     "variability": "uniform"
+    },
+    "collection:foo:excludes": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "collection:foo:expansionRule": {
+     "defined": true,
+     "fallback": "expandPrims",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "expandPrims",
+     "variability": "uniform"
+    },
+    "collection:foo:includeRoot": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "bool",
+     "value": null,
+     "variability": "uniform"
+    },
+    "collection:foo:includes": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "collection:foo:membershipExpression": {
+     "defined": true,
+     "fallback": null,
+     "kind": "attribute",
+     "type_name": "pathExpression",
+     "value": null,
+     "variability": "uniform"
+    },
+    "collection:foo:mode": {
+     "defined": true,
+     "fallback": "automatic",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "automatic",
+     "variability": "uniform"
+    },
+    "material:binding": {
+     "defined": false,
+     "kind": "relationship"
+    },
+    "proxyPrim": {
+     "defined": true,
+     "kind": "relationship"
+    },
+    "purpose": {
+     "defined": true,
+     "fallback": "default",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "default",
+     "variability": "uniform"
+    },
+    "visibility": {
+     "defined": true,
+     "fallback": "inherited",
+     "kind": "attribute",
+     "type_name": "token",
+     "value": "inherited",
+     "variability": "varying"
+    }
+   },
+   "property_names": [
+    "collection:foo",
+    "collection:foo:excludes",
+    "collection:foo:expansionRule",
+    "collection:foo:includeRoot",
+    "collection:foo:includes",
+    "collection:foo:membershipExpression",
+    "collection:foo:mode",
+    "material:binding",
+    "proxyPrim",
+    "purpose",
+    "visibility"
+   ],
+   "schema_type": "Scope",
+   "type_name": "Scope"
+  }
+ ],
+ "set": "openusd"
+}

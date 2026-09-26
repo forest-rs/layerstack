@@ -27,13 +27,8 @@ the global variant fallbacks `fallbacks`, flattens it with
 `layer_dump` records every spec of a layer and each of its fields as
 OpenUSD reads them: list ops as the lists they apply to an empty list,
 dictionaries by key, values by `repr`. Two layers that author the same
-thing have equal dumps, with three normalizations:
+thing have equal dumps, with two normalizations:
 
-- a property's `custom` field is left out: OpenUSD's flatten writes the
-  `custom` its metadata resolution gives, the weakest opinion's, while
-  `UsdProperty::IsCustom` (and AOUSD Core §12.2.4) makes a property custom
-  when any opinion does, which Layerstack writes; `stage_dump` compares
-  `IsCustom`;
 - the generated prototypes `Flattened_Prototype_N` are named after the
   path of their first instance, since OpenUSD numbers them in the order of
   its instance cache;
@@ -82,8 +77,6 @@ def layer_dump(layer):
             return
         entry = {"kind": type(spec).__name__}
         for key in spec.ListInfoKeys():
-            if key == "custom":
-                continue
             value = spec.GetInfo(key)
             if key == "timeSamples":
                 value = {repr(t): fmt(v) for t, v in sorted(value.items())}

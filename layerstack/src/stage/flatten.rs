@@ -37,8 +37,12 @@
 //!   composed list op, such as `apiSchemas`, is written as the explicit
 //!   list it resolves to. Inactive prims are not composed, so they are not
 //!   written. Class prims are written as classes.
-//! - An attribute keeps its composed type, `custom`, variability and
-//!   metadata. Its time samples are written when its strongest value
+//! - An attribute keeps its composed type, variability and metadata. Its
+//!   `custom` is the weakest opinion's, as OpenUSD's flatten writes it,
+//!   although the stage reports a property custom when any opinion is
+//!   (AOUSD Core §12.2.4). With [`FlattenRequirements::schemas`], a
+//!   property the prim's schema defines is written as the schema declares
+//!   it, as OpenUSD writes it. Its time samples are written when its strongest value
 //!   source is time samples, its spline when that is a spline, and its
 //!   default whenever an opinion authors one, as the resolved default or a
 //!   value block. Times and `timecode` values are mapped through the layer
@@ -67,12 +71,6 @@
 //!
 //! Where it differs from OpenUSD:
 //!
-//! - OpenUSD writes the `custom` its metadata resolution gives, the weakest
-//!   opinion's; this writes a property custom when any opinion is, as
-//!   `UsdProperty::IsCustom` and AOUSD Core §12.2.4 have it.
-//! - For a property a schema defines, OpenUSD writes the schema's
-//!   variability; no schema is read here, so the composed variability is
-//!   written.
 //! - OpenUSD also reads the session layer's metadata; a [`Stage`] has no
 //!   session layer.
 //!
@@ -105,7 +103,7 @@ use crate::{
     path::{Path, PathId, PropertyPath, TargetPath},
     prim_index::{ArcKind, FieldKey, Opinion},
     prim_index_graph::NodeId,
-    property::{PropertyEntry, PropertyKind, PropertySpec},
+    property::{PropertyEntry, PropertyKind, PropertySpec, Variability},
     spec_path::{SpecComponent, SpecPath},
 };
 
@@ -748,8 +746,7 @@ impl Flattener<'_, '_> {
         let property = PropertyPath::new(prim, name);
         let path = self.property_display(prim, name);
         let mut spec = PropertySpec::of_kind(declaration.kind);
-        spec.custom = declaration.custom;
-        spec.variability = declaration.variability;
+        self.declare(prim, name, &declaration, opinions, &mut spec, &path);
         spec.metadata = self.property_metadata(name, opinions, remap, &path);
 
         let targets = stage
@@ -862,6 +859,71 @@ impl Flattener<'_, '_> {
             spec.default = Some(value);
         }
         Some(spec)
+    }
+
+    /// Writes the property's `custom` and variability as OpenUSD's flatten
+    /// writes them: for a property the prim's schema defines, not custom
+    /// and, for an attribute, the schema's variability; otherwise the
+    /// weakest opinion's `custom` (`_GetPropCustomImpl` in
+    /// `pxr/usd/usd/stage.cpp`) and the composed variability.
+    ///
+    /// Spec: AOUSD Core §12.2.3 (variability), §12.2.4 (`custom`), §13.3
+    /// (schema properties).
+    fn declare(
+        &mut self,
+        prim: PathId,
+        name: TokenId,
+        declaration: &super::PropertyDeclaration,
+        opinions: &[Opinion],
+        spec: &mut PropertySpec,
+        path: &str,
+    ) {
+        let source = opinions.first().map(|op| self.source(op, true));
+        if let Some(variability) = self.schema_variability(prim, name) {
+            spec.custom = false;
+            spec.variability = match declaration.kind {
+                PropertyKind::Attribute => variability,
+                PropertyKind::Relationship => declaration.variability,
+            };
+            if spec.custom != declaration.custom || spec.variability != declaration.variability {
+                let t = Transformation::DefinedBySchema {
+                    variability: spec.variability,
+                };
+                self.transformed(path.into(), t, source);
+            }
+            return;
+        }
+        spec.custom = opinions
+            .iter()
+            .rev()
+            .find_map(|op| op.value.as_property())
+            .is_some_and(|weakest| weakest.custom);
+        spec.variability = declaration.variability;
+        if spec.custom != declaration.custom {
+            let t = Transformation::CustomFromWeakestOpinion {
+                custom: spec.custom,
+            };
+            self.transformed(path.into(), t, source);
+        }
+    }
+
+    /// The variability the prim's schema declares for `name`, when a schema
+    /// defines it ([`FlattenRequirements::schemas`]).
+    ///
+    /// Spec: AOUSD Core §13.3.2.4 (the prim's type, then its applied API
+    /// schemas).
+    fn schema_variability(&mut self, prim: PathId, name: TokenId) -> Option<Variability> {
+        let registry = self.requirements.schemas?;
+        let api_schemas = self.store.tokens_mut().intern("apiSchemas");
+        let type_name = self.stage.resolve_type_name(prim, &*self.store);
+        let applied = self
+            .stage
+            .resolve_token_list(prim, api_schemas)
+            .map(|resolved| resolved.value)
+            .unwrap_or_default();
+        registry
+            .resolve_property(type_name, &applied, name)
+            .map(|definition| definition.variability)
     }
 
     /// The time samples of `source` in stage time, with `timecode` values

@@ -1,0 +1,14 @@
+#usda 1.0
+(
+    defaultPrim = "Tree"
+)
+
+def Xform "Tree"
+{
+    token[] xformOpOrder = ["xformOp:translate"]
+    double3 xformOp:translate = (0, 1, 0)
+    uniform token visibility = "inherited"
+    custom uniform token purpose = "render"
+    double height = 3
+    custom double girth = 2
+}

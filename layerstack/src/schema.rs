@@ -14,7 +14,7 @@ use alloc::vec::Vec;
 
 use hashbrown::HashMap;
 
-use crate::{doc::FieldValue, interner::TokenId};
+use crate::{doc::FieldValue, interner::TokenId, property::Variability};
 
 /// A property defined by a schema, with a fallback value.
 ///
@@ -26,6 +26,11 @@ pub struct PropertyDefinition {
     pub name: TokenId,
     /// The fallback value for this property when no opinion is authored.
     pub fallback: FieldValue,
+    /// The variability the schema declares, which a prim of the schema's
+    /// type has whatever the opinions author.
+    ///
+    /// Spec: AOUSD Core §12.2.3 (variability), §13.3 (schema properties).
+    pub variability: Variability,
 }
 
 /// A schema definition: typed (`IsA`) or applied (`HasA`).
@@ -119,11 +124,23 @@ impl SchemaDefinition {
         self
     }
 
-    /// Adds a property with a fallback value (builder, consuming).
+    /// Adds a varying property with a fallback value (builder, consuming).
     pub fn with_property(mut self, name: TokenId, fallback: impl Into<FieldValue>) -> Self {
         self.properties.push(PropertyDefinition {
             name,
             fallback: fallback.into(),
+            variability: Variability::Varying,
+        });
+        self
+    }
+
+    /// Adds a `uniform` property with a fallback value (builder,
+    /// consuming).
+    pub fn with_uniform_property(mut self, name: TokenId, fallback: impl Into<FieldValue>) -> Self {
+        self.properties.push(PropertyDefinition {
+            name,
+            fallback: fallback.into(),
+            variability: Variability::Uniform,
         });
         self
     }
@@ -187,25 +204,41 @@ impl SchemaRegistry {
         applied_api_schemas: &[TokenId],
         field: TokenId,
     ) -> Option<FieldValue> {
+        self.resolve_property(type_name, applied_api_schemas, field)
+            .map(|property| property.fallback.clone())
+    }
+
+    /// The definition of the property `field` on a prim with the given type
+    /// and applied API schemas, found in the order of
+    /// [`SchemaRegistry::resolve_fallback`].
+    ///
+    /// Spec: AOUSD Core §13.3.2.4 (fallback value resolution).
+    #[must_use]
+    pub fn resolve_property(
+        &self,
+        type_name: Option<TokenId>,
+        applied_api_schemas: &[TokenId],
+        field: TokenId,
+    ) -> Option<&PropertyDefinition> {
         // 1. Walk the typed schema inheritance chain (strongest = leaf type).
         if let Some(tn) = type_name
-            && let Some(fallback) = self.resolve_typed_fallback(tn, field)
+            && let Some(property) = self.resolve_typed_fallback(tn, field)
         {
-            return Some(fallback);
+            return Some(property);
         }
 
         // 2. Walk applied API schemas in authored order.
         for api_name in applied_api_schemas {
-            if let Some(fallback) = self.property_fallback(*api_name, field) {
-                return Some(fallback);
+            if let Some(property) = self.property_fallback(*api_name, field) {
+                return Some(property);
             }
         }
 
         // 3. Walk built-in API schemas of the typed schema chain.
         if let Some(tn) = type_name
-            && let Some(fallback) = self.resolve_builtin_api_fallback(tn, field)
+            && let Some(property) = self.resolve_builtin_api_fallback(tn, field)
         {
-            return Some(fallback);
+            return Some(property);
         }
 
         // 4. Walk auto-apply API schemas.
@@ -213,8 +246,8 @@ impl SchemaRegistry {
             && let Some(auto_apis) = self.auto_apply.get(&tn)
         {
             for api_name in auto_apis {
-                if let Some(fallback) = self.property_fallback(*api_name, field) {
-                    return Some(fallback);
+                if let Some(property) = self.property_fallback(*api_name, field) {
+                    return Some(property);
                 }
             }
         }
@@ -223,7 +256,11 @@ impl SchemaRegistry {
     }
 
     /// Walks the `IsA` inheritance chain looking for a fallback for `field`.
-    fn resolve_typed_fallback(&self, type_name: TokenId, field: TokenId) -> Option<FieldValue> {
+    fn resolve_typed_fallback(
+        &self,
+        type_name: TokenId,
+        field: TokenId,
+    ) -> Option<&PropertyDefinition> {
         let mut current = Some(type_name);
         // Guard against infinite loops from misconfigured schemas.
         let mut depth = 0;
@@ -246,7 +283,7 @@ impl SchemaRegistry {
         &self,
         type_name: TokenId,
         field: TokenId,
-    ) -> Option<FieldValue> {
+    ) -> Option<&PropertyDefinition> {
         let mut current = Some(type_name);
         let mut depth = 0;
         while let Some(tn) = current {
@@ -269,14 +306,14 @@ impl SchemaRegistry {
         None
     }
 
-    /// Returns the fallback value for a field directly on a single schema.
-    fn property_fallback(&self, schema_name: TokenId, field: TokenId) -> Option<FieldValue> {
+    /// Returns the definition of a field directly on a single schema.
+    fn property_fallback(
+        &self,
+        schema_name: TokenId,
+        field: TokenId,
+    ) -> Option<&PropertyDefinition> {
         let schema = self.schemas.get(&schema_name)?;
-        schema
-            .properties
-            .iter()
-            .find(|p| p.name == field)
-            .map(|p| p.fallback.clone())
+        schema.properties.iter().find(|p| p.name == field)
     }
 }
 

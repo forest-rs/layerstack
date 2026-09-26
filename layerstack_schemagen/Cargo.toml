@@ -1,0 +1,21 @@
+[package]
+name = "layerstack_schemagen"
+description = "Generates the layerstack_schemas tables from OpenUSD's own schema definitions."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+keywords = ["usd", "schemas", "codegen"]
+categories = ["development-tools"]
+publish = false
+
+[dependencies]
+layerstack = { path = "../layerstack" }
+layerstack_usda = { path = "../layerstack_usda" }
+# Reads each schema's kind, bases and auto-applies from OpenUSD's
+# `plugInfo.json`; this tool is never a dependency of a published crate.
+serde_json = { version = "1.0" }
+
+[lints]
+workspace = true

@@ -33,6 +33,14 @@
 //!   in a sublayer, and deletes them in the root layer: one node's list
 //!   ops chain across its layers, deletes included, so none remains there,
 //!   while the same reference `/Press` itself adds stays.
+//! - `/Punch`, and `/Stamp`'s selected branch, add references, payloads and
+//!   inherits in a sublayer, which the root layer only reorders: each list
+//!   takes the order its reorder gives, the items it names moved with the
+//!   items that follow them.
+//! - `/Die`'s references, payloads and inherits from a sublayer are edited
+//!   in the root layer with the legacy `add`, of new items and of items the
+//!   weaker list holds, and a reorder: an added item the list holds stays
+//!   where it is, where an `append` would move it.
 //! - `/Sets`, `/Part`, `/Copy` and `/Heir` author path expressions: `%_`
 //!   splices in the next weaker expression, and each expression is anchored
 //!   at the prim authoring it and mapped through the arcs to the stage

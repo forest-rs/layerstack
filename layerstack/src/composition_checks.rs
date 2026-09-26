@@ -205,8 +205,8 @@ pub(crate) struct TargetOwner {
 /// spec brought in across `map`'s arc, into the arc's destination.
 ///
 /// A path the arc cannot map is removed and reported as
-/// [`InvalidExternalTargetPath`]; a deleted path that cannot be mapped is
-/// removed silently, since it removes nothing. Values other than a
+/// [`InvalidExternalTargetPath`]; a deleted or reordered path that cannot
+/// be mapped is removed silently, since it names nothing mapped. Values other than a
 /// property spec's targets are mapped where they can be and otherwise kept.
 ///
 /// Spec: AOUSD Core §10.3.2, §10.6. OpenUSD: `_PathTranslateCallback` in
@@ -267,11 +267,14 @@ pub(crate) fn map_arc_targets(
     for target in internal {
         cycles.note_class_internal_target(owner.prim, owner.property, target);
     }
-    list.delete = list
-        .delete
-        .iter()
-        .filter_map(|item| map.map_target(store, *item))
-        .collect();
+    // A deleted or reordered path that cannot be mapped names nothing
+    // mapped, and is dropped silently.
+    for items in [&mut list.delete, &mut list.reorder] {
+        *items = items
+            .iter()
+            .filter_map(|item| map.map_target(store, *item))
+            .collect();
+    }
 }
 
 /// The property spec a target path error was found in, or `None` for an

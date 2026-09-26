@@ -761,7 +761,11 @@ impl Lowering<'_> {
         path: &str,
         item: impl Fn(&T) -> Result<U, SaveError>,
     ) -> Result<ListOp<U>, SaveError> {
-        let edits = !(op.prepend.is_empty() && op.append.is_empty() && op.delete.is_empty());
+        let edits = !(op.prepend.is_empty()
+            && op.append.is_empty()
+            && op.delete.is_empty()
+            && op.add.is_empty()
+            && op.reorder.is_empty());
         if op.explicit.is_some() && edits {
             return unsupported(path, Unsupported::MixedListOp);
         }
@@ -769,8 +773,10 @@ impl Lowering<'_> {
         Ok(ListOp {
             explicit: op.explicit.as_deref().map(list).transpose()?,
             deleted: list(&op.delete)?,
+            added: list(&op.add)?,
             prepended: list(&op.prepend)?,
             appended: list(&op.append)?,
+            reordered: list(&op.reorder)?,
         })
     }
 

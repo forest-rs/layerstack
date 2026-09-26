@@ -506,6 +506,22 @@ pub fn cases() -> Vec<SaveCase> {
             composition: Some(&[]),
             minimum_openusd: None,
         },
+        SaveCase {
+            name: "reordered_lists",
+            covers: "list ops that only reorder: references, payloads, inherits, \
+                     specializes and `apiSchemas`, relationship targets and connections, \
+                     some beside a legacy `add` of a new item or one a weaker layer holds; \
+                     composed over a weaker layer, the targets and connections take the \
+                     order OpenUSD gives; the edit changes an attribute",
+            source: REORDERED,
+            edit: |layer| {
+                layer.property("/Press.a").default = Some(Value::Double(3.0));
+            },
+            expected: REORDERED_EDITED,
+            weaker: Some(REORDERED_WEAKER),
+            composition: None,
+            minimum_openusd: None,
+        },
     ]
 }
 
@@ -2003,5 +2019,54 @@ def Xform "Model"
     def Mesh "Geo"
     {
     }
+}
+"#;
+
+const REORDERED: &str = r#"#usda 1.0
+
+def "Press" (
+    add references = [@./c.usda@</C>, @./a.usda@</A>]
+    reorder references = [@./a.usda@</A>, @./b.usda@</B>]
+    reorder payload = [@./b.usda@</B>, @./a.usda@</A>]
+    reorder inherits = [</_class_B>, </_class_A>]
+    reorder specializes = [</_class_A>, </_class_B>]
+    reorder apiSchemas = ["CollectionAPI:b", "CollectionAPI:a"]
+)
+{
+    double a = 1
+    double b = 2
+    add double width.connect = </Press.a>
+    reorder double width.connect = [</Press.b>]
+    add rel pins = </Press/D>
+    reorder rel pins = [</Press/C>, </Press/A>]
+}
+"#;
+
+const REORDERED_EDITED: &str = r#"#usda 1.0
+
+def "Press" (
+    add references = [@./c.usda@</C>, @./a.usda@</A>]
+    reorder references = [@./a.usda@</A>, @./b.usda@</B>]
+    reorder payload = [@./b.usda@</B>, @./a.usda@</A>]
+    reorder inherits = [</_class_B>, </_class_A>]
+    reorder specializes = [</_class_A>, </_class_B>]
+    reorder apiSchemas = ["CollectionAPI:b", "CollectionAPI:a"]
+)
+{
+    double a = 3
+    double b = 2
+    add double width.connect = </Press.a>
+    reorder double width.connect = [</Press.b>]
+    add rel pins = </Press/D>
+    reorder rel pins = [</Press/C>, </Press/A>]
+}
+"#;
+
+const REORDERED_WEAKER: &str = r#"#usda 1.0
+
+over "Press"
+{
+    double width.connect = [</Press.a>, </Press.b>]
+    rel pins = [</Press/A>, </Press/B>, </Press/C>]
 }
 "#;

@@ -105,18 +105,21 @@ impl<A, F> OpinionKey<A, F> {
 /// An ordered unique-list edit.
 ///
 /// `ListOp` is intentionally small: explicit replaces the whole list, deletes
-/// remove matching items, prepend inserts items at the front, and append
-/// inserts items at the back. Re-inserting an existing item moves it to the
-/// requested position.
+/// remove matching items, add inserts items the list lacks at the back (the
+/// legacy `add`), prepend inserts items at the front, append inserts items
+/// at the back, and reorder moves the items it names into its order.
+/// Prepending or appending an existing item moves it to the requested
+/// position; adding one leaves it where it is.
 ///
 /// An authored `explicit` list makes the other edits spurious: applying the
 /// operation yields the explicit list unchanged. This matches the `ListOps`
 /// semantics of AOUSD Core §12.4 as implemented by `layerstack`.
 ///
 /// Build one from the list it authors, [`ListOp::explicit`],
-/// [`ListOp::prepended`], [`ListOp::appended`] or [`ListOp::deleted`], adding
-/// the others with the `with_` builders; read every item it names with
-/// [`ListOp::items`].
+/// [`ListOp::prepended`], [`ListOp::appended`], [`ListOp::deleted`],
+/// [`ListOp::added`] or [`ListOp::reordered`], adding the others with the
+/// `with_` builders; read
+/// every item it names with [`ListOp::items`].
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ListOp<T> {
     /// Optional explicit list replacement. When present, the other edits in
@@ -128,6 +131,12 @@ pub struct ListOp<T> {
     pub append: Vec<T>,
     /// Items to delete before prepends/appends are applied.
     pub delete: Vec<T>,
+    /// Items to insert at the back, after the deletes, when the list does
+    /// not hold them yet: the legacy `add`, which moves no item.
+    pub add: Vec<T>,
+    /// The order to move the items it names into, after the other edits
+    /// (see [`ListOp::apply_to`]).
+    pub reorder: Vec<T>,
 }
 
 impl<T> Default for ListOp<T> {
@@ -146,6 +155,8 @@ impl<T> ListOp<T> {
             prepend: Vec::new(),
             append: Vec::new(),
             delete: Vec::new(),
+            add: Vec::new(),
+            reorder: Vec::new(),
         }
     }
 
@@ -157,6 +168,8 @@ impl<T> ListOp<T> {
             prepend: Vec::new(),
             append: Vec::new(),
             delete: Vec::new(),
+            add: Vec::new(),
+            reorder: Vec::new(),
         }
     }
 
@@ -168,6 +181,8 @@ impl<T> ListOp<T> {
             prepend: items,
             append: Vec::new(),
             delete: Vec::new(),
+            add: Vec::new(),
+            reorder: Vec::new(),
         }
     }
 
@@ -179,6 +194,8 @@ impl<T> ListOp<T> {
             prepend: Vec::new(),
             append: items,
             delete: Vec::new(),
+            add: Vec::new(),
+            reorder: Vec::new(),
         }
     }
 
@@ -190,6 +207,36 @@ impl<T> ListOp<T> {
             prepend: Vec::new(),
             append: Vec::new(),
             delete: items,
+            add: Vec::new(),
+            reorder: Vec::new(),
+        }
+    }
+
+    /// An operation that inserts at the back the items of `items` a list
+    /// does not hold yet (the legacy `add`; see [`ListOp::apply_to`]).
+    #[must_use]
+    pub const fn added(items: Vec<T>) -> Self {
+        Self {
+            explicit: None,
+            prepend: Vec::new(),
+            append: Vec::new(),
+            delete: Vec::new(),
+            add: items,
+            reorder: Vec::new(),
+        }
+    }
+
+    /// An operation that moves the items of `items` a list holds into the
+    /// order of `items` (see [`ListOp::apply_to`]).
+    #[must_use]
+    pub const fn reordered(items: Vec<T>) -> Self {
+        Self {
+            explicit: None,
+            prepend: Vec::new(),
+            append: Vec::new(),
+            delete: Vec::new(),
+            add: Vec::new(),
+            reorder: items,
         }
     }
 
@@ -216,6 +263,20 @@ impl<T> ListOp<T> {
         self
     }
 
+    /// This operation with `items` as the items it adds.
+    #[must_use]
+    pub fn with_added(mut self, items: Vec<T>) -> Self {
+        self.add = items;
+        self
+    }
+
+    /// This operation with `items` as the order it moves items into.
+    #[must_use]
+    pub fn with_reordered(mut self, items: Vec<T>) -> Self {
+        self.reorder = items;
+        self
+    }
+
     /// Adds `other`, authored by the same spec, to this operation: its
     /// explicit list, if any, replaces this one's, and its edits follow
     /// this one's in each list.
@@ -226,6 +287,8 @@ impl<T> ListOp<T> {
         self.prepend.extend(other.prepend);
         self.append.extend(other.append);
         self.delete.extend(other.delete);
+        self.add.extend(other.add);
+        self.reorder.extend(other.reorder);
     }
 
     /// Whether the operation authors nothing: no explicit list, however
@@ -236,23 +299,26 @@ impl<T> ListOp<T> {
     }
 
     /// Every item the operation names, in every list: the explicit list,
-    /// then the deleted, prepended and appended items.
+    /// then the deleted, added, prepended, appended and reordered items.
     pub fn items(&self) -> impl Iterator<Item = &T> {
         self.explicit
             .iter()
             .flatten()
             .chain(&self.delete)
+            .chain(&self.add)
             .chain(&self.prepend)
             .chain(&self.append)
+            .chain(&self.reorder)
     }
 
     /// Every item the operation can put into a list: the explicit list,
-    /// then the prepended and appended items. Deleted items only name
-    /// items a list may hold.
+    /// then the added, prepended and appended items. Deleted and reordered
+    /// items only name items a list may hold.
     pub fn inserted_items(&self) -> impl Iterator<Item = &T> {
         self.explicit
             .iter()
             .flatten()
+            .chain(&self.add)
             .chain(&self.prepend)
             .chain(&self.append)
     }
@@ -261,15 +327,19 @@ impl<T> ListOp<T> {
     pub fn inserted_lists_mut(&mut self) -> impl Iterator<Item = &mut Vec<T>> {
         self.explicit
             .iter_mut()
-            .chain([&mut self.prepend, &mut self.append])
+            .chain([&mut self.add, &mut self.prepend, &mut self.append])
     }
 
     /// Every list of the operation, mutably, in the order of
     /// [`Self::items`].
     pub fn lists_mut(&mut self) -> impl Iterator<Item = &mut Vec<T>> {
-        self.explicit
-            .iter_mut()
-            .chain([&mut self.delete, &mut self.prepend, &mut self.append])
+        self.explicit.iter_mut().chain([
+            &mut self.delete,
+            &mut self.add,
+            &mut self.prepend,
+            &mut self.append,
+            &mut self.reorder,
+        ])
     }
 
     /// The same operation over other items: each list mapped by `f`.
@@ -280,12 +350,27 @@ impl<T> ListOp<T> {
             prepend: f(&self.prepend),
             append: f(&self.append),
             delete: f(&self.delete),
+            add: f(&self.add),
+            reorder: f(&self.reorder),
         }
     }
 }
 
 impl<T: Clone + Eq> ListOp<T> {
-    /// Applies this list operation to `base`.
+    /// Applies this list operation to `base`: an explicit list replaces
+    /// it; otherwise the deleted items are removed, the added items the
+    /// list lacks inserted at the back, the prepended and appended items
+    /// moved or inserted, and then the items the reorder names moved into
+    /// its order.
+    ///
+    /// A reorder keeps each item it names together with the items that
+    /// follow it up to the next item it names, and moves those runs into
+    /// its order, after every item that precedes the first item it names;
+    /// items it names that the list does not hold are ignored.
+    ///
+    /// Spec: AOUSD Core §12.4 (list ops). OpenUSD:
+    /// `SdfListOp::ApplyOperations`, `_AddKeys` and `_ReorderKeysHelper` in
+    /// `pxr/usd/sdf/listOp.cpp`.
     #[must_use]
     pub fn apply_to(&self, base: &[T]) -> Vec<T> {
         if let Some(explicit) = &self.explicit {
@@ -295,6 +380,12 @@ impl<T: Clone + Eq> ListOp<T> {
         let mut out = base.to_vec();
 
         out.retain(|item| !self.delete.contains(item));
+
+        for item in &self.add {
+            if !out.contains(item) {
+                out.push(item.clone());
+            }
+        }
 
         for item in self.prepend.iter().rev() {
             out.retain(|existing| existing != item);
@@ -306,8 +397,37 @@ impl<T: Clone + Eq> ListOp<T> {
             out.push(item.clone());
         }
 
-        out
+        reorder(out, &self.reorder)
     }
+}
+
+/// `list` with the items of `order` it holds moved into that order, each
+/// with the items that follow it up to the next item `order` names; the
+/// items before the first of them stay in front (see [`ListOp::apply_to`]).
+fn reorder<T: Clone + Eq>(list: Vec<T>, order: &[T]) -> Vec<T> {
+    let mut named: Vec<&T> = Vec::with_capacity(order.len());
+    for item in order {
+        if !named.contains(&item) {
+            named.push(item);
+        }
+    }
+    if named.is_empty() {
+        return list;
+    }
+    let mut scratch = list;
+    let mut runs = Vec::with_capacity(scratch.len());
+    for item in named {
+        let Some(start) = scratch.iter().position(|existing| existing == item) else {
+            continue;
+        };
+        let end = scratch[start + 1..]
+            .iter()
+            .position(|existing| order.contains(existing))
+            .map_or(scratch.len(), |offset| start + 1 + offset);
+        runs.extend(scratch.drain(start..end));
+    }
+    scratch.extend(runs);
+    scratch
 }
 
 /// Resolves a strong-to-weak chain of list operations.

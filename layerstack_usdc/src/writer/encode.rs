@@ -524,9 +524,13 @@ impl<'a> Packer<'a> {
                 prepended,
                 appended,
                 deleted,
+                added,
+                reordered,
             }) if prepended.is_empty()
                 && appended.is_empty()
                 && deleted.is_empty()
+                && added.is_empty()
+                && reordered.is_empty()
                 && match items.as_slice() {
                     [] => true,
                     [one] => !one.asset.is_empty(),
@@ -975,12 +979,18 @@ impl<'a> Packer<'a> {
     ) -> Result<Vec<u8>, UsdcWriteError> {
         const IS_EXPLICIT: u8 = 1 << 0;
         const HAS_EXPLICIT: u8 = 1 << 1;
+        const HAS_ADDED: u8 = 1 << 2;
         const HAS_DELETED: u8 = 1 << 3;
+        const HAS_ORDERED: u8 = 1 << 4;
         const HAS_PREPENDED: u8 = 1 << 5;
         const HAS_APPENDED: u8 = 1 << 6;
 
         if op.explicit.is_some()
-            && !(op.prepended.is_empty() && op.appended.is_empty() && op.deleted.is_empty())
+            && !(op.prepended.is_empty()
+                && op.appended.is_empty()
+                && op.deleted.is_empty()
+                && op.added.is_empty()
+                && op.reordered.is_empty())
         {
             return Err(site.list_op("an explicit list op cannot also edit"));
         }
@@ -991,19 +1001,28 @@ impl<'a> Packer<'a> {
         }
         for (list, bit) in [
             (explicit, HAS_EXPLICIT),
+            (op.added.as_slice(), HAS_ADDED),
             (op.prepended.as_slice(), HAS_PREPENDED),
             (op.appended.as_slice(), HAS_APPENDED),
             (op.deleted.as_slice(), HAS_DELETED),
+            (op.reordered.as_slice(), HAS_ORDERED),
         ] {
             if !list.is_empty() {
                 header |= bit;
             }
         }
         let mut bytes = alloc::vec![header];
-        // Written in `_ListOpHeader` order: explicit, prepended, appended,
-        // deleted. Equal items encode to equal bytes, so a repeat within a
-        // list is found by its encoding.
-        for list in [explicit, &op.prepended, &op.appended, &op.deleted] {
+        // Written in `_ListOpHeader` order: explicit, added, prepended,
+        // appended, deleted, ordered. Equal items encode to equal bytes, so
+        // a repeat within a list is found by its encoding.
+        for list in [
+            explicit,
+            &op.added,
+            &op.prepended,
+            &op.appended,
+            &op.deleted,
+            &op.reordered,
+        ] {
             if list.is_empty() {
                 continue;
             }

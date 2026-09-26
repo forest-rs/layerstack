@@ -1389,6 +1389,16 @@ impl<'a> AssembleCtx<'a> {
             .iter()
             .filter_map(|v| self.convert_crate_to_reference(v))
             .collect();
+        result.add = listop
+            .added_items
+            .iter()
+            .filter_map(|v| self.convert_crate_to_reference(v))
+            .collect();
+        result.reorder = listop
+            .ordered_items
+            .iter()
+            .filter_map(|v| self.convert_crate_to_reference(v))
+            .collect();
 
         Ok(result)
     }
@@ -1421,6 +1431,8 @@ impl<'a> AssembleCtx<'a> {
         result.prepend = convert_items(&listop.prepended_items, self.tokens, self.paths);
         result.append = convert_items(&listop.appended_items, self.tokens, self.paths);
         result.delete = convert_items(&listop.deleted_items, self.tokens, self.paths);
+        result.add = convert_items(&listop.added_items, self.tokens, self.paths);
+        result.reorder = convert_items(&listop.ordered_items, self.tokens, self.paths);
 
         Ok(result)
     }
@@ -1446,6 +1458,8 @@ impl<'a> AssembleCtx<'a> {
         result.prepend = convert_items(&listop.prepended_items, self.tokens);
         result.append = convert_items(&listop.appended_items, self.tokens);
         result.delete = convert_items(&listop.deleted_items, self.tokens);
+        result.add = convert_items(&listop.added_items, self.tokens);
+        result.reorder = convert_items(&listop.ordered_items, self.tokens);
 
         result
     }
@@ -1499,6 +1513,8 @@ impl<'a> AssembleCtx<'a> {
         result.prepend = convert_items(&listop.prepended_items, self.tokens, self.paths);
         result.append = convert_items(&listop.appended_items, self.tokens, self.paths);
         result.delete = convert_items(&listop.deleted_items, self.tokens, self.paths);
+        result.add = convert_items(&listop.added_items, self.tokens, self.paths);
+        result.reorder = convert_items(&listop.ordered_items, self.tokens, self.paths);
 
         Ok(result)
     }
@@ -1630,12 +1646,14 @@ impl<'a> AssembleCtx<'a> {
 
     // ── Token/path helpers ──────────────────────────────────────────
 
-    /// Returns the names a token or string list op adds, in order: its
-    /// explicit, prepended and appended items.
+    /// Returns the names a token or string list op adds, in the order it
+    /// gives them over no names: its explicit, prepended, added and
+    /// appended items.
     fn list_op_names(&mut self, listop: &CrateListOp) -> Vec<TokenId> {
         let items = listop.explicit_items.iter().flatten();
         let listed: Vec<TokenId> = items
             .chain(&listop.prepended_items)
+            .chain(&listop.added_items)
             .chain(&listop.appended_items)
             .filter_map(|item| match item {
                 CrateValue::Token(name) | CrateValue::String(name) => {
@@ -1831,6 +1849,8 @@ fn convert_scalar_listop<T>(
         prepend: items(&listop.prepended_items)?,
         append: items(&listop.appended_items)?,
         delete: items(&listop.deleted_items)?,
+        add: items(&listop.added_items)?,
+        reorder: items(&listop.ordered_items)?,
     })
 }
 

@@ -376,7 +376,9 @@ impl EmitCtx<'_> {
                 ast::PrimMeta::VariantSets(listop) => {
                     // variantSets metadata declares the ordered set of variant
                     // set names. We store the union of all names in order,
-                    // and the names a `delete` removes apart.
+                    // and the names a `delete` removes apart. A `reorder`
+                    // names no new set, and is not modeled: the sets keep
+                    // the order they are declared in.
                     if listop.kind == ast::ListOpKind::Delete {
                         for name in listop.items.iter().flatten() {
                             let tok = self.tokens.intern(name);
@@ -384,7 +386,9 @@ impl EmitCtx<'_> {
                                 spec.deleted_variant_sets.push(tok);
                             }
                         }
-                    } else if let Some(items) = &listop.items {
+                    } else if listop.kind != ast::ListOpKind::Reorder
+                        && let Some(items) = &listop.items
+                    {
                         for name in items {
                             let tok = self.tokens.intern(name);
                             if !spec.variant_set_order.contains(&tok) {
@@ -536,7 +540,9 @@ impl EmitCtx<'_> {
                 ast::ListOpKind::Explicit => list.explicit = Some(items),
                 ast::ListOpKind::Prepend => list.prepend = items,
                 ast::ListOpKind::Append => list.append = items,
+                ast::ListOpKind::Add => list.add = items,
                 ast::ListOpKind::Delete => list.delete = items,
+                ast::ListOpKind::Reorder => list.reorder = items,
             }
             list
         }
@@ -685,7 +691,9 @@ impl EmitCtx<'_> {
                 ast::ListOpKind::Explicit => listop.explicit = Some(target_paths),
                 ast::ListOpKind::Prepend => listop.prepend = target_paths,
                 ast::ListOpKind::Append => listop.append = target_paths,
+                ast::ListOpKind::Add => listop.add = target_paths,
                 ast::ListOpKind::Delete => listop.delete = target_paths,
+                ast::ListOpKind::Reorder => listop.reorder = target_paths,
             }
             listop
         });
@@ -938,7 +946,9 @@ impl EmitCtx<'_> {
             ast::ListOpKind::Explicit => listop.explicit = Some(refs),
             ast::ListOpKind::Prepend => listop.prepend = refs,
             ast::ListOpKind::Append => listop.append = refs,
+            ast::ListOpKind::Add => listop.add = refs,
             ast::ListOpKind::Delete => listop.delete = refs,
+            ast::ListOpKind::Reorder => listop.reorder = refs,
         }
         listop
     }
@@ -1061,7 +1071,9 @@ impl EmitCtx<'_> {
             ast::ListOpKind::Explicit => listop.explicit = Some(path_ids),
             ast::ListOpKind::Prepend => listop.prepend = path_ids,
             ast::ListOpKind::Append => listop.append = path_ids,
+            ast::ListOpKind::Add => listop.add = path_ids,
             ast::ListOpKind::Delete => listop.delete = path_ids,
+            ast::ListOpKind::Reorder => listop.reorder = path_ids,
         }
         listop
     }
@@ -1135,7 +1147,9 @@ impl EmitCtx<'_> {
             ast::ListOpKind::Explicit => listop.explicit = Some(target_paths),
             ast::ListOpKind::Prepend => listop.prepend = target_paths,
             ast::ListOpKind::Append => listop.append = target_paths,
+            ast::ListOpKind::Add => listop.add = target_paths,
             ast::ListOpKind::Delete => listop.delete = target_paths,
+            ast::ListOpKind::Reorder => listop.reorder = target_paths,
         }
         listop
     }

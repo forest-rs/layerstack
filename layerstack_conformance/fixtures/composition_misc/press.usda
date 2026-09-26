@@ -22,3 +22,46 @@ class "_class_Press"
 {
     double press = 1
 }
+
+def "Punch" (
+    prepend references = [@./clay.usda@</Clay>, @./clay.usda@</Board>]
+    prepend payload = [@./clay.usda@</Glaze>, @./clay.usda@</Ash>]
+    prepend inherits = [</_class_Stamp>, </_class_Die>]
+)
+{
+}
+
+def "Stamp" (
+    variantSets = "grip"
+    variants = {
+        string grip = "firm"
+    }
+)
+{
+    variantSet "grip" = {
+        "firm" (
+            prepend references = [@./clay.usda@</Clay>, @./clay.usda@</Board>]
+            prepend payload = [@./clay.usda@</Glaze>, @./clay.usda@</Ash>]
+            prepend inherits = [</_class_Stamp>, </_class_Die>]
+        ) {
+        }
+    }
+}
+
+class "_class_Stamp"
+{
+    double stamp = 1
+}
+
+class "_class_Die"
+{
+    double die = 1
+}
+
+def "Die" (
+    prepend references = [@./clay.usda@</Clay>, @./clay.usda@</Board>, @./clay.usda@</Slip>]
+    prepend payload = [@./clay.usda@</Glaze>, @./clay.usda@</Rim>]
+    prepend inherits = [</_class_Stamp>, </_class_Die>]
+)
+{
+}

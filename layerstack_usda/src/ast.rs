@@ -369,8 +369,14 @@ pub enum ListOpKind {
     Prepend,
     /// `append`
     Append,
+    /// `add`: the legacy add, inserting the items a list lacks at its back
+    /// (`SdfListOp::_AddKeys` in `pxr/usd/sdf/listOp.cpp`).
+    Add,
     /// `delete`
     Delete,
+    /// `reorder`: the order the items it names are moved into (AOUSD Core
+    /// §12.4; `SdfListOp::_ReorderKeys` in `pxr/usd/sdf/listOp.cpp`).
+    Reorder,
 }
 
 /// A list-op applied to a generic list.

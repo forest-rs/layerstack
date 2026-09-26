@@ -516,6 +516,13 @@ impl VariantSet {
 /// Spec: AOUSD Core §7.3.7 (attribute specs and relationship specs are
 /// collectively property specs).
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(
+    target_pointer_width = "64",
+    expect(
+        clippy::large_enum_variant,
+        reason = "most properties are attributes, which boxing would allocate one by one"
+    )
+)]
 pub enum Property {
     /// An attribute spec.
     Attribute(Attribute),
@@ -1061,15 +1068,15 @@ pub enum Value {
     Block,
 }
 
-/// A list operation: either an explicit list, or edits (`delete`,
-/// `prepend`, `append`) applied to weaker opinions.
+/// A list operation: either an explicit list, or edits (`delete`, `add`,
+/// `prepend`, `append`, `reorder`) applied to weaker opinions.
 ///
 /// Written in OpenUSD's order (`pxr/usd/sdf/fileIO_Common.cpp`,
 /// `_WriteListOp`): the explicit list as `key = [...]`; otherwise one
-/// statement per non-empty edit, `delete`, then `prepend`, then `append`.
-/// An explicit list excludes edits, and a list op must say something: both
-/// are checked ([`WriteError::InvalidListOp`]). The legacy `add` and
-/// `reorder` operations are not representable.
+/// statement per non-empty edit, `delete`, then `add`, then `prepend`,
+/// then `append`, then `reorder`. An explicit list excludes edits, and a
+/// list op must say something: both are checked
+/// ([`WriteError::InvalidListOp`]).
 ///
 /// Spec: AOUSD Core §6.6.3 (list operations), §16.2.14 (list-op syntax).
 #[derive(Clone, Debug, PartialEq)]
@@ -1079,10 +1086,14 @@ pub struct ListOp<T> {
     pub explicit: Option<Vec<T>>,
     /// Items removed from weaker opinions.
     pub deleted: Vec<T>,
+    /// Items added to the back when absent: the legacy `add`.
+    pub added: Vec<T>,
     /// Items added to the front.
     pub prepended: Vec<T>,
     /// Items added to the back.
     pub appended: Vec<T>,
+    /// The order the items it names are moved into, after the other edits.
+    pub reordered: Vec<T>,
 }
 
 /// An empty list op: no explicit list and no edits, which says nothing and
@@ -1092,8 +1103,10 @@ impl<T> Default for ListOp<T> {
         Self {
             explicit: None,
             deleted: Vec::new(),
+            added: Vec::new(),
             prepended: Vec::new(),
             appended: Vec::new(),
+            reordered: Vec::new(),
         }
     }
 }
@@ -1104,8 +1117,10 @@ impl<T> ListOp<T> {
         Self {
             explicit: Some(items),
             deleted: Vec::new(),
+            added: Vec::new(),
             prepended: Vec::new(),
             appended: Vec::new(),
+            reordered: Vec::new(),
         }
     }
 
@@ -1114,25 +1129,32 @@ impl<T> ListOp<T> {
         Self {
             explicit: None,
             deleted: Vec::new(),
+            added: Vec::new(),
             prepended: items,
             appended: Vec::new(),
+            reordered: Vec::new(),
         }
     }
 
-    /// Every item of every list, explicit first, then deleted, prepended
-    /// and appended.
+    /// Every item of every list, explicit first, then deleted, added,
+    /// prepended, appended and reordered.
     pub fn items(&self) -> impl Iterator<Item = &T> {
         self.explicit
             .iter()
             .flatten()
             .chain(&self.deleted)
+            .chain(&self.added)
             .chain(&self.prepended)
             .chain(&self.appended)
+            .chain(&self.reordered)
     }
 
     fn is_valid(&self) -> bool {
-        let edits =
-            !(self.deleted.is_empty() && self.prepended.is_empty() && self.appended.is_empty());
+        let edits = !(self.deleted.is_empty()
+            && self.added.is_empty()
+            && self.prepended.is_empty()
+            && self.appended.is_empty()
+            && self.reordered.is_empty());
         if self.explicit.is_some() {
             !edits
         } else {
@@ -1443,8 +1465,10 @@ fn validate_arc_list<T: PartialEq>(
     let lists = [
         op.explicit.as_deref().unwrap_or(&[]),
         &op.deleted,
+        &op.added,
         &op.prepended,
         &op.appended,
+        &op.reordered,
     ];
     if op.is_valid() && !lists.into_iter().any(repeats) {
         Ok(())
@@ -2368,8 +2392,8 @@ impl Writer<'_> {
     }
 
     /// One statement per list-op operation, in OpenUSD's order: the
-    /// explicit list, otherwise `delete`, `prepend` and `append` for each
-    /// non-empty edit. `statement` writes the line after the indentation,
+    /// explicit list, otherwise `delete`, `add`, `prepend`, `append` and
+    /// `reorder` for each non-empty edit. `statement` writes the line after the indentation,
     /// given the operation keyword (empty for the explicit list).
     fn list_op_statements<T>(
         &mut self,
@@ -2385,8 +2409,10 @@ impl Writer<'_> {
         }
         for (keyword, items) in [
             ("delete ", &op.deleted),
+            ("add ", &op.added),
             ("prepend ", &op.prepended),
             ("append ", &op.appended),
+            ("reorder ", &op.reordered),
         ] {
             if !items.is_empty() {
                 self.indent(depth);
@@ -3424,8 +3450,10 @@ def Xform "Root"
             Value::TokenListOp(ListOp {
                 explicit: None,
                 deleted: vec!["D".into()],
+                added: vec!["N".into()],
                 prepended: vec!["P".into()],
                 appended: vec!["A1".into(), "A2".into()],
+                reordered: vec!["A2".into(), "P".into()],
             }),
         ));
         prim.metadata.push(Metadatum::new(
@@ -3441,8 +3469,10 @@ def Xform "Root"
         assert!(
             text.contains(concat!(
                 "    delete apiSchemas = [\"D\"]\n",
+                "    add apiSchemas = [\"N\"]\n",
                 "    prepend apiSchemas = [\"P\"]\n",
                 "    append apiSchemas = [\"A1\", \"A2\"]\n",
+                "    reorder apiSchemas = [\"A2\", \"P\"]\n",
                 "    exedraTags = []\n",
             )),
             "{text}"

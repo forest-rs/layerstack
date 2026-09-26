@@ -3325,6 +3325,13 @@ struct ArcStep {
     /// other target, but maps the paths outside that extension, such as a
     /// class the target inherits, as the authored arc does.
     ancestral: Option<(PathId, PathId)>,
+    /// For an implied class arc, the relocations lifted into the stage
+    /// namespace of the weaker layer stacks it is implied out of (see
+    /// [`Walk::with_spooky`]): the arc's opinions at their sources compose
+    /// at their targets.
+    ///
+    /// Spec: AOUSD Core §10.3.2.6, §10.4.2.4.
+    spooky: Rc<[Rc<LiftedSet>]>,
 }
 
 /// Where interning an arc path has reached in a composed prim's graph: the
@@ -3484,16 +3491,38 @@ fn intern_steps(
     stage_relocates: &LiftedSet,
 ) {
     for (at, step) in steps.iter().enumerate() {
+        let mut spooky_depth = None;
         let view = match step.target {
             StepTarget::Namespace { dest_root, .. } => {
                 let outer = Walk::new(outer_relocates(stage_relocates, &steps[..at]), None);
-                relocate_nodes(store, out, dest, dest_root, &outer, cursor)
+                let view = relocate_nodes(store, out, dest, dest_root, &outer, cursor);
+                // An implied class reaching `dest` through a relocation it
+                // is implied across has the site of the relocation source:
+                // OpenUSD implies it from the relocate node's class, in the
+                // prim index of the relocation target, and adds it there
+                // (`_EvalImpliedClassTree`).
+                let spooky = Walk::new(step.spooky.iter().map(|set| &**set), None);
+                let (taken, unmoved) = spooky.unwind(store, dest_root, view);
+                match taken
+                    .first()
+                    .and_then(|(relocate, _)| relocate.stage_target)
+                {
+                    Some(target) => {
+                        let depth = store.paths().resolve(target).depth();
+                        spooky_depth = Some(u16::try_from(depth).unwrap_or(u16::MAX));
+                        unmoved
+                    }
+                    None => view,
+                }
             }
             _ => dest,
         };
-        let Some(arc) = step.arc(store, view, cursor) else {
+        let Some(mut arc) = step.arc(store, view, cursor) else {
             continue;
         };
+        if let Some(depth) = spooky_depth {
+            arc.namespace_depth = depth;
+        }
         let graph = &mut out.get_mut(&dest).expect("path exists").graph;
         cursor.node = graph.intern_child(cursor.node, arc);
         graph.set_layer_offset(cursor.node, step.layer_offset);
@@ -3591,10 +3620,19 @@ fn outer_relocates<'a>(
 /// The walk the opinions of an arc's target take into the stage namespace
 /// (see [`Walk`]): `path` is the arc path to the arc, the arc last.
 fn arc_walk<'a>(stage: &'a LiftedSet, path: &'a [ArcStep]) -> Walk<'a> {
-    match path.split_last() {
+    let walk = match path.split_last() {
         Some((own, outer)) => Walk::new(outer_relocates(stage, outer), own.relocates.as_deref()),
         None => Walk::new([stage], None),
-    }
+    };
+    walk.with_spooky(spooky_relocates(path))
+}
+
+/// The relocations the implied class arcs among `steps` are implied across
+/// (see [`ArcStep::spooky`]).
+fn spooky_relocates(steps: &[ArcStep]) -> impl Iterator<Item = &LiftedSet> {
+    steps
+        .iter()
+        .flat_map(|step| step.spooky.iter().map(|set| &**set))
 }
 
 /// The relocations of the arc target's layer stack, rooted at
@@ -3690,6 +3728,7 @@ fn local_variant_steps(layer_stack: LayerId, sites: &[VariantSelectionSite]) -> 
             skips_duplicates: false,
             relocates: None,
             ancestral: None,
+            spooky: Rc::from([]),
         })
         .collect()
 }
@@ -3709,6 +3748,9 @@ struct ArcParent<'a> {
     /// For an arc of a target's ancestor, the arc as authored (see
     /// [`ArcStep::ancestral`]).
     ancestral: Option<(PathId, PathId)>,
+    /// For an implied class arc, the relocations it is implied across (see
+    /// [`ArcStep::spooky`]).
+    spooky: Rc<[Rc<LiftedSet>]>,
 }
 
 impl<'a> ArcParent<'a> {
@@ -3720,6 +3762,7 @@ impl<'a> ArcParent<'a> {
             origin: None,
             skips_duplicates: false,
             ancestral: None,
+            spooky: Rc::from([]),
         }
     }
 
@@ -3781,15 +3824,28 @@ impl<'a> ArcParent<'a> {
     }
 
     /// A class arc implied beneath the node `steps` reach from the class
-    /// node at the arc path `origin` (see [`implied_classes`]).
-    fn implied_from(steps: &'a [ArcStep], origin: Rc<[ArcStep]>) -> Self {
+    /// node at the arc path `origin`, across the relocations `spooky` (see
+    /// [`implied_classes`]).
+    fn implied_from(
+        steps: &'a [ArcStep],
+        origin: Rc<[ArcStep]>,
+        spooky: Rc<[Rc<LiftedSet>]>,
+    ) -> Self {
         Self {
             steps,
             implied: true,
             origin: Some(origin),
             skips_duplicates: false,
             ancestral: None,
+            spooky,
         }
+    }
+
+    /// The walk the opinions of the class arc `own`, authored at the site
+    /// `steps` reach, take into the stage namespace (see [`arc_walk`]).
+    fn class_walk<'b>(&'b self, stage: &'b LiftedSet, own: Option<&'b LiftedSet>) -> Walk<'b> {
+        Walk::new(outer_relocates(stage, self.steps), own)
+            .with_spooky(spooky_relocates(self.steps).chain(self.spooky.iter().map(|set| &**set)))
     }
 }
 
@@ -3798,6 +3854,9 @@ impl<'a> ArcParent<'a> {
 struct ImpliedClass {
     parent: Vec<ArcStep>,
     step: ArcStep,
+    /// The relocations of the arcs the class is implied across, which
+    /// the implied arc's opinions pass (see [`ArcStep::spooky`]).
+    spooky: Vec<Rc<LiftedSet>>,
     /// The arcs whose namespace mappings carry the class path into the
     /// implied arc's layer stack, innermost first.
     transfers: Vec<Transfer>,
@@ -3974,6 +4033,9 @@ fn implied_classes(
             // The same site: OpenUSD adds a node that contributes no
             // opinions and only carries the class further up.
             implied = implied_classes(store, stage_layer_stack, stage_relocates, parent, class);
+            for further in &mut implied {
+                further.spooky.extend(step.relocates.clone());
+            }
         } else {
             let host = ArcStep {
                 layer_stack,
@@ -3985,6 +4047,7 @@ fn implied_classes(
             implied.push(ImpliedClass {
                 parent: parent.to_vec(),
                 step: implied_step(class, &host, dest_root, mapped),
+                spooky: step.relocates.iter().cloned().collect(),
                 transfers: alloc::vec![Transfer {
                     outer,
                     arc_dest,
@@ -4011,12 +4074,15 @@ fn implied_classes(
             let ImpliedClass {
                 parent,
                 step: host,
+                mut spooky,
                 transfers,
             } = hierarchy;
-            let step = implied_step(class, &host, dest_root, mapped);
+            spooky.extend(step.relocates.clone());
+            let implied_class = implied_step(class, &host, dest_root, mapped);
             implied.push(ImpliedClass {
                 parent: nest_step(parent, host),
-                step,
+                step: implied_class,
+                spooky,
                 transfers,
             });
         }
@@ -4081,6 +4147,7 @@ fn implied_step(
         skips_duplicates: false,
         relocates: None,
         ancestral: None,
+        spooky: Rc::from([]),
     }
 }
 
@@ -4188,6 +4255,7 @@ impl ArcNodes {
             origin: parent.origin,
             skips_duplicates,
             ancestral: parent.ancestral,
+            spooky: parent.spooky,
             ..step
         };
         Self {
@@ -4263,6 +4331,7 @@ impl ArcNodes {
             skips_duplicates,
             relocates: None,
             ancestral: None,
+            spooky: Rc::from([]),
         })
     }
 
@@ -4838,6 +4907,7 @@ impl AncestralArcs<'_> {
             skips_duplicates: arc.skips_duplicates,
             relocates: None,
             ancestral: None,
+            spooky: Rc::from([]),
         };
         let relocate_nodes = ArcNodes::new(
             ArcParent::nested(&nodes.path),
@@ -5072,6 +5142,7 @@ fn add_inherit_edge_opinions(
         skips_duplicates: false,
         relocates: None,
         ancestral: None,
+        spooky: Rc::from([]),
     };
     let stage_relocates = cycles.relocations().stage();
     let implied = implied_classes(
@@ -5112,7 +5183,16 @@ fn add_inherit_edge_opinions(
             implied.step.layer_stack,
             namespace_depth,
             arc_list_index,
-            ArcParent::implied_from(&implied.parent, origin.clone()),
+            ArcParent::implied_from(
+                &implied.parent,
+                origin.clone(),
+                parent
+                    .spooky
+                    .iter()
+                    .cloned()
+                    .chain(implied.spooky)
+                    .collect(),
+            ),
             out,
             visited,
             visited_specializes,
@@ -5162,10 +5242,7 @@ fn add_inherit_edge_opinions(
     remote_paths.dedup();
 
     let mut mapping: Vec<(PathId, PathId)> = Vec::new();
-    let walk = Walk::new(
-        outer_relocates(&stage_relocates, parent.steps),
-        step.relocates.as_deref(),
-    );
+    let walk = parent.class_walk(&stage_relocates, step.relocates.as_deref());
     for remote_path_id in remote_paths {
         let rel: Vec<_> = {
             let remote_path = store.paths().resolve(remote_path_id);
@@ -5996,6 +6073,7 @@ fn add_reference_edge_opinions(
             skips_duplicates: false,
             relocates,
             ancestral: None,
+            spooky: Rc::from([]),
         },
         cycles.relocations().stage(),
     );
@@ -6705,6 +6783,7 @@ fn add_payload_edge_opinions(
             skips_duplicates: false,
             relocates,
             ancestral: None,
+            spooky: Rc::from([]),
         },
         cycles.relocations().stage(),
     );
@@ -7295,6 +7374,7 @@ fn add_specializes_edge_opinions(
         skips_duplicates: false,
         relocates: None,
         ancestral: None,
+        spooky: Rc::from([]),
     };
     // The specializes implied into the next stronger layer stacks or
     // namespaces, with the node this arc is authored as (its placeholder,
@@ -7335,7 +7415,16 @@ fn add_specializes_edge_opinions(
             implied.step.layer_stack,
             namespace_depth,
             arc_list_index,
-            ArcParent::implied_from(&implied.parent, origin.clone()),
+            ArcParent::implied_from(
+                &implied.parent,
+                origin.clone(),
+                parent
+                    .spooky
+                    .iter()
+                    .cloned()
+                    .chain(implied.spooky)
+                    .collect(),
+            ),
             out,
             visited,
             prim_order_out,
@@ -7379,10 +7468,7 @@ fn add_specializes_edge_opinions(
     remote_paths.dedup();
 
     let mut mapping: Vec<(PathId, PathId)> = Vec::new();
-    let walk = Walk::new(
-        outer_relocates(&stage_relocates, parent.steps),
-        relocates.as_deref(),
-    );
+    let walk = parent.class_walk(&stage_relocates, relocates.as_deref());
     for remote_path_id in remote_paths {
         let rel: Vec<_> = {
             let remote_path = store.paths().resolve(remote_path_id);

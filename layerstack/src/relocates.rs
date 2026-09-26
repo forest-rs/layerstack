@@ -466,6 +466,9 @@ impl LiftedSet {
 /// - Stepping into an `own` source drops the opinion: the target layer
 ///   stack authors it at a relocation source. `own` targets are the target
 ///   layer stack's own sites and are kept.
+/// - Stepping into a `spooky` source, one no other relocation claims, moves
+///   the walk to its target; `spooky` targets are kept (see
+///   [`Walk::with_spooky`]).
 ///
 /// Spec: AOUSD Core §10.3.2.6 ("All previously-computed ancestral opinions
 /// except those due to ancestral variant arcs are removed"; opinions at a
@@ -475,6 +478,7 @@ impl LiftedSet {
 pub(crate) struct Walk<'a> {
     outer: Vec<&'a LiftedSet>,
     own: Option<&'a LiftedSet>,
+    spooky: Vec<&'a LiftedSet>,
 }
 
 impl<'a> Walk<'a> {
@@ -486,13 +490,36 @@ impl<'a> Walk<'a> {
         Self {
             outer: outer.into_iter().filter(|set| !set.is_empty()).collect(),
             own: own.filter(|set| !set.is_empty()),
+            spooky: Vec::new(),
         }
+    }
+
+    /// The same walk, also through `spooky`: the relocations of the weaker
+    /// layer stacks a class arc is implied out of.
+    ///
+    /// A class implied into a stronger layer stack stands for the class
+    /// nodes of the weaker one, and those include the classes of each
+    /// relocation source's namespace, which the relocation brings to its
+    /// target. The implied class's opinions at a relocation source so
+    /// compose at the relocation target: OpenUSD's "spooky" inherits. The
+    /// relocation's target keeps the implied class's own opinions there,
+    /// which are not ancestral opinions of the relocating layer stack.
+    ///
+    /// Spec: AOUSD Core §10.3.2.6 (the relocation source's opinions,
+    /// computed with its layer stack), §10.4.2.4 (implied classes).
+    /// OpenUSD: `_EvalImpliedClassTree` implies the classes beneath a
+    /// relocate node to its parent, and `_EvalImpliedRelocations`, in
+    /// `pxr/usd/pcp/primIndex.cpp`.
+    pub(crate) fn with_spooky(mut self, spooky: impl IntoIterator<Item = &'a LiftedSet>) -> Self {
+        self.spooky
+            .extend(spooky.into_iter().filter(|set| !set.is_empty()));
+        self
     }
 
     /// Returns `true` when no relocation applies, so placing a path only
     /// joins it onto its destination.
     pub(crate) fn is_empty(&self) -> bool {
-        self.outer.is_empty() && self.own.is_none()
+        self.outer.is_empty() && self.own.is_none() && self.spooky.is_empty()
     }
 
     /// The same walk with `own` counted as outer: the walk of an arc nested
@@ -500,7 +527,11 @@ impl<'a> Walk<'a> {
     pub(crate) fn nested(&self) -> Self {
         let mut outer = self.outer.clone();
         outer.extend(self.own);
-        Self { outer, own: None }
+        Self {
+            outer,
+            own: None,
+            spooky: self.spooky.clone(),
+        }
     }
 
     /// Places the path `rel` beneath the stage path `dest_root` (see
@@ -533,6 +564,12 @@ impl<'a> Walk<'a> {
                 }
                 if self.outer.iter().any(|set| set.target(id).is_some()) {
                     return None;
+                }
+                if let Some(relocate) = self.spooky.iter().rev().find_map(|set| set.source(id)) {
+                    let target = relocate.stage_target?;
+                    current = paths.resolve(target).clone();
+                    moved = true;
+                    continue;
                 }
             }
             current = next;
@@ -567,6 +604,7 @@ impl<'a> Walk<'a> {
                 self.own
                     .into_iter()
                     .chain(self.outer.iter().rev().copied())
+                    .chain(self.spooky.iter().rev().copied())
                     .find_map(|set| set.source(id))
                     .and_then(|relocate| relocate.stage_target)
             });

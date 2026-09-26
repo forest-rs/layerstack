@@ -11,6 +11,28 @@
 //! delegated to the caller via the [`AssetResolver`] trait, keeping this
 //! module `no_std` compatible.
 //!
+//! # Rejected layers
+//!
+//! Some text parses but is not scene description OpenUSD can hold: an
+//! inherits, specializes, reference or payload path, a relocates path or a
+//! relationship target path with a variant selection (`</A{v=x}B>`), and
+//! an attribute connection path written with one. OpenUSD's text parser
+//! (`Sdf_TextFileFormatParser`, validating with `SdfSchema::IsValid*`)
+//! rejects the whole layer, so it never opens. Emitting reports each such
+//! path as a [`Severity::Error`] diagnostic with OpenUSD's message, leaves
+//! it out of the layer and sets [`EmitResult::rejected`]; a caller that
+//! follows OpenUSD treats the layer as one that failed to load. A relative
+//! relationship target inside a variant branch is anchored at the prim with
+//! its variant selections, so it is rejected unless it climbs out of every
+//! branch; a relative connection is anchored without them, as OpenUSD
+//! strips them from connection paths.
+//!
+//! Spec: AOUSD Core §16.2.16.9 (target paths may not contain variant
+//! selections; the text parser may reject them), §8 (path grammar),
+//! §10.3.2 (arcs). The Core leaves the other paths to the parser too; this
+//! follows OpenUSD, which rejects them all.
+//!
+//! [`Severity::Error`]: crate::diagnostic::Severity::Error
 //! [`Layer`]: layerstack::Layer
 //! [`PrimSpec`]: layerstack::PrimSpec
 
@@ -50,6 +72,9 @@ pub struct EmitResult {
     pub resolved_layers: Vec<Layer>,
     /// Diagnostics from the emit pass.
     pub diagnostics: Vec<Diagnostic>,
+    /// Whether OpenUSD's text parser rejects the layer as a whole (see
+    /// [Rejected layers](self#rejected-layers)); `diagnostics` say why.
+    pub rejected: bool,
 }
 
 /// Converts a parsed AST layer into a layerstack [`Layer`].
@@ -79,12 +104,14 @@ pub fn emit(
         resolved_layers: Vec::new(),
         diagnostics: Vec::new(),
         rejections: Vec::new(),
+        rejected: false,
     };
     let layer = ctx.emit_layer(ast);
     EmitResult {
         layer,
         resolved_layers: ctx.resolved_layers,
         diagnostics: ctx.diagnostics,
+        rejected: ctx.rejected,
     }
 }
 
@@ -100,9 +127,18 @@ struct EmitCtx<'a> {
     /// Why values being converted could not take their declared type; the
     /// caller that owns the value reports them (see [`EmitCtx::checked`]).
     rejections: Vec<String>,
+    /// Whether the layer is rejected (see [`EmitResult::rejected`]).
+    rejected: bool,
 }
 
 impl EmitCtx<'_> {
+    /// Reports scene description OpenUSD's text parser rejects, which
+    /// rejects the layer.
+    fn reject(&mut self, span: Span, message: String) {
+        self.diagnostics.push(Diagnostic::error(span, message));
+        self.rejected = true;
+    }
+
     // ── Layer ────────────────────────────────────────────────────────
 
     fn emit_layer(&mut self, ast: &ast::Layer<'_>) -> Layer {
@@ -138,6 +174,22 @@ impl EmitCtx<'_> {
                 }
                 ast::LayerMeta::Relocates(entries) => {
                     for entry in entries {
+                        // OpenUSD names the source path in both messages.
+                        // Spec: `SdfSchema::IsValidRelocatesSourcePath`.
+                        if has_variant_selection(entry.source) {
+                            self.reject(
+                                entry.span,
+                                format!("'{}' is not a valid relocates source path", entry.source),
+                            );
+                            continue;
+                        }
+                        if has_variant_selection(entry.target) {
+                            self.reject(
+                                entry.span,
+                                format!("'{}' is not a valid relocates target path", entry.source),
+                            );
+                            continue;
+                        }
                         if let Some(relocate) = self.emit_relocate(entry) {
                             layer.relocates.push(relocate);
                         }
@@ -229,7 +281,12 @@ impl EmitCtx<'_> {
                     self.emit_attribute(attr, &mut spec.properties, prim_path);
                 }
                 ast::PrimChild::Relationship(rel) => {
-                    self.emit_relationship(rel, &mut spec.properties, prim_path);
+                    self.emit_relationship(
+                        rel,
+                        &mut spec.properties,
+                        prim_path,
+                        outer_variant_sites,
+                    );
                 }
                 ast::PrimChild::Prim(child_prim) => {
                     let child_name = self.tokens.intern(child_prim.name);
@@ -278,21 +335,25 @@ impl EmitCtx<'_> {
         prim_path: &str,
         spec: &mut PrimSpec,
     ) {
+        let sites = spec.outer_variant_sites.clone();
         for meta in metadata {
             match meta {
                 ast::PrimMeta::References(arc) => {
-                    merge_ref_listop(&mut spec.references, self.emit_arc_listop(arc, prim_path));
+                    merge_ref_listop(&mut spec.references, self.emit_arc_listop(arc, "Reference"));
                 }
                 ast::PrimMeta::Payload(arc) => {
-                    merge_ref_listop(&mut spec.payloads, self.emit_arc_listop(arc, prim_path));
+                    merge_ref_listop(&mut spec.payloads, self.emit_arc_listop(arc, "Payload"));
                 }
                 ast::PrimMeta::Inherits(paths) => {
-                    merge_path_listop(&mut spec.inherits, self.emit_path_listop(paths, prim_path));
+                    merge_path_listop(
+                        &mut spec.inherits,
+                        self.emit_path_listop(paths, prim_path, &sites, "Inherit"),
+                    );
                 }
                 ast::PrimMeta::Specializes(paths) => {
                     merge_path_listop(
                         &mut spec.specializes,
-                        self.emit_path_listop(paths, prim_path),
+                        self.emit_path_listop(paths, prim_path, &sites, "Specializes"),
                     );
                 }
                 ast::PrimMeta::Variants(selections) => {
@@ -565,15 +626,39 @@ impl EmitCtx<'_> {
     /// Merges one relationship statement into the property list.
     ///
     /// Spec: AOUSD Core §7.6.5 (relationship spec fields).
+    /// Emits a relationship of the prim at `anchor`, whose spec sits in the
+    /// variant branches `sites`.
     fn emit_relationship(
         &mut self,
         rel: &ast::Relationship<'_>,
         properties: &mut Vec<PropertyEntry>,
         anchor: &str,
+        sites: &[VariantSelectionSite],
     ) {
         let name_tok = self.tokens.intern(rel.name);
         let listop = rel.targets.as_ref().map(|targets| {
-            let target_paths = self.target_paths(targets, anchor, rel.span);
+            // Spec: `SdfSchema::IsValidRelationshipTargetPath`.
+            let targets: Vec<String> = targets
+                .iter()
+                .copied()
+                .filter_map(|target| {
+                    let absolute = (!has_variant_selection(target))
+                        .then(|| self.variant_anchored(target, anchor, sites))
+                        .flatten();
+                    if absolute.is_none() {
+                        self.reject(
+                            rel.span,
+                            format!(
+                                "Relationship target paths cannot contain variant \
+                                 selections: <{target}>"
+                            ),
+                        );
+                    }
+                    absolute
+                })
+                .collect();
+            let targets: Vec<&str> = targets.iter().map(String::as_str).collect();
+            let target_paths = self.target_paths(&targets, anchor, rel.span);
             let mut listop = ListOp::default();
             match rel.op {
                 ast::ListOpKind::Explicit => listop.explicit = Some(target_paths),
@@ -674,7 +759,12 @@ impl EmitCtx<'_> {
             branch_context.push(branch_site);
 
             // Process branch metadata (arcs on the branch itself).
-            self.emit_variant_branch_metadata(&branch.metadata, prim_path, &mut variant_spec);
+            self.emit_variant_branch_metadata(
+                &branch.metadata,
+                prim_path,
+                &branch_context,
+                &mut variant_spec,
+            );
 
             // Process branch children.
             for child in &branch.children {
@@ -683,7 +773,12 @@ impl EmitCtx<'_> {
                         self.emit_attribute(attr, &mut variant_spec.properties, prim_path);
                     }
                     ast::PrimChild::Relationship(rel) => {
-                        self.emit_relationship(rel, &mut variant_spec.properties, prim_path);
+                        self.emit_relationship(
+                            rel,
+                            &mut variant_spec.properties,
+                            prim_path,
+                            &branch_context,
+                        );
                     }
                     ast::PrimChild::Prim(child_prim) => {
                         let child_tok = self.tokens.intern(child_prim.name);
@@ -789,7 +884,12 @@ impl EmitCtx<'_> {
             branch_context.push(branch_site);
 
             // Process branch metadata.
-            self.emit_variant_branch_metadata(&branch.metadata, prim_path, variant_spec);
+            self.emit_variant_branch_metadata(
+                &branch.metadata,
+                prim_path,
+                &branch_context,
+                variant_spec,
+            );
 
             // Collect deeper nested variant sets to process after this
             // branch's variant_spec borrow is released.
@@ -822,7 +922,12 @@ impl EmitCtx<'_> {
                         self.emit_attribute(attr, &mut variant_spec.properties, prim_path);
                     }
                     ast::PrimChild::Relationship(rel) => {
-                        self.emit_relationship(rel, &mut variant_spec.properties, prim_path);
+                        self.emit_relationship(
+                            rel,
+                            &mut variant_spec.properties,
+                            prim_path,
+                            &branch_context,
+                        );
                     }
                     _ => {}
                 }
@@ -861,6 +966,7 @@ impl EmitCtx<'_> {
         &mut self,
         metadata: &[ast::PrimMeta<'_>],
         prim_path: &str,
+        branch_sites: &[VariantSelectionSite],
         variant_spec: &mut VariantSpec,
     ) {
         for meta in metadata {
@@ -868,25 +974,25 @@ impl EmitCtx<'_> {
                 ast::PrimMeta::References(arc) => {
                     merge_ref_listop(
                         &mut variant_spec.references,
-                        self.emit_arc_listop(arc, prim_path),
+                        self.emit_arc_listop(arc, "Reference"),
                     );
                 }
                 ast::PrimMeta::Payload(arc) => {
                     merge_ref_listop(
                         &mut variant_spec.payloads,
-                        self.emit_arc_listop(arc, prim_path),
+                        self.emit_arc_listop(arc, "Payload"),
                     );
                 }
                 ast::PrimMeta::Inherits(paths) => {
                     merge_path_listop(
                         &mut variant_spec.inherits,
-                        self.emit_path_listop(paths, prim_path),
+                        self.emit_path_listop(paths, prim_path, branch_sites, "Inherit"),
                     );
                 }
                 ast::PrimMeta::Specializes(paths) => {
                     merge_path_listop(
                         &mut variant_spec.specializes,
-                        self.emit_path_listop(paths, prim_path),
+                        self.emit_path_listop(paths, prim_path, branch_sites, "Specializes"),
                     );
                 }
                 ast::PrimMeta::Variants(selections) => {
@@ -908,8 +1014,10 @@ impl EmitCtx<'_> {
 
     // ── Composition arcs ────────────────────────────────────────────
 
-    fn emit_arc_listop(&mut self, arc: &ast::ListOpArc<'_>, _prim_path: &str) -> ListOp<Reference> {
-        let Some(items) = &arc.items else {
+    /// Converts a reference or payload list; `arc` names the arc in
+    /// OpenUSD's messages (`Reference` or `Payload`).
+    fn emit_arc_listop(&mut self, arc_list: &ast::ListOpArc<'_>, arc: &str) -> ListOp<Reference> {
+        let Some(items) = &arc_list.items else {
             // `= None` clears the arc list.
             return ListOp {
                 explicit: Some(Vec::new()),
@@ -917,10 +1025,13 @@ impl EmitCtx<'_> {
             };
         };
 
-        let refs: Vec<Reference> = items.iter().filter_map(|r| self.emit_arc_ref(r)).collect();
+        let refs: Vec<Reference> = items
+            .iter()
+            .filter_map(|r| self.emit_arc_ref(r, arc))
+            .collect();
 
         let mut listop = ListOp::default();
-        match arc.kind {
+        match arc_list.kind {
             ast::ListOpKind::Explicit => listop.explicit = Some(refs),
             ast::ListOpKind::Prepend => listop.prepend = refs,
             ast::ListOpKind::Append => listop.append = refs,
@@ -929,7 +1040,17 @@ impl EmitCtx<'_> {
         listop
     }
 
-    fn emit_arc_ref(&mut self, arc_ref: &ast::ArcRef<'_>) -> Option<Reference> {
+    fn emit_arc_ref(&mut self, arc_ref: &ast::ArcRef<'_>, arc: &str) -> Option<Reference> {
+        // Spec: `SdfSchema::IsValidReference` and `IsValidPayload`.
+        if let Some(path) = arc_ref.prim_path
+            && has_variant_selection(path)
+        {
+            self.reject(
+                arc_ref.span,
+                format!("{arc} paths cannot contain variant selections: <{path}>"),
+            );
+            return None;
+        }
         // An omitted prim path, and the empty path `<>`, target the layer's
         // `defaultPrim`. OpenUSD warns that `<>` is ill-formed, reads it as
         // the empty path and composes it as an omitted target.
@@ -977,11 +1098,19 @@ impl EmitCtx<'_> {
     }
 
     /// Converts an inherits or specializes list; relative paths resolve
-    /// against the prim path `anchor`.
+    /// against the prim path `anchor`, whose spec sits in the variant
+    /// branches `sites`. `arc` names the arc in OpenUSD's messages
+    /// (`Inherit` or `Specializes`).
     ///
     /// Spec: AOUSD Core §8 (paths; relative paths are anchored to the prim
     /// that authors them).
-    fn emit_path_listop(&mut self, paths: &ast::ListOpPaths<'_>, anchor: &str) -> ListOp<PathId> {
+    fn emit_path_listop(
+        &mut self,
+        paths: &ast::ListOpPaths<'_>,
+        anchor: &str,
+        sites: &[VariantSelectionSite],
+        arc: &str,
+    ) -> ListOp<PathId> {
         let Some(items) = &paths.items else {
             return ListOp {
                 explicit: Some(Vec::new()),
@@ -992,7 +1121,18 @@ impl EmitCtx<'_> {
         let path_ids: Vec<PathId> = items
             .iter()
             .filter_map(|s| {
-                let absolute = absolute_path(s, anchor);
+                // Spec: `SdfSchema::IsValidInheritPath` and
+                // `IsValidSpecializesPath`.
+                let Some(absolute) = (!has_variant_selection(s))
+                    .then(|| self.variant_anchored(s, anchor, sites))
+                    .flatten()
+                else {
+                    self.reject(
+                        paths.span,
+                        format!("{arc} paths cannot contain variant selections: <{s}>"),
+                    );
+                    return None;
+                };
                 match Path::parse_absolute(&absolute, self.tokens) {
                     Ok(path) => Some(self.paths.intern(path)),
                     Err(_) => {
@@ -1059,7 +1199,26 @@ impl EmitCtx<'_> {
         conn: &ast::Connection<'_>,
         anchor: &str,
     ) -> ListOp<TargetPath> {
-        let target_paths = self.target_paths(&conn.targets, anchor, conn.span);
+        // A relative connection is anchored without the variant selections
+        // of the prim that authors it, as OpenUSD strips them; one written
+        // with a variant selection is rejected (`Sdf_TextFileFormatParser`,
+        // `PathRef`).
+        let targets: Vec<&str> = conn
+            .targets
+            .iter()
+            .copied()
+            .filter(|target| {
+                let invalid = has_variant_selection(target);
+                if invalid {
+                    self.reject(
+                        conn.span,
+                        format!("'{target}' is not a valid prim or property scene path"),
+                    );
+                }
+                !invalid
+            })
+            .collect();
+        let target_paths = self.target_paths(&targets, anchor, conn.span);
 
         let mut listop = ListOp::default();
         match conn.op {
@@ -1069,6 +1228,62 @@ impl EmitCtx<'_> {
             ast::ListOpKind::Delete => listop.delete = target_paths,
         }
         listop
+    }
+
+    /// Makes `path`, authored on the prim at `anchor` whose spec sits in the
+    /// variant branches `sites`, absolute, or returns `None` when the result
+    /// names one of those variant selections.
+    ///
+    /// OpenUSD anchors a relative path at the spec path with its selections
+    /// (`/A{v=x}B`), where each leading `..` removes one element, a prim name
+    /// or a variant selection (`SdfPath::MakeAbsolutePath`): `<../../D>`
+    /// authored on `/A{v=x}C` is `/A/D`, while `<../D>` is `/A{v=x}D`.
+    fn variant_anchored(
+        &self,
+        path: &str,
+        anchor: &str,
+        sites: &[VariantSelectionSite],
+    ) -> Option<String> {
+        if path.starts_with('/') || sites.is_empty() {
+            return Some(absolute_path(path, anchor));
+        }
+        // The anchor's elements: each prim name, followed by the selections
+        // of the variant sets it hosts (`None`).
+        let mut elements: Vec<Option<&str>> = Vec::new();
+        for (level, name) in anchor.split('/').filter(|s| !s.is_empty()).enumerate() {
+            elements.push(Some(name));
+            let hosted = sites
+                .iter()
+                .filter(|site| self.paths.resolve(site.host_path).depth() == level + 1)
+                .count();
+            elements.extend(core::iter::repeat_n(None, hosted));
+        }
+        let mut rest = path;
+        let mut climbs = 0;
+        loop {
+            if let Some(tail) = rest.strip_prefix("../") {
+                climbs += 1;
+                rest = tail;
+            } else if rest == ".." {
+                climbs += 1;
+                rest = "";
+            } else if let Some(tail) = rest.strip_prefix("./") {
+                rest = tail;
+            } else {
+                break;
+            }
+        }
+        elements.truncate(elements.len().saturating_sub(climbs));
+        let names: Option<Vec<&str>> = elements.into_iter().collect();
+        let mut base = String::new();
+        for name in names? {
+            base.push('/');
+            base.push_str(name);
+        }
+        if base.is_empty() {
+            base.push('/');
+        }
+        Some(absolute_path(rest, &base))
     }
 
     /// Parses relationship or connection targets; relative paths resolve
@@ -1407,6 +1622,12 @@ fn is_prim_name(name: &str) -> bool {
 /// `Child`, `.attr` and `../B.attr` are relative, `/A/B` is not.
 ///
 /// Spec: AOUSD Core §8 (paths).
+/// Whether `path` names a variant selection (`</A{v=x}B>`), which paths in
+/// scene description cannot (see [Rejected layers](self#rejected-layers)).
+fn has_variant_selection(path: &str) -> bool {
+    path.contains('{')
+}
+
 fn absolute_path(path: &str, anchor: &str) -> String {
     if path.starts_with('/') {
         return String::from(path);
@@ -2382,6 +2603,103 @@ def \"Rig\" {
         assert_eq!(first.span.text(src), "</Rig{v=a}Anim>: </Anim>");
         assert_eq!(result.layer.relocates.len(), 1);
         assert_eq!(result.layer.prims.len(), 2, "pseudo-root and /Rig");
+    }
+
+    /// Spec: OpenUSD's text parser rejects the layer (`SdfSchema::IsValid*`);
+    /// see the module's "Rejected layers".
+    #[test]
+    fn emit_rejects_variant_selections_in_paths() {
+        let cases = [
+            (
+                "def \"A\" (\n    inherits = </B{v=x}C>\n)\n{\n}\n",
+                "Inherit paths cannot contain variant selections",
+            ),
+            (
+                "def \"A\" (\n    specializes = </B{v=x}C>\n)\n{\n}\n",
+                "Specializes paths cannot contain variant selections",
+            ),
+            (
+                "def \"A\" (\n    references = </B{v=x}C>\n)\n{\n}\n",
+                "Reference paths cannot contain variant selections",
+            ),
+            (
+                "def \"A\" (\n    payload = </B{v=x}C>\n)\n{\n}\n",
+                "Payload paths cannot contain variant selections",
+            ),
+            (
+                "(\n    relocates = {\n        </B{v=x}C>: </B/D>\n    }\n)\n",
+                "'/B{v=x}C' is not a valid relocates source path",
+            ),
+            (
+                "def \"A\"\n{\n    rel r = </B{v=x}C>\n}\n",
+                "Relationship target paths cannot contain variant selections",
+            ),
+            (
+                "def \"A\" (\n    variantSets = \"v\"\n)\n{\n    variantSet \"v\" = {\n        \"x\" {\n            def \"C\"\n            {\n                rel r = <../D>\n            }\n        }\n    }\n}\n",
+                "Relationship target paths cannot contain variant selections",
+            ),
+            (
+                "def \"A\"\n{\n    int x.connect = </B{v=x}C.y>\n}\n",
+                "'/B{v=x}C.y' is not a valid prim or property scene path",
+            ),
+        ];
+        for (body, message) in cases {
+            let src = format!("#usda 1.0\n{body}");
+            let (result, _tokens, _paths) = emit_source(&src);
+            assert!(result.rejected, "{src}");
+            assert!(
+                result
+                    .diagnostics
+                    .iter()
+                    .any(|d| d.message.starts_with(message)),
+                "{src}: {:?}",
+                result.diagnostics
+            );
+        }
+    }
+
+    /// A relative target that climbs out of every variant branch, and a
+    /// relative connection inside one, are not rejected.
+    #[test]
+    fn emit_keeps_relative_paths_outside_variant_selections() {
+        let src = "#usda 1.0
+def \"A\" (
+    variantSets = \"v\"
+)
+{
+    variantSet \"v\" = {
+        \"x\" {
+            def \"C\"
+            {
+                rel r = <../../D>
+                int x
+                int x.connect = <.y>
+            }
+        }
+    }
+}
+";
+        let (result, mut tokens, paths) = emit_source(src);
+        assert!(!result.rejected, "{:?}", result.diagnostics);
+        // `<../../D>` climbs `C` and the selection `{v=x}` of `/A{v=x}C`:
+        // `/A/D`. The connection is anchored at `/A/C`.
+        let child = Path::parse_absolute("/A/C", &mut tokens).unwrap();
+        let spec = result
+            .layer
+            .prim_specs(paths.lookup(&child).unwrap())
+            .next()
+            .expect("branch spec of /A/C");
+        let (r, x) = (tokens.intern("r"), tokens.intern("x"));
+        let targets = |name| {
+            let op = spec.property(name).unwrap().targets.clone().unwrap();
+            op.explicit
+                .unwrap()
+                .iter()
+                .map(|target| target.display(&paths, &tokens))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(targets(r), ["/A/D"]);
+        assert_eq!(targets(x), ["/A/C.y"]);
     }
 
     #[test]

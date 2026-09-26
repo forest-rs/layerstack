@@ -14,6 +14,7 @@ use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack::{AssetResolveError, AssetResolver, InMemoryStore, ResolvedAsset};
 
+use layerstack_usda::diagnostic::{Diagnostic, Severity};
 use layerstack_usda::emit;
 use layerstack_usda::lower;
 use layerstack_usda::parser::parse_cst;
@@ -23,6 +24,11 @@ pub struct LoadedStage {
     pub store: InMemoryStore,
     pub root_layer: LayerId,
     pub layer_names: BTreeMap<LayerId, String>,
+    /// Why OpenUSD's text parser rejects the entry layer, which then does
+    /// not open (see `layerstack_usda::emit`); empty when it loads. A
+    /// sublayer or arc target it rejects is unresolved instead, as OpenUSD
+    /// cannot open it either.
+    pub invalid: Vec<String>,
 }
 
 /// Loads a USDA file and all of its sublayers/references recursively,
@@ -41,7 +47,7 @@ pub fn load_entry_usda(entry: &Path) -> LoadedStage {
     };
 
     // Load the entry file.
-    let root_layer = load_file(entry, &mut store, &mut resolver);
+    let (root_layer, invalid) = load_file(entry, &mut store, &mut resolver);
 
     // Insert any resolved layers produced during emit.
     while let Some(layer) = resolver.pending_layers.pop() {
@@ -52,6 +58,7 @@ pub fn load_entry_usda(entry: &Path) -> LoadedStage {
         store,
         root_layer,
         layer_names: resolver.layer_names,
+        invalid,
     }
 }
 
@@ -65,12 +72,18 @@ pub fn load_entry_usda_sublayers_only(entry: &Path) -> LoadedStage {
     load_entry_usda(entry)
 }
 
-fn load_file(path: &Path, store: &mut InMemoryStore, resolver: &mut FileResolver) -> LayerId {
+/// Loads the layer at `path`, with the reasons it is rejected (see
+/// [`LoadedStage::invalid`]).
+fn load_file(
+    path: &Path,
+    store: &mut InMemoryStore,
+    resolver: &mut FileResolver,
+) -> (LayerId, Vec<String>) {
     let canonical = path.to_path_buf();
 
     // Deduplication check.
     if let Some(id) = resolver.by_path.get(&canonical) {
-        return *id;
+        return (*id, Vec::new());
     }
 
     // Assign a new layer ID.
@@ -128,10 +141,25 @@ fn load_file(path: &Path, store: &mut InMemoryStore, resolver: &mut FileResolver
         store.insert_layer(layer);
     }
 
+    let invalid = if emit_result.rejected {
+        rejections(&emit_result.diagnostics)
+    } else {
+        Vec::new()
+    };
+
     // Insert the emitted layer.
     store.insert_layer(emit_result.layer);
 
-    layer_id
+    (layer_id, invalid)
+}
+
+/// The messages of the error diagnostics of a rejected layer.
+fn rejections(diagnostics: &[Diagnostic]) -> Vec<String> {
+    diagnostics
+        .iter()
+        .filter(|d| d.severity == Severity::Error)
+        .map(|d| d.message.clone())
+        .collect()
 }
 
 // ── File-based asset resolver ───────────────────────────────────────────
@@ -204,6 +232,18 @@ impl AssetResolver for FileResolver {
         let ast_result = lower::lower(&cst.tree, &source);
 
         let emit_result = emit::emit(&ast_result.layer, layer_id, tokens, paths, self);
+        // OpenUSD cannot open a layer its text parser rejects, so the arc or
+        // sublayer that names it does not resolve.
+        if emit_result.rejected {
+            self.by_path.remove(&resolved_path);
+            self.layer_paths.remove(&layer_id);
+            self.layer_names.remove(&layer_id);
+            return Err(AssetResolveError::LoadError(Arc::from(format!(
+                "{} is rejected: {}",
+                resolved_path.display(),
+                rejections(&emit_result.diagnostics).join("; ")
+            ))));
+        }
 
         // Collect resolved sub-layers.
         for layer in emit_result.resolved_layers {

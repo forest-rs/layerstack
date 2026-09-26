@@ -55,6 +55,7 @@ pub fn load_entry_usdz(entry: &Path) -> LoadedStage {
         store,
         root_layer: layer_id,
         layer_names,
+        invalid: Vec::new(),
     }
 }
 

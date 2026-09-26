@@ -820,6 +820,7 @@ impl<'a> LowerCtx<'a> {
         }
 
         ArcRef {
+            span: node.span(),
             asset,
             prim_path,
             offset,

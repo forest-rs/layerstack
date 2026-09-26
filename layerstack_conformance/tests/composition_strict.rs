@@ -548,8 +548,9 @@ struct Known {
 use Cause as C;
 use Diff as D;
 
-/// Fixtures that are not compared: no usable oracle, or Layerstack cannot
-/// compose them at all.
+/// Fixtures that are not compared: OpenUSD rejects the entry layer, so
+/// `pcp.txt` composes no prims. Layerstack's USDA reader must reject it too
+/// ([`LoadedStage::invalid`]).
 ///
 /// Each entry is `(fixture, reason)`.
 const SKIPPED: &[(&str, &str)] = &[
@@ -856,6 +857,16 @@ fn strict_prim_stacks_match_pcp_txt() {
     let mut passing = Vec::new();
     for name in &names {
         if skipped.contains_key(name.as_str()) {
+            let dir = assets_dir().join(name);
+            let entry = load_pcp_txt(&dir.join("pcp.txt")).entry;
+            let loaded = load_entry_usda(&dir.join("usda").join(entry));
+            if loaded.invalid.is_empty() {
+                writeln!(
+                    drift,
+                    "{name}: OpenUSD rejects the entry layer; Layerstack loads it"
+                )
+                .unwrap();
+            }
             continue;
         }
         let observed = observe(name);

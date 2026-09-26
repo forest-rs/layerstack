@@ -57,7 +57,9 @@
 //! target paths, specializes propagated to the root of the graph and
 //! implied like inherits, relocates of the stage's and of referenced layer
 //! stacks (relocated prims composed at their targets beneath relocate
-//! nodes, their sources prohibited), asset paths authored as variable
+//! nodes, with the ancestral opinions of their sources, those of variant
+//! branches included, their sources prohibited, and relocations of those
+//! sources reported), asset paths authored as variable
 //! expressions, evaluated with the expression variables of the referencing
 //! layer stacks, variant sets nested in other branches, each branch a
 //! variant spec of its own, and variant selections, including fallbacks
@@ -66,7 +68,6 @@
 //!
 //! # Not supported
 //!
-//! - Relocates combined with implied classes ([`Cause::Relocates`]).
 //! - Implied classes in population and variant selection
 //!   ([`Cause::ImpliedClasses`]).
 //! - Variant selections of the sites ancestral arcs reach, made before the
@@ -504,12 +505,6 @@ enum Cause {
     /// prim's arcs are all added (`_EvalNodeAncestralVariantSets` in
     /// `pxr/usd/pcp/primIndex.cpp`).
     AncestralArcs,
-
-    // Unsupported features.
-    /// Relocates (AOUSD Core §10.3.2.6) move a prim's ancestral opinions
-    /// to its relocation target, but variant opinions authored inside a
-    /// relocation source are not composed as OpenUSD composes them.
-    Relocates,
 }
 
 /// A fixture known to mismatch the oracle, with its exact mismatch shape.
@@ -555,15 +550,6 @@ const SKIPPED: &[(&str, &str)] = &[
 
 /// Every fixture that does not match the oracle exactly.
 const KNOWN: &[Known] = &[
-    Known {
-        fixture: "ErrorOpinionAtRelocationSource_root",
-        causes: &[C::Relocates],
-        prims: 3,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingSite],
-        reason: "`/VariantAtRelocateSource/Sibling` misses the variant opinions `root.usd` authors inside the relocated `/VariantAtRelocateSource/Child`",
-    },
     Known {
         fixture: "TrickyVariantAncestralSelection_root",
         causes: &[C::AncestralArcs],

@@ -46,7 +46,8 @@ LAYERS = {
         </Flyer/Streamer>: </Ribbon>,
         </Flyer/Tail>: </Knot>,
         </Chain_2/Tail>: </Chain_2/Tail_2>,
-        </Chain/Tail>: </Chain/Tail_1>
+        </Chain/Tail>: </Chain/Tail_1>,
+        </Belltower/Floor/Bell>: </Belltower/Bell>
     }
 )
 
@@ -331,6 +332,170 @@ def "Deck" (
 )
 {
 }
+
+# `/Belltower/Floor/Bell` is relocated to `/Belltower/Bell`. The variant
+# branch `/Belltower/Floor` selects authors opinions at the source, which
+# are ancestral opinions of the source and compose at the target; the
+# source's own spec and variant branch are ignored. `/Belltower/Ringer`
+# inherits beneath the relocated prim.
+def "Belltower" (
+    references = @./tower.usda@</Tower>
+)
+{
+    over "Floor" (
+        variantSets = "tone"
+        variants = {
+            string tone = "low"
+        }
+    )
+    {
+        variantSet "tone" = {
+            "low" {
+                over "Bell"
+                {
+                    int pitch = 1
+
+                    over "Clapper"
+                    {
+                        int weight = 1
+                    }
+                }
+            }
+            "high" {
+                over "Bell"
+                {
+                    int pitch = 9
+                }
+            }
+        }
+
+        over "Bell" (
+            variantSets = "size"
+            variants = {
+                string size = "big"
+            }
+        )
+        {
+            int pitch = 9
+
+            variantSet "size" = {
+                "big" {
+                    over "Clapper"
+                    {
+                        int weight = 9
+                    }
+                }
+            }
+        }
+    }
+
+    def "Ringer" (
+        inherits = </Belltower/Bell/Clapper>
+    )
+    {
+    }
+}
+
+# `kiln.usda` relocates `/Kiln/Chamber/Tray`, which its reference to
+# `clay.usda` brings, to `/Kiln/Shelf`, and authors opinions at the source
+# inside the variant branch `/Kiln/Chamber` selects, while its reference
+# on `/Kiln/Chamber` brings more ancestral opinions of the source. Each
+# arc reaching the relocated tray composes them: `/Oven` references
+# `/Kiln`, `/Forge` references `/Oven`, `/Stove` payloads `/Kiln`, and
+# `/Rack` references the relocated `/Kiln/Shelf` itself.
+def "Oven" (
+    references = @./kiln.usda@</Kiln>
+)
+{
+}
+
+def "Forge" (
+    references = </Oven>
+)
+{
+}
+
+def "Stove" (
+    payload = @./kiln.usda@</Kiln>
+)
+{
+}
+
+def "Rack" (
+    references = @./kiln.usda@</Kiln/Shelf>
+)
+{
+}
+''',
+    "kiln": '''#usda 1.0
+(
+    relocates = {
+        </Kiln/Chamber/Tray>: </Kiln/Shelf>
+    }
+)
+
+def "Kiln" (
+    references = @./clay.usda@</Clay>
+)
+{
+    over "Chamber" (
+        references = @./glaze.usda@</Glaze>
+        variantSets = "heat"
+        variants = {
+            string heat = "high"
+        }
+    )
+    {
+        variantSet "heat" = {
+            "high" {
+                over "Tray"
+                {
+                    int temp = 7
+                    rel holds = </Kiln/Chamber/Tray/Pot>
+
+                    over "Pot"
+                    {
+                        int temp = 7
+                    }
+                }
+            }
+            "low" {
+                over "Tray"
+                {
+                    int temp = 1
+                }
+            }
+        }
+    }
+}
+''',
+    "clay": '''#usda 1.0
+
+def "Clay"
+{
+    def "Chamber"
+    {
+        def "Tray"
+        {
+            int temp = 0
+
+            def "Pot"
+            {
+                int temp = 0
+            }
+        }
+    }
+}
+''',
+    "glaze": '''#usda 1.0
+
+def "Glaze"
+{
+    def "Tray"
+    {
+        int coat = 3
+    }
+}
 ''',
     "fleet": '''#usda 1.0
 (
@@ -356,6 +521,24 @@ def "Fleet"
         over "_class_Sailor"
         {
             int rank = 2
+        }
+    }
+}
+''',
+    "tower": '''#usda 1.0
+
+def "Tower"
+{
+    def "Floor"
+    {
+        def "Bell"
+        {
+            int pitch = 0
+
+            def "Clapper"
+            {
+                int weight = 0
+            }
         }
     }
 }
@@ -665,7 +848,9 @@ def composition_errors(root):
     prim index reports it (`/` for the root layer stack's).
 
     A prim index reports the errors of the prim indexes its arcs compute
-    from scratch too, whose own root site `rootSite` names."""
+    from scratch too, whose own root site `rootSite` names. The errors of
+    each property's relationship targets and attribute connections are
+    the prim's, as in `composition_errors_oracle.py`."""
     cache = Pcp.Cache(Pcp.LayerStackIdentifier(root), usd=True)
     _, errs = cache.ComputeLayerStack(cache.GetLayerStackIdentifier())
     errors = {(error_kind(error), "/") for error in errs}
@@ -673,6 +858,19 @@ def composition_errors(root):
     def walk(path):
         index, errs = cache.ComputePrimIndex(path)
         errors.update((error_kind(error), str(path)) for error in errs)
+        for name in index.ComputePrimPropertyNames():
+            property_path = path.AppendProperty(name)
+            property_index, errs = Pcp.BuildPrimPropertyIndex(
+                property_path, cache, index)
+            errors.update((error_kind(error), str(path)) for error in errs)
+            specs = list(property_index.propertyStack)
+            if specs and isinstance(specs[0], Sdf.RelationshipSpec):
+                result = cache.ComputeRelationshipTargetPaths(
+                    property_path, False, None, False)
+            else:
+                result = cache.ComputeAttributeConnectionPaths(
+                    property_path, False, None, False)
+            errors.update((error_kind(error), str(path)) for error in result[2])
         names, _prohibited = index.ComputePrimChildNames()
         for name in names:
             walk(path.AppendChild(name))

@@ -230,6 +230,18 @@ pub(crate) fn compose_stage(
         &mut authored_children_opinions,
         dep_builder.as_mut(),
     );
+    add_relocated_variant_opinions(
+        store,
+        &layer_stack,
+        &stage_relocates,
+        &[],
+        &stage_relocates,
+        Outside::IdentityUnchecked,
+        &mut prims,
+        &mut prim_order_opinions,
+        &mut authored_children_opinions,
+        &mut cycles,
+    );
     add_inherit_opinions(
         store,
         fallbacks,
@@ -3037,6 +3049,312 @@ fn root_layer_stack(out: &HashMap<PathId, PrimIndex>, path: PathId) -> LayerId {
         .layer_stack()
 }
 
+/// Adds to the composed prim `dest`, beneath the relocate node `nodes`, the
+/// specs `stack` authors at `source_view`, the relocation source `source`
+/// extended towards `dest`, inside the selected variant branches of the
+/// source's namespace ancestors.
+///
+/// A relocate node brings the ancestral opinions of its source, those of
+/// the variant arcs of the source's ancestors among them; the source's own
+/// specs, its own variant branches included, are ignored.
+///
+/// Spec: AOUSD Core §10.3.2.6 ("the composition algorithm is executed with
+/// the layer stack and the entry's source path"). OpenUSD: the relocate arc
+/// `_EvalNodeRelocations` adds includes the source's ancestral opinions
+/// (`includeAncestralOpinions` in `pxr/usd/pcp/primIndex.cpp`), the variant
+/// nodes of its ancestors among them. `targets` maps the target paths of
+/// those opinions (see [`RelocateTargets`]).
+fn add_source_ancestral_variant_specs(
+    store: &mut dyn LayerStore,
+    stack: &LayerStack,
+    nodes: &mut ArcNodes,
+    out: &mut HashMap<PathId, PrimIndex>,
+    dest: PathId,
+    (source, source_view): (PathId, PathId),
+    base_offset: LayerOffset,
+    targets: Option<RelocateTargets>,
+    authored_children_out: &mut HashMap<PathId, ChildOrderOpinions>,
+    prim_order_out: &mut HashMap<PathId, ChildOrderOpinions>,
+    cycles: &mut CycleDetector,
+) {
+    let source_path = store.paths().resolve(source).clone();
+    // A spec inside the variant branches of the source's proper ancestors.
+    let ancestral = |paths: &crate::path::PathInterner, sites: &[VariantSelectionSite]| {
+        !sites.is_empty()
+            && sites.iter().all(|site| {
+                let host = paths.resolve(site.host_path);
+                host.is_prefix_of(&source_path) && *host != source_path
+            })
+    };
+    // The node of each branch path those specs are authored in, interned
+    // first so the specs are read in place.
+    let mut branch_nodes: Vec<(Vec<VariantSelectionSite>, NodeId)> = Vec::new();
+    for &layer_id in &stack.layers {
+        let sites: Vec<Vec<VariantSelectionSite>> = store
+            .layer(layer_id)
+            .into_iter()
+            .flat_map(|layer| layer.prim_specs(source_view))
+            .filter(|spec| ancestral(store.paths(), &spec.outer_variant_sites))
+            .map(|spec| spec.outer_variant_sites.to_vec())
+            .collect();
+        for sites in sites {
+            if branch_nodes.iter().all(|(known, _)| *known != sites) {
+                let node = nodes.spec_node(store, out, dest, &sites);
+                branch_nodes.push((sites, node));
+            }
+        }
+    }
+    if branch_nodes.is_empty() {
+        return;
+    }
+    for (layer_strength_idx, layer_id) in stack.layers.iter().copied().enumerate() {
+        let Some(layer) = store.layer(layer_id) else {
+            continue;
+        };
+        let layer_strength = u16::try_from(layer_strength_idx).unwrap_or(u16::MAX);
+        let layer_offset = base_offset.compose(stack.offset_at(layer_strength_idx));
+        // Opinions whose target paths the arc maps once the layer is read.
+        let mut pending: Vec<Opinion> = Vec::new();
+        for spec in layer.prim_specs(source_view) {
+            let Some(&(_, node)) = branch_nodes
+                .iter()
+                .find(|(sites, _)| **sites == *spec.outer_variant_sites)
+            else {
+                continue;
+            };
+            let key = OpinionKey {
+                node,
+                layer_strength,
+                layer_id,
+                lookup_path: source_view,
+                spec_path: prim_spec_path(store, source_view, &spec.outer_variant_sites),
+            };
+            if !spec.authored_children.is_empty() {
+                authored_children_out
+                    .entry(dest)
+                    .or_default()
+                    .push((key.clone(), spec.authored_children.clone()));
+            }
+            if let Some(order) = &spec.prim_order {
+                prim_order_out
+                    .entry(dest)
+                    .or_default()
+                    .push((key.clone(), order.clone()));
+            }
+            let index = out.get_mut(&dest).expect("path exists");
+            index.add_source(key.clone());
+            for entry in composed_entries(&spec.fields, &spec.properties) {
+                let key = key.clone().with_spec_path(property_spec_path(
+                    store,
+                    source_view,
+                    &spec.outer_variant_sites,
+                    entry.name(),
+                ));
+                let index = out.get_mut(&dest).expect("path exists");
+                if let Some(property_type) = entry.property_type() {
+                    index.add_property_type(entry.name(), key.clone(), property_type.clone());
+                }
+                pending.push(Opinion {
+                    key,
+                    field: entry.name(),
+                    value: entry.value(),
+                    layer_offset,
+                });
+            }
+        }
+        for mut opinion in pending {
+            if let Some(map) = targets {
+                map.map(store, dest, layer_id, &mut opinion, cycles);
+            }
+            out.get_mut(&dest)
+                .expect("path exists")
+                .add_opinion(opinion);
+        }
+    }
+}
+
+/// How the arc above a relocate node maps the target paths of the
+/// opinions the node brings: onto the arc's destination as its namespace
+/// maps them, the relocate node's own mapping being the identity.
+///
+/// OpenUSD: `_EvalNodeRelocations` adds the relocate arc with an identity
+/// map expression, so only the arcs above it map its opinions' targets
+/// (`pxr/usd/pcp/primIndex.cpp`, `pxr/usd/pcp/targetIndex.cpp`).
+#[derive(Clone, Copy)]
+struct RelocateTargets {
+    /// The kind of the arc.
+    arc: ArcKind,
+    /// The arc's target, in the namespace its specs are authored in.
+    source: PathId,
+    /// The arc's destination prim.
+    dest: PathId,
+    /// What the arc does with a path outside its target.
+    outside: Outside,
+}
+
+impl RelocateTargets {
+    /// The mapping of the nearest arc on `path` above its relocate and
+    /// variant steps, which does `outside` with a path outside its target;
+    /// `None` for the stage's own relocations, whose targets are authored
+    /// in the stage namespace.
+    fn of(path: &[ArcStep], outside: Outside) -> Option<Self> {
+        path.iter()
+            .rev()
+            .filter(|step| !matches!(step.arc_kind, ArcKind::Relocates | ArcKind::Variants))
+            .find_map(|step| match step.target {
+                StepTarget::Namespace {
+                    dest_root,
+                    target_root,
+                } => Some(Self {
+                    arc: step.arc_kind,
+                    source: target_root,
+                    dest: dest_root,
+                    outside,
+                }),
+                _ => None,
+            })
+    }
+
+    /// Maps the target paths of `opinion`, authored in `layer`, of the
+    /// composed prim `prim` (see [`map_arc_targets`]).
+    fn map(
+        self,
+        store: &mut dyn LayerStore,
+        prim: PathId,
+        layer: LayerId,
+        opinion: &mut Opinion,
+        cycles: &mut CycleDetector,
+    ) {
+        let source = store.paths().resolve(self.source).clone();
+        let dest = store.paths().resolve(self.dest).clone();
+        map_arc_targets(
+            store,
+            &mut opinion.value,
+            ArcPathMap {
+                arc: self.arc,
+                source: &source,
+                dest: &dest,
+                inside: Inside::Join,
+                outside: self.outside,
+                relocated: &[],
+            },
+            TargetOwner {
+                prim,
+                property: opinion.field,
+                layer,
+                spec: opinion.key.spec_path.clone(),
+            },
+            cycles,
+        );
+    }
+}
+
+/// Adds to each composed prim at or beneath the stage target of a
+/// relocation of `relocates` whose source it also reaches the ancestral
+/// variant opinions of that source (see
+/// [`add_source_ancestral_variant_specs`]), read from `stack`, the gathered
+/// relocating layer stack, beneath a relocate node under the arcs `parent`.
+///
+/// This serves the stage's own relocations (`parent` empty) and those of
+/// the layer stack an arc reaches, lifted through it (`parent` the arc
+/// path, see [`AncestralArcs::expand_relocation_sources`]); the relocate
+/// node sits beneath the arc's node, so it reads its layers in that node's
+/// expression context. A relocation whose source the arc does not map has
+/// no stage source: its relocate node comes from [`AncestralArcs`].
+fn add_relocated_variant_opinions(
+    store: &mut dyn LayerStore,
+    stack: &LayerStack,
+    relocates: &LiftedSet,
+    parent: &[ArcStep],
+    stage_relocates: &Rc<LiftedSet>,
+    outside: Outside,
+    out: &mut HashMap<PathId, PrimIndex>,
+    prim_order_out: &mut HashMap<PathId, ChildOrderOpinions>,
+    authored_children_out: &mut HashMap<PathId, ChildOrderOpinions>,
+    cycles: &mut CycleDetector,
+) {
+    let targets = RelocateTargets::of(parent, outside);
+    // Stage target → (relocating layer stack, source in its namespace).
+    let by_target: HashMap<PathId, (LayerId, PathId)> = relocates
+        .iter()
+        .filter(|relocate| relocate.stage_source.is_some())
+        .filter_map(|relocate| {
+            Some((
+                relocate.stage_target?,
+                (relocate.layer_stack, relocate.source),
+            ))
+        })
+        .collect();
+    if by_target.is_empty() {
+        return;
+    }
+    let (layer_offset, offset_layers) = parent.last().map_or_else(
+        || (LayerOffset::default(), Rc::from([])),
+        |step| (step.layer_offset, step.offset_layers.clone()),
+    );
+    let mut dests: Vec<PathId> = out.keys().copied().collect();
+    dests.sort_unstable();
+    for path in dests {
+        // The nearest relocation target at or above `path`.
+        let found = {
+            let interner = store.paths();
+            let mut cursor = Some(interner.resolve(path).clone());
+            let mut found = None;
+            while let Some(at) = cursor.filter(|at| at.depth() > 0) {
+                if let Some(&relocate) = interner.lookup(&at).and_then(|id| by_target.get(&id)) {
+                    let rel = interner
+                        .resolve(path)
+                        .strip_prefix(&at)
+                        .expect("an ancestor prefixes its descendant")
+                        .to_vec();
+                    found = Some((relocate, at.depth(), rel));
+                    break;
+                }
+                cursor = at.parent();
+            }
+            found
+        };
+        let Some(((layer_stack, source), target_depth, rel)) = found else {
+            continue;
+        };
+        let namespace_depth = u16::try_from(target_depth).unwrap_or(u16::MAX);
+        let joined = store.paths().resolve(source).join(&rel);
+        let source_view = store.paths_mut().intern(joined);
+        let step = ArcStep {
+            arc_kind: ArcKind::Relocates,
+            layer_stack,
+            target: StepTarget::Namespace {
+                dest_root: path,
+                target_root: source_view,
+            },
+            namespace_depth,
+            sibling_index: 0,
+            implied: false,
+            origin: None,
+            layer_offset,
+            offset_layers: offset_layers.clone(),
+            skips_duplicates: false,
+            relocates: None,
+            ancestral: None,
+            spooky: Rc::from([]),
+        };
+        let mut nodes = ArcNodes::new(ArcParent::nested(parent), step, Rc::clone(stage_relocates));
+        add_source_ancestral_variant_specs(
+            store,
+            stack,
+            &mut nodes,
+            out,
+            path,
+            (source, source_view),
+            layer_offset,
+            targets,
+            authored_children_out,
+            prim_order_out,
+            cycles,
+        );
+    }
+}
+
 fn add_local_and_variant_opinions(
     store: &dyn LayerStore,
     fallbacks: &VariantFallbacks,
@@ -4708,6 +5026,9 @@ struct AncestralArcs<'a> {
     /// `true` for a class arc, whose ancestral arcs add no node for a site
     /// the prim index uses already (see [`Self::used_sites`]).
     class_arc: bool,
+    /// What the arc does with a target path authored outside its target,
+    /// for the opinions its relocate nodes bring (see [`RelocateTargets`]).
+    targets_outside: Outside,
 }
 
 impl AncestralArcs<'_> {
@@ -4962,12 +5283,20 @@ impl AncestralArcs<'_> {
         );
     }
 
-    /// Expands, beneath a relocate node, the arcs of the ancestors of each
-    /// relocation source of the target layer stack that lies outside the
-    /// arc's target while its relocation target lies inside (see
-    /// [`Self::expand_from`]), for the prim the arc maps that target to.
+    /// Adds, beneath relocate nodes, the ancestral opinions of the
+    /// relocation sources of the target layer stack that the arc's walk
+    /// does not bring to their targets.
     ///
-    /// No path the arc maps reaches such a source, so no walk moves its
+    /// For a source inside the arc's target, the walk moves the opinions
+    /// of the arcs above the source, but not the specs the relocating
+    /// layer stack authors at the source inside its ancestors' variant
+    /// branches: [`add_relocated_variant_opinions`] adds those, as for the
+    /// stage's own relocations.
+    ///
+    /// For a source outside the arc's target whose relocation target lies
+    /// inside, it expands the arcs of the source's ancestors (see
+    /// [`Self::expand_from`]) for the prim the arc maps that target to. No
+    /// path the arc maps reaches such a source, so no walk moves its
     /// ancestral opinions to the target: the relocate node brings them, as
     /// OpenUSD adds one wherever a node's site is a relocation target
     /// (`_EvalNodeRelocations` in `pxr/usd/pcp/primIndex.cpp`). The
@@ -4976,7 +5305,7 @@ impl AncestralArcs<'_> {
     ///
     /// Spec: AOUSD Core §10.3.2.6 ("the composition algorithm is executed
     /// with the layer stack and the entry's source path").
-    fn expand_outside_sources(
+    fn expand_relocation_sources(
         &self,
         store: &mut dyn LayerStore,
         nodes: &ArcNodes,
@@ -4991,6 +5320,21 @@ impl AncestralArcs<'_> {
         let Some(own) = nodes.step().relocates.clone() else {
             return;
         };
+        // The sources the arc maps: their ancestral opinions reach the
+        // target through the arc, all but those of the variant branches
+        // of the relocating layer stack, which the relocate node brings.
+        add_relocated_variant_opinions(
+            store,
+            self.data_stack,
+            &own,
+            &nodes.path,
+            &nodes.stage_relocates,
+            self.targets_outside,
+            out,
+            prim_order_out,
+            authored_children_out,
+            cycles,
+        );
         for relocate in own.iter() {
             let (Some(target), Some(dest)) = (relocate.target, relocate.stage_target) else {
                 continue;
@@ -5094,11 +5438,15 @@ impl AncestralArcs<'_> {
             // The ancestor's depth, measured in the destination's namespace
             // as the depth of the arcs authored at the target is: the arcs
             // of ancestors further above than the destination is deep
-            // share depth 0.
-            let namespace_depth = u16::try_from(
-                (dest_depth + ancestor_path.depth()).saturating_sub(target_path.depth()),
-            )
-            .unwrap_or(u16::MAX);
+            // share depth 0. Beneath a relocate node, which composes the
+            // relocation source's index in its own namespace, it is the
+            // ancestor's depth there (`_EvalNodeRelocations`).
+            let depth = if nodes.step().arc_kind == ArcKind::Relocates {
+                ancestor_path.depth()
+            } else {
+                (dest_depth + ancestor_path.depth()).saturating_sub(target_path.depth())
+            };
+            let namespace_depth = u16::try_from(depth).unwrap_or(u16::MAX);
             let arcs = self.arcs_of(store, nodes, out, ancestor, cycles);
             let mapped = |store: &mut dyn LayerStore, path: PathId| {
                 let joined = store.paths().resolve(path).join(&rel);
@@ -5262,11 +5610,45 @@ impl AncestralArcs<'_> {
             ancestral: None,
             spooky: Rc::from([]),
         };
-        let relocate_nodes = ArcNodes::new(
+        let mut relocate_nodes = ArcNodes::new(
             ArcParent::nested(&nodes.path),
             step,
             Rc::clone(&nodes.stage_relocates),
         );
+        // The destination and the prims beneath it, each reading the
+        // source extended as far.
+        let targets = RelocateTargets::of(&nodes.path, self.targets_outside);
+        let mut dests: Vec<(PathId, PathId)> = alloc::vec![(self.dest_root, source_view)];
+        {
+            let dest_path = store.paths().resolve(self.dest_root).clone();
+            let mut beneath: Vec<(PathId, Vec<TokenId>)> = out
+                .keys()
+                .filter_map(|&prim| {
+                    let rel = store.paths().resolve(prim).strip_prefix(&dest_path)?;
+                    (!rel.is_empty()).then(|| (prim, rel.to_vec()))
+                })
+                .collect();
+            beneath.sort_unstable();
+            for (prim, rel) in beneath {
+                let joined = store.paths().resolve(source_view).join(&rel);
+                dests.push((prim, store.paths_mut().intern(joined)));
+            }
+        }
+        for (dest, view) in dests {
+            add_source_ancestral_variant_specs(
+                store,
+                self.data_stack,
+                &mut relocate_nodes,
+                out,
+                dest,
+                (source, view),
+                self.layer_offset,
+                targets,
+                authored_children_out,
+                prim_order_out,
+                cycles,
+            );
+        }
         AncestralArcs {
             target: source_view,
             ..*self
@@ -6035,6 +6417,7 @@ fn add_inherit_edge_opinions(
         layer_offset: base_offset,
         ref_remap,
         class_arc: true,
+        targets_outside: class_outside,
     }
     .expand(
         store,
@@ -6839,6 +7222,7 @@ fn add_reference_edge_opinions(
         layer_offset: reference.layer_offset,
         ref_remap: Some((&dest_root_path, &target_root)),
         class_arc: false,
+        targets_outside,
     };
     ancestral.expand(
         store,
@@ -6851,7 +7235,7 @@ fn add_reference_edge_opinions(
         cycles,
         deps.as_deref_mut(),
     );
-    ancestral.expand_outside_sources(
+    ancestral.expand_relocation_sources(
         store,
         &nodes,
         out,
@@ -7514,6 +7898,7 @@ fn add_payload_edge_opinions(
         layer_offset: reference.layer_offset,
         ref_remap: Some((&dest_root_path, &target_root)),
         class_arc: false,
+        targets_outside,
     };
     ancestral.expand(
         store,
@@ -7526,7 +7911,7 @@ fn add_payload_edge_opinions(
         cycles,
         deps.as_deref_mut(),
     );
-    ancestral.expand_outside_sources(
+    ancestral.expand_relocation_sources(
         store,
         &nodes,
         out,
@@ -8301,6 +8686,7 @@ fn add_specializes_edge_opinions(
         layer_offset: base_offset,
         ref_remap: None,
         class_arc: true,
+        targets_outside,
     }
     .expand(
         store,

@@ -1,0 +1,41 @@
+#usda 1.0
+(
+    relocates = {
+        </Kiln/Chamber/Tray>: </Kiln/Shelf>
+    }
+)
+
+def "Kiln" (
+    references = @./clay.usda@</Clay>
+)
+{
+    over "Chamber" (
+        references = @./glaze.usda@</Glaze>
+        variantSets = "heat"
+        variants = {
+            string heat = "high"
+        }
+    )
+    {
+        variantSet "heat" = {
+            "high" {
+                over "Tray"
+                {
+                    int temp = 7
+                    rel holds = </Kiln/Chamber/Tray/Pot>
+
+                    over "Pot"
+                    {
+                        int temp = 7
+                    }
+                }
+            }
+            "low" {
+                over "Tray"
+                {
+                    int temp = 1
+                }
+            }
+        }
+    }
+}

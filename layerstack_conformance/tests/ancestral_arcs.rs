@@ -34,6 +34,12 @@
 //!   layer stack, each arc with its own offset and scale, and one of the
 //!   sampled attributes authored in a sublayer with an offset: every
 //!   transform applies once (AOUSD Core §12.3.2.1).
+//! - `/Hut/Loft` references `loft.usda /Hut`, which has the same name as
+//!   the stage's `/Hut`. Its target paths map once, into `/Hut/Loft`,
+//!   whichever arc brings them: the reference; a class the target
+//!   inherits; a class a child specializes; a prim a child references
+//!   internally. A path beneath the internal reference's destination does
+//!   not map back through it, and is dropped and reported.
 //!
 //! Spec: AOUSD Core §10.2 and §10.4; OpenUSD `_AddArc` with
 //! `includeAncestralOpinions` and `_BuildInitialPrimIndexFromAncestor` in
@@ -43,7 +49,7 @@
 
 use std::collections::BTreeMap;
 
-use layerstack::{InterpolationType, Stage, StageOptions, Value};
+use layerstack::{CompositionError, InterpolationType, Stage, StageOptions, Value};
 use layerstack_conformance::{
     usda_real::{LoadedStage, load_entry_usda},
     workspace_root,
@@ -60,6 +66,8 @@ struct Oracle {
     values: BTreeMap<String, i32>,
     /// `(time, value)` probes of each time-sampled attribute.
     samples: BTreeMap<String, Vec<(f64, f64)>>,
+    /// The target paths of each relationship and connected attribute.
+    targets: BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Deserialize)]
@@ -163,6 +171,51 @@ fn values_match_openusd() {
         "values differ from OpenUSD:\n{}",
         mismatches.join("\n")
     );
+}
+
+#[test]
+fn targets_match_openusd() {
+    // Spec: AOUSD Core §12.4 (target paths map through the arcs of their
+    // opinions, once).
+    let oracle = oracle();
+    let (mut loaded, stage) = compose(&oracle);
+    assert!(!oracle.targets.is_empty(), "the oracle records targets");
+    let mut mismatches = Vec::new();
+    for (property, expected) in &oracle.targets {
+        let path = loaded.store.property_path(property);
+        let targets: Vec<String> = stage
+            .resolve_target_list_path(path)
+            .map(|resolved| resolved.value)
+            .unwrap_or_default()
+            .iter()
+            .map(|target| target.display(&loaded.store.paths, &loaded.store.tokens))
+            .collect();
+        if &targets != expected {
+            mismatches.push(format!(
+                "{property}: expected {expected:?}, got {targets:?}"
+            ));
+        }
+    }
+    assert!(
+        mismatches.is_empty(),
+        "targets differ from OpenUSD:\n{}",
+        mismatches.join("\n")
+    );
+
+    // The one path OpenUSD drops is reported.
+    let shelf = loaded.store.path("/Hut/Loft/Shelf");
+    let stray = loaded.store.tokens.intern("stray");
+    let dropped: Vec<_> = stage
+        .composition_errors()
+        .iter()
+        .filter_map(|error| match error {
+            CompositionError::InvalidExternalTargetPath(error) => {
+                Some((error.prim, error.property))
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(dropped, [(shelf, stray)]);
 }
 
 #[test]

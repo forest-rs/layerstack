@@ -1,0 +1,62 @@
+#usda 1.0
+
+# Every target path below maps once, into `/Hut/Loft`'s namespace: through
+# the reference alone, or first through the arc that brings its opinion
+# (a class it inherits, a specialized class, an internal reference), then
+# through the reference. `stray` lies beneath `Shelf`, the internal
+# reference's destination, which that reference does not map back:
+# `Shelf` drops it, `_proto_Jar` keeps it.
+def "Hut" (
+    prepend inherits = </_class_Beam>
+)
+{
+    rel door = </Hut/Wick>
+
+    def "Wick"
+    {
+        int flame = 1
+    }
+
+    def "Shelf" (
+        references = </Hut/_proto_Jar>
+    )
+    {
+    }
+
+    def "Stool" (
+        specializes = </Hut/_base_Stool>
+    )
+    {
+    }
+
+    class "_proto_Jar"
+    {
+        rel lid = </Hut/_proto_Jar/Cap>
+        rel wick = </Hut/Wick>
+        rel stray = </Hut/Shelf/Cap>
+
+        def "Cap"
+        {
+        }
+    }
+
+    class "_base_Stool"
+    {
+        rel seat = </Hut/_base_Stool/Cushion>
+        rel wick = </Hut/Wick>
+
+        def "Cushion"
+        {
+        }
+    }
+}
+
+class "_class_Beam"
+{
+    rel beam = </_class_Beam/Ray>
+
+    def "Ray"
+    {
+        int width = 1
+    }
+}

@@ -1,0 +1,9 @@
+#usda 1.0
+
+# AOUSD Core 13.3.2.3 and 13.3.2.4.
+def Bar "myFoo" (
+    apiSchemas = ["FooBar"]
+)
+{
+    double myFoo:prop = 5
+}

@@ -1,0 +1,64 @@
+#usda 1.0
+
+# No type: only the applied schema defines properties.
+def "Typeless" (
+    prepend apiSchemas = ["LabelAPI"]
+)
+{
+}
+
+# An unknown type name is typeless (AOUSD Core 13.3.1); applied schemas
+# still apply.
+def Mystery "Unknown" (
+    prepend apiSchemas = ["StyleAPI"]
+)
+{
+    custom double extra = 1
+}
+
+# An abstract type name is typeless too.
+def Shape "AbstractTyped"
+{
+}
+
+# A typed schema with built-ins, overrides and auto-applies.
+def Tile "Tile"
+{
+}
+
+# Applied schemas after the type's: an override schema, multiple-apply
+# instances (one with an instance name containing `:`), a repeat of a
+# built-in, an unknown schema, a multiple-apply schema without an instance
+# and a single-apply schema with one. Authored values shadow fallbacks; a
+# default block hides one.
+def Panel "Panel" (
+    prepend apiSchemas = ["OverrideAPI", "SlotAPI:left:upper", "SlotAPI:right", "LabelAPI", "UnknownAPI", "SlotAPI", "LabelAPI:bad"]
+)
+{
+    double depth = None
+    int slot:right:index = 7
+    float width = 5
+}
+
+# `apiSchemas` composes as a list op: the reference's list, less what this
+# prim deletes, plus what it appends.
+def "Composed" (
+    delete apiSchemas = ["OverrideAPI"]
+    append apiSchemas = ["PinAPI:tail"]
+    references = </Panel>
+)
+{
+}
+
+# An inclusion cycle: each schema includes the other once.
+def "CycleFromOne" (
+    prepend apiSchemas = ["CycleOneAPI"]
+)
+{
+}
+
+def "CycleFromTwo" (
+    prepend apiSchemas = ["CycleTwoAPI"]
+)
+{
+}

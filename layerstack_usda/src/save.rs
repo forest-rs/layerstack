@@ -72,10 +72,9 @@
 //!   is not recorded, such as an empty array in a dictionary);
 //! - [`SaveError::Invalid`]: a layer the file formats cannot hold as it
 //!   stands, such as a prim spec that no parent or variant lists among its
-//!   children, a variant whose enclosing branches the layer does not
-//!   hold, an attribute without a type, a relationship with time samples, or a
-//!   sublayer or arc into another layer built from a layer id alone, with
-//!   no authored asset path to write;
+//!   children, an attribute without a type, a relationship with time
+//!   samples, or a sublayer or arc into another layer built from a layer id
+//!   alone, with no authored asset path to write;
 //! - [`SaveError::Document`]: what the writers' shared validation rejects
 //!   (invalid identifiers, a `defaultPrim` that names no prim of the layer, keys
 //!   whose USDA syntax the writer does not produce, sample times that are not
@@ -96,7 +95,8 @@ use core::fmt;
 
 use layerstack::doc::{
     FieldEntry, FieldValue, Layer, LayerOffset as LayerLayerOffset, PrimSpec,
-    Reference as LayerReference, ReferenceTarget, Specifier, Value as LayerValue, VariantSpec,
+    Reference as LayerReference, ReferenceTarget, Specifier, Value as LayerValue, VariantSetSpec,
+    VariantSpec,
 };
 use layerstack::interner::{TokenId, TokenInterner};
 use layerstack::listop::ListOp as LayerListOp;
@@ -245,10 +245,6 @@ pub enum Invalid {
     /// A sublayer, or a reference or payload into another layer, records no
     /// authored asset path to write (it was built from a layer id alone).
     ArcWithoutAsset,
-    /// A variant's branch context ([`VariantSpec::outer_variant_sites`])
-    /// names no branch of the layer, so it has no place in the written
-    /// namespace.
-    UnplacedVariant,
 }
 
 impl fmt::Display for Invalid {
@@ -261,7 +257,6 @@ impl fmt::Display for Invalid {
             Self::RelationshipValue => "relationship holds a type or values",
             Self::PseudoRootOpinions => "pseudo-root spec holds prim opinions",
             Self::ArcWithoutAsset => "arc to another layer has no authored asset path",
-            Self::UnplacedVariant => "variant is not inside a branch of the layer",
         })
     }
 }
@@ -470,31 +465,15 @@ impl Lowering<'_> {
             prim.children.push(self.prim(layer, here, child, visited)?);
         }
 
-        let mut host = Host {
+        (prim.variant_set_names, prim.variant_sets) = self.variant_sets(
+            layer,
             id,
-            spec,
-            placed: HashSet::new(),
-        };
-        (prim.variant_set_names, prim.variant_sets) =
-            self.variant_sets(layer, &mut host, here, true, visited)?;
-        // Every variant of the prim spec must sit in a branch written above.
-        let mut unplaced: Vec<String> = spec
-            .variant_sets
-            .iter()
-            .flat_map(|(&set, spec)| spec.variants.keys().map(move |&variant| (set, variant)))
-            .filter(|site| !host.placed.contains(site))
-            .map(|(set, variant)| {
-                branch_display(
-                    &shown,
-                    self.tokens.resolve(set),
-                    self.tokens.resolve(variant),
-                )
-            })
-            .collect();
-        unplaced.sort();
-        if let Some(path) = unplaced.into_iter().next() {
-            return invalid(path, Invalid::UnplacedVariant);
-        }
+            &spec.variant_sets,
+            &spec.variant_set_order,
+            &spec.deleted_variant_sets,
+            here,
+            visited,
+        )?;
         Ok(prim)
     }
 
@@ -545,35 +524,31 @@ impl Lowering<'_> {
 
     // ── Variants ────────────────────────────────────────────────────
 
-    /// The variant sets of `host` whose variants sit directly in `owner`:
-    /// the prim spec itself (`top`), or one of its variants, for the sets
-    /// nested there. Returns the `variantSets` list op naming them, with,
-    /// on the prim spec, the sets it declares without variants, and the
-    /// sets.
+    /// The variant sets `sets`, declared in `order`, of the prim at `host`,
+    /// held by `owner`: the prim spec, or one of its variant specs for the
+    /// sets nested there. Returns the `variantSets` list op naming every
+    /// declared set, those without variants included, and the sets.
     ///
-    /// The layer model keeps every variant set of a prim spec on it, nested
-    /// ones included, each variant recording the branches enclosing it
-    /// ([`VariantSpec::outer_variant_sites`]); a variant goes to the owner
-    /// whose branch context that is. Sets are written in the prim spec's
-    /// `variantSets` order, then by name, and variants by name, as
-    /// `Sdf_WriteVariantSet` sorts them. The list op is written as
-    /// `prepend`, which adds the sets to weaker opinions as composition of
-    /// the layer model does.
+    /// Sets are written in `variantSets` order, then by name, and variants
+    /// by name, as `Sdf_WriteVariantSet` sorts them. The list op is written
+    /// as `prepend`, which adds the sets to weaker opinions as composition
+    /// of the layer model does, with the set names `deleted` removes (a
+    /// prim spec's [`PrimSpec::deleted_variant_sets`]).
     ///
     /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
     /// specs), §7.6.2.3.5 (`variantSetNames`), §7.6.6–§7.6.7.
     fn variant_sets(
         &self,
         layer: &Layer,
-        host: &mut Host<'_>,
+        host: PathId,
+        sets: &HashMap<TokenId, VariantSetSpec>,
+        order: &[TokenId],
+        deleted: &[TokenId],
         owner: Parent<'_>,
-        top: bool,
         visited: &mut Visited,
     ) -> Result<(Option<ListOp<String>>, Vec<VariantSet>), SaveError> {
-        let spec = host.spec;
-        let mut order: Vec<TokenId> = spec.variant_set_order.clone();
-        let mut unordered: Vec<TokenId> = spec
-            .variant_sets
+        let mut order: Vec<TokenId> = order.to_vec();
+        let mut unordered: Vec<TokenId> = sets
             .keys()
             .copied()
             .filter(|set| !order.contains(set))
@@ -582,57 +557,40 @@ impl Lowering<'_> {
         order.extend(unordered);
 
         let mut names = Vec::new();
-        let mut sets = Vec::new();
+        let mut written = Vec::new();
         for set in order {
-            let mut here: Vec<(TokenId, &VariantSpec)> = spec
-                .variant_sets
+            names.push(self.name(set));
+            let mut here: Vec<(TokenId, &VariantSpec)> = sets
                 .get(&set)
                 .into_iter()
                 .flat_map(|set| &set.variants)
-                .filter(|(_, variant)| variant.outer_variant_sites == owner.sites)
                 .map(|(&name, variant)| (name, variant))
                 .collect();
             if here.is_empty() {
-                // A set declared without variants belongs to the prim spec.
-                let declared_only = spec
-                    .variant_sets
-                    .get(&set)
-                    .is_none_or(|set| set.variants.is_empty());
-                if top && declared_only {
-                    names.push(self.name(set));
-                }
                 continue;
             }
             here.sort_by(|a, b| self.tokens.resolve(a.0).cmp(self.tokens.resolve(b.0)));
             let mut variants = Vec::with_capacity(here.len());
             for (name, variant) in here {
-                host.placed.insert((set, name));
                 variants.push(self.variant(layer, host, owner, set, name, variant, visited)?);
             }
-            names.push(self.name(set));
-            sets.push(VariantSet {
+            written.push(VariantSet {
                 name: self.name(set),
                 variants,
             });
         }
-        let deleted: Vec<String> = if top {
-            spec.deleted_variant_sets
-                .iter()
-                .map(|set| self.name(*set))
-                .collect()
-        } else {
-            Vec::new()
-        };
+        let deleted: Vec<String> = deleted.iter().map(|set| self.name(*set)).collect();
         let names = (!names.is_empty() || !deleted.is_empty()).then(|| ListOp {
             deleted,
             ..ListOp::prepend(names)
         });
-        Ok((names, sets))
+        Ok((names, written))
     }
 
-    /// Lowers one variant of `host` in `owner` to the prim spec it holds:
-    /// its metadata, arcs, selections, properties, child prims (the prim
-    /// specs the layer keeps in this branch) and nested variant sets.
+    /// Lowers one variant of the prim at `host`, held by `owner`, to the
+    /// prim spec it holds: its metadata, arcs, selections, properties,
+    /// child prims (the prim specs the layer keeps in this branch) and the
+    /// variant sets nested in it.
     ///
     /// Spec: AOUSD Core §7.3.6, §7.6.7 (variant specs), §10.3.2.5.
     #[allow(
@@ -642,7 +600,7 @@ impl Lowering<'_> {
     fn variant(
         &self,
         layer: &Layer,
-        host: &mut Host<'_>,
+        host: PathId,
         owner: Parent<'_>,
         set: TokenId,
         name: TokenId,
@@ -656,7 +614,7 @@ impl Lowering<'_> {
         );
         let mut sites = owner.sites.to_vec();
         sites.push(VariantSelectionSite {
-            host_path: host.id,
+            host_path: host,
             set,
             variant: name,
         });
@@ -683,8 +641,15 @@ impl Lowering<'_> {
             prim.children
                 .push(self.prim(layer, branch, child, visited)?);
         }
-        (prim.variant_set_names, prim.variant_sets) =
-            self.variant_sets(layer, host, branch, false, visited)?;
+        (prim.variant_set_names, prim.variant_sets) = self.variant_sets(
+            layer,
+            host,
+            &variant.variant_sets,
+            &variant.variant_set_order,
+            &[],
+            branch,
+            visited,
+        )?;
         Ok(prim)
     }
 
@@ -997,14 +962,6 @@ struct Parent<'a> {
     path: &'a Path,
     shown: &'a str,
     sites: &'a [VariantSelectionSite],
-}
-
-/// The prim spec whose variant sets are being written, and the variants
-/// written so far (set, variant).
-struct Host<'a> {
-    id: PathId,
-    spec: &'a PrimSpec,
-    placed: HashSet<(TokenId, TokenId)>,
 }
 
 /// The arc list ops of a prim spec or variant.

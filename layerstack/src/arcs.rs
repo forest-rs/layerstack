@@ -422,30 +422,15 @@ impl ArcAuthoring<'_> {
                 }
             }
         }
-        let mut selected: Vec<(TokenId, TokenId)> = selections
-            .iter()
-            .map(|(set, variant)| (*set, *variant))
-            .collect();
-        selected.sort_unstable();
         for (index, layer) in layers() {
             for spec in variant_host_specs(store, fallbacks, stack, layer, prim, scope) {
-                for &(set, variant) in &selected {
-                    let Some(branch) = spec
-                        .variant_sets
-                        .get(&set)
-                        .and_then(|set_spec| set_spec.variants.get(&variant))
-                    else {
-                        continue;
-                    };
-                    if adds(branch_arcs(branch), layer.id) {
-                        let mut sites = branch.outer_variant_sites.clone();
-                        sites.push(VariantSelectionSite {
-                            host_path: prim,
-                            set,
-                            variant,
-                        });
-                        return (sites, Some(index));
-                    }
+                let mut branches: Vec<_> = spec.selected_variant_branches(selections).collect();
+                branches.sort_unstable_by(|a, b| a.chain().cmp(b.chain()));
+                if let Some(branch) = branches
+                    .iter()
+                    .find(|branch| adds(branch_arcs(branch.spec), layer.id))
+                {
+                    return (branch.sites(&spec.outer_variant_sites, prim), Some(index));
                 }
             }
         }
@@ -608,9 +593,10 @@ fn finish_arc_list<T: Clone + Eq>(
     let parent = parent_of(store, prim);
     for layer in stack.layers.iter().filter_map(|id| store.layer(*id)) {
         for spec in layer.prim_specs(prim) {
-            for set_spec in spec.variant_sets.values() {
-                ops.extend(set_spec.variants.values().map(|v| edit(own(v), layer.id)));
-            }
+            ops.extend(
+                spec.variant_branches()
+                    .map(|branch| edit(own(branch.spec), layer.id)),
+            );
         }
         if let Some(parent) = parent {
             ops.extend(
@@ -704,14 +690,10 @@ pub(crate) fn resolve_inherits_for_prim_in(
             continue;
         };
         for spec in variant_host_specs(store, fallbacks, local_stack, layer, prim, scope) {
-            for (set_tok, selected_variant) in selections {
-                if let Some(set_spec) = spec.variant_sets.get(set_tok)
-                    && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                {
-                    let vi = &variant_spec.inherits;
-                    if vi.explicit.is_some() || !vi.prepend.is_empty() || !vi.append.is_empty() {
-                        ops.push(vi.clone());
-                    }
+            for branch in spec.selected_variant_branches(selections) {
+                let vi = &branch.spec.inherits;
+                if vi.explicit.is_some() || !vi.prepend.is_empty() || !vi.append.is_empty() {
+                    ops.push(vi.clone());
                 }
             }
         }
@@ -968,7 +950,6 @@ pub(crate) fn resolve_references_for_prim_selected(
         .collect();
     let branches = selected_branch_arcs(
         &specs,
-        prim,
         selections,
         |branch| &branch.references,
         |op, layer| anchor_internal_arcs(store, op, layer, anchor),
@@ -1072,14 +1053,10 @@ pub(crate) fn resolve_variant_references_in(
             continue;
         };
         for spec in variant_host_specs(store, fallbacks, data_stack, layer, prim, scope) {
-            for (set_tok, selected_variant) in selections {
-                if let Some(set_spec) = spec.variant_sets.get(set_tok)
-                    && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                {
-                    let vr = &variant_spec.references;
-                    if vr.explicit.is_some() || !vr.prepend.is_empty() || !vr.append.is_empty() {
-                        ops.push(anchor_internal_arcs(store, vr, *layer_id, anchor));
-                    }
+            for branch in spec.selected_variant_branches(selections) {
+                let vr = &branch.spec.references;
+                if vr.explicit.is_some() || !vr.prepend.is_empty() || !vr.append.is_empty() {
+                    ops.push(anchor_internal_arcs(store, vr, *layer_id, anchor));
                 }
             }
         }
@@ -1105,14 +1082,10 @@ pub(crate) fn resolve_branch_payloads_in(
             continue;
         };
         for spec in variant_host_specs(store, fallbacks, data_stack, layer, prim, scope) {
-            for (set_tok, selected_variant) in selections {
-                if let Some(set_spec) = spec.variant_sets.get(set_tok)
-                    && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                {
-                    let vp = &variant_spec.payloads;
-                    if vp.explicit.is_some() || !vp.prepend.is_empty() || !vp.append.is_empty() {
-                        ops.push(anchor_internal_arcs(store, vp, *layer_id, anchor));
-                    }
+            for branch in spec.selected_variant_branches(selections) {
+                let vp = &branch.spec.payloads;
+                if vp.explicit.is_some() || !vp.prepend.is_empty() || !vp.append.is_empty() {
+                    ops.push(anchor_internal_arcs(store, vp, *layer_id, anchor));
                 }
             }
         }
@@ -1183,16 +1156,11 @@ pub(crate) fn resolve_variant_child_references(
                     continue;
                 };
                 let context = SiteContext::Chain(selections_stack.chain_of(*layer_id));
-                for (set, selected_variant) in &parent_selections {
-                    if let Some(set_spec) = spec.variant_sets.get(set)
-                        && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                    {
-                        let inner =
-                            site_selections(store, &variant_spec.variant_selections, context);
-                        for (inner_set, inner_variant) in inner.iter() {
-                            if !parent_selections.contains_key(inner_set) {
-                                new_sels.entry(*inner_set).or_insert(*inner_variant);
-                            }
+                for branch in spec.selected_variant_branches(&parent_selections) {
+                    let inner = site_selections(store, &branch.spec.variant_selections, context);
+                    for (inner_set, inner_variant) in inner.iter() {
+                        if !parent_selections.contains_key(inner_set) {
+                            new_sels.entry(*inner_set).or_insert(*inner_variant);
                         }
                     }
                 }
@@ -1295,16 +1263,14 @@ pub(crate) fn collect_all_variant_branch_references(
             prim,
             SelectionScope::Discover,
         ) {
-            for (_set_tok, set_spec) in &spec.variant_sets {
-                for (_variant_tok, variant_spec) in &set_spec.variants {
-                    let vr = &variant_spec.references;
-                    if vr.explicit.is_some() || !vr.prepend.is_empty() || !vr.append.is_empty() {
-                        let refs = resolve_list_chain::<Reference>(
-                            &[],
-                            [anchor_internal_arcs(store, vr, *layer_id, anchor)],
-                        );
-                        all_refs.extend(refs);
-                    }
+            for branch in spec.variant_branches() {
+                let vr = &branch.spec.references;
+                if vr.explicit.is_some() || !vr.prepend.is_empty() || !vr.append.is_empty() {
+                    let refs = resolve_list_chain::<Reference>(
+                        &[],
+                        [anchor_internal_arcs(store, vr, *layer_id, anchor)],
+                    );
+                    all_refs.extend(refs);
                 }
             }
         }
@@ -1338,7 +1304,6 @@ pub(crate) fn resolve_variant_branch_payloads(
             .collect();
         for payload in selected_branch_arcs(
             &specs,
-            check_path,
             selections,
             |branch| &branch.payloads,
             |op, layer| anchor_internal_arcs(store, op, layer, anchor),
@@ -1354,70 +1319,78 @@ pub(crate) fn resolve_variant_branch_payloads(
 /// The strength order of the variant nodes beneath one node of a prim
 /// index, from the specs of that node's layer stack.
 ///
-/// Each selected branch is a variant node of its own: branches rank by
-/// node, in `variantSets` order across the layer stack (the sets no layer
-/// names last, by token), with a set nested in a branch beneath it. Only
-/// the specs of one node rank by layer, so a weaker layer's branch of an
-/// earlier set is stronger than a stronger layer's branch of a later set.
+/// Each selected branch is a variant node of its own: the branches of the
+/// sets declared at one spec (the prim spec, or a variant spec for the sets
+/// nested in it) rank by node, in `variantSets` order across the layer
+/// stack (the sets no layer names last, by token), and a set nested in a
+/// branch ranks beneath it. Only the specs of one node rank by layer, so a
+/// weaker layer's branch of an earlier set is stronger than a stronger
+/// layer's branch of a later set.
 ///
 /// Spec: AOUSD Core §10.4 (LIVERPS), §10.3.2.5 (variants). OpenUSD adds a
 /// variant arc per set beneath the node declaring it, with the set's index
-/// as its sibling number (`_AddVariantArc` and `Task::PriorityOrder` in
-/// `pxr/usd/pcp/primIndex.cpp`), and ranks sibling arcs of one type by that
-/// number (`PcpCompareSiblingNodeStrength` in
-/// `pxr/usd/pcp/strengthOrdering.cpp`).
-pub(crate) struct VariantNodeOrder {
-    /// The node's variant sets, strongest first.
-    sets: Vec<TokenId>,
+/// in that node's `variantSetNames` as its sibling number (`_AddVariantArc`
+/// and `Task::PriorityOrder` in `pxr/usd/pcp/primIndex.cpp`), and ranks
+/// sibling arcs of one type by that number (`PcpCompareSiblingNodeStrength`
+/// in `pxr/usd/pcp/strengthOrdering.cpp`).
+pub(crate) struct VariantNodeOrder<'s> {
+    /// The node's prim specs, stronger layers first.
+    specs: Vec<&'s PrimSpec>,
 }
 
-impl VariantNodeOrder {
+impl<'s> VariantNodeOrder<'s> {
     /// The order of the variant nodes of the node whose layer stack holds
     /// `specs`, stronger layers first.
-    pub(crate) fn new<'s>(specs: impl IntoIterator<Item = &'s PrimSpec> + Clone) -> Self {
+    pub(crate) fn new(specs: impl IntoIterator<Item = &'s PrimSpec>) -> Self {
+        Self {
+            specs: specs.into_iter().collect(),
+        }
+    }
+
+    /// The variant sets declared at `enclosing` (the branches of the prim
+    /// enclosing them, outermost first), strongest first.
+    fn sets_at(&self, enclosing: &[(TokenId, TokenId)]) -> Vec<TokenId> {
+        let declared = || {
+            self.specs
+                .iter()
+                .filter_map(|spec| spec.variant_sets_in(enclosing))
+        };
         let mut sets: Vec<TokenId> = Vec::new();
-        for spec in specs.clone() {
-            for set in &spec.variant_set_order {
+        for (_, order) in declared() {
+            for set in order {
                 if !sets.contains(set) {
                     sets.push(*set);
                 }
             }
         }
-        let mut unordered: Vec<TokenId> = specs
-            .into_iter()
-            .flat_map(|spec| spec.variant_sets.keys().copied())
+        let mut unordered: Vec<TokenId> = declared()
+            .flat_map(|(sets, _)| sets.keys().copied())
             .filter(|set| !sets.contains(set))
             .collect();
         unordered.sort_unstable();
         unordered.dedup();
         sets.extend(unordered);
-        Self { sets }
+        sets
     }
 
-    /// The rank of the variant node of the branch `branch` of the set `set`
-    /// on the prim `host`: the ranks of the sets it lies in, outermost
-    /// first. A branch ranks after the branches it is nested in and before
-    /// the next set's.
-    pub(crate) fn rank(&self, host: PathId, set: TokenId, branch: &VariantSpec) -> Vec<usize> {
-        let position = |set: TokenId| {
-            self.sets
-                .iter()
-                .position(|s| *s == set)
-                .unwrap_or(self.sets.len())
-        };
-        branch
-            .outer_variant_sites
-            .iter()
-            .filter(|site| site.host_path == host)
-            .map(|site| position(site.set))
-            .chain([position(set)])
+    /// The rank of the variant node of the branch whose path on the prim
+    /// is `chain` (outermost first): the rank of each set on the way, among
+    /// the sets declared where it is. A branch ranks after the branches it
+    /// is nested in and before the next set's.
+    pub(crate) fn rank(&self, chain: &[(TokenId, TokenId)]) -> Vec<usize> {
+        (0..chain.len())
+            .map(|level| {
+                let sets = self.sets_at(&chain[..level]);
+                let set = chain[level].0;
+                sets.iter().position(|s| *s == set).unwrap_or(sets.len())
+            })
             .collect()
     }
 }
 
 /// The arcs `arcs` authored on the branches `selections` selects of the
-/// specs `specs` of the prim `host`, stronger layers first, each with the
-/// layer authoring it.
+/// specs `specs` of one prim, stronger layers first, each with the layer
+/// authoring it.
 ///
 /// Each branch is its own variant node, so each composes its own list
 /// across the layer stack, and the lists follow in node order
@@ -1430,37 +1403,31 @@ impl VariantNodeOrder {
 /// `pxr/usd/pcp/primIndex.cpp`).
 fn selected_branch_arcs<T: Clone + Eq>(
     specs: &[(LayerId, &PrimSpec)],
-    host: PathId,
     selections: &HashMap<TokenId, TokenId>,
     arcs: fn(&VariantSpec) -> &ListOp<T>,
     edit: impl Fn(&ListOp<T>, LayerId) -> ListOp<T>,
 ) -> Vec<T> {
     let order = VariantNodeOrder::new(specs.iter().map(|(_, spec)| *spec));
-    let mut nodes: Vec<(Vec<usize>, TokenId, Vec<ListOp<T>>)> = Vec::new();
+    // Each variant node by its path on the prim.
+    type Chain = Vec<(TokenId, TokenId)>;
+    let mut nodes: Vec<(Chain, Vec<ListOp<T>>)> = Vec::new();
     for (layer, spec) in specs {
-        for (set, variant) in selections {
-            let Some(branch) = spec
-                .variant_sets
-                .get(set)
-                .and_then(|set_spec| set_spec.variants.get(variant))
-            else {
-                continue;
-            };
-            let list = arcs(branch);
+        for branch in spec.selected_variant_branches(selections) {
+            let list = arcs(branch.spec);
             if list.explicit.is_none() && list.prepend.is_empty() && list.append.is_empty() {
                 continue;
             }
-            let rank = order.rank(host, *set, branch);
+            let chain: Chain = branch.chain().collect();
             let op = edit(list, *layer);
-            match nodes.iter_mut().find(|(r, s, _)| *r == rank && s == set) {
-                Some((_, _, ops)) => ops.push(op),
-                None => nodes.push((rank, *set, alloc::vec![op])),
+            match nodes.iter_mut().find(|(c, _)| *c == chain) {
+                Some((_, ops)) => ops.push(op),
+                None => nodes.push((chain, alloc::vec![op])),
             }
         }
     }
-    nodes.sort_by(|a, b| a.0.cmp(&b.0));
+    nodes.sort_by_cached_key(|(chain, _)| order.rank(chain));
     let mut all: Vec<T> = Vec::new();
-    for (_, _, ops) in nodes {
+    for (_, ops) in nodes {
         for item in resolve_list_chain::<T>(&[], ops) {
             if !all.contains(&item) {
                 all.push(item);
@@ -1494,16 +1461,14 @@ pub(crate) fn collect_all_variant_branch_payloads(
             prim,
             SelectionScope::Discover,
         ) {
-            for (_set_tok, set_spec) in &spec.variant_sets {
-                for (_variant_tok, variant_spec) in &set_spec.variants {
-                    let vp = &variant_spec.payloads;
-                    if vp.explicit.is_some() || !vp.prepend.is_empty() || !vp.append.is_empty() {
-                        let payloads = resolve_list_chain::<Reference>(
-                            &[],
-                            [anchor_internal_arcs(store, vp, *layer_id, anchor)],
-                        );
-                        all_payloads.extend(payloads);
-                    }
+            for branch in spec.variant_branches() {
+                let vp = &branch.spec.payloads;
+                if vp.explicit.is_some() || !vp.prepend.is_empty() || !vp.append.is_empty() {
+                    let payloads = resolve_list_chain::<Reference>(
+                        &[],
+                        [anchor_internal_arcs(store, vp, *layer_id, anchor)],
+                    );
+                    all_payloads.extend(payloads);
                 }
             }
         }
@@ -1559,14 +1524,10 @@ pub(crate) fn resolve_specializes_for_prim_in(
             continue;
         };
         for spec in variant_host_specs(store, fallbacks, local_stack, layer, prim, scope) {
-            for (set_tok, selected_variant) in selections {
-                if let Some(set_spec) = spec.variant_sets.get(set_tok)
-                    && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                {
-                    let vs = &variant_spec.specializes;
-                    if vs.explicit.is_some() || !vs.prepend.is_empty() || !vs.append.is_empty() {
-                        ops.push(vs.clone());
-                    }
+            for branch in spec.selected_variant_branches(selections) {
+                let vs = &branch.spec.specializes;
+                if vs.explicit.is_some() || !vs.prepend.is_empty() || !vs.append.is_empty() {
+                    ops.push(vs.clone());
                 }
             }
         }

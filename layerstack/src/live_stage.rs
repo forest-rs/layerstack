@@ -94,15 +94,13 @@ fn participating_layers(store: &dyn LayerStore, root: LayerId) -> HashSet<LayerI
                 &mut pending,
                 &mut expressions,
             );
-            for set in spec.variant_sets.values() {
-                for variant in set.variants.values() {
-                    arc_layers(
-                        &variant.references,
-                        &variant.payloads,
-                        &mut pending,
-                        &mut expressions,
-                    );
-                }
+            for branch in spec.variant_branches() {
+                arc_layers(
+                    &branch.spec.references,
+                    &branch.spec.payloads,
+                    &mut pending,
+                    &mut expressions,
+                );
             }
         }
     }

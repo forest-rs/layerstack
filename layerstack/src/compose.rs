@@ -94,15 +94,6 @@ fn variant_property_spec_path(
     variant_spec_path(store, prim_path, selection_sites).with_property(property)
 }
 
-fn combined_variant_sites(
-    outer: &[VariantSelectionSite],
-    current: VariantSelectionSite,
-) -> Vec<VariantSelectionSite> {
-    let mut out = outer.to_vec();
-    out.push(current);
-    out
-}
-
 /// Maps a forwarded opinion's source spec path through an optional
 /// provenance namespace remap.
 ///
@@ -653,30 +644,17 @@ fn authored_strength_ordered_variant_selections(
     graph: &PrimIndexGraph,
     sources: &[OpinionKey],
 ) -> HashMap<TokenId, TokenId> {
-    use crate::spec_path::SpecComponent;
-
     let sites: Vec<VariantSite<'_>> = sources
         .iter()
         .filter_map(|source| {
             let spec = store.layer(source.layer_id).and_then(|layer| {
                 layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
             })?;
-            let branch: Vec<(TokenId, TokenId)> = source
-                .spec_path
-                .components()
-                .iter()
-                .rev()
-                .map_while(|component| match component {
-                    SpecComponent::VariantSelection { set, variant } => Some((*set, *variant)),
-                    SpecComponent::Prim(_) => None,
-                })
-                .collect();
             let context = SiteContext::Node(graph, source.node);
             Some(VariantSite::of_spec(
                 store,
                 spec,
-                source.lookup_path,
-                branch,
+                source.spec_path.variant_chain(),
                 context,
             ))
         })
@@ -689,89 +667,88 @@ fn authored_strength_ordered_variant_selections(
 }
 
 /// A site that may author and declare variant selections for a composed
-/// prim: a prim spec, or one of the prim's own variant branches in it.
+/// prim: a prim spec, or one of the prim's own variant specs in it.
 ///
 /// OpenUSD reads a node's site path, which ends in the node's variant
 /// selections for a variant node (`_ComposeVariantSelectionAcrossNodes` and
 /// `_EvalNodeVariantSets` in `pxr/usd/pcp/primIndex.cpp`).
 struct VariantSite<'a> {
-    /// The prim's own branches the site lies in, innermost first: empty for
-    /// a spec.
+    /// The path of the site's variant spec on the prim spec, outermost
+    /// first (`[(a, x), (b, y)]` for `/P{a=x}{b=y}`): empty for the prim
+    /// spec itself.
     branch: Vec<(TokenId, TokenId)>,
     /// The selections the site authors, evaluated where it is read.
     authored: Option<Cow<'a, HashMap<TokenId, TokenId>>>,
-    /// The prim spec hosting the branches, and its path, for the variant
-    /// sets the site declares; `None` for a site that declares none.
-    host: Option<(&'a crate::doc::PrimSpec, PathId)>,
+    /// The variant sets the site declares, in `variantSets` order; `None`
+    /// for a site that declares none.
+    declared: Option<&'a [TokenId]>,
 }
 
 impl<'a> VariantSite<'a> {
-    /// The site of `spec`, the spec of the prim `host`, or of its branch
-    /// `branch`, innermost first, read in `context`.
+    /// The site of `spec`, or of its variant spec at `branch` (outermost
+    /// first), read in `context`.
     fn of_spec(
         store: &dyn LayerStore,
         spec: &'a crate::doc::PrimSpec,
-        host: PathId,
         branch: Vec<(TokenId, TokenId)>,
         context: SiteContext<'_>,
     ) -> Self {
-        let authored = match branch.first() {
-            Some((set, variant)) => spec
-                .variant_sets
-                .get(set)
-                .and_then(|set_spec| set_spec.variants.get(variant))
-                .map(|variant_spec| &variant_spec.variant_selections),
-            None => Some(&spec.variant_selections),
+        let (authored, declared) = if branch.is_empty() {
+            (
+                Some(&spec.variant_selections),
+                Some(spec.variant_set_order.as_slice()),
+            )
+        } else {
+            match spec.variant_spec(&branch) {
+                Some(variant) => (
+                    Some(&variant.variant_selections),
+                    Some(variant.variant_set_order.as_slice()),
+                ),
+                None => (None, None),
+            }
         };
         Self {
             branch,
             authored: authored.map(|authored| site_selections(store, authored, context)),
-            host: Some((spec, host)),
+            declared,
         }
     }
 
     /// The sites of the node whose layer stack holds `specs`, the specs of
-    /// the prim `host` with the chains reaching them, stronger layers
-    /// first: each spec, then each variant branch in the node's strength
-    /// order.
-    fn of_node(store: &dyn LayerStore, specs: &[HostSpec<'a, '_>], host: PathId) -> Vec<Self> {
+    /// one prim with the chains reaching them, stronger layers first: each
+    /// spec, then each variant branch in the node's strength order.
+    fn of_node(store: &dyn LayerStore, specs: &[HostSpec<'a, '_>]) -> Vec<Self> {
         let mut sites: Vec<Self> = specs
             .iter()
-            .map(|(spec, chain)| {
-                Self::of_spec(store, spec, host, Vec::new(), SiteContext::Chain(chain))
-            })
+            .map(|(spec, chain)| Self::of_spec(store, spec, Vec::new(), SiteContext::Chain(chain)))
             .collect();
-        sites.extend(Self::branches_of_node(store, specs, host));
+        sites.extend(Self::branches_of_node(store, specs));
         sites
     }
 
     /// The sites of the variant branches of the node whose layer stack
-    /// holds `specs`, the specs of the prim `host`, stronger layers first:
-    /// in the order of their variant nodes ([`VariantNodeOrder`]), each
-    /// node's specs by layer.
-    fn branches_of_node(
-        store: &dyn LayerStore,
-        specs: &[HostSpec<'a, '_>],
-        host: PathId,
-    ) -> Vec<Self> {
+    /// holds `specs`, the specs of one prim with the chains reaching them,
+    /// stronger layers first: in the order of their variant nodes
+    /// ([`VariantNodeOrder`]), each node's specs by layer.
+    fn branches_of_node(store: &dyn LayerStore, specs: &[HostSpec<'a, '_>]) -> Vec<Self> {
         let order = VariantNodeOrder::new(specs.iter().map(|(spec, _)| *spec));
         // Each branch with its node's rank, then its layer.
         let mut branches: Vec<(Vec<usize>, usize, Self)> = Vec::new();
         for (layer, (spec, chain)) in specs.iter().enumerate() {
-            for (set, set_spec) in &spec.variant_sets {
-                for (variant, variant_spec) in &set_spec.variants {
-                    let mut branch: Vec<(TokenId, TokenId)> = variant_spec
-                        .outer_variant_sites
-                        .iter()
-                        .filter(|site| site.host_path == host)
-                        .map(|site| (site.set, site.variant))
-                        .collect();
-                    branch.push((*set, *variant));
-                    branch.reverse();
-                    let node = order.rank(host, *set, variant_spec);
-                    let site = Self::of_spec(store, spec, host, branch, SiteContext::Chain(chain));
-                    branches.push((node, layer, site));
-                }
+            for branch in spec.variant_branches() {
+                let path: Vec<(TokenId, TokenId)> = branch.chain().collect();
+                let node = order.rank(&path);
+                let authored = site_selections(
+                    store,
+                    &branch.spec.variant_selections,
+                    SiteContext::Chain(chain),
+                );
+                let site = Self {
+                    branch: path,
+                    authored: Some(authored),
+                    declared: Some(branch.spec.variant_set_order.as_slice()),
+                };
+                branches.push((node, layer, site));
             }
         }
         // Variants of one set exclude each other, so their relative order
@@ -785,7 +762,7 @@ impl<'a> VariantSite<'a> {
         Self {
             branch: Vec::new(),
             authored: Some(Cow::Borrowed(authored)),
-            host: None,
+            declared: None,
         }
     }
 
@@ -796,17 +773,10 @@ impl<'a> VariantSite<'a> {
             .all(|(set, variant)| selections.get(set) == Some(variant))
     }
 
-    /// The variant sets the site declares, in `variantSets` order: the sets
-    /// of its spec nested in exactly its innermost branch, or, for a spec,
-    /// those not nested in a branch of the prim.
+    /// The variant sets the site declares, in `variantSets` order: those of
+    /// its prim spec, or those nested in its variant spec.
     fn declared(&self) -> impl Iterator<Item = TokenId> + '_ {
-        let innermost = self.branch.first().copied();
-        self.host.into_iter().flat_map(move |(spec, host)| {
-            spec.variant_set_order
-                .iter()
-                .copied()
-                .filter(move |set| nesting_branch(spec, host, *set) == innermost)
-        })
+        self.declared.into_iter().flatten().copied()
     }
 }
 
@@ -882,32 +852,6 @@ fn evaluate_variant_sets(sites: &[VariantSite<'_>]) -> HashMap<TokenId, TokenId>
         }
     }
     selections
-}
-
-/// The branch of `host`'s own variant sets that the variant set `set` of
-/// `spec` is nested in, innermost, as `(set, variant)`; `None` for a set
-/// declared outside those branches, or nested in different branches in
-/// different variants.
-///
-/// A set nested in a branch (`/P{a=x}{b=y}`) is declared by that branch, so
-/// OpenUSD evaluates it only once the branch composes
-/// (`_EvalNodeVariantSets` in `pxr/usd/pcp/primIndex.cpp`).
-fn nesting_branch(
-    spec: &crate::doc::PrimSpec,
-    host: PathId,
-    set: TokenId,
-) -> Option<(TokenId, TokenId)> {
-    let set_spec = spec.variant_sets.get(&set)?;
-    let mut nesting = set_spec.variants.values().map(|variant| {
-        variant
-            .outer_variant_sites
-            .iter()
-            .rev()
-            .find(|site| site.host_path == host)
-            .map(|site| (site.set, site.variant))
-    });
-    let first = nesting.next()??;
-    nesting.all(|other| other == Some(first)).then_some(first)
 }
 
 /// Applies `fallbacks` to `selections`, every authored selection of a
@@ -1001,16 +945,12 @@ fn authored_composed_variant_selections(
             else {
                 continue;
             };
-            for (set, selected_variant) in &selections {
-                if let Some(set_spec) = spec.variant_sets.get(set)
-                    && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                {
-                    let context = SiteContext::Node(graph, source.node);
-                    let inner = site_selections(store, &variant_spec.variant_selections, context);
-                    for (inner_set, inner_variant) in inner.iter() {
-                        if !selections.contains_key(inner_set) {
-                            new_sels.entry(*inner_set).or_insert(*inner_variant);
-                        }
+            let context = SiteContext::Node(graph, source.node);
+            for branch in spec.selected_variant_branches(&selections) {
+                let inner = site_selections(store, &branch.spec.variant_selections, context);
+                for (inner_set, inner_variant) in inner.iter() {
+                    if !selections.contains_key(inner_set) {
+                        new_sels.entry(*inner_set).or_insert(*inner_variant);
                     }
                 }
             }
@@ -1368,9 +1308,10 @@ fn filter_variant_children(
             else {
                 continue;
             };
-            // Use the first non-empty variant_set_order we find.
-            if !spec.variant_set_order.is_empty() {
-                variant_set_order = spec.variant_set_order.clone();
+            // Use the first non-empty variant set order we find: the prim
+            // spec's sets, then those nested in its branches.
+            variant_set_order = spec.selected_variant_set_order(&selections);
+            if !variant_set_order.is_empty() {
                 break;
             }
         }
@@ -1386,30 +1327,12 @@ fn filter_variant_children(
                 continue;
             };
 
-            for (set_name, set_spec) in &spec.variant_sets {
-                for (variant_name, variant_spec) in &set_spec.variants {
-                    all_variant_children.extend(variant_spec.authored_children.iter().copied());
-                    if selections.get(set_name) != Some(variant_name) {
-                        continue;
-                    }
-                    // A child of a variant set nested in other branches of
-                    // this prim also needs those branches selected.
-                    let branch = VariantSelectionSite {
-                        host_path: source.lookup_path,
-                        set: *set_name,
-                        variant: *variant_name,
-                    };
-                    for child in &variant_spec.authored_children {
-                        let requirements = nested_branch_requirements(store, layer, *child, branch);
-                        let outer_ok = requirements.is_empty()
-                            || requirements.iter().any(|reqs| {
-                                reqs.iter()
-                                    .all(|site| selections.get(&site.set) == Some(&site.variant))
-                            });
-                        if outer_ok {
-                            selected_children.insert(*child);
-                        }
-                    }
+            // A child of a variant set nested in other branches of this
+            // prim also needs those branches selected.
+            for branch in spec.variant_branches() {
+                all_variant_children.extend(branch.spec.authored_children.iter().copied());
+                if branch.is_selected(&selections) {
+                    selected_children.extend(branch.spec.authored_children.iter().copied());
                 }
             }
         }
@@ -1459,30 +1382,18 @@ fn filter_variant_children(
                 else {
                     continue;
                 };
-                for (set, set_spec) in &spec.variant_sets {
-                    for (variant, variant_spec) in &set_spec.variants {
-                        let branch = VariantSelectionSite {
-                            host_path: source.lookup_path,
-                            set: *set,
-                            variant: *variant,
-                        };
-                        for child in &variant_spec.authored_children {
-                            let depth = nested_branch_requirements(store, layer, *child, branch)
-                                .iter()
-                                .map(Vec::len)
-                                .max()
-                                .unwrap_or(0);
-                            let entry = child_nesting_depth.entry(*child).or_insert(0);
-                            *entry = (*entry).max(depth);
-                        }
+                for branch in spec.variant_branches() {
+                    for child in &branch.spec.authored_children {
+                        let entry = child_nesting_depth.entry(*child).or_insert(0);
+                        *entry = (*entry).max(branch.depth());
                     }
                 }
             }
 
             for set_tok in variant_set_order.iter().rev() {
-                let Some(&selected_variant) = selections.get(set_tok) else {
+                if !selections.contains_key(set_tok) {
                     continue;
-                };
+                }
                 for source in &prim_index.sources {
                     let Some(layer) = store.layer(source.layer_id) else {
                         continue;
@@ -1494,13 +1405,14 @@ fn filter_variant_children(
                     ) else {
                         continue;
                     };
-                    if let Some(set_spec) = spec.variant_sets.get(set_tok)
-                        && let Some(variant_spec) = set_spec.variants.get(&selected_variant)
+                    for branch in spec
+                        .selected_variant_branches(&selections)
+                        .filter(|branch| branch.set == *set_tok)
                     {
                         let arc_list_index = enclosing_arc(&prim_index.graph, source.node)
                             .map_or(0, PrimNode::sibling_index);
                         let group = arc_groups.entry(arc_list_index).or_default();
-                        for child in &variant_spec.authored_children {
+                        for child in &branch.spec.authored_children {
                             if !group.contains(child) {
                                 group.push(*child);
                             }
@@ -1598,17 +1510,12 @@ fn filter_variant_children(
                 else {
                     continue;
                 };
-                for (set, selected_variant) in &gp_selections {
-                    if let Some(set_spec) = spec.variant_sets.get(set)
-                        && let Some(variant_spec) = set_spec.variants.get(selected_variant)
-                    {
-                        let context = SiteContext::of_source(gp_index, source);
-                        let inner =
-                            site_selections(store, &variant_spec.variant_selections, context);
-                        for (inner_set, inner_variant) in inner.iter() {
-                            if !gp_selections.contains_key(inner_set) {
-                                new_sels.entry(*inner_set).or_insert(*inner_variant);
-                            }
+                let context = SiteContext::of_source(gp_index, source);
+                for branch in spec.selected_variant_branches(&gp_selections) {
+                    let inner = site_selections(store, &branch.spec.variant_selections, context);
+                    for (inner_set, inner_variant) in inner.iter() {
+                        if !gp_selections.contains_key(inner_set) {
+                            new_sels.entry(*inner_set).or_insert(*inner_variant);
                         }
                     }
                 }
@@ -1891,40 +1798,6 @@ fn uncontributed_children(
         .collect()
 }
 
-/// Returns, for each prim spec of `host`'s child `child` authored directly
-/// in `branch` in `layer`, the other branches of `host` enclosing it: for a
-/// child authored in a variant set nested in another branch of the same prim
-/// (`/P{a=x}{b=y}C`, with `branch` `{b=y}`), that is `[{a=x}]`. The child is
-/// only populated while those branches are selected too.
-///
-/// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set specs),
-/// §10.3.2.5 (variants).
-fn nested_branch_requirements(
-    store: &dyn LayerStore,
-    layer: &crate::doc::Layer,
-    child: TokenId,
-    branch: VariantSelectionSite,
-) -> Vec<Vec<VariantSelectionSite>> {
-    let host = store.paths().resolve(branch.host_path);
-    let Some(child_path) = store.paths().lookup(&host.join(&[child])) else {
-        return Vec::new();
-    };
-    layer
-        .branch_prim_specs(child_path, branch)
-        .map(|spec| {
-            let (_, enclosing) = spec
-                .outer_variant_sites
-                .split_last()
-                .expect("a branch spec has a branch");
-            enclosing
-                .iter()
-                .filter(|site| site.host_path == branch.host_path)
-                .copied()
-                .collect()
-        })
-        .collect()
-}
-
 /// Strips descendant opinions and children for effective instances.
 ///
 /// A prim is an *effective instance* when it has `instanceable = true`
@@ -2096,16 +1969,8 @@ fn strip_instance_descendants(
                     ) else {
                         continue;
                     };
-                    for (set, set_spec) in &spec.variant_sets {
-                        let Some(selected) = selections.get(set) else {
-                            continue;
-                        };
-                        let Some(variant_spec) = set_spec.variants.get(selected) else {
-                            continue;
-                        };
-                        for child in &variant_spec.authored_children {
-                            vc.insert(*child);
-                        }
+                    for branch in spec.selected_variant_branches(&selections) {
+                        vc.extend(branch.spec.authored_children.iter().copied());
                     }
                 }
             }
@@ -2299,16 +2164,8 @@ fn collect_non_identity_children(
             else {
                 continue;
             };
-            for (set, set_spec) in &spec.variant_sets {
-                let Some(selected) = selections.get(set) else {
-                    continue;
-                };
-                let Some(variant_spec) = set_spec.variants.get(selected) else {
-                    continue;
-                };
-                for child in &variant_spec.authored_children {
-                    surviving.insert(*child);
-                }
+            for branch in spec.selected_variant_branches(&selections) {
+                surviving.extend(branch.spec.authored_children.iter().copied());
             }
         }
 
@@ -2328,16 +2185,8 @@ fn collect_non_identity_children(
             else {
                 continue;
             };
-            for (set, set_spec) in &spec.variant_sets {
-                let Some(selected) = selections.get(set) else {
-                    continue;
-                };
-                let Some(variant_spec) = set_spec.variants.get(selected) else {
-                    continue;
-                };
-                for child in &variant_spec.authored_children {
-                    surviving.insert(*child);
-                }
+            for branch in spec.selected_variant_branches(&selections) {
+                surviving.extend(branch.spec.authored_children.iter().copied());
             }
         }
 
@@ -2557,18 +2406,18 @@ fn authored_full_variant_selections(
     let mut sites: Vec<VariantSite<'_>> = local
         .iter()
         .map(|(spec, chain)| {
-            VariantSite::of_spec(store, spec, path, Vec::new(), SiteContext::Chain(chain))
+            VariantSite::of_spec(store, spec, Vec::new(), SiteContext::Chain(chain))
         })
         .collect();
     sites.push(VariantSite::authored_only(&child));
     for target in inherits.iter().copied() {
         let specs = selection_host_specs(store, fallbacks, local_stack, target);
-        sites.extend(VariantSite::of_node(store, &specs, target));
+        sites.extend(VariantSite::of_node(store, &specs));
     }
-    sites.extend(VariantSite::branches_of_node(store, &local, path));
+    sites.extend(VariantSite::branches_of_node(store, &local));
     for (stack, target) in &targets {
         let specs = selection_host_specs(store, fallbacks, stack, *target);
-        sites.extend(VariantSite::of_node(store, &specs, *target));
+        sites.extend(VariantSite::of_node(store, &specs));
     }
     evaluate_variant_sets(&sites)
 }
@@ -3131,6 +2980,7 @@ fn local_variant_node(
         if !hosted {
             continue;
         }
+        let enclosing = enclosing_branches(&variants, *site);
         variants.push(*site);
         node = graph.intern_child(
             node,
@@ -3139,7 +2989,7 @@ fn local_variant_node(
                 layer_stack,
                 site: SpecPath::from_variant_selection_sites(path, &variants, paths),
                 namespace_depth: u16::try_from(host.depth()).unwrap_or(u16::MAX),
-                sibling_index: declared_variant_set_index(store, layer_stack, *site),
+                sibling_index: declared_variant_set_index(store, layer_stack, *site, &enclosing),
                 implied: false,
                 skips_duplicates: false,
             },
@@ -3254,21 +3104,14 @@ fn add_local_and_variant_opinions(
                     ));
                 }
 
-                for (set, selected_variant) in &selections {
-                    let Some(set_spec) = spec.variant_sets.get(set) else {
-                        continue;
-                    };
-                    let Some(variant_spec) = set_spec.variants.get(selected_variant) else {
-                        continue;
-                    };
-                    let branch_selections = combined_variant_sites(
-                        &variant_spec.outer_variant_sites,
-                        VariantSelectionSite {
-                            host_path: path,
-                            set: *set,
-                            variant: *selected_variant,
-                        },
-                    );
+                // Each selected branch is a variant spec of its own, those
+                // of sets nested in a selected branch included
+                // (`/P{a=x}{b=y}`), so each has its own node.
+                //
+                // Spec: AOUSD Core §7.3.6, §10.3.2.5.
+                for branch in spec.selected_variant_branches(&selections) {
+                    let variant_spec = branch.spec;
+                    let branch_selections = branch.sites(&spec.outer_variant_sites, path);
 
                     let branch_path = variant_spec_path(store, path, &branch_selections);
                     let variant_node = local_variant_node(store, out, path, &branch_selections);
@@ -3695,8 +3538,10 @@ impl ArcStep {
                 if !hosted {
                     return None;
                 }
+                let enclosing = enclosing_branches(&cursor.variants, site);
                 cursor.variants.push(site);
-                sibling_index = declared_variant_set_index(store, self.layer_stack, site);
+                sibling_index =
+                    declared_variant_set_index(store, self.layer_stack, site, &enclosing);
                 let paths = store.paths();
                 let site =
                     SpecPath::from_variant_selection_sites(cursor.prim, &cursor.variants, paths);
@@ -3746,21 +3591,45 @@ fn map_namespace(
     }
 }
 
-/// The position of `site`'s variant set among the variant sets its host
-/// declares (`variantSets`, [`crate::doc::PrimSpec::variant_set_order`]) in
-/// the layer stack rooted at `layer_stack`, strongest layer first, which
-/// ranks the branches of different sets at one site; sets declared nowhere
-/// follow every declared one.
+/// The branches of `site`'s host among `outer`, the variant selections
+/// leading to it, outermost first: those whose variant spec declares its
+/// set (`/P{a=x}` for `/P{a=x}{b=y}`), as `(set, variant)`.
+fn enclosing_branches(
+    outer: &[VariantSelectionSite],
+    site: VariantSelectionSite,
+) -> Vec<(TokenId, TokenId)> {
+    let mut chain: Vec<(TokenId, TokenId)> = outer
+        .iter()
+        .rev()
+        .take_while(|enclosing| enclosing.host_path == site.host_path)
+        .map(|enclosing| (enclosing.set, enclosing.variant))
+        .collect();
+    chain.reverse();
+    chain
+}
+
+/// The position of `site`'s variant set among the variant sets declared
+/// where it is authored, in the layer stack rooted at `layer_stack`,
+/// strongest layer first: by the host's prim spec for a set of its own, or
+/// by the variant spec of the branches `enclosing` (outermost first) for a
+/// set nested in them. This ranks the branches of different sets at one
+/// site; sets declared nowhere follow every declared one.
+///
+/// Each branch declares its nested sets on its own, so two branches that
+/// declare the same sets in different orders rank them differently.
 ///
 /// Spec: AOUSD Core §10.3.2.5 (variant sets are evaluated in the order of
-/// the `variantSetNames` list op). OpenUSD: `PcpCompareSiblingNodeStrength`
-/// compares variant siblings by `GetSiblingNumAtOrigin`, the set's index in
-/// `PcpComposeSiteVariantSets` (`pxr/usd/pcp/strengthOrdering.cpp`,
-/// `_AddVariantArc` in `pxr/usd/pcp/primIndex.cpp`).
+/// the `variantSetNames` list op), §7.3.6 (variant specs may contain variant
+/// set specs). OpenUSD: `PcpCompareSiblingNodeStrength` compares variant
+/// siblings by `GetSiblingNumAtOrigin`, the set's index in
+/// `PcpComposeSiteVariantSets` at the node the arc is added beneath
+/// (`pxr/usd/pcp/strengthOrdering.cpp`, `_AddVariantArc` in
+/// `pxr/usd/pcp/primIndex.cpp`).
 fn declared_variant_set_index(
     store: &dyn LayerStore,
     layer_stack: LayerId,
     site: VariantSelectionSite,
+    enclosing: &[(TokenId, TokenId)],
 ) -> u16 {
     let mut declared: Vec<TokenId> = Vec::new();
     for layer in LayerStack::gather(store, layer_stack)
@@ -3769,7 +3638,10 @@ fn declared_variant_set_index(
         .filter_map(|id| store.layer(*id))
     {
         for spec in layer.prim_specs(site.host_path) {
-            for set in &spec.variant_set_order {
+            let Some((_, order)) = spec.variant_sets_in(enclosing) else {
+                continue;
+            };
+            for set in order {
                 if !declared.contains(set) {
                     declared.push(*set);
                 }
@@ -5785,55 +5657,46 @@ fn add_inherit_edge_opinions(
                         local_stack,
                         *remote_path_id,
                     );
-                    for (set, selected) in &inherits_selections {
-                        if let Some(set_spec) = spec.variant_sets.get(set)
-                            && let Some(variant_spec) = set_spec.variants.get(selected)
+                    for branch in spec.selected_variant_branches(&inherits_selections) {
+                        let variant_spec = branch.spec;
+                        let branch_selections =
+                            branch.sites(&spec.outer_variant_sites, *remote_path_id);
+                        let branch_path = normalized_variant_spec_path(
+                            store,
+                            *remote_path_id,
+                            &branch_selections,
+                            provenance_remap,
+                        );
+                        let variant_node =
+                            nodes.variant_node(store, out, *dest_path_id, &branch_selections);
+                        pending_sources.push((
+                            *dest_path_id,
+                            OpinionKey {
+                                node: variant_node,
+                                layer_strength,
+                                layer_id,
+                                lookup_path: *remote_path_id,
+                                spec_path: branch_path,
+                            },
+                        ));
+                        for entry in
+                            composed_entries(&variant_spec.fields, &variant_spec.properties)
                         {
-                            let branch_selections = combined_variant_sites(
-                                &variant_spec.outer_variant_sites,
-                                VariantSelectionSite {
-                                    host_path: *remote_path_id,
-                                    set: *set,
-                                    variant: *selected,
-                                },
-                            );
-                            let branch_path = normalized_variant_spec_path(
-                                store,
-                                *remote_path_id,
-                                &branch_selections,
-                                provenance_remap,
-                            );
-                            let variant_node =
-                                nodes.variant_node(store, out, *dest_path_id, &branch_selections);
-                            pending_sources.push((
+                            pending.push((
                                 *dest_path_id,
-                                OpinionKey {
-                                    node: variant_node,
-                                    layer_strength,
-                                    layer_id,
-                                    lookup_path: *remote_path_id,
-                                    spec_path: branch_path,
-                                },
-                            ));
-                            for entry in
-                                composed_entries(&variant_spec.fields, &variant_spec.properties)
-                            {
-                                pending.push((
-                                    *dest_path_id,
+                                *remote_path_id,
+                                normalized_variant_property_spec_path(
+                                    store,
                                     *remote_path_id,
-                                    normalized_variant_property_spec_path(
-                                        store,
-                                        *remote_path_id,
-                                        &branch_selections,
-                                        entry.name(),
-                                        provenance_remap,
-                                    ),
+                                    &branch_selections,
                                     entry.name(),
-                                    entry.value(),
-                                    entry.property_type().cloned(),
-                                    variant_node,
-                                ));
-                            }
+                                    provenance_remap,
+                                ),
+                                entry.name(),
+                                entry.value(),
+                                entry.property_type().cloned(),
+                                variant_node,
+                            ));
                         }
                     }
                 }
@@ -6593,90 +6456,79 @@ fn add_reference_edge_opinions(
                         *remote_path_id,
                     )
                 };
-                for (set, selected) in &selections {
-                    if let Some(set_spec) = remote_spec.variant_sets.get(set)
-                        && let Some(variant_spec) = set_spec.variants.get(selected)
-                    {
-                        let branch_selections = combined_variant_sites(
-                            &variant_spec.outer_variant_sites,
-                            VariantSelectionSite {
-                                host_path: *remote_path_id,
-                                set: *set,
-                                variant: *selected,
-                            },
-                        );
-                        let branch_path = normalized_variant_spec_path(
-                            store,
-                            *remote_path_id,
-                            &branch_selections,
-                            provenance_remap,
-                        );
-                        let variant_node =
-                            nodes.variant_node(store, out, *dest_path_id, &branch_selections);
-                        pending_sources.push((
-                            *dest_path_id,
-                            OpinionKey {
-                                node: variant_node,
-                                layer_strength,
-                                layer_id: remote_layer_id,
-                                lookup_path: *remote_path_id,
-                                spec_path: branch_path.clone(),
-                            },
-                        ));
+                for branch in remote_spec.selected_variant_branches(&selections) {
+                    let variant_spec = branch.spec;
+                    let branch_selections =
+                        branch.sites(&remote_spec.outer_variant_sites, *remote_path_id);
+                    let branch_path = normalized_variant_spec_path(
+                        store,
+                        *remote_path_id,
+                        &branch_selections,
+                        provenance_remap,
+                    );
+                    let variant_node =
+                        nodes.variant_node(store, out, *dest_path_id, &branch_selections);
+                    pending_sources.push((
+                        *dest_path_id,
+                        OpinionKey {
+                            node: variant_node,
+                            layer_strength,
+                            layer_id: remote_layer_id,
+                            lookup_path: *remote_path_id,
+                            spec_path: branch_path.clone(),
+                        },
+                    ));
 
-                        for entry in
-                            composed_entries(&variant_spec.fields, &variant_spec.properties)
-                        {
-                            let key = OpinionKey {
-                                node: variant_node,
-                                layer_strength,
-                                layer_id: remote_layer_id,
-                                lookup_path: *remote_path_id,
-                                spec_path: normalized_variant_property_spec_path(
-                                    store,
-                                    *remote_path_id,
-                                    &branch_selections,
-                                    entry.name(),
-                                    provenance_remap,
-                                ),
-                            };
-                            let index = out.get_mut(dest_path_id).expect("path exists");
-                            if let Some(property_type) = entry.property_type() {
-                                index.add_property_type(
-                                    entry.name(),
-                                    key.clone(),
-                                    property_type.clone(),
-                                );
-                            }
-                            index.add_opinion(Opinion {
-                                key: key.clone(),
-                                field: entry.name(),
-                                value: {
-                                    let mut value = entry.value();
-                                    map_arc_targets(
-                                        store,
-                                        &mut value,
-                                        ArcPathMap {
-                                            arc: ArcKind::References,
-                                            source: &target_root,
-                                            dest: &dest_root_path,
-                                            inside: Inside::Keep,
-                                            outside: targets_outside,
-                                            relocated: &[],
-                                        },
-                                        TargetOwner {
-                                            prim: *dest_path_id,
-                                            property: entry.name(),
-                                            layer: remote_layer_id,
-                                            spec: key.spec_path.clone(),
-                                        },
-                                        cycles,
-                                    );
-                                    value
-                                },
-                                layer_offset: ref_offset,
-                            });
+                    for entry in composed_entries(&variant_spec.fields, &variant_spec.properties) {
+                        let key = OpinionKey {
+                            node: variant_node,
+                            layer_strength,
+                            layer_id: remote_layer_id,
+                            lookup_path: *remote_path_id,
+                            spec_path: normalized_variant_property_spec_path(
+                                store,
+                                *remote_path_id,
+                                &branch_selections,
+                                entry.name(),
+                                provenance_remap,
+                            ),
+                        };
+                        let index = out.get_mut(dest_path_id).expect("path exists");
+                        if let Some(property_type) = entry.property_type() {
+                            index.add_property_type(
+                                entry.name(),
+                                key.clone(),
+                                property_type.clone(),
+                            );
                         }
+                        index.add_opinion(Opinion {
+                            key: key.clone(),
+                            field: entry.name(),
+                            value: {
+                                let mut value = entry.value();
+                                map_arc_targets(
+                                    store,
+                                    &mut value,
+                                    ArcPathMap {
+                                        arc: ArcKind::References,
+                                        source: &target_root,
+                                        dest: &dest_root_path,
+                                        inside: Inside::Keep,
+                                        outside: targets_outside,
+                                        relocated: &[],
+                                    },
+                                    TargetOwner {
+                                        prim: *dest_path_id,
+                                        property: entry.name(),
+                                        layer: remote_layer_id,
+                                        spec: key.spec_path.clone(),
+                                    },
+                                    cycles,
+                                );
+                                value
+                            },
+                            layer_offset: ref_offset,
+                        });
                     }
                 }
             }
@@ -7307,90 +7159,79 @@ fn add_payload_edge_opinions(
                         *remote_path_id,
                     )
                 };
-                for (set, selected) in &selections {
-                    if let Some(set_spec) = remote_spec.variant_sets.get(set)
-                        && let Some(variant_spec) = set_spec.variants.get(selected)
-                    {
-                        let branch_selections = combined_variant_sites(
-                            &variant_spec.outer_variant_sites,
-                            VariantSelectionSite {
-                                host_path: *remote_path_id,
-                                set: *set,
-                                variant: *selected,
-                            },
-                        );
-                        let branch_path = normalized_variant_spec_path(
-                            store,
-                            *remote_path_id,
-                            &branch_selections,
-                            provenance_remap,
-                        );
-                        let variant_node =
-                            nodes.variant_node(store, out, *dest_path_id, &branch_selections);
-                        pending_sources.push((
-                            *dest_path_id,
-                            OpinionKey {
-                                node: variant_node,
-                                layer_strength,
-                                layer_id: remote_layer_id,
-                                lookup_path: *remote_path_id,
-                                spec_path: branch_path.clone(),
-                            },
-                        ));
+                for branch in remote_spec.selected_variant_branches(&selections) {
+                    let variant_spec = branch.spec;
+                    let branch_selections =
+                        branch.sites(&remote_spec.outer_variant_sites, *remote_path_id);
+                    let branch_path = normalized_variant_spec_path(
+                        store,
+                        *remote_path_id,
+                        &branch_selections,
+                        provenance_remap,
+                    );
+                    let variant_node =
+                        nodes.variant_node(store, out, *dest_path_id, &branch_selections);
+                    pending_sources.push((
+                        *dest_path_id,
+                        OpinionKey {
+                            node: variant_node,
+                            layer_strength,
+                            layer_id: remote_layer_id,
+                            lookup_path: *remote_path_id,
+                            spec_path: branch_path.clone(),
+                        },
+                    ));
 
-                        for entry in
-                            composed_entries(&variant_spec.fields, &variant_spec.properties)
-                        {
-                            let key = OpinionKey {
-                                node: variant_node,
-                                layer_strength,
-                                layer_id: remote_layer_id,
-                                lookup_path: *remote_path_id,
-                                spec_path: normalized_variant_property_spec_path(
-                                    store,
-                                    *remote_path_id,
-                                    &branch_selections,
-                                    entry.name(),
-                                    provenance_remap,
-                                ),
-                            };
-                            let index = out.get_mut(dest_path_id).expect("path exists");
-                            if let Some(property_type) = entry.property_type() {
-                                index.add_property_type(
-                                    entry.name(),
-                                    key.clone(),
-                                    property_type.clone(),
-                                );
-                            }
-                            index.add_opinion(Opinion {
-                                key: key.clone(),
-                                field: entry.name(),
-                                value: {
-                                    let mut value = entry.value();
-                                    map_arc_targets(
-                                        store,
-                                        &mut value,
-                                        ArcPathMap {
-                                            arc: ArcKind::Payloads,
-                                            source: &target_root,
-                                            dest: &dest_root_path,
-                                            inside: Inside::Join,
-                                            outside: targets_outside,
-                                            relocated: &[],
-                                        },
-                                        TargetOwner {
-                                            prim: *dest_path_id,
-                                            property: entry.name(),
-                                            layer: remote_layer_id,
-                                            spec: key.spec_path.clone(),
-                                        },
-                                        cycles,
-                                    );
-                                    value
-                                },
-                                layer_offset: payload_offset,
-                            });
+                    for entry in composed_entries(&variant_spec.fields, &variant_spec.properties) {
+                        let key = OpinionKey {
+                            node: variant_node,
+                            layer_strength,
+                            layer_id: remote_layer_id,
+                            lookup_path: *remote_path_id,
+                            spec_path: normalized_variant_property_spec_path(
+                                store,
+                                *remote_path_id,
+                                &branch_selections,
+                                entry.name(),
+                                provenance_remap,
+                            ),
+                        };
+                        let index = out.get_mut(dest_path_id).expect("path exists");
+                        if let Some(property_type) = entry.property_type() {
+                            index.add_property_type(
+                                entry.name(),
+                                key.clone(),
+                                property_type.clone(),
+                            );
                         }
+                        index.add_opinion(Opinion {
+                            key: key.clone(),
+                            field: entry.name(),
+                            value: {
+                                let mut value = entry.value();
+                                map_arc_targets(
+                                    store,
+                                    &mut value,
+                                    ArcPathMap {
+                                        arc: ArcKind::Payloads,
+                                        source: &target_root,
+                                        dest: &dest_root_path,
+                                        inside: Inside::Join,
+                                        outside: targets_outside,
+                                        relocated: &[],
+                                    },
+                                    TargetOwner {
+                                        prim: *dest_path_id,
+                                        property: entry.name(),
+                                        layer: remote_layer_id,
+                                        spec: key.spec_path.clone(),
+                                    },
+                                    cycles,
+                                );
+                                value
+                            },
+                            layer_offset: payload_offset,
+                        });
                     }
                 }
             }
@@ -7993,55 +7834,46 @@ fn add_specializes_edge_opinions(
                         local_stack,
                         *remote_path_id,
                     );
-                    for (set, selected) in &spec_selections {
-                        if let Some(set_spec) = spec.variant_sets.get(set)
-                            && let Some(variant_spec) = set_spec.variants.get(selected)
+                    for branch in spec.selected_variant_branches(&spec_selections) {
+                        let variant_spec = branch.spec;
+                        let branch_selections =
+                            branch.sites(&spec.outer_variant_sites, *remote_path_id);
+                        let branch_path = normalized_variant_spec_path(
+                            store,
+                            *remote_path_id,
+                            &branch_selections,
+                            provenance_remap,
+                        );
+                        let variant_node =
+                            nodes.variant_node(store, out, *dest_path_id, &branch_selections);
+                        pending_sources.push((
+                            *dest_path_id,
+                            OpinionKey {
+                                node: variant_node,
+                                layer_strength,
+                                layer_id,
+                                lookup_path: *remote_path_id,
+                                spec_path: branch_path,
+                            },
+                        ));
+                        for entry in
+                            composed_entries(&variant_spec.fields, &variant_spec.properties)
                         {
-                            let branch_selections = combined_variant_sites(
-                                &variant_spec.outer_variant_sites,
-                                VariantSelectionSite {
-                                    host_path: *remote_path_id,
-                                    set: *set,
-                                    variant: *selected,
-                                },
-                            );
-                            let branch_path = normalized_variant_spec_path(
-                                store,
-                                *remote_path_id,
-                                &branch_selections,
-                                provenance_remap,
-                            );
-                            let variant_node =
-                                nodes.variant_node(store, out, *dest_path_id, &branch_selections);
-                            pending_sources.push((
+                            pending.push((
                                 *dest_path_id,
-                                OpinionKey {
-                                    node: variant_node,
-                                    layer_strength,
-                                    layer_id,
-                                    lookup_path: *remote_path_id,
-                                    spec_path: branch_path,
-                                },
-                            ));
-                            for entry in
-                                composed_entries(&variant_spec.fields, &variant_spec.properties)
-                            {
-                                pending.push((
-                                    *dest_path_id,
+                                *remote_path_id,
+                                normalized_variant_property_spec_path(
+                                    store,
                                     *remote_path_id,
-                                    normalized_variant_property_spec_path(
-                                        store,
-                                        *remote_path_id,
-                                        &branch_selections,
-                                        entry.name(),
-                                        provenance_remap,
-                                    ),
+                                    &branch_selections,
                                     entry.name(),
-                                    entry.value(),
-                                    entry.property_type().cloned(),
-                                    variant_node,
-                                ));
-                            }
+                                    provenance_remap,
+                                ),
+                                entry.name(),
+                                entry.value(),
+                                entry.property_type().cloned(),
+                                variant_node,
+                            ));
                         }
                     }
                 }
@@ -8926,8 +8758,7 @@ mod child_order_tests {
 
     /// Test that deeply nested variant children are ordered correctly:
     /// children from deeper nesting levels (more enclosing branches of the
-    /// same prim in their spec's `outer_variant_sites`) come before shallower
-    /// ones.
+    /// same prim) come before shallower ones.
     #[test]
     fn test_nested_variant_child_ordering() {
         let mut store = InMemoryStore::default();
@@ -8955,7 +8786,7 @@ mod child_order_tests {
 
         // Build PrimSpec with nested variant sets.
         let mut d_spec = PrimSpec {
-            variant_set_order: vec![standin, shading],
+            variant_set_order: vec![standin],
             ..PrimSpec::default()
         };
         d_spec.variant_selections.insert(standin, anim);
@@ -8967,19 +8798,28 @@ mod child_order_tests {
             variant,
         };
 
-        // shadingVariant=spooky, nested in standin=anim: anim_spooky_sphere.
-        let mut shading_spooky = VariantSpec::default();
-        shading_spooky.authored_children.push(sphere);
-
-        let mut shading_set = VariantSetSpec::default();
-        shading_set.variants.insert(spooky, shading_spooky);
-        d_spec.variant_sets.insert(shading, shading_set);
-
         // standin=anim, nested in standin=anim and shadingVariant=spooky:
         // anim_spooky_anim_sphere.
-        let mut standin_anim = VariantSpec::default();
-        standin_anim.authored_children.push(anim_sphere);
+        let mut inner_anim = VariantSpec::default();
+        inner_anim.authored_children.push(anim_sphere);
+        let mut inner_standin = VariantSetSpec::default();
+        inner_standin.variants.insert(anim, inner_anim);
 
+        // shadingVariant=spooky, nested in standin=anim: anim_spooky_sphere.
+        let mut shading_spooky = VariantSpec {
+            variant_set_order: vec![standin],
+            ..VariantSpec::default()
+        };
+        shading_spooky.authored_children.push(sphere);
+        shading_spooky.variant_sets.insert(standin, inner_standin);
+        let mut shading_set = VariantSetSpec::default();
+        shading_set.variants.insert(spooky, shading_spooky);
+
+        let mut standin_anim = VariantSpec {
+            variant_set_order: vec![shading],
+            ..VariantSpec::default()
+        };
+        standin_anim.variant_sets.insert(shading, shading_set);
         let mut standin_set = VariantSetSpec::default();
         standin_set.variants.insert(anim, standin_anim);
         d_spec.variant_sets.insert(standin, standin_set);

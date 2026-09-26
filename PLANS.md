@@ -203,9 +203,6 @@ separate spec-identity layer and to reference/payload target resolution.
 
 ### Risks
 
-- Existing `VariantSpec::merge` behavior currently collapses nested contexts
-  that share the same set/variant names; the host path must become part of the
-  identity without making merge order unstable.
 - Provenance propagation appears in many code paths; partial conversion could
   easily produce mixed single-host and multi-host behavior.
 

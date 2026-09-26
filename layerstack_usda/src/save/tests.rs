@@ -943,9 +943,8 @@ fn saves_variant_sets_and_selections() {
     assert_eq!(Imported::new(&text).save().unwrap(), text, "stable");
 }
 
-/// A variant whose branch context the layer does not hold, and prim specs
-/// in a branch that the branch does not list or that are missing, are
-/// rejected with their variant-qualified paths.
+/// Prim specs in a branch that the branch does not list or that are
+/// missing are rejected with their variant-qualified paths.
 #[test]
 fn rejects_misplaced_variant_specs() {
     let source = "#usda 1.0\ndef \"A\"\n{\n    variantSet \"v\" = {\n        \"x\" {\n            def \"B\"\n            {\n            }\n        }\n    }\n}\n";
@@ -972,22 +971,6 @@ fn rejects_misplaced_variant_specs() {
             problem,
         })
     };
-
-    let mut imported = Imported::new(source);
-    let host_path = imported
-        .paths
-        .intern(Path::parse_absolute("/A", &mut imported.tokens).unwrap());
-    let site = VariantSelectionSite {
-        host_path,
-        set: imported.tokens.intern("w"),
-        variant: imported.tokens.intern("y"),
-    };
-    branch(&mut imported).outer_variant_sites = vec![site];
-    assert_eq!(
-        imported.save(),
-        invalid("/A{v=x}", Invalid::UnplacedVariant),
-        "a variant inside no branch of the layer"
-    );
 
     let mut imported = Imported::new(source);
     branch(&mut imported).authored_children.clear();

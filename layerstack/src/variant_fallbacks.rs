@@ -39,14 +39,16 @@ pub type VariantFallbacks = HashMap<TokenId, Vec<TokenId>>;
 ///
 /// `selections` holds every authored selection; fallbacks only complete
 /// it. The variant sets are visited in the order the specs declare them
-/// (`variantSets`, [`PrimSpec::variant_set_order`]), `specs` strongest
-/// first. For each declared set with a fallback and no selection, the
-/// first name in its fallback list that names a variant of the set in any
-/// of `specs` is selected, and the selections authored inside that branch
-/// are added before the next set is visited: they count as authored for
-/// the sets they name, so a set decided by a fallback earlier in the order
-/// keeps it, and a later one takes the branch's selection. The result
-/// depends only on the specs and the order of each fallback list.
+/// (`variantSets`, [`PrimSpec::variant_set_order`], then that of the sets
+/// nested in selected branches, see [`PrimSpec::selected_variant_set_order`]),
+/// `specs` strongest first. For each declared set with a fallback and no
+/// selection, the first name in its fallback list that names a variant of
+/// the set in any of `specs` is selected, and the selections authored
+/// inside the selected branches are added before the next set is visited:
+/// they count as authored for the sets they name, so a set decided by a
+/// fallback earlier in the order keeps it, and a later one takes the
+/// branch's selection. The result depends only on the specs and the order
+/// of each fallback list.
 ///
 /// Spec: AOUSD Core §10.3.2.5.1 selects only from opinions; fallbacks follow
 /// OpenUSD, which evaluates every authored selection before any fallback,
@@ -68,51 +70,68 @@ pub(crate) fn apply_variant_fallbacks(
     }
     let mut filled: HashSet<TokenId> = HashSet::new();
     loop {
-        let next = specs
-            .iter()
-            .flat_map(|(spec, _)| spec.variant_set_order.iter().copied())
-            .find(|set| {
-                !selections.contains_key(set)
-                    && fallbacks.contains_key(set)
-                    && !filled.contains(set)
-            });
+        let next = declared_sets(specs, selections).into_iter().find(|set| {
+            !selections.contains_key(set) && fallbacks.contains_key(set) && !filled.contains(set)
+        });
         let Some(set) = next else {
             return;
         };
         filled.insert(set);
         let chosen = fallbacks[&set].iter().copied().find(|variant| {
             specs.iter().any(|(spec, _)| {
-                spec.variant_sets
-                    .get(&set)
-                    .is_some_and(|set_spec| set_spec.variants.contains_key(variant))
+                let own = core::iter::once(&spec.variant_sets);
+                let nested = spec
+                    .selected_variant_branches(selections)
+                    .map(|branch| &branch.spec.variant_sets);
+                own.chain(nested).any(|sets| {
+                    sets.get(&set)
+                        .is_some_and(|set_spec| set_spec.variants.contains_key(variant))
+                })
             })
         });
         let Some(variant) = chosen else {
             continue;
         };
         selections.insert(set, variant);
-        // Selections authored in the chosen branch, and in branches they
-        // select in turn.
-        let mut pending = alloc::vec![(set, variant)];
-        while let Some((set, variant)) = pending.pop() {
+        // Selections authored in the selected branches, and in branches
+        // they select in turn.
+        loop {
+            let mut added: Vec<(TokenId, TokenId)> = Vec::new();
             for (spec, context) in specs {
-                let Some(branch) = spec
-                    .variant_sets
-                    .get(&set)
-                    .and_then(|set_spec| set_spec.variants.get(&variant))
-                else {
-                    continue;
-                };
-                let inner = site_selections(store, &branch.variant_selections, *context);
-                for (inner_set, inner_variant) in inner.iter() {
-                    if !selections.contains_key(inner_set) {
-                        selections.insert(*inner_set, *inner_variant);
-                        pending.push((*inner_set, *inner_variant));
+                for branch in spec.selected_variant_branches(selections) {
+                    let inner = site_selections(store, &branch.spec.variant_selections, *context);
+                    for (inner_set, inner_variant) in inner.iter() {
+                        if !selections.contains_key(inner_set)
+                            && !added.iter().any(|(s, _)| s == inner_set)
+                        {
+                            added.push((*inner_set, *inner_variant));
+                        }
                     }
                 }
             }
+            if added.is_empty() {
+                break;
+            }
+            selections.extend(added);
         }
     }
+}
+
+/// The variant sets `specs` declare, strongest first, in `variantSets`
+/// order (see [`PrimSpec::selected_variant_set_order`]).
+fn declared_sets(
+    specs: &[(&PrimSpec, SiteContext<'_>)],
+    selections: &HashMap<TokenId, TokenId>,
+) -> Vec<TokenId> {
+    let mut sets: Vec<TokenId> = Vec::new();
+    for (spec, _) in specs {
+        for set in spec.selected_variant_set_order(selections) {
+            if !sets.contains(&set) {
+                sets.push(set);
+            }
+        }
+    }
+    sets
 }
 
 #[cfg(test)]

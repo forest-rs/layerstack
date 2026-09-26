@@ -1,0 +1,44 @@
+#usda 1.0
+(
+    defaultPrim = "Grove"
+    upAxis = "Z"
+    metersPerUnit = 0.01
+    timeCodesPerSecond = 24
+    framesPerSecond = 24
+    startTimeCode = 0
+    endTimeCode = 40
+    doc = "A grove of trees, each a reference to one asset."
+)
+
+# References with layer offsets and scales: the asset's samples and
+# `timecode` values land in stage time.
+def Xform "Grove" (
+    kind = "assembly"
+)
+{
+    def "Oak" (
+        references = @./tree.usda@ (offset = 5)
+    )
+    {
+        double height = 7
+    }
+
+    def "Elm" (
+        references = @./tree.usda@</Tree> (offset = 2; scale = 2)
+    )
+    {
+    }
+
+    def "Ash" (
+        prepend references = [
+            @./tree.usda@ (offset = -3),
+            @./sapling.usda@
+        ]
+    )
+    {
+        over "Canopy"
+        {
+            float density = 0.25
+        }
+    }
+}

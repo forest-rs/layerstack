@@ -1,0 +1,18 @@
+#usda 1.0
+
+def Xform "Tree"
+{
+    double girth = 0.25
+    float leafFall.timeSamples = {
+        0: 0,
+        3: 1,
+    }
+
+    def Scope "Litter"
+    {
+        int count.timeSamples = {
+            1: 10,
+            2: 20,
+        }
+    }
+}

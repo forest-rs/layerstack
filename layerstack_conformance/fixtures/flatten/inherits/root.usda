@@ -1,0 +1,28 @@
+#usda 1.0
+
+# A class inherited by two prims, overridden locally on one; the class
+# itself is written as a class.
+class Xform "_class_Tree"
+{
+    double height = 4
+    token leafShape = "oval"
+
+    def Scope "Roots"
+    {
+        int depth = 2
+    }
+}
+
+def Xform "Birch" (
+    inherits = </_class_Tree>
+)
+{
+    token leafShape = "serrated"
+}
+
+def Xform "Pine" (
+    inherits = </_class_Tree>
+    references = @./conifer.usda@
+)
+{
+}

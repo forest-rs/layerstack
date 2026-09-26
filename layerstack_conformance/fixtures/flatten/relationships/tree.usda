@@ -1,0 +1,26 @@
+#usda 1.0
+(
+    defaultPrim = "Tree"
+)
+
+def Xform "Tree"
+{
+    double height = 5
+    rel trunk = </Tree/Trunk>
+    rel lights = </Tree/Lamp>
+
+    def Scope "Trunk"
+    {
+        double girth.connect = </Tree.height>
+        rel canopy = [</Tree/Canopy>, </Tree/Canopy.density>]
+    }
+
+    def Scope "Canopy"
+    {
+        float density = 0.5
+    }
+
+    def Scope "Lamp"
+    {
+    }
+}

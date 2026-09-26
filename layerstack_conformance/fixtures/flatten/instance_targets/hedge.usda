@@ -1,0 +1,20 @@
+#usda 1.0
+(
+    defaultPrim = "Hedge"
+)
+
+def Xform "Hedge"
+{
+    def Scope "Anchor"
+    {
+        rel next = </Hedge/Branch>
+        rel missing = </Hedge/Gone>
+        float pull.connect = </Hedge/Branch.weight>
+    }
+
+    def Scope "Branch"
+    {
+        float weight = 2
+        rel back = </Hedge/Anchor>
+    }
+}

@@ -1,0 +1,10 @@
+#usda 1.0
+(
+    defaultPrim = "Orchard"
+)
+
+def Xform "Orchard" (
+    payload = @./meadow.usda@</Meadow/Flowers> (offset = 1; scale = 0.5)
+)
+{
+}

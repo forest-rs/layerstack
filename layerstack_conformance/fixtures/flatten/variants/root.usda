@@ -1,0 +1,64 @@
+#usda 1.0
+
+# Variant selections are baked in: only the selected variants remain, with
+# their children and properties; a nested variant set too.
+def Xform "Tree" (
+    variants = {
+        string season = "autumn"
+        string size = "large"
+    }
+    prepend variantSets = ["season", "size"]
+)
+{
+    double height = 3
+
+    variantSet "season" = {
+        "autumn" (
+            variants = {
+                string palette = "red"
+            }
+            prepend variantSets = "palette"
+        ) {
+            token leafColor = "orange"
+
+            def Scope "FallenLeaves"
+            {
+                int count = 40
+            }
+
+            variantSet "palette" = {
+                "gold" {
+                    color3f tint = (1, 0.8, 0)
+                }
+                "red" {
+                    color3f tint = (0.8, 0.1, 0)
+                }
+            }
+        }
+        "spring" {
+            token leafColor = "green"
+
+            def Scope "Blossoms"
+            {
+            }
+        }
+    }
+
+    variantSet "size" = {
+        "large" {
+            double height = 9
+        }
+        "small" {
+            double height = 1
+        }
+    }
+}
+
+def "Grove" (
+    references = @./tree_asset.usda@
+    variants = {
+        string season = "spring"
+    }
+)
+{
+}

@@ -1,0 +1,33 @@
+#usda 1.0
+(
+    defaultPrim = "Tree"
+)
+
+def Xform "Tree" (
+    kind = "component"
+    prepend apiSchemas = ["MaterialBindingAPI"]
+    customData = {
+        int revision = 3
+        string author = "grove"
+    }
+)
+{
+    custom double height = 3
+    double growth.timeSamples = {
+        0: 1,
+        10: 2.5,
+    }
+    timecode planted = 5
+    timecode pruned.timeSamples = {
+        4: 8,
+    }
+
+    def Scope "Canopy"
+    {
+        float density = 0.75
+        float[] leaves.timeSamples = {
+            0: [1, 2],
+            20: [3, 4],
+        }
+    }
+}

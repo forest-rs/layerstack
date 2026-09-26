@@ -1211,7 +1211,7 @@ fn variant_specs_round_trip() {
     let root_path = layerstack::path::Path::parse_absolute("/Root", &mut store.tokens).unwrap();
     let root_id = store.paths.lookup(&root_path).unwrap();
     let prim = &layer.prims[&root_id];
-    assert_eq!(prim.variant_set_order, [season, age], "set order");
+    assert_eq!(prim.variant_set_order, [season], "set order");
     assert_eq!(prim.variant_selections.get(&season), Some(&winter));
     assert_eq!(prim.variant_selections.get(&age), Some(&old));
     let branch = &prim.variant_sets[&season].variants[&winter];
@@ -1221,13 +1221,20 @@ fn variant_specs_round_trip() {
         Some(DocValue::Double(2.0)),
         "branch property"
     );
-    let nested = &prim.variant_sets[&age].variants[&old];
+    assert!(
+        !prim.variant_sets.contains_key(&age),
+        "not on the prim spec"
+    );
+    assert_eq!(branch.variant_set_order, [age], "nested set order");
+    assert!(
+        prim.variant_spec(&[(season, winter), (age, old)]).is_some(),
+        "nested in its branch"
+    );
     let site = layerstack::spec_path::VariantSelectionSite {
         host_path: root_id,
         set: season,
         variant: winter,
     };
-    assert_eq!(nested.outer_variant_sites, [site], "nested in its branch");
     let snow = layerstack::path::Path::parse_absolute("/Root/Snow", &mut store.tokens).unwrap();
     let snow = store.paths.lookup(&snow).unwrap();
     assert!(

@@ -255,7 +255,8 @@ impl Same for VariantSpec {
             specializes,
             payloads,
             variant_selections,
-            outer_variant_sites,
+            variant_sets,
+            variant_set_order,
             property_order,
         } = self;
         fields.same(&other.fields)
@@ -266,7 +267,8 @@ impl Same for VariantSpec {
             && *specializes == other.specializes
             && *payloads == other.payloads
             && *variant_selections == other.variant_selections
-            && *outer_variant_sites == other.outer_variant_sites
+            && variant_sets.same(&other.variant_sets)
+            && *variant_set_order == other.variant_set_order
             && *property_order == other.property_order
     }
 }

@@ -990,8 +990,6 @@ impl Stage {
         prim: PathId,
         store: &dyn LayerStore,
     ) -> Option<Vec<TokenId>> {
-        use crate::spec_path::SpecComponent;
-
         let index = self.prims.get(&prim)?;
         index.sources.iter().find_map(|source| {
             let spec = store.layer(source.layer_id)?.source_prim_spec(
@@ -999,15 +997,11 @@ impl Stage {
                 &source.spec_path,
                 store.paths(),
             )?;
-            match source.spec_path.components().last() {
-                Some(SpecComponent::VariantSelection { set, variant }) => spec
-                    .variant_sets
-                    .get(set)?
-                    .variants
-                    .get(variant)?
-                    .property_order
-                    .clone(),
-                _ => spec.property_order.clone(),
+            let chain = source.spec_path.variant_chain();
+            if chain.is_empty() {
+                spec.property_order.clone()
+            } else {
+                spec.variant_spec(&chain)?.property_order.clone()
             }
         })
     }

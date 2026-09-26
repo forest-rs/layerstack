@@ -59,8 +59,9 @@
 //! stacks (relocated prims composed at their targets beneath relocate
 //! nodes, their sources prohibited), asset paths authored as variable
 //! expressions, evaluated with the expression variables of the referencing
-//! layer stacks, and variant selections, including fallbacks, that do not
-//! depend on the features below.
+//! layer stacks, variant sets nested in other branches, each branch a
+//! variant spec of its own, and variant selections, including fallbacks,
+//! that do not depend on the features below.
 //!
 //! # Not supported
 //!
@@ -68,8 +69,8 @@
 //! - Implied classes in population and variant selection
 //!   ([`Cause::ImpliedClasses`]).
 //! - Variant selections of the sites ancestral arcs reach, made before the
-//!   prim's index is complete ([`Cause::AncestralArcs`]), and
-//!   some nested variant specs ([`Cause::VariantSpecs`]).
+//!   prim's index is complete ([`Cause::AncestralArcs`]), and variant
+//!   sets a specialized class selects ([`Cause::VariantSpecs`]).
 //!
 //! The test prints the per-cause tally and the list of exact matches.
 
@@ -294,8 +295,7 @@ fn authored_default(loaded: &LoadedStage, layer: LayerId, spec: &SpecPath) -> Au
     let Some(branch) = layer
         .prims
         .get(&host_path)
-        .and_then(|prim| prim.variant_sets.get(&set))
-        .and_then(|set| set.variants.get(&variant))
+        .and_then(|prim| prim.variant_spec(&[(set, variant)]))
     else {
         return Authored::Unknown;
     };
@@ -504,10 +504,10 @@ enum Cause {
     /// prim's arcs are all added (`_EvalNodeAncestralVariantSets` in
     /// `pxr/usd/pcp/primIndex.cpp`).
     AncestralArcs,
-    /// Variant branch sites are missing: a variant set nested in a branch of
-    /// the same prim that reuses an enclosing set's name shares that set's
-    /// [`layerstack::VariantSpec`]s, and a branch selected only through
-    /// another arc is not composed at every site hosting it.
+    /// A variant set selected only by a class the prim specializes is not
+    /// selected: the prim's variant selections are resolved without its
+    /// specializes targets, which OpenUSD adds before any variant set is
+    /// evaluated (`Task::PriorityOrder` in `pxr/usd/pcp/primIndex.cpp`).
     VariantSpecs,
 
     // Unsupported features.
@@ -562,15 +562,6 @@ const SKIPPED: &[(&str, &str)] = &[
 
 /// Every fixture that does not match the oracle exactly.
 const KNOWN: &[Known] = &[
-    Known {
-        fixture: "BasicNestedVariants_root",
-        causes: &[C::VariantSpecs],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingSite],
-        reason: "`/DirectlyNestedVariants` lacks the outer `{standin=anim}` branch of directly nested variant sets",
-    },
     Known {
         fixture: "ErrorInvalidReferenceToRelocationSource_root",
         causes: &[C::Relocates],

@@ -6,13 +6,16 @@
 //! A layer stores a prim spec authored inside variant branches
 //! (`/Rock{shape=jagged}Child`) at its namespace path, with the branches
 //! as its [`PrimSpec::outer_variant_sites`], and a variant spec
-//! (`/Rock{shape=jagged}`) inside the prim spec hosting its variant set.
-//! This module turns a [`SpecPath`] into that storage location.
+//! (`/Rock{shape=jagged}`) inside the spec holding its variant set: the
+//! prim spec hosting it, or for a set nested in another branch
+//! (`/Rock{shape=jagged}{size=big}`), that branch's variant spec. This
+//! module turns a [`SpecPath`] into that storage location.
 
 use alloc::vec::Vec;
 
 use crate::{
-    doc::{FieldEntry, FieldValue, Layer, PrimSpec, Value, VariantSpec, get_field},
+    HashMap,
+    doc::{FieldEntry, FieldValue, Layer, PrimSpec, Value, VariantSetSpec, VariantSpec, get_field},
     interner::TokenId,
     path::{Path, PathId, PathInterner},
     property::{PropertyEntry, PropertySpec, PropertyType, get_property},
@@ -31,7 +34,8 @@ pub(crate) enum Loc {
         sites: Vec<VariantSelectionSite>,
     },
     /// The variant spec of the last of `sites`, hosted at `host`; the
-    /// others are the branches enclosing it.
+    /// others are the branches enclosing it, those hosted at `host` too
+    /// last (`/Rock{a=x}{b=y}`).
     Variant {
         host: PathId,
         sites: Vec<VariantSelectionSite>,
@@ -41,7 +45,7 @@ pub(crate) enum Loc {
 impl Loc {
     /// The storage location of the prim or variant spec path `path` (its
     /// property suffix is ignored), interning the variant hosts' paths;
-    /// `None` for a path the layer model cannot store: a variant spec
+    /// `None` for a path editing does not reach yet: a variant spec
     /// nested in another branch of the same prim (`/Rock{a=x}{b=y}`).
     pub(crate) fn of(path: &SpecPath, paths: &mut PathInterner) -> Option<Self> {
         Self::with_hosts(path, |host| Some(paths.intern(host)))
@@ -109,20 +113,29 @@ impl Loc {
         }
     }
 
-    /// For a variant spec, the location of the prim spec hosting it, the
-    /// selection naming it, and the branches enclosing it.
+    /// For a variant spec, the location of the spec holding its variant
+    /// set, and the selection naming it: the prim spec hosting the set, or
+    /// for a set nested in another branch of the same prim
+    /// (`/Rock{a=x}{b=y}`), that branch's variant spec (`/Rock{a=x}`).
+    ///
+    /// Spec: AOUSD Core §7.3.6 (prim and variant specs contain variant set
+    /// specs).
     pub(crate) fn variant_parts(&self) -> Option<(Self, VariantSelectionSite)> {
         let Self::Variant { host, sites } = self else {
             return None;
         };
         let (site, outer) = sites.split_last()?;
-        Some((
-            Self::Prim {
+        let holder = match outer.last() {
+            Some(enclosing) if enclosing.host_path == *host => Self::Variant {
+                host: *host,
+                sites: outer.to_vec(),
+            },
+            _ => Self::Prim {
                 path: *host,
                 sites: outer.to_vec(),
             },
-            *site,
-        ))
+        };
+        Some((holder, *site))
     }
 
     /// The location of the spec that lists this prim spec among its
@@ -184,6 +197,23 @@ impl<'a> SpecRef<'a> {
             Self::Variant(spec) => spec.variant_selections.get(&set).copied(),
         }
     }
+
+    /// The variant sets this spec holds: a prim spec's own, or those nested
+    /// in a variant spec.
+    pub(crate) fn variant_sets(self) -> &'a HashMap<TokenId, VariantSetSpec> {
+        match self {
+            Self::Prim(spec) => &spec.variant_sets,
+            Self::Variant(spec) => &spec.variant_sets,
+        }
+    }
+
+    /// The `variantSets` order of the sets this spec holds.
+    pub(crate) fn variant_set_order(self) -> &'a [TokenId] {
+        match self {
+            Self::Prim(spec) => &spec.variant_set_order,
+            Self::Variant(spec) => &spec.variant_set_order,
+        }
+    }
 }
 
 /// A prim-like spec found at a [`Loc`], mutably.
@@ -193,7 +223,7 @@ pub(crate) enum SpecMut<'a> {
     Variant(&'a mut VariantSpec),
 }
 
-impl SpecMut<'_> {
+impl<'a> SpecMut<'a> {
     pub(crate) fn fields(&mut self) -> &mut Vec<FieldEntry> {
         match self {
             Self::Prim(spec) => &mut spec.fields,
@@ -215,10 +245,24 @@ impl SpecMut<'_> {
         }
     }
 
-    pub(crate) fn variant_selections(&mut self) -> &mut crate::HashMap<TokenId, TokenId> {
+    pub(crate) fn variant_selections(&mut self) -> &mut HashMap<TokenId, TokenId> {
         match self {
             Self::Prim(spec) => &mut spec.variant_selections,
             Self::Variant(spec) => &mut spec.variant_selections,
+        }
+    }
+
+    /// The variant sets this spec holds and their `variantSets` order (see
+    /// [`SpecRef::variant_sets`]).
+    pub(crate) fn into_variant_sets(
+        self,
+    ) -> (
+        &'a mut HashMap<TokenId, VariantSetSpec>,
+        &'a mut Vec<TokenId>,
+    ) {
+        match self {
+            Self::Prim(spec) => (&mut spec.variant_sets, &mut spec.variant_set_order),
+            Self::Variant(spec) => (&mut spec.variant_sets, &mut spec.variant_set_order),
         }
     }
 }
@@ -228,16 +272,13 @@ pub(crate) fn spec_at<'a>(layer: &'a Layer, loc: &Loc) -> Option<SpecRef<'a>> {
     match loc {
         Loc::Prim { path, sites } => layer.prim_spec_in(*path, sites).map(SpecRef::Prim),
         Loc::Variant { .. } => {
-            let (host, site) = loc.variant_parts()?;
-            let SpecRef::Prim(host_spec) = spec_at(layer, &host)? else {
-                return None;
-            };
-            let variant = host_spec
-                .variant_sets
+            let (holder, site) = loc.variant_parts()?;
+            let variant = spec_at(layer, &holder)?
+                .variant_sets()
                 .get(&site.set)?
                 .variants
                 .get(&site.variant)?;
-            (variant.outer_variant_sites == host.sites()).then_some(SpecRef::Variant(variant))
+            Some(SpecRef::Variant(variant))
         }
     }
 }
@@ -247,17 +288,10 @@ pub(crate) fn spec_at_mut<'a>(layer: &'a mut Layer, loc: &Loc) -> Option<SpecMut
     match loc {
         Loc::Prim { path, sites } => prim_spec_mut(layer, *path, sites).map(SpecMut::Prim),
         Loc::Variant { .. } => {
-            let (host, site) = loc.variant_parts()?;
-            let Loc::Prim { path, sites } = &host else {
-                return None;
-            };
-            let host_spec = prim_spec_mut(layer, *path, sites)?;
-            let variant = host_spec
-                .variant_sets
-                .get_mut(&site.set)?
-                .variants
-                .get_mut(&site.variant)?;
-            (variant.outer_variant_sites == *sites).then_some(SpecMut::Variant(variant))
+            let (holder, site) = loc.variant_parts()?;
+            let (sets, _) = spec_at_mut(layer, &holder)?.into_variant_sets();
+            let variant = sets.get_mut(&site.set)?.variants.get_mut(&site.variant)?;
+            Some(SpecMut::Variant(variant))
         }
     }
 }

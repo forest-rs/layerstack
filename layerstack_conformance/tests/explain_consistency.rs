@@ -101,10 +101,7 @@ fn names(store: &InMemoryStore) -> Names {
     for layer in store.layers.values() {
         for spec in prim_specs(layer) {
             names.types.extend(spec.type_name);
-            let variants = spec
-                .variant_sets
-                .values()
-                .flat_map(|set| set.variants.values());
+            let variants = spec.variant_branches().map(|branch| branch.spec);
             let fields = spec
                 .fields
                 .iter()

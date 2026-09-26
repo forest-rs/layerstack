@@ -205,10 +205,7 @@ fn count_values(layer: &Layer) -> u64 {
     fields(&layer.metadata)
         + prims
             .map(|prim| {
-                let variants = prim
-                    .variant_sets
-                    .values()
-                    .flat_map(|set| set.variants.values());
+                let variants = prim.variant_branches().map(|branch| branch.spec);
                 fields(&prim.fields)
                     + properties(&prim.properties)
                     + variants

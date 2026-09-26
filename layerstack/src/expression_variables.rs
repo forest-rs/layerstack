@@ -635,22 +635,21 @@ pub(crate) fn site_selections<'m>(
 }
 
 /// The variant selections authored at `source`: those of its prim spec, or
-/// of the variant branch its spec path ends in, as authored.
+/// of the variant spec its spec path ends in (`/P{a=x}{b=y}` for a set
+/// nested in a branch), as authored.
 fn authored_source_selections<'s>(
     store: &'s dyn LayerStore,
     source: &OpinionKey,
 ) -> Option<&'s HashMap<TokenId, TokenId>> {
-    use crate::spec_path::SpecComponent;
     let spec = store.layer(source.layer_id).and_then(|layer| {
         layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
     })?;
-    match source.spec_path.components().last() {
-        Some(SpecComponent::VariantSelection { set, variant }) => spec
-            .variant_sets
-            .get(set)
-            .and_then(|set_spec| set_spec.variants.get(variant))
-            .map(|branch| &branch.variant_selections),
-        _ => Some(&spec.variant_selections),
+    let chain = source.spec_path.variant_chain();
+    if chain.is_empty() {
+        Some(&spec.variant_selections)
+    } else {
+        spec.variant_spec(&chain)
+            .map(|branch| &branch.variant_selections)
     }
 }
 
@@ -719,7 +718,9 @@ pub(crate) fn read_selections(
 
 /// The variant sets some node of `index` declares: each node's `variantSets`
 /// list op composed over its sources, weakest first, so a stronger spec's
-/// `delete` removes a weaker one's declaration in that node.
+/// `delete` removes a weaker one's declaration in that node. A variant
+/// node's sources declare the sets nested in its branch
+/// ([`crate::doc::PrimSpec::variant_sets_in`]).
 ///
 /// OpenUSD: `PcpComposeSiteVariantSets` in `pxr/usd/pcp/composeSite.cpp`,
 /// called for each node by `_EvalNodeVariantSets` in
@@ -732,9 +733,15 @@ pub(crate) fn declared_variant_sets(store: &dyn LayerStore, index: &PrimIndex) -
         }) else {
             continue;
         };
+        let chain = source.spec_path.variant_chain();
+        let Some((_, order)) = spec.variant_sets_in(&chain) else {
+            continue;
+        };
         let names = per_node.entry(source.node).or_default();
-        names.retain(|name| !spec.deleted_variant_sets.contains(name));
-        for name in &spec.variant_set_order {
+        if chain.is_empty() {
+            names.retain(|name| !spec.deleted_variant_sets.contains(name));
+        }
+        for name in order {
             if !names.contains(name) {
                 names.push(*name);
             }
@@ -760,11 +767,9 @@ fn layer_arcs(layer: &Layer) -> impl Iterator<Item = &Reference> {
         .values()
         .chain(layer.variant_prims.values().flatten())
         .flat_map(|spec| {
-            let branches = spec
-                .variant_sets
-                .values()
-                .flat_map(|set| set.variants.values())
-                .flat_map(|variant| items(&variant.references).chain(items(&variant.payloads)));
+            let branches = spec.variant_branches().flat_map(|branch| {
+                items(&branch.spec.references).chain(items(&branch.spec.payloads))
+            });
             items(&spec.references)
                 .chain(items(&spec.payloads))
                 .chain(branches)

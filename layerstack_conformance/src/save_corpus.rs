@@ -18,7 +18,9 @@
 //! subroot `defaultPrim`, animation, and composition arcs written by their
 //! authored asset paths (placements of a shared asset, a retimed payload,
 //! inherits and specializes, and arcs whose assets are missing), and
-//! variant sets with their selections, branch prim specs and nested sets,
+//! variant sets with their selections, branch prim specs and sets nested in
+//! branches (a set reusing an enclosing set's name, and one name nested under
+//! two branches, included),
 //! within the supported subset of [`layerstack_usda::save`]. [`unsupported_cases`] are
 //! encodings outside that subset, each with the error naming its source
 //! path.
@@ -169,8 +171,9 @@ impl Imported {
         self.layer.prims.get_mut(&id).expect("prim spec")
     }
 
-    /// The variant `variant` of set `set` on the prim spec at `path`
-    /// outside any variant, for editing.
+    /// The variant spec at `chain` on the prim spec at `path` outside any
+    /// variant, for editing: `[("a", "x"), ("b", "y")]` names `{a=x}{b=y}`,
+    /// the branch `y` of the set `b` nested in the branch `x` of `a`.
     ///
     /// # Panics
     ///
@@ -178,15 +181,14 @@ impl Imported {
     pub fn variant(
         &mut self,
         path: &str,
-        set: &str,
-        variant: &str,
+        chain: &[(&str, &str)],
     ) -> &mut layerstack::doc::VariantSpec {
-        let set = self.tokens.intern(set);
-        let variant = self.tokens.intern(variant);
+        let chain: Vec<_> = chain
+            .iter()
+            .map(|(set, variant)| (self.tokens.intern(set), self.tokens.intern(variant)))
+            .collect();
         self.prim(path)
-            .variant_sets
-            .get_mut(&set)
-            .and_then(|set| set.variants.get_mut(&variant))
+            .variant_spec_mut(&chain)
             .expect("variant spec")
     }
 
@@ -470,7 +472,7 @@ pub fn cases() -> Vec<SaveCase> {
             source: VARIANT_SETS,
             edit: |layer| {
                 let height = layer.tokens.intern("height");
-                let summer = layer.variant("/Forest/Oak", "season", "summer");
+                let summer = layer.variant("/Forest/Oak", &[("season", "summer")]);
                 layerstack::property::get_property_mut(&mut summer.properties, height)
                     .expect("summer height")
                     .default = Some(Value::Double(5.0));
@@ -674,25 +676,24 @@ pub fn composed(root: Root<'_>, assets: &[(&str, &str)]) -> String {
 
 /// The properties a prim stack entry authors: those of the prim spec at
 /// `spec_path`, in the variant branches that enclose it (`/A{v=x}B`), or of
-/// the variant it ends with (`/A{v=x}`).
+/// the variant it ends with (`/A{v=x}`, `/A{v=x}{w=y}`).
 fn stack_properties<'a>(
     store: &'a InMemoryStore,
     layer_id: LayerId,
     spec_path: &SpecPath,
 ) -> Option<&'a [PropertyEntry]> {
+    let layer = store.layers.get(&layer_id)?;
+    if !spec_path.variant_chain().is_empty() {
+        return Some(&layer.variant_spec_at(spec_path, &store.paths)?.properties);
+    }
     let mut segments = Vec::new();
     let mut sites = Vec::new();
-    let mut last = None;
     for component in spec_path.components() {
         match *component {
-            SpecComponent::Prim(name) => {
-                sites.extend(last.take());
-                segments.push(name);
-            }
+            SpecComponent::Prim(name) => segments.push(name),
             SpecComponent::VariantSelection { set, variant } => {
-                sites.extend(last.take());
                 let host_path = store.paths.lookup(&Path::root().join(&segments))?;
-                last = Some(VariantSelectionSite {
+                sites.push(VariantSelectionSite {
                     host_path,
                     set,
                     variant,
@@ -701,20 +702,7 @@ fn stack_properties<'a>(
         }
     }
     let id = store.paths.lookup(&Path::root().join(&segments))?;
-    // Selections on the prim itself name one of its spec's variants.
-    sites.retain(|site| site.host_path != id);
-    let spec = store.layers.get(&layer_id)?.prim_spec_in(id, &sites)?;
-    Some(match last {
-        Some(site) => {
-            &spec
-                .variant_sets
-                .get(&site.set)?
-                .variants
-                .get(&site.variant)?
-                .properties
-        }
-        None => &spec.properties,
-    })
+    Some(&layer.prim_spec_in(id, &sites)?.properties)
 }
 
 /// A value with its tokens spelled out.

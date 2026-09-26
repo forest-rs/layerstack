@@ -316,19 +316,22 @@ fn render_prim(out: &mut Vec<String>, path: PathId, spec: &PrimSpec, names: Name
         spec.property_order.as_deref(),
         names,
     );
-    let mut sets: Vec<_> = spec.variant_sets.iter().collect();
-    sets.sort_by_key(|(name, _)| names.token(**name));
-    for (set, set_spec) in sets {
-        let mut variants: Vec<_> = set_spec.variants.iter().collect();
-        variants.sort_by_key(|(name, _)| names.token(**name));
-        for (name, variant) in variants {
-            out.push(format!(
-                "{indent}variant {{{}={}}}",
-                names.token(*set),
-                names.token(*name)
-            ));
-            render_variant(out, &format!("{indent}    "), variant, names);
-        }
+    // Every variant spec, nested ones included, by its path on the prim
+    // spec (`{a=x}{b=y}`).
+    let mut variants: Vec<(String, &VariantSpec)> = spec
+        .variant_branches()
+        .map(|branch| {
+            let path: String = branch
+                .chain()
+                .map(|(set, variant)| format!("{{{}={}}}", names.token(set), names.token(variant)))
+                .collect();
+            (path, branch.spec)
+        })
+        .collect();
+    variants.sort_by(|a, b| a.0.cmp(&b.0));
+    for (path, variant) in variants {
+        out.push(format!("{indent}variant {path}"));
+        render_variant(out, &format!("{indent}    "), variant, names);
     }
 }
 

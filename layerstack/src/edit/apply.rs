@@ -16,7 +16,7 @@ use alloc::{boxed::Box, vec::Vec};
 use super::{
     error::{EditError, Rejection, Slot},
     same::Same,
-    spec::{Loc, SpecMut, SpecRef, conforms, spec_at, spec_at_mut},
+    spec::{Loc, SpecRef, conforms, spec_at, spec_at_mut},
     target::Address,
     transaction::{Op, Precondition, Transaction, authored},
 };
@@ -53,8 +53,9 @@ pub(crate) enum Raw {
         index: Option<usize>,
     },
     /// Stores (`Some`) or removes (`None`) the variant `variant` of the set
-    /// `set` on the prim spec at `host`. Storing creates the set, and lists
-    /// it in the host's variant set order, if needed; removing drops the
+    /// `set` held by the spec at `host`: a prim spec, or the variant spec a
+    /// nested set belongs to. Storing creates the set, and lists it in the
+    /// holder's variant set order, if needed; removing drops the
     /// set when `drop_set` and it is left empty, and the set's order entry
     /// when `drop_order`.
     Variant {
@@ -918,32 +919,25 @@ fn ensure(
             }
         }
         Loc::Variant { .. } => {
-            let (host, site) = loc.variant_parts().expect("a variant location");
-            ensure(store, id, &host, journal)?;
-            let Some(SpecRef::Prim(host_spec)) = spec_at(layer(store, id)?, &host) else {
-                return Err(diverged(store, &host));
+            // The prim spec hosting the set, or for a set nested in another
+            // branch (`/P{a=x}{b=y}`), that branch's variant spec.
+            let (holder, site) = loc.variant_parts().expect("a variant location");
+            ensure(store, id, &holder, journal)?;
+            let Some(holder_spec) = spec_at(layer(store, id)?, &holder) else {
+                return Err(diverged(store, &holder));
             };
-            let set = host_spec.variant_sets.get(&site.set);
-            if set.is_some_and(|set| set.variants.contains_key(&site.variant)) {
-                // A branch of that name enclosed by other branches of the
-                // host: `/P{a=x}{b=y}` and `/P{a=z}{b=y}`.
-                return Err(Rejection::UnsupportedPath(loc.spec_path(store.paths())));
-            }
             let (drop_set, drop_order) = (
-                set.is_none(),
-                !host_spec.variant_set_order.contains(&site.set),
+                !holder_spec.variant_sets().contains_key(&site.set),
+                !holder_spec.variant_set_order().contains(&site.set),
             );
             journal.run(
                 store,
                 Raw::Variant {
                     layer: id,
-                    host: host.clone(),
+                    host: holder,
                     set: site.set,
                     variant: site.variant,
-                    spec: Some(VariantSpec {
-                        outer_variant_sites: host.sites().to_vec(),
-                        ..VariantSpec::default()
-                    }),
+                    spec: Some(VariantSpec::default()),
                     drop_set,
                     drop_order,
                 },
@@ -1181,23 +1175,21 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
             drop_order,
             ..
         } => {
-            let Some(SpecMut::Prim(host_spec)) =
-                store.layer_mut(id).and_then(|l| spec_at_mut(l, host))
-            else {
+            let Some(holder) = store.layer_mut(id).and_then(|l| spec_at_mut(l, host)) else {
                 return Err(diverged_at(store, host));
             };
+            let (variant_sets, variant_set_order) = holder.into_variant_sets();
             match spec {
                 Some(spec) => {
-                    let created_set = !host_spec.variant_sets.contains_key(set);
-                    let listed = host_spec.variant_set_order.contains(set);
-                    let old = host_spec
-                        .variant_sets
+                    let created_set = !variant_sets.contains_key(set);
+                    let listed = variant_set_order.contains(set);
+                    let old = variant_sets
                         .entry(*set)
                         .or_default()
                         .variants
                         .insert(*variant, spec.clone());
                     if !listed {
-                        host_spec.variant_set_order.push(*set);
+                        variant_set_order.push(*set);
                     }
                     Ok(Raw::Variant {
                         layer: id,
@@ -1210,17 +1202,17 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                     })
                 }
                 None => {
-                    let Some(set_spec) = host_spec.variant_sets.get_mut(set) else {
+                    let Some(set_spec) = variant_sets.get_mut(set) else {
                         return Err(diverged_at(store, host));
                     };
                     let Some(old) = set_spec.variants.remove(variant) else {
                         return Err(diverged_at(store, host));
                     };
                     if *drop_set && set_spec.variants.is_empty() {
-                        host_spec.variant_sets.remove(set);
+                        variant_sets.remove(set);
                     }
-                    if *drop_order && host_spec.variant_set_order.last() == Some(set) {
-                        host_spec.variant_set_order.pop();
+                    if *drop_order && variant_set_order.last() == Some(set) {
+                        variant_set_order.pop();
                     }
                     Ok(Raw::Variant {
                         layer: id,

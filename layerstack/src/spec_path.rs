@@ -250,6 +250,27 @@ impl SpecPath {
         self.property
     }
 
+    /// Returns the variant selections this path ends in, after its last
+    /// prim name, outermost first: `[(a, x), (b, y)]` for `/P{a=x}{b=y}`
+    /// (and for `/P{a=x}{b=y}.attr`), empty for `/P` or `/P{a=x}C`. They
+    /// name a variant spec of the prim spec at [`SpecPath::prim_path`] (see
+    /// [`crate::PrimSpec::variant_spec`]).
+    #[must_use]
+    pub fn variant_chain(&self) -> Vec<(TokenId, TokenId)> {
+        let start = self
+            .components
+            .iter()
+            .rposition(|component| matches!(component, SpecComponent::Prim(_)))
+            .map_or(0, |index| index + 1);
+        self.components[start..]
+            .iter()
+            .filter_map(|component| match *component {
+                SpecComponent::VariantSelection { set, variant } => Some((set, variant)),
+                SpecComponent::Prim(_) => None,
+            })
+            .collect()
+    }
+
     /// Returns the structured components.
     #[must_use]
     pub fn components(&self) -> &[SpecComponent] {

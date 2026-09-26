@@ -919,14 +919,19 @@ impl Reference {
 /// Opinions for a variant branch.
 ///
 /// A variant spec holds the opinions the branch authors for the prim hosting
-/// its variant set. Prims authored inside the branch are not held here: like
-/// OpenUSD's `SdfVariantSpec`, whose prim spec owns the branch's namespace
-/// children (`pxr/usd/sdf/variantSpec.h`), each of them is a [`PrimSpec`] of
-/// its own, stored in the [`Layer`] with the branch recorded in its
-/// [`PrimSpec::outer_variant_sites`].
+/// its variant set, and the variant sets nested in the branch: like
+/// OpenUSD's `SdfVariantSpec`, whose prim spec owns the branch's variant
+/// sets and namespace children (`pxr/usd/sdf/variantSpec.h`,
+/// `pxr/usd/sdf/variantSetSpec.h`), each branch is a spec of its own,
+/// addressed by its variant-qualified path (`/P{a=x}`, and `/P{a=x}{b=y}`
+/// for a set nested in it). A variant set of one name nested under two
+/// branches is two sets. Prims authored inside the branch are not held
+/// here: each of them is a [`PrimSpec`] of its own, stored in the [`Layer`]
+/// with the branch recorded in its [`PrimSpec::outer_variant_sites`].
 ///
 /// Spec: AOUSD Core §7.3.6 (variant specs may contain any spec a prim spec
-/// contains), §7.6.7 (variant specs), §10.3.2.5 (variants arc).
+/// contains, variant set specs included), §7.6.7 (variant specs),
+/// §10.3.2.5 (variants arc).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct VariantSpec {
     /// Authored metadata fields on the prim hosting the variant set, within
@@ -966,53 +971,182 @@ pub struct VariantSpec {
     /// When a variant branch header includes `variants = { string v2 = "b" }`,
     /// those selections apply to the owning prim when this variant is selected.
     pub variant_selections: HashMap<TokenId, TokenId>,
-    /// Outer selections enclosing this variant branch: the
-    /// [`PrimSpec::outer_variant_sites`] of the prim hosting the variant set,
-    /// followed, for a variant set nested in another branch of the same prim
-    /// (`/P{a=x}{b=y}`), by those enclosing branches.
+    /// The variant sets nested in this branch (`/P{a=x}{b=}`), keyed by
+    /// set name.
     ///
-    /// Branches on a prim outside any variant branch that are not nested
-    /// leave this empty. Composed provenance uses it to keep the full
-    /// variant-qualified source identity.
-    pub outer_variant_sites: Vec<VariantSelectionSite>,
+    /// They are sets of the prim hosting this branch, available only while
+    /// this branch is selected.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
+    /// specs).
+    pub variant_sets: HashMap<TokenId, VariantSetSpec>,
+    /// Ordered names of the variant sets this branch declares (its
+    /// `variantSets` metadata, then the sets it authors), as
+    /// [`PrimSpec::variant_set_order`] is for a prim spec.
+    pub variant_set_order: Vec<TokenId>,
     /// Property ordering authored inside this branch (`reorder properties`).
     ///
     /// Spec: AOUSD Core §7.6.7 (variant specs contribute prim spec fields).
     pub property_order: Option<Vec<TokenId>>,
 }
 
-impl VariantSpec {
-    /// Merges another [`VariantSpec`] into this one, combining authored
-    /// children and other fields.
-    ///
-    /// Used when the same variant branch name appears at multiple nesting
-    /// levels (e.g., an outer `standin=anim` and a deeply nested
-    /// `standin=anim` within `shadingVariant=spooky`).
-    pub fn merge(&mut self, other: Self) {
-        for child in other.authored_children {
-            if !self.authored_children.contains(&child) {
-                self.authored_children.push(child);
+/// One variant spec of a prim spec, with the branches of the same prim spec
+/// that enclose it (see [`PrimSpec::variant_branches`]).
+///
+/// The branch's variant-qualified path is the prim spec's path followed by
+/// [`VariantBranch::chain`]: `/P{a=x}{b=y}` for the branch `b=y` of a set
+/// nested in the branch `a=x` of `/P`.
+#[derive(Clone, Debug, PartialEq)]
+pub struct VariantBranch<'a> {
+    /// The enclosing branches of the same prim spec, outermost first, as
+    /// `(set, variant)`: empty for a set declared on the prim spec itself.
+    pub enclosing: Vec<(TokenId, TokenId)>,
+    /// The variant set name.
+    pub set: TokenId,
+    /// The variant name.
+    pub variant: TokenId,
+    /// The variant spec.
+    pub spec: &'a VariantSpec,
+}
+
+impl VariantBranch<'_> {
+    /// Every selection of the branch's path on its prim spec, outermost
+    /// first, ending with its own.
+    pub fn chain(&self) -> impl Iterator<Item = (TokenId, TokenId)> + '_ {
+        self.enclosing
+            .iter()
+            .copied()
+            .chain(core::iter::once((self.set, self.variant)))
+    }
+
+    /// The number of enclosing branches of the same prim spec.
+    #[must_use]
+    pub fn depth(&self) -> usize {
+        self.enclosing.len()
+    }
+
+    /// Whether `selections` (set → variant) selects this branch and every
+    /// branch enclosing it.
+    #[must_use]
+    pub fn is_selected(&self, selections: &HashMap<TokenId, TokenId>) -> bool {
+        self.chain()
+            .all(|(set, variant)| selections.get(&set) == Some(&variant))
+    }
+
+    /// The variant selection sites naming this branch, for the prim spec at
+    /// `host` whose own branch context is `outer` (its
+    /// [`PrimSpec::outer_variant_sites`]): `outer`, then this branch's
+    /// [`VariantBranch::chain`] hosted on `host`.
+    #[must_use]
+    pub fn sites(&self, outer: &[VariantSelectionSite], host: PathId) -> Vec<VariantSelectionSite> {
+        let mut sites = Vec::with_capacity(outer.len() + self.enclosing.len() + 1);
+        sites.extend_from_slice(outer);
+        sites.extend(self.chain().map(|(set, variant)| VariantSelectionSite {
+            host_path: host,
+            set,
+            variant,
+        }));
+        sites
+    }
+}
+
+/// The variant spec reached from `sets` through `chain`, outermost first.
+fn variant_spec_in<'a>(
+    sets: &'a HashMap<TokenId, VariantSetSpec>,
+    chain: &[(TokenId, TokenId)],
+) -> Option<&'a VariantSpec> {
+    let ((set, variant), rest) = chain.split_first()?;
+    let spec = sets.get(set)?.variants.get(variant)?;
+    if rest.is_empty() {
+        Some(spec)
+    } else {
+        variant_spec_in(&spec.variant_sets, rest)
+    }
+}
+
+/// The variant spec reached from `sets` through `chain`, mutably.
+fn variant_spec_in_mut<'a>(
+    sets: &'a mut HashMap<TokenId, VariantSetSpec>,
+    chain: &[(TokenId, TokenId)],
+) -> Option<&'a mut VariantSpec> {
+    let ((set, variant), rest) = chain.split_first()?;
+    let spec = sets.get_mut(set)?.variants.get_mut(variant)?;
+    if rest.is_empty() {
+        Some(spec)
+    } else {
+        variant_spec_in_mut(&mut spec.variant_sets, rest)
+    }
+}
+
+/// Iterates the variant specs of a prim spec, each before those nested in
+/// it (see [`PrimSpec::variant_branches`] and
+/// [`PrimSpec::selected_variant_branches`]).
+#[derive(Clone, Debug)]
+pub struct VariantBranches<'a> {
+    /// Branches still to visit.
+    pending: Vec<VariantBranch<'a>>,
+    /// When set, only the branches it selects are visited.
+    selections: Option<&'a HashMap<TokenId, TokenId>>,
+}
+
+impl<'a> VariantBranches<'a> {
+    fn new(
+        sets: &'a HashMap<TokenId, VariantSetSpec>,
+        selections: Option<&'a HashMap<TokenId, TokenId>>,
+    ) -> Self {
+        let mut branches = Self {
+            pending: Vec::new(),
+            selections,
+        };
+        branches.push_sets(&[], sets);
+        branches
+    }
+
+    fn push_sets(
+        &mut self,
+        enclosing: &[(TokenId, TokenId)],
+        sets: &'a HashMap<TokenId, VariantSetSpec>,
+    ) {
+        for (set, set_spec) in sets {
+            match self.selections {
+                Some(selections) => {
+                    let Some(variant) = selections.get(set) else {
+                        continue;
+                    };
+                    if let Some(spec) = set_spec.variants.get(variant) {
+                        self.pending.push(VariantBranch {
+                            enclosing: enclosing.to_vec(),
+                            set: *set,
+                            variant: *variant,
+                            spec,
+                        });
+                    }
+                }
+                None => {
+                    for (variant, spec) in &set_spec.variants {
+                        self.pending.push(VariantBranch {
+                            enclosing: enclosing.to_vec(),
+                            set: *set,
+                            variant: *variant,
+                            spec,
+                        });
+                    }
+                }
             }
         }
-        for entry in other.fields {
-            if !self.fields.iter().any(|e| e.name == entry.name) {
-                self.fields.push(entry);
-            }
+    }
+}
+
+impl<'a> Iterator for VariantBranches<'a> {
+    type Item = VariantBranch<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let branch = self.pending.pop()?;
+        if !branch.spec.variant_sets.is_empty() {
+            let chain: Vec<(TokenId, TokenId)> = branch.chain().collect();
+            self.push_sets(&chain, &branch.spec.variant_sets);
         }
-        for entry in other.properties {
-            if get_property(&self.properties, entry.name).is_none() {
-                self.properties.push(entry);
-            }
-        }
-        for (k, v) in other.variant_selections {
-            self.variant_selections.entry(k).or_insert(v);
-        }
-        if self.outer_variant_sites.is_empty() {
-            self.outer_variant_sites = other.outer_variant_sites;
-        }
-        if self.property_order.is_none() {
-            self.property_order = other.property_order;
-        }
+        Some(branch)
     }
 }
 
@@ -1118,9 +1252,15 @@ pub struct PrimSpec {
     pub authored_children: Vec<TokenId>,
     /// Authored variant selections (set -> chosen variant).
     pub variant_selections: HashMap<TokenId, TokenId>,
-    /// Authored variant sets available at this prim.
+    /// Authored variant sets of this prim spec (`/P{v=}`), keyed by set
+    /// name. Sets nested in a branch belong to that branch's
+    /// [`VariantSpec::variant_sets`]; [`PrimSpec::variant_branches`] walks
+    /// them all.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (prim specs contain variant set specs).
     pub variant_sets: HashMap<TokenId, VariantSetSpec>,
-    /// Ordered list of variant set names (from `variantSets` metadata).
+    /// Ordered names of the variant sets this prim spec declares (its
+    /// `variantSets` metadata, then the sets it authors).
     ///
     /// This determines the evaluation order for variant children.
     /// Children from later variant sets appear before earlier ones.
@@ -1330,6 +1470,108 @@ impl PrimSpec {
     pub fn with_active(mut self, active: bool) -> Self {
         self.active = Some(active);
         self
+    }
+
+    /// Iterates every variant spec of this prim spec, those of the variant
+    /// sets nested in a branch included, each before the sets nested in
+    /// it.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
+    /// specs).
+    pub fn variant_branches(&self) -> VariantBranches<'_> {
+        VariantBranches::new(&self.variant_sets, None)
+    }
+
+    /// Iterates the variant specs `selections` (set → variant) selects:
+    /// the selected branch of each of this prim spec's sets, then of each
+    /// set nested in a selected branch. A branch whose enclosing branch is
+    /// not selected is not visited, whatever its own set selects.
+    ///
+    /// Spec: AOUSD Core §10.3.2.5 (only the selected variant contributes).
+    pub fn selected_variant_branches<'a>(
+        &'a self,
+        selections: &'a HashMap<TokenId, TokenId>,
+    ) -> VariantBranches<'a> {
+        VariantBranches::new(&self.variant_sets, Some(selections))
+    }
+
+    /// Returns the variant spec at `chain` (outermost first) below this
+    /// prim spec: `[(a, x), (b, y)]` names `{a=x}{b=y}`. `None` for an
+    /// empty chain or one this prim spec does not author.
+    #[must_use]
+    pub fn variant_spec(&self, chain: &[(TokenId, TokenId)]) -> Option<&VariantSpec> {
+        variant_spec_in(&self.variant_sets, chain)
+    }
+
+    /// Returns the variant spec at `chain` mutably (see
+    /// [`PrimSpec::variant_spec`]).
+    pub fn variant_spec_mut(&mut self, chain: &[(TokenId, TokenId)]) -> Option<&mut VariantSpec> {
+        variant_spec_in_mut(&mut self.variant_sets, chain)
+    }
+
+    /// Returns the variant sets this prim spec declares under `selections`
+    /// (set → variant), in `variantSets` order: its own, then those each
+    /// selected branch nests, visiting the branches in their sets' declared
+    /// order.
+    ///
+    /// Only selected branches count, each in turn, so two branches that
+    /// declare the same nested sets in different orders do not interfere.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
+    /// specs), §10.3.2.5 (variant sets are evaluated in `variantSetNames`
+    /// order).
+    pub(crate) fn selected_variant_set_order(
+        &self,
+        selections: &HashMap<TokenId, TokenId>,
+    ) -> Vec<TokenId> {
+        fn visit(
+            sets: &HashMap<TokenId, VariantSetSpec>,
+            order: &[TokenId],
+            selections: &HashMap<TokenId, TokenId>,
+            out: &mut Vec<TokenId>,
+        ) {
+            for set in order {
+                if !out.contains(set) {
+                    out.push(*set);
+                }
+            }
+            for set in order {
+                let branch = selections
+                    .get(set)
+                    .and_then(|variant| sets.get(set)?.variants.get(variant));
+                if let Some(branch) = branch {
+                    visit(
+                        &branch.variant_sets,
+                        &branch.variant_set_order,
+                        selections,
+                        out,
+                    );
+                }
+            }
+        }
+        let mut sets = Vec::new();
+        visit(
+            &self.variant_sets,
+            &self.variant_set_order,
+            selections,
+            &mut sets,
+        );
+        sets
+    }
+
+    /// Returns the variant sets declared at `chain` below this prim spec,
+    /// with their `variantSets` order: this prim spec's own for an empty
+    /// chain, otherwise those nested in the variant spec it names.
+    #[must_use]
+    pub fn variant_sets_in(
+        &self,
+        chain: &[(TokenId, TokenId)],
+    ) -> Option<(&HashMap<TokenId, VariantSetSpec>, &[TokenId])> {
+        if chain.is_empty() {
+            return Some((&self.variant_sets, &self.variant_set_order));
+        }
+        let spec = self.variant_spec(chain)?;
+        Some((&spec.variant_sets, &spec.variant_set_order))
     }
 }
 
@@ -1746,6 +1988,50 @@ impl Layer {
             }
         }
         self.prim_spec_in(lookup_path, &sites)
+    }
+
+    /// Returns the variant spec at the variant-qualified `spec_path`
+    /// (`/P{a=x}`, `/P{a=x}{b=y}`, or `/A{v=x}P{a=y}` for a set on a prim
+    /// inside a branch), or `None` when this layer authors none there or
+    /// `spec_path` does not end in a variant selection. A property suffix
+    /// is ignored.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
+    /// specs), §7.6.7 (variant specs). OpenUSD addresses each `SdfVariantSpec`
+    /// by such a path (`SdfPath::IsPrimVariantSelectionPath`,
+    /// `pxr/usd/sdf/variantSpec.h`).
+    #[must_use]
+    pub fn variant_spec_at(
+        &self,
+        spec_path: &SpecPath,
+        paths: &PathInterner,
+    ) -> Option<&VariantSpec> {
+        let chain = spec_path.variant_chain();
+        if chain.is_empty() {
+            return None;
+        }
+        self.branch_prim_spec(spec_path.prim_path(), spec_path, paths)?
+            .variant_spec(&chain)
+    }
+
+    /// Returns the variant sets of the prim or variant spec at the
+    /// variant-qualified `spec_path`, with their `variantSets` order: those
+    /// of the prim spec for `/P` (or `/A{v=x}P`), those nested in the
+    /// variant spec for `/P{a=x}`. `None` when this layer authors no spec
+    /// there.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (prim and variant specs contain variant set
+    /// specs). OpenUSD: `SdfPrimSpec::GetVariantSets` and
+    /// `SdfVariantSpec::GetVariantSets`.
+    #[must_use]
+    pub fn variant_sets_at(
+        &self,
+        spec_path: &SpecPath,
+        paths: &PathInterner,
+    ) -> Option<(&HashMap<TokenId, VariantSetSpec>, &[TokenId])> {
+        let chain = spec_path.variant_chain();
+        self.branch_prim_spec(spec_path.prim_path(), spec_path, paths)?
+            .variant_sets_in(&chain)
     }
 
     /// Returns an authored layer metadata field, if present.
@@ -2347,5 +2633,101 @@ mod tests {
                 .map(|path| path.display(&tokens));
             assert_eq!(actual.as_deref(), *expected, "defaultPrim = {token:?}");
         }
+    }
+
+    /// Variant specs nest per branch: `/P{a=x}{a=x}` is a spec of its own
+    /// below `/P{a=x}`, and a set nested under two branches is two sets.
+    /// Both are addressed by their variant-qualified paths.
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
+    /// specs).
+    #[test]
+    fn variant_specs_nest_per_branch() {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let [a, b, x, y, count] = ["a", "b", "x", "y", "count"].map(|t| tokens.intern(t));
+        let p = paths.intern(Path::parse_absolute("/P", &mut tokens).unwrap());
+        let variant = |value: i64, sets: Vec<(TokenId, TokenId, VariantSpec)>| {
+            let mut spec = VariantSpec::default();
+            spec.fields.push(FieldEntry {
+                name: count,
+                value: FieldValue::Value(Value::Int64(value)),
+            });
+            for (set, name, nested) in sets {
+                spec.variant_set_order.push(set);
+                spec.variant_sets
+                    .entry(set)
+                    .or_default()
+                    .variants
+                    .insert(name, nested);
+            }
+            spec
+        };
+        // `/P{a=x}` nests `a` again and `b`; `/P{a=y}` nests another `b`.
+        let ax = variant(
+            1,
+            vec![(a, x, variant(2, vec![])), (b, y, variant(3, vec![]))],
+        );
+        let ay = variant(4, vec![(b, y, variant(5, vec![]))]);
+        let mut prim = PrimSpec::def();
+        prim.variant_set_order.push(a);
+        let set = prim.variant_sets.entry(a).or_default();
+        set.variants.insert(x, ax);
+        set.variants.insert(y, ay);
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(p, prim);
+
+        let count_at = |path: &str, tokens: &mut TokenInterner, paths: &mut PathInterner| {
+            let path = SpecPath::parse(path, tokens, paths).unwrap();
+            match layer.variant_spec_at(&path, paths)?.fields[0].value {
+                FieldValue::Value(Value::Int64(value)) => Some(value),
+                _ => None,
+            }
+        };
+        assert_eq!(count_at("/P{a=x}", &mut tokens, &mut paths), Some(1));
+        assert_eq!(count_at("/P{a=x}{a=x}", &mut tokens, &mut paths), Some(2));
+        assert_eq!(count_at("/P{a=x}{b=y}", &mut tokens, &mut paths), Some(3));
+        assert_eq!(count_at("/P{a=y}{b=y}", &mut tokens, &mut paths), Some(5));
+        assert_eq!(count_at("/P{b=y}", &mut tokens, &mut paths), None);
+        assert_eq!(count_at("/P", &mut tokens, &mut paths), None);
+
+        let sets_at = |path: &str, tokens: &mut TokenInterner, paths: &mut PathInterner| {
+            let path = SpecPath::parse(path, tokens, paths).unwrap();
+            layer
+                .variant_sets_at(&path, paths)
+                .map(|(_, order)| order.to_vec())
+        };
+        assert_eq!(sets_at("/P", &mut tokens, &mut paths), Some(vec![a]));
+        assert_eq!(
+            sets_at("/P{a=x}", &mut tokens, &mut paths),
+            Some(vec![a, b])
+        );
+        assert_eq!(sets_at("/P{a=y}", &mut tokens, &mut paths), Some(vec![b]));
+        assert_eq!(sets_at("/Q", &mut tokens, &mut paths), None);
+
+        let prim = &layer.prims[&p];
+        let mut chains: Vec<Vec<(TokenId, TokenId)>> = prim
+            .variant_branches()
+            .map(|branch| branch.chain().collect())
+            .collect();
+        chains.sort();
+        let mut expected = vec![
+            vec![(a, x)],
+            vec![(a, x), (a, x)],
+            vec![(a, x), (b, y)],
+            vec![(a, y)],
+            vec![(a, y), (b, y)],
+        ];
+        expected.sort();
+        assert_eq!(chains, expected, "every variant spec, nested ones included");
+
+        // Only fully selected branches are visited.
+        let selections: HashMap<TokenId, TokenId> = [(a, y), (b, y)].into_iter().collect();
+        let mut selected: Vec<Vec<(TokenId, TokenId)>> = prim
+            .selected_variant_branches(&selections)
+            .map(|branch| branch.chain().collect())
+            .collect();
+        selected.sort();
+        assert_eq!(selected, [vec![(a, y)], vec![(a, y), (b, y)]]);
     }
 }

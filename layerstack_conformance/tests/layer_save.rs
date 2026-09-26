@@ -324,7 +324,9 @@ fn variant_structure(variant: &VariantSpec) -> String {
         specializes,
         payloads,
         variant_selections,
-        outer_variant_sites,
+        // Walked by `PrimSpec::variant_branches`.
+        variant_sets: _,
+        variant_set_order,
         property_order,
     } = variant;
     let selections: BTreeMap<_, _> = variant_selections.iter().collect();
@@ -332,7 +334,7 @@ fn variant_structure(variant: &VariantSpec) -> String {
         "fields {fields:?}\n      properties {properties:?}\n      children \
          {authored_children:?}\n      references {}\n      payloads {}\n      inherits \
          {inherits:?}\n      specializes {specializes:?}\n      selections {selections:?}\n      \
-         outer {outer_variant_sites:?}\n      property order {property_order:?}",
+         variant sets {variant_set_order:?}\n      property order {property_order:?}",
         arc_list(references),
         arc_list(payloads),
     )
@@ -378,7 +380,8 @@ fn structure(layer: &Layer) -> String {
             outer_variant_sites,
             authored_children,
             variant_selections,
-            variant_sets,
+            // Walked by `PrimSpec::variant_branches` below.
+            variant_sets: _,
             variant_set_order,
             deleted_variant_sets,
             references,
@@ -399,14 +402,16 @@ fn structure(layer: &Layer) -> String {
             arc_list(references),
             arc_list(payloads),
         );
-        let variants: BTreeMap<_, _> = variant_sets
-            .iter()
-            .flat_map(|(set, spec)| spec.variants.iter().map(move |(name, v)| ((set, name), v)))
+        // Every variant spec by its path on the prim spec, nested ones
+        // included.
+        let variants: BTreeMap<Vec<_>, _> = spec
+            .variant_branches()
+            .map(|branch| (branch.chain().collect(), branch.spec))
             .collect();
-        for ((set, name), variant) in variants {
+        for (chain, variant) in variants {
             let _ = writeln!(
                 text,
-                "  variant {set:?}={name:?}\n      {}",
+                "  variant {chain:?}\n      {}",
                 variant_structure(variant)
             );
         }

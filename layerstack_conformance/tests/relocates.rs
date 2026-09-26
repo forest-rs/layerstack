@@ -36,14 +36,23 @@
 //! - A prim relocated beneath a parent that does not exist otherwise,
 //!   `/Nowhere`, is not composed; beneath `/Heap`, which has a spec, and
 //!   `/Bin/Tray`, which a reference brings, it is.
+//! - `puppet.usda` relocates the thumb and the tips of both hands that its
+//!   reference to `strings.usda` brings. Through `/Marionette`, the
+//!   relocated prims keep the classes of their sources' namespace, implied
+//!   into `root.usda` (OpenUSD's "spooky" inherits): `/_class_Puppet`,
+//!   which `/Puppet` inherits, and `/Marionette/Strings/SymHand`, which both
+//!   hands and the thumb inherit. That class references `glove.usda`, and
+//!   the variant selection `root.usda` authors on it applies to the
+//!   relocated thumb and left tip; the right hand selects its own.
 //!
 //! The same scene recomposed by a [`LiveStage`] after opinion edits at
-//! relocation targets and sources, after edits to the relocates
-//! themselves, and after switching variant selections, must match a full
-//! composition.
+//! relocation targets and sources and in the classes implied through them,
+//! after edits to the relocates themselves, and after switching variant
+//! selections, must match a full composition.
 //!
-//! Spec: AOUSD Core §10.3.2.6 (relocates); OpenUSD `_EvalNodeRelocations`
-//! in `pxr/usd/pcp/primIndex.cpp`.
+//! Spec: AOUSD Core §10.3.2.6 (relocates), §10.4.2.4 (implied classes);
+//! OpenUSD `_EvalNodeRelocations`, `_EvalImpliedRelocations` and
+//! `_EvalImpliedClassTree` in `pxr/usd/pcp/primIndex.cpp`.
 
 #![allow(missing_docs, reason = "integration tests")]
 
@@ -361,6 +370,31 @@ fn opinion_edits_at_relocation_targets_and_sources_recompose_in_scope() {
         ),
         ("kit.usda", "/Kit/Gear", "size", "/Crate/Gear"),
         ("parts.usda", "/Parts/Gear", "pitch", "/Crate/Gear"),
+        // Classes implied through the relocation sources.
+        (
+            "root.usda",
+            "/_class_Puppet/Strings/LHand/Tip",
+            "bend",
+            "/Marionette/Controls/LTip",
+        ),
+        (
+            "root.usda",
+            "/Marionette/Strings/SymHand/Tip",
+            "bend",
+            "/Marionette/Controls/LTip",
+        ),
+        (
+            "root.usda",
+            "/Marionette/Strings/SymHand",
+            "reach",
+            "/Marionette/Controls/Thumb",
+        ),
+        (
+            "puppet.usda",
+            "/_class_Puppet/Strings/Thumb",
+            "slack",
+            "/Marionette/Controls/Thumb",
+        ),
     ];
     for (layer, prim, attr, relocated) in edits {
         let source = set_int(&mut loaded, layer, prim, attr, 42);
@@ -378,13 +412,19 @@ fn opinion_edits_at_relocation_targets_and_sources_recompose_in_scope() {
         );
         assert_matches_full(&mut live, &mut loaded, &oracle);
     }
-    let angle = loaded.store.property_path("/Robot/Anim/Wrist.angle");
-    assert_eq!(
-        live.stage()
-            .resolve_field_path(angle)
-            .map(|resolved| resolved.value),
-        Some(Value::Int(42))
-    );
+    for attr in [
+        "/Robot/Anim/Wrist.angle",
+        "/Marionette/Controls/LTip.bend",
+        "/Marionette/Controls/Thumb.reach",
+    ] {
+        let attr = loaded.store.property_path(attr);
+        assert_eq!(
+            live.stage()
+                .resolve_field_path(attr)
+                .map(|resolved| resolved.value),
+            Some(Value::Int(42))
+        );
+    }
 }
 
 #[test]

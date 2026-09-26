@@ -46,6 +46,70 @@ LAYERS = {
     }
 )
 
+# Classes implied through relocation sources ("spooky" inherits):
+# `puppet.usda` relocates prims its reference to `strings.usda` brings. The
+# relocated prims keep the classes of their sources' namespace: the class
+# `/_class_Puppet` that `/Puppet` inherits, implied into this layer stack
+# as `/_class_Puppet`, and the class `/Strings/SymHand` that both hands
+# inherit, implied as `/Marionette/Strings/SymHand`. That class references
+# `glove.usda`, whose variant set it selects here; `RHand` selects its own.
+def "Marionette" (
+    references = @./puppet.usda@</Puppet>
+)
+{
+    over "Strings"
+    {
+        over "SymHand" (
+            variants = {
+                string fit = "tight"
+            }
+        )
+        {
+            int reach = 0
+
+            over "Tip"
+            {
+                int bend = 0
+            }
+        }
+
+        over "RHand" (
+            variants = {
+                string fit = "loose"
+            }
+        )
+        {
+        }
+    }
+}
+
+class "_class_Puppet"
+{
+    over "Strings"
+    {
+        over "Thumb"
+        {
+            int reach = 5
+        }
+
+        over "LHand"
+        {
+            over "Tip"
+            {
+                int bend = 5
+            }
+        }
+    }
+
+    over "Controls"
+    {
+        over "LTip"
+        {
+            int tilt = 5
+        }
+    }
+}
+
 # A local relocate: `/Garden/Bed` comes from the class `/_class_Garden`
 # that `/Garden` inherits, and composes at `/Garden/Plot`.
 def "Garden" (
@@ -312,6 +376,116 @@ def "Stone" (
     references = @./stone.usda@</Stone>
 )
 {
+}
+''',
+    "puppet": '''#usda 1.0
+(
+    relocates = {
+        </Puppet/Strings/Thumb>: </Puppet/Controls/Thumb>,
+        </Puppet/Strings/LHand/Tip>: </Puppet/Controls/LTip>,
+        </Puppet/Strings/RHand/Tip>: </Puppet/Controls/RTip>
+    }
+)
+
+def "Puppet" (
+    inherits = </_class_Puppet>
+)
+{
+    def "Strings" (
+        references = @./strings.usda@</Strings>
+    )
+    {
+    }
+
+    def "Controls"
+    {
+    }
+}
+
+class "_class_Puppet"
+{
+    over "Strings"
+    {
+        over "Thumb"
+        {
+            int slack = 1
+        }
+
+        over "LHand"
+        {
+            over "Tip"
+            {
+                int slack = 1
+            }
+        }
+    }
+
+    over "Controls"
+    {
+        over "LTip"
+        {
+            int grip = 1
+        }
+    }
+}
+''',
+    "strings": '''#usda 1.0
+
+def "Strings"
+{
+    class "SymHand" (
+        references = @./glove.usda@</Glove>
+    )
+    {
+        int reach = 3
+    }
+
+    def "Thumb" (
+        inherits = </Strings/SymHand>
+    )
+    {
+    }
+
+    def "LHand" (
+        inherits = </Strings/SymHand>
+    )
+    {
+    }
+
+    def "RHand" (
+        inherits = </Strings/SymHand>
+    )
+    {
+    }
+}
+''',
+    "glove": '''#usda 1.0
+
+def "Glove" (
+    variantSets = "fit"
+    variants = {
+        string fit = "loose"
+    }
+)
+{
+    variantSet "fit" = {
+        "loose" {
+            int slack = 2
+
+            def "Tip"
+            {
+                int slack = 2
+            }
+        }
+        "tight" {
+            int slack = 0
+
+            def "Tip"
+            {
+                int slack = 0
+            }
+        }
+    }
 }
 ''',
     "bin": '''#usda 1.0

@@ -4,6 +4,312 @@
  "root": "root.usda",
  "prims": [
   {
+   "path": "/Marionette",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Marionette"
+    ],
+    [
+     "root.usda",
+     "/_class_Puppet"
+    ],
+    [
+     "puppet.usda",
+     "/Puppet"
+    ],
+    [
+     "puppet.usda",
+     "/_class_Puppet"
+    ]
+   ]
+  },
+  {
+   "path": "/Marionette/Strings",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Marionette/Strings"
+    ],
+    [
+     "root.usda",
+     "/_class_Puppet/Strings"
+    ],
+    [
+     "puppet.usda",
+     "/Puppet/Strings"
+    ],
+    [
+     "puppet.usda",
+     "/_class_Puppet/Strings"
+    ],
+    [
+     "strings.usda",
+     "/Strings"
+    ]
+   ]
+  },
+  {
+   "path": "/Marionette/Strings/SymHand",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Marionette/Strings/SymHand"
+    ],
+    [
+     "strings.usda",
+     "/Strings/SymHand"
+    ],
+    [
+     "glove.usda",
+     "/Glove"
+    ],
+    [
+     "glove.usda",
+     "/Glove{fit=tight}"
+    ]
+   ]
+  },
+  {
+   "path": "/Marionette/Strings/SymHand/Tip",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Marionette/Strings/SymHand/Tip"
+    ],
+    [
+     "glove.usda",
+     "/Glove{fit=tight}Tip"
+    ]
+   ]
+  },
+  {
+   "path": "/Marionette/Strings/LHand",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Marionette/Strings/SymHand"
+    ],
+    [
+     "root.usda",
+     "/_class_Puppet/Strings/LHand"
+    ],
+    [
+     "puppet.usda",
+     "/_class_Puppet/Strings/LHand"
+    ],
+    [
+     "strings.usda",
+     "/Strings/LHand"
+    ],
+    [
+     "strings.usda",
+     "/Strings/SymHand"
+    ],
+    [
+     "glove.usda",
+     "/Glove"
+    ],
+    [
+     "glove.usda",
+     "/Glove{fit=tight}"
+    ]
+   ]
+  },
+  {
+   "path": "/Marionette/Strings/RHand",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Marionette/Strings/RHand"
+    ],
+    [
+     "root.usda",
+     "/Marionette/Strings/SymHand"
+    ],
+    [
+     "strings.usda",
+     "/Strings/RHand"
+    ],
+    [
+     "strings.usda",
+     "/Strings/SymHand"
+    ],
+    [
+     "glove.usda",
+     "/Glove"
+    ],
+    [
+     "glove.usda",
+     "/Glove{fit=loose}"
+    ]
+   ]
+  },
+  {
+   "path": "/Marionette/Controls",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Puppet/Controls"
+    ],
+    [
+     "puppet.usda",
+     "/Puppet/Controls"
+    ],
+    [
+     "puppet.usda",
+     "/_class_Puppet/Controls"
+    ]
+   ]
+  },
+  {
+   "path": "/Marionette/Controls/LTip",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Marionette/Strings/SymHand/Tip"
+    ],
+    [
+     "root.usda",
+     "/_class_Puppet/Strings/LHand/Tip"
+    ],
+    [
+     "root.usda",
+     "/_class_Puppet/Controls/LTip"
+    ],
+    [
+     "puppet.usda",
+     "/_class_Puppet/Strings/LHand/Tip"
+    ],
+    [
+     "glove.usda",
+     "/Glove{fit=tight}Tip"
+    ]
+   ]
+  },
+  {
+   "path": "/Marionette/Controls/RTip",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Marionette/Strings/SymHand/Tip"
+    ],
+    [
+     "glove.usda",
+     "/Glove{fit=loose}Tip"
+    ]
+   ]
+  },
+  {
+   "path": "/Marionette/Controls/Thumb",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Marionette/Strings/SymHand"
+    ],
+    [
+     "root.usda",
+     "/_class_Puppet/Strings/Thumb"
+    ],
+    [
+     "puppet.usda",
+     "/_class_Puppet/Strings/Thumb"
+    ],
+    [
+     "strings.usda",
+     "/Strings/Thumb"
+    ],
+    [
+     "strings.usda",
+     "/Strings/SymHand"
+    ],
+    [
+     "glove.usda",
+     "/Glove"
+    ],
+    [
+     "glove.usda",
+     "/Glove{fit=tight}"
+    ]
+   ]
+  },
+  {
+   "path": "/Marionette/Controls/Thumb/Tip",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Marionette/Strings/SymHand/Tip"
+    ],
+    [
+     "glove.usda",
+     "/Glove{fit=tight}Tip"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Puppet",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Puppet"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Puppet/Strings",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Puppet/Strings"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Puppet/Strings/Thumb",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Puppet/Strings/Thumb"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Puppet/Strings/LHand",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Puppet/Strings/LHand"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Puppet/Strings/LHand/Tip",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Puppet/Strings/LHand/Tip"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Puppet/Controls",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Puppet/Controls"
+    ]
+   ]
+  },
+  {
+   "path": "/_class_Puppet/Controls/LTip",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/_class_Puppet/Controls/LTip"
+    ]
+   ]
+  },
+  {
    "path": "/Garden",
    "prim_stack": [
     [
@@ -370,6 +676,26 @@
   }
  ],
  "values": {
+  "/Marionette/Strings/SymHand.reach": 0,
+  "/Marionette/Strings/SymHand.slack": 0,
+  "/Marionette/Strings/SymHand/Tip.bend": 0,
+  "/Marionette/Strings/SymHand/Tip.slack": 0,
+  "/Marionette/Strings/LHand.reach": 0,
+  "/Marionette/Strings/LHand.slack": 0,
+  "/Marionette/Strings/RHand.reach": 0,
+  "/Marionette/Strings/RHand.slack": 2,
+  "/Marionette/Controls/LTip.bend": 0,
+  "/Marionette/Controls/LTip.slack": 1,
+  "/Marionette/Controls/LTip.tilt": 5,
+  "/Marionette/Controls/RTip.bend": 0,
+  "/Marionette/Controls/RTip.slack": 2,
+  "/Marionette/Controls/Thumb.reach": 0,
+  "/Marionette/Controls/Thumb.slack": 1,
+  "/Marionette/Controls/Thumb/Tip.bend": 0,
+  "/Marionette/Controls/Thumb/Tip.slack": 0,
+  "/_class_Puppet/Strings/Thumb.reach": 5,
+  "/_class_Puppet/Strings/LHand/Tip.bend": 5,
+  "/_class_Puppet/Controls/LTip.tilt": 5,
   "/Garden/Plot.depth": 0,
   "/Garden/Plot.rows": 1,
   "/_class_Garden/Bed.depth": 1,

@@ -1152,10 +1152,18 @@ fn spec_path_branches_selected(
 /// to itself, as an internal reference does, and a variant branch keeps its
 /// host's namespace.
 ///
+/// A relocate node moves a path at or beneath a relocation source of its
+/// layer stack to the relocation's target, as the arcs that reach that
+/// layer stack map it, and the nodes beneath it see `dest` at the
+/// relocation source: at the depth of the source's site, relative to the
+/// target's (AOUSD Core §10.3.2.6.1).
+///
 /// OpenUSD translates the host of a variant set toward the root this way to
 /// find the strongest site that selects it
 /// (`Pcp_TranslatePathFromNodeToRootOrClosestNode`, used by
-/// `_ComposeVariantSelection` in `pxr/usd/pcp/primIndex.cpp`).
+/// `_ComposeVariantSelection` in `pxr/usd/pcp/primIndex.cpp`; the map
+/// functions of the arcs reaching a relocating layer stack include its
+/// relocations).
 fn stage_host_path(
     store: &dyn LayerStore,
     graph: &PrimIndexGraph,
@@ -1164,16 +1172,37 @@ fn stage_host_path(
     host: crate::path::Path,
 ) -> Option<crate::path::Path> {
     let paths = store.paths();
-    let dest_depth = paths.resolve(dest).depth();
+    let site_depth = |node: &PrimNode| paths.resolve(node.site().prim_path()).depth();
+    // The depth of `dest` as each node on the way to the root sees it,
+    // nearest first.
+    let mut chain = Vec::new();
+    let mut at = Some(node);
+    while let Some(id) = at {
+        let node = graph.node(id)?;
+        chain.push(node);
+        at = node.parent();
+    }
+    let mut depths = alloc::vec![0; chain.len()];
+    let mut depth = paths.resolve(dest).depth();
+    for (at, node) in chain.iter().enumerate().rev() {
+        depths[at] = depth;
+        if node.arc_kind() == ArcKind::Relocates
+            && let Some(parent) = chain.get(at + 1)
+        {
+            depth = (depth + site_depth(node)).saturating_sub(site_depth(parent));
+        }
+    }
     let mut host = host;
-    let mut cursor = graph.node(node)?;
-    while let Some(parent_id) = cursor.parent() {
-        let parent = graph.node(parent_id)?;
+    for (at, pair) in chain.windows(2).enumerate() {
+        let (cursor, parent) = (pair[0], pair[1]);
         if cursor.arc_kind() == ArcKind::Variants {
-            cursor = parent;
             continue;
         }
-        let levels = dest_depth.saturating_sub(usize::from(cursor.namespace_depth()));
+        if cursor.arc_kind() == ArcKind::Relocates {
+            host = relocated_path(store, cursor.layer_stack(), host);
+            continue;
+        }
+        let levels = depths[at].saturating_sub(usize::from(cursor.namespace_depth()));
         let ancestor = |path: &crate::path::Path| {
             let depth = path.depth().checked_sub(levels)?;
             Some(crate::path::Path::root().join(&path.segments()[..depth]))
@@ -1192,9 +1221,30 @@ fn stage_host_path(
             }
             None => return None,
         };
-        cursor = parent;
     }
     Some(host)
+}
+
+/// `path`, in the namespace of the layer stack rooted at `layer_stack`,
+/// moved by the relocation of that layer stack whose source is at or above
+/// it: the path that relocation gives it, as the arcs that reach the layer
+/// stack map it (AOUSD Core §10.3.2.6.1). A path no relocation moves, or
+/// one a relocation removes, is kept.
+fn relocated_path(
+    store: &dyn LayerStore,
+    layer_stack: LayerId,
+    path: crate::path::Path,
+) -> crate::path::Path {
+    let stack = LayerStack::gather(store, layer_stack);
+    let table = crate::relocates::RelocationTable::compute(store, &stack, &mut Vec::new());
+    let paths = store.paths();
+    table
+        .iter()
+        .find_map(|relocate| {
+            let rel = path.strip_prefix(paths.resolve(relocate.source))?;
+            Some(paths.resolve(relocate.target?).join(rel))
+        })
+        .unwrap_or(path)
 }
 
 /// Filters children maps by removing variant-only children that don't belong
@@ -2829,6 +2879,72 @@ fn resolve_forwarded_variant_selections(
     selections
 }
 
+/// The variant selections for the variant sets of `source_path`, the site
+/// in `weaker_stack` an arc reaches for the composed prim `selection_path`:
+/// those `stronger_stack` authors for the prim, then those of the sites
+/// composed for it so far, strongest first, then those `weaker_stack`
+/// authors at `source_path`, then the fallbacks.
+///
+/// The sites composed so far include the classes implied into the stronger
+/// layer stacks, which a class arc's expansion adds before the arcs
+/// authored inside the class: a selection such a class authors for a set
+/// of a reference the class makes applies to that reference. Only the
+/// sites outside every variant branch count, as a branch's own selection
+/// counts only once the branch is known to be selected.
+///
+/// Spec: AOUSD Core §10.3.2.5 (the strongest selection wins), §10.4.2.4
+/// (implied classes). OpenUSD: `_ComposeVariantSelection` in
+/// `pxr/usd/pcp/primIndex.cpp` searches the prim index built so far.
+fn arc_target_variant_selections(
+    store: &dyn LayerStore,
+    fallbacks: &VariantFallbacks,
+    stronger_stack: &LayerStack,
+    so_far: &PrimIndex,
+    selection_path: PathId,
+    weaker_stack: &LayerStack,
+    source_path: PathId,
+) -> HashMap<TokenId, TokenId> {
+    let mut selections =
+        authored_full_variant_selections(store, fallbacks, stronger_stack, selection_path);
+    let mut sources: Vec<OpinionKey> = so_far
+        .sources
+        .iter()
+        .filter(|key| {
+            !key.spec_path.components().iter().any(|component| {
+                matches!(
+                    component,
+                    crate::spec_path::SpecComponent::VariantSelection { .. }
+                )
+            })
+        })
+        .cloned()
+        .collect();
+    so_far.graph.sort_keys(&mut sources);
+    let composed = PrimIndex {
+        sources,
+        ..PrimIndex::default()
+    };
+    for (set, variant) in authored_strength_ordered_variant_selections(store, &composed) {
+        selections.entry(set).or_insert(variant);
+    }
+    for (set, variant) in
+        authored_full_variant_selections(store, fallbacks, weaker_stack, source_path)
+    {
+        selections.entry(set).or_insert(variant);
+    }
+    apply_fallbacks_at(
+        store,
+        fallbacks,
+        &mut selections,
+        &[],
+        &[
+            (stronger_stack, selection_path),
+            (weaker_stack, source_path),
+        ],
+    );
+    selections
+}
+
 /// The node in `out[path]`'s graph of the local variant branches `sites`,
 /// outermost first: the selected branches of the prim's own variant sets, or
 /// of an ancestor's variant sets that author a spec for the prim. Each branch
@@ -3490,12 +3606,22 @@ fn intern_steps(
     cursor: &mut PathCursor,
     stage_relocates: &LiftedSet,
 ) {
+    // `dest` as the steps so far see it: the relocations they took undone.
+    let mut seen = dest;
     for (at, step) in steps.iter().enumerate() {
         let mut spooky_depth = None;
         let view = match step.target {
             StepTarget::Namespace { dest_root, .. } => {
+                // A relocation an enclosing step took is taken once: an arc
+                // authored in the relocation source's namespace sees the
+                // source.
+                let paths = store.paths();
+                if !paths.resolve(dest_root).is_prefix_of(paths.resolve(seen)) {
+                    seen = dest;
+                }
                 let outer = Walk::new(outer_relocates(stage_relocates, &steps[..at]), None);
-                let view = relocate_nodes(store, out, dest, dest_root, &outer, cursor);
+                let view = relocate_nodes(store, out, dest, seen, dest_root, &outer, cursor);
+                seen = view;
                 // An implied class reaching `dest` through a relocation it
                 // is implied across has the site of the relocation source:
                 // OpenUSD implies it from the relocate node's class, in the
@@ -3549,7 +3675,8 @@ fn intern_steps(
 /// relocate node for each relocation in `outer` that moved `dest` into
 /// the namespace an arc authored at the stage path `host` maps, and
 /// returns `dest` as that arc sees it: the path it would have without
-/// those relocations.
+/// those relocations. `seen` is `dest` with the relocations the arcs
+/// enclosing that arc took already undone.
 ///
 /// A relocate node sits at the relocation source in the relocating layer
 /// stack. It contributes no opinions: its source's own opinions are
@@ -3565,14 +3692,15 @@ fn relocate_nodes(
     store: &mut dyn LayerStore,
     out: &mut HashMap<PathId, PrimIndex>,
     dest: PathId,
+    seen: PathId,
     host: PathId,
     outer: &Walk<'_>,
     cursor: &mut PathCursor,
 ) -> PathId {
     if outer.is_empty() {
-        return dest;
+        return seen;
     }
-    let (taken, view) = outer.unwind(store, host, dest);
+    let (taken, view) = outer.unwind(store, host, seen);
     for (relocate, site) in taken {
         let namespace_depth = relocate.stage_target.map_or(0, |target| {
             u16::try_from(store.paths().resolve(target).depth()).unwrap_or(u16::MAX)
@@ -6219,10 +6347,11 @@ fn add_reference_edge_opinions(
                         ));
                 }
 
-                let selections = resolve_forwarded_variant_selections(
+                let selections = arc_target_variant_selections(
                     store,
                     fallbacks,
                     stage_stack,
+                    &out[dest_path_id],
                     *dest_path_id,
                     &remote_stack,
                     *remote_path_id,
@@ -6949,10 +7078,11 @@ fn add_payload_edge_opinions(
                         ));
                 }
 
-                let selections = resolve_forwarded_variant_selections(
+                let selections = arc_target_variant_selections(
                     store,
                     fallbacks,
                     stage_stack,
+                    &out[dest_path_id],
                     *dest_path_id,
                     &remote_stack,
                     *remote_path_id,

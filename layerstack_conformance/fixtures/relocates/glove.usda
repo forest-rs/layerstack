@@ -1,0 +1,28 @@
+#usda 1.0
+
+def "Glove" (
+    variantSets = "fit"
+    variants = {
+        string fit = "loose"
+    }
+)
+{
+    variantSet "fit" = {
+        "loose" {
+            int slack = 2
+
+            def "Tip"
+            {
+                int slack = 2
+            }
+        }
+        "tight" {
+            int slack = 0
+
+            def "Tip"
+            {
+                int slack = 0
+            }
+        }
+    }
+}

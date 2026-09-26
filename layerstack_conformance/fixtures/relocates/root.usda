@@ -10,6 +10,70 @@
     }
 )
 
+# Classes implied through relocation sources ("spooky" inherits):
+# `puppet.usda` relocates prims its reference to `strings.usda` brings. The
+# relocated prims keep the classes of their sources' namespace: the class
+# `/_class_Puppet` that `/Puppet` inherits, implied into this layer stack
+# as `/_class_Puppet`, and the class `/Strings/SymHand` that both hands
+# inherit, implied as `/Marionette/Strings/SymHand`. That class references
+# `glove.usda`, whose variant set it selects here; `RHand` selects its own.
+def "Marionette" (
+    references = @./puppet.usda@</Puppet>
+)
+{
+    over "Strings"
+    {
+        over "SymHand" (
+            variants = {
+                string fit = "tight"
+            }
+        )
+        {
+            int reach = 0
+
+            over "Tip"
+            {
+                int bend = 0
+            }
+        }
+
+        over "RHand" (
+            variants = {
+                string fit = "loose"
+            }
+        )
+        {
+        }
+    }
+}
+
+class "_class_Puppet"
+{
+    over "Strings"
+    {
+        over "Thumb"
+        {
+            int reach = 5
+        }
+
+        over "LHand"
+        {
+            over "Tip"
+            {
+                int bend = 5
+            }
+        }
+    }
+
+    over "Controls"
+    {
+        over "LTip"
+        {
+            int tilt = 5
+        }
+    }
+}
+
 # A local relocate: `/Garden/Bed` comes from the class `/_class_Garden`
 # that `/Garden` inherits, and composes at `/Garden/Plot`.
 def "Garden" (

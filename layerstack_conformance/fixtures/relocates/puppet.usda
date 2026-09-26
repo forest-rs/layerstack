@@ -1,0 +1,50 @@
+#usda 1.0
+(
+    relocates = {
+        </Puppet/Strings/Thumb>: </Puppet/Controls/Thumb>,
+        </Puppet/Strings/LHand/Tip>: </Puppet/Controls/LTip>,
+        </Puppet/Strings/RHand/Tip>: </Puppet/Controls/RTip>
+    }
+)
+
+def "Puppet" (
+    inherits = </_class_Puppet>
+)
+{
+    def "Strings" (
+        references = @./strings.usda@</Strings>
+    )
+    {
+    }
+
+    def "Controls"
+    {
+    }
+}
+
+class "_class_Puppet"
+{
+    over "Strings"
+    {
+        over "Thumb"
+        {
+            int slack = 1
+        }
+
+        over "LHand"
+        {
+            over "Tip"
+            {
+                int slack = 1
+            }
+        }
+    }
+
+    over "Controls"
+    {
+        over "LTip"
+        {
+            int grip = 1
+        }
+    }
+}

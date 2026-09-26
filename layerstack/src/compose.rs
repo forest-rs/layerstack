@@ -3025,22 +3025,42 @@ fn arc_target_variant_selections(
 /// Spec: AOUSD Core §10.3.2.5 (variants), §10.4 (LIVERPS: local before
 /// variants). OpenUSD: `_EvalNodeVariantSets` in `pxr/usd/pcp/primIndex.cpp`.
 fn local_variant_node(
-    store: &mut dyn LayerStore,
+    store: &dyn LayerStore,
     out: &mut HashMap<PathId, PrimIndex>,
     path: PathId,
     sites: &[VariantSelectionSite],
 ) -> NodeId {
     let layer_stack = root_layer_stack(out, path);
-    let mut cursor = PathCursor::root(path);
-    intern_steps(
-        store,
-        out,
-        path,
-        &local_variant_steps(layer_stack, sites),
-        &mut cursor,
-        &LiftedSet::default(),
-    );
-    cursor.node
+    let paths = store.paths();
+    let graph = &mut out.get_mut(&path).expect("path exists").graph;
+    let mut node = NodeId::ROOT;
+    let mut variants = Vec::new();
+    // Local variants stay at this prim: unlike namespace arcs they never
+    // intern a mapped path. Keep the store borrowed so callers can read
+    // authored specs directly instead of cloning them to release a borrow.
+    for site in sites {
+        let host = paths.resolve(site.host_path);
+        let hosted = paths.resolve(path).strip_prefix(host).is_some();
+        debug_assert!(hosted, "a variant step is hosted at or above its site");
+        if !hosted {
+            continue;
+        }
+        variants.push(*site);
+        node = graph.intern_child(
+            node,
+            NodeArc {
+                arc_kind: ArcKind::Variants,
+                layer_stack,
+                site: SpecPath::from_variant_selection_sites(path, &variants, paths),
+                namespace_depth: u16::try_from(host.depth()).unwrap_or(u16::MAX),
+                sibling_index: declared_variant_set_index(store, layer_stack, *site),
+                implied: false,
+                skips_duplicates: false,
+            },
+        );
+        graph.set_layer_offset(node, LayerOffset::IDENTITY);
+    }
+    node
 }
 
 /// The layer stack of the root node of `out[path]`'s graph: the stage's.
@@ -3053,7 +3073,7 @@ fn root_layer_stack(out: &HashMap<PathId, PrimIndex>, path: PathId) -> LayerId {
 }
 
 fn add_local_and_variant_opinions(
-    store: &mut dyn LayerStore,
+    store: &dyn LayerStore,
     fallbacks: &VariantFallbacks,
     local_stack: &LayerStack,
     paths: &BTreeSet<PathId>,
@@ -3066,7 +3086,7 @@ fn add_local_and_variant_opinions(
         let selections = resolve_full_variant_selections(store, fallbacks, local_stack, path);
 
         for (layer_strength_idx, layer_id) in local_stack.layers.iter().copied().enumerate() {
-            let Some(layer) = store.layer(layer_id).cloned() else {
+            let Some(layer) = store.layer(layer_id) else {
                 continue;
             };
             for spec in layer.prim_specs(path) {

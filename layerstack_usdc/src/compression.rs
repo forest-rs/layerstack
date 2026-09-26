@@ -122,6 +122,21 @@ pub fn decode_integer_array(
     count: usize,
     int_size: usize,
 ) -> Result<Vec<i64>, UsdcError> {
+    // Dispatch once so the common integer widths have fixed delta sizes
+    // throughout the inner loop, as in OpenUSD's typed _DecodeNHelper.
+    match int_size {
+        4 => decode_integer_array_width(data, count, 4),
+        8 => decode_integer_array_width(data, count, 8),
+        _ => decode_integer_array_width(data, count, int_size),
+    }
+}
+
+#[inline(always)]
+fn decode_integer_array_width(
+    data: &[u8],
+    count: usize,
+    int_size: usize,
+) -> Result<Vec<i64>, UsdcError> {
     if count == 0 {
         return Ok(vec![]);
     }

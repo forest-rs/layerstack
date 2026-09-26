@@ -21,6 +21,8 @@
 //! Multiple-apply schemas are templates: their property names, and the
 //! schemas they include, hold [`INSTANCE_NAME_PLACEHOLDER`] where the
 //! instance name goes, as OpenUSD's generated schemas do.
+//! [`read_generated_schema`] reads definitions from such a layer
+//! (OpenUSD's `generatedSchema.usda`).
 //!
 //! Every [`TokenId`] a registry holds is interned in the token interner of
 //! the store whose stages use it.
@@ -32,8 +34,10 @@
 //! and `UsdPrimDefinition` (`pxr/usd/usd/primDefinition.cpp`).
 
 mod definition;
+mod generated;
 
 pub use definition::{AppliedSchema, PrimDefinition};
+pub use generated::{GeneratedSchemaError, SchemaDeclaration, read_generated_schema};
 
 use alloc::{format, string::String, vec, vec::Vec};
 

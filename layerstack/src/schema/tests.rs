@@ -380,3 +380,113 @@ fn uninterned_instance_names_are_reported() {
     let applied = [t.intern("SlotAPI:fresh")];
     let _ = registry.prim_definition(None, &applied, &t);
 }
+
+#[test]
+fn generated_schema_layers_read_as_definitions() {
+    use crate::{
+        doc::{FieldValue, Layer, LayerId, PrimSpec},
+        listop::ListOp,
+        path::{Path, PathInterner},
+        property::PropertySpec,
+    };
+    use alloc::sync::Arc;
+
+    let mut t = TokenInterner::default();
+    let mut paths = PathInterner::default();
+    let (slot, pin, tile) = (t.intern("SlotAPI"), t.intern("PinAPI"), t.intern("Tile"));
+    let [by_type, by_instance] =
+        ["PinAPI:__INSTANCE_NAME__", "PinAPI:__INSTANCE_NAME__:extra"].map(|n| t.intern(n));
+    let (offset, index) = (
+        t.intern("pin:__INSTANCE_NAME__:offset"),
+        t.intern("slot:__INSTANCE_NAME__:index"),
+    );
+    let (api_schemas, custom_data) = (t.intern("apiSchemas"), t.intern("customData"));
+    let float = PropertyType::new("float", false, Value::Float(0.0));
+
+    let mut layer = Layer::new(LayerId(1));
+    let slot_path = paths.intern(Path::root().join(&[slot]));
+    layer.insert_prim(
+        slot_path,
+        PrimSpec::class()
+            .with_field(
+                api_schemas,
+                FieldValue::TokenListOp(ListOp::explicit(vec![by_type, by_instance])),
+            )
+            .with_field(
+                custom_data,
+                Value::Dictionary(vec![(
+                    Arc::from("apiSchemaOverridePropertyNames"),
+                    Value::Array(vec![Value::Token(offset)]),
+                )]),
+            )
+            .with_property(
+                offset,
+                PropertySpec::typed_attribute(float.clone())
+                    .uniform()
+                    .with_default(Value::Float(0.5)),
+            )
+            .with_property(
+                index,
+                PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+                    .with_default(Value::Int(0)),
+            ),
+    );
+    let pin_path = paths.intern(Path::root().join(&[pin]));
+    layer.insert_prim(
+        pin_path,
+        PrimSpec::class().with_property(
+            offset,
+            PropertySpec::typed_attribute(float).with_default(Value::Float(0.25)),
+        ),
+    );
+
+    let declared = [
+        SchemaDeclaration {
+            name: slot,
+            kind: SchemaKind::MultipleApplyApi,
+            parent: None,
+        },
+        SchemaDeclaration {
+            name: pin,
+            kind: SchemaKind::MultipleApplyApi,
+            parent: None,
+        },
+    ];
+    let schemas = read_generated_schema(&layer, &declared, &mut t, &paths).expect("read");
+    let slot_schema = &schemas[0];
+    assert_eq!(slot_schema.built_ins, [pin, t.intern("PinAPI:extra")]);
+    assert_eq!(
+        slot_schema
+            .properties
+            .iter()
+            .map(|p| p.name)
+            .collect::<Vec<_>>(),
+        [index]
+    );
+    assert_eq!(slot_schema.overrides[0].name, offset);
+
+    let mut builder = SchemaRegistry::builder();
+    for schema in schemas {
+        builder.register(schema);
+    }
+    let registry = builder.build(&mut t);
+    let applied = [t.intern("SlotAPI:a")];
+    assert_eq!(
+        fallback(&registry, None, &applied, "pin:a:offset", &mut t),
+        Some(Value::Float(0.5))
+    );
+    assert_eq!(
+        fallback(&registry, None, &applied, "pin:a:extra:offset", &mut t),
+        Some(Value::Float(0.25))
+    );
+
+    let missing = [SchemaDeclaration {
+        name: tile,
+        kind: SchemaKind::ConcreteTyped,
+        parent: None,
+    }];
+    assert_eq!(
+        read_generated_schema(&layer, &missing, &mut t, &paths),
+        Err(GeneratedSchemaError::MissingSchema { name: tile })
+    );
+}

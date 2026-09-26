@@ -1685,8 +1685,16 @@ fn filter_variant_children(
                             let src_child_id = store.paths().lookup(&src_child_path);
                             if let Some(sc_id) = src_child_id {
                                 // Source namespace has this path, but it's not in
-                                // source's filtered children → it was filtered out.
-                                if !src_leaves.contains(&leaf) && prims.contains_key(&sc_id) {
+                                // source's filtered children → it was filtered out,
+                                // unless a branch this prim selects through the
+                                // class authors it (`/C{a=x}{b=y}Child`).
+                                if !src_leaves.contains(&leaf)
+                                    && prims.contains_key(&sc_id)
+                                    && !prim_index
+                                        .sources
+                                        .iter()
+                                        .any(|key| source_authors_child(store, key, leaf))
+                                {
                                     to_remove.insert(leaf);
                                 }
                             }

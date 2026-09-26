@@ -82,6 +82,58 @@
    ]
   },
   {
+   "path": "/Pit",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Pit"
+    ],
+    [
+     "strata.usda",
+     "/Pit"
+    ]
+   ]
+  },
+  {
+   "path": "/Shaft",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Shaft"
+    ],
+    [
+     "strata.usda",
+     "/Shaft"
+    ]
+   ]
+  },
+  {
+   "path": "/Seam",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Seam"
+    ],
+    [
+     "strata.usda",
+     "/Seam"
+    ]
+   ]
+  },
+  {
+   "path": "/Lode",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Lode"
+    ],
+    [
+     "strata.usda",
+     "/Lode"
+    ]
+   ]
+  },
+  {
    "path": "/Outcrop",
    "prim_stack": [
     [

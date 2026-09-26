@@ -155,6 +155,33 @@ def "Mine" (
 {
 }
 
+# A literal delete removes the arc `strata.usda` authors as an expression
+# that evaluates to the same asset and prim, and an expression delete
+# removes the arc it authors literally.
+def "Pit" (
+    delete references = @./granite.usda@</Granite>
+)
+{
+}
+
+def "Shaft" (
+    delete payload = @./basalt.usda@</Basalt>
+)
+{
+}
+
+def "Seam" (
+    delete references = @`"./${ROCK}.usda"`@</Granite>
+)
+{
+}
+
+def "Lode" (
+    delete payload = @`if(${DEEP}, "./basalt.usda", "./granite.usda")`@</Basalt>
+)
+{
+}
+
 # Only the selections composition reads are evaluated: the `soil`
 # selection of the selected `summer` branch is an error; that of the
 # unselected `winter` branch is never read.

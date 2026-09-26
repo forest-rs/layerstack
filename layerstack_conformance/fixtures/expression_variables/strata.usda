@@ -12,6 +12,30 @@ over "Mine" (
 {
 }
 
+over "Pit" (
+    prepend references = @`"./${ROCK}.usda"`@</Granite>
+)
+{
+}
+
+over "Shaft" (
+    prepend payload = @`if(${DEEP}, "./basalt.usda", "./granite.usda")`@</Basalt>
+)
+{
+}
+
+over "Seam" (
+    prepend references = @./granite.usda@</Granite>
+)
+{
+}
+
+over "Lode" (
+    prepend payload = @./basalt.usda@</Basalt>
+)
+{
+}
+
 over "Outcrop"
 {
     int layered = 1

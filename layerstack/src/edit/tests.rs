@@ -1393,3 +1393,73 @@ fn live_stage_edits_a_branch_selected_by_a_fallback() {
         Some(Value::Double(0.95))
     );
 }
+
+/// A variant spec nested in another branch of the same prim
+/// (`/Rock{shape=round}{size=big}`) is created, with the set holding it,
+/// inside the outer branch's variant spec. An opinion authored there
+/// through `LiveStage::apply` composes once both branches are selected, the
+/// live stage equals a fresh composition, and the inverse restores every
+/// layer.
+///
+/// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set specs),
+/// §10.3.2.5 (only the selected variant contributes).
+#[test]
+fn live_stage_edits_a_variant_spec_nested_in_a_branch() {
+    let mut store = rocks();
+    let original = layers(&store);
+    let mut live = crate::LiveStage::compose(&mut store, SCENE, StageOptions::default());
+    let (shape, round, size, big, height) = (
+        store.tokens.intern("shape"),
+        store.tokens.intern("round"),
+        store.tokens.intern("size"),
+        store.tokens.intern("big"),
+        store.tokens.intern("height"),
+    );
+    let (rock, rock_a) = (store.path("/Rock"), store.path("/World/RockA"));
+
+    let mut edit = Transaction::new();
+    edit.create_property(
+        Address::spec(
+            ROCK,
+            spec(&mut store, "/Rock{shape=round}{size=big}.height"),
+        ),
+        attr(3.0),
+    )
+    .set_variant_selection(
+        Address::spec(ROCK, spec(&mut store, "/Rock{shape=round}")),
+        size,
+        Some(big),
+    );
+    let applied = live.apply(&mut store, &edit).expect("applies");
+
+    let rock_spec = &store.layers[&ROCK].prims[&rock];
+    assert!(
+        !rock_spec.variant_sets.contains_key(&size),
+        "the set is nested, not on the prim spec"
+    );
+    let outer = rock_spec
+        .variant_spec(&[(shape, round)])
+        .expect("outer branch");
+    assert_eq!(outer.variant_set_order, [size]);
+    assert!(
+        rock_spec
+            .variant_spec(&[(shape, round), (size, big)])
+            .is_some()
+    );
+    assert_eq!(
+        authored_default(&mut store, ROCK, "/Rock{shape=round}{size=big}.height"),
+        Some(Value::Double(3.0))
+    );
+    assert_eq!(
+        live.stage()
+            .resolve_field_path(crate::PropertyPath::new(rock_a, height))
+            .map(|resolved| resolved.value),
+        Some(Value::Double(3.0)),
+        "the nested branch composes"
+    );
+    assert_live_matches_fresh(&live, &mut store, "nested branch");
+
+    live.apply(&mut store, &applied.inverse).expect("undo");
+    assert_eq!(layers(&store), original, "the inverse removes the set");
+    assert_live_matches_fresh(&live, &mut store, "undone");
+}

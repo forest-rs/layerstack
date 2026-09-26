@@ -499,7 +499,7 @@ fn resolve(store: &mut dyn LayerStore, at: &Address) -> Result<(SpecPath, Loc), 
         return Err(Rejection::NoSuchLayer(at.layer()));
     }
     let path = at.resolve(store.paths_mut()).ok_or(Rejection::Unmappable)?;
-    let loc = Loc::of(&path, store.paths_mut()).ok_or(Rejection::UnsupportedPath(path.clone()))?;
+    let loc = Loc::of(&path, store.paths_mut());
     Ok((path, loc))
 }
 

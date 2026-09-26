@@ -366,8 +366,16 @@ impl EmitCtx<'_> {
                 }
                 ast::PrimMeta::VariantSets(listop) => {
                     // variantSets metadata declares the ordered set of variant
-                    // set names. We store the union of all names in order.
-                    if let Some(items) = &listop.items {
+                    // set names. We store the union of all names in order,
+                    // and the names a `delete` removes apart.
+                    if listop.kind == ast::ListOpKind::Delete {
+                        for name in listop.items.iter().flatten() {
+                            let tok = self.tokens.intern(name);
+                            if !spec.deleted_variant_sets.contains(&tok) {
+                                spec.deleted_variant_sets.push(tok);
+                            }
+                        }
+                    } else if let Some(items) = &listop.items {
                         for name in items {
                             let tok = self.tokens.intern(name);
                             if !spec.variant_set_order.contains(&tok) {

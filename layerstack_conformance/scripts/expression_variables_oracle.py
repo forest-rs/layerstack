@@ -240,6 +240,36 @@ def "Canvas" (
 {
 }
 
+# A selection for a variant set no contributing spec declares is never
+# read, so its malformed expression is not an error.
+def "Moss" (
+    variants = {
+        string detail = "`${BROKEN`"
+    }
+)
+{
+}
+
+# `strata.usda` declares `grain` for both; this layer deletes the
+# declaration on `/Loam`, so neither of its malformed selections is read,
+# while `/Clay`'s is.
+over "Loam" (
+    delete variantSets = "grain"
+    variants = {
+        string grain = "`${STRONG`"
+    }
+)
+{
+}
+
+over "Clay" (
+    variants = {
+        string grain = "`${FIRM`"
+    }
+)
+{
+}
+
 # `red.usda` on its own, so a host holds it when the override changes.
 def "Swatch" (
     references = @./red.usda@</Paint>
@@ -386,6 +416,31 @@ def "Chip"
 }
 ''',
     "strata": '''#usda 1.0
+
+def "Loam" (
+    variantSets = "grain"
+    variants = {
+        string grain = "`${WEAK`"
+    }
+)
+{
+    variantSet "grain" = {
+        "fine" {
+            int size = 1
+        }
+    }
+}
+
+def "Clay" (
+    variantSets = "grain"
+)
+{
+    variantSet "grain" = {
+        "fine" {
+            int size = 1
+        }
+    }
+}
 
 over "Quarry" (
     prepend references = @`"./${ROCK}.usda"`@

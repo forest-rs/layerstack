@@ -27,7 +27,9 @@
 //! expression anchored in two directories (two
 //! different arcs, which a delete in one does not remove from the other),
 //! and invalid selections in a selected and an unselected variant branch
-//! (only the one composition reads is an error).
+//! (only the one composition reads is an error), for a variant set no
+//! spec declares and for one a stronger `delete` removes from `variantSets`
+//! (neither is read).
 //!
 //! Spec: AOUSD Core §7.6.1.7 reserves `expressionVariables`; §10.3.1,
 //! §10.3.2.1 and §10.3.2.2 (sublayers, references and payloads). OpenUSD:

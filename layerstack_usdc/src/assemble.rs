@@ -631,7 +631,21 @@ impl<'a> AssembleCtx<'a> {
                     // Core §7.6.2.3.5) whose items, in order, give the
                     // variant sets' strength order.
                     let names = match value.value() {
-                        Some(CrateValue::ListOp(listop)) => self.list_op_names(listop),
+                        Some(CrateValue::ListOp(listop)) => {
+                            // The names a `delete` removes are kept apart.
+                            let deleted: Vec<TokenId> = listop
+                                .deleted_items
+                                .iter()
+                                .filter_map(|item| match item {
+                                    CrateValue::Token(name) | CrateValue::String(name) => {
+                                        Some(self.tokens.intern(name))
+                                    }
+                                    _ => None,
+                                })
+                                .collect();
+                            append_unique(&mut spec.deleted_variant_sets, deleted);
+                            self.list_op_names(listop)
+                        }
                         _ => self.extract_token_names(value),
                     };
                     append_unique(&mut spec.variant_set_order, names);

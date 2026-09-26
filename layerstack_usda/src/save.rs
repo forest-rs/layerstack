@@ -615,7 +615,18 @@ impl Lowering<'_> {
                 variants,
             });
         }
-        let names = (!names.is_empty()).then(|| ListOp::prepend(names));
+        let deleted: Vec<String> = if top {
+            spec.deleted_variant_sets
+                .iter()
+                .map(|set| self.name(*set))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let names = (!names.is_empty() || !deleted.is_empty()).then(|| ListOp {
+            deleted,
+            ..ListOp::prepend(names)
+        });
         Ok((names, sets))
     }
 
@@ -965,6 +976,7 @@ fn is_children_only(spec: &PrimSpec) -> bool {
         && spec.variant_selections.is_empty()
         && spec.variant_sets.is_empty()
         && spec.variant_set_order.is_empty()
+        && spec.deleted_variant_sets.is_empty()
         && !is_authored(&spec.references)
         && !is_authored(&spec.payloads)
         && !is_authored(&spec.inherits)

@@ -1,0 +1,14 @@
+#usda 1.0
+
+def "System"
+{
+    def "Moon" (
+        references = @./moon_ref.usda@</Moon>
+    )
+    {
+        over "Crater"
+        {
+            int depth = 1
+        }
+    }
+}

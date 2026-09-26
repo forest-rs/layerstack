@@ -1,0 +1,50 @@
+#usda 1.0
+
+# A diamond: `left.usda /Left` and `right.usda /Right` both reference
+# `source.usda /Source`, each with its own offset, so `/Junction` reaches
+# `/Source` twice.
+def "Junction" (
+    references = [
+        @./left.usda@</Left>,
+        @./right.usda@</Right>
+    ]
+)
+{
+}
+
+# The same payload target through two payloads.
+def "Delta" (
+    payload = [
+        @./left.usda@</Left>,
+        @./right.usda@</Right>
+    ]
+)
+{
+}
+
+# The same target listed three times with different offsets: three nodes,
+# the first strongest.
+def "Echo" (
+    references = [
+        @./pulse.usda@</Pulse> (offset = 10),
+        @./pulse.usda@</Pulse> (offset = 20; scale = 2),
+        @./pulse.usda@</Pulse>
+    ]
+)
+{
+}
+
+# `/Orbit/Moon`'s own payload to `moon.usda /Moon` is stronger than the
+# one `/Orbit`'s payload reaches beneath it, through `system.usda
+# /System/Moon`'s reference to `moon_ref.usda /Moon`: `depth` comes from
+# `moon.usda`, not from `system.usda`.
+def "Orbit" (
+    payload = @./system.usda@</System>
+)
+{
+    def "Moon" (
+        payload = @./moon.usda@</Moon>
+    )
+    {
+    }
+}

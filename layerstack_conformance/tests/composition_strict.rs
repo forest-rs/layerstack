@@ -48,7 +48,8 @@
 //!
 //! Exact prim stacks, property stacks and values for sublayer stacks
 //! (including duplicate sublayers, cycles and time offsets), local opinions,
-//! references, payloads and inherits nested to any depth, ranked by walking
+//! references, payloads and inherits nested to any depth, one node per arc
+//! occurrence (a site reached twice contributes twice), ranked by walking
 //! each prim's composition graph ([`Stage::explain_prim_graph`]), inherits
 //! implied into every stronger layer stack on the way to the root, internal
 //! references and payloads authored anywhere in a layer stack, the arcs
@@ -64,7 +65,6 @@
 //! - Relocates combined with implied classes ([`Cause::Relocates`]).
 //! - Implied classes in population and variant selection
 //!   ([`Cause::ImpliedClasses`]).
-//! - One site per arc path ([`Cause::CollapsedNodes`]).
 //! - Variant selections of the sites ancestral arcs reach, made before the
 //!   prim's index is complete ([`Cause::AncestralArcs`]),
 //!   some nested variant specs ([`Cause::VariantSpecs`]) and asset-path
@@ -487,13 +487,6 @@ fn observe(name: &str) -> Observed {
 /// contributor first.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 enum Cause {
-    // Presentation: the same sites, counted differently.
-    /// OpenUSD keeps one node per arc path, so a site reached twice (a
-    /// reference or payload diamond, a reference listed repeatedly with
-    /// different offsets) appears twice; Layerstack visits each
-    /// `(destination, layer, target)` once.
-    CollapsedNodes,
-
     // Ordering: strength order differs from OpenUSD's node graph.
     /// Class arcs (inherits, specializes) authored inside referenced content
     /// are implied onto each stronger layer stack and ranked with that
@@ -571,15 +564,6 @@ const SKIPPED: &[(&str, &str)] = &[
 /// Every fixture that does not match the oracle exactly.
 const KNOWN: &[Known] = &[
     Known {
-        fixture: "BasicNestedPayload_root",
-        causes: &[C::CollapsedNodes],
-        prims: 2,
-        props: 1,
-        values: 1,
-        diffs: &[D::MissingRepeat, D::Order],
-        reason: "`/Set2/Prop`'s own payload of `prop_payload.usd /Prop` collapses into the weaker one nested in `set_payload.usd`, so `PropScope.x` resolves from `set_payload.usd`",
-    },
-    Known {
         fixture: "BasicNestedVariants_root",
         causes: &[C::VariantSpecs],
         prims: 1,
@@ -587,24 +571,6 @@ const KNOWN: &[Known] = &[
         values: 0,
         diffs: &[D::MissingSite],
         reason: "`/DirectlyNestedVariants` lacks the outer `{standin=anim}` branch of directly nested variant sets",
-    },
-    Known {
-        fixture: "BasicPayloadDiamond_root",
-        causes: &[C::CollapsedNodes],
-        prims: 2,
-        props: 2,
-        values: 0,
-        diffs: &[D::MissingRepeat],
-        reason: "`C.usd /C` is reached through `A` and `B` but listed once",
-    },
-    Known {
-        fixture: "BasicReferenceDiamond_root",
-        causes: &[C::CollapsedNodes],
-        prims: 1,
-        props: 1,
-        values: 0,
-        diffs: &[D::MissingRepeat],
-        reason: "`C.usd /C` is reached through `A` and `B` but listed once",
     },
     Known {
         fixture: "ErrorInvalidReferenceToRelocationSource_root",
@@ -630,7 +596,7 @@ const KNOWN: &[Known] = &[
         prims: 4,
         props: 0,
         values: 0,
-        diffs: &[D::MissingSite, D::MissingRepeat],
+        diffs: &[D::MissingSite],
         reason: "payload asset paths such as `` @`\"./${REF}.usd\"`@ `` are variable expressions",
     },
     Known {
@@ -639,26 +605,17 @@ const KNOWN: &[Known] = &[
         prims: 4,
         props: 0,
         values: 0,
-        diffs: &[D::MissingSite, D::MissingRepeat],
+        diffs: &[D::MissingSite],
         reason: "reference asset paths such as `` @`\"./${REF}.usd\"`@ `` are variable expressions",
     },
     Known {
-        fixture: "ReferenceListOpsWithOffsets_root",
-        causes: &[C::CollapsedNodes],
+        fixture: "RelocatePrimsWithSameName_root",
+        causes: &[C::Relocates],
         prims: 2,
         props: 0,
         values: 0,
-        diffs: &[D::MissingRepeat],
-        reason: "`@ref.usd@</Ref>` listed four times with different offsets is one source, not four nodes",
-    },
-    Known {
-        fixture: "RelocatePrimsWithSameName_root",
-        causes: &[C::Relocates, C::CollapsedNodes],
-        prims: 6,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingPrim, D::MissingRepeat],
-        reason: "`base.usd /Base/Child`, reached through both `/Ref1` and `/Ref2`, is expanded once, so `Child_2` is missing; under `/ChainedReferences`, where `root.usd` relocates `Child` and the internal references relocate it too, neither relocated child is composed",
+        diffs: &[D::MissingPrim],
+        reason: "under `/ChainedReferences`, where `root.usd` relocates `Child` and the internal references relocate it too, neither relocated child is composed",
     },
     Known {
         fixture: "SpecializesAndVariants3_root",

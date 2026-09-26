@@ -1,0 +1,15 @@
+#usda 1.0
+
+def "Source"
+{
+    int width = 3
+    double level.timeSamples = {
+        0: 0,
+        4: 8,
+    }
+
+    def "Tap"
+    {
+        int flow = 3
+    }
+}

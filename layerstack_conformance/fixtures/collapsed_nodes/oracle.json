@@ -1,0 +1,310 @@
+{
+ "generator": "layerstack_conformance/scripts/collapsed_nodes_oracle.py",
+ "openusd_version": "0.26.8",
+ "root": "root.usda",
+ "prims": [
+  {
+   "path": "/Junction",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Junction"
+    ],
+    [
+     "left.usda",
+     "/Left"
+    ],
+    [
+     "source.usda",
+     "/Source"
+    ],
+    [
+     "right.usda",
+     "/Right"
+    ],
+    [
+     "source.usda",
+     "/Source"
+    ]
+   ]
+  },
+  {
+   "path": "/Junction/Tap",
+   "prim_stack": [
+    [
+     "source.usda",
+     "/Source/Tap"
+    ],
+    [
+     "source.usda",
+     "/Source/Tap"
+    ]
+   ]
+  },
+  {
+   "path": "/Delta",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Delta"
+    ],
+    [
+     "left.usda",
+     "/Left"
+    ],
+    [
+     "source.usda",
+     "/Source"
+    ],
+    [
+     "right.usda",
+     "/Right"
+    ],
+    [
+     "source.usda",
+     "/Source"
+    ]
+   ]
+  },
+  {
+   "path": "/Delta/Tap",
+   "prim_stack": [
+    [
+     "source.usda",
+     "/Source/Tap"
+    ],
+    [
+     "source.usda",
+     "/Source/Tap"
+    ]
+   ]
+  },
+  {
+   "path": "/Echo",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Echo"
+    ],
+    [
+     "pulse.usda",
+     "/Pulse"
+    ],
+    [
+     "pulse.usda",
+     "/Pulse"
+    ],
+    [
+     "pulse.usda",
+     "/Pulse"
+    ]
+   ]
+  },
+  {
+   "path": "/Echo/Peak",
+   "prim_stack": [
+    [
+     "pulse.usda",
+     "/Pulse/Peak"
+    ],
+    [
+     "pulse.usda",
+     "/Pulse/Peak"
+    ],
+    [
+     "pulse.usda",
+     "/Pulse/Peak"
+    ]
+   ]
+  },
+  {
+   "path": "/Orbit",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Orbit"
+    ],
+    [
+     "system.usda",
+     "/System"
+    ]
+   ]
+  },
+  {
+   "path": "/Orbit/Moon",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Orbit/Moon"
+    ],
+    [
+     "moon.usda",
+     "/Moon"
+    ],
+    [
+     "system.usda",
+     "/System/Moon"
+    ],
+    [
+     "moon_ref.usda",
+     "/Moon"
+    ],
+    [
+     "moon.usda",
+     "/Moon"
+    ]
+   ]
+  },
+  {
+   "path": "/Orbit/Moon/Crater",
+   "prim_stack": [
+    [
+     "moon.usda",
+     "/Moon/Crater"
+    ],
+    [
+     "system.usda",
+     "/System/Moon/Crater"
+    ],
+    [
+     "moon_ref.usda",
+     "/Moon/Crater"
+    ],
+    [
+     "moon.usda",
+     "/Moon/Crater"
+    ]
+   ]
+  }
+ ],
+ "values": {
+  "/Junction.left": 1,
+  "/Junction.right": 1,
+  "/Junction.width": 3,
+  "/Junction/Tap.flow": 3,
+  "/Delta.left": 1,
+  "/Delta.right": 1,
+  "/Delta.width": 3,
+  "/Delta/Tap.flow": 3,
+  "/Echo/Peak.height": 1,
+  "/Orbit/Moon/Crater.depth": 2
+ },
+ "samples": {
+  "/Junction.level": [
+   [
+    4.0,
+    0.0
+   ],
+   [
+    5.0,
+    0.0
+   ],
+   [
+    7.0,
+    4.0
+   ],
+   [
+    9.0,
+    8.0
+   ],
+   [
+    10.0,
+    8.0
+   ]
+  ],
+  "/Delta.level": [
+   [
+    4.0,
+    0.0
+   ],
+   [
+    5.0,
+    0.0
+   ],
+   [
+    7.0,
+    4.0
+   ],
+   [
+    9.0,
+    8.0
+   ],
+   [
+    10.0,
+    8.0
+   ]
+  ],
+  "/Echo.beat": [
+   [
+    9.0,
+    0.0
+   ],
+   [
+    10.0,
+    0.0
+   ],
+   [
+    11.0,
+    2.0
+   ],
+   [
+    12.0,
+    4.0
+   ],
+   [
+    13.0,
+    4.0
+   ]
+  ]
+ },
+ "property_stacks": {
+  "/Junction.level": [
+   [
+    "source.usda",
+    "/Source.level",
+    5.0,
+    1.0
+   ],
+   [
+    "source.usda",
+    "/Source.level",
+    7.0,
+    0.5
+   ]
+  ],
+  "/Delta.level": [
+   [
+    "source.usda",
+    "/Source.level",
+    5.0,
+    1.0
+   ],
+   [
+    "source.usda",
+    "/Source.level",
+    7.0,
+    0.5
+   ]
+  ],
+  "/Echo.beat": [
+   [
+    "pulse.usda",
+    "/Pulse.beat",
+    10.0,
+    1.0
+   ],
+   [
+    "pulse.usda",
+    "/Pulse.beat",
+    20.0,
+    2.0
+   ],
+   [
+    "pulse.usda",
+    "/Pulse.beat",
+    0.0,
+    1.0
+   ]
+  ]
+ }
+}

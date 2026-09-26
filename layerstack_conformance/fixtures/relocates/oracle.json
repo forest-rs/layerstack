@@ -838,6 +838,40 @@
      "/Frame/Tail/Bow"
     ]
    ]
+  },
+  {
+   "path": "/Deck",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Deck"
+    ],
+    [
+     "fleet.usda",
+     "/Fleet/Deck"
+    ]
+   ]
+  },
+  {
+   "path": "/Deck/Sailor",
+   "prim_stack": [
+    [
+     "fleet.usda",
+     "/Fleet/Deck/Sailor"
+    ],
+    [
+     "fleet.usda",
+     "/Fleet/Crew/_class_Sailor"
+    ],
+    [
+     "crew.usda",
+     "/Crew/Sailor"
+    ],
+    [
+     "crew.usda",
+     "/Crew/_class_Sailor"
+    ]
+   ]
   }
  ],
  "values": {
@@ -893,7 +927,10 @@
   "/Chain_1/Tail_2.length": 1,
   "/Chain_1/Tail_2/Bow.loops": 1,
   "/Chain_2/Tail_2.length": 1,
-  "/Chain_2/Tail_2/Bow.loops": 1
+  "/Chain_2/Tail_2/Bow.loops": 1,
+  "/Deck/Sailor.age": 1,
+  "/Deck/Sailor.rank": 2,
+  "/Deck/Sailor.watch": 2
  },
  "targets": {
   "/Robot.debug": [

@@ -1,0 +1,16 @@
+#usda 1.0
+
+def "Crew"
+{
+    def "_class_Sailor"
+    {
+        int rank = 1
+    }
+
+    def "Sailor" (
+        inherits = </Crew/_class_Sailor>
+    )
+    {
+        int age = 1
+    }
+}

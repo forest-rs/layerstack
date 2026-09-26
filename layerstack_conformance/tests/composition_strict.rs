@@ -508,8 +508,7 @@ enum Cause {
     // Unsupported features.
     /// Relocates (AOUSD Core §10.3.2.6) move a prim's ancestral opinions
     /// to its relocation target, but variant opinions authored inside a
-    /// relocation source and the classes of a relocation source outside a
-    /// subroot reference's target are not composed as OpenUSD composes them.
+    /// relocation source are not composed as OpenUSD composes them.
     Relocates,
 }
 
@@ -564,15 +563,6 @@ const KNOWN: &[Known] = &[
         values: 0,
         diffs: &[D::MissingSite],
         reason: "`/VariantAtRelocateSource/Sibling` misses the variant opinions `root.usd` authors inside the relocated `/VariantAtRelocateSource/Child`",
-    },
-    Known {
-        fixture: "SubrootReferenceAndRelocates_root",
-        causes: &[C::Relocates],
-        prims: 1,
-        props: 0,
-        values: 0,
-        diffs: &[D::MissingSite],
-        reason: "the subroot reference to `groups.usd /Groups/CrowdGroup/Char` misses the class `_class_Char` of its relocation source's namespace",
     },
     Known {
         fixture: "TrickyVariantAncestralSelection_root",

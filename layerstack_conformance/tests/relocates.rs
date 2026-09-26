@@ -56,6 +56,12 @@
 //! - `/Chain` reaches `/Chain_2/Tail`, a relocation source, through two
 //!   internal references, so relocating `/Chain/Tail` too composes nothing
 //!   at `/Chain/Tail_1`, not even `/Chain_1/Tail`.
+//! - `fleet.usda` relocates `/Fleet/Crew/Sailor`, which its reference to
+//!   `crew.usda` brings, to `/Fleet/Deck/Sailor`. `/Deck`'s subroot
+//!   reference to `/Fleet/Deck` maps the target but not the source, and
+//!   `/Deck/Sailor` still composes the source's ancestral opinions, with
+//!   the class the sailor inherits and the class implied from it into
+//!   `fleet.usda`.
 //!
 //! Composition errors are compared by kind and the composed prim whose
 //! prim index reports them.
@@ -415,6 +421,14 @@ fn opinion_edits_at_relocation_targets_and_sources_recompose_in_scope() {
         ("frame.usda", "/Frame/Tail", "length", "/Ribbon"),
         ("frame.usda", "/Frame/Tail", "length", "/Chain/Tail_2"),
         ("frame.usda", "/Frame/Tail/Bow", "loops", "/Bowline"),
+        // A source outside a subroot reference, and its implied class.
+        ("crew.usda", "/Crew/Sailor", "age", "/Deck/Sailor"),
+        (
+            "fleet.usda",
+            "/Fleet/Crew/_class_Sailor",
+            "rank",
+            "/Deck/Sailor",
+        ),
     ];
     for (layer, prim, attr, relocated) in edits {
         let source = set_int(&mut loaded, layer, prim, attr, 42);

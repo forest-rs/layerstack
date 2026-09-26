@@ -4962,6 +4962,66 @@ impl AncestralArcs<'_> {
         );
     }
 
+    /// Expands, beneath a relocate node, the arcs of the ancestors of each
+    /// relocation source of the target layer stack that lies outside the
+    /// arc's target while its relocation target lies inside (see
+    /// [`Self::expand_from`]), for the prim the arc maps that target to.
+    ///
+    /// No path the arc maps reaches such a source, so no walk moves its
+    /// ancestral opinions to the target: the relocate node brings them, as
+    /// OpenUSD adds one wherever a node's site is a relocation target
+    /// (`_EvalNodeRelocations` in `pxr/usd/pcp/primIndex.cpp`). The
+    /// classes implied from beneath it stop at the arc, which cannot map
+    /// the source (`_EvalImpliedRelocations`).
+    ///
+    /// Spec: AOUSD Core §10.3.2.6 ("the composition algorithm is executed
+    /// with the layer stack and the entry's source path").
+    fn expand_outside_sources(
+        &self,
+        store: &mut dyn LayerStore,
+        nodes: &ArcNodes,
+        out: &mut HashMap<PathId, PrimIndex>,
+        visited_inherits: &mut VisitedClasses,
+        visited_specializes: &mut VisitedClasses,
+        prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
+        authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
+        cycles: &mut CycleDetector,
+        mut deps: Option<&mut DependencyBuilder>,
+    ) {
+        let Some(own) = nodes.step().relocates.clone() else {
+            return;
+        };
+        for relocate in own.iter() {
+            let (Some(target), Some(dest)) = (relocate.target, relocate.stage_target) else {
+                continue;
+            };
+            let paths = store.paths();
+            if paths
+                .resolve(self.target)
+                .is_prefix_of(paths.resolve(relocate.source))
+                || !out.contains_key(&dest)
+            {
+                continue;
+            }
+            AncestralArcs {
+                dest_root: dest,
+                target,
+                ..*self
+            }
+            .expand(
+                store,
+                nodes,
+                out,
+                visited_inherits,
+                visited_specializes,
+                prim_order_out,
+                authored_children_out,
+                cycles,
+                deps.as_deref_mut(),
+            );
+        }
+    }
+
     /// Expands the arcs of the ancestors of the target beneath `nodes`,
     /// past the `skip` nearest ones.
     ///
@@ -6766,8 +6826,9 @@ fn add_reference_edge_opinions(
         }
     }
 
-    // The arcs the target's ancestors author (see `AncestralArcs`).
-    AncestralArcs {
+    // The arcs the target's ancestors author, and those of the relocation
+    // sources outside the target (see `AncestralArcs`).
+    let ancestral = AncestralArcs {
         fallbacks,
         data_stack: &remote_stack,
         selection_stack: &combined_stack,
@@ -6778,8 +6839,19 @@ fn add_reference_edge_opinions(
         layer_offset: reference.layer_offset,
         ref_remap: Some((&dest_root_path, &target_root)),
         class_arc: false,
-    }
-    .expand(
+    };
+    ancestral.expand(
+        store,
+        &nodes,
+        out,
+        visited_inherits,
+        visited_specializes,
+        prim_order_out,
+        authored_children_out,
+        cycles,
+        deps.as_deref_mut(),
+    );
+    ancestral.expand_outside_sources(
         store,
         &nodes,
         out,
@@ -7429,8 +7501,9 @@ fn add_payload_edge_opinions(
             );
         }
     }
-    // The arcs the target's ancestors author (see `AncestralArcs`).
-    AncestralArcs {
+    // The arcs the target's ancestors author, and those of the relocation
+    // sources outside the target (see `AncestralArcs`).
+    let ancestral = AncestralArcs {
         fallbacks,
         data_stack: &remote_stack,
         selection_stack: &combined_stack,
@@ -7441,8 +7514,19 @@ fn add_payload_edge_opinions(
         layer_offset: reference.layer_offset,
         ref_remap: Some((&dest_root_path, &target_root)),
         class_arc: false,
-    }
-    .expand(
+    };
+    ancestral.expand(
+        store,
+        &nodes,
+        out,
+        visited_inherits,
+        visited_specializes,
+        prim_order_out,
+        authored_children_out,
+        cycles,
+        deps.as_deref_mut(),
+    );
+    ancestral.expand_outside_sources(
         store,
         &nodes,
         out,

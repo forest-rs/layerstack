@@ -207,6 +207,47 @@ fn unresolved_arcs_are_kept_as_authored() {
     }
 }
 
+/// A `delete` in `variantSets` is kept apart from the declared sets, and
+/// saves and reads back from both formats.
+///
+/// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`), §12.4 (list ops).
+#[test]
+fn deleted_variant_sets_round_trip() {
+    const SOURCE: &str = r#"#usda 1.0
+
+over "Loam" (
+    delete variantSets = "grain"
+)
+{
+}
+
+def "Clay" (
+    prepend variantSets = "grain"
+)
+{
+}
+"#;
+    let mut layer = Imported::usda(SOURCE);
+    let grain = layer.tokens.intern("grain");
+    let mut path = |text: &str| {
+        let parsed = layerstack::Path::parse_absolute(text, &mut layer.tokens).expect("prim path");
+        layer.paths.intern(parsed)
+    };
+    let (loam, clay) = (path("/Loam"), path("/Clay"));
+    let spec = |layer: &Layer, path| layer.prims.get(&path).expect("prim").clone();
+    assert_eq!(spec(&layer.layer, loam).deleted_variant_sets, [grain]);
+    assert!(spec(&layer.layer, loam).variant_set_order.is_empty());
+    assert_eq!(spec(&layer.layer, clay).variant_set_order, [grain]);
+    let want = structure(&layer.layer);
+    let usda = layer.save_usda().unwrap();
+    assert!(usda.contains("delete variantSets = [\"grain\"]"), "{usda}");
+    let usdc = layer.save_usdc().unwrap();
+    let from_usda = reimport_usda(&mut layer, &usda);
+    assert_eq!(structure(&from_usda), want, "layer → USDA → layer");
+    let from_usdc = reimport_usdc(&mut layer, &usdc);
+    assert_eq!(structure(&from_usdc), want, "layer → USDC → layer");
+}
+
 #[test]
 fn corpus_edits_change_what_they_edit() {
     for case in cases() {
@@ -339,6 +380,7 @@ fn structure(layer: &Layer) -> String {
             variant_selections,
             variant_sets,
             variant_set_order,
+            deleted_variant_sets,
             references,
             inherits,
             specializes,
@@ -351,7 +393,7 @@ fn structure(layer: &Layer) -> String {
         let mut text = format!(
             "  {specifier:?} {type_name:?}\n  fields {fields:?}\n  properties {properties:?}\n  \
              property order {property_order:?}\n  children {authored_children:?}\n  prim order \
-             {prim_order:?}\n  selections {selections:?}\n  variant sets {variant_set_order:?}\n  \
+             {prim_order:?}\n  selections {selections:?}\n  variant sets {variant_set_order:?} deleted {deleted_variant_sets:?}\n  \
              references {}\n  payloads {}\n  inherits {inherits:?}\n  specializes \
              {specializes:?}\n  instanceable {instanceable:?} active {active:?}\n",
             arc_list(references),

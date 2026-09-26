@@ -1125,6 +1125,14 @@ pub struct PrimSpec {
     /// This determines the evaluation order for variant children.
     /// Children from later variant sets appear before earlier ones.
     pub variant_set_order: Vec<TokenId>,
+    /// Variant set names this spec's `variantSets` list op deletes: a
+    /// weaker opinion's declaration of them is removed, as a list op
+    /// removes deleted items (so composition does not evaluate their
+    /// selections there).
+    ///
+    /// Spec: AOUSD Core §7.6.2.3.5 (`variantSetNames`), §12.4 (list ops).
+    /// OpenUSD: `PcpComposeSiteVariantSets` in `pxr/usd/pcp/composeSite.cpp`.
+    pub deleted_variant_sets: Vec<TokenId>,
     /// References arcs (a `ListOp` chain across the layer stack).
     pub references: ListOp<Reference>,
     /// Inherits arcs (a `ListOp` chain across the layer stack).

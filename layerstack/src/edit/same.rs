@@ -290,6 +290,7 @@ impl Same for PrimSpec {
             variant_selections,
             variant_sets,
             variant_set_order,
+            deleted_variant_sets,
             references,
             inherits,
             specializes,
@@ -308,6 +309,7 @@ impl Same for PrimSpec {
             && *variant_selections == other.variant_selections
             && variant_sets.same(&other.variant_sets)
             && *variant_set_order == other.variant_set_order
+            && *deleted_variant_sets == other.deleted_variant_sets
             && *references == other.references
             && *inherits == other.inherits
             && *specializes == other.specializes

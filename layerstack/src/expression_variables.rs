@@ -728,16 +728,18 @@ fn has_selection_expressions(layer: &Layer, tokens: &TokenInterner) -> bool {
 
 /// The errors and variable reads of the evaluated selections `findings`
 /// that composition reads: those of a site among a composed prim's
-/// sources, `prims`, that no stronger source of the prim selects the same
-/// variant set at.
+/// sources, `prims`, for a variant set a node of the prim declares
+/// ([`declared_variant_sets`]), that no stronger source of the prim
+/// selects the same set at.
 ///
-/// OpenUSD evaluates a selection only when it composes it
-/// (`PcpComposeSiteVariantSelection` in `pxr/usd/pcp/composeSite.cpp`),
-/// walking the prim index's nodes strongest first until one selects the
-/// set, and records the variables it used there
-/// (`_ComposeVariantSelectionForNode` in `pxr/usd/pcp/primIndex.cpp`). A
-/// selection in an unselected branch, or beneath a stronger one, is neither
-/// an error nor a dependency.
+/// OpenUSD evaluates a selection only when it composes it: for each
+/// variant set a node's `variantSets` declare (`_EvalNodeVariantSets`), it
+/// searches the nodes strongest first until one selects the set
+/// (`_ComposeVariantSelectionForNode` in `pxr/usd/pcp/primIndex.cpp`,
+/// `PcpComposeSiteVariantSelection` in `pxr/usd/pcp/composeSite.cpp`),
+/// and records the variables it used there. A selection in an unselected
+/// branch, beneath a stronger one, or for a set no node declares is
+/// neither an error nor a dependency.
 pub(crate) fn read_selections(
     store: &dyn LayerStore,
     prims: &HashMap<crate::path::PathId, crate::prim_index::PrimIndex>,
@@ -747,11 +749,13 @@ pub(crate) fn read_selections(
     let mut read = alloc::vec![false; findings.len()];
     if !findings.is_empty() {
         for index in prims.values() {
+            let declared = declared_variant_sets(store, index);
             let mut decided: HashSet<TokenId> = HashSet::new();
             for source in &index.sources {
                 for (i, finding) in findings.iter().enumerate() {
                     if finding.layer == source.layer_id
                         && finding.site == source.spec_path
+                        && declared.contains(&finding.set)
                         && !decided.contains(&finding.set)
                     {
                         read[i] = true;
@@ -770,6 +774,35 @@ pub(crate) fn read_selections(
         }
     }
     (errors, reads)
+}
+
+/// The variant sets some node of `index` declares: each node's `variantSets`
+/// list op composed over its sources, weakest first, so a stronger spec's
+/// `delete` removes a weaker one's declaration in that node.
+///
+/// OpenUSD: `PcpComposeSiteVariantSets` in `pxr/usd/pcp/composeSite.cpp`,
+/// called for each node by `_EvalNodeVariantSets` in
+/// `pxr/usd/pcp/primIndex.cpp`.
+pub(crate) fn declared_variant_sets(
+    store: &dyn LayerStore,
+    index: &crate::prim_index::PrimIndex,
+) -> HashSet<TokenId> {
+    let mut per_node: HashMap<crate::prim_index_graph::NodeId, Vec<TokenId>> = HashMap::new();
+    for source in index.sources.iter().rev() {
+        let Some(spec) = store.layer(source.layer_id).and_then(|layer| {
+            layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+        }) else {
+            continue;
+        };
+        let names = per_node.entry(source.node).or_default();
+        names.retain(|name| !spec.deleted_variant_sets.contains(name));
+        for name in &spec.variant_set_order {
+            if !names.contains(name) {
+                names.push(*name);
+            }
+        }
+    }
+    per_node.into_values().flatten().collect()
 }
 
 /// The variant sets `source` selects: the selections of its prim spec, or

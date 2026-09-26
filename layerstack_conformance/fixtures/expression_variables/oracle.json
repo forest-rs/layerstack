@@ -86,6 +86,32 @@
    ]
   },
   {
+   "path": "/Loam",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Loam"
+    ],
+    [
+     "strata.usda",
+     "/Loam"
+    ]
+   ]
+  },
+  {
+   "path": "/Clay",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Clay"
+    ],
+    [
+     "strata.usda",
+     "/Clay"
+    ]
+   ]
+  },
+  {
    "path": "/Quarry",
    "prim_stack": [
     [
@@ -432,6 +458,15 @@
    ]
   },
   {
+   "path": "/Moss",
+   "prim_stack": [
+    [
+     "root.usda",
+     "/Moss"
+    ]
+   ]
+  },
+  {
    "path": "/Swatch",
    "prim_stack": [
     [
@@ -513,6 +548,13 @@
    "",
    "variant",
    "`${CLAY`",
+   "Missing ending '}' at character 7"
+  ],
+  [
+   "VariableExpressionError",
+   "",
+   "variant",
+   "`${FIRM`",
    "Missing ending '}' at character 7"
   ],
   [

@@ -2002,6 +2002,40 @@ fn property_names_merge_authored_and_defined_properties() {
     );
 }
 
+/// `reorder properties` moves the names it lists to the front, in its
+/// order, ahead of the rest in dictionary order; a listed name the prim
+/// does not have is skipped. Both name queries apply it.
+///
+/// Spec: AOUSD Core §7.6.2.2.2. OpenUSD: `UsdPrim::ApplyPropertyOrder`, as
+/// `UsdPrim::GetPropertyNames` and `GetAuthoredPropertyNames` apply it.
+#[test]
+fn property_names_apply_reorder_properties() {
+    let mut store = InMemoryStore::default();
+    let [alpha, beta, gamma, absent] =
+        ["alpha", "beta", "gamma", "absent"].map(|name| store.tokens.intern(name));
+    let p = store.path("/P");
+    let mut spec = PrimSpec::def()
+        .with_property(alpha, PropertySpec::attribute().custom().with_default(1))
+        .with_property(beta, PropertySpec::attribute().custom().with_default(2))
+        .with_property(gamma, PropertySpec::attribute().custom().with_default(3));
+    spec.property_order = Some(vec![gamma, absent, beta]);
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(p, spec);
+    store.insert_layer(layer);
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    assert_eq!(stage.property_names(p, &store), [gamma, beta, alpha]);
+    assert_eq!(
+        stage.authored_property_names(p, &store),
+        [gamma, beta, alpha]
+    );
+
+    let mut names = vec![alpha, beta, gamma];
+    layerstack::stage::apply_property_order(&[], &mut names);
+    assert_eq!(names, [alpha, beta, gamma]);
+    layerstack::stage::apply_property_order(&[beta, beta], &mut names);
+    assert_eq!(names, [beta, alpha, gamma]);
+}
+
 // ── Dictionary combining ──────────────────────────────────────────────
 
 fn dict_entry(key: &str, val: Value) -> (Arc<str>, Value) {

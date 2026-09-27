@@ -1184,16 +1184,18 @@ impl Stage {
 
     /// Returns the names of the properties of `prim`: those any opinion
     /// authors and those its schemas define ([`Stage::prim_definition`]),
-    /// attributes and relationships together, in dictionary order: letters
-    /// ignoring case, runs of digits by value. Empty when `prim` is not on
+    /// attributes and relationships together. Empty when `prim` is not on
     /// the stage.
+    ///
+    /// They are in dictionary order (letters ignoring case, runs of digits
+    /// by value), then the names the prim's `reorder properties` lists
+    /// ([`Stage::resolve_property_order`]) move to the front in its order
+    /// ([`apply_property_order`]), as OpenUSD's `UsdPrim::GetPropertyNames`
+    /// orders them.
     ///
     /// This builds the prim's definition ([`Stage::prim_definition`]);
     /// nothing is cached. Without schemas ([`StageOptions::schemas`]) these
     /// are the authored names alone ([`Stage::authored_property_names`]).
-    ///
-    /// The order is OpenUSD's `UsdPrim::GetPropertyNames` before it applies
-    /// `reorder properties` ([`Stage::resolve_property_order`]).
     ///
     /// Spec: AOUSD Core §7.3.3 (a prim's properties share one name space),
     /// §12 (the composed prim holds every property any opinion authors),
@@ -1211,7 +1213,7 @@ impl Stage {
                     .filter(|name| !authored.contains(name)),
             );
         }
-        sort_property_names(&mut names, store.tokens());
+        self.order_property_names(prim, &mut names, store);
         names
     }
 
@@ -1226,8 +1228,17 @@ impl Stage {
     #[must_use]
     pub fn authored_property_names(&self, prim: PathId, store: &dyn LayerStore) -> Vec<TokenId> {
         let mut names = self.authored_names(prim);
-        sort_property_names(&mut names, store.tokens());
+        self.order_property_names(prim, &mut names, store);
         names
+    }
+
+    /// Sorts `names` in dictionary order, then applies the prim's
+    /// `reorder properties`.
+    fn order_property_names(&self, prim: PathId, names: &mut [TokenId], store: &dyn LayerStore) {
+        sort_property_names(names, store.tokens());
+        if let Some(order) = self.resolve_property_order(prim, store) {
+            apply_property_order(&order, names);
+        }
     }
 
     /// The names of the properties opinions of `prim` author, unsorted.
@@ -1785,6 +1796,24 @@ impl Stage {
             spec_path: strongest.key.spec_path.clone(),
             field,
         })
+    }
+}
+
+/// Moves the names `order` lists to the front of `names`, in `order`'s
+/// order, keeping the rest in their order after them; names `order` lists
+/// that `names` does not hold are skipped.
+///
+/// OpenUSD: `UsdPrim::ApplyPropertyOrder` (`pxr/usd/usd/prim.cpp`), which
+/// `UsdPrim::GetPropertyNames` applies to the sorted names.
+///
+/// Spec: AOUSD Core §7.6.2.2.2 (`propertyChildren` ordering).
+pub fn apply_property_order(order: &[TokenId], names: &mut [TokenId]) {
+    let mut rest = 0;
+    for name in order {
+        if let Some(found) = names[rest..].iter().position(|n| n == name) {
+            names[rest..=rest + found].rotate_right(1);
+            rest += 1;
+        }
     }
 }
 

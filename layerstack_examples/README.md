@@ -17,6 +17,11 @@ Small runnable programs that demonstrate how to use the `layerstack` API, and th
   USDA file with no composition arcs, as `usdcat --flatten` does, prints the report of what it
   wrote exactly and what it transformed, and verifies that the file composes the same values on
   its own)
+- `cargo run -p layerstack_examples --example typed_schema`
+  (authors a mesh, a sphere light and a collection through `layerstack_schemas`' edit handles in
+  a base layer and a stronger shot layer, then reads them through the typed views: the strongest
+  opinion, schema fallbacks, `allowedTokens` enums and inherited properties, and the raw value
+  with its provenance)
 - `cargo run -p layerstack_examples --example light_rig_slots`
   (sparse edits to a typed `Vec` of light rig slots with `opinionated` alone: insert a light,
   duplicate the last slot, and resize with an unlit light as the host-supplied fill)

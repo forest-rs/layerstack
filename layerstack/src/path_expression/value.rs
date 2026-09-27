@@ -303,6 +303,31 @@ pub(crate) fn anchor_opinions(store: &dyn LayerStore, prims: &mut HashMap<PathId
     }
 }
 
+/// Maps freshly authored value slots using an existing opinion's node. Values
+/// already held by the stage must not pass through this mapping a second time.
+pub(crate) fn anchor_fresh_values<'a>(
+    store: &dyn LayerStore,
+    graph: &PrimIndexGraph,
+    prim: PathId,
+    node: NodeId,
+    values: impl Iterator<Item = &'a mut Value>,
+) {
+    let mut values = values.filter(|v| has_path_expression(v)).peekable();
+    if values.peek().is_none() {
+        return;
+    }
+    let Some(site) = graph.node(node) else {
+        return;
+    };
+    let anchor = prim_names(store, site.site());
+    let Some(maps) = node_maps(store, graph, node, store.paths().resolve(prim).depth()) else {
+        return;
+    };
+    for value in values {
+        anchor_value(value, &anchor, &maps);
+    }
+}
+
 /// The values a path expression query reads, strongest first: each
 /// answering opinion's position (`None` for a schema fallback) and its
 /// value, `None` for a block in effect.

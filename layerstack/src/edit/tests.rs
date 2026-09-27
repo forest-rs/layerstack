@@ -1862,3 +1862,91 @@ fn class_arc_targets_keep_the_root_identity() {
         assert_eq!(layers(&store), before);
     }
 }
+
+/// Refresh only new value slots: a referenced expression is mapped once,
+/// and editing a sample does not remap the already composed default again.
+#[test]
+fn live_value_slots_preserve_mapping_and_undo() {
+    let mut store = rocks();
+    let path = spec(&mut store, "/Rock.selection");
+    let at = Address::spec(ROCK, path);
+    let mut setup = Transaction::new();
+    setup.create_property(
+        at.clone(),
+        PropertySpec::typed_attribute(PropertyType::new(
+            "pathExpression",
+            false,
+            Value::PathExpression("".into()),
+        ))
+        .with_default(Value::PathExpression("./Old".into())),
+    );
+    setup.apply(&mut store).unwrap();
+    let mut live = crate::LiveStage::compose(&mut store, SCENE, StageOptions::default());
+    let a = store.property_path("/World/RockA.selection");
+    let b = store.property_path("/World/RockB.selection");
+    let check = |live: &crate::LiveStage, store: &mut InMemoryStore| {
+        let fresh = compose(store);
+        for path in [a, b] {
+            assert_eq!(
+                live.stage().resolve_property_path(path),
+                fresh.resolve_property_path(path)
+            );
+            for time in [0.0, 5.0, 14.0] {
+                assert_eq!(
+                    live.stage().resolve_property_path_at_time(
+                        path,
+                        time,
+                        crate::InterpolationType::default()
+                    ),
+                    fresh.resolve_property_path_at_time(
+                        path,
+                        time,
+                        crate::InterpolationType::default()
+                    )
+                );
+            }
+        }
+    };
+    let mut inverses = Vec::new();
+    for (sample, value) in [(false, "./New"), (true, "./Sample")] {
+        let mut txn = Transaction::new();
+        if sample {
+            txn.set_time_sample(at.clone(), 2.0, Value::PathExpression(value.into()));
+        } else {
+            txn.set_default(at.clone(), Value::PathExpression(value.into()));
+        }
+        inverses.push(live.apply(&mut store, &txn).unwrap().inverse);
+        check(&live, &mut store);
+    }
+    for undo in inverses.into_iter().rev() {
+        let redo = live.apply(&mut store, &undo).unwrap().inverse;
+        check(&live, &mut store);
+        let undo = live.apply(&mut store, &redo).unwrap().inverse;
+        check(&live, &mut store);
+        live.apply(&mut store, &undo).unwrap();
+        check(&live, &mut store);
+    }
+}
+
+/// A precise value transaction must not consume or conceal older pending
+/// notifications, nor hide another authored slot changed without notification.
+#[test]
+fn live_value_refresh_respects_pending_and_unnotified_edits() {
+    for notify in [false, true] {
+        let mut store = rocks();
+        let mut live = crate::LiveStage::compose(&mut store, SCENE, StageOptions::default());
+        let spin = Address::spec(ROCK, spec(&mut store, "/Rock.spin"));
+        let size = Address::spec(ROCK, spec(&mut store, "/Rock.size"));
+        let rock = store.path("/Rock");
+        let mut outside = Transaction::new();
+        outside.set_time_sample(spin, 5.0, Value::Double(75.0));
+        outside.apply(&mut store).unwrap();
+        if notify {
+            live.notify_layer_prim_edits(ROCK, &[rock]);
+        }
+        let mut txn = Transaction::new();
+        txn.set_default(size, Value::Double(4.0));
+        live.apply(&mut store, &txn).unwrap();
+        assert_live_matches_fresh(&live, &mut store, "pending/unnotified slot");
+    }
+}

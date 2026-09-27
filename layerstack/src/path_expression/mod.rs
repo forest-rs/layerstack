@@ -62,7 +62,9 @@ mod parse;
 mod predicate;
 pub(crate) mod value;
 
-pub(crate) use value::{Fold, Stop, anchor_opinions, fold_at_time, fold_default};
+pub(crate) use value::{
+    Fold, Stop, anchor_fresh_values, anchor_opinions, fold_at_time, fold_default,
+};
 
 use alloc::{boxed::Box, string::String, vec::Vec};
 use core::fmt;

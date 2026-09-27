@@ -829,6 +829,15 @@ fn check_type(path: &SpecPath, ty: &PropertyType, value: &Value) -> Result<(), R
 
 /// Sets the default (`time` is `None`) or the time sample at the layer
 /// time `time` of the attribute `at`, creating its spec when missing.
+///
+/// A created spec takes its type and variability from the prim's schemas
+/// when they define the attribute, and otherwise from the composed
+/// declaration, as OpenUSD creates it (`UsdPrim::CreateAttribute`, which a
+/// schema's `Create*Attr` calls with the definition's type and
+/// variability).
+///
+/// Spec: AOUSD Core §13.3.2.3 (the prim definition declares the prim's
+/// schema properties).
 fn set_value(
     store: &mut dyn LayerStore,
     at: &Address,
@@ -839,14 +848,30 @@ fn set_value(
 ) -> Result<(), Rejection> {
     let (path, loc, name) = property_address(store, at)?;
     let id = at.layer();
+    let defined = stage
+        .zip(at.stage_path())
+        .and_then(|(stage, (prim, _))| stage.property_definition(prim, name, &*store));
+    if defined
+        .as_ref()
+        .is_some_and(|d| d.kind != PropertyKind::Attribute)
+    {
+        return Err(Rejection::NotAnAttribute(path));
+    }
     let declared = stage
         .zip(at.stage_path())
-        .and_then(|(stage, (prim, _))| stage.resolve_property_declaration(prim, name));
+        .and_then(|(stage, (prim, _))| stage.resolve_property_declaration(prim, name))
+        .map(|d| (d.type_name, d.variability));
+    let declared = match defined {
+        Some(defined) if defined.type_name.is_some() => {
+            Some((defined.type_name, defined.variability))
+        }
+        _ => declared,
+    };
     let existing = attribute_at(store, id, &loc, name, &path)?.cloned();
     let ty = existing
         .as_ref()
         .and_then(|spec| spec.type_name.clone())
-        .or_else(|| declared.as_ref().and_then(|d| d.type_name.clone()))
+        .or_else(|| declared.as_ref().and_then(|(ty, _)| ty.clone()))
         .ok_or(Rejection::UndeclaredType(path.clone()))?;
     check_type(&path, &ty, value)?;
     if existing.is_some() {
@@ -870,7 +895,7 @@ fn set_value(
     }
     ensure(store, id, &loc, journal)?;
     let mut spec = PropertySpec::typed_attribute(ty);
-    spec.variability = declared.map_or(Variability::Varying, |d| d.variability);
+    spec.variability = declared.map_or(Variability::Varying, |(_, variability)| variability);
     match time {
         None => spec.default = Some(value.clone()),
         Some(time) => spec.time_samples = Some(alloc::vec![(time, value.clone())]),

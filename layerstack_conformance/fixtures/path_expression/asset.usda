@@ -1,0 +1,51 @@
+#usda 1.0
+(
+    doc = "Referenced by scene.usda's /Referencing: its expressions are relative, and reference its own collections, so composition maps them; its variant sets nest, and /Referencing selects which."
+)
+
+def Xform "Asset" (
+    prepend apiSchemas = ["CollectionAPI:kit", "CollectionAPI:outer"]
+    variants = {
+        string mode = "rich"
+    }
+    prepend variantSets = "mode"
+)
+{
+    pathExpression collection:kit:membershipExpression = "Part//"
+    pathExpression collection:outer:membershipExpression = "%/Asset:kit + ../Other// + //Rock"
+
+    def Xform "Part"
+    {
+        def Xform "Hidden"
+        {
+        }
+
+        def Xform "Shown"
+        {
+        }
+    }
+    variantSet "mode" = {
+        "plain" (
+            variants = {
+                string tone = "cool"
+            }
+            prepend variantSets = "tone"
+        ) {
+            variantSet "tone" = {
+                "cool" {
+                }
+            }
+        }
+        "rich" (
+            variants = {
+                string tone = "warm"
+            }
+            prepend variantSets = "tone"
+        ) {
+            variantSet "tone" = {
+                "warm" {
+                }
+            }
+        }
+    }
+}

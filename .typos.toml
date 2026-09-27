@@ -23,4 +23,7 @@ extend-exclude = [
     "core-spec-supplemental-release_dec2025/",
     # OpenUSD's schema documentation, as the views generated from it quote it.
     "layerstack_schemas/src/generated/views/",
+    # Random regular expressions and what OpenUSD matches with them.
+    "layerstack_conformance/fixtures/path_expression/selection_globs.json",
+    "layerstack_conformance/fixtures/path_expression/selection_glob_divergences.json",
 ]

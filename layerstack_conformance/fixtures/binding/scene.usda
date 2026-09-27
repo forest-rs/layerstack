@@ -383,3 +383,43 @@ def Xform "Ordered" (
     {
     }
 }
+
+def Xform "Predicates" (
+    kind = "assembly"
+    prepend apiSchemas = ["MaterialBindingAPI", "CollectionAPI:parts", "CollectionAPI:meshes", "CollectionAPI:joined", "CollectionAPI:loop"]
+)
+{
+    pathExpression collection:parts:membershipExpression = "/Predicates//{kind:component}"
+    pathExpression collection:meshes:membershipExpression = "/Predicates//{isa:Mesh} - //Skip"
+    pathExpression collection:joined:membershipExpression = "%:parts + %/Collections:set + /Predicates/Plain"
+    pathExpression collection:loop:membershipExpression = "%:loop /Predicates/Plain/Leaf"
+    rel material:binding:collection:joined = [</Predicates.collection:joined>, </Looks/Red>]
+    rel material:binding:collection:loop = [</Predicates.collection:loop>, </Looks/Preview>]
+    rel material:binding:collection:meshes = [</Predicates.collection:meshes>, </Looks/Blue>] (
+        bindMaterialAs = "strongerThanDescendants"
+    )
+    rel material:binding:collection:parts = [</Predicates.collection:parts>, </Looks/Green>]
+
+    def Xform "Part" (
+        kind = "component"
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Looks/Full>
+
+        def Mesh "Body"
+        {
+        }
+
+        def Mesh "Skip"
+        {
+        }
+    }
+
+    def Xform "Plain"
+    {
+        def Mesh "Leaf"
+        {
+        }
+    }
+}

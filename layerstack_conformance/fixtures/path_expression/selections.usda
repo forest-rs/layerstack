@@ -1,0 +1,125 @@
+#usda 1.0
+(
+    doc = "Prims selecting variants for scripts/selection_glob_oracle.py: one selection of the `color` set each."
+)
+
+def Xform "S0" (
+    variants = {
+        string color = "red"
+    }
+    prepend variantSets = "color"
+)
+{
+}
+
+def Xform "S1" (
+    variants = {
+        string color = "blue"
+    }
+    prepend variantSets = "color"
+)
+{
+}
+
+def Xform "S2" (
+    variants = {
+        string color = "aab"
+    }
+    prepend variantSets = "color"
+)
+{
+}
+
+def Xform "S3" (
+    variants = {
+        string color = "ab"
+    }
+    prepend variantSets = "color"
+)
+{
+}
+
+def Xform "S4" (
+    variants = {
+        string color = "abcabc"
+    }
+    prepend variantSets = "color"
+)
+{
+}
+
+def Xform "S5" (
+    variants = {
+        string color = "x"
+    }
+    prepend variantSets = "color"
+)
+{
+}
+
+def Xform "S6" (
+    variants = {
+        string color = "big-1"
+    }
+    prepend variantSets = "color"
+)
+{
+}
+
+def Xform "S7" (
+    variants = {
+        string color = "a|b"
+    }
+    prepend variantSets = "color"
+)
+{
+}
+
+def Xform "S8" (
+    variants = {
+        string color = "1"
+    }
+    prepend variantSets = "color"
+)
+{
+}
+
+def Xform "S9" (
+    variants = {
+        string color = "_z"
+    }
+    prepend variantSets = "color"
+)
+{
+}
+
+def Xform "S10" (
+    variants = {
+        string color = "b"
+    }
+    prepend variantSets = "color"
+)
+{
+}
+
+def Xform "S11" (
+    variants = {
+        string color = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaab"
+    }
+    prepend variantSets = "color"
+)
+{
+}
+
+def Xform "S12" (
+    variants = {
+        string color = "a-b"
+    }
+    prepend variantSets = "color"
+)
+{
+}
+
+def Xform "S13"
+{
+}

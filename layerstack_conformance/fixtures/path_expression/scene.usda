@@ -1,0 +1,557 @@
+#usda 1.0
+(
+    doc = "Path expressions and collection predicates for tests/path_expression.rs; scripts/path_expression_oracle.py records what OpenUSD matches."
+    subLayers = [
+        @weak.usda@
+    ]
+)
+def Xform "World" (
+    kind = "assembly"
+    prepend apiSchemas = ["CollectionAPI:tagged"]
+    variants = {
+        string shade = "blue"
+        string size = "big-1"
+    }
+    prepend variantSets = ["shade", "size", "lod"]
+)
+{
+    double size = 1
+    custom float points:x = 2
+    pathExpression collection:tagged:membershipExpression = "//Rock"
+
+    def Mesh "Rock" (
+        kind = "component"
+    )
+    {
+        double size = 2
+        custom float points:y = 3
+    }
+
+    def Gprim "Abstracted"
+    {
+    }
+
+    def Unregistered "Unknown" (
+        kind = "bogus"
+    )
+    {
+    }
+
+    def Xform "Group" (
+        kind = "group"
+    )
+    {
+        def Xform "Part" (
+            kind = "component"
+        )
+        {
+            double size = 3
+
+            def Xform "Detail" (
+                kind = "subcomponent"
+            )
+            {
+            }
+
+            def Xform "Inner" (
+                kind = "component"
+            )
+            {
+            }
+        }
+
+        def Scope "Modeled" (
+            kind = "model"
+        )
+        {
+        }
+    }
+
+    def Xform "Loose" (
+        prepend apiSchemas = ["CollectionAPI:applied"]
+    )
+    {
+        pathExpression collection:unapplied:membershipExpression = "/World"
+
+        def Xform "Part" (
+            kind = "component"
+        )
+        {
+        }
+    }
+
+    class "Template"
+    {
+        def Xform "InTemplate"
+        {
+            double size = 4
+        }
+    }
+
+    over "Sketch"
+    {
+        def Xform "UnderSketch"
+        {
+        }
+    }
+
+    def Xform "Tagged" (
+        prepend apiSchemas = ["CollectionAPI:a", "CollectionAPI:b", "MaterialBindingAPI"]
+    )
+    {
+    }
+
+    def Sphere "Ball"
+    {
+    }
+    variantSet "shade" = {
+        "blue" {
+        }
+        "red" {
+        }
+    }
+    variantSet "size" = {
+        "big-1" {
+        }
+    }
+}
+
+def Xform "Fallback" (
+    variants = {
+        string lod = "missing"
+    }
+    prepend variantSets = "lod"
+)
+{
+    variantSet "lod" = {
+        "high" {
+        }
+    }
+}
+
+def Xform "Nested" (
+    variants = {
+        string outer = "on"
+    }
+    prepend variantSets = "outer"
+)
+{
+    variantSet "outer" = {
+        "off" (
+            variants = {
+                string shape = "round"
+            }
+            prepend variantSets = "shape"
+        ) {
+            variantSet "shape" = {
+                "round" {
+                }
+            }
+        }
+        "on" (
+            variants = {
+                string color = "red"
+            }
+            prepend variantSets = "color"
+        ) {
+            variantSet "color" = {
+                "red" (
+                    variants = {
+                        string depth = "deep"
+                    }
+                    prepend variantSets = "depth"
+                ) {
+                    variantSet "depth" = {
+                        "deep" {
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+def Xform "Undeclared" (
+    variants = {
+        string undeclared = "chosen"
+    }
+)
+{
+}
+
+def Xform "Other"
+{
+    def Xform "Rock"
+    {
+    }
+}
+
+def Xform "Referencing" (
+    prepend references = @asset.usda@</Asset>
+    variants = {
+        string mode = "plain"
+    }
+)
+{
+    pathExpression collection:kit:membershipExpression = "%_ - Part/Hidden"
+}
+def Scope "Expressions" (
+    prepend apiSchemas = ["CollectionAPI:e0", "CollectionAPI:e1", "CollectionAPI:e2", "CollectionAPI:e3", "CollectionAPI:e4", "CollectionAPI:e5", "CollectionAPI:e6", "CollectionAPI:e7", "CollectionAPI:e8", "CollectionAPI:e9", "CollectionAPI:e10", "CollectionAPI:e11", "CollectionAPI:e12", "CollectionAPI:e13", "CollectionAPI:e14", "CollectionAPI:e15", "CollectionAPI:e16", "CollectionAPI:e17", "CollectionAPI:e18", "CollectionAPI:e19", "CollectionAPI:e20", "CollectionAPI:e21", "CollectionAPI:e22", "CollectionAPI:e23", "CollectionAPI:e24", "CollectionAPI:e25", "CollectionAPI:e26", "CollectionAPI:e27", "CollectionAPI:e28", "CollectionAPI:e29", "CollectionAPI:e30", "CollectionAPI:e31", "CollectionAPI:e32", "CollectionAPI:e33", "CollectionAPI:e34", "CollectionAPI:e35", "CollectionAPI:e36", "CollectionAPI:e37", "CollectionAPI:e38", "CollectionAPI:e39", "CollectionAPI:e40", "CollectionAPI:e41", "CollectionAPI:e42", "CollectionAPI:e43", "CollectionAPI:e44", "CollectionAPI:e45", "CollectionAPI:e46", "CollectionAPI:e47", "CollectionAPI:e48", "CollectionAPI:e49", "CollectionAPI:e50", "CollectionAPI:e51", "CollectionAPI:e52", "CollectionAPI:e53", "CollectionAPI:e54", "CollectionAPI:e55", "CollectionAPI:e56", "CollectionAPI:e57", "CollectionAPI:e58", "CollectionAPI:e59", "CollectionAPI:e60", "CollectionAPI:e61", "CollectionAPI:e62", "CollectionAPI:e63", "CollectionAPI:e64", "CollectionAPI:e65", "CollectionAPI:e66", "CollectionAPI:e67", "CollectionAPI:e68", "CollectionAPI:e69", "CollectionAPI:e70", "CollectionAPI:e71", "CollectionAPI:e72", "CollectionAPI:e73", "CollectionAPI:e74", "CollectionAPI:e75", "CollectionAPI:e76", "CollectionAPI:e77", "CollectionAPI:e78", "CollectionAPI:e79", "CollectionAPI:e80", "CollectionAPI:e81", "CollectionAPI:e82", "CollectionAPI:e83", "CollectionAPI:e84", "CollectionAPI:e85", "CollectionAPI:e86", "CollectionAPI:e87", "CollectionAPI:e88", "CollectionAPI:e89", "CollectionAPI:e90", "CollectionAPI:e91", "CollectionAPI:e92", "CollectionAPI:e93", "CollectionAPI:e94", "CollectionAPI:e95", "CollectionAPI:e96", "CollectionAPI:e97", "CollectionAPI:e98", "CollectionAPI:e99", "CollectionAPI:e100", "CollectionAPI:e101", "CollectionAPI:e102", "CollectionAPI:e103", "CollectionAPI:e104", "CollectionAPI:e105", "CollectionAPI:e106", "CollectionAPI:e107", "CollectionAPI:e108", "CollectionAPI:e109", "CollectionAPI:e110", "CollectionAPI:e111", "CollectionAPI:e112", "CollectionAPI:p0", "CollectionAPI:p1", "CollectionAPI:p2", "CollectionAPI:p3", "CollectionAPI:p4", "CollectionAPI:p5", "CollectionAPI:p6", "CollectionAPI:p7", "CollectionAPI:p8", "CollectionAPI:p9", "CollectionAPI:p10", "CollectionAPI:p11", "CollectionAPI:p12", "CollectionAPI:p13", "CollectionAPI:p14", "CollectionAPI:p15", "CollectionAPI:p16", "CollectionAPI:p17", "CollectionAPI:p18", "CollectionAPI:p19", "CollectionAPI:p20", "CollectionAPI:p21", "CollectionAPI:p22", "CollectionAPI:p23", "CollectionAPI:p24", "CollectionAPI:p25", "CollectionAPI:p26", "CollectionAPI:p27", "CollectionAPI:p28", "CollectionAPI:p29", "CollectionAPI:p30", "CollectionAPI:p31", "CollectionAPI:p32", "CollectionAPI:p33", "CollectionAPI:p34", "CollectionAPI:p35", "CollectionAPI:p36", "CollectionAPI:p37", "CollectionAPI:p38", "CollectionAPI:p39", "CollectionAPI:p40", "CollectionAPI:p41", "CollectionAPI:p42", "CollectionAPI:p43", "CollectionAPI:p44", "CollectionAPI:p45", "CollectionAPI:p46", "CollectionAPI:p47", "CollectionAPI:p48", "CollectionAPI:p49", "CollectionAPI:p50", "CollectionAPI:p51", "CollectionAPI:p52", "CollectionAPI:p53", "CollectionAPI:p54", "CollectionAPI:p55", "CollectionAPI:p56", "CollectionAPI:p57", "CollectionAPI:p58", "CollectionAPI:p59", "CollectionAPI:p60", "CollectionAPI:p61", "CollectionAPI:p62", "CollectionAPI:p63", "CollectionAPI:p64", "CollectionAPI:p65", "CollectionAPI:p66", "CollectionAPI:p67", "CollectionAPI:p68", "CollectionAPI:p69", "CollectionAPI:p70", "CollectionAPI:p71", "CollectionAPI:p72", "CollectionAPI:p73", "CollectionAPI:p74", "CollectionAPI:p75", "CollectionAPI:p76", "CollectionAPI:p77", "CollectionAPI:p78", "CollectionAPI:p79", "CollectionAPI:p80", "CollectionAPI:p81", "CollectionAPI:p82", "CollectionAPI:p83", "CollectionAPI:p84", "CollectionAPI:p85", "CollectionAPI:p86", "CollectionAPI:p87", "CollectionAPI:p88", "CollectionAPI:p89", "CollectionAPI:p90", "CollectionAPI:p91", "CollectionAPI:p92", "CollectionAPI:p93", "CollectionAPI:p94", "CollectionAPI:p95", "CollectionAPI:p96", "CollectionAPI:p97", "CollectionAPI:p98", "CollectionAPI:p99", "CollectionAPI:p100", "CollectionAPI:p101", "CollectionAPI:p102", "CollectionAPI:p103", "CollectionAPI:p104", "CollectionAPI:p105", "CollectionAPI:p106", "CollectionAPI:p107", "CollectionAPI:p108", "CollectionAPI:p109", "CollectionAPI:p110", "CollectionAPI:p111", "CollectionAPI:p112", "CollectionAPI:base", "CollectionAPI:nested", "CollectionAPI:cycleA", "CollectionAPI:cycleB", "CollectionAPI:layered", "CollectionAPI:u0", "CollectionAPI:u1", "CollectionAPI:u2", "CollectionAPI:u3", "CollectionAPI:u4", "CollectionAPI:u5", "CollectionAPI:u6", "CollectionAPI:u7", "CollectionAPI:u8", "CollectionAPI:u9", "CollectionAPI:u10"]
+)
+{
+    pathExpression collection:e0:membershipExpression = "/World"
+    pathExpression collection:e1:membershipExpression = "/World/*"
+    pathExpression collection:e2:membershipExpression = "/World//"
+    pathExpression collection:e3:membershipExpression = "//"
+    pathExpression collection:e4:membershipExpression = "/"
+    pathExpression collection:e5:membershipExpression = "//Rock"
+    pathExpression collection:e6:membershipExpression = "/World//Rock"
+    pathExpression collection:e7:membershipExpression = "//R*"
+    pathExpression collection:e8:membershipExpression = "//*o*"
+    pathExpression collection:e9:membershipExpression = "/World/[GL]*"
+    pathExpression collection:e10:membershipExpression = "/World/[!GL]*"
+    pathExpression collection:e11:membershipExpression = "/World/?oose"
+    pathExpression collection:e12:membershipExpression = "/World/Group/Part/*"
+    pathExpression collection:e13:membershipExpression = "/World//*.size"
+    pathExpression collection:e14:membershipExpression = "//*.points:*"
+    pathExpression collection:e15:membershipExpression = "/World.size"
+    pathExpression collection:e16:membershipExpression = "/World/Rock.size"
+    pathExpression collection:e17:membershipExpression = "/World/Rock.*"
+    pathExpression collection:e18:membershipExpression = "//Part//"
+    pathExpression collection:e19:membershipExpression = "//Part//Inner"
+    pathExpression collection:e20:membershipExpression = "/World/Group//"
+    pathExpression collection:e21:membershipExpression = "/World//Part/*"
+    pathExpression collection:e22:membershipExpression = "//*.[rs]*"
+    pathExpression collection:e23:membershipExpression = "/World/Group//{isa:Xform}"
+    pathExpression collection:e24:membershipExpression = "//{abstract}"
+    pathExpression collection:e25:membershipExpression = "//{abstract:0}"
+    pathExpression collection:e26:membershipExpression = "//{abstract:1.5}"
+    pathExpression collection:e27:membershipExpression = "//{abstract(isAbstract=false)}"
+    pathExpression collection:e28:membershipExpression = "//{abstract(other=1)}"
+    pathExpression collection:e29:membershipExpression = "//{defined}"
+    pathExpression collection:e30:membershipExpression = "//{defined:false}"
+    pathExpression collection:e31:membershipExpression = "//{model}"
+    pathExpression collection:e32:membershipExpression = "//{model:false}"
+    pathExpression collection:e33:membershipExpression = "//{group}"
+    pathExpression collection:e34:membershipExpression = "//{group(isGroup=false)}"
+    pathExpression collection:e35:membershipExpression = "//{kind:model}"
+    pathExpression collection:e36:membershipExpression = "//{kind:component}"
+    pathExpression collection:e37:membershipExpression = "//{kind:group,subcomponent}"
+    pathExpression collection:e38:membershipExpression = "//{kind(model, strict=true)}"
+    pathExpression collection:e39:membershipExpression = "//{kind(model, strict=1)}"
+    pathExpression collection:e40:membershipExpression = "//{kind(model, strict=\"yes\")}"
+    pathExpression collection:e41:membershipExpression = "//{kind:component,strict=true}"
+    pathExpression collection:e42:membershipExpression = "//{kind:subcomponent}"
+    pathExpression collection:e43:membershipExpression = "//{specifier:def}"
+    pathExpression collection:e44:membershipExpression = "//{specifier:over,class}"
+    pathExpression collection:e45:membershipExpression = "//{specifier}"
+    pathExpression collection:e46:membershipExpression = "//{isa:Gprim}"
+    pathExpression collection:e47:membershipExpression = "//{isa:Mesh}"
+    pathExpression collection:e48:membershipExpression = "//{isa(Gprim, strict=true)}"
+    pathExpression collection:e49:membershipExpression = "//{isa(Sphere, strict=true)}"
+    pathExpression collection:e50:membershipExpression = "//{isa:Typed}"
+    pathExpression collection:e51:membershipExpression = "//{isa:Xform,Mesh}"
+    pathExpression collection:e52:membershipExpression = "//{isa:Unregistered}"
+    pathExpression collection:e53:membershipExpression = "//{isa:CollectionAPI}"
+    pathExpression collection:e54:membershipExpression = "//{isa}"
+    pathExpression collection:e55:membershipExpression = "//{hasAPI:CollectionAPI}"
+    pathExpression collection:e56:membershipExpression = "//{hasAPI(CollectionAPI, instanceName=a)}"
+    pathExpression collection:e57:membershipExpression = "//{hasAPI(CollectionAPI, instanceName=zz)}"
+    pathExpression collection:e58:membershipExpression = "//{hasAPI(MaterialBindingAPI, instanceName=x)}"
+    pathExpression collection:e59:membershipExpression = "//{hasAPI:MaterialBindingAPI,Unregistered}"
+    pathExpression collection:e60:membershipExpression = "//{hasAPI:Mesh}"
+    pathExpression collection:e61:membershipExpression = "//{variant(shade=blue)}"
+    pathExpression collection:e62:membershipExpression = "//{variant(shade=red)}"
+    pathExpression collection:e63:membershipExpression = "//{variant(shade=b*)}"
+    pathExpression collection:e64:membershipExpression = "//{variant(shade=l)}"
+    pathExpression collection:e65:membershipExpression = "//{variant(shade=\"l|z\")}"
+    pathExpression collection:e66:membershipExpression = "//{variant(size=\"big-1\")}"
+    pathExpression collection:e67:membershipExpression = "//{variant(size=\"g-\")}"
+    pathExpression collection:e68:membershipExpression = "//{variant(lod=missing)}"
+    pathExpression collection:e69:membershipExpression = "//{variant(lod=m*)}"
+    pathExpression collection:e70:membershipExpression = "//{variant(shade=\"^b.*e$\")}"
+    pathExpression collection:e71:membershipExpression = "//{variant(shade=\"^b*e$\")}"
+    pathExpression collection:e72:membershipExpression = "//{variant(shade=blue, size=\"big-1\")}"
+    pathExpression collection:e73:membershipExpression = "//{variant}"
+    pathExpression collection:e74:membershipExpression = "//{variant(undeclared=chosen)}"
+    pathExpression collection:e75:membershipExpression = "//{variant(color=red)}"
+    pathExpression collection:e76:membershipExpression = "//{variant(color=\"r*\", outer=on)}"
+    pathExpression collection:e77:membershipExpression = "//{variant(shape=round)}"
+    pathExpression collection:e78:membershipExpression = "//{variant(tone=warm)}"
+    pathExpression collection:e79:membershipExpression = "//{variant(tone=cool)}"
+    pathExpression collection:e80:membershipExpression = "//{variant(depth=deep)}"
+    pathExpression collection:e81:membershipExpression = "//{defined}.size"
+    pathExpression collection:e82:membershipExpression = "/World//{model}.size"
+    pathExpression collection:e83:membershipExpression = "//{abstract or kind:subcomponent}"
+    pathExpression collection:e84:membershipExpression = "//{not defined and not abstract}"
+    pathExpression collection:e85:membershipExpression = "//{isa:Xform kind:component}"
+    pathExpression collection:e86:membershipExpression = "//{(model or group) and not isa:Mesh}"
+    pathExpression collection:e87:membershipExpression = "//{not not abstract}"
+    pathExpression collection:e88:membershipExpression = "//{kind:component}//"
+    pathExpression collection:e89:membershipExpression = "//{group}//{kind:component}"
+    pathExpression collection:e90:membershipExpression = "~//"
+    pathExpression collection:e91:membershipExpression = "~/World//"
+    pathExpression collection:e92:membershipExpression = "/World// - //Part//"
+    pathExpression collection:e93:membershipExpression = "/World//Rock + /Other//"
+    pathExpression collection:e94:membershipExpression = "//Rock & /World//"
+    pathExpression collection:e95:membershipExpression = "~(/World/Group// + /World/Loose//) & /World//"
+    pathExpression collection:e96:membershipExpression = "/World/Group// /Other"
+    pathExpression collection:e97:membershipExpression = "(/World - /World/Rock) //Inner"
+    pathExpression collection:e98:membershipExpression = "//{model} - //{group}"
+    pathExpression collection:e99:membershipExpression = "//{kind:component} & ~//{model}"
+    pathExpression collection:e100:membershipExpression = "/World// - /World/Group//{kind:component}//"
+    pathExpression collection:e101:membershipExpression = "~//{defined} + //Rock"
+    pathExpression collection:e102:membershipExpression = "/World//*.size - /World/Rock.size"
+    pathExpression collection:e103:membershipExpression = "%:base - //Inner"
+    pathExpression collection:e104:membershipExpression = "%/World:tagged"
+    pathExpression collection:e105:membershipExpression = "%/World:tagged %:base"
+    pathExpression collection:e106:membershipExpression = "%:nested"
+    pathExpression collection:e107:membershipExpression = "%:cycleA"
+    pathExpression collection:e108:membershipExpression = "%:missing /Other"
+    pathExpression collection:e109:membershipExpression = "%/Nowhere:thing /Other"
+    pathExpression collection:e110:membershipExpression = "%/World/Loose:unapplied /Other"
+    pathExpression collection:e111:membershipExpression = "%/Referencing:kit"
+    pathExpression collection:e112:membershipExpression = "~%:base"
+    uniform token collection:p0:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p0:membershipExpression = "/World"
+    uniform token collection:p1:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p1:membershipExpression = "/World/*"
+    uniform token collection:p2:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p2:membershipExpression = "/World//"
+    uniform token collection:p3:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p3:membershipExpression = "//"
+    uniform token collection:p4:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p4:membershipExpression = "/"
+    uniform token collection:p5:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p5:membershipExpression = "//Rock"
+    uniform token collection:p6:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p6:membershipExpression = "/World//Rock"
+    uniform token collection:p7:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p7:membershipExpression = "//R*"
+    uniform token collection:p8:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p8:membershipExpression = "//*o*"
+    uniform token collection:p9:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p9:membershipExpression = "/World/[GL]*"
+    uniform token collection:p10:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p10:membershipExpression = "/World/[!GL]*"
+    uniform token collection:p11:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p11:membershipExpression = "/World/?oose"
+    uniform token collection:p12:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p12:membershipExpression = "/World/Group/Part/*"
+    uniform token collection:p13:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p13:membershipExpression = "/World//*.size"
+    uniform token collection:p14:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p14:membershipExpression = "//*.points:*"
+    uniform token collection:p15:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p15:membershipExpression = "/World.size"
+    uniform token collection:p16:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p16:membershipExpression = "/World/Rock.size"
+    uniform token collection:p17:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p17:membershipExpression = "/World/Rock.*"
+    uniform token collection:p18:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p18:membershipExpression = "//Part//"
+    uniform token collection:p19:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p19:membershipExpression = "//Part//Inner"
+    uniform token collection:p20:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p20:membershipExpression = "/World/Group//"
+    uniform token collection:p21:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p21:membershipExpression = "/World//Part/*"
+    uniform token collection:p22:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p22:membershipExpression = "//*.[rs]*"
+    uniform token collection:p23:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p23:membershipExpression = "/World/Group//{isa:Xform}"
+    uniform token collection:p24:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p24:membershipExpression = "//{abstract}"
+    uniform token collection:p25:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p25:membershipExpression = "//{abstract:0}"
+    uniform token collection:p26:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p26:membershipExpression = "//{abstract:1.5}"
+    uniform token collection:p27:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p27:membershipExpression = "//{abstract(isAbstract=false)}"
+    uniform token collection:p28:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p28:membershipExpression = "//{abstract(other=1)}"
+    uniform token collection:p29:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p29:membershipExpression = "//{defined}"
+    uniform token collection:p30:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p30:membershipExpression = "//{defined:false}"
+    uniform token collection:p31:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p31:membershipExpression = "//{model}"
+    uniform token collection:p32:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p32:membershipExpression = "//{model:false}"
+    uniform token collection:p33:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p33:membershipExpression = "//{group}"
+    uniform token collection:p34:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p34:membershipExpression = "//{group(isGroup=false)}"
+    uniform token collection:p35:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p35:membershipExpression = "//{kind:model}"
+    uniform token collection:p36:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p36:membershipExpression = "//{kind:component}"
+    uniform token collection:p37:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p37:membershipExpression = "//{kind:group,subcomponent}"
+    uniform token collection:p38:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p38:membershipExpression = "//{kind(model, strict=true)}"
+    uniform token collection:p39:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p39:membershipExpression = "//{kind(model, strict=1)}"
+    uniform token collection:p40:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p40:membershipExpression = "//{kind(model, strict=\"yes\")}"
+    uniform token collection:p41:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p41:membershipExpression = "//{kind:component,strict=true}"
+    uniform token collection:p42:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p42:membershipExpression = "//{kind:subcomponent}"
+    uniform token collection:p43:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p43:membershipExpression = "//{specifier:def}"
+    uniform token collection:p44:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p44:membershipExpression = "//{specifier:over,class}"
+    uniform token collection:p45:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p45:membershipExpression = "//{specifier}"
+    uniform token collection:p46:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p46:membershipExpression = "//{isa:Gprim}"
+    uniform token collection:p47:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p47:membershipExpression = "//{isa:Mesh}"
+    uniform token collection:p48:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p48:membershipExpression = "//{isa(Gprim, strict=true)}"
+    uniform token collection:p49:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p49:membershipExpression = "//{isa(Sphere, strict=true)}"
+    uniform token collection:p50:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p50:membershipExpression = "//{isa:Typed}"
+    uniform token collection:p51:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p51:membershipExpression = "//{isa:Xform,Mesh}"
+    uniform token collection:p52:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p52:membershipExpression = "//{isa:Unregistered}"
+    uniform token collection:p53:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p53:membershipExpression = "//{isa:CollectionAPI}"
+    uniform token collection:p54:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p54:membershipExpression = "//{isa}"
+    uniform token collection:p55:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p55:membershipExpression = "//{hasAPI:CollectionAPI}"
+    uniform token collection:p56:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p56:membershipExpression = "//{hasAPI(CollectionAPI, instanceName=a)}"
+    uniform token collection:p57:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p57:membershipExpression = "//{hasAPI(CollectionAPI, instanceName=zz)}"
+    uniform token collection:p58:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p58:membershipExpression = "//{hasAPI(MaterialBindingAPI, instanceName=x)}"
+    uniform token collection:p59:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p59:membershipExpression = "//{hasAPI:MaterialBindingAPI,Unregistered}"
+    uniform token collection:p60:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p60:membershipExpression = "//{hasAPI:Mesh}"
+    uniform token collection:p61:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p61:membershipExpression = "//{variant(shade=blue)}"
+    uniform token collection:p62:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p62:membershipExpression = "//{variant(shade=red)}"
+    uniform token collection:p63:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p63:membershipExpression = "//{variant(shade=b*)}"
+    uniform token collection:p64:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p64:membershipExpression = "//{variant(shade=l)}"
+    uniform token collection:p65:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p65:membershipExpression = "//{variant(shade=\"l|z\")}"
+    uniform token collection:p66:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p66:membershipExpression = "//{variant(size=\"big-1\")}"
+    uniform token collection:p67:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p67:membershipExpression = "//{variant(size=\"g-\")}"
+    uniform token collection:p68:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p68:membershipExpression = "//{variant(lod=missing)}"
+    uniform token collection:p69:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p69:membershipExpression = "//{variant(lod=m*)}"
+    uniform token collection:p70:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p70:membershipExpression = "//{variant(shade=\"^b.*e$\")}"
+    uniform token collection:p71:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p71:membershipExpression = "//{variant(shade=\"^b*e$\")}"
+    uniform token collection:p72:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p72:membershipExpression = "//{variant(shade=blue, size=\"big-1\")}"
+    uniform token collection:p73:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p73:membershipExpression = "//{variant}"
+    uniform token collection:p74:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p74:membershipExpression = "//{variant(undeclared=chosen)}"
+    uniform token collection:p75:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p75:membershipExpression = "//{variant(color=red)}"
+    uniform token collection:p76:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p76:membershipExpression = "//{variant(color=\"r*\", outer=on)}"
+    uniform token collection:p77:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p77:membershipExpression = "//{variant(shape=round)}"
+    uniform token collection:p78:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p78:membershipExpression = "//{variant(tone=warm)}"
+    uniform token collection:p79:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p79:membershipExpression = "//{variant(tone=cool)}"
+    uniform token collection:p80:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p80:membershipExpression = "//{variant(depth=deep)}"
+    uniform token collection:p81:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p81:membershipExpression = "//{defined}.size"
+    uniform token collection:p82:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p82:membershipExpression = "/World//{model}.size"
+    uniform token collection:p83:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p83:membershipExpression = "//{abstract or kind:subcomponent}"
+    uniform token collection:p84:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p84:membershipExpression = "//{not defined and not abstract}"
+    uniform token collection:p85:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p85:membershipExpression = "//{isa:Xform kind:component}"
+    uniform token collection:p86:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p86:membershipExpression = "//{(model or group) and not isa:Mesh}"
+    uniform token collection:p87:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p87:membershipExpression = "//{not not abstract}"
+    uniform token collection:p88:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p88:membershipExpression = "//{kind:component}//"
+    uniform token collection:p89:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p89:membershipExpression = "//{group}//{kind:component}"
+    uniform token collection:p90:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p90:membershipExpression = "~//"
+    uniform token collection:p91:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p91:membershipExpression = "~/World//"
+    uniform token collection:p92:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p92:membershipExpression = "/World// - //Part//"
+    uniform token collection:p93:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p93:membershipExpression = "/World//Rock + /Other//"
+    uniform token collection:p94:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p94:membershipExpression = "//Rock & /World//"
+    uniform token collection:p95:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p95:membershipExpression = "~(/World/Group// + /World/Loose//) & /World//"
+    uniform token collection:p96:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p96:membershipExpression = "/World/Group// /Other"
+    uniform token collection:p97:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p97:membershipExpression = "(/World - /World/Rock) //Inner"
+    uniform token collection:p98:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p98:membershipExpression = "//{model} - //{group}"
+    uniform token collection:p99:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p99:membershipExpression = "//{kind:component} & ~//{model}"
+    uniform token collection:p100:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p100:membershipExpression = "/World// - /World/Group//{kind:component}//"
+    uniform token collection:p101:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p101:membershipExpression = "~//{defined} + //Rock"
+    uniform token collection:p102:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p102:membershipExpression = "/World//*.size - /World/Rock.size"
+    uniform token collection:p103:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p103:membershipExpression = "%:base - //Inner"
+    uniform token collection:p104:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p104:membershipExpression = "%/World:tagged"
+    uniform token collection:p105:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p105:membershipExpression = "%/World:tagged %:base"
+    uniform token collection:p106:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p106:membershipExpression = "%:nested"
+    uniform token collection:p107:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p107:membershipExpression = "%:cycleA"
+    uniform token collection:p108:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p108:membershipExpression = "%:missing /Other"
+    uniform token collection:p109:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p109:membershipExpression = "%/Nowhere:thing /Other"
+    uniform token collection:p110:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p110:membershipExpression = "%/World/Loose:unapplied /Other"
+    uniform token collection:p111:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p111:membershipExpression = "%/Referencing:kit"
+    uniform token collection:p112:expansionRule = "expandPrimsAndProperties"
+    pathExpression collection:p112:membershipExpression = "~%:base"
+    pathExpression collection:base:membershipExpression = "/World/Group//"
+    pathExpression collection:nested:membershipExpression = "%:base - %/World:tagged"
+    pathExpression collection:cycleA:membershipExpression = "%:cycleB /World/Rock"
+    pathExpression collection:cycleB:membershipExpression = "%:cycleA + /Other"
+    pathExpression collection:layered:membershipExpression = "/World/Rock %_"
+    pathExpression collection:u0:membershipExpression = "//{kind:bogus}"
+    pathExpression collection:u1:membershipExpression = "//{nosuch}"
+    pathExpression collection:u2:membershipExpression = "//{abstract:\"false\"}"
+    pathExpression collection:u3:membershipExpression = "//{abstract(1, 2)}"
+    pathExpression collection:u4:membershipExpression = "//{variant(size=1)}"
+    pathExpression collection:u5:membershipExpression = "//{variant(shade=\"\")}"
+    pathExpression collection:u6:membershipExpression = "//{variant:shade=blue}"
+    pathExpression collection:u7:membershipExpression = "//{specifier:bogus}"
+    pathExpression collection:u8:membershipExpression = "//{hasAPI(CollectionAPI, instanceName=1)}"
+    pathExpression collection:u9:membershipExpression = "/World/[!]"
+    pathExpression collection:u10:membershipExpression = "/World/Rock + //{nosuch}"
+}

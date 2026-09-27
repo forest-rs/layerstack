@@ -174,7 +174,11 @@ impl<T: Copy + PartialOrd> TemporalPlanner<T> {
                 .collect();
         } else {
             let strong = &self.samples;
-            let mut merged = Vec::with_capacity(strong.len() + weak.len());
+            // Merge only metadata first: at most four candidates exist, and
+            // only two can survive bracketing. Do not copy recipes discarded
+            // by that selection, or copy recipes that can be moved intact.
+            let mut merged = [(0, lower.time, false, SamplePick::Lower); 4];
+            let mut len = 0;
             let (mut i, mut j) = (0, 0);
             while i < strong.len() || j < weak.len() {
                 let s = strong.get(i);
@@ -183,11 +187,13 @@ impl<T: Copy + PartialOrd> TemporalPlanner<T> {
                 // (including +infinity) as an end-of-series sentinel.
                 if let Some(s) = s.filter(|s| w.is_none_or(|w| s.time <= w.time)) {
                     let held = held_index(weak.len(), j, s.time, |k| weak[k].time, &equivalent);
-                    merged.push(s.joined(pick(held), s.time, s.composes && weak[held].composes));
+                    merged[len] = (i, s.time, s.composes && weak[held].composes, pick(held));
+                    len += 1;
                 } else if let Some(w) = w {
                     let held = held_index(strong.len(), i, w.time, |k| strong[k].time, &equivalent);
                     if strong[held].composes {
-                        merged.push(strong[held].joined(pick(j), w.time, w.composes));
+                        merged[len] = (held, w.time, w.composes, pick(j));
+                        len += 1;
                     }
                 }
                 match (s, w) {
@@ -201,7 +207,29 @@ impl<T: Copy + PartialOrd> TemporalPlanner<T> {
                     _ => j += 1,
                 }
             }
-            self.samples = merged;
+            let (from, to) = bracket_range(len, self.time, |i| merged[i].1);
+            let mut old = [None, None];
+            for (slot, sample) in old.iter_mut().zip(self.samples.drain(..)) {
+                *slot = Some(sample);
+            }
+            for k in from..to {
+                let (source, time, composes, pick) = merged[k];
+                let previous = old[source].as_mut().expect("candidate source exists");
+                let reused = merged[k + 1..to].iter().any(|entry| entry.0 == source);
+                let mut picks = if reused {
+                    let mut fork = Vec::with_capacity(previous.picks.len() + 1);
+                    fork.extend_from_slice(&previous.picks);
+                    fork
+                } else {
+                    core::mem::take(&mut previous.picks)
+                };
+                picks.push(pick);
+                self.samples.push(TemporalSelection {
+                    time,
+                    composes,
+                    picks,
+                });
+            }
         }
         trim(&mut self.samples, self.time);
         match (self.samples.first(), self.samples.last()) {
@@ -233,36 +261,36 @@ fn held_index<T: Copy>(
     }
 }
 
-impl<T: Copy> TemporalSelection<T> {
-    fn joined(&self, pick: SamplePick, time: T, composes: bool) -> Self {
-        let mut picks = Vec::with_capacity(self.picks.len() + 1);
-        picks.extend_from_slice(&self.picks);
-        picks.push(pick);
-        Self {
-            time,
-            composes,
-            picks,
-        }
-    }
-}
-
-fn trim<T: Copy + PartialOrd>(samples: &mut Vec<TemporalSelection<T>>, time: T) {
-    let Some(last) = samples.len().checked_sub(1) else {
-        return;
+fn bracket_range<T: Copy + PartialOrd>(
+    len: usize,
+    time: T,
+    at: impl Fn(usize) -> T,
+) -> (usize, usize) {
+    let Some(last) = len.checked_sub(1) else {
+        return (0, 0);
     };
-    let (from, to) = if last == 0 || time <= samples[0].time {
+    let (from, to) = if last == 0 || time <= at(0) {
         (0, 0)
-    } else if time >= samples[last].time {
+    } else if time >= at(last) {
         (last, last)
     } else {
-        let next = samples.partition_point(|e| e.time < time).clamp(1, last);
-        if samples[next].time == time {
+        // There are at most four merged candidates.
+        let next = (0..len)
+            .take_while(|&i| at(i) < time)
+            .count()
+            .clamp(1, last);
+        if at(next) == time {
             (next, next)
         } else {
             (next - 1, next)
         }
     };
-    samples.truncate(to + 1);
+    (from, to + 1)
+}
+
+fn trim<T: Copy + PartialOrd>(samples: &mut Vec<TemporalSelection<T>>, time: T) {
+    let (from, to) = bracket_range(samples.len(), time, |i| samples[i].time);
+    samples.truncate(to);
     samples.drain(..from);
 }
 
@@ -277,6 +305,50 @@ mod tests {
 
     fn sample<T>(time: T, composes: bool) -> TemporalSample<T> {
         TemporalSample { time, composes }
+    }
+
+    #[test]
+    fn shared_recipe_forks_before_either_branch_is_extended() {
+        let mut plan = TemporalPlanner::new(5, TemporalMode::Bracketing);
+        plan.push(sample(0, true), sample(10, true), |a, b| a == b);
+        plan.push(sample(3, true), sample(7, true), |a, b| a == b);
+        assert_eq!(plan.samples()[0].time, 3);
+        assert_eq!(plan.samples()[1].time, 7);
+        assert_eq!(
+            plan.samples()[0].picks,
+            [SamplePick::Lower, SamplePick::Lower]
+        );
+        assert_eq!(
+            plan.samples()[1].picks,
+            [SamplePick::Lower, SamplePick::Upper]
+        );
+        plan.push(sample(3, false), sample(7, false), |a, b| a == b);
+        assert_eq!(plan.query(), None);
+        assert_eq!(plan.samples()[0].picks, [SamplePick::Lower; 3]);
+        assert_eq!(
+            plan.samples()[1].picks,
+            [SamplePick::Lower, SamplePick::Upper, SamplePick::Upper]
+        );
+    }
+
+    #[test]
+    fn aligned_sources_reuse_recipe_storage() {
+        let mut plan = TemporalPlanner::new(5, TemporalMode::Bracketing);
+        plan.push(sample(0, true), sample(10, true), |a, b| a == b);
+        for selection in &mut plan.samples {
+            selection.picks.reserve(100);
+        }
+        let buffers = [
+            plan.samples[0].picks.as_ptr(),
+            plan.samples[1].picks.as_ptr(),
+        ];
+        for _ in 0..99 {
+            plan.push(sample(0, true), sample(10, true), |a, b| a == b);
+            assert_eq!(plan.samples[0].picks.as_ptr(), buffers[0]);
+            assert_eq!(plan.samples[1].picks.as_ptr(), buffers[1]);
+        }
+        assert_eq!(plan.samples[0].picks, vec![SamplePick::Lower; 100]);
+        assert_eq!(plan.samples[1].picks, vec![SamplePick::Upper; 100]);
     }
 
     #[test]

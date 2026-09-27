@@ -16,9 +16,10 @@
 //! to within the rounding of the platform's trigonometry and fused
 //! multiply-adds.
 
-use alloc::{string::String, vec::Vec};
+use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use core::ops::Bound;
 
-use layerstack::{HashMap, PathId, Value, half};
+use layerstack::{HashMap, Path, PathId, Value, half};
 
 use crate::gf::{self, Matrix4, Rotation};
 use crate::usd_geom::{Imageable, Xformable};
@@ -602,7 +603,7 @@ struct Entry {
 /// scenes.
 ///
 /// After an edit, drop what it changed: a structural change
-/// (`LiveStage::apply` reports the recomposed prims) or an edit of a
+/// (`LiveStage::apply` reports subtree roots in `changes.resynced`) or an edit of a
 /// prim's `xformOpOrder` or `xformOp:*` attributes changes that prim's
 /// transform and its descendants' world transforms, which
 /// [`XformCache::invalidate`] drops; [`XformCache::clear`] drops
@@ -613,6 +614,10 @@ struct Entry {
 pub struct XformCache {
     time: Time,
     entries: HashMap<PathId, Entry>,
+    // Path's segment ordering places a prefix and its descendants together.
+    // This index also covers locally queried entries whose parents were never
+    // cached, and survives deletion of the subtree from the composed stage.
+    namespace: BTreeMap<Path, PathId>,
     stats: XformCacheStats,
 }
 
@@ -623,6 +628,7 @@ impl XformCache {
         Self {
             time,
             entries: HashMap::new(),
+            namespace: BTreeMap::new(),
             stats: XformCacheStats::default(),
         }
     }
@@ -642,15 +648,28 @@ impl XformCache {
     /// Drops everything held, and the statistics.
     pub fn clear(&mut self) {
         self.entries.clear();
+        self.namespace.clear();
         self.stats = XformCacheStats::default();
     }
 
     /// Drops what it holds for `path` and its namespace descendants.
+    ///
+    /// An ordered namespace index limits the search to cached descendants,
+    /// even when the subtree has already been removed from the stage. The
+    /// index retains one owned path per cached prim.
     pub fn invalidate(&mut self, scene: &Scene<'_>, path: PathId) {
         let paths = scene.store().paths();
-        let root = paths.resolve(path).clone();
-        self.entries
-            .retain(|held, _| !root.is_prefix_of(paths.resolve(*held)));
+        let root = paths.resolve(path);
+        let removed: Vec<_> = self
+            .namespace
+            .range::<Path, _>((Bound::Included(root), Bound::Unbounded))
+            .take_while(|(held, _)| root.is_prefix_of(held))
+            .map(|(_, id)| *id)
+            .collect();
+        for id in removed {
+            self.namespace.remove(paths.resolve(id));
+            self.entries.remove(&id);
+        }
     }
 
     /// The number of prims it holds something for.
@@ -680,7 +699,11 @@ impl XformCache {
             return None;
         }
         let time = self.time;
-        let entry = self.entries.entry(path).or_default();
+        let entry = self.entries.entry(path).or_insert_with(|| {
+            self.namespace
+                .insert(scene.store().paths().resolve(path).clone(), path);
+            Entry::default()
+        });
         if entry.local.is_some() {
             self.stats.hits += 1;
         } else {
@@ -714,10 +737,21 @@ impl XformCache {
                 break;
             }
             chain.push(current);
+            // OpenUSD UsdGeomXformCache::_GetCtm does not query a parent
+            // above a reset. Evaluate while walking so a cold reset subtree
+            // does not populate unrelated ancestor transforms.
+            if self.local_transform(scene, current)?.resets_xform_stack {
+                break;
+            }
             at = scene.parent(current);
         }
         for current in chain.into_iter().rev() {
-            let world = self.local_transform(scene, current)?.local_to_world(&above);
+            let world = self
+                .entries
+                .get(&current)?
+                .local
+                .as_ref()?
+                .local_to_world(&above);
             self.entries.entry(current).or_default().world = Some(world);
             self.stats.world_computed += 1;
             above = world;
@@ -737,5 +771,108 @@ impl XformCache {
             Some(parent) => self.local_to_world(scene, parent),
             None => Some(gf::IDENTITY),
         }
+    }
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+    use layerstack::{
+        EditTarget, InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, StageOptions, Transaction,
+    };
+
+    #[test]
+    fn invalidation_finds_sparse_locals_after_source_removal() {
+        let mut store = InMemoryStore::default();
+        // Intern siblings out of lexical order; namespace index order is token order.
+        let other = store.path("/Other");
+        let child = store.path("/Root/Z/Leaf");
+        let branch = store.path("/Root/Z");
+        let sibling = store.path("/Root/A");
+        let root = store.path("/Root");
+        let mut layer = Layer::new(LayerId(1));
+        for path in [other, child, branch, sibling, root] {
+            layer.insert_prim(path, PrimSpec::def());
+        }
+        store.insert_layer(layer);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let mut cache = XformCache::new(Time::Default);
+        for path in [other, child, sibling] {
+            cache.local_transform(&Scene::new(live.stage(), &store), path);
+        }
+        assert_eq!(cache.len(), 3);
+        // No parent was queried and the removed subtree no longer exists in Stage.
+        let mut txn = Transaction::new();
+        txn.remove_spec(EditTarget::for_layer(LayerId(1)).prim(branch));
+        let applied = live.apply(&mut store, &txn).unwrap();
+        cache.invalidate(&Scene::new(live.stage(), &store), branch);
+        assert_eq!(cache.len(), 2);
+        assert!(!cache.entries.contains_key(&child));
+        assert_eq!(cache.namespace.len(), 2);
+        live.apply(&mut store, &applied.inverse).unwrap();
+        cache.local_transform(&Scene::new(live.stage(), &store), child);
+        cache.invalidate(&Scene::new(live.stage(), &store), root);
+        assert_eq!(cache.len(), 1);
+        assert!(cache.entries.contains_key(&other));
+        let pseudo = store.path("/");
+        cache.invalidate(&Scene::new(live.stage(), &store), pseudo);
+        assert!(cache.is_empty());
+        assert!(cache.namespace.is_empty());
+    }
+
+    #[test]
+    fn cold_reset_does_not_evaluate_ancestors() {
+        use alloc::{sync::Arc, vec};
+        use layerstack::PropertySpec;
+        let mut store = InMemoryStore::default();
+        let root = store.path("/Root");
+        let child = store.path("/Root/Child");
+        let xform = store.tokens.intern("Xform");
+        let order = store.tokens.intern("xformOpOrder");
+        let reset = store.tokens.intern("!resetXformStack!");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(root, PrimSpec::def().with_type_name(xform));
+        layer.insert_prim(
+            child,
+            PrimSpec::def().with_type_name(xform).with_property(
+                order,
+                PropertySpec::attribute().with_default(Value::Array(vec![Value::Token(reset)])),
+            ),
+        );
+        store.insert_layer(layer);
+        let options = StageOptions {
+            schemas: Some(Arc::new(crate::openusd(&mut store.tokens))),
+            ..StageOptions::default()
+        };
+        let live = LiveStage::compose(&mut store, LayerId(1), options);
+        let scene = Scene::new(live.stage(), &store);
+        let mut cache = XformCache::new(Time::Default);
+        assert_eq!(cache.local_to_world(&scene, child), Some(gf::IDENTITY));
+        assert_eq!(cache.stats().local_computed, 1);
+        assert_eq!(cache.stats().world_computed, 1);
+        assert_eq!(cache.len(), 1);
+        assert!(!cache.entries.contains_key(&root));
+    }
+
+    #[test]
+    fn clear_and_clone_keep_namespace_index_in_sync() {
+        let mut store = InMemoryStore::default();
+        let path = store.path("/Root");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(path, PrimSpec::def());
+        store.insert_layer(layer);
+        let live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let scene = Scene::new(live.stage(), &store);
+        let mut cache = XformCache::new(Time::Default);
+        cache.local_to_world(&scene, path);
+        let mut copied = cache.clone();
+        copied.invalidate(&scene, path);
+        assert!(copied.is_empty());
+        assert_eq!(cache.len(), 1);
+        cache.set_time(Time::at(1.0));
+        assert!(cache.namespace.is_empty());
+        cache.local_to_world(&scene, path);
+        cache.invalidate(&scene, path);
+        assert!(cache.is_empty());
     }
 }

@@ -18,6 +18,7 @@ layerstack = { path = "../layerstack" }
 
 [dev-dependencies]
 criterion = { features = ["html_reports"], version = "0.8" }
+layerstack_schemas = { default-features = false, features = ["usd-geom"], path = "../layerstack_schemas" }
 layerstack_usdc = { path = "../layerstack_usdc" }
 
 [[bench]]
@@ -46,4 +47,8 @@ harness = false
 
 [[bench]]
 name = "live_edits"
+harness = false
+
+[[bench]]
+name = "xform_cache"
 harness = false

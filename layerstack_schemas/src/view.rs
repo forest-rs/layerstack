@@ -26,6 +26,7 @@ use layerstack::{
 };
 
 use crate::edit::SchemaEdit;
+use crate::kind::KindRegistry;
 
 /// When a computation reads the stage: the default time, or a time code
 /// with the interpolation between its time samples.
@@ -79,6 +80,7 @@ impl Time {
 pub struct Scene<'a> {
     stage: &'a Stage,
     store: &'a dyn LayerStore,
+    kinds: &'a KindRegistry,
 }
 
 impl fmt::Debug for Scene<'_> {
@@ -88,10 +90,87 @@ impl fmt::Debug for Scene<'_> {
 }
 
 impl<'a> Scene<'a> {
-    /// The scene of `stage`, composed from `store`.
+    /// The scene of `stage`, composed from `store`, with OpenUSD's kinds
+    /// ([`KindRegistry::openusd`]).
     #[must_use]
     pub fn new(stage: &'a Stage, store: &'a dyn LayerStore) -> Self {
-        Self { stage, store }
+        Self {
+            stage,
+            store,
+            kinds: KindRegistry::openusd(),
+        }
+    }
+
+    /// The scene with the kinds `kinds` instead.
+    #[must_use]
+    pub fn with_kinds(self, kinds: &'a KindRegistry) -> Self {
+        Self { kinds, ..self }
+    }
+
+    /// The kinds the scene reads `kind` metadata with.
+    #[must_use]
+    pub fn kinds(&self) -> &'a KindRegistry {
+        self.kinds
+    }
+
+    /// The prim's composed `kind` metadata, if authored and not empty.
+    ///
+    /// Spec: AOUSD Core §7.6.2.4.4.
+    #[must_use]
+    pub fn kind(&self, path: PathId) -> Option<&'a str> {
+        let key = self.token("kind")?;
+        let resolved = self.stage.resolve_field(path, key)?;
+        let tokens = self.store.tokens();
+        let kind = match resolved.value {
+            Value::Token(token) => tokens.resolve(token),
+            Value::String(kind) => tokens.resolve(tokens.lookup(&kind)?),
+            _ => return None,
+        };
+        (!kind.is_empty()).then_some(kind)
+    }
+
+    /// The prim's place in the model hierarchy: whether it is a group
+    /// (`group`, `assembly`) and whether it is a model (a group, or
+    /// `component` or `model`), each only under a group. The pseudo-root is
+    /// both.
+    fn model_flags(&self, path: PathId) -> (bool, bool) {
+        let Some(parent) = self.parent(path) else {
+            return (true, true);
+        };
+        if !self.model_flags(parent).0 {
+            return (false, false);
+        }
+        let Some(kind) = self.kind(path) else {
+            return (false, false);
+        };
+        let kinds = self.kinds;
+        let group = kinds.is_a(kind, crate::kind::GROUP);
+        let model = group
+            || kinds.is_a(kind, crate::kind::COMPONENT)
+            || kinds.is_a(kind, crate::kind::MODEL);
+        (group, model)
+    }
+
+    /// Whether the prim is a model: its kind is a kind of `model` and its
+    /// parent is a group.
+    ///
+    /// OpenUSD: `UsdPrim::IsModel` (`Usd_PrimData::_ComposeAndCacheFlags`).
+    ///
+    /// Spec: AOUSD Core §11.4, §11.5 (model hierarchy).
+    #[must_use]
+    pub fn is_model(&self, path: PathId) -> bool {
+        self.model_flags(path).1
+    }
+
+    /// Whether the prim is a group: its kind is a kind of `group` and its
+    /// parent is a group.
+    ///
+    /// OpenUSD: `UsdPrim::IsGroup`.
+    ///
+    /// Spec: AOUSD Core §11.4.
+    #[must_use]
+    pub fn is_group(&self, path: PathId) -> bool {
+        self.model_flags(path).0
     }
 
     /// The composed stage.

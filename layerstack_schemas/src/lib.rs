@@ -193,6 +193,28 @@
 //! assert_eq!(cache.local_to_world(&scene, ball), Some(sphere.compute_local_to_world(Time::at(1.0))));
 //! ```
 //!
+//! # Collections and material bindings
+//!
+//! With `usd`, `CollectionApi::membership_query` computes a collection's
+//! membership as OpenUSD's `ComputeMembershipQuery` does (includes and
+//! excludes, expansion rules, `includeRoot`, collections included by their
+//! collection paths), and [`MembershipQuery::is_included`] answers for any
+//! prim or property. A collection decided by its `membershipExpression`,
+//! which layerstack does not evaluate yet, answers
+//! [`Membership::ExpressionUnsupported`] rather than a guess.
+//!
+//! With `usd-shade`, `PrimView::compute_bound_material` (every view derefs
+//! to [`PrimView`]) resolves a prim's material for a [`MaterialPurpose`] as
+//! `ComputeBoundMaterial` does: direct and collection bindings, binding
+//! strength, the purpose's fallback to all-purpose and the walk up
+//! namespace. It returns the material and the [`Binding`] that decided it,
+//! including whether that binding's prim lacks `MaterialBindingAPI` (a
+//! legacy binding, which [`BindingOptions`] allows by default as OpenUSD
+//! 26.08 does), or [`Undecided`] when the outcome depends on an expression.
+//! [`BindingCache`] resolves many prims, sharing each ancestor's bindings and
+//! each collection's membership; [`BindingInputs`] and
+//! [`BoundMaterial::resolve`] are the pure steps it folds.
+//!
 //! # License
 //!
 //! The generated tables are derived from OpenUSD's schema definitions,
@@ -222,6 +244,10 @@ extern crate alloc;
 
 #[macro_use]
 mod view;
+#[cfg(feature = "usd-shade")]
+mod binding;
+#[cfg(feature = "usd")]
+mod collection;
 mod edit;
 mod generated;
 #[cfg(feature = "usd-geom")]
@@ -235,6 +261,15 @@ mod xform;
 #[cfg(feature = "usd-geom")]
 mod xform_edit;
 
+#[cfg(feature = "usd-shade")]
+pub use binding::{
+    Binding, BindingCache, BindingCacheStats, BindingInputs, BindingKind, BindingOptions,
+    BindingStrength, BoundMaterial, CollectionBinding, DirectBinding, MaterialPurpose, Undecided,
+};
+#[cfg(feature = "usd")]
+pub use collection::{
+    ExpansionRule, Membership, MembershipProblem, MembershipQuery, MembershipRule,
+};
 pub use edit::SchemaEdit;
 pub use generated::views::*;
 pub use generated::{Domain, OPENUSD_VERSION};

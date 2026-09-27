@@ -1,0 +1,353 @@
+#usda 1.0
+(
+    doc = "Material bindings and collection membership for tests/binding.rs; scripts/binding_oracle.py records what OpenUSD computes."
+)
+
+def Scope "Looks"
+{
+    def Material "Red"
+    {
+    }
+
+    def Material "Blue"
+    {
+    }
+
+    def Material "Green"
+    {
+    }
+
+    def Material "Preview"
+    {
+    }
+
+    def Material "Full"
+    {
+    }
+
+    def Xform "NotAMaterial"
+    {
+    }
+}
+
+def Xform "Direct" (
+    prepend apiSchemas = ["MaterialBindingAPI"]
+)
+{
+    rel material:binding = </Looks/Red>
+
+    def Xform "Child"
+    {
+    }
+
+    def Xform "Own" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Looks/Blue>
+
+        def Xform "Leaf"
+        {
+        }
+    }
+
+    def Xform "Unbound" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = None
+    }
+
+    def Xform "TwoTargets" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = [</Looks/Blue>, </Looks/Green>]
+    }
+}
+
+def Xform "Strong" (
+    prepend apiSchemas = ["MaterialBindingAPI"]
+)
+{
+    rel material:binding = </Looks/Red> (
+        bindMaterialAs = "strongerThanDescendants"
+    )
+
+    def Xform "Child" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Looks/Blue>
+
+        def Xform "StrongerStill" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            rel material:binding = </Looks/Green> (
+                bindMaterialAs = "strongerThanDescendants"
+            )
+        }
+    }
+
+    def Xform "Weak" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Looks/Blue> (
+            bindMaterialAs = "weakerThanDescendants"
+        )
+    }
+}
+
+def Xform "Purposes" (
+    prepend apiSchemas = ["MaterialBindingAPI"]
+)
+{
+    rel material:binding = </Looks/Red>
+    rel material:binding:full = </Looks/Full>
+    rel material:binding:preview = </Looks/Preview>
+
+    def Xform "Child" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Looks/Blue>
+    }
+
+    def Xform "EmptyPreview" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Looks/Green>
+        rel material:binding:preview
+    }
+
+    def Xform "OnlyFull" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding:full = </Looks/Green>
+    }
+}
+
+def Xform "NoApi"
+{
+    rel material:binding = </Looks/Green>
+
+    def Xform "Child"
+    {
+    }
+
+    def Xform "WithApi" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Looks/Blue>
+    }
+}
+
+def Xform "Collections" (
+    prepend apiSchemas = ["MaterialBindingAPI", "CollectionAPI:set", "CollectionAPI:other"]
+)
+{
+    rel collection:set:includes = [</Collections/A>, </Collections/B>]
+    rel collection:set:excludes = </Collections/A/Skip>
+    rel collection:other:includes = </Collections/C>
+    rel material:binding:collection:set = [</Collections.collection:set>, </Looks/Green>]
+    rel material:binding:collection:other = [</Looks/Red>, </Collections.collection:other>]
+    rel material:binding:collection:preview:set = [</Collections.collection:set>, </Looks/Preview>]
+
+    def Xform "A" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Looks/Blue>
+
+        def Xform "Skip"
+        {
+        }
+
+        def Xform "Deep"
+        {
+        }
+    }
+
+    def Xform "B"
+    {
+        def Xform "Deep"
+        {
+        }
+    }
+
+    def Xform "C"
+    {
+    }
+
+    def Xform "D"
+    {
+    }
+}
+
+def Xform "SameSite" (
+    prepend apiSchemas = ["MaterialBindingAPI", "CollectionAPI:self"]
+)
+{
+    rel collection:self:includes = </SameSite>
+    rel material:binding = </Looks/Red>
+    rel material:binding:collection:self = [</SameSite.collection:self>, </Looks/Blue>]
+
+    def Xform "Kid"
+    {
+    }
+}
+
+def Xform "StrongCollection" (
+    prepend apiSchemas = ["MaterialBindingAPI", "CollectionAPI:all"]
+)
+{
+    rel collection:all:includes = </StrongCollection/Child>
+    rel material:binding:collection:all = [</StrongCollection.collection:all>, </Looks/Blue>] (
+        bindMaterialAs = "strongerThanDescendants"
+    )
+
+    def Xform "Child" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Looks/Red>
+
+        def Xform "Grandchild" (
+            prepend apiSchemas = ["MaterialBindingAPI"]
+        )
+        {
+            rel material:binding = </Looks/Green>
+        }
+    }
+}
+
+def Xform "Expansion" (
+    prepend apiSchemas = ["CollectionAPI:explicit", "CollectionAPI:props", "CollectionAPI:root", "CollectionAPI:prims", "CollectionAPI:mixed"]
+)
+{
+    uniform token collection:explicit:expansionRule = "explicitOnly"
+    rel collection:explicit:includes = [</Expansion/One>, </Expansion/Two.size>]
+    uniform bool collection:explicit:includeRoot = true
+    uniform token collection:props:expansionRule = "expandPrimsAndProperties"
+    rel collection:props:includes = </Expansion/One>
+    rel collection:props:excludes = </Expansion/One/Kid.size>
+    uniform bool collection:root:includeRoot = true
+    rel collection:root:excludes = </Looks>
+    rel collection:prims:includes = [</Expansion/One>, </Expansion/Two.size>]
+    uniform token collection:mixed:mode = "relationship"
+    rel collection:mixed:includes = </Expansion/Two>
+    rel collection:mixed:excludes = </Expansion/Two/Kid>
+    pathExpression collection:mixed:membershipExpression = "/Expansion/One"
+
+    def Xform "One"
+    {
+        double size = 1
+
+        def Xform "Kid"
+        {
+            double size = 2
+        }
+    }
+
+    def Xform "Two"
+    {
+        double size = 3
+
+        def Xform "Kid"
+        {
+            def Xform "Back"
+            {
+            }
+        }
+    }
+}
+
+def Xform "Nest" (
+    prepend apiSchemas = ["MaterialBindingAPI", "CollectionAPI:outer", "CollectionAPI:inner", "CollectionAPI:loopA", "CollectionAPI:loopB"]
+)
+{
+    rel collection:outer:includes = [</Nest.collection:inner>, </Nest/Y>]
+    rel collection:outer:excludes = </Nest/X/Out>
+    uniform token collection:inner:expansionRule = "explicitOnly"
+    rel collection:inner:includes = [</Nest/X>, </Nest/Z>]
+    rel collection:loopA:includes = [</Nest.collection:loopB>, </Nest/X>]
+    rel collection:loopB:includes = [</Nest.collection:loopA>, </Nest/Y>]
+    rel material:binding:collection:outer = [</Nest.collection:outer>, </Looks/Red>]
+
+    def Xform "X"
+    {
+        def Xform "Out"
+        {
+        }
+
+        def Xform "In"
+        {
+        }
+    }
+
+    def Xform "Y"
+    {
+    }
+
+    def Xform "Z"
+    {
+    }
+}
+
+def Xform "Targets" (
+    prepend apiSchemas = ["MaterialBindingAPI"]
+)
+{
+    rel alias = </Looks/Green>
+
+    def Xform "Wrong" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Looks/NotAMaterial>
+        rel material:binding:preview = </Looks/Preview>
+    }
+
+    def Xform "Missing" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Looks/Nowhere>
+    }
+
+    def Xform "Forwarded" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Targets.alias>
+    }
+
+    def Xform "NoCollection" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding:collection:gone = [</Targets.collection:gone>, </Looks/Red>]
+        rel material:binding = </Looks/Blue>
+    }
+}
+
+def Xform "Referenced" (
+    prepend references = @asset.usda@</Asset>
+)
+{
+    over "Part" (
+        prepend apiSchemas = ["MaterialBindingAPI"]
+    )
+    {
+        rel material:binding = </Looks/Blue>
+    }
+
+    over "Grouped"
+    {
+    }
+}

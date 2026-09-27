@@ -1,0 +1,25 @@
+#usda 1.0
+(
+    doc = "Referenced by scene.usda's /Referenced; its bindings target materials in scene.usda's namespace."
+)
+
+def Xform "Asset" (
+    prepend apiSchemas = ["MaterialBindingAPI", "CollectionAPI:group"]
+)
+{
+    rel material:binding = </Looks/Red>
+    rel collection:group:includes = </Asset/Grouped>
+    rel material:binding:collection:group = [</Asset.collection:group>, </Looks/Green>]
+
+    def Xform "Part"
+    {
+    }
+
+    def Xform "Grouped"
+    {
+    }
+
+    def Xform "Plain"
+    {
+    }
+}

@@ -4,7 +4,9 @@
 
 Usage: schema_views_oracle.py [SCENE [OUT]]
 
-Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`.
+Needs OpenUSD through Python `pxr`, for example `pip install usd-core==26.8`,
+and an OpenUSD checkout of that release in `LAYERSTACK_OPENUSD_SOURCE` for
+the schemas the wheel is built without (see `openusd_source.py`).
 
 `tests/schema_views.rs` authors `fixtures/schema_views/scene.usda` through
 every setter of `layerstack_schemas`'s views (see
@@ -35,6 +37,7 @@ import math
 import os
 import sys
 
+import openusd_source  # Before `pxr`: loads the source-only schemas.
 from pxr import Gf, Sdf, Usd
 
 HERE = os.path.dirname(os.path.abspath(__file__))

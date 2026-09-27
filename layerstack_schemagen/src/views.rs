@@ -15,7 +15,7 @@ use std::fmt::Write as _;
 
 use layerstack::{PropertyKind, SchemaKind, TokenInterner, Value, Variability};
 
-use crate::emit::{header, module};
+use crate::emit::{header, module, origin_note};
 use crate::model::{Domain, Model, Property, Schema};
 
 /// Rust keywords, which no generated name may be.
@@ -338,8 +338,9 @@ pub(crate) fn files(model: &Model) -> Result<Vec<(String, String)>, String> {
             "#[cfg(feature = {:?})]\n#[doc = {:?}]\npub mod {module};",
             feature(domain.plugin),
             format!(
-                "OpenUSD's `{}` schemas as typed views, edit handles and token enums.",
-                domain.name
+                "OpenUSD's `{}` schemas as typed views, edit handles and token enums.{}",
+                domain.name,
+                origin_note(domain)
             )
         );
         files.push((
@@ -495,13 +496,14 @@ fn domain_file(
     let mut out = header(model);
     let _ = write!(
         out,
-        "\n//! OpenUSD's `{}` schemas as typed views, edit handles and token enums.\n\n\
+        "\n//! OpenUSD's `{}` schemas as typed views, edit handles and token enums.{}\n\n\
          #![allow(\n    clippy::doc_markdown,\n    clippy::too_long_first_doc_paragraph,\n    \
          reason = \"documentation as OpenUSD writes it\"\n)]\n\n\
          use core::ops::Deref;\n\n\
          use layerstack::{{@LAYERSTACK@}};\n\n\
          use crate::{{@CRATE@}};\n",
-        domain.name
+        domain.name,
+        origin_note(domain)
     );
     let mut uses_instances = false;
     let mut body = String::new();

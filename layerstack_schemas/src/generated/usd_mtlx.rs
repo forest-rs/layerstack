@@ -10,7 +10,7 @@
 // `cargo run -p layerstack_schemagen -- --pxr <site-packages>/pxr \
 //  --source <OpenUSD checkout>`.
 
-//! OpenUSD's `UsdProfiles` schemas.
+//! OpenUSD's `usdMtlx` schemas. From OpenUSD's source (`pxr/usd/usdMtlx`); not in the usd-core wheel, which is built without it.
 
 #![allow(
     clippy::unreadable_literal,
@@ -19,19 +19,27 @@
     reason = "values as OpenUSD writes them"
 )]
 
-use layerstack::SchemaKind;
+use alloc::sync::Arc;
 
-use crate::table::{DomainTables, Schema};
+use layerstack::{PropertyKind, SchemaKind, Value, Variability};
+
+use crate::table::{DomainTables, Property, Schema, fallback};
 
 pub(crate) static TABLES: DomainTables = DomainTables {
     schemas: &[Schema {
-        name: "ClaimsAPI",
+        name: "MaterialXConfigAPI",
         kind: SchemaKind::SingleApplyApi,
         parent: None,
         built_ins: &[],
-        properties: &[],
+        properties: &[Property {
+            name: "config:mtlx:version",
+            kind: PropertyKind::Attribute,
+            value_type: Some(&super::STRING),
+            variability: Variability::Varying,
+            fallback: fallback(|_| Value::String(Arc::from("1.38"))),
+        }],
         overrides: &[],
-        can_only_apply_to: &[],
+        can_only_apply_to: &["Material"],
         allowed_instance_names: &[],
         instance_can_only_apply_to: &[],
     }],

@@ -23,11 +23,25 @@ use layerstack::{
 };
 use serde_json::Value as Json;
 
+/// Where a domain's `generatedSchema.usda` and `plugInfo.json` are read
+/// from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Origin {
+    /// The usd-core wheel: `pxr/pluginfo/<plugin>/resources`.
+    Wheel,
+    /// The OpenUSD source checkout, `pxr/usd/<plugin>`: a plugin the wheel
+    /// is built without (`usdMtlx` needs `MaterialX`). Its release is the
+    /// wheel's, which the version check ensures.
+    Source,
+}
+
 /// A domain: one OpenUSD schema plugin.
 #[derive(Debug)]
 pub(crate) struct Domain {
     /// The plugin's directory under `pxr/pluginfo` (`usdGeom`).
     pub(crate) plugin: &'static str,
+    /// Where its definitions were read from.
+    pub(crate) origin: Origin,
     /// The plugin's name, as its `plugInfo.json` gives it (`usdGeom`,
     /// `UsdProfiles`).
     pub(crate) name: String,
@@ -103,25 +117,26 @@ pub(crate) struct Model {
     pub(crate) tokens: TokenInterner,
 }
 
-/// The domains generated: `(plugin directory, Rust name)`. Adding a domain
-/// is one line here.
-pub(crate) const DOMAINS: &[(&str, &str)] = &[
-    ("usd", "Usd"),
-    ("usdGeom", "UsdGeom"),
-    ("usdShade", "UsdShade"),
-    ("usdLux", "UsdLux"),
-    ("usdSkel", "UsdSkel"),
-    ("usdPhysics", "UsdPhysics"),
-    ("usdVol", "UsdVol"),
-    ("usdRender", "UsdRender"),
-    ("usdLod", "UsdLod"),
-    ("usdUI", "UsdUI"),
-    ("usdRi", "UsdRi"),
-    ("usdHydra", "UsdHydra"),
-    ("usdMedia", "UsdMedia"),
-    ("usdProc", "UsdProc"),
-    ("usdSemantics", "UsdSemantics"),
-    ("usdProfiles", "UsdProfiles"),
+/// The domains generated: `(plugin directory, Rust name, where its
+/// definitions are)`. Adding a domain is one line here.
+pub(crate) const DOMAINS: &[(&str, &str, Origin)] = &[
+    ("usd", "Usd", Origin::Wheel),
+    ("usdGeom", "UsdGeom", Origin::Wheel),
+    ("usdShade", "UsdShade", Origin::Wheel),
+    ("usdLux", "UsdLux", Origin::Wheel),
+    ("usdSkel", "UsdSkel", Origin::Wheel),
+    ("usdPhysics", "UsdPhysics", Origin::Wheel),
+    ("usdVol", "UsdVol", Origin::Wheel),
+    ("usdRender", "UsdRender", Origin::Wheel),
+    ("usdLod", "UsdLod", Origin::Wheel),
+    ("usdUI", "UsdUI", Origin::Wheel),
+    ("usdRi", "UsdRi", Origin::Wheel),
+    ("usdHydra", "UsdHydra", Origin::Wheel),
+    ("usdMedia", "UsdMedia", Origin::Wheel),
+    ("usdProc", "UsdProc", Origin::Wheel),
+    ("usdSemantics", "UsdSemantics", Origin::Wheel),
+    ("usdProfiles", "UsdProfiles", Origin::Wheel),
+    ("usdMtlx", "UsdMtlx", Origin::Source),
 ];
 
 /// A type a plugin declares: its schema identifier, kind and bases.
@@ -151,6 +166,7 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
     let mut files = Vec::new();
     let relative = |path: &Path| {
         path.strip_prefix(site_packages)
+            .or_else(|_| path.strip_prefix(source))
             .unwrap_or(path)
             .to_string_lossy()
             .replace('\\', "/")
@@ -162,8 +178,8 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
     let mut types: BTreeMap<String, TypeInfo> = BTreeMap::new();
     let mut plugin_auto_applies: BTreeMap<&'static str, Vec<(String, String)>> = BTreeMap::new();
     let mut plugin_names: BTreeMap<&'static str, String> = BTreeMap::new();
-    for &(plugin, _) in DOMAINS {
-        let path = resources(pxr, plugin).join("plugInfo.json");
+    for &(plugin, _, origin) in DOMAINS {
+        let path = definitions(pxr, source, plugin, origin).join("plugInfo.json");
         files.push(relative(&path));
         let info = plug_info(&path)?;
         for plugin_info in info["Plugins"].as_array().ok_or("no Plugins")? {
@@ -227,8 +243,8 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
     let custom_data = store.tokens.intern("customData");
     let allowed_tokens = store.tokens.intern("allowedTokens");
     let mut domains = Vec::new();
-    for (index, &(plugin, variant)) in DOMAINS.iter().enumerate() {
-        let path = resources(pxr, plugin).join("generatedSchema.usda");
+    for (index, &(plugin, variant, origin)) in DOMAINS.iter().enumerate() {
+        let path = definitions(pxr, source, plugin, origin).join("generatedSchema.usda");
         files.push(relative(&path));
         let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
         let parsed = layerstack_usda::parser::parse(&text);
@@ -408,6 +424,7 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
         left_out.sort();
         domains.push(Domain {
             plugin,
+            origin,
             name: plugin_names
                 .get(plugin)
                 .cloned()
@@ -453,7 +470,7 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
                 dependencies.push(plugin);
             }
         }
-        dependencies.sort_by_key(|plugin| DOMAINS.iter().position(|(p, _)| p == plugin));
+        dependencies.sort_by_key(|plugin| DOMAINS.iter().position(|(p, _, _)| p == plugin));
         domain.dependencies = dependencies;
     }
 
@@ -603,8 +620,13 @@ fn strings(json: &Json) -> Vec<String> {
         .unwrap_or_default()
 }
 
-fn resources(pxr: &Path, plugin: &str) -> PathBuf {
-    pxr.join("pluginfo").join(plugin).join("resources")
+/// The directory holding a domain's `generatedSchema.usda` and
+/// `plugInfo.json`.
+fn definitions(pxr: &Path, source: &Path, plugin: &str, origin: Origin) -> PathBuf {
+    match origin {
+        Origin::Wheel => pxr.join("pluginfo").join(plugin).join("resources"),
+        Origin::Source => source.join("pxr").join("usd").join(plugin),
+    }
 }
 
 /// A `plugInfo.json`, without its `#` comment lines, which JSON has not.

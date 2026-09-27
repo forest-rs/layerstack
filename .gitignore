@@ -1,1 +1,3 @@
 /target
+# The oracle scripts import openusd_source.py.
+__pycache__/

@@ -31,6 +31,10 @@ It provides:
 - **Value resolution** — scalar (strongest-wins) and [`ListOp`] chaining
 - **Composition arcs** — local, inherits, variants, references, payloads,
   specializes (LIVERPS)
+- **Path expressions** — sets of prim and property paths
+  ([`PathExpression`]: globs, `//`, predicates, set operators and
+  references to other expressions), composed as values and matched
+  with a caller-supplied predicate library ([`path_expression`])
 - **Variable expressions** — sublayer, reference and payload asset paths
   and variant selections authored as expressions, evaluated with each
   layer stack's `expressionVariables` ([`variable_expression`])

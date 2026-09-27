@@ -1,0 +1,1469 @@
+{
+  "connections": {
+    "/Base.outputs:displacement": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Base.outputs:surface": {
+      "invalid": [],
+      "sources": [
+        "/Base/A.outputs:out",
+        "/Base/B.outputs:out"
+      ],
+      "terminals": [
+        "/Base/A.outputs:out",
+        "/Base/B.outputs:out"
+      ]
+    },
+    "/Base.outputs:volume": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Base/A.outputs:out": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Base/B.outputs:out": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Contexts.outputs:bad:surface": {
+      "invalid": [],
+      "sources": [
+        "/Graph.outputs:cycle"
+      ],
+      "terminals": []
+    },
+    "/Contexts.outputs:displacement": {
+      "invalid": [],
+      "sources": [
+        "/Graph.outputs:out"
+      ],
+      "terminals": [
+        "/S.outputs:out"
+      ]
+    },
+    "/Contexts.outputs:empty:surface": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Contexts.outputs:ri:surface": {
+      "invalid": [],
+      "sources": [
+        "/T.outputs:out"
+      ],
+      "terminals": [
+        "/T.outputs:out"
+      ]
+    },
+    "/Contexts.outputs:surface": {
+      "invalid": [],
+      "sources": [
+        "/S.outputs:out"
+      ],
+      "terminals": [
+        "/S.outputs:out"
+      ]
+    },
+    "/Contexts.outputs:volume": {
+      "invalid": [],
+      "sources": [
+        "/T.outputs:out"
+      ],
+      "terminals": [
+        "/T.outputs:out"
+      ]
+    },
+    "/Direct.outputs:displacement": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Direct.outputs:surface": {
+      "invalid": [],
+      "sources": [
+        "/S.outputs:out"
+      ],
+      "terminals": [
+        "/S.outputs:out"
+      ]
+    },
+    "/Direct.outputs:volume": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Empty.outputs:displacement": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Empty.outputs:surface": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Empty.outputs:volume": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Graph.inputs:in": {
+      "invalid": [],
+      "sources": [
+        "/S.outputs:out"
+      ],
+      "terminals": [
+        "/S.outputs:out"
+      ]
+    },
+    "/Graph.outputs:cycle": {
+      "invalid": [],
+      "sources": [
+        "/Graph.outputs:cycle2"
+      ],
+      "terminals": []
+    },
+    "/Graph.outputs:cycle2": {
+      "invalid": [],
+      "sources": [
+        "/Graph.outputs:cycle"
+      ],
+      "terminals": []
+    },
+    "/Graph.outputs:diamond": {
+      "invalid": [],
+      "sources": [
+        "/Graph.outputs:left",
+        "/Graph.outputs:right"
+      ],
+      "terminals": [
+        "/S.outputs:out",
+        "/S.outputs:out"
+      ]
+    },
+    "/Graph.outputs:left": {
+      "invalid": [],
+      "sources": [
+        "/Graph.inputs:in"
+      ],
+      "terminals": [
+        "/S.outputs:out"
+      ]
+    },
+    "/Graph.outputs:mixed": {
+      "invalid": [],
+      "sources": [
+        "/Graph.outputs:cycle",
+        "/T.outputs:out",
+        "/S.outputs:out"
+      ],
+      "terminals": [
+        "/T.outputs:out",
+        "/S.outputs:out"
+      ]
+    },
+    "/Graph.outputs:out": {
+      "invalid": [],
+      "sources": [
+        "/Graph.inputs:in"
+      ],
+      "terminals": [
+        "/S.outputs:out"
+      ]
+    },
+    "/Graph.outputs:right": {
+      "invalid": [],
+      "sources": [
+        "/Graph.inputs:in"
+      ],
+      "terminals": [
+        "/S.outputs:out"
+      ]
+    },
+    "/Instance.outputs:displacement": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Instance.outputs:surface": {
+      "invalid": [],
+      "sources": [
+        "/Instance/B.outputs:out",
+        "/T.outputs:out"
+      ],
+      "terminals": [
+        "/Instance/B.outputs:out",
+        "/T.outputs:out"
+      ]
+    },
+    "/Instance.outputs:volume": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Instance/A.outputs:out": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Instance/B.outputs:out": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Invalid.outputs:displacement": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Invalid.outputs:surface": {
+      "invalid": [
+        "/Missing.outputs:out",
+        "/Plain.wrong",
+        "/Plain.outputs:relationship"
+      ],
+      "sources": [
+        "/S.inputs:in",
+        "/T.outputs:out"
+      ],
+      "terminals": [
+        "/T.outputs:out"
+      ]
+    },
+    "/Invalid.outputs:volume": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Mixed.outputs:displacement": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Mixed.outputs:surface": {
+      "invalid": [],
+      "sources": [
+        "/Graph.outputs:mixed"
+      ],
+      "terminals": [
+        "/T.outputs:out",
+        "/S.outputs:out"
+      ]
+    },
+    "/Mixed.outputs:volume": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Multiple.outputs:displacement": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Multiple.outputs:surface": {
+      "invalid": [],
+      "sources": [
+        "/Graph.outputs:diamond"
+      ],
+      "terminals": [
+        "/S.outputs:out",
+        "/S.outputs:out"
+      ]
+    },
+    "/Multiple.outputs:volume": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/NonShader.outputs:displacement": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/NonShader.outputs:surface": {
+      "invalid": [],
+      "sources": [
+        "/Plain.outputs:out"
+      ],
+      "terminals": [
+        "/Plain.outputs:out"
+      ]
+    },
+    "/NonShader.outputs:volume": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/OnlyRi.outputs:displacement": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/OnlyRi.outputs:ri:surface": {
+      "invalid": [],
+      "sources": [
+        "/T.outputs:out"
+      ],
+      "terminals": [
+        "/T.outputs:out"
+      ]
+    },
+    "/OnlyRi.outputs:surface": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/OnlyRi.outputs:volume": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Plain.outputs:out": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Referenced.outputs:displacement": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Referenced.outputs:surface": {
+      "invalid": [],
+      "sources": [
+        "/Graph.outputs:out"
+      ],
+      "terminals": [
+        "/S.outputs:out"
+      ]
+    },
+    "/Referenced.outputs:volume": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/S.inputs:in": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/S.outputs:out": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/T.outputs:out": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Through.outputs:displacement": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    },
+    "/Through.outputs:surface": {
+      "invalid": [],
+      "sources": [
+        "/Graph.outputs:out"
+      ],
+      "terminals": [
+        "/S.outputs:out"
+      ]
+    },
+    "/Through.outputs:volume": {
+      "invalid": [],
+      "sources": [],
+      "terminals": []
+    }
+  },
+  "materials": [
+    {
+      "context": "",
+      "material": "/Direct",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "",
+      "material": "/Direct",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "",
+      "material": "/Direct",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "ri",
+      "material": "/Direct",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "ri",
+      "material": "/Direct",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "ri",
+      "material": "/Direct",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "missing",
+      "material": "/Direct",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "missing",
+      "material": "/Direct",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "missing",
+      "material": "/Direct",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "bad",
+      "material": "/Direct",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "bad",
+      "material": "/Direct",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "bad",
+      "material": "/Direct",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "empty",
+      "material": "/Direct",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "empty",
+      "material": "/Direct",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "empty",
+      "material": "/Direct",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "",
+      "material": "/Through",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "",
+      "material": "/Through",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "",
+      "material": "/Through",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "ri",
+      "material": "/Through",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "ri",
+      "material": "/Through",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "ri",
+      "material": "/Through",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "missing",
+      "material": "/Through",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "missing",
+      "material": "/Through",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "missing",
+      "material": "/Through",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "bad",
+      "material": "/Through",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "bad",
+      "material": "/Through",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "bad",
+      "material": "/Through",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "empty",
+      "material": "/Through",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "empty",
+      "material": "/Through",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "empty",
+      "material": "/Through",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "",
+      "material": "/Contexts",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "",
+      "material": "/Contexts",
+      "selected": "/S.outputs:out",
+      "terminal": "displacement"
+    },
+    {
+      "context": "",
+      "material": "/Contexts",
+      "selected": "/T.outputs:out",
+      "terminal": "volume"
+    },
+    {
+      "context": "ri",
+      "material": "/Contexts",
+      "selected": "/T.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "ri",
+      "material": "/Contexts",
+      "selected": "/S.outputs:out",
+      "terminal": "displacement"
+    },
+    {
+      "context": "ri",
+      "material": "/Contexts",
+      "selected": "/T.outputs:out",
+      "terminal": "volume"
+    },
+    {
+      "context": "missing",
+      "material": "/Contexts",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "missing",
+      "material": "/Contexts",
+      "selected": "/S.outputs:out",
+      "terminal": "displacement"
+    },
+    {
+      "context": "missing",
+      "material": "/Contexts",
+      "selected": "/T.outputs:out",
+      "terminal": "volume"
+    },
+    {
+      "context": "bad",
+      "material": "/Contexts",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "bad",
+      "material": "/Contexts",
+      "selected": "/S.outputs:out",
+      "terminal": "displacement"
+    },
+    {
+      "context": "bad",
+      "material": "/Contexts",
+      "selected": "/T.outputs:out",
+      "terminal": "volume"
+    },
+    {
+      "context": "empty",
+      "material": "/Contexts",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "empty",
+      "material": "/Contexts",
+      "selected": "/S.outputs:out",
+      "terminal": "displacement"
+    },
+    {
+      "context": "empty",
+      "material": "/Contexts",
+      "selected": "/T.outputs:out",
+      "terminal": "volume"
+    },
+    {
+      "context": "",
+      "material": "/Multiple",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "",
+      "material": "/Multiple",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "",
+      "material": "/Multiple",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "ri",
+      "material": "/Multiple",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "ri",
+      "material": "/Multiple",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "ri",
+      "material": "/Multiple",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "missing",
+      "material": "/Multiple",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "missing",
+      "material": "/Multiple",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "missing",
+      "material": "/Multiple",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "bad",
+      "material": "/Multiple",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "bad",
+      "material": "/Multiple",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "bad",
+      "material": "/Multiple",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "empty",
+      "material": "/Multiple",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "empty",
+      "material": "/Multiple",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "empty",
+      "material": "/Multiple",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "",
+      "material": "/Mixed",
+      "selected": "/T.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "",
+      "material": "/Mixed",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "",
+      "material": "/Mixed",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "ri",
+      "material": "/Mixed",
+      "selected": "/T.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "ri",
+      "material": "/Mixed",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "ri",
+      "material": "/Mixed",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "missing",
+      "material": "/Mixed",
+      "selected": "/T.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "missing",
+      "material": "/Mixed",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "missing",
+      "material": "/Mixed",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "bad",
+      "material": "/Mixed",
+      "selected": "/T.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "bad",
+      "material": "/Mixed",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "bad",
+      "material": "/Mixed",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "empty",
+      "material": "/Mixed",
+      "selected": "/T.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "empty",
+      "material": "/Mixed",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "empty",
+      "material": "/Mixed",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "",
+      "material": "/Invalid",
+      "selected": "/T.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "",
+      "material": "/Invalid",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "",
+      "material": "/Invalid",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "ri",
+      "material": "/Invalid",
+      "selected": "/T.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "ri",
+      "material": "/Invalid",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "ri",
+      "material": "/Invalid",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "missing",
+      "material": "/Invalid",
+      "selected": "/T.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "missing",
+      "material": "/Invalid",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "missing",
+      "material": "/Invalid",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "bad",
+      "material": "/Invalid",
+      "selected": "/T.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "bad",
+      "material": "/Invalid",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "bad",
+      "material": "/Invalid",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "empty",
+      "material": "/Invalid",
+      "selected": "/T.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "empty",
+      "material": "/Invalid",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "empty",
+      "material": "/Invalid",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "",
+      "material": "/NonShader",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "",
+      "material": "/NonShader",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "",
+      "material": "/NonShader",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "ri",
+      "material": "/NonShader",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "ri",
+      "material": "/NonShader",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "ri",
+      "material": "/NonShader",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "missing",
+      "material": "/NonShader",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "missing",
+      "material": "/NonShader",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "missing",
+      "material": "/NonShader",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "bad",
+      "material": "/NonShader",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "bad",
+      "material": "/NonShader",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "bad",
+      "material": "/NonShader",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "empty",
+      "material": "/NonShader",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "empty",
+      "material": "/NonShader",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "empty",
+      "material": "/NonShader",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "",
+      "material": "/Empty",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "",
+      "material": "/Empty",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "",
+      "material": "/Empty",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "ri",
+      "material": "/Empty",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "ri",
+      "material": "/Empty",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "ri",
+      "material": "/Empty",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "missing",
+      "material": "/Empty",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "missing",
+      "material": "/Empty",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "missing",
+      "material": "/Empty",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "bad",
+      "material": "/Empty",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "bad",
+      "material": "/Empty",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "bad",
+      "material": "/Empty",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "empty",
+      "material": "/Empty",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "empty",
+      "material": "/Empty",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "empty",
+      "material": "/Empty",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "",
+      "material": "/OnlyRi",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "",
+      "material": "/OnlyRi",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "",
+      "material": "/OnlyRi",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "ri",
+      "material": "/OnlyRi",
+      "selected": "/T.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "ri",
+      "material": "/OnlyRi",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "ri",
+      "material": "/OnlyRi",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "missing",
+      "material": "/OnlyRi",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "missing",
+      "material": "/OnlyRi",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "missing",
+      "material": "/OnlyRi",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "bad",
+      "material": "/OnlyRi",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "bad",
+      "material": "/OnlyRi",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "bad",
+      "material": "/OnlyRi",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "empty",
+      "material": "/OnlyRi",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "empty",
+      "material": "/OnlyRi",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "empty",
+      "material": "/OnlyRi",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "",
+      "material": "/Referenced",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "",
+      "material": "/Referenced",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "",
+      "material": "/Referenced",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "ri",
+      "material": "/Referenced",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "ri",
+      "material": "/Referenced",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "ri",
+      "material": "/Referenced",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "missing",
+      "material": "/Referenced",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "missing",
+      "material": "/Referenced",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "missing",
+      "material": "/Referenced",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "bad",
+      "material": "/Referenced",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "bad",
+      "material": "/Referenced",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "bad",
+      "material": "/Referenced",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "empty",
+      "material": "/Referenced",
+      "selected": "/S.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "empty",
+      "material": "/Referenced",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "empty",
+      "material": "/Referenced",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "",
+      "material": "/Base",
+      "selected": "/Base/A.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "",
+      "material": "/Base",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "",
+      "material": "/Base",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "ri",
+      "material": "/Base",
+      "selected": "/Base/A.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "ri",
+      "material": "/Base",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "ri",
+      "material": "/Base",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "missing",
+      "material": "/Base",
+      "selected": "/Base/A.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "missing",
+      "material": "/Base",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "missing",
+      "material": "/Base",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "bad",
+      "material": "/Base",
+      "selected": "/Base/A.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "bad",
+      "material": "/Base",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "bad",
+      "material": "/Base",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "empty",
+      "material": "/Base",
+      "selected": "/Base/A.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "empty",
+      "material": "/Base",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "empty",
+      "material": "/Base",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "",
+      "material": "/Instance",
+      "selected": "/Instance/B.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "",
+      "material": "/Instance",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "",
+      "material": "/Instance",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "ri",
+      "material": "/Instance",
+      "selected": "/Instance/B.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "ri",
+      "material": "/Instance",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "ri",
+      "material": "/Instance",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "missing",
+      "material": "/Instance",
+      "selected": "/Instance/B.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "missing",
+      "material": "/Instance",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "missing",
+      "material": "/Instance",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "bad",
+      "material": "/Instance",
+      "selected": "/Instance/B.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "bad",
+      "material": "/Instance",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "bad",
+      "material": "/Instance",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "empty",
+      "material": "/Instance",
+      "selected": "/Instance/B.outputs:out",
+      "terminal": "surface"
+    },
+    {
+      "context": "empty",
+      "material": "/Instance",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "empty",
+      "material": "/Instance",
+      "selected": null,
+      "terminal": "volume"
+    }
+  ],
+  "version": "26.8"
+}

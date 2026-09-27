@@ -208,6 +208,12 @@
 //! scene's [`KindRegistry`]. [`MembershipQuery::included_paths`] lists every
 //! member, and [`ExpressionEvaluator`] matches any expression.
 //!
+//! With `usd-shade`, [`Scene::connected_sources`] reads composed shading
+//! connections and [`Scene::shader_sources`] traces node-graph passthroughs.
+//! [`usd_shade::Material::compute_surface_source`] selects a terminal through
+//! ordered render contexts and universal fallback. Results retain candidate
+//! endpoints, branch diagnostics and dependencies, including missing properties.
+//!
 //! With `usd-shade`, `PrimView::compute_bound_material` (every view derefs
 //! to [`PrimView`]) resolves a prim's material for a [`MaterialPurpose`] as
 //! `ComputeBoundMaterial` does: direct and collection bindings, binding
@@ -264,6 +270,8 @@ pub mod kind;
 mod predicate;
 #[cfg(feature = "usd")]
 mod regex;
+#[cfg(feature = "usd-shade")]
+pub mod shading;
 mod table;
 mod value;
 #[cfg(feature = "usd-geom")]

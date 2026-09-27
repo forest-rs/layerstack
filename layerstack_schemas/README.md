@@ -17,6 +17,10 @@ let schemas = layerstack_schemas::openusd(&mut tokens);
 Each domain is a Cargo feature (`usd-geom`, `usd-lux`, …); `all`, the
 default, enables every one.
 
+The `usd-shade` feature also resolves composed connections and material surface,
+displacement and volume sources through node graphs and ordered render contexts.
+Results retain the selected endpoint, other candidates, diagnostics and dependencies.
+
 To regenerate after an OpenUSD upgrade, install the matching usd-core wheel,
 check out OpenUSD's sources at the same release (for each property's
 `apiName`, which names the accessors, and for `usdMtlx`, which the wheel is

@@ -25,7 +25,8 @@ use crate::{
         FieldEntry, FieldValue, Layer, LayerId, LayerStore, PrimSpec, Specifier, Value, VariantSpec,
     },
     interner::TokenId,
-    path::{PathId, PathInterner},
+    listop::ListOp,
+    path::{PathId, PathInterner, TargetPath},
     property::{
         PropertyEntry, PropertyKind, PropertySpec, PropertyType, Variability, get_property,
     },
@@ -105,6 +106,14 @@ pub(crate) enum Raw {
         value: Option<FieldValue>,
         index: usize,
     },
+    /// Sets (`Some`) or removes (`None`) the targets or connections of the
+    /// property `name` at `loc`.
+    Targets {
+        layer: LayerId,
+        loc: Loc,
+        name: TokenId,
+        targets: Option<ListOp<TargetPath>>,
+    },
     /// Sets or clears the selection for `set` authored at `loc`.
     Selection {
         layer: LayerId,
@@ -124,6 +133,7 @@ impl Raw {
             | Self::Default { layer, .. }
             | Self::Sample { layer, .. }
             | Self::Field { layer, .. }
+            | Self::Targets { layer, .. }
             | Self::Selection { layer, .. } => *layer,
         }
     }
@@ -139,6 +149,7 @@ impl Raw {
             Self::Property { loc, .. }
             | Self::Default { loc, .. }
             | Self::Sample { loc, .. }
+            | Self::Targets { loc, .. }
             | Self::Field { loc, .. } => Some(loc.prim_path()),
         }
     }
@@ -263,6 +274,20 @@ impl Raw {
                 },
             ) => (layer, loc, property, key) == (l, lc, pr, k) && value.same(v),
             (
+                Self::Targets {
+                    layer,
+                    loc,
+                    name,
+                    targets,
+                },
+                Self::Targets {
+                    layer: l,
+                    loc: lc,
+                    name: n,
+                    targets: t,
+                },
+            ) => (layer, loc, name, targets) == (l, lc, n, t),
+            (
                 Self::Selection {
                     layer,
                     loc,
@@ -308,6 +333,9 @@ impl Raw {
                     None => path,
                 };
                 (path, Slot::Metadata(*key))
+            }
+            Self::Targets { loc, name, .. } => {
+                (loc.spec_path(paths).with_property(*name), Slot::Targets)
             }
             Self::Selection { loc, set, .. } => {
                 (loc.spec_path(paths), Slot::VariantSelection(*set))
@@ -602,6 +630,8 @@ fn apply_op(
             }
         }
         Op::SetDefault { at, value } => set_value(store, at, None, value, stage, journal),
+        Op::SetTargets { at, targets } => set_targets(store, at, targets.as_ref(), stage, journal),
+        Op::AddAppliedSchema { at, name } => add_applied_schema(store, at, *name, journal),
         Op::SetTimeSample { at, time, value } => {
             set_value(store, at, Some(at.layer_time(*time)), value, stage, journal)
         }
@@ -911,6 +941,139 @@ fn set_value(
             index,
         },
     )
+}
+
+/// Adds `name` to the `apiSchemas` list op of the prim spec `at` (see
+/// [`Transaction::add_applied_schema`]).
+///
+/// OpenUSD: `UsdPrim::AddAppliedSchema`.
+fn add_applied_schema(
+    store: &mut dyn LayerStore,
+    at: &Address,
+    name: TokenId,
+    journal: &mut Journal,
+) -> Result<(), Rejection> {
+    let key = store.tokens_mut().intern("apiSchemas");
+    let (path, loc) = resolve(store, at)?;
+    if path.property().is_some() {
+        return Err(Rejection::NotAPrim(path));
+    }
+    let id = at.layer();
+    ensure(store, id, &loc, journal)?;
+    let spec = spec_at(layer(store, id)?, &loc).ok_or(Rejection::NoSuchSpec(path.clone()))?;
+    let mut list = match crate::doc::get_field(spec.fields(), &key) {
+        Some(FieldValue::TokenListOp(list)) => list.clone(),
+        _ => ListOp::default(),
+    };
+    match &mut list.explicit {
+        Some(explicit) if explicit.contains(&name) => return Ok(()),
+        Some(explicit) => explicit.push(name),
+        None if list.prepend.contains(&name) || list.append.contains(&name) => return Ok(()),
+        None => list.prepend.push(name),
+    }
+    let index = field_index(spec.fields(), key);
+    journal.run(
+        store,
+        Raw::Field {
+            layer: id,
+            loc,
+            property: None,
+            key,
+            value: Some(FieldValue::TokenListOp(list)),
+            index,
+        },
+    )
+}
+
+/// Sets (`Some`) or clears (`None`) the targets or connections of the
+/// property `at`, creating the property spec when setting and it is
+/// missing (see [`Transaction::set_targets`]). Every target is mapped
+/// through `at` first; one it does not map rejects the edit.
+///
+/// Spec: AOUSD Core §7.6.4.2.3, §7.6.5.1.1, §12.4.
+fn set_targets(
+    store: &mut dyn LayerStore,
+    at: &Address,
+    targets: Option<&ListOp<TargetPath>>,
+    stage: Option<&Stage>,
+    journal: &mut Journal,
+) -> Result<(), Rejection> {
+    let (path, loc, name) = property_address(store, at)?;
+    let targets = match targets {
+        None => None,
+        Some(targets) => {
+            let mut mapped = targets.clone();
+            for list in mapped.lists_mut() {
+                for target in list.iter_mut() {
+                    *target = at
+                        .map_target(*target, store.paths_mut())
+                        .ok_or(Rejection::UnmappableTarget(*target))?;
+                }
+            }
+            Some(mapped)
+        }
+    };
+    let targets = targets.as_ref();
+    let id = at.layer();
+    let existing = spec_at(layer(store, id)?, &loc)
+        .and_then(|spec| get_property(spec.properties(), name))
+        .map(|spec| spec.targets.is_some());
+    match (existing, targets) {
+        (Some(_), Some(_)) | (Some(true), None) => journal.run(
+            store,
+            Raw::Targets {
+                layer: id,
+                loc,
+                name,
+                targets: targets.cloned(),
+            },
+        ),
+        (Some(false) | None, None) => Ok(()),
+        (None, Some(targets)) => {
+            let prim = at.stage_path().map(|(prim, _)| prim);
+            let defined = stage
+                .zip(prim)
+                .and_then(|(stage, prim)| stage.property_definition(prim, name, &*store));
+            let declared = stage
+                .zip(prim)
+                .and_then(|(stage, prim)| stage.resolve_property_declaration(prim, name));
+            let mut spec = match (defined, declared) {
+                (Some(defined), _) if defined.kind == PropertyKind::Relationship => {
+                    PropertySpec::relationship()
+                }
+                (Some(defined), _) => {
+                    let ty = defined
+                        .type_name
+                        .ok_or(Rejection::UndeclaredType(path.clone()))?;
+                    let mut spec = PropertySpec::typed_attribute(ty);
+                    spec.variability = defined.variability;
+                    spec
+                }
+                (None, Some(declared)) if declared.kind == PropertyKind::Attribute => {
+                    let ty = declared
+                        .type_name
+                        .ok_or(Rejection::UndeclaredType(path.clone()))?;
+                    let mut spec = PropertySpec::typed_attribute(ty);
+                    spec.variability = declared.variability;
+                    spec
+                }
+                (None, _) => PropertySpec::relationship(),
+            };
+            spec.targets = Some(targets.clone());
+            ensure(store, id, &loc, journal)?;
+            let index = properties_at(store, id, &loc)?.len();
+            journal.run(
+                store,
+                Raw::Property {
+                    layer: id,
+                    loc,
+                    name,
+                    spec: Some(spec),
+                    index,
+                },
+            )
+        }
+    }
 }
 
 /// Creates the spec at `loc` if it is missing: a prim spec as an `over`,
@@ -1291,6 +1454,30 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                 name: *name,
                 spec: old,
                 index: old_index,
+            })
+        }
+        Raw::Targets {
+            loc, name, targets, ..
+        } => {
+            let property = store
+                .layer_mut(id)
+                .and_then(|l| spec_at_mut(l, loc))
+                .and_then(|mut s| {
+                    let properties = s.properties();
+                    let index = properties.iter().position(|e| e.name == *name)?;
+                    Some(core::mem::replace(
+                        &mut properties[index].spec.targets,
+                        targets.clone(),
+                    ))
+                });
+            let Some(old) = property else {
+                return Err(diverged_at(store, loc));
+            };
+            Ok(Raw::Targets {
+                layer: id,
+                loc: loc.clone(),
+                name: *name,
+                targets: old,
             })
         }
         Raw::Default {

@@ -15,6 +15,8 @@ use super::{
 use crate::{
     doc::{FieldValue, LayerId, LayerStore, Specifier, Value},
     interner::TokenId,
+    listop::ListOp,
+    path::TargetPath,
     property::{PropertySpec, get_property},
 };
 
@@ -111,6 +113,14 @@ pub(crate) enum Op {
         at: Address,
         set: TokenId,
         variant: Option<TokenId>,
+    },
+    SetTargets {
+        at: Address,
+        targets: Option<ListOp<TargetPath>>,
+    },
+    AddAppliedSchema {
+        at: Address,
+        name: TokenId,
     },
     /// A storage-level step of an inverse, guarded by the step it undoes.
     Raw(Box<Guarded>),
@@ -220,6 +230,63 @@ impl Transaction {
     /// `SdfVariantSetSpec::RemoveVariant`, `SdfPrimSpec::RemoveProperty`.
     pub fn remove_spec(&mut self, at: Address) -> &mut Self {
         self.push(Op::RemoveSpec { at })
+    }
+
+    /// Sets the targets of the relationship, or the connections of the
+    /// attribute, at `at` to the list op `targets`, replacing any authored
+    /// on that spec. A missing property spec is created: with the prim's
+    /// schema definition of the property when it has one, else with the
+    /// stage's composed declaration (for a stage address applied through
+    /// [`LiveStage::apply`](crate::LiveStage::apply)), else as a
+    /// relationship. An attribute created this way needs a declared type.
+    ///
+    /// Target paths are named as the address is: through an edit target
+    /// ([`EditTarget::property`](super::EditTarget::property)) they are
+    /// stage paths, each mapped to the layer's namespace as the property's
+    /// own path is, and one the target does not map rejects the edit
+    /// ([`Rejection::UnmappableTarget`](super::Rejection::UnmappableTarget)); with a spec address
+    /// ([`Address::spec`](super::Address::spec)) they are the layer's own
+    /// paths, authored as given. Mapping at the address keeps every
+    /// caller's targets in the same namespace as its other paths.
+    ///
+    /// OpenUSD: `UsdRelationship::SetTargets`,
+    /// `UsdAttribute::SetConnections`, `SdfPropertySpec`'s
+    /// `targetPaths` / `connectionPaths` list ops.
+    ///
+    /// Spec: AOUSD Core §7.6.4.2.3 (`connectionPaths`), §7.6.5.1.1
+    /// (`targetPaths`), §12.4.
+    pub fn set_targets(&mut self, at: Address, targets: ListOp<TargetPath>) -> &mut Self {
+        self.push(Op::SetTargets {
+            at,
+            targets: Some(targets),
+        })
+    }
+
+    /// Removes the targets or connections authored on the property spec at
+    /// `at`, keeping the spec. Clearing nothing does nothing.
+    ///
+    /// OpenUSD: `UsdRelationship::ClearTargets`,
+    /// `UsdAttribute::ClearConnections`.
+    pub fn clear_targets(&mut self, at: Address) -> &mut Self {
+        self.push(Op::SetTargets { at, targets: None })
+    }
+
+    /// Applies the API schema `name` (`LabelAPI`, or `CollectionAPI:inst`
+    /// for a multiple-apply instance) to the prim spec at `at`, creating
+    /// the spec as an `over` if needed: `name` is added to the end of the
+    /// spec's `apiSchemas` prepends, or of its explicit list when the list
+    /// op is explicit, unless the op already prepends, appends or lists
+    /// it. Deleted items are left as they are.
+    ///
+    /// This authors the spec only; whether the schema may be applied is
+    /// the caller's question ([`crate::SchemaRegistry::can_apply`]).
+    ///
+    /// OpenUSD: `UsdPrim::AddAppliedSchema`, which `UsdPrim::ApplyAPI`
+    /// calls.
+    ///
+    /// Spec: AOUSD Core §13.2.1.2 (`apiSchemas`), §13.3.2.
+    pub fn add_applied_schema(&mut self, at: Address, name: TokenId) -> &mut Self {
+        self.push(Op::AddAppliedSchema { at, name })
     }
 
     /// Sets the default value of the attribute at `at`.
@@ -463,6 +530,8 @@ impl Op {
                 (at, Slot::Metadata(*key))
             }
             Self::SetVariantSelection { at, set, .. } => (at, Slot::VariantSelection(*set)),
+            Self::SetTargets { at, .. } => (at, Slot::Targets),
+            Self::AddAppliedSchema { at, .. } => (at, Slot::AppliedSchemas),
             Self::Raw(_) => return None,
         })
     }
@@ -505,5 +574,13 @@ pub(crate) fn authored(
         }
         .map(Authored::Field),
         Slot::VariantSelection(set) => spec.variant_selection(*set).map(Authored::Token),
+        Slot::AppliedSchemas => store
+            .tokens()
+            .lookup("apiSchemas")
+            .and_then(|key| crate::doc::get_field(spec.fields(), &key).cloned())
+            .map(Authored::Field),
+        Slot::Targets => property
+            .and_then(|p| p.targets.clone())
+            .map(|targets| Authored::Field(FieldValue::PathListOp(targets))),
     })
 }

@@ -7,10 +7,10 @@ use crate::{
     doc::{LayerId, LayerOffset, LayerStore},
     interner::TokenId,
     layer_stack::LayerStack,
-    path::{PathId, PathInterner, PropertyPath},
+    path::{PathId, PathInterner, PropertyPath, TargetPath},
     prim_index::ArcKind,
-    prim_index_graph::{NodeId, PrimNode},
-    spec_path::SpecPath,
+    prim_index_graph::{NodeId, PrimIndexGraph, PrimNode},
+    spec_path::{SpecComponent, SpecPath},
     stage::Stage,
 };
 
@@ -20,10 +20,21 @@ pub(crate) enum NamespaceMap {
     /// Every stage path is the spec path of the same name.
     Identity,
     /// `stage_root` and its namespace descendants map to `spec_root` and
-    /// the same descendants beneath it; nothing else maps.
+    /// the same descendants beneath it. With `root_identity`, every other
+    /// path maps to itself, unless that lands beneath a plain `spec_root`
+    /// (which `stage_root` already maps to); without it nothing else maps.
+    ///
+    /// OpenUSD: a `PcpMapFunction` with one path pair, and the root
+    /// identity (`/` → `/`) when it has one: a local variant target's
+    /// (`UsdEditTarget::ForLocalDirectVariant`), and a node's map to the
+    /// root when every arc on the way keeps it (variants, inherits and
+    /// specializes do; references and payloads do not). A path is mapped by
+    /// its most specific pair, and one whose image falls in the range of a
+    /// more specific pair does not map.
     Prefix {
         stage_root: PathId,
         spec_root: SpecPath,
+        root_identity: bool,
     },
 }
 
@@ -35,12 +46,28 @@ impl NamespaceMap {
             Self::Prefix {
                 stage_root,
                 spec_root,
+                root_identity,
             } => {
-                let names = paths
+                if let Some(names) = paths
                     .resolve(path)
-                    .strip_prefix(paths.resolve(*stage_root))?
-                    .to_vec();
-                Some(spec_root.join_prims(&names, paths))
+                    .strip_prefix(paths.resolve(*stage_root))
+                    .map(<[_]>::to_vec)
+                {
+                    return Some(spec_root.join_prims(&names, paths));
+                }
+                if !root_identity {
+                    return None;
+                }
+                let plain_root = spec_root
+                    .components()
+                    .iter()
+                    .all(|c| matches!(c, SpecComponent::Prim(_)));
+                let shadowed = plain_root
+                    && paths
+                        .resolve(path)
+                        .strip_prefix(paths.resolve(spec_root.prim_path()))
+                        .is_some();
+                (!shadowed).then(|| SpecPath::from_prim_path(path, paths))
             }
         }
     }
@@ -90,7 +117,8 @@ impl EditTarget {
 
     /// Targets the variant branch `variant` of `layer`, such as
     /// `/Rock{shape=jagged}`: the prim hosting the branch and its namespace
-    /// descendants map inside the branch; no other path maps. Any property
+    /// descendants map inside the branch, and every other path maps to
+    /// itself, outside the branch (`/Light` is `/Light`). Any property
     /// suffix of `variant` is ignored.
     ///
     /// The branch does not have to be selected, or to exist: edits through
@@ -104,6 +132,7 @@ impl EditTarget {
             map: NamespaceMap::Prefix {
                 stage_root: variant.prim_path(),
                 spec_root: variant.prim_spec(),
+                root_identity: true,
             },
             offset: LayerOffset::IDENTITY,
         }
@@ -115,9 +144,12 @@ impl EditTarget {
     ///
     /// `prim` and its namespace descendants map to the node's site and the
     /// same descendants beneath it, including the variant selections of a
-    /// variant node; other paths do not map, except through the prim's root
-    /// node, which maps every path to itself. Times map through the offsets
-    /// of every arc from the root to the node.
+    /// variant node. Other paths map to themselves when every arc from the
+    /// root to the node is a variant, inherit or specialize arc, whose
+    /// namespace maps keep the root identity; through a reference or
+    /// payload they do not map. The prim's root node maps every path to
+    /// itself. Times map through the offsets of every arc from the root to
+    /// the node.
     ///
     /// Returns `None` if `prim` is not on the stage, `node` is not a node
     /// of its graph, or `node` is a relocate node: its site is the
@@ -132,9 +164,10 @@ impl EditTarget {
     /// root layer.
     #[must_use]
     pub fn for_node(stage: &Stage, prim: PathId, node: NodeId) -> Option<Self> {
-        let node_ref = editable_node(stage, prim, node)?;
+        let (graph, node_ref) = editable_node(stage, prim, node)?;
         Some(Self::from_node(
             prim,
+            graph,
             node_ref,
             node_ref.layer_stack(),
             node_ref.layer_offset(),
@@ -159,20 +192,39 @@ impl EditTarget {
         node: NodeId,
         layer: LayerId,
     ) -> Option<Self> {
-        let node_ref = editable_node(stage, prim, node)?;
+        let (graph, node_ref) = editable_node(stage, prim, node)?;
         let stack = LayerStack::gather(store, node_ref.layer_stack());
         let index = stack.layers.iter().position(|id| *id == layer)?;
         let offset = node_ref.layer_offset().compose(stack.offset_at(index));
-        Some(Self::from_node(prim, node_ref, layer, offset))
+        Some(Self::from_node(prim, graph, node_ref, layer, offset))
     }
 
-    fn from_node(prim: PathId, node: &PrimNode, layer: LayerId, offset: LayerOffset) -> Self {
+    fn from_node(
+        prim: PathId,
+        graph: &PrimIndexGraph,
+        node: &PrimNode,
+        layer: LayerId,
+        offset: LayerOffset,
+    ) -> Self {
         let map = if node.parent().is_none() && node.arc_kind() == ArcKind::Local {
             NamespaceMap::Identity
         } else {
+            // OpenUSD: `PcpMapExpression::AddRootIdentity` for class arcs;
+            // a variant arc's map is the identity; references and payloads
+            // map only their target's namespace (`primIndex.cpp`).
+            let mut root_identity = true;
+            let mut at = Some(node);
+            while let Some(current) = at {
+                root_identity &= matches!(
+                    current.arc_kind(),
+                    ArcKind::Local | ArcKind::Variants | ArcKind::Inherits | ArcKind::Specializes
+                );
+                at = current.parent().and_then(|parent| graph.node(parent));
+            }
             NamespaceMap::Prefix {
                 stage_root: prim,
                 spec_root: node.site().clone(),
+                root_identity,
             }
         };
         Self { layer, map, offset }
@@ -252,9 +304,14 @@ impl EditTarget {
 
 /// The node `node` of `prim`'s graph, unless it is a relocate node, whose
 /// own specs never contribute (see [`EditTarget::for_node`]).
-fn editable_node(stage: &Stage, prim: PathId, node: NodeId) -> Option<&PrimNode> {
-    let node = stage.explain_prim_graph(prim)?.node(node)?;
-    (node.arc_kind() != ArcKind::Relocates).then_some(node)
+fn editable_node(
+    stage: &Stage,
+    prim: PathId,
+    node: NodeId,
+) -> Option<(&PrimIndexGraph, &PrimNode)> {
+    let graph = stage.explain_prim_graph(prim)?;
+    let node = graph.node(node)?;
+    (node.arc_kind() != ArcKind::Relocates).then_some((graph, node))
 }
 
 /// The spec an edit applies to: a spec path in a layer, given directly
@@ -326,6 +383,37 @@ impl Address {
                 })
             }
         }
+    }
+
+    /// Maps a relationship or connection target given with this address
+    /// to the path authored in its layer; `None` if the target does not
+    /// map it.
+    ///
+    /// A stage address's targets are stage paths, mapped through the edit
+    /// target's namespace map as its own path is. The authored path is the
+    /// concrete path: a target never names a variant selection, so one
+    /// written inside a variant names the prims the variant's opinions
+    /// apply to. A spec address's targets are the layer's own paths,
+    /// authored as given.
+    ///
+    /// OpenUSD: `UsdEditTarget::MapToSpecPath` on each target
+    /// (`UsdRelationship::_GetTargetForAuthoring`), which strips variant
+    /// selections from the result.
+    pub(crate) fn map_target(
+        &self,
+        target: TargetPath,
+        paths: &mut PathInterner,
+    ) -> Option<TargetPath> {
+        let AddressPath::Stage { map, .. } = &self.path else {
+            return Some(target);
+        };
+        let prim = map.map_prim(target.prim_path(), paths)?.prim_path();
+        Some(match target {
+            TargetPath::Prim(_) => TargetPath::Prim(prim),
+            TargetPath::Property(property) => {
+                TargetPath::Property(PropertyPath::new(prim, property.property()))
+            }
+        })
     }
 
     /// Maps a time given with this address to a time in its layer.

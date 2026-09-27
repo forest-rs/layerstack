@@ -6,7 +6,7 @@
 use alloc::sync::Arc;
 use core::fmt;
 
-use crate::{doc::LayerId, interner::TokenId, spec_path::SpecPath};
+use crate::{doc::LayerId, interner::TokenId, path::TargetPath, spec_path::SpecPath};
 
 /// Why a [`Transaction`](super::Transaction) was not applied. When one is
 /// returned, no layer was changed.
@@ -57,6 +57,10 @@ pub enum Slot {
     Default,
     /// An attribute's time sample at a time.
     TimeSample(f64),
+    /// A relationship's targets or an attribute's connections.
+    Targets,
+    /// A prim spec's `apiSchemas` list op.
+    AppliedSchemas,
     /// A metadata field.
     Metadata(TokenId),
     /// The selection for a variant set.
@@ -70,6 +74,9 @@ pub enum Rejection {
     NoSuchLayer(LayerId),
     /// The edit target does not map the stage path.
     Unmappable,
+    /// The edit target does not map this relationship or connection
+    /// target (a stage path).
+    UnmappableTarget(TargetPath),
     /// The edit needs a property path and was given a prim or variant
     /// path.
     NotAProperty(SpecPath),
@@ -133,6 +140,7 @@ impl fmt::Display for Rejection {
         match self {
             Self::NoSuchLayer(layer) => write!(f, "no layer {}", layer.0),
             Self::Unmappable => f.write_str("the edit target does not map the path"),
+            Self::UnmappableTarget(_) => f.write_str("the edit target does not map a target path"),
             Self::NotAProperty(_) => f.write_str("expected a property path"),
             Self::NotAPrim(_) => f.write_str("expected a prim or variant path"),
             Self::NoSuchSpec(_) => f.write_str("no spec at the path"),

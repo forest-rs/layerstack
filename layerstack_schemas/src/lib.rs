@@ -39,6 +39,81 @@
 //! the domains it depends on ([`Domain::dependencies`]): `UsdLux`'s lights
 //! derive from `UsdGeom`'s `Boundable`.
 //!
+//! # Views
+//!
+//! Each domain's module ([`usd_geom`], [`usd_lux`], …) has a typed view of
+//! every schema, which reads a composed prim through a [`Scene`] (a stage
+//! composed with these schemas, and its store):
+//!
+//! - a typed schema's view (`Mesh`) is constructed with `new`, which checks
+//!   `IsA`, and derefs to the view of the schema it inherits from, down to
+//!   [`PrimView`]; an abstract schema's view (`Gprim`) reads any prim
+//!   derived from it;
+//! - a single-apply schema's view (`MaterialBindingApi`) is had with `get`,
+//!   which checks `HasAPI`; a multiple-apply schema's (`CollectionApi`) with
+//!   `get(scene, path, instance)`, or every applied instance with
+//!   `instances`;
+//! - getters return the resolved value, with the schema's fallback, as a
+//!   Rust value, or `None` when there is none; `_at` getters read a varying
+//!   attribute at a time code; relationship getters return their targets;
+//! - a token attribute with `allowedTokens` reads as an enum with an
+//!   `Other` variant for any other token;
+//! - accessors are named for each property's `apiName`, snake-cased, else
+//!   for its USD name without a multiple-apply schema's instance prefix.
+//!
+//! Vectors are arrays, quaternions `[i, j, k, r]`, halves `f32`, strings,
+//! assets and path expressions `Arc<str>`, and matrices arrays of rows
+//! (`m[row][column]`, translation in the last row, as USD stores them).
+//! For anything a view does not offer, resolve the property by its USD name
+//! on [`Scene::stage`]: `Stage::resolve_value_with_schema` returns the raw
+//! resolved value with its provenance.
+//!
+//! Every view has an edit handle (`MeshEdit`) whose setters author through
+//! a [`SchemaEdit`], which collects a `Transaction` for one explicit edit
+//! target. A handle is had only for a prim that exists, on the stage or
+//! defined earlier in the edit: from a view's `edit`, a concrete schema's
+//! `define`, an applied schema's `apply` (which fails with
+//! `CannotApply::NoSuchPrim` for a missing prim), or `new`, which returns
+//! `None` for one. No edit manufactures an `over` for a missing prim.
+//! Relationship targets are stage paths, mapped through the edit target
+//! (through a reference, `/Instance/Light` is authored as `/Asset/Light`);
+//! one it does not map rejects the transaction when it is applied.
+//!
+//! ```
+//! use std::sync::Arc;
+//!
+//! use layerstack::edit::EditTarget;
+//! use layerstack::{InMemoryStore, InterpolationType, Layer, LayerId, LiveStage, StageOptions};
+//! use layerstack_schemas::usd_geom::{Mesh, MeshSubdivisionScheme};
+//! use layerstack_schemas::{Scene, SchemaEdit};
+//!
+//! let mut store = InMemoryStore::default();
+//! store.insert_layer(Layer::new(LayerId(1)));
+//! let options = StageOptions {
+//!     schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+//!     ..StageOptions::default()
+//! };
+//! let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+//! let path = store.path("/Ground");
+//!
+//! let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+//! Mesh::define(&mut edit, path)
+//!     .set_face_vertex_counts(&mut edit, &[4])
+//!     .set_points_at(&mut edit, 1.0, &[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [1.0, 0.0, 1.0], [0.0, 0.0, 1.0]]);
+//! let transaction = edit.finish();
+//! live.apply(&mut store, &transaction).expect("applies");
+//!
+//! let scene = Scene::new(live.stage(), &store);
+//! let mesh = Mesh::new(&scene, path).expect("a mesh");
+//! assert_eq!(mesh.face_vertex_counts(), Some(vec![4]));
+//! assert_eq!(mesh.points_at(1.0, InterpolationType::Held).map(|p| p.len()), Some(4));
+//! // Nothing authored: the schema's fallback.
+//! assert_eq!(mesh.subdivision_scheme(), Some(MeshSubdivisionScheme::CatmullClark));
+//! ```
+//!
+//! Each domain is a Cargo feature (`usd-geom`, `usd-lux`, …) that enables
+//! the domains it depends on; `all`, the default, enables every one.
+//!
 //! # License
 //!
 //! The generated tables are derived from OpenUSD's schema definitions,
@@ -51,13 +126,32 @@
 //! the implementation, and these are OpenUSD's.
 
 #![no_std]
+// With fewer domains, fewer of the shared view helpers and value types are
+// used; the full build (`all`) is linted strictly.
+#![cfg_attr(
+    not(feature = "all"),
+    allow(
+        dead_code,
+        unused_imports,
+        unused_macros,
+        unreachable_pub,
+        reason = "a build with fewer domains uses fewer of the shared helpers"
+    )
+)]
 
 extern crate alloc;
 
+#[macro_use]
+mod view;
+mod edit;
 mod generated;
 mod table;
+mod value;
 
+pub use edit::SchemaEdit;
+pub use generated::views::*;
 pub use generated::{Domain, OPENUSD_VERSION};
+pub use view::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene};
 
 use alloc::vec::Vec;
 
@@ -117,7 +211,8 @@ fn with_dependencies(domains: &[Domain]) -> Vec<Domain> {
         .collect()
 }
 
-#[cfg(test)]
+// The tests name domains across the crate.
+#[cfg(all(test, feature = "all"))]
 mod tests {
     use super::*;
 

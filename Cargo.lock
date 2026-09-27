@@ -715,6 +715,7 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "layerstack",
+ "layerstack_schemas",
  "layerstack_usdc",
 ]
 

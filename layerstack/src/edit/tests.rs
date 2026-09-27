@@ -205,6 +205,13 @@ fn targets_map_through_reference_and_variant_nodes() {
         mapped(&local_variant, &mut store, rock).as_deref(),
         Some("/Rock{shape=jagged}")
     );
+    // Outside the branch, a local variant target maps every path to itself
+    // (OpenUSD: `ForLocalDirectVariant`'s root identity); a reference's
+    // does not (checked above).
+    assert_eq!(
+        mapped(&local_variant, &mut store, world).as_deref(),
+        Some("/World")
+    );
 }
 
 #[test]
@@ -1462,4 +1469,396 @@ fn live_stage_edits_a_variant_spec_nested_in_a_branch() {
     live.apply(&mut store, &applied.inverse).expect("undo");
     assert_eq!(layers(&store), original, "the inverse removes the set");
     assert_live_matches_fresh(&live, &mut store, "undone");
+}
+
+/// Relationship targets and attribute connections are set, replaced and
+/// cleared on their spec, a missing relationship spec is created, and each
+/// edit's inverse restores the layer exactly, with redo reapplying it.
+///
+/// Spec: AOUSD Core §7.6.4.2.3 (`connectionPaths`), §7.6.5.1.1
+/// (`targetPaths`), §12.4.
+#[test]
+fn targets_and_connections_undo_and_redo_exactly() {
+    use crate::{ListOp, PropertyKind, PropertyPath, TargetPath};
+
+    let mut store = rocks();
+    let rock = store.path("/Rock");
+    let world = store.path("/World");
+    let look = store.tokens.intern("look");
+    let size = store.tokens.intern("size");
+    let target = |path| TargetPath::Prim(path);
+    let at = |name| EditTarget::for_layer(ROCK).property(PropertyPath::new(rock, name));
+    let property = |store: &InMemoryStore, name| {
+        store.layers[&ROCK].prims[&rock]
+            .properties
+            .iter()
+            .find(|entry| entry.name == name)
+            .map(|entry| entry.spec.clone())
+    };
+    let original = layers(&store);
+
+    // A missing relationship is created with its targets.
+    let mut create = Transaction::new();
+    create.set_targets(at(look), ListOp::explicit(vec![target(world)]));
+    let undo_create = create.apply(&mut store).expect("creates");
+    let created = property(&store, look).expect("relationship");
+    assert_eq!(created.kind, PropertyKind::Relationship);
+    assert_eq!(created.targets, Some(ListOp::explicit(vec![target(world)])));
+    let after_create = layers(&store);
+
+    // An attribute gains connections; the relationship's targets change.
+    let mut edit = Transaction::new();
+    edit.set_targets(at(size), ListOp::prepended(vec![target(world)]))
+        .set_targets(at(look), ListOp::appended(vec![target(rock)]));
+    let undo_edit = edit.apply(&mut store).expect("sets");
+    assert_eq!(
+        property(&store, size).and_then(|p| p.targets),
+        Some(ListOp::prepended(vec![target(world)]))
+    );
+    assert_eq!(
+        property(&store, size).and_then(|p| p.default),
+        Some(Value::Double(1.0))
+    );
+    let after_edit = layers(&store);
+
+    // Clearing keeps the spec; clearing nothing does nothing.
+    let mut clear = Transaction::new();
+    clear.clear_targets(at(look)).clear_targets(at(look));
+    let undo_clear = clear.apply(&mut store).expect("clears");
+    assert_eq!(property(&store, look).map(|p| p.targets), Some(None));
+
+    let redo_clear = undo_clear.apply(&mut store).expect("undo clear");
+    assert_eq!(layers(&store), after_edit);
+    let redo_edit = undo_edit.apply(&mut store).expect("undo edit");
+    assert_eq!(layers(&store), after_create);
+    let redo_create = undo_create.apply(&mut store).expect("undo create");
+    assert_eq!(layers(&store), original, "no relationship is left behind");
+
+    redo_create.apply(&mut store).expect("redo create");
+    redo_edit.apply(&mut store).expect("redo edit");
+    assert_eq!(layers(&store), after_edit);
+    redo_clear.apply(&mut store).expect("redo clear");
+    assert_eq!(property(&store, look).map(|p| p.targets), Some(None));
+}
+
+/// Applying an API schema adds it to the end of the spec's `apiSchemas`
+/// prepends (or its explicit list), once, creating the prim spec as an
+/// `over` when it is missing; the inverse restores the layer exactly.
+///
+/// OpenUSD: `UsdPrim::AddAppliedSchema`.
+#[test]
+fn applied_schemas_are_prepended_once_and_undo_exactly() {
+    use crate::ListOp;
+
+    let mut store = rocks();
+    let rock = store.path("/Rock");
+    let fresh = store.path("/Fresh");
+    let api_schemas = store.tokens.intern("apiSchemas");
+    let [label, slot, other] =
+        ["LabelAPI", "SlotAPI:main", "OtherAPI"].map(|n| store.tokens.intern(n));
+    let at = |path| EditTarget::for_layer(ROCK).prim(path);
+    let list = |store: &InMemoryStore, path| {
+        store.layers[&ROCK].prims.get(&path).and_then(|spec| {
+            match crate::doc::get_field(&spec.fields, &api_schemas) {
+                Some(FieldValue::TokenListOp(list)) => Some(list.clone()),
+                _ => None,
+            }
+        })
+    };
+    let original = layers(&store);
+
+    let mut apply = Transaction::new();
+    apply
+        .add_applied_schema(at(rock), label)
+        .add_applied_schema(at(rock), slot)
+        .add_applied_schema(at(rock), label)
+        .add_applied_schema(at(fresh), label);
+    let undo = apply.apply(&mut store).expect("applies");
+    assert_eq!(
+        list(&store, rock),
+        Some(ListOp::prepended(vec![label, slot]))
+    );
+    assert_eq!(
+        store.layers[&ROCK].prims[&fresh].specifier,
+        Some(Specifier::Over)
+    );
+    assert_eq!(list(&store, fresh), Some(ListOp::prepended(vec![label])));
+    let applied = layers(&store);
+
+    let redo = undo.apply(&mut store).expect("undo");
+    assert_eq!(layers(&store), original);
+    redo.apply(&mut store).expect("redo");
+    assert_eq!(layers(&store), applied);
+
+    // An explicit list gains the name at its end; appended names count.
+    let mut explicit = Transaction::new();
+    explicit.set_metadata(
+        at(rock),
+        api_schemas,
+        FieldValue::TokenListOp(ListOp::explicit(vec![other])),
+    );
+    explicit.add_applied_schema(at(rock), label);
+    explicit.apply(&mut store).expect("explicit");
+    assert_eq!(
+        list(&store, rock),
+        Some(ListOp::explicit(vec![other, label]))
+    );
+    let mut appended = Transaction::new();
+    appended.set_metadata(
+        at(rock),
+        api_schemas,
+        FieldValue::TokenListOp(ListOp::appended(vec![label])),
+    );
+    appended.add_applied_schema(at(rock), label);
+    appended.apply(&mut store).expect("appended");
+    assert_eq!(list(&store, rock), Some(ListOp::appended(vec![label])));
+}
+
+/// Targets given through an edit target are stage paths, mapped to the
+/// target layer's namespace as the property's own path is: through a
+/// reference `/World/RockB/Pebble` is authored as `/Rock/Pebble`, and
+/// through a variant the authored target names no variant selection. A
+/// target the edit target does not map rejects the edit; the inverse
+/// restores the layer exactly.
+///
+/// OpenUSD: `UsdRelationship::_GetTargetForAuthoring`
+/// (`UsdEditTarget::MapToSpecPath`, variant selections stripped).
+#[test]
+fn targets_map_through_the_edit_target() {
+    use crate::{ListOp, PropertyPath, TargetPath};
+
+    let mut store = rocks();
+    let stage = compose(&mut store);
+    let (rock_a, rock_b) = (store.path("/World/RockA"), store.path("/World/RockB"));
+    let (pebble_b, pebble_a) = (
+        store.path("/World/RockB/Pebble"),
+        store.path("/World/RockA/Pebble"),
+    );
+    let (rock, pebble) = (store.path("/Rock"), store.path("/Rock/Pebble"));
+    let look = store.tokens.intern("look");
+    let size = store.tokens.intern("size");
+    let through_b = EditTarget::for_node(&stage, rock_b, node(&stage, rock_b, ArcKind::References))
+        .expect("reference node");
+    let in_round = EditTarget::for_node(&stage, rock_a, node(&stage, rock_a, ArcKind::Variants))
+        .expect("variant node");
+    let original = layers(&store);
+
+    let mut edit = Transaction::new();
+    edit.set_targets(
+        through_b.property(PropertyPath::new(rock_b, look)),
+        ListOp {
+            prepend: vec![
+                TargetPath::Prim(pebble_b),
+                TargetPath::Property(PropertyPath::new(rock_b, size)),
+            ],
+            delete: vec![TargetPath::Prim(rock_b)],
+            ..ListOp::default()
+        },
+    )
+    .set_targets(
+        in_round.property(PropertyPath::new(rock_a, look)),
+        ListOp::explicit(vec![TargetPath::Prim(pebble_a)]),
+    );
+    let undo = edit.apply(&mut store).expect("maps every target");
+    let rock_spec = &store.layers[&ROCK].prims[&rock];
+    let authored = rock_spec
+        .properties
+        .iter()
+        .find(|entry| entry.name == look)
+        .and_then(|entry| entry.spec.targets.clone());
+    assert_eq!(
+        authored,
+        Some(ListOp {
+            prepend: vec![
+                TargetPath::Prim(pebble),
+                TargetPath::Property(PropertyPath::new(rock, size)),
+            ],
+            delete: vec![TargetPath::Prim(rock)],
+            ..ListOp::default()
+        })
+    );
+    let round = store.tokens.intern("round");
+    let shape = store.tokens.intern("shape");
+    let in_variant = rock_spec.variant_sets[&shape].variants[&round]
+        .properties
+        .iter()
+        .find(|entry| entry.name == look)
+        .and_then(|entry| entry.spec.targets.clone());
+    assert_eq!(
+        in_variant,
+        Some(ListOp::explicit(vec![TargetPath::Prim(pebble)])),
+        "a target names no variant selection"
+    );
+    let after = layers(&store);
+
+    // The composed targets are the stage paths given.
+    let recomposed = compose(&mut store);
+    assert_eq!(
+        recomposed
+            .resolve_target_list_path(PropertyPath::new(rock_b, look))
+            .map(|resolved| resolved.value),
+        Some(vec![
+            TargetPath::Prim(pebble_b),
+            TargetPath::Property(PropertyPath::new(rock_b, size)),
+        ])
+    );
+
+    let redo = undo.apply(&mut store).expect("undo");
+    assert_eq!(layers(&store), original);
+    redo.apply(&mut store).expect("redo");
+    assert_eq!(layers(&store), after);
+
+    // A target outside the reference's namespace does not map.
+    let before = layers(&store);
+    let mut outside = Transaction::new();
+    outside.set_targets(
+        through_b.property(PropertyPath::new(rock_b, look)),
+        ListOp::explicit(vec![TargetPath::Prim(pebble_b), TargetPath::Prim(rock_a)]),
+    );
+    assert_eq!(
+        outside.apply(&mut store),
+        Err(EditError::Rejected {
+            op: 0,
+            reason: Rejection::UnmappableTarget(TargetPath::Prim(rock_a)),
+        })
+    );
+    assert_eq!(layers(&store), before);
+}
+
+/// A local variant target keeps targets outside its branch: `/Light` and
+/// `/Light.intensity` are authored as themselves, and `/Rock/Pebble`
+/// inside the branch names no variant selection. Undo and redo are exact.
+///
+/// OpenUSD: `UsdEditTarget::ForLocalDirectVariant`, whose map function
+/// has the root identity.
+#[test]
+fn local_variant_targets_keep_paths_outside_the_branch() {
+    use crate::{ListOp, PropertyPath, TargetPath};
+
+    let mut store = rocks();
+    let rock = store.path("/Rock");
+    let (light, pebble) = (store.path("/Light"), store.path("/Rock/Pebble"));
+    let look = store.tokens.intern("look");
+    let intensity = store.tokens.intern("intensity");
+    let jagged = spec(&mut store, "/Rock{shape=jagged}");
+    let target = EditTarget::for_local_variant(ROCK, &jagged);
+    let targets = vec![
+        TargetPath::Prim(light),
+        TargetPath::Property(PropertyPath::new(light, intensity)),
+        TargetPath::Prim(pebble),
+    ];
+    let original = layers(&store);
+
+    let mut edit = Transaction::new();
+    edit.set_targets(
+        target.property(PropertyPath::new(rock, look)),
+        ListOp::explicit(targets.clone()),
+    );
+    let undo = edit.apply(&mut store).expect("every target maps");
+    let shape = store.tokens.intern("shape");
+    let jagged_name = store.tokens.intern("jagged");
+    let authored = store.layers[&ROCK].prims[&rock].variant_sets[&shape].variants[&jagged_name]
+        .properties
+        .iter()
+        .find(|entry| entry.name == look)
+        .and_then(|entry| entry.spec.targets.clone());
+    assert_eq!(authored, Some(ListOp::explicit(targets)));
+    let after = layers(&store);
+
+    let redo = undo.apply(&mut store).expect("undo");
+    assert_eq!(layers(&store), original);
+    redo.apply(&mut store).expect("redo");
+    assert_eq!(layers(&store), after);
+}
+
+/// Inherit and specialize node targets keep the root identity: a path
+/// outside the arc's namespace maps to itself, while one in the namespace
+/// the arc already maps its prim to (`/Class/X`) does not map, as a
+/// `PcpMapFunction` maps each path by its most specific pair. Targets
+/// follow the same map; undo and redo are exact.
+///
+/// OpenUSD: `UsdEditTarget(layer, node)`, whose map is the node's map to
+/// the root, with `PcpMapExpression::AddRootIdentity` for class arcs.
+#[test]
+fn class_arc_targets_keep_the_root_identity() {
+    use crate::{ListOp, PropertyPath, TargetPath};
+
+    let mut store = InMemoryStore::default();
+    let root = store.path("/");
+    let names = ["Class", "Base", "Inst", "Spec", "Light"];
+    let children = names.map(|n| store.tokens.intern(n)).to_vec();
+    let [class, base, inst, spec_prim, light] = names.map(|n| store.path(&alloc::format!("/{n}")));
+    let mut layer = Layer::new(SCENE);
+    layer.insert_prim(root, PrimSpec::default().with_children(children));
+    layer.insert_prim(class, PrimSpec::class());
+    layer.insert_prim(base, PrimSpec::def());
+    layer.insert_prim(inst, PrimSpec::def().with_inherit(class));
+    layer.insert_prim(spec_prim, PrimSpec::def().with_specialize(base));
+    layer.insert_prim(light, PrimSpec::def());
+    store.insert_layer(layer);
+    let stage = compose(&mut store);
+    let look = store.tokens.intern("look");
+
+    for (prim, source, kind) in [
+        (inst, class, ArcKind::Inherits),
+        (spec_prim, base, ArcKind::Specializes),
+    ] {
+        let target = EditTarget::for_node(&stage, prim, node(&stage, prim, kind)).expect("node");
+        let child = store.paths.intern(store.paths.resolve(prim).join(&[look]));
+        let source_child = store
+            .paths
+            .intern(store.paths.resolve(source).join(&[look]));
+        let mapped = |store: &mut InMemoryStore, path| {
+            target
+                .map_to_spec_path(path, &mut store.paths)
+                .map(|spec| spec.prim_path())
+        };
+        assert_eq!(mapped(&mut store, prim), Some(source));
+        assert_eq!(mapped(&mut store, child), Some(source_child));
+        assert_eq!(mapped(&mut store, light), Some(light), "the root identity");
+        assert_eq!(
+            mapped(&mut store, source),
+            None,
+            "the arc maps the prim there"
+        );
+        assert_eq!(mapped(&mut store, source_child), None);
+
+        let at = target.property(PropertyPath::new(prim, look));
+        let before = layers(&store);
+        let mut edit = Transaction::new();
+        edit.set_targets(
+            at.clone(),
+            ListOp::explicit(vec![TargetPath::Prim(light), TargetPath::Prim(child)]),
+        );
+        let undo = edit.apply(&mut store).expect("maps");
+        let authored = store.layers[&SCENE].prims[&source]
+            .properties
+            .iter()
+            .find(|entry| entry.name == look)
+            .and_then(|entry| entry.spec.targets.clone());
+        assert_eq!(
+            authored,
+            Some(ListOp::explicit(vec![
+                TargetPath::Prim(light),
+                TargetPath::Prim(source_child)
+            ]))
+        );
+        let after = layers(&store);
+        let redo = undo.apply(&mut store).expect("undo");
+        assert_eq!(layers(&store), before);
+        let undo = redo.apply(&mut store).expect("redo");
+        assert_eq!(layers(&store), after);
+        undo.apply(&mut store).expect("undo again");
+
+        let mut shadowed = Transaction::new();
+        shadowed.set_targets(at, ListOp::explicit(vec![TargetPath::Prim(source_child)]));
+        assert_eq!(
+            shadowed.apply(&mut store),
+            Err(EditError::Rejected {
+                op: 0,
+                reason: Rejection::UnmappableTarget(TargetPath::Prim(source_child)),
+            })
+        );
+        assert_eq!(layers(&store), before);
+    }
 }

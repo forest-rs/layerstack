@@ -423,8 +423,9 @@ fn value_edits(steps: &[Guarded], store: &dyn LayerStore) -> Option<Vec<Property
     Some(edits)
 }
 
-/// Optional source candidate lookup supplied by a caller with a current
-/// namespace index. Authoring does not own its lifetime or eligibility policy.
+/// Optional complete source candidate snapshot at transaction start. The
+/// journal keeps it across deletions and discards it after source-slot writes
+/// could add paths. The caller owns the index and its initial eligibility.
 pub(crate) trait SourceNamespace {
     fn subtree(&self, layer: LayerId, root: PathId) -> Option<Vec<PathId>>;
 }
@@ -432,6 +433,8 @@ pub(crate) trait SourceNamespace {
 /// The inverse steps recorded so far and their effects.
 #[derive(Default)]
 struct Journal<'a> {
+    // Deletions leave this snapshot a candidate superset. Source-slot writes
+    // can add paths, so they discard it before any later subtree lookup.
     namespace: Option<&'a dyn SourceNamespace>,
     steps: Vec<Guarded>,
     layers: Vec<LayerId>,
@@ -448,6 +451,11 @@ impl Journal<'_> {
     /// Applies `step`, records its inverse, and returns the inverse.
     fn run_step(&mut self, store: &mut dyn LayerStore, step: Raw) -> Result<&Raw, Rejection> {
         let inverse = apply_raw(store, &step)?;
+        if let Raw::PrimSlots { main, branches, .. } = &step
+            && (main.is_some() || branches.is_some())
+        {
+            self.namespace = None;
+        }
         let layer = step.layer();
         if !self.layers.contains(&layer) {
             self.layers.push(layer);
@@ -1335,11 +1343,12 @@ fn remove_subtree(
         })
     };
     let found = layer(store, id)?;
-    // The snapshot is valid only before the first structural step in this
-    // layer. Later operations in a mixed transaction use current storage.
+    // Earlier deletions only make the snapshot a superset. Check candidates
+    // against current storage below, including when removing an ancestor of
+    // a previously removed spec. The journal discards the snapshot after a
+    // source-slot write could have introduced paths it does not contain.
     let mut candidates: Vec<PathId> = journal
         .namespace
-        .filter(|_| !journal.structural_layers.contains(&id))
         .and_then(|index| index.subtree(id, root))
         .unwrap_or_else(|| {
             found

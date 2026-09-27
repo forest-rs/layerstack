@@ -554,3 +554,105 @@ fn boundary_order_keeps_inactive_names_until_after_reordering() {
         }
     }
 }
+
+#[test]
+fn batch_removals_include_disjoint_and_overlapping_subtrees() {
+    let (mut store, mut live) = scene();
+    let before = store.layer(ROOT).unwrap().prims.clone();
+    let mut txn = Transaction::new();
+    // Removing a descendant first leaves the original source index as a
+    // superset when its ancestor is removed later in the same transaction.
+    for path in ["/World/A/X", "/World/A", "/World/B", "/World/B/Y"] {
+        txn.remove_spec(address(&mut store, path));
+    }
+    for _ in 0..3 {
+        let removed = live.apply(&mut store, &txn).unwrap();
+        assert_eq!(removed.changes.removed.len(), 4);
+        assert_eq!(removed.changes.resynced.len(), 2);
+        assert_eq!(store.layer(ROOT).unwrap().prims.len(), 1);
+        matches_clean(&mut store, &live);
+        live.apply(&mut store, &removed.inverse).unwrap();
+        assert_eq!(store.layer(ROOT).unwrap().prims, before);
+        matches_clean(&mut store, &live);
+    }
+    let mut failing = txn.clone();
+    failing.create_prim(address(&mut store, "/World"), Specifier::Def, None);
+    assert!(live.apply(&mut store, &failing).is_err());
+    assert_eq!(store.layer(ROOT).unwrap().prims, before);
+    assert!(live.local_namespace.as_ref().unwrap().current(&store));
+    matches_clean(&mut store, &live);
+}
+
+#[test]
+fn creation_between_removals_does_not_hide_new_descendants() {
+    let (mut store, mut live) = scene();
+    let before = store.layer(ROOT).unwrap().prims.clone();
+    let mut txn = Transaction::new();
+    txn.remove_spec(address(&mut store, "/World/A/X"));
+    txn.create_prim(
+        address(&mut store, "/World/B/New/Leaf"),
+        Specifier::Def,
+        None,
+    );
+    txn.remove_spec(address(&mut store, "/World/B"));
+    let removed = live.apply(&mut store, &txn).unwrap();
+    assert_eq!(store.layer(ROOT).unwrap().prims.len(), 2);
+    matches_clean(&mut store, &live);
+    live.apply(&mut store, &removed.inverse).unwrap();
+    assert_eq!(store.layer(ROOT).unwrap().prims, before);
+    matches_clean(&mut store, &live);
+}
+
+#[test]
+fn removal_after_inverse_restoration_finds_restored_descendants() {
+    let (mut store, mut live) = scene();
+    let mut remove = Transaction::new();
+    remove.remove_spec(address(&mut store, "/World/B"));
+    let mut restore = live.apply(&mut store, &remove).unwrap().inverse;
+    let before = store.layer(ROOT).unwrap().prims.clone();
+    // Raw inverse steps add paths absent from this transaction's snapshot.
+    restore.remove_spec(address(&mut store, "/World/B"));
+    let applied = live.apply(&mut store, &restore).unwrap();
+    assert_eq!(store.layer(ROOT).unwrap().prims, before);
+    assert!(applied.changes.created.is_empty());
+    assert!(applied.changes.removed.is_empty());
+    matches_clean(&mut store, &live);
+}
+
+#[test]
+fn compacted_child_lists_merge_scattered_edits_across_parents() {
+    let (mut store, _) = scene();
+    for i in 0..64 {
+        let parent = if i % 2 == 0 { "A" } else { "B" };
+        let path = store.path(&alloc::format!("/World/{parent}/Part{i}"));
+        store
+            .layer_mut(ROOT)
+            .unwrap()
+            .insert_prim(path, PrimSpec::def());
+    }
+    let before = store.layer(ROOT).unwrap().prims.clone();
+    let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
+    let mut txn = Transaction::new();
+    for i in 0..64 {
+        let parent = if i % 2 == 0 { "A" } else { "B" };
+        if i % 3 == 0 {
+            txn.remove_spec(address(
+                &mut store,
+                &alloc::format!("/World/{parent}/Part{i}"),
+            ));
+        } else if i % 3 == 1 {
+            txn.create_prim(
+                address(&mut store, &alloc::format!("/World/{parent}/Added{i}/Leaf")),
+                Specifier::Def,
+                None,
+            );
+        }
+    }
+    for _ in 0..3 {
+        let applied = live.apply(&mut store, &txn).unwrap();
+        matches_clean(&mut store, &live);
+        live.apply(&mut store, &applied.inverse).unwrap();
+        assert_eq!(store.layer(ROOT).unwrap().prims, before);
+        matches_clean(&mut store, &live);
+    }
+}

@@ -1,7 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Single authored-value edits in increasingly large, nested stages.
+//! Live value, subtree and batch edits in increasingly large, nested stages.
 
 use std::hint::black_box;
 
@@ -167,5 +167,55 @@ fn bench_local_structure(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_live_edits, bench_local_structure);
+fn bench_batch_removals(c: &mut Criterion) {
+    let mut group = c.benchmark_group("live_batch_remove");
+    group.sample_size(10);
+    for n in [1_000, 10_000, 100_000] {
+        for (case, count, fanout) in [
+            ("2", 2, 10),
+            ("16", 16, 10),
+            ("128", 128, 10),
+            ("wide_128", 128, n),
+            ("wide_1024", 1024, n),
+        ] {
+            let (mut store, mut live, leaf, _) = build(n, fanout);
+            let parent = if case.starts_with("wide_") {
+                store.path("/World")
+            } else {
+                leaf
+            };
+            let prefix = store
+                .paths
+                .resolve(parent)
+                .display(&store.tokens)
+                .to_string();
+            let mut setup = Transaction::new();
+            let mut txn = Transaction::new();
+            for i in 0..count {
+                let path = store.path(&format!("{prefix}/Batch{i}"));
+                let address = EditTarget::for_layer(LayerId(1)).prim(path);
+                setup.create_prim(address.clone(), layerstack::Specifier::Def, None);
+                txn.remove_spec(address);
+            }
+            live.apply(&mut store, &setup).unwrap();
+            group.bench_with_input(BenchmarkId::new(case, n), &n, |b, _| {
+                b.iter(|| {
+                    // Each sample is one original-command deletion plus its
+                    // exact undo. Replaying raw redo would bypass discovery.
+                    let removed = live.apply(&mut store, &txn).unwrap();
+                    let restored = live.apply(&mut store, &removed.inverse).unwrap();
+                    black_box((&removed.changes, &restored.changes));
+                });
+            });
+        }
+    }
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_live_edits,
+    bench_local_structure,
+    bench_batch_removals
+);
 criterion_main!(benches);

@@ -1,401 +1,150 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Typed schema layer: domain-specific types over `Value::Opaque`.
+//! Typed schema views: reading and authoring OpenUSD's schemas as Rust.
 //!
-//! The layerstack kernel is domain-neutral — it stores `Value` enums and
-//! resolves them by strength. Domain-specific types (transforms, colors,
-//! bounding boxes) are encoded as `Value::Opaque` with a type discriminator
-//! and decoded by a schema layer above the kernel.
+//! `layerstack_schemas` generates a view of every OpenUSD schema over a
+//! composed stage, and an edit handle that authors it. This example:
 //!
-//! This example builds a tiny "robot scene schema" with:
-//! - `Transform` (position + rotation as f32 arrays)
-//! - `Color` (RGBA as f32 array)
-//! - `BoundingBox` (min/max corners)
-//!
-//! It shows:
-//! 1. Encoding domain types into `Value::Opaque`
-//! 2. Decoding them back with a typed API
-//! 3. Composition still works (strongest opinion wins, `ListOps` chain)
-//! 4. Provenance tells you which layer provided the winning value
+//! 1. authors a robot in a base layer through edit handles: a `Mesh` arm, a
+//!    `SphereLight` with its built-in `LightAPI`, and a `CollectionAPI`
+//!    instance naming the light;
+//! 2. overrides the arm in a stronger shot layer, through the same handles
+//!    and another edit target;
+//! 3. reads the composed result through the views: the strongest opinion,
+//!    the schema fallback where nothing is authored, enums for
+//!    `allowedTokens`, and inherited properties through `Deref`;
+//! 4. drops to the raw resolved value, with its provenance, for what the
+//!    views do not show.
 
 use std::sync::Arc;
 
+use layerstack::edit::EditTarget;
 use layerstack::{
-    InMemoryStore, Layer, LayerId, PathId, PrimSpec, Stage, StageOptions, SublayerEntry, TokenId,
-    Value,
+    InMemoryStore, InterpolationType, Layer, LayerId, LiveStage, StageOptions, SublayerEntry,
+    TargetPath,
 };
-
-// ---------------------------------------------------------------------------
-// Domain types
-// ---------------------------------------------------------------------------
-
-/// A 3D transform: position and Euler rotation.
-#[derive(Debug, Clone, PartialEq)]
-struct Transform {
-    position: [f32; 3],
-    rotation: [f32; 3],
-}
-
-/// An RGBA color.
-#[derive(Debug, Clone, PartialEq)]
-struct Color {
-    r: f32,
-    g: f32,
-    b: f32,
-    a: f32,
-}
-
-/// An axis-aligned bounding box.
-#[derive(Debug, Clone, PartialEq)]
-struct BoundingBox {
-    min: [f32; 3],
-    max: [f32; 3],
-}
-
-// ---------------------------------------------------------------------------
-// Codec: domain types ↔ Value::Opaque
-// ---------------------------------------------------------------------------
-
-/// Registry of type names used as discriminators in `Value::Opaque`.
-struct SchemaTokens {
-    transform: TokenId,
-    color: TokenId,
-    bbox: TokenId,
-    // Field names.
-    field_xform: TokenId,
-    field_color: TokenId,
-    field_bounds: TokenId,
-    field_name: TokenId,
-}
-
-impl SchemaTokens {
-    fn intern(store: &mut InMemoryStore) -> Self {
-        Self {
-            transform: store.tokens.intern("schema:Transform"),
-            color: store.tokens.intern("schema:Color"),
-            bbox: store.tokens.intern("schema:BoundingBox"),
-            field_xform: store.tokens.intern("xformOp:transform"),
-            field_color: store.tokens.intern("primvars:displayColor"),
-            field_bounds: store.tokens.intern("extent"),
-            field_name: store.tokens.intern("name"),
-        }
-    }
-}
-
-/// Encodes a `Transform` as `Value::Opaque`.
-fn encode_transform(tokens: &SchemaTokens, xform: &Transform) -> Value {
-    // Simple encoding: 6 × f32, little-endian.
-    let mut bytes = Vec::with_capacity(24);
-    for &v in &xform.position {
-        bytes.extend_from_slice(&v.to_le_bytes());
-    }
-    for &v in &xform.rotation {
-        bytes.extend_from_slice(&v.to_le_bytes());
-    }
-    Value::Opaque {
-        type_name: tokens.transform,
-        bytes: Arc::from(bytes.as_slice()),
-    }
-}
-
-/// Decodes a `Transform` from `Value::Opaque`.
-fn decode_transform(tokens: &SchemaTokens, value: &Value) -> Option<Transform> {
-    match value {
-        Value::Opaque { type_name, bytes }
-            if *type_name == tokens.transform && bytes.len() == 24 =>
-        {
-            let f = |i: usize| f32::from_le_bytes(bytes[i..i + 4].try_into().unwrap());
-            Some(Transform {
-                position: [f(0), f(4), f(8)],
-                rotation: [f(12), f(16), f(20)],
-            })
-        }
-        _ => None,
-    }
-}
-
-/// Encodes a `Color` as `Value::Opaque`.
-fn encode_color(tokens: &SchemaTokens, color: &Color) -> Value {
-    let mut bytes = Vec::with_capacity(16);
-    for &v in &[color.r, color.g, color.b, color.a] {
-        bytes.extend_from_slice(&v.to_le_bytes());
-    }
-    Value::Opaque {
-        type_name: tokens.color,
-        bytes: Arc::from(bytes.as_slice()),
-    }
-}
-
-/// Decodes a `Color` from `Value::Opaque`.
-fn decode_color(tokens: &SchemaTokens, value: &Value) -> Option<Color> {
-    match value {
-        Value::Opaque { type_name, bytes } if *type_name == tokens.color && bytes.len() == 16 => {
-            let f = |i: usize| f32::from_le_bytes(bytes[i..i + 4].try_into().unwrap());
-            Some(Color {
-                r: f(0),
-                g: f(4),
-                b: f(8),
-                a: f(12),
-            })
-        }
-        _ => None,
-    }
-}
-
-/// Encodes a `BoundingBox` as `Value::Opaque`.
-fn encode_bbox(tokens: &SchemaTokens, bbox: &BoundingBox) -> Value {
-    let mut bytes = Vec::with_capacity(24);
-    for &v in &bbox.min {
-        bytes.extend_from_slice(&v.to_le_bytes());
-    }
-    for &v in &bbox.max {
-        bytes.extend_from_slice(&v.to_le_bytes());
-    }
-    Value::Opaque {
-        type_name: tokens.bbox,
-        bytes: Arc::from(bytes.as_slice()),
-    }
-}
-
-/// Decodes a `BoundingBox` from `Value::Opaque`.
-fn decode_bbox(tokens: &SchemaTokens, value: &Value) -> Option<BoundingBox> {
-    match value {
-        Value::Opaque { type_name, bytes } if *type_name == tokens.bbox && bytes.len() == 24 => {
-            let f = |i: usize| f32::from_le_bytes(bytes[i..i + 4].try_into().unwrap());
-            Some(BoundingBox {
-                min: [f(0), f(4), f(8)],
-                max: [f(12), f(16), f(20)],
-            })
-        }
-        _ => None,
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Typed query helpers
-// ---------------------------------------------------------------------------
-
-/// Typed wrapper over `Stage` for the robot schema.
-struct SceneQuery<'a> {
-    stage: &'a Stage,
-    tokens: &'a SchemaTokens,
-}
-
-impl<'a> SceneQuery<'a> {
-    fn transform(&self, prim: PathId) -> Option<Transform> {
-        let resolved = self.stage.resolve_field(prim, self.tokens.field_xform)?;
-        decode_transform(self.tokens, &resolved.value)
-    }
-
-    fn color(&self, prim: PathId) -> Option<Color> {
-        let resolved = self.stage.resolve_field(prim, self.tokens.field_color)?;
-        decode_color(self.tokens, &resolved.value)
-    }
-
-    fn bounds(&self, prim: PathId) -> Option<BoundingBox> {
-        let resolved = self.stage.resolve_field(prim, self.tokens.field_bounds)?;
-        decode_bbox(self.tokens, &resolved.value)
-    }
-
-    fn name(&self, prim: PathId) -> Option<String> {
-        let resolved = self.stage.resolve_field(prim, self.tokens.field_name)?;
-        match &resolved.value {
-            Value::String(s) => Some(s.to_string()),
-            _ => None,
-        }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Main
-// ---------------------------------------------------------------------------
+use layerstack_schemas::usd::CollectionApi;
+use layerstack_schemas::usd_geom::{Gprim, Mesh, MeshEdit, MeshSubdivisionScheme, Xform};
+use layerstack_schemas::usd_lux::SphereLight;
+use layerstack_schemas::{Scene, SchemaEdit};
 
 fn main() {
+    // The shot layer (1) is the root; the base layer (2) is its weaker
+    // sublayer.
     let mut store = InMemoryStore::default();
-    let schema = SchemaTokens::intern(&mut store);
+    let mut shot = Layer::new(LayerId(1));
+    shot.sublayers = vec![SublayerEntry::new(LayerId(2))];
+    store.insert_layer(shot);
+    store.insert_layer(Layer::new(LayerId(2)));
+    let options = StageOptions {
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        with_provenance: true,
+        ..StageOptions::default()
+    };
+    let mut live = LiveStage::compose(&mut store, LayerId(1), options);
 
     let robot = store.path("/Robot");
     let arm = store.path("/Robot/Arm");
+    let key = store.path("/Robot/Key");
+    let key_target = TargetPath::prim(key);
 
-    // --- Base layer: defines the robot with default values. ---
-    let mut base = Layer::new(LayerId(1));
-    base.sublayers = vec![SublayerEntry::new(LayerId(2))];
-
-    let arm_token = store.tokens.intern("Arm");
-
-    let robot_spec = PrimSpec::def()
-        .with_children(vec![arm_token])
-        .with_field(schema.field_name, "Atlas")
-        .with_field(
-            schema.field_xform,
-            encode_transform(
-                &schema,
-                &Transform {
-                    position: [0.0, 0.0, 0.0],
-                    rotation: [0.0, 0.0, 0.0],
-                },
-            ),
+    // --- The base layer: define the robot. ---
+    let base = EditTarget::for_layer(LayerId(2));
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, base);
+    Xform::define(&mut edit, robot);
+    Mesh::define(&mut edit, arm)
+        .set_face_vertex_counts(&mut edit, &[4])
+        .set_face_vertex_indices(&mut edit, &[0, 1, 2, 3])
+        .set_points(
+            &mut edit,
+            &[
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+                [1.0, 2.0, 0.0],
+                [0.0, 2.0, 0.0],
+            ],
         )
-        .with_field(
-            schema.field_bounds,
-            encode_bbox(
-                &schema,
-                &BoundingBox {
-                    min: [-1.0, 0.0, -1.0],
-                    max: [1.0, 2.0, 1.0],
-                },
-            ),
-        );
-    base.insert_prim(robot, robot_spec);
+        .set_display_color(&mut edit, &[[0.5, 0.5, 0.5]]);
+    SphereLight::define(&mut edit, key)
+        .set_radius(&mut edit, 0.25)
+        .light_api()
+        .set_intensity(&mut edit, 800.0)
+        .set_intensity_at(&mut edit, 24.0, 1200.0);
+    // A multiple-apply schema is applied with an instance name, which
+    // names its properties (`collection:lights:includes`).
+    CollectionApi::apply(&mut edit, robot, "lights")
+        .expect("any prim may have a collection")
+        .set_includes(&mut edit, &[key_target]);
+    let transaction = edit.finish();
+    live.apply(&mut store, &transaction)
+        .expect("the base edits apply");
 
-    let arm_spec = PrimSpec::def()
-        .with_field(
-            schema.field_color,
-            encode_color(
-                &schema,
-                &Color {
-                    r: 0.5,
-                    g: 0.5,
-                    b: 0.5,
-                    a: 1.0,
-                },
-            ),
-        )
-        .with_field(
-            schema.field_xform,
-            encode_transform(
-                &schema,
-                &Transform {
-                    position: [0.5, 1.0, 0.0],
-                    rotation: [0.0, 0.0, 0.0],
-                },
-            ),
-        );
-    base.insert_prim(arm, arm_spec);
-    store.insert_layer(base);
+    // --- The shot layer: override the arm. ---
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    // Setters return the handle of the schema that defines the property,
+    // so chain a derived schema's setters before its bases'.
+    MeshEdit::new(&edit, arm)
+        .expect("the arm is on the stage")
+        .set_subdivision_scheme(&mut edit, MeshSubdivisionScheme::None)
+        .set_display_color(&mut edit, &[[1.0, 0.0, 0.0]]);
+    let transaction = edit.finish();
+    live.apply(&mut store, &transaction)
+        .expect("the shot edits apply");
 
-    // --- Override layer: a "shot" layer that repositions the robot and
-    //     recolors the arm. Stronger than the base. ---
-    let mut shot = Layer::new(LayerId(2));
-
-    // Override only the transform on the robot (position it in the scene).
-    let robot_override = PrimSpec::default().with_field(
-        schema.field_xform,
-        encode_transform(
-            &schema,
-            &Transform {
-                position: [10.0, 0.0, 5.0],
-                rotation: [0.0, 45.0, 0.0],
-            },
-        ),
-    );
-    shot.insert_prim(robot, robot_override);
-
-    // Override the arm color to red.
-    let arm_override = PrimSpec::default().with_field(
-        schema.field_color,
-        encode_color(
-            &schema,
-            &Color {
-                r: 1.0,
-                g: 0.0,
-                b: 0.0,
-                a: 1.0,
-            },
-        ),
-    );
-    shot.insert_prim(arm, arm_override);
-    store.insert_layer(shot);
-
-    // --- Compose and query with the typed API. ---
-    let stage = Stage::compose(
-        &mut store,
-        LayerId(1),
-        StageOptions {
-            with_provenance: true,
-            ..StageOptions::default()
-        },
-    );
-
-    let query = SceneQuery {
-        stage: &stage,
-        tokens: &schema,
-    };
-
-    println!("/Robot");
-    println!("  name      = {:?}", query.name(robot).unwrap());
-    // Base layer provides the name (no override in shot layer).
-    println!("  transform = {:?}", query.transform(robot).unwrap());
-    // Shot layer wins — robot is at (10, 0, 5) rotated 45°.
-    println!("  bounds    = {:?}", query.bounds(robot).unwrap());
-    // Only base layer has bounds, so base wins.
-
+    // --- Read the composed robot through the views. ---
+    let scene = Scene::new(live.stage(), &store);
+    let mesh = Mesh::new(&scene, arm).expect("the arm is a mesh");
     println!("/Robot/Arm");
-    println!("  color     = {:?}", query.color(arm).unwrap());
-    // Shot layer wins — arm is red.
-    println!("  transform = {:?}", query.transform(arm).unwrap());
-    // Only base layer has arm transform, so base wins.
+    // The shot layer's opinion is the strongest.
+    println!("  displayColor      = {:?}", mesh.display_color());
+    // Only the base layer authors the points.
+    println!("  points            = {:?}", mesh.points());
+    println!("  subdivisionScheme = {:?}", mesh.subdivision_scheme());
+    // Nothing authors these: the schema's fallbacks. `orientation` is a
+    // `Gprim` property, which the mesh view reaches through `Deref`.
+    println!("  orientation       = {:?}", mesh.orientation());
+    println!("  purpose           = {:?}", mesh.purpose());
+    // Any mesh is a `Gprim`, so the abstract view reads it too.
+    let gprim = Gprim::new(&scene, arm).expect("a mesh is a gprim");
+    println!("  doubleSided       = {:?}", gprim.double_sided());
 
-    // Verify composition: shot layer (LayerId(2)) is a sublayer of base
-    // (LayerId(1)), making base STRONGER. But we inserted the shot as
-    // sublayer, meaning base opinions are checked first.
-    //
-    // Wait — sublayers are WEAKER than the parent. LayerId(1) lists
-    // LayerId(2) as a sublayer, so LayerId(1) is stronger. Let's verify:
-    let robot_xform_prov = stage
-        .resolve_field(robot, schema.field_xform)
-        .unwrap()
-        .provenance
-        .unwrap();
+    let light = SphereLight::new(&scene, key).expect("the key is a sphere light");
+    println!("/Robot/Key");
+    println!("  radius            = {:?}", light.radius());
+    println!("  intensity         = {:?}", light.light_api().intensity());
     println!(
-        "\nRobot transform provided by layer {} (1=base, 2=shot)",
-        robot_xform_prov.layer.0
+        "  intensity at 24   = {:?}",
+        light
+            .light_api()
+            .intensity_at(24.0, InterpolationType::Linear)
     );
 
-    // The base layer is stronger, so it provides the transform.
-    // To make the shot layer stronger, it should be the ROOT with
-    // base as its sublayer. Let's recompose with that ordering:
-    println!("\n--- Recomposing with shot as strongest layer ---\n");
-
-    // Move the shot to be the root, with base as sublayer.
-    {
-        let shot = store.layers.get_mut(&LayerId(2)).unwrap();
-        shot.sublayers = vec![SublayerEntry::new(LayerId(1))];
-        let base = store.layers.get_mut(&LayerId(1)).unwrap();
-        base.sublayers = vec![];
+    for collection in CollectionApi::instances(&scene, robot) {
+        let includes: Vec<String> = collection
+            .includes()
+            .into_iter()
+            .map(|t| t.display(&store.paths, &store.tokens))
+            .collect();
+        println!(
+            "/Robot collection {:?} includes {includes:?} ({:?})",
+            collection.instance(),
+            collection.expansion_rule()
+        );
     }
 
-    let stage2 = Stage::compose(
-        &mut store,
-        LayerId(2), // Shot is now root (strongest).
-        StageOptions {
-            with_provenance: true,
-            ..StageOptions::default()
-        },
-    );
-
-    let query2 = SceneQuery {
-        stage: &stage2,
-        tokens: &schema,
-    };
-
-    println!("/Robot");
-    println!("  transform = {:?}", query2.transform(robot).unwrap());
-    println!("  name      = {:?}", query2.name(robot).unwrap());
-    // Now shot's transform wins; name still comes from base (only source).
-
-    println!("/Robot/Arm");
-    println!("  color     = {:?}", query2.color(arm).unwrap());
-    // Shot's red color wins over base's gray.
-
-    let prov = stage2
-        .resolve_field(robot, schema.field_xform)
-        .unwrap()
-        .provenance
-        .unwrap();
+    // --- The raw value, with provenance, for what views do not show. ---
+    let name = store
+        .tokens
+        .lookup(Gprim::DISPLAY_COLOR)
+        .expect("interned by the edits");
+    let resolved = live
+        .stage()
+        .resolve_value_with_schema(arm, name, &store)
+        .expect("authored");
+    let provenance = resolved.provenance.expect("composed with provenance");
     println!(
-        "\nRobot transform now provided by layer {} (shot wins!)",
-        prov.layer.0
+        "displayColor comes from layer {} (1 = shot, 2 = base)",
+        provenance.layer.0
     );
 }

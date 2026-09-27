@@ -154,3 +154,5 @@ impl fmt::Display for UsdcError {
         }
     }
 }
+
+impl core::error::Error for UsdcError {}

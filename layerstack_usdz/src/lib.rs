@@ -44,12 +44,14 @@ use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 
 pub mod crc32;
+pub mod diagnostic;
 pub mod error;
 mod resolver;
 pub mod writer;
 pub mod zip;
 
-pub use error::UsdzError;
+pub use diagnostic::{ImportDiagnostic, MemberDiagnostic};
+pub use error::{LayerReadError, UsdzError};
 pub use writer::{PackageFile, UsdzWriteError, write_usdz};
 
 /// The result of successfully reading a USDZ package.
@@ -66,6 +68,27 @@ pub struct UsdzResult {
     /// layer's included (`root.usda`, `models/asset.usda`). Layers the
     /// outer resolver loaded are not listed.
     pub member_paths: BTreeMap<LayerId, Arc<str>>,
+    /// Recovery diagnostics from loaded package members, each reported once.
+    ///
+    /// Root diagnostics come first, followed by other members in completion
+    /// order; each member preserves parse/lower/emit or assembly order.
+    /// Inspect these before accepting a partial result. No diagnostics are
+    /// available here for unloaded members or layers decoded by the outer
+    /// resolver, which owns its own diagnostic policy.
+    pub diagnostics: Vec<MemberDiagnostic>,
+}
+
+impl UsdzResult {
+    /// Whether any loaded member reported malformed or unrepresented content.
+    ///
+    /// This checks [`Self::diagnostics`], not composition or viewer support.
+    /// `false` does not rule out warnings, unread members, or problems inside
+    /// the outer resolver. Callers that require a diagnostic-free import can
+    /// instead require `diagnostics.is_empty()`.
+    #[must_use]
+    pub fn has_errors(&self) -> bool {
+        self.diagnostics.iter().any(|d| d.diagnostic.is_error())
+    }
 }
 
 /// Reads a USDZ package from a byte slice and produces a [`Layer`].
@@ -75,6 +98,14 @@ pub struct UsdzResult {
 /// layer format dispatch → assembly.
 ///
 /// `data` must contain the complete USDZ file contents.
+///
+/// Readable layers may recover from malformed or unsupported authored content.
+/// `Ok` then contains a partial layer and [`UsdzResult::diagnostics`]; inspect
+/// those diagnostics or [`UsdzResult::has_errors`] before using it. A hard
+/// decoding failure in the root or any loaded package member returns
+/// [`UsdzError::LayerRead`] with the member and original typed cause. Missing
+/// assets retain the format reader's existing unresolved-arc behavior.
+/// This reads reachable layers, not every unused layer member in the archive.
 ///
 /// A relative asset path authored in a package layer names a member of the
 /// package, anchored as OpenUSD anchors it: a path relative to its layer
@@ -99,7 +130,7 @@ pub struct UsdzResult {
 ///     AssetResolveError, AssetResolver, LayerId, ResolvedAsset,
 ///     TokenInterner, PathInterner,
 /// };
-/// use layerstack_usdz::{read_usdz, UsdzError};
+/// use layerstack_usdz::{read_usdz, write_usdz, ImportDiagnostic, PackageFile};
 ///
 /// struct NoAssets;
 /// impl AssetResolver for NoAssets {
@@ -110,15 +141,22 @@ pub struct UsdzResult {
 ///     fn resolved_path(&self, _: LayerId) -> Option<&str> { None }
 /// }
 ///
-/// // Invalid data fails at the ZIP parsing stage.
+/// // Readable text can still lose an invalid authored value during recovery.
+/// let source = b"#usda 1.0\ndef \"Rock\" { float amount = \"wrong\" }\n";
+/// let package = write_usdz(&[PackageFile::new("root.usda", source)]).unwrap();
 /// let result = read_usdz(
-///     b"not a zip",
+///     &package,
 ///     LayerId(1),
 ///     &mut TokenInterner::default(),
 ///     &mut PathInterner::default(),
 ///     &mut NoAssets,
-/// );
-/// assert!(result.is_err());
+/// ).unwrap();
+/// assert!(result.has_errors());
+/// let diagnostic = &result.diagnostics[0];
+/// assert_eq!(&*diagnostic.member, "root.usda");
+/// assert!(matches!(diagnostic.diagnostic, ImportDiagnostic::UsdaEmit(_)));
+/// // A strict consumer rejects this partial import; an inspector can use
+/// // the original diagnostic's source span to highlight the problem.
 /// ```
 ///
 /// [`Layer`]: layerstack::doc::Layer
@@ -178,6 +216,8 @@ pub fn read_usdz(
     let mut resolved_layers = parsed.resolved_layers;
     resolved_layers.extend(loaded.descendants);
     let member_paths = loaded.member_paths;
+    let mut diagnostics = parsed.diagnostics;
+    diagnostics.extend(loaded.diagnostics);
 
     // 7. Installing two layers with one ID would silently drop one, so an
     //    outer resolver that handed out an ID twice fails the read.
@@ -190,6 +230,7 @@ pub fn read_usdz(
         layer: parsed.layer,
         resolved_layers,
         member_paths,
+        diagnostics,
     })
 }
 

@@ -18,7 +18,8 @@ use layerstack::interner::TokenInterner;
 use layerstack::path::PathInterner;
 use layerstack::{AssetResolveError, AssetResolver, ResolvedAsset};
 
-use crate::error::UsdzError;
+use crate::diagnostic::{ImportDiagnostic, MemberDiagnostic};
+use crate::error::{LayerReadError, UsdzError};
 use crate::zip::ZipArchive;
 
 /// USDC magic bytes used for format sniffing.
@@ -65,6 +66,8 @@ pub(crate) struct UsdzResolver<'a> {
     /// Why the package cannot be read, which a failed resolution cannot
     /// report itself: parsers keep an unresolvable arc and carry on.
     failure: Option<UsdzError>,
+    /// Diagnostics from members loaded beneath the root.
+    diagnostics: Vec<MemberDiagnostic>,
     /// Resolves paths outside the package, and allocates the layer IDs of
     /// members, so that they share one ID space with the layers it loads.
     outer: &'a mut dyn AssetResolver,
@@ -87,6 +90,7 @@ impl<'a> UsdzResolver<'a> {
             member_paths: BTreeMap::from([(root, root_member)]),
             descendants: Vec::new(),
             failure: None,
+            diagnostics: Vec::new(),
             outer,
         }
     }
@@ -99,6 +103,7 @@ impl<'a> UsdzResolver<'a> {
             None => Ok(Loaded {
                 descendants: self.descendants,
                 member_paths: self.member_paths,
+                diagnostics: self.diagnostics,
             }),
         }
     }
@@ -141,15 +146,19 @@ impl<'a> UsdzResolver<'a> {
         let parsed = match parse_layer_data(data, &name, layer_id, tokens, paths, self) {
             Ok(parsed) => parsed,
             Err(e) => {
-                return Some(Err(AssetResolveError::LoadError(Arc::from(
-                    alloc::format!("{e}"),
-                ))));
+                let message = Arc::from(alloc::format!("{e}"));
+                // Parsers preserve unresolved arcs and continue, but a found
+                // member's decoding failure must reach the package caller.
+                // AOUSD Core §9.7: the member is part of this package read.
+                self.failure.get_or_insert(e);
+                return Some(Err(AssetResolveError::LoadError(message)));
             }
         };
 
         // The layer goes back to the parser that asked for it; the layers
         // its own parser resolved have no other way back to the caller.
         self.descendants.extend(parsed.resolved_layers);
+        self.diagnostics.extend(parsed.diagnostics);
 
         Some(Ok(ResolvedAsset {
             layer_id,
@@ -167,6 +176,8 @@ pub(crate) struct Loaded {
     /// The path in the package of each member loaded, the root layer's
     /// included.
     pub(crate) member_paths: BTreeMap<LayerId, Arc<str>>,
+    /// Diagnostics retained from each member parsed by the resolver.
+    pub(crate) diagnostics: Vec<MemberDiagnostic>,
 }
 
 impl AssetResolver for UsdzResolver<'_> {
@@ -253,6 +264,8 @@ pub(crate) struct ParsedLayer {
     /// resolving its sublayers, references and payloads. Nothing else keeps
     /// them: the caller must.
     pub(crate) resolved_layers: Vec<Layer>,
+    /// Diagnostics reported by this layer's format pipeline.
+    pub(crate) diagnostics: Vec<MemberDiagnostic>,
 }
 
 /// Parses a USD layer from raw bytes, dispatching by extension and magic.
@@ -277,8 +290,10 @@ pub(crate) fn parse_layer_data(
                 parse_usda(data, name, layer_id, tokens, paths, resolver)
             }
         }
-        _ => Err(UsdzError::LayerParseError {
-            message: Arc::from(alloc::format!("unsupported file type: {name}")),
+        _ => Err(UsdzError::LayerRead {
+            member: Arc::from(name),
+            layer_id,
+            cause: LayerReadError::UnsupportedFormat,
         }),
     }
 }
@@ -294,13 +309,23 @@ fn parse_usdc(
 ) -> Result<ParsedLayer, UsdzError> {
     let result =
         layerstack_usdc::read_usdc(data, layer_id, tokens, paths, resolver).map_err(|e| {
-            UsdzError::LayerParseError {
-                message: Arc::from(alloc::format!("USDC parse error in {name}: {e}")),
+            UsdzError::LayerRead {
+                member: Arc::from(name),
+                layer_id,
+                cause: LayerReadError::Usdc(e),
             }
         })?;
     Ok(ParsedLayer {
         layer: result.layer,
         resolved_layers: result.resolved_layers,
+        diagnostics: member_diagnostics(
+            name,
+            layer_id,
+            result
+                .diagnostics
+                .into_iter()
+                .map(ImportDiagnostic::UsdcAssemble),
+        ),
     })
 }
 
@@ -313,8 +338,10 @@ fn parse_usda(
     paths: &mut PathInterner,
     resolver: &mut dyn AssetResolver,
 ) -> Result<ParsedLayer, UsdzError> {
-    let source = core::str::from_utf8(data).map_err(|_| UsdzError::LayerParseError {
-        message: Arc::from(alloc::format!("USDA file {name} is not valid UTF-8")),
+    let source = core::str::from_utf8(data).map_err(|error| UsdzError::LayerRead {
+        member: Arc::from(name),
+        layer_id,
+        cause: LayerReadError::InvalidUtf8(error),
     })?;
 
     let cst = layerstack_usda::parser::parse_cst(source);
@@ -324,7 +351,47 @@ fn parse_usda(
     Ok(ParsedLayer {
         layer: emit_result.layer,
         resolved_layers: emit_result.resolved_layers,
+        // Keep every phase's evidence. Successful recovery is not a clean
+        // import (AOUSD Core §16.2: USDA syntax and authored values).
+        diagnostics: member_diagnostics(
+            name,
+            layer_id,
+            cst.diagnostics
+                .into_iter()
+                .map(ImportDiagnostic::UsdaParse)
+                .chain(
+                    ast_result
+                        .diagnostics
+                        .into_iter()
+                        .map(ImportDiagnostic::UsdaLower),
+                )
+                .chain(
+                    emit_result
+                        .diagnostics
+                        .into_iter()
+                        .map(ImportDiagnostic::UsdaEmit),
+                ),
+        ),
     })
+}
+
+fn member_diagnostics(
+    name: &str,
+    layer_id: LayerId,
+    diagnostics: impl Iterator<Item = ImportDiagnostic>,
+) -> Vec<MemberDiagnostic> {
+    let mut diagnostics = diagnostics.peekable();
+    if diagnostics.peek().is_none() {
+        return Vec::new();
+    }
+    let member: Arc<str> = Arc::from(name);
+    diagnostics
+        .map(|diagnostic| MemberDiagnostic {
+            member: member.clone(),
+            layer_id,
+            diagnostic,
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -649,5 +716,23 @@ mod tests {
             ]
         );
         assert_eq!(outside.asked, ["elsewhere.usda", "/abs/outside.usda"]);
+    }
+    #[test]
+    fn malformed_referenced_member_is_not_silent_success() {
+        let mut outside = Outside::new(&[]);
+        let result = try_read(
+            &[
+                (
+                    "root.usda",
+                    "#usda 1.0\ndef \"P\" (references = @broken.usdc@</Rock>) {}\n",
+                ),
+                ("broken.usdc", "not a crate"),
+            ],
+            &mut outside,
+        );
+        assert!(
+            result.is_err(),
+            "a found member that cannot decode must fail the package read"
+        );
     }
 }

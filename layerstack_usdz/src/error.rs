@@ -34,10 +34,15 @@ pub enum UsdzError {
         /// Actual CRC-32 computed from the entry data.
         actual: u32,
     },
-    /// The contained USD layer could not be parsed.
-    LayerParseError {
-        /// Description of the parse error.
-        message: Arc<str>,
+    /// A found package member could not be decoded. Recovery diagnostics
+    /// from readable members instead appear in [`crate::UsdzResult`].
+    LayerRead {
+        /// Path of the offending member inside the package.
+        member: Arc<str>,
+        /// The layer ID assigned to the member for this read.
+        layer_id: LayerId,
+        /// The original typed failure.
+        cause: LayerReadError,
     },
     /// Data too short for the expected structure.
     UnexpectedEof,
@@ -75,7 +80,7 @@ impl fmt::Display for UsdzError {
                 f,
                 "CRC-32 mismatch for {entry:?}: expected {expected:#010x}, got {actual:#010x}"
             ),
-            Self::LayerParseError { message } => write!(f, "layer parse error: {message}"),
+            Self::LayerRead { member, cause, .. } => write!(f, "layer {member:?}: {cause}"),
             Self::UnexpectedEof => write!(f, "unexpected end of data"),
             Self::LayerIdUnavailable { member } => write!(
                 f,
@@ -84,6 +89,46 @@ impl fmt::Display for UsdzError {
             Self::DuplicateLayerId { id } => {
                 write!(f, "two layers read from the package share {id:?}")
             }
+        }
+    }
+}
+
+/// A hard failure while decoding a package layer.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LayerReadError {
+    /// The binary decoder's original error, including its version or offset.
+    Usdc(layerstack_usdc::UsdcError),
+    /// USDA text was not UTF-8; the error locates the invalid bytes.
+    InvalidUtf8(core::str::Utf8Error),
+    /// The member's extension does not identify a supported USD layer format.
+    UnsupportedFormat,
+}
+
+impl fmt::Display for LayerReadError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Usdc(error) => write!(f, "USDC: {error}"),
+            Self::InvalidUtf8(error) => write!(f, "USDA is not UTF-8: {error}"),
+            Self::UnsupportedFormat => f.write_str("unsupported layer format"),
+        }
+    }
+}
+
+impl core::error::Error for LayerReadError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::Usdc(error) => Some(error),
+            Self::InvalidUtf8(error) => Some(error),
+            Self::UnsupportedFormat => None,
+        }
+    }
+}
+
+impl core::error::Error for UsdzError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
+        match self {
+            Self::LayerRead { cause, .. } => Some(cause),
+            _ => None,
         }
     }
 }

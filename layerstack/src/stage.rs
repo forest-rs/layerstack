@@ -337,18 +337,20 @@ impl Stage {
     }
 
     /// Replaces only complete local subtrees and their boundary child lists.
-    /// Supporting ancestors and siblings in the partial stage are not merged.
+    /// Supporting ancestors are not merged. Boundary children reuse the
+    /// retained indexes and the shared child-order fold.
     pub(crate) fn merge_local_subtrees(
         &mut self,
+        store: &dyn LayerStore,
         mut partial: Self,
         affected: &[PathId],
         hierarchy: &[PathId],
-        parents: &[PathId],
+        boundary_children: Vec<(PathId, Vec<PathId>)>,
     ) {
         for path in affected {
             self.prims.remove(path);
         }
-        for path in hierarchy.iter().chain(parents) {
+        for path in hierarchy {
             match partial.children.remove(path) {
                 Some(children) => {
                     self.children.insert(*path, children);
@@ -359,6 +361,21 @@ impl Stage {
             }
         }
         self.merge_prims_from(partial, affected);
+        for (parent, mut children) in boundary_children {
+            let Some(index) = self.prims.get(&parent) else {
+                self.children.remove(&parent);
+                continue;
+            };
+            if children.is_empty() {
+                self.children.remove(&parent);
+                continue;
+            }
+            crate::compose::order_local_children(store, index, &mut children);
+            // Ordinary composition orders before pruning inactive children:
+            // invisible names can delimit reorder groups of visible names.
+            children.retain(|child| self.prims.contains_key(child));
+            self.children.insert(parent, children);
+        }
     }
 
     /// Interns the names of the multiple-apply schema instances the

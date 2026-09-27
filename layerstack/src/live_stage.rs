@@ -247,8 +247,9 @@ impl LiveStage {
     /// Local prim creation and removal recompose the affected subtrees when
     /// the stage has one layer, all authored ancestors, no population mask,
     /// and no arcs, variants, relocates or instanceable specs. The work also
-    /// includes the ancestors and their direct children to preserve ordering
-    /// and pruning; a wide sibling list can therefore still be expensive.
+    /// includes ancestor composition and the changed boundary child lists to
+    /// preserve ordering and pruning. Unchanged sibling indexes are retained;
+    /// processing a wide boundary list still costs work proportional to it.
     /// Other structural edits rebuild the stage; other opinion edits use
     /// scoped composition.
     ///
@@ -429,11 +430,13 @@ impl LiveStage {
             .collect();
         parents.sort_unstable();
         parents.dedup();
-        // Only boundary parents have child lists that will be merged. Their
-        // siblings must participate in ordering and activation pruning, but
-        // higher ancestor child lists remain in the existing stage unchanged.
-        // Keep the ancestor chain for activation context without composing
-        // unrelated branches (AOUSD Core §7.6, §11.3.1).
+        // Supporting ancestors supply activation context. Boundary children
+        // are ordered separately against the retained stage; their indexes
+        // do not change merely because a sibling was added or removed.
+        let boundary_children: Vec<_> = parents
+            .iter()
+            .map(|parent| (*parent, index.children(*parent).to_vec()))
+            .collect();
         let mut seed: BTreeSet<PathId> = affected.iter().copied().collect();
         for &path in &affected {
             let mut current = store.paths().resolve(path).parent();
@@ -442,9 +445,6 @@ impl LiveStage {
                 seed.insert(parent_id);
                 current = parent.parent();
             }
-        }
-        for &parent in &parents {
-            seed.extend(index.children(parent).iter().copied());
         }
         // Deleted specs are removal candidates, not population candidates.
         // Seeding them would leave an empty child-list entry on a parent
@@ -491,7 +491,7 @@ impl LiveStage {
         let mut affected: Vec<_> = affected.into_iter().collect();
         affected.sort_unstable();
         self.stage
-            .merge_local_subtrees(partial, &affected, &hierarchy, &parents);
+            .merge_local_subtrees(store, partial, &affected, &hierarchy, boundary_children);
         self.update_prim_edges(&affected, &deps);
         for &path in &affected {
             if !self.stage.has_prim(path) {

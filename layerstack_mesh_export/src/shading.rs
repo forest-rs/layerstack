@@ -22,6 +22,7 @@
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
+use layerstack_schemas::usd_shade as shade;
 
 use layerstack_usda::writer::{Attribute, Prim, Property, Value};
 
@@ -161,7 +162,7 @@ pub(crate) fn material_prim(material: &Material<'_>, scope: &str) -> Result<Prim
         uv_sets: Vec::new(),
     };
 
-    let mut surface = Prim::def("Shader", SURFACE);
+    let mut surface = Prim::def(shade::Shader::SCHEMA, SURFACE);
     let mut shader_attrs = Vec::new();
     let attrs = &mut shader_attrs;
     attrs.push(info_id("UsdPreviewSurface"));
@@ -239,11 +240,11 @@ pub(crate) fn material_prim(material: &Material<'_>, scope: &str) -> Result<Prim
         .properties
         .extend(shader_attrs.into_iter().map(Property::Attribute));
 
-    let mut prim = Prim::def("Material", &*material.name);
+    let mut prim = Prim::def(shade::Material::SCHEMA, &*material.name);
     // `UsdShadeMaterial` `outputs:surface` (material.h:206), connected to
     // the shader's output as in the specification's sample.
     prim.push_property(
-        Attribute::declared("outputs:surface", "token")
+        Attribute::declared(shade::Material::SURFACE, "token")
             .with_connection(format!("{path}/{SURFACE}.outputs:surface")),
     );
     prim.children.push(surface);
@@ -251,7 +252,7 @@ pub(crate) fn material_prim(material: &Material<'_>, scope: &str) -> Result<Prim
         prim.children.push(texture_prim(node, &network));
     }
     for uv_set in &network.uv_sets {
-        let mut reader = Prim::def("Shader", network.reader_name(uv_set));
+        let mut reader = Prim::def(shade::Shader::SCHEMA, network.reader_name(uv_set));
         reader.push_property(info_id("UsdPrimvarReader_float2"));
         reader.push_property(Attribute::new(
             "inputs:varname",
@@ -265,7 +266,7 @@ pub(crate) fn material_prim(material: &Material<'_>, scope: &str) -> Result<Prim
 }
 
 fn info_id(id: &str) -> Attribute {
-    Attribute::new("info:id", "token", Value::Token(id.into())).uniform()
+    Attribute::new(shade::NodeDefApi::ID, "token", Value::Token(id.into())).uniform()
 }
 
 fn color<'a>(
@@ -329,7 +330,7 @@ fn float<'a>(
 }
 
 fn texture_prim(node: &TextureNode<'_>, network: &Network<'_>) -> Prim {
-    let mut prim = Prim::def("Shader", node.name);
+    let mut prim = Prim::def(shade::Shader::SCHEMA, node.name);
     let mut attrs = Vec::new();
     attrs.push(info_id("UsdUVTexture"));
     attrs.push(Attribute::new(

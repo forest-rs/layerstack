@@ -12,6 +12,12 @@ categories = ["graphics", "encoding"]
 
 [dependencies]
 layerstack = { path = "../layerstack" }
+# The schema, property and token names it authors, so an OpenUSD schema
+# change breaks the build rather than the files.
+layerstack_schemas = { default-features = false, features = [
+    "usd-geom",
+    "usd-shade",
+], path = "../layerstack_schemas" }
 layerstack_usda = { path = "../layerstack_usda" }
 layerstack_usdc = { path = "../layerstack_usdc" }
 layerstack_usdz = { path = "../layerstack_usdz" }

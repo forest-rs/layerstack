@@ -215,13 +215,14 @@ impl<'a> AssembleCtx<'a> {
         // 3. Attribute/Relationship specs (add fields to parent prims)
         // 4. VariantSet/Variant specs (handle variant structures)
 
-        // First pass: collect all spec fields by spec index.
-        let sections = self.sections;
-        let spec_fields: Vec<Fields<'a>> = sections
-            .specs
-            .iter()
-            .map(|spec| self.collect_fields(spec.fieldset_index))
-            .collect::<Result<_, _>>()?;
+        // Reuse one field vector and decode each spec when its assembly
+        // pass reaches it, so intermediate arrays do not remain alive alongside
+        // the entire assembled layer.
+        // Track visits to validate skipped/unsupported specs once at the end:
+        // bulk import still checks every authored field (AOUSD Core §16.3).
+        self.budget.charge_elements(self.sections.specs.len())?;
+        let mut decoded = alloc::vec![false; self.sections.specs.len()];
+        let mut fields = Vec::new();
 
         // Build a path-to-spec-index map grouped by prim path for child lookup.
         let mut prim_specs_map: HashMap<&str, PrimSpec> = HashMap::new();
@@ -231,7 +232,8 @@ impl<'a> AssembleCtx<'a> {
         // Process PseudoRoot specs first.
         for (i, spec) in self.sections.specs.iter().enumerate() {
             if spec.form == SpecForm::PseudoRoot {
-                self.process_pseudo_root(&spec_fields[i], &mut layer)?;
+                self.collect_spec_fields(i, &mut decoded, &mut fields)?;
+                self.process_pseudo_root(&fields, &mut layer)?;
             }
         }
 
@@ -245,7 +247,8 @@ impl<'a> AssembleCtx<'a> {
                     self.report(path_str, None, "prim spec path could not be parsed")?;
                     continue;
                 }
-                let (prim, children) = self.build_prim_spec(path_str, &spec_fields[i])?;
+                self.collect_spec_fields(i, &mut decoded, &mut fields)?;
+                let (prim, children) = self.build_prim_spec(path_str, &fields)?;
                 if let Some(children) = children {
                     property_children.insert(path_str, children);
                 }
@@ -289,10 +292,11 @@ impl<'a> AssembleCtx<'a> {
                 self.report(path_str, None, "property spec has no owning prim spec")?;
                 continue;
             };
+            self.collect_spec_fields(i, &mut decoded, &mut fields)?;
             if is_attribute {
-                self.apply_attribute_fields(path_str, &spec_fields[i], name, prim)?;
+                self.apply_attribute_fields(path_str, &fields, name, prim)?;
             } else {
-                self.apply_relationship_fields(path_str, &spec_fields[i], name, prim)?;
+                self.apply_relationship_fields(path_str, &fields, name, prim)?;
             }
         }
 
@@ -304,17 +308,23 @@ impl<'a> AssembleCtx<'a> {
                     let (prim_path, attr_name) =
                         path_str.rsplit_once('.').expect("validated property path");
                     if let Some(prim) = prim_specs_map.get_mut(prim_path) {
-                        self.apply_connection_fields(&spec_fields[i], attr_name, prim)?;
+                        self.collect_spec_fields(i, &mut decoded, &mut fields)?;
+                        self.apply_connection_fields(&fields, attr_name, prim)?;
                     }
                 }
             }
         }
 
         // Process VariantSet and Variant specs.
-        self.process_variant_specs(&spec_fields, &mut prim_specs_map)?;
+        self.process_variant_specs(&mut decoded, &mut fields, &mut prim_specs_map)?;
 
-        // Report specs of forms the layer model does not hold.
+        // Validate fields not consumed above, including malformed paths and
+        // specs the layer model does not hold, and report unsupported forms.
         for (i, spec) in self.sections.specs.iter().enumerate() {
+            if decoded[i] {
+                continue;
+            }
+            self.collect_spec_fields(i, &mut decoded, &mut fields)?;
             let handled = matches!(
                 spec.form,
                 SpecForm::PseudoRoot
@@ -325,7 +335,7 @@ impl<'a> AssembleCtx<'a> {
                     | SpecForm::VariantSet
                     | SpecForm::Variant
             );
-            if !handled && !spec_fields[i].is_empty() {
+            if !handled && !fields.is_empty() {
                 let path_str = self.lookup_path(spec.path_index)?;
                 self.report(
                     path_str,
@@ -334,6 +344,8 @@ impl<'a> AssembleCtx<'a> {
                 )?;
             }
         }
+
+        drop(fields);
 
         // Keep the authored property order (`propertyChildren`).
         //
@@ -397,20 +409,34 @@ impl<'a> AssembleCtx<'a> {
         Ok(out)
     }
 
+    /// Decodes a spec once, retaining only a flag after its fields are consumed.
+    /// Spec allocation is charged before the visit flags are allocated.
+    fn collect_spec_fields(
+        &mut self,
+        index: usize,
+        decoded: &mut [bool],
+        fields: &mut Fields<'a>,
+    ) -> Result<(), UsdcError> {
+        debug_assert!(!decoded[index], "spec decoded twice");
+        decoded[index] = true;
+        self.collect_fields(self.sections.specs[index].fieldset_index, fields)
+    }
+
     /// Collects decoded fields for a spec from the fieldsets/fields tables.
     ///
     /// Field names are borrowed from the token table: specs sharing a
     /// fieldset share its names. Each use is still charged by the name's
     /// length, since assembly matches, interns or reports it.
-    fn collect_fields(&mut self, fieldset_index: u32) -> Result<Fields<'a>, UsdcError> {
-        // A spec can become a field of its own (an attribute declared
-        // without a value), so each spec is charged too.
-        self.budget.charge(1)?;
-        let mut result = Vec::new();
+    fn collect_fields(
+        &mut self,
+        fieldset_index: u32,
+        result: &mut Fields<'a>,
+    ) -> Result<(), UsdcError> {
+        result.clear();
         let start = fieldset_index as usize;
 
         if start >= self.sections.fieldsets.len() {
-            return Ok(result);
+            return Ok(());
         }
 
         // Walk the fieldset array from the start index until we hit a
@@ -433,7 +459,7 @@ impl<'a> AssembleCtx<'a> {
             idx += 1;
         }
 
-        Ok(result)
+        Ok(())
     }
 
     /// Processes a `PseudoRoot` spec: sublayers, root prim order and layer
@@ -751,7 +777,8 @@ impl<'a> AssembleCtx<'a> {
     /// specs), §7.6.7 (variant specs), §16.3 (crate paths).
     fn process_variant_specs(
         &mut self,
-        spec_fields: &[Fields<'_>],
+        decoded: &mut [bool],
+        fields: &mut Fields<'a>,
         prim_specs: &mut HashMap<&str, PrimSpec>,
     ) -> Result<(), UsdcError> {
         // Properties directly on a variant (`/P{v=x}.b`), by variant path.
@@ -769,10 +796,11 @@ impl<'a> AssembleCtx<'a> {
             else {
                 continue;
             };
+            self.collect_spec_fields(i, decoded, fields)?;
             let property = if spec.form == SpecForm::Attribute {
-                self.build_attribute_spec(path_str, &spec_fields[i])?
+                self.build_attribute_spec(path_str, fields)?
             } else {
-                self.build_relationship_spec(path_str, &spec_fields[i])?
+                self.build_relationship_spec(path_str, fields)?
             };
             let prop_tok = self.tokens.intern(prop_name);
             set_property_vec(
@@ -819,10 +847,11 @@ impl<'a> AssembleCtx<'a> {
                 .map(|(set, variant)| (self.tokens.intern(set), self.tokens.intern(variant)))
                 .collect();
             let ((set, variant), enclosing) = chain.split_last().expect("a selection");
+            self.collect_spec_fields(i, decoded, fields)?;
             let variant_spec = if is_set {
                 None
             } else {
-                Some(self.build_variant_spec(path_str, &spec_fields[i], &mut variant_properties)?)
+                Some(self.build_variant_spec(path_str, fields, &mut variant_properties)?)
             };
             let prim = prim_specs.get_mut(owner).expect("owner checked above");
             let holder = if enclosing.is_empty() {
@@ -2382,7 +2411,14 @@ mod tests {
         raw[6] = ValueType::Vec3f as u8;
         raw[7] = 0x80;
         sections.fields[0].value_rep = raw;
-        for form in [SpecForm::Attribute, SpecForm::Mapper] {
+        for form in [
+            SpecForm::Attribute,
+            SpecForm::Relationship,
+            SpecForm::Connection,
+            SpecForm::VariantSet,
+            SpecForm::Variant,
+            SpecForm::Mapper,
+        ] {
             sections.specs[0].form = form;
             assert!(matches!(
                 assemble_within(&sections, &mut DecodeBudget::with_limit(100)),

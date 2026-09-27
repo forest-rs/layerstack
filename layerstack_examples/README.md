@@ -23,8 +23,9 @@ Small runnable programs that demonstrate how to use the `layerstack` API, and th
   opinion, schema fallbacks, `allowedTokens` enums and inherited properties, the purpose and
   visibility the arm inherits, and the raw value with its provenance)
 - `cargo run -p layerstack_examples --example world_transforms`
-  (prints the world transform, visibility and purpose of every `Gprim` of a small animated
-  orrery at two time codes, through one `XformCache` per time code)
+  (authors a small animated orrery through the transform op API, then prints the world
+  transform, visibility and purpose of every `Gprim` at two time codes, through one `XformCache`
+  per time code)
 - `cargo run -p layerstack_examples --example light_rig_slots`
   (sparse edits to a typed `Vec` of light rig slots with `opinionated` alone: insert a light,
   duplicate the last slot, and resize with an unlit light as the host-supplied fill)

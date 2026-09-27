@@ -6,9 +6,9 @@
 //! `layerstack_schemas` generates a view of every OpenUSD schema over a
 //! composed stage, and an edit handle that authors it. This example:
 //!
-//! 1. authors a robot in a base layer through edit handles: a `Mesh` arm, a
-//!    `SphereLight` with its built-in `LightAPI`, and a `CollectionAPI`
-//!    instance naming the light;
+//! 1. authors a robot in a base layer through edit handles: a `Mesh` arm,
+//!    placed by transform ops, a `SphereLight` with its built-in
+//!    `LightAPI`, and a `CollectionAPI` instance naming the light;
 //! 2. overrides the arm in a stronger shot layer, through the same handles
 //!    and another edit target;
 //! 3. reads the composed result through the views: the strongest opinion,
@@ -32,7 +32,7 @@ use layerstack_schemas::usd_geom::{
     Gprim, ImageablePurpose, Mesh, MeshEdit, MeshSubdivisionScheme, Xform, XformEdit,
 };
 use layerstack_schemas::usd_lux::SphereLight;
-use layerstack_schemas::{Scene, SchemaEdit, Time};
+use layerstack_schemas::{Scene, SchemaEdit, Time, XformOpPrecision, XformOpType};
 
 fn main() {
     // The shot layer (1) is the root; the base layer (2) is its weaker
@@ -71,6 +71,27 @@ fn main() {
             ],
         )
         .set_display_color(&mut edit, &[[0.5, 0.5, 0.5]]);
+    // Place the arm: raised, then swung about Y over time. The handle
+    // derefs to `XformableEdit`, which authors transform ops; the last op
+    // listed applies first.
+    let arm_ops = MeshEdit::new(&edit, arm).expect("defined above");
+    arm_ops
+        .add_translate_op(&mut edit, XformOpPrecision::Double)
+        .expect("a new translate")
+        .set(&mut edit, [0.0, 1.5, 0.0])
+        .expect("a vector");
+    let swing = arm_ops
+        .add_op(
+            &mut edit,
+            XformOpType::RotateY,
+            XformOpPrecision::Float,
+            None,
+            false,
+        )
+        .expect("a new rotateY");
+    for (time, degrees) in [(0.0, 0.0), (24.0, 90.0)] {
+        swing.set_at(&mut edit, time, degrees).expect("degrees");
+    }
     SphereLight::define(&mut edit, key)
         .set_radius(&mut edit, 0.25)
         .light_api()
@@ -135,10 +156,16 @@ fn main() {
         "  guide visibility  = {:?}",
         mesh.compute_effective_visibility(&ImageablePurpose::Guide, Time::Default)
     );
-    // Nothing authors transform ops here, so the world transform is the
-    // identity; `world_transforms` shows transforms in motion.
+    // The ops the arm's `xformOpOrder` lists, and where they put it.
+    let ops: Vec<&str> = mesh
+        .ordered_xform_ops()
+        .ops
+        .iter()
+        .map(|op| op.name)
+        .collect();
+    println!("  xformOpOrder      = {ops:?}");
     println!(
-        "  local-to-world    = {:?}",
+        "  local-to-world at 24 = {:?}",
         mesh.compute_local_to_world(Time::at(24.0))
     );
 

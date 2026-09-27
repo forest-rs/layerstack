@@ -19,7 +19,7 @@
 //! [`XformCache`] per time and through the views, visibility, effective
 //! visibility for each purpose, and purpose info.
 //!
-//! Matrices agree to within `TOLERANCE` times the largest entry of
+//! Matrices agree to within `matrices::TOLERANCE` times the largest entry of
 //! OpenUSD's (at least 1). Both compute each op and product as `Gf` does,
 //! step for step; they differ only where the platform's `sin`, `cos` and
 //! `acos` round differently from `libm`'s and where the C++ compiler fuses
@@ -32,6 +32,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use layerstack::{PathId, Stage, StageOptions};
+use layerstack_conformance::matrices::{TOLERANCE, relative_error};
 use layerstack_conformance::usda_real::load_entry_usda;
 use layerstack_conformance::workspace_root;
 use layerstack_schemas::usd_geom::{Imageable, ImageablePurpose, Xformable};
@@ -39,9 +40,6 @@ use layerstack_schemas::{Scene, Time, XformCache};
 use serde::Deserialize;
 
 const ORACLE: &str = include_str!("../fixtures/xform/oracle.json");
-
-/// The largest difference allowed, relative to the matrix's scale.
-const TOLERANCE: f64 = 1e-12;
 
 #[derive(Deserialize)]
 struct Oracle {
@@ -78,54 +76,6 @@ fn time(key: &str) -> Time {
         Some(("held", code)) => Time::held(code.parse().expect("a time code")),
         Some(_) => panic!("no time {key}"),
     }
-}
-
-/// How far `got` is from `expected`, relative to the scale of
-/// `expected`: infinite when either has a non-finite entry the other does
-/// not have in the same place (`f64::max` would drop a NaN).
-fn error(got: &[[f64; 4]; 4], expected: &[[f64; 4]; 4]) -> f64 {
-    let scale = expected
-        .iter()
-        .flatten()
-        .filter(|v| v.is_finite())
-        .fold(1.0_f64, |m, v| m.max(v.abs()));
-    let mut worst = 0.0_f64;
-    for (a, b) in got.iter().flatten().zip(expected.iter().flatten()) {
-        let e = if a.is_finite() && b.is_finite() {
-            (a - b).abs() / scale
-        } else if (a.is_nan() && b.is_nan()) || a == b {
-            0.0
-        } else {
-            f64::INFINITY
-        };
-        if e > worst {
-            worst = e;
-        }
-    }
-    worst
-}
-
-/// The comparator fails on a NaN or infinity the other side lacks.
-#[test]
-fn the_comparator_rejects_non_finite_entries() {
-    let identity = [
-        [1.0, 0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0, 0.0],
-        [0.0, 0.0, 1.0, 0.0],
-        [0.0, 0.0, 0.0, 1.0],
-    ];
-    let nan = [[f64::NAN; 4]; 4];
-    assert_eq!(error(&identity, &identity), 0.0, "equal");
-    assert!(error(&nan, &identity) > TOLERANCE, "NaN got");
-    assert!(error(&identity, &nan) > TOLERANCE, "NaN expected");
-    assert_eq!(error(&nan, &nan), 0.0, "NaN in the same places");
-    let mut infinite = identity;
-    infinite[3][0] = f64::INFINITY;
-    assert!(error(&infinite, &identity) > TOLERANCE, "infinity got");
-    assert_eq!(error(&infinite, &infinite), 0.0, "the same infinity");
-    let mut off = identity;
-    off[3][0] = 1e-9;
-    assert!(error(&off, &identity) > TOLERANCE, "a small difference");
 }
 
 #[test]
@@ -187,7 +137,7 @@ fn transforms_visibility_and_purpose_match_openusd() {
             match (&sample.local, &xformable) {
                 (Some(expected), Some(xformable)) => {
                     let local = xformable.local_transform(time);
-                    let e = error(&local.matrix, expected);
+                    let e = relative_error(&local.matrix, expected);
                     worst = worst.max(e);
                     checks += 1;
                     if e > TOLERANCE {
@@ -209,7 +159,7 @@ fn transforms_visibility_and_purpose_match_openusd() {
             }
 
             let world = cache.local_to_world(&scene, path).expect("on the stage");
-            let e = error(&world, &sample.world);
+            let e = relative_error(&world, &sample.world);
             worst = worst.max(e);
             checks += 1;
             if e > TOLERANCE {

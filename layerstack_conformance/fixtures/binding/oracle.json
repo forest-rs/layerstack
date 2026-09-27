@@ -1066,6 +1066,162 @@
     "relationship": "/Ordered.material:binding:collection:z"
    }
   },
+  "/Predicates": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Predicates/Part": {
+   "all@legacy": {
+    "material": "/Looks/Full",
+    "relationship": "/Predicates/Part.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Full",
+    "relationship": "/Predicates/Part.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Full",
+    "relationship": "/Predicates/Part.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Full",
+    "relationship": "/Predicates/Part.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Full",
+    "relationship": "/Predicates/Part.material:binding"
+   },
+   "preview@strict": {
+    "material": "/Looks/Full",
+    "relationship": "/Predicates/Part.material:binding"
+   }
+  },
+  "/Predicates/Part/Body": {
+   "all@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Predicates.material:binding:collection:meshes"
+   },
+   "all@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Predicates.material:binding:collection:meshes"
+   },
+   "full@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Predicates.material:binding:collection:meshes"
+   },
+   "full@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Predicates.material:binding:collection:meshes"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Predicates.material:binding:collection:meshes"
+   },
+   "preview@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Predicates.material:binding:collection:meshes"
+   }
+  },
+  "/Predicates/Part/Skip": {
+   "all@legacy": {
+    "material": "/Looks/Full",
+    "relationship": "/Predicates/Part.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Full",
+    "relationship": "/Predicates/Part.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Full",
+    "relationship": "/Predicates/Part.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Full",
+    "relationship": "/Predicates/Part.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Full",
+    "relationship": "/Predicates/Part.material:binding"
+   },
+   "preview@strict": {
+    "material": "/Looks/Full",
+    "relationship": "/Predicates/Part.material:binding"
+   }
+  },
+  "/Predicates/Plain": {
+   "all@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Predicates.material:binding:collection:joined"
+   },
+   "all@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Predicates.material:binding:collection:joined"
+   },
+   "full@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Predicates.material:binding:collection:joined"
+   },
+   "full@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Predicates.material:binding:collection:joined"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Predicates.material:binding:collection:joined"
+   },
+   "preview@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Predicates.material:binding:collection:joined"
+   }
+  },
+  "/Predicates/Plain/Leaf": {
+   "all@legacy": {
+    "material": "/Looks/Preview",
+    "relationship": "/Predicates.material:binding:collection:loop"
+   },
+   "all@strict": {
+    "material": "/Looks/Preview",
+    "relationship": "/Predicates.material:binding:collection:loop"
+   },
+   "full@legacy": {
+    "material": "/Looks/Preview",
+    "relationship": "/Predicates.material:binding:collection:loop"
+   },
+   "full@strict": {
+    "material": "/Looks/Preview",
+    "relationship": "/Predicates.material:binding:collection:loop"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Preview",
+    "relationship": "/Predicates.material:binding:collection:loop"
+   },
+   "preview@strict": {
+    "material": "/Looks/Preview",
+    "relationship": "/Predicates.material:binding:collection:loop"
+   }
+  },
   "/Purposes": {
    "all@legacy": {
     "material": "/Looks/Red",
@@ -1755,7 +1911,13 @@
     "/Referenced/Grouped",
     "/Referenced/Plain",
     "/Ordered",
-    "/Ordered/Child"
+    "/Ordered/Child",
+    "/Predicates",
+    "/Predicates/Part",
+    "/Predicates/Part/Body",
+    "/Predicates/Part/Skip",
+    "/Predicates/Plain",
+    "/Predicates/Plain/Leaf"
    ],
    "mode": "automatic",
    "uses_rule_map": true
@@ -1868,7 +2030,13 @@
     "/Referenced/Grouped",
     "/Referenced/Plain",
     "/Ordered",
-    "/Ordered/Child"
+    "/Ordered/Child",
+    "/Predicates",
+    "/Predicates/Part",
+    "/Predicates/Part/Body",
+    "/Predicates/Part/Skip",
+    "/Predicates/Plain",
+    "/Predicates/Plain/Leaf"
    ],
    "mode": "automatic",
    "uses_rule_map": true
@@ -1879,6 +2047,36 @@
    ],
    "mode": "automatic",
    "uses_rule_map": true
+  },
+  "/Predicates.collection:joined": {
+   "included": [
+    "/Predicates/Part",
+    "/Predicates/Plain"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": false
+  },
+  "/Predicates.collection:loop": {
+   "included": [
+    "/Predicates/Plain/Leaf"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": false
+  },
+  "/Predicates.collection:meshes": {
+   "included": [
+    "/Predicates/Part/Body",
+    "/Predicates/Plain/Leaf"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": false
+  },
+  "/Predicates.collection:parts": {
+   "included": [
+    "/Predicates/Part"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": false
   },
   "/Referenced.collection:group": {
    "included": [

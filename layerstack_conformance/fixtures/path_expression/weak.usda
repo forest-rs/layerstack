@@ -1,0 +1,9 @@
+#usda 1.0
+(
+    doc = "A sublayer of scene.usda: the weaker expression its `%_` composes over."
+)
+
+over "Expressions"
+{
+    pathExpression collection:layered:membershipExpression = "/Other//"
+}

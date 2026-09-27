@@ -1,0 +1,386 @@
+{
+ "$:a{^": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "$^)1?": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "()": {
+  "reason": "an empty group or branch",
+  "tag": "undefined"
+ },
+ "()*": {
+  "reason": "an empty group or branch",
+  "tag": "undefined"
+ },
+ "(a)\\1": {
+  "reason": "`\\` before an ordinary character",
+  "tag": "undefined"
+ },
+ "({)": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ ")": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ ")$})": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ ")).]}": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ ")-": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ ")2{b*2a": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ ")?)": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ ")\\]a-": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ ")]??+": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ ")]a*.-": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ ")^": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "**r${": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "*,{": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "*]\\\\a{-": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ ",]^\\r": {
+  "reason": "`\\` before an ordinary character",
+  "tag": "undefined"
+ },
+ ",{": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ ",{?:": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "-()r": {
+  "reason": "an empty group or branch",
+  "tag": "undefined"
+ },
+ "-)": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "-),$": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "-)?.)]-": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "-1)?|b^": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ ".)b?^]": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ ".?{+": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "1)a\\\\]1": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "11\\2ar": {
+  "reason": "`\\` before an ordinary character",
+  "tag": "undefined"
+ },
+ "1\\aa": {
+  "reason": "`\\` before an ordinary character",
+  "tag": "undefined"
+ },
+ "1a)r": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "1b^r**)": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "1r.:)": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "21)": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "2b)a\\?": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "2{": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ ":.^2\\-": {
+  "reason": "`\\` before an ordinary character",
+  "tag": "undefined"
+ },
+ ":\\\\\\[{}": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ ":{": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ ":{a": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "?$\\,": {
+  "reason": "`\\` before an ordinary character",
+  "tag": "undefined"
+ },
+ "?)-+:": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "?)2$*.": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "?\\2.": {
+  "reason": "`\\` before an ordinary character",
+  "tag": "undefined"
+ },
+ "?{.": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "[[=a=]]": {
+  "reason": "an equivalence class `[=x=]`",
+  "tag": "unsupported"
+ },
+ "\\(),ab^": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "\\,*]+": {
+  "reason": "`\\` before an ordinary character",
+  "tag": "undefined"
+ },
+ "\\-": {
+  "reason": "`\\` before an ordinary character",
+  "tag": "undefined"
+ },
+ "\\a": {
+  "reason": "`\\` before an ordinary character",
+  "tag": "undefined"
+ },
+ "\\a2.|?{": {
+  "reason": "`\\` before an ordinary character",
+  "tag": "undefined"
+ },
+ "\\a]a": {
+  "reason": "`\\` before an ordinary character",
+  "tag": "undefined"
+ },
+ "\\b]]-2a": {
+  "reason": "`\\` before an ordinary character",
+  "tag": "undefined"
+ },
+ "\\q": {
+  "reason": "`\\` before an ordinary character",
+  "tag": "undefined"
+ },
+ "])+b]2": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "]+]{ra.": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "].{": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "]{": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "]{,}": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "]|r)?": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "^):": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "^)\\,)": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "^,{b.)": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "^-{?b^?": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "^2?){": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "^:-):*": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "^\\-*": {
+  "reason": "`\\` before an ordinary character",
+  "tag": "undefined"
+ },
+ "^\\-*?.": {
+  "reason": "`\\` before an ordinary character",
+  "tag": "undefined"
+ },
+ "^{.]": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "^}a.)": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "a{": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "a{x}": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "b?\\2$]": {
+  "reason": "`\\` before an ordinary character",
+  "tag": "undefined"
+ },
+ "b|$)a$": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "b|)": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "b}{r\\{": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "r)": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "r*b})}": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ },
+ "r^-{\\,": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "r{": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "{": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "{*:,+": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "{*|\\\\^": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "{,$2": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "{?": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "{?)})b": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "{?b.1)a": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "{]": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "{|:)?": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "{}": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "}2\\-r": {
+  "reason": "`\\` before an ordinary character",
+  "tag": "undefined"
+ },
+ "}^b{": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "}{": {
+  "reason": "a `{` that starts no interval",
+  "tag": "undefined"
+ },
+ "}}?)\\:^": {
+  "reason": "an unmatched `)`",
+  "tag": "undefined"
+ }
+}

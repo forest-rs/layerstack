@@ -7,8 +7,10 @@
 //! several depths, both binding strengths and their conflicts, purposes and
 //! their fallback, bindings on prims without `MaterialBindingAPI`,
 //! collections with each expansion rule, excludes, `includeRoot`, nested and
-//! circular inclusions and a `relationship` mode, a collection decided by
-//! its `membershipExpression`, bindings to a non-`Material`, a missing prim
+//! circular inclusions and a `relationship` mode, collections decided by
+//! their `membershipExpression` (by path, by the `kind` and `isa`
+//! predicates, through references to other collections and a reference
+//! cycle, on `/Exprs` and `/Predicates`), bindings to a non-`Material`, a missing prim
 //! and through relationship forwarding, and overrides through a reference
 //! (`asset.usda`). `scripts/binding_oracle.py` records what OpenUSD 26.08
 //! computes in `oracle.json`:
@@ -273,8 +275,9 @@ fn stale(cache: &mut BindingCache, scene: &Scene<'_>, prims: &[PathId], step: &s
 /// A cache kept across edits agrees with a fresh one after each edit, once
 /// the edit is invalidated as `BindingCache` documents: a binding
 /// retargeted, a binding made stronger, an include removed from a
-/// collection another collection includes, an include added, and
-/// `reorder properties` changed.
+/// collection another collection includes, an include added, the
+/// expression of a collection another's expression references changed,
+/// and `reorder properties` changed.
 #[test]
 fn binding_caches_follow_edits() {
     use layerstack::edit::{EditTarget, Transaction};
@@ -361,9 +364,30 @@ fn binding_caches_follow_edits() {
     let scene = Scene::new(live.stage(), store);
     failures.extend(stale(&mut cache, &scene, &prims, "include added"));
 
+    // `/Predicates.collection:joined` references `parts`: changing `parts`'s
+    // expression changes `joined`, which only `parts`'s invalidation names.
+    let parts_expression = property(
+        store,
+        "/Predicates",
+        "collection:parts:membershipExpression",
+    );
+    let parts = property(store, "/Predicates", "collection:parts");
+    let leaf = store.path("/Predicates/Plain/Leaf");
+    let red = store.path("/Looks/Red");
+    let mut tx = Transaction::new();
+    tx.set_default(
+        target.property(parts_expression),
+        Value::PathExpression("/Predicates/Plain//{isa:Mesh}".into()),
+    );
+    live.apply(store, &tx).expect("edits an expression");
+    cache.invalidate_collection(parts);
+    let scene = Scene::new(live.stage(), store);
+    failures.extend(stale(&mut cache, &scene, &prims, "expression edited"));
+    let bound = cache.compute_bound_material(&scene, leaf);
+    assert_eq!(bound.material, Some(red), "`joined` reads `parts`");
+
     // Put `/Ordered`'s `a` binding before `z`.
     let ordered = store.path("/Ordered");
-    let red = store.path("/Looks/Red");
     let a = store.tokens.intern("material:binding:collection:a");
     let z = store.tokens.intern("material:binding:collection:z");
     store

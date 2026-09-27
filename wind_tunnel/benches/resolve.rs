@@ -43,12 +43,14 @@ fn float_array(len: usize, scale: f32) -> Value {
     Value::Array((0..len).map(|i| Value::Float(i as f32 * scale)).collect())
 }
 
-fn write_edit(index: usize, value: f32) -> Value {
+fn write_edit(index: usize, value: f32, instructions: usize) -> Value {
     Value::ArrayEdit(ArrayEdit {
-        ops: vec![ArrayEditOp::Write {
-            src: ArrayEditOperand::Literal(Value::Float(value)),
-            index: ArrayIndex::Position(index as i64),
-        }],
+        ops: (0..instructions)
+            .map(|offset| ArrayEditOp::Write {
+                src: ArrayEditOperand::Literal(Value::Float(value)),
+                index: ArrayIndex::Position((index + offset) as i64),
+            })
+            .collect(),
     })
 }
 
@@ -56,7 +58,7 @@ fn write_edit(index: usize, value: f32) -> Value {
 ///
 /// The weakest sublayer authors dense arrays; every stronger one authors
 /// sparse edits, a scalar, a dictionary entry and a token list op.
-fn build(layers: u64, points_len: usize) -> Scene {
+fn build(layers: u64, points_len: usize, instructions: usize) -> Scene {
     let mut store = InMemoryStore::default();
     let points = store.tokens.intern("points");
     let animated = store.tokens.intern("animated");
@@ -86,8 +88,11 @@ fn build(layers: u64, points_len: usize) -> Scene {
             )
         } else {
             (
-                write_edit(i, i as f32),
-                vec![(0.0, write_edit(i, 0.0)), (10.0, write_edit(i, 10.0))],
+                write_edit(i, i as f32, instructions),
+                vec![
+                    (0.0, write_edit(i, 0.0, instructions)),
+                    (10.0, write_edit(i, 10.0, instructions)),
+                ],
             )
         };
         let entry = Value::Dictionary(vec![(
@@ -137,7 +142,7 @@ fn build(layers: u64, points_len: usize) -> Scene {
 }
 
 fn bench_resolve(c: &mut Criterion) {
-    let scene = build(LAYERS, POINTS);
+    let scene = build(LAYERS, POINTS, 1);
     let stage = &scene.stage;
     let mut group = c.benchmark_group("resolve");
 
@@ -175,7 +180,7 @@ fn bench_resolve(c: &mut Criterion) {
     // Tiny arrays expose planning costs; large arrays include materialization.
     // Two layers give a dense-only series; deeper stacks add sparse opinions.
     for (layers, points) in [(2, 1), (20, 1), (100, 1), (100, 1_000)] {
-        let scene = build(layers, points);
+        let scene = build(layers, points, 1);
         group.bench_function(format!("temporal/{layers}_layers/{points}_elements"), |b| {
             b.iter(|| {
                 black_box(scene.stage.resolve_property_path_at_time(
@@ -186,6 +191,22 @@ fn bench_resolve(c: &mut Criterion) {
             });
         });
     }
+
+    // Multi-instruction programs separate authored-edit copying from the
+    // planner's per-source costs. All writes fit in the dense array.
+    let scene = build(20, 1_000, 64);
+    group.bench_function("sparse_program_default", |b| {
+        b.iter(|| black_box(scene.stage.resolve_property_path(black_box(scene.points))));
+    });
+    group.bench_function("sparse_program_linear", |b| {
+        b.iter(|| {
+            black_box(scene.stage.resolve_property_path_at_time(
+                black_box(scene.animated),
+                black_box(2.5),
+                InterpolationType::Linear,
+            ))
+        });
+    });
 
     group.finish();
 }

@@ -32,9 +32,9 @@ struct CounterFamily;
 
 impl OpinionFamily<CounterOp> for CounterFamily {
     type Value = i64;
-    type Edit = i64;
+    type Edit<'op> = i64;
 
-    fn classify(&self, op: &CounterOp) -> FamilyMember<Self::Value, Self::Edit> {
+    fn classify(&self, op: &CounterOp) -> FamilyMember<Self::Value, Self::Edit<'_>> {
         match op {
             CounterOp::Total(total) => FamilyMember::Dense(*total),
             CounterOp::Delta(delta) => FamilyMember::Sparse(*delta),
@@ -48,7 +48,10 @@ impl OpinionFamily<CounterOp> for CounterFamily {
         }
     }
 
-    fn apply(&self, edit: Self::Edit, base: Self::Value) -> Self::Value {
+    fn apply<'op>(&self, edit: Self::Edit<'op>, base: Self::Value) -> Self::Value
+    where
+        CounterOp: 'op,
+    {
         base + edit
     }
 

@@ -125,6 +125,13 @@ them sparse until a dense value or block ends the chain. `layerstack` uses
 `ArrayEdit<Value>` for USD sparse array edits and derives the fill from the
 property's type.
 
+Sparse-family adapters choose ownership through `OpinionFamily::Edit<'op>`:
+it can be a reference into the classified operation or an owned, synthesized
+edit. The shared fold keeps sparse edits until it reaches a dense value or
+block, then applies them weakest-first. Dense results remain owned so edits
+can modify them in place. Borrowing changes neither lazy cutoff nor the
+provenance reported by the diagnostic entry point.
+
 ## Temporal composition
 
 `TemporalPlanner` accepts already ordered sources, one bracket at a time. It

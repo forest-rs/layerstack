@@ -189,8 +189,8 @@ enum SparseValueFamily {
 /// materialization (`minsize`/`resize` fill values) during apply.
 ///
 /// Because the kernel pulls opinions lazily and stops at the first dense
-/// member or block, opinions hidden behind them are never cloned, and each
-/// participating value is cloned exactly once.
+/// member or block, opinions hidden behind them are never cloned, and sparse
+/// edit programs are borrowed. Only the winning dense base is cloned.
 #[derive(Clone, Copy, Debug)]
 struct ArrayFamily<'a> {
     /// Typed property metadata for edit materialization.
@@ -200,10 +200,10 @@ struct ArrayFamily<'a> {
 }
 
 impl ArrayFamily<'_> {
-    fn classify_value(value: &Value) -> FamilyMember<Vec<Value>, ArrayEdit> {
+    fn classify_value(value: &Value) -> FamilyMember<Vec<Value>, &ArrayEdit> {
         match value {
             Value::Array(items) => FamilyMember::Dense(items.clone()),
-            Value::ArrayEdit(edit) => FamilyMember::Sparse(edit.clone()),
+            Value::ArrayEdit(edit) => FamilyMember::Sparse(edit),
             // A sampled block blocks exactly like an authored default block,
             // wherever it is the held sample. OpenUSD 26.08 lets opinions
             // weaker than a held sampled block show through when the block's
@@ -217,7 +217,7 @@ impl ArrayFamily<'_> {
         }
     }
 
-    fn foreign() -> FamilyMember<Vec<Value>, ArrayEdit> {
+    fn foreign<'op>() -> FamilyMember<Vec<Value>, &'op ArrayEdit> {
         // `OpinionKind` cannot name domain families, so the reason degrades
         // to a set-over-set mismatch. The reason is never observed: the lean
         // kernel entry point records no events.
@@ -230,9 +230,9 @@ impl ArrayFamily<'_> {
 
 impl OpinionFamily<Opinion> for ArrayFamily<'_> {
     type Value = Vec<Value>;
-    type Edit = ArrayEdit;
+    type Edit<'op> = &'op ArrayEdit;
 
-    fn classify(&self, opinion: &Opinion) -> FamilyMember<Self::Value, Self::Edit> {
+    fn classify<'op>(&self, opinion: &'op Opinion) -> FamilyMember<Self::Value, Self::Edit<'op>> {
         // A default-time query reads only the default slot.
         //
         // Spec: AOUSD Core §12.3.1 (default values).
@@ -242,7 +242,10 @@ impl OpinionFamily<Opinion> for ArrayFamily<'_> {
         }
     }
 
-    fn apply(&self, edit: Self::Edit, base: Self::Value) -> Self::Value {
+    fn apply<'op>(&self, edit: Self::Edit<'op>, base: Self::Value) -> Self::Value
+    where
+        Opinion: 'op,
+    {
         let mut value = base;
         edit.apply_in_place(&mut value, PropertyTypeFill(self.property_type));
         value
@@ -684,15 +687,24 @@ struct PickedArrayFamily<'a> {
 
 impl<'o> OpinionFamily<Bracket<'o>> for PickedArrayFamily<'_> {
     type Value = Vec<Value>;
-    type Edit = ArrayEdit;
+    type Edit<'op>
+        = &'op ArrayEdit
+    where
+        Bracket<'o>: 'op;
 
-    fn classify(&self, bracket: &Bracket<'o>) -> FamilyMember<Self::Value, Self::Edit> {
+    fn classify<'op>(
+        &self,
+        bracket: &'op Bracket<'o>,
+    ) -> FamilyMember<Self::Value, Self::Edit<'op>> {
         bracket
             .sample(self.picks[bracket.index])
             .map_or_else(ArrayFamily::foreign, ArrayFamily::classify_value)
     }
 
-    fn apply(&self, edit: Self::Edit, base: Self::Value) -> Self::Value {
+    fn apply<'op>(&self, edit: Self::Edit<'op>, base: Self::Value) -> Self::Value
+    where
+        Bracket<'o>: 'op,
+    {
         self.array.apply(edit, base)
     }
 

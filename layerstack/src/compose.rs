@@ -6659,6 +6659,20 @@ struct ArcVariantSnapshot {
     entries: Vec<(TokenId, OpinionValue, Option<PropertyType>)>,
 }
 
+fn snapshot_selected_branches<'a>(
+    spec: &'a crate::doc::PrimSpec,
+    selections: &'a HashMap<TokenId, TokenId>,
+    source: PathId,
+) -> impl Iterator<Item = ArcVariantSnapshot> + 'a {
+    spec.selected_variant_branches(selections)
+        .map(move |branch| ArcVariantSnapshot {
+            sites: branch.sites(&spec.outer_variant_sites, source),
+            entries: composed_entries(&branch.spec.fields, &branch.spec.properties)
+                .map(|entry| (entry.name(), entry.value(), entry.property_type().cloned()))
+                .collect(),
+        })
+}
+
 fn snapshot_class_specs(
     store: &dyn LayerStore,
     fallbacks: &VariantFallbacks,
@@ -6689,16 +6703,7 @@ fn snapshot_class_specs(
                         source,
                     )
                 });
-                spec.selected_variant_branches(selections)
-                    .map(|branch| ArcVariantSnapshot {
-                        sites: branch.sites(&spec.outer_variant_sites, source),
-                        entries: composed_entries(&branch.spec.fields, &branch.spec.properties)
-                            .map(|entry| {
-                                (entry.name(), entry.value(), entry.property_type().cloned())
-                            })
-                            .collect(),
-                    })
-                    .collect()
+                snapshot_selected_branches(spec, selections, source).collect()
             };
             snapshots.push((source, dest, ArcSpecSnapshot::new(spec), branches));
         }
@@ -7391,72 +7396,70 @@ impl LateBranches {
         for (at, layer_id) in arc.remote_stack.layers.iter().copied().enumerate() {
             let layer_strength = u16::try_from(at).unwrap_or(u16::MAX);
             let layer_offset = arc.layer_offset.compose(arc.remote_stack.offset_at(at));
-            let specs: Vec<crate::doc::PrimSpec> = store
+            // Borrow the source specs while selecting branches, then detach
+            // only the opinions this pass will register. Unselected branches
+            // and the already registered base opinions need no copies.
+            let branches: Vec<_> = store
                 .layer(layer_id)
-                .map(|layer| layer.prim_specs(remote_path).cloned().collect())
-                .unwrap_or_default();
-            for spec in &specs {
-                for branch in spec.selected_variant_branches(&selections) {
-                    let sites = branch.sites(&spec.outer_variant_sites, remote_path);
-                    let node = nodes.variant_node(store, out, dest, &sites);
-                    let key = OpinionKey {
-                        node,
-                        layer_strength,
-                        layer_id,
-                        lookup_path: remote_path,
-                        spec_path: normalized_variant_spec_path(
+                .into_iter()
+                .flat_map(|layer| layer.prim_specs(remote_path))
+                .flat_map(|spec| snapshot_selected_branches(spec, &selections, remote_path))
+                .collect();
+            for branch in branches {
+                let sites = branch.sites;
+                let node = nodes.variant_node(store, out, dest, &sites);
+                let key = OpinionKey {
+                    node,
+                    layer_strength,
+                    layer_id,
+                    lookup_path: remote_path,
+                    spec_path: normalized_variant_spec_path(
+                        store,
+                        remote_path,
+                        &sites,
+                        arc.provenance_remap,
+                    ),
+                };
+                out.get_mut(&dest)
+                    .expect("path exists")
+                    .add_source(key.clone());
+                for (field, mut value, property_type) in branch.entries {
+                    let key = key
+                        .clone()
+                        .with_spec_path(normalized_variant_property_spec_path(
                             store,
                             remote_path,
                             &sites,
+                            field,
                             arc.provenance_remap,
-                        ),
-                    };
-                    out.get_mut(&dest)
-                        .expect("path exists")
-                        .add_source(key.clone());
-                    for entry in composed_entries(&branch.spec.fields, &branch.spec.properties) {
-                        let key =
-                            key.clone()
-                                .with_spec_path(normalized_variant_property_spec_path(
-                                    store,
-                                    remote_path,
-                                    &sites,
-                                    entry.name(),
-                                    arc.provenance_remap,
-                                ));
-                        let mut value = entry.value();
-                        let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
-                        map_arc_targets(
-                            store,
-                            &mut value,
-                            ArcPathMap {
-                                arc: arc.arc,
-                                source: &target_root,
-                                map: &|store, path| targets.map(store, path),
-                            },
-                            TargetOwner {
-                                prim: dest,
-                                property: entry.name(),
-                                layer: layer_id,
-                                spec: key.spec_path.clone(),
-                            },
-                            cycles,
-                        );
-                        let index = out.get_mut(&dest).expect("path exists");
-                        if let Some(property_type) = entry.property_type() {
-                            index.add_property_type(
-                                entry.name(),
-                                key.clone(),
-                                property_type.clone(),
-                            );
-                        }
-                        index.add_opinion(Opinion {
-                            key,
-                            field: entry.name(),
-                            value,
-                            layer_offset,
-                        });
+                        ));
+                    let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
+                    map_arc_targets(
+                        store,
+                        &mut value,
+                        ArcPathMap {
+                            arc: arc.arc,
+                            source: &target_root,
+                            map: &|store, path| targets.map(store, path),
+                        },
+                        TargetOwner {
+                            prim: dest,
+                            property: field,
+                            layer: layer_id,
+                            spec: key.spec_path.clone(),
+                        },
+                        cycles,
+                    );
+                    let index = out.get_mut(&dest).expect("path exists");
+                    if let Some(property_type) = property_type {
+                        index.add_property_type(field, key.clone(), property_type);
                     }
+                    index.add_opinion(Opinion {
+                        key,
+                        field,
+                        value,
+                        layer_offset,
+                    });
                 }
             }
         }

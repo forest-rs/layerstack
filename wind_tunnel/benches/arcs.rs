@@ -171,31 +171,55 @@ fn bench_arc_edits(c: &mut Criterion) {
     group.finish();
 }
 
-fn bench_inherit_payload(c: &mut Criterion) {
-    let mut group = c.benchmark_group("nested_arcs_unrelated_array");
-    for &len in &[0, 65_536] {
-        group.bench_with_input(BenchmarkId::from_parameter(len), &len, |b, &len| {
-            b.iter_batched(
-                || {
-                    let mut store = build_forest(100);
-                    let unrelated = store.path("/Unrelated");
-                    let points = store.tokens.intern("points");
-                    store.layers.get_mut(&LayerId(1)).unwrap().insert_prim(
-                        unrelated,
-                        PrimSpec::def().with_field(
-                            points,
-                            Value::Array(vec![Value::Vec3f([1.0, 2.0, 3.0]); len]),
-                        ),
-                    );
-                    store
-                },
-                |mut store| Stage::compose(&mut store, LayerId(1), StageOptions::default()),
-                BatchSize::LargeInput,
-            );
-        });
+fn bench_arc_payloads(c: &mut Criterion) {
+    let mut group = c.benchmark_group("nested_arcs_array");
+    for location in ["unrelated", "unselected_variant"] {
+        for &len in &[0, 65_536] {
+            group.bench_with_input(BenchmarkId::new(location, len), &len, |b, &len| {
+                b.iter_batched(
+                    || {
+                        let mut store = build_forest(100);
+                        let points = store.tokens.intern("points");
+                        let value = Value::Array(vec![Value::Vec3f([1.0, 2.0, 3.0]); len]);
+                        if location == "unselected_variant" {
+                            let tree = store.path("/Tree");
+                            let season = store.tokens.intern("season");
+                            let winter = store.tokens.intern("winter");
+                            let spec = store
+                                .layers
+                                .get_mut(&LayerId(2))
+                                .unwrap()
+                                .prims
+                                .get_mut(&tree)
+                                .unwrap();
+                            spec.variant_sets.get_mut(&season).unwrap().variants.insert(
+                                winter,
+                                VariantSpec {
+                                    fields: vec![layerstack::FieldEntry {
+                                        name: points,
+                                        value: value.into(),
+                                    }],
+                                    ..VariantSpec::default()
+                                },
+                            );
+                        } else {
+                            let unrelated = store.path("/Unrelated");
+                            store
+                                .layers
+                                .get_mut(&LayerId(1))
+                                .unwrap()
+                                .insert_prim(unrelated, PrimSpec::def().with_field(points, value));
+                        }
+                        store
+                    },
+                    |mut store| Stage::compose(&mut store, LayerId(1), StageOptions::default()),
+                    BatchSize::LargeInput,
+                );
+            });
+        }
     }
     group.finish();
 }
 
-criterion_group!(benches, bench_arcs, bench_arc_edits, bench_inherit_payload);
+criterion_group!(benches, bench_arcs, bench_arc_edits, bench_arc_payloads);
 criterion_main!(benches);

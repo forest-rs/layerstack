@@ -1,0 +1,26 @@
+#usda 1.0
+(
+    doc = "Referenced by scene.usda's /Vis/Referenced."
+)
+
+def Xform "Asset"
+{
+    uniform token purpose = "render"
+    double3 xformOp:translate = (10, 0, 0)
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+
+    def Xform "Part"
+    {
+        double xformOp:rotateX = 90
+        uniform token[] xformOpOrder = ["xformOp:rotateX"]
+    }
+
+    def Xform "Hidden"
+    {
+        token visibility = "invisible"
+    }
+
+    def Xform "Plain"
+    {
+    }
+}

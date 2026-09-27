@@ -401,6 +401,11 @@ jobs:
             layerstack_conformance/fixtures/edit_target_maps "$RUNNER_TEMP/edit_target_maps.json"
           diff -u layerstack_conformance/fixtures/edit_target_maps/oracle.json "$RUNNER_TEMP/edit_target_maps.json"
 
+      # The transform oracle must be what OpenUSD computes, to within the
+      # rounding of the platform's trigonometry.
+      - name: check transform oracle
+        run: python layerstack_conformance/scripts/xform_oracle.py --check
+
   # If this fails, consider changing your text or adding something to .typos.toml.
   typos:
     runs-on: ubuntu-latest

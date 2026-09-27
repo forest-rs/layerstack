@@ -1,0 +1,15 @@
+#usda 1.0
+(
+    doc = "Ops OpenUSD evaluates as the identity (or a huge scale) with a warning or coding error, for tests/xform.rs; not recorded by the oracle, as a coding error aborts OpenUSD's Python call."
+)
+
+def Xform "Problems"
+{
+    double3 xformOp:translate = (1, 2, 3)
+    double3 xformOp:translate:unset
+    double3 xformOp:bogus = (1, 1, 1)
+    double xformOp:scale:scalar = 2
+    matrix4d xformOp:transform:flat = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 0, 0), (0, 0, 0, 1) )
+    rel xformOp:rotateX:relationship
+    uniform token[] xformOpOrder = ["xformOp:translate:absent", "xformOp:translate:unset", "xformOp:bogus", "xformOp:scale:scalar", "!invert!xformOp:transform:flat", "xformOp:rotateX:relationship", "xformOp:translate"]
+}

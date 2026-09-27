@@ -1245,6 +1245,10 @@
    "default": "token1",
    "sample": "token2"
   },
+  "/Authored_MaterialXConfigAPI.config:mtlx:version": {
+   "default": "text1",
+   "sample": "text2"
+  },
   "/Authored_Mesh.cornerIndices": {
    "default": [
     3,
@@ -4318,6 +4322,10 @@
   "/Fallback_Material.outputs:volume": {
    "default": null,
    "sample": null
+  },
+  "/Fallback_MaterialXConfigAPI.config:mtlx:version": {
+   "default": "1.38",
+   "sample": "1.38"
   },
   "/Fallback_Mesh.cornerIndices": {
    "default": [],

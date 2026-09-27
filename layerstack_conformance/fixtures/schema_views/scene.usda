@@ -2195,3 +2195,19 @@ def Scope "Authored_ClaimsAPI" (
 )
 {
 }
+
+def Material "Fallback_MaterialXConfigAPI" (
+    prepend apiSchemas = ["MaterialXConfigAPI"]
+)
+{
+}
+
+def Material "Authored_MaterialXConfigAPI" (
+    prepend apiSchemas = ["MaterialXConfigAPI"]
+)
+{
+    string config:mtlx:version = "text1"
+    string config:mtlx:version.timeSamples = {
+        2: "text2",
+    }
+}

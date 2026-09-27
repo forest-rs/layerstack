@@ -1,8 +1,8 @@
 # layerstack_schemas
 
 Every schema domain OpenUSD ships (`usd`, `usdGeom`, `usdShade`, `usdLux`,
-`usdSkel`, `usdPhysics`, `usdVol`, `usdRender` and the rest) as `layerstack`
-schema definitions, generated from OpenUSD's own `generatedSchema.usda` and
+`usdSkel`, `usdPhysics`, `usdVol`, `usdRender`, `usdMtlx` and the rest) as
+`layerstack` schema definitions, generated from OpenUSD's own `generatedSchema.usda` and
 `plugInfo.json` files by `layerstack_schemagen`, so nothing is parsed at run
 time, and as typed views over a composed stage: `usd_geom::Mesh`,
 `usd_lux::SphereLight`, `usd::CollectionApi` and every other schema, with a
@@ -19,7 +19,8 @@ default, enables every one.
 
 To regenerate after an OpenUSD upgrade, install the matching usd-core wheel,
 check out OpenUSD's sources at the same release (for each property's
-`apiName`, which names the accessors), and run:
+`apiName`, which names the accessors, and for `usdMtlx`, which the wheel is
+built without), and run:
 
 ```sh
 cargo run -p layerstack_schemagen -- --pxr <site-packages>/pxr --source <OpenUSD>

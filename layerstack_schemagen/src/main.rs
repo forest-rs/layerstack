@@ -18,9 +18,13 @@
 //!
 //! `--source` names a checkout of OpenUSD's sources at the release the wheel
 //! is (the generator refuses any other version, from
-//! `cmake/defaults/Version.cmake`). Only each property's `apiName`, which
+//! `cmake/defaults/Version.cmake`). Each property's `apiName`, which
 //! `generatedSchema.usda` does not keep, is read from its
-//! `pxr/usd/<plugin>/schema.usda`; it names the views' accessors.
+//! `pxr/usd/<plugin>/schema.usda`; it names the views' accessors. A domain
+//! the wheel is built without (`usdMtlx`, which needs `MaterialX`) is read
+//! entirely from the source, `pxr/usd/<plugin>/generatedSchema.usda` and
+//! `plugInfo.json` ([`model::Origin::Source`]), and its generated docs say
+//! so.
 //!
 //! It writes `layerstack_schemas/src/generated` (the tables, and the views in
 //! `views/`), the domain features of `layerstack_schemas/Cargo.toml`, and

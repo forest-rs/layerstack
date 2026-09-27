@@ -27,7 +27,7 @@ include = [
 default = ["all"]
 std = []
 # Every domain.
-all = ["usd", "usd-geom", "usd-shade", "usd-lux", "usd-skel", "usd-physics", "usd-vol", "usd-render", "usd-lod", "usd-ui", "usd-ri", "usd-hydra", "usd-media", "usd-proc", "usd-semantics", "usd-profiles"]
+all = ["usd", "usd-geom", "usd-shade", "usd-lux", "usd-skel", "usd-physics", "usd-vol", "usd-render", "usd-lod", "usd-ui", "usd-ri", "usd-hydra", "usd-media", "usd-proc", "usd-semantics", "usd-profiles", "usd-mtlx"]
 usd = []
 usd-geom = ["usd"]
 usd-shade = ["usd"]
@@ -44,6 +44,7 @@ usd-media = ["usd-geom"]
 usd-proc = ["usd-geom"]
 usd-semantics = []
 usd-profiles = []
+usd-mtlx = ["usd-shade"]
 # END GENERATED FEATURES
 
 [dependencies]

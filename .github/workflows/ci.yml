@@ -362,6 +362,8 @@ jobs:
           sparse-checkout: |
             cmake/defaults/Version.cmake
             pxr/usd/*/schema.usda
+            pxr/usd/usdMtlx/generatedSchema.usda
+            pxr/usd/usdMtlx/plugInfo.json
 
       - name: install stable toolchain
         uses: dtolnay/rust-toolchain@master
@@ -389,6 +391,8 @@ jobs:
 
       # The schema views oracle must be what OpenUSD reads from its scene.
       - name: check schema views oracle
+        env:
+          LAYERSTACK_OPENUSD_SOURCE: openusd
         run: |
           python layerstack_conformance/scripts/schema_views_oracle.py \
             layerstack_conformance/fixtures/schema_views/scene.usda "$RUNNER_TEMP/oracle.json"

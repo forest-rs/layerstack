@@ -5,7 +5,10 @@
 Usage: openusd_schemas_oracle.py [OUT_JSON]
 
 Needs usd-core 26.8 through Python `pxr` (`pip install usd-core==26.8`), the
-release `layerstack_schemas` is generated from. Writes
+release `layerstack_schemas` is generated from, and an OpenUSD checkout of
+that release in `LAYERSTACK_OPENUSD_SOURCE` for the schemas the wheel is
+built without (`usdMtlx`, loaded as a codeless plugin; see
+`openusd_source.py`). Writes
 `layerstack_conformance/fixtures/openusd_schemas/registry.json` by default,
 which `tests/openusd_schemas.rs` replays against the registry
 `layerstack_schemas::openusd` builds.
@@ -30,6 +33,7 @@ import os
 import re
 import sys
 
+import openusd_source  # Before `pxr`: loads the source-only schemas.
 from pxr import Gf, Sdf, Usd
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -37,12 +41,13 @@ DEFAULT_OUT = os.path.normpath(
     os.path.join(HERE, "..", "fixtures", "openusd_schemas", "registry.json"))
 
 # The plugins `layerstack_schemas` generates, as in layerstack_schemagen's
-# `DOMAINS`: every schema domain usd-core ships.
+# `DOMAINS`: every schema domain usd-core ships, then those it is built
+# without.
 DOMAINS = [
     "usd", "usdGeom", "usdShade", "usdLux", "usdSkel", "usdPhysics", "usdVol",
     "usdRender", "usdLod", "usdUI", "usdRi", "usdHydra", "usdMedia", "usdProc",
     "usdSemantics", "usdProfiles",
-]
+] + openusd_source.SOURCE_DOMAINS
 
 # Instance names probed with `IsAllowedAPISchemaInstanceName`: plain ones,
 # ones containing `:`, OpenUSD's own (`lightLink`, `transX`, `angular`),
@@ -105,7 +110,10 @@ def definition(prim_definition):
 
 
 def plug_info_types(pxr_dir, plugin):
-    path = os.path.join(pxr_dir, "pluginfo", plugin, "resources", "plugInfo.json")
+    if plugin in openusd_source.SOURCE_DOMAINS:
+        path = openusd_source.plug_info_path(plugin)
+    else:
+        path = os.path.join(pxr_dir, "pluginfo", plugin, "resources", "plugInfo.json")
     text = "\n".join(
         line for line in open(path).read().splitlines()
         if not line.lstrip().startswith("#"))

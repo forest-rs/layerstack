@@ -15,7 +15,8 @@
   "usdMedia",
   "usdProc",
   "usdSemantics",
-  "usdProfiles"
+  "usdProfiles",
+  "usdMtlx"
  ],
  "instances": [
   "fixture",
@@ -4889,6 +4890,41 @@
    "kind": "SingleApplyAPI",
    "name": "MaterialBindingAPI",
    "plugin": "usdShade",
+   "version": 0
+  },
+  {
+   "can_only_apply_to": [
+    [
+     "",
+     [
+      "Material"
+     ]
+    ]
+   ],
+   "definitions": [
+    {
+     "applied": [
+      "MaterialXConfigAPI"
+     ],
+     "applied_schemas": [
+      "MaterialXConfigAPI"
+     ],
+     "properties": {
+      "config:mtlx:version": {
+       "fallback": "1.38",
+       "kind": "attribute",
+       "type_name": "string",
+       "variability": "varying"
+      }
+     },
+     "type": ""
+    }
+   ],
+   "family": "MaterialXConfigAPI",
+   "is_a": [],
+   "kind": "SingleApplyAPI",
+   "name": "MaterialXConfigAPI",
+   "plugin": "usdMtlx",
    "version": 0
   },
   {

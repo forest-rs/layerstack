@@ -10,7 +10,7 @@
 // `cargo run -p layerstack_schemagen -- --pxr <site-packages>/pxr \
 //  --source <OpenUSD checkout>`.
 
-//! OpenUSD's `UsdProfiles` schemas as typed views, edit handles and token enums.
+//! OpenUSD's `usdMtlx` schemas as typed views, edit handles and token enums. From OpenUSD's source (`pxr/usd/usdMtlx`); not in the usd-core wheel, which is built without it.
 
 #![allow(
     clippy::doc_markdown,
@@ -23,15 +23,15 @@ use core::ops::Deref;
 use layerstack::{CannotApply, PathId};
 
 use crate::{PrimEdit, PrimView, Scene, SchemaEdit};
-#[doc = "An applied API schema that records a prim's profile compatibility claims and per-capability usage declarations."]
+#[doc = "MaterialXConfigAPI is an API schema that provides an interface for storing information about the MaterialX environment."]
 #[doc = ""]
-#[doc = "The view of OpenUSD's single-apply API schema `ClaimsAPI`. Get it with [`ClaimsApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
+#[doc = "The view of OpenUSD's single-apply API schema `MaterialXConfigAPI`. Get it with [`MaterialXConfigApi::get`], which checks the prim has the schema applied (`HasAPI`). For anything it does not offer, resolve the property by its USD name on [`Scene::stage`](crate::Scene::stage) (`Stage::resolve_value_with_schema` returns the raw resolved value)."]
 #[derive(Clone, Copy, Debug)]
-pub struct ClaimsApi<'a> {
+pub struct MaterialXConfigApi<'a> {
     base: PrimView<'a>,
 }
 
-impl<'a> Deref for ClaimsApi<'a> {
+impl<'a> Deref for MaterialXConfigApi<'a> {
     type Target = PrimView<'a>;
 
     fn deref(&self) -> &Self::Target {
@@ -39,9 +39,9 @@ impl<'a> Deref for ClaimsApi<'a> {
     }
 }
 
-impl<'a> ClaimsApi<'a> {
+impl<'a> MaterialXConfigApi<'a> {
     /// The schema's name.
-    pub const SCHEMA: &'static str = "ClaimsAPI";
+    pub const SCHEMA: &'static str = "MaterialXConfigAPI";
 
     /// A view of the schema on the prim at `path`, if the prim has it
     /// applied.
@@ -58,8 +58,8 @@ impl<'a> ClaimsApi<'a> {
 
     /// An edit handle for this prim.
     #[must_use]
-    pub fn edit(&self) -> ClaimsApiEdit {
-        ClaimsApiEdit::from_path(self.path())
+    pub fn edit(&self) -> MaterialXConfigApiEdit {
+        MaterialXConfigApiEdit::from_path(self.path())
     }
 
     /// Applies the schema to `path` (a `prepend apiSchemas` entry in the
@@ -70,19 +70,32 @@ impl<'a> ClaimsApi<'a> {
     /// # Errors
     ///
     /// Why the schema cannot be applied there.
-    pub fn apply(edit: &mut SchemaEdit<'_>, path: PathId) -> Result<ClaimsApiEdit, CannotApply> {
+    pub fn apply(
+        edit: &mut SchemaEdit<'_>,
+        path: PathId,
+    ) -> Result<MaterialXConfigApiEdit, CannotApply> {
         edit.apply(path, Self::SCHEMA, None)?;
-        Ok(ClaimsApiEdit::from_path(path))
+        Ok(MaterialXConfigApiEdit::from_path(path))
+    }
+
+    /// The USD name of [`Self::config_mtlx_version`].
+    pub const CONFIG_MTLX_VERSION: &'static str = "config:mtlx:version";
+
+    attribute! {
+        #[doc = "MaterialX library version that the data has been authored against."]
+        #[doc = ""]
+        #[doc = "USD attribute `config:mtlx:version` (`string`; fallback `\"1.38\"`)."]
+        config_mtlx_version, config_mtlx_version_at, "config:mtlx:version", ::alloc::sync::Arc<str>, crate::value::read_string
     }
 }
 
-#[doc = "Authors the properties of OpenUSD's `ClaimsAPI` through a [`SchemaEdit`]."]
+#[doc = "Authors the properties of OpenUSD's `MaterialXConfigAPI` through a [`SchemaEdit`]."]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct ClaimsApiEdit {
+pub struct MaterialXConfigApiEdit {
     base: PrimEdit,
 }
 
-impl Deref for ClaimsApiEdit {
+impl Deref for MaterialXConfigApiEdit {
     type Target = PrimEdit;
 
     fn deref(&self) -> &Self::Target {
@@ -90,7 +103,7 @@ impl Deref for ClaimsApiEdit {
     }
 }
 
-impl ClaimsApiEdit {
+impl MaterialXConfigApiEdit {
     /// A handle authoring the prim at `path` through `edit`, if the prim
     /// exists: on the edit's stage, or defined earlier in `edit`. Setters
     /// never create a prim that does not.
@@ -103,5 +116,12 @@ impl ClaimsApiEdit {
         Self {
             base: PrimEdit::new(path),
         }
+    }
+
+    set_attribute! {
+        #[doc = "MaterialX library version that the data has been authored against."]
+        #[doc = ""]
+        #[doc = "USD attribute `config:mtlx:version` (`string`; fallback `\"1.38\"`)."]
+        set_config_mtlx_version, set_config_mtlx_version_at, "config:mtlx:version", &str, crate::value::write_string
     }
 }

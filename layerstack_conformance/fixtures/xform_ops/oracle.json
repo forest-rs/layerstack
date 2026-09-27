@@ -1,0 +1,2072 @@
+{
+ "calls": [
+  {
+   "accepted": false,
+   "after": {
+    "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
+       10.0,
+       20.0,
+       30.0
+      ],
+      "samples": {
+       "0.0": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "10.0": [
+        90.0,
+        0.0,
+        45.0
+       ]
+      },
+      "type": "float3"
+     },
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       2.0,
+       0.5
+      ],
+      "samples": {},
+      "type": "half3"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:translate:pivot": {
+      "default": [
+       0.5,
+       0.0,
+       -0.5
+      ],
+      "samples": {},
+      "type": "float3"
+     }
+    },
+    "order": [
+     "xformOp:translate",
+     "xformOp:translate:pivot",
+     "xformOp:rotateXYZ",
+     "xformOp:scale",
+     "!invert!xformOp:translate:pivot"
+    ]
+   },
+   "call": [
+    "add",
+    "/Pivoted",
+    "translate",
+    "double",
+    "",
+    false
+   ]
+  },
+  {
+   "accepted": false,
+   "after": {
+    "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
+       10.0,
+       20.0,
+       30.0
+      ],
+      "samples": {
+       "0.0": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "10.0": [
+        90.0,
+        0.0,
+        45.0
+       ]
+      },
+      "type": "float3"
+     },
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       2.0,
+       0.5
+      ],
+      "samples": {},
+      "type": "half3"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:translate:pivot": {
+      "default": [
+       0.5,
+       0.0,
+       -0.5
+      ],
+      "samples": {},
+      "type": "float3"
+     }
+    },
+    "order": [
+     "xformOp:translate",
+     "xformOp:translate:pivot",
+     "xformOp:rotateXYZ",
+     "xformOp:scale",
+     "!invert!xformOp:translate:pivot"
+    ]
+   },
+   "call": [
+    "add",
+    "/Pivoted",
+    "translate",
+    "double",
+    "pivot",
+    true
+   ]
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
+       10.0,
+       20.0,
+       30.0
+      ],
+      "samples": {
+       "0.0": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "10.0": [
+        90.0,
+        0.0,
+        45.0
+       ]
+      },
+      "type": "float3"
+     },
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       2.0,
+       0.5
+      ],
+      "samples": {},
+      "type": "half3"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:translate:other": {
+      "default": null,
+      "samples": {},
+      "type": "half3"
+     },
+     "xformOp:translate:pivot": {
+      "default": [
+       0.5,
+       0.0,
+       -0.5
+      ],
+      "samples": {},
+      "type": "float3"
+     }
+    },
+    "order": [
+     "xformOp:translate",
+     "xformOp:translate:pivot",
+     "xformOp:rotateXYZ",
+     "xformOp:scale",
+     "!invert!xformOp:translate:pivot",
+     "xformOp:translate:other"
+    ]
+   },
+   "call": [
+    "add",
+    "/Pivoted",
+    "translate",
+    "half",
+    "other",
+    false
+   ],
+   "op_precision": "half"
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
+       10.0,
+       20.0,
+       30.0
+      ],
+      "samples": {
+       "0.0": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "10.0": [
+        90.0,
+        0.0,
+        45.0
+       ]
+      },
+      "type": "float3"
+     },
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       2.0,
+       0.5
+      ],
+      "samples": {},
+      "type": "half3"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:translate:pivot": {
+      "default": [
+       0.5,
+       0.0,
+       -0.5
+      ],
+      "samples": {},
+      "type": "float3"
+     }
+    },
+    "order": [
+     "xformOp:translate",
+     "xformOp:translate:pivot",
+     "xformOp:rotateXYZ",
+     "xformOp:scale",
+     "!invert!xformOp:translate:pivot",
+     "!invert!xformOp:rotateXYZ"
+    ]
+   },
+   "call": [
+    "add",
+    "/Pivoted",
+    "rotateXYZ",
+    "double",
+    "",
+    true
+   ],
+   "op_precision": "float"
+  },
+  {
+   "accepted": false,
+   "after": {
+    "attributes": {
+     "xformOp:orient": {
+      "default": [
+       0.0,
+       0.7071067690849304,
+       0.0,
+       0.7071067690849304
+      ],
+      "samples": {},
+      "type": "quatf"
+     },
+     "xformOp:rotateX:tilt": {
+      "default": 30.0,
+      "samples": {
+       "10.0": 60.0
+      },
+      "type": "half"
+     }
+    },
+    "order": [
+     "xformOp:orient",
+     "xformOp:rotateX:tilt"
+    ]
+   },
+   "call": [
+    "add",
+    "/Oriented",
+    "rotateX",
+    "float",
+    "tilt",
+    false
+   ]
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:orient": {
+      "default": [
+       0.0,
+       0.7071067690849304,
+       0.0,
+       0.7071067690849304
+      ],
+      "samples": {},
+      "type": "quatf"
+     },
+     "xformOp:rotateX:tilt": {
+      "default": 30.0,
+      "samples": {
+       "10.0": 60.0
+      },
+      "type": "half"
+     }
+    },
+    "order": [
+     "xformOp:orient",
+     "xformOp:rotateX:tilt",
+     "!invert!xformOp:rotateX:tilt"
+    ]
+   },
+   "call": [
+    "add",
+    "/Oriented",
+    "rotateX",
+    "float",
+    "tilt",
+    true
+   ],
+   "op_precision": "half"
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:scaleZ": {
+      "default": 4.0,
+      "samples": {},
+      "type": "double"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        2.0,
+        0.0
+       ],
+       [
+        3.0,
+        4.0,
+        5.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     },
+     "xformOp:transform:second": {
+      "default": null,
+      "samples": {},
+      "type": "matrix4d"
+     }
+    },
+    "order": [
+     "xformOp:transform",
+     "!invert!xformOp:scaleZ",
+     "xformOp:transform:second"
+    ]
+   },
+   "call": [
+    "add",
+    "/Matrix",
+    "transform",
+    "float",
+    "second",
+    false
+   ],
+   "op_precision": "double"
+  },
+  {
+   "accepted": false,
+   "after": {
+    "attributes": {
+     "xformOp:scaleZ": {
+      "default": 4.0,
+      "samples": {},
+      "type": "double"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        2.0,
+        0.0
+       ],
+       [
+        3.0,
+        4.0,
+        5.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     }
+    },
+    "order": [
+     "xformOp:transform",
+     "!invert!xformOp:scaleZ"
+    ]
+   },
+   "call": [
+    "add",
+    "/Matrix",
+    "scaleZ",
+    "float",
+    "",
+    true
+   ]
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:scale": {
+      "default": null,
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:translate": {
+      "default": [
+       0.0,
+       7.0,
+       0.0
+      ],
+      "samples": {},
+      "type": "double3"
+     }
+    },
+    "order": [
+     "!resetXformStack!",
+     "xformOp:translate",
+     "xformOp:scale"
+    ]
+   },
+   "call": [
+    "add",
+    "/Reset",
+    "scale",
+    "float",
+    "",
+    false
+   ],
+   "op_precision": "float"
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:translate": {
+      "default": [
+       9.0,
+       9.0,
+       9.0
+      ],
+      "samples": {},
+      "type": "double3"
+     }
+    },
+    "order": [
+     "xformOp:translate"
+    ]
+   },
+   "call": [
+    "add",
+    "/Cleared",
+    "translate",
+    "float",
+    "",
+    false
+   ],
+   "op_precision": "double"
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
+       10.0,
+       20.0,
+       30.0
+      ],
+      "samples": {
+       "0.0": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "10.0": [
+        90.0,
+        0.0,
+        45.0
+       ]
+      },
+      "type": "float3"
+     },
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       2.0,
+       0.5
+      ],
+      "samples": {},
+      "type": "half3"
+     },
+     "xformOp:translate": {
+      "default": [
+       5.0,
+       6.0,
+       7.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:translate:pivot": {
+      "default": [
+       0.5,
+       0.0,
+       -0.5
+      ],
+      "samples": {},
+      "type": "float3"
+     }
+    },
+    "order": [
+     "xformOp:translate",
+     "xformOp:translate:pivot",
+     "xformOp:rotateXYZ",
+     "xformOp:scale",
+     "!invert!xformOp:translate:pivot"
+    ]
+   },
+   "call": [
+    "set",
+    "/Pivoted",
+    "translate",
+    "",
+    false,
+    [
+     5.0,
+     6.0,
+     7.0
+    ],
+    null
+   ]
+  },
+  {
+   "accepted": false,
+   "after": {
+    "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
+       10.0,
+       20.0,
+       30.0
+      ],
+      "samples": {
+       "0.0": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "10.0": [
+        90.0,
+        0.0,
+        45.0
+       ]
+      },
+      "type": "float3"
+     },
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       2.0,
+       0.5
+      ],
+      "samples": {},
+      "type": "half3"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:translate:pivot": {
+      "default": [
+       0.5,
+       0.0,
+       -0.5
+      ],
+      "samples": {},
+      "type": "float3"
+     }
+    },
+    "order": [
+     "xformOp:translate",
+     "xformOp:translate:pivot",
+     "xformOp:rotateXYZ",
+     "xformOp:scale",
+     "!invert!xformOp:translate:pivot"
+    ]
+   },
+   "call": [
+    "set",
+    "/Pivoted",
+    "translate",
+    "pivot",
+    true,
+    [
+     9.0,
+     9.0,
+     9.0
+    ],
+    null
+   ]
+  },
+  {
+   "accepted": false,
+   "after": {
+    "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
+       10.0,
+       20.0,
+       30.0
+      ],
+      "samples": {
+       "0.0": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "10.0": [
+        90.0,
+        0.0,
+        45.0
+       ]
+      },
+      "type": "float3"
+     },
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       2.0,
+       0.5
+      ],
+      "samples": {},
+      "type": "half3"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:translate:pivot": {
+      "default": [
+       0.5,
+       0.0,
+       -0.5
+      ],
+      "samples": {},
+      "type": "float3"
+     }
+    },
+    "order": [
+     "xformOp:translate",
+     "xformOp:translate:pivot",
+     "xformOp:rotateXYZ",
+     "xformOp:scale",
+     "!invert!xformOp:translate:pivot"
+    ]
+   },
+   "call": [
+    "set",
+    "/Pivoted",
+    "translate",
+    "pivot",
+    true,
+    [
+     9.0,
+     9.0,
+     9.0
+    ],
+    5.0
+   ]
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
+       10.0,
+       20.0,
+       30.0
+      ],
+      "samples": {
+       "0.0": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "10.0": [
+        90.0,
+        0.0,
+        45.0
+       ]
+      },
+      "type": "float3"
+     },
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       2.0,
+       0.5
+      ],
+      "samples": {},
+      "type": "half3"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:translate:pivot": {
+      "default": [
+       0.5,
+       0.0,
+       -0.5
+      ],
+      "samples": {
+       "5.0": [
+        0.25,
+        0.5,
+        0.75
+       ]
+      },
+      "type": "float3"
+     }
+    },
+    "order": [
+     "xformOp:translate",
+     "xformOp:translate:pivot",
+     "xformOp:rotateXYZ",
+     "xformOp:scale",
+     "!invert!xformOp:translate:pivot"
+    ]
+   },
+   "call": [
+    "set",
+    "/Pivoted",
+    "translate",
+    "pivot",
+    false,
+    [
+     0.25,
+     0.5,
+     0.75
+    ],
+    5.0
+   ]
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
+       10.0,
+       20.0,
+       30.0
+      ],
+      "samples": {
+       "0.0": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "10.0": [
+        90.0,
+        0.0,
+        45.0
+       ],
+       "5.0": [
+        1.5,
+        2.5,
+        3.5
+       ]
+      },
+      "type": "float3"
+     },
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       2.0,
+       0.5
+      ],
+      "samples": {},
+      "type": "half3"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:translate:pivot": {
+      "default": [
+       0.5,
+       0.0,
+       -0.5
+      ],
+      "samples": {},
+      "type": "float3"
+     }
+    },
+    "order": [
+     "xformOp:translate",
+     "xformOp:translate:pivot",
+     "xformOp:rotateXYZ",
+     "xformOp:scale",
+     "!invert!xformOp:translate:pivot"
+    ]
+   },
+   "call": [
+    "set",
+    "/Pivoted",
+    "rotateXYZ",
+    "",
+    false,
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    5.0
+   ]
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
+       10.0,
+       20.0,
+       30.0
+      ],
+      "samples": {
+       "0.0": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "10.0": [
+        90.0,
+        0.0,
+        45.0
+       ]
+      },
+      "type": "float3"
+     },
+     "xformOp:scale": {
+      "default": [
+       0.5,
+       1.5,
+       2.5
+      ],
+      "samples": {},
+      "type": "half3"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:translate:pivot": {
+      "default": [
+       0.5,
+       0.0,
+       -0.5
+      ],
+      "samples": {},
+      "type": "float3"
+     }
+    },
+    "order": [
+     "xformOp:translate",
+     "xformOp:translate:pivot",
+     "xformOp:rotateXYZ",
+     "xformOp:scale",
+     "!invert!xformOp:translate:pivot"
+    ]
+   },
+   "call": [
+    "set",
+    "/Pivoted",
+    "scale",
+    "",
+    false,
+    [
+     0.5,
+     1.5,
+     2.5
+    ],
+    null
+   ]
+  },
+  {
+   "accepted": false,
+   "after": {
+    "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
+       10.0,
+       20.0,
+       30.0
+      ],
+      "samples": {
+       "0.0": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "10.0": [
+        90.0,
+        0.0,
+        45.0
+       ]
+      },
+      "type": "float3"
+     },
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       2.0,
+       0.5
+      ],
+      "samples": {},
+      "type": "half3"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:translate:pivot": {
+      "default": [
+       0.5,
+       0.0,
+       -0.5
+      ],
+      "samples": {},
+      "type": "float3"
+     }
+    },
+    "order": [
+     "xformOp:translate",
+     "xformOp:translate:pivot",
+     "xformOp:rotateXYZ",
+     "xformOp:scale",
+     "!invert!xformOp:translate:pivot"
+    ]
+   },
+   "call": [
+    "set",
+    "/Pivoted",
+    "translate",
+    "",
+    false,
+    2.0,
+    null
+   ]
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:orient": {
+      "default": [
+       0.0,
+       0.0,
+       0.7071067690849304,
+       0.7071067690849304
+      ],
+      "samples": {},
+      "type": "quatf"
+     },
+     "xformOp:rotateX:tilt": {
+      "default": 30.0,
+      "samples": {
+       "10.0": 60.0
+      },
+      "type": "half"
+     }
+    },
+    "order": [
+     "xformOp:orient",
+     "xformOp:rotateX:tilt"
+    ]
+   },
+   "call": [
+    "set",
+    "/Oriented",
+    "orient",
+    "",
+    false,
+    [
+     0.0,
+     0.0,
+     0.70710678,
+     0.70710678
+    ],
+    null
+   ]
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:orient": {
+      "default": [
+       0.0,
+       0.7071067690849304,
+       0.0,
+       0.7071067690849304
+      ],
+      "samples": {},
+      "type": "quatf"
+     },
+     "xformOp:rotateX:tilt": {
+      "default": 30.0,
+      "samples": {
+       "10.0": 60.0,
+       "5.0": 45.0
+      },
+      "type": "half"
+     }
+    },
+    "order": [
+     "xformOp:orient",
+     "xformOp:rotateX:tilt"
+    ]
+   },
+   "call": [
+    "set",
+    "/Oriented",
+    "rotateX",
+    "tilt",
+    false,
+    45.0,
+    5.0
+   ]
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:scaleZ": {
+      "default": 4.0,
+      "samples": {},
+      "type": "double"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        0.0,
+        1.0,
+        0.0
+       ],
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        1.0,
+        2.0,
+        3.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     }
+    },
+    "order": [
+     "xformOp:transform",
+     "!invert!xformOp:scaleZ"
+    ]
+   },
+   "call": [
+    "set",
+    "/Matrix",
+    "transform",
+    "",
+    false,
+    [
+     [
+      0.0,
+      0.0,
+      1.0,
+      0.0
+     ],
+     [
+      0.0,
+      1.0,
+      0.0,
+      0.0
+     ],
+     [
+      -1.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     [
+      1.0,
+      2.0,
+      3.0,
+      1.0
+     ]
+    ],
+    null
+   ]
+  },
+  {
+   "accepted": false,
+   "after": {
+    "attributes": {
+     "xformOp:scaleZ": {
+      "default": 4.0,
+      "samples": {},
+      "type": "double"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        2.0,
+        0.0
+       ],
+       [
+        3.0,
+        4.0,
+        5.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     }
+    },
+    "order": [
+     "xformOp:transform",
+     "!invert!xformOp:scaleZ"
+    ]
+   },
+   "call": [
+    "set",
+    "/Matrix",
+    "scaleZ",
+    "",
+    true,
+    3.0,
+    null
+   ]
+  },
+  {
+   "accepted": false,
+   "after": {
+    "attributes": {
+     "xformOp:scaleZ": {
+      "default": 4.0,
+      "samples": {},
+      "type": "double"
+     },
+     "xformOp:transform": {
+      "default": [
+       [
+        0.0,
+        1.0,
+        0.0,
+        0.0
+       ],
+       [
+        -1.0,
+        0.0,
+        0.0,
+        0.0
+       ],
+       [
+        0.0,
+        0.0,
+        2.0,
+        0.0
+       ],
+       [
+        3.0,
+        4.0,
+        5.0,
+        1.0
+       ]
+      ],
+      "samples": {},
+      "type": "matrix4d"
+     }
+    },
+    "order": [
+     "xformOp:transform",
+     "!invert!xformOp:scaleZ"
+    ]
+   },
+   "call": [
+    "set",
+    "/Matrix",
+    "transform",
+    "",
+    false,
+    [
+     1.0,
+     2.0,
+     3.0
+    ],
+    null
+   ]
+  },
+  {
+   "accepted": false,
+   "after": {
+    "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
+       10.0,
+       20.0,
+       30.0
+      ],
+      "samples": {
+       "0.0": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "10.0": [
+        90.0,
+        0.0,
+        45.0
+       ]
+      },
+      "type": "float3"
+     },
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       2.0,
+       0.5
+      ],
+      "samples": {},
+      "type": "half3"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:translate:pivot": {
+      "default": [
+       0.5,
+       0.0,
+       -0.5
+      ],
+      "samples": {},
+      "type": "float3"
+     }
+    },
+    "order": [
+     "xformOp:translate",
+     "xformOp:translate:pivot",
+     "xformOp:rotateXYZ",
+     "xformOp:scale",
+     "!invert!xformOp:translate:pivot"
+    ]
+   },
+   "call": [
+    "set",
+    "/Pivoted",
+    "translate",
+    "absent",
+    false,
+    [
+     1.0,
+     1.0,
+     1.0
+    ],
+    null
+   ]
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
+       10.0,
+       20.0,
+       30.0
+      ],
+      "samples": {
+       "0.0": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "10.0": [
+        90.0,
+        0.0,
+        45.0
+       ]
+      },
+      "type": "float3"
+     },
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       2.0,
+       0.5
+      ],
+      "samples": {},
+      "type": "half3"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:translate:pivot": {
+      "default": [
+       0.5,
+       0.0,
+       -0.5
+      ],
+      "samples": {},
+      "type": "float3"
+     }
+    },
+    "order": []
+   },
+   "call": [
+    "clear",
+    "/Pivoted"
+   ]
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:translate": {
+      "default": [
+       9.0,
+       9.0,
+       9.0
+      ],
+      "samples": {},
+      "type": "double3"
+     }
+    },
+    "order": []
+   },
+   "call": [
+    "clear",
+    "/Cleared"
+   ]
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:rotateXYZ": {
+      "default": [
+       10.0,
+       20.0,
+       30.0
+      ],
+      "samples": {
+       "0.0": [
+        0.0,
+        0.0,
+        0.0
+       ],
+       "10.0": [
+        90.0,
+        0.0,
+        45.0
+       ]
+      },
+      "type": "float3"
+     },
+     "xformOp:scale": {
+      "default": [
+       2.0,
+       2.0,
+       0.5
+      ],
+      "samples": {},
+      "type": "half3"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       2.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "double3"
+     },
+     "xformOp:translate:pivot": {
+      "default": [
+       0.5,
+       0.0,
+       -0.5
+      ],
+      "samples": {},
+      "type": "float3"
+     }
+    },
+    "order": [
+     "!resetXformStack!",
+     "xformOp:translate",
+     "xformOp:translate:pivot",
+     "xformOp:rotateXYZ",
+     "xformOp:scale",
+     "!invert!xformOp:translate:pivot"
+    ]
+   },
+   "call": [
+    "reset",
+    "/Pivoted",
+    true
+   ]
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:translate": {
+      "default": [
+       0.0,
+       7.0,
+       0.0
+      ],
+      "samples": {},
+      "type": "double3"
+     }
+    },
+    "order": [
+     "!resetXformStack!",
+     "xformOp:translate"
+    ]
+   },
+   "call": [
+    "reset",
+    "/Reset",
+    true
+   ]
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:translate": {
+      "default": [
+       0.0,
+       7.0,
+       0.0
+      ],
+      "samples": {},
+      "type": "double3"
+     }
+    },
+    "order": [
+     "xformOp:translate"
+    ]
+   },
+   "call": [
+    "reset",
+    "/Reset",
+    false
+   ]
+  },
+  {
+   "accepted": true,
+   "after": {
+    "attributes": {
+     "xformOp:scale": {
+      "default": [
+       3.0,
+       3.0,
+       3.0
+      ],
+      "samples": {},
+      "type": "float3"
+     },
+     "xformOp:translate": {
+      "default": [
+       1.0,
+       0.0,
+       0.0
+      ],
+      "samples": {},
+      "type": "float3"
+     }
+    },
+    "order": [
+     "xformOp:translate",
+     "xformOp:scale"
+    ]
+   },
+   "call": [
+    "reset",
+    "/Unreset",
+    false
+   ]
+  }
+ ],
+ "openusd_version": "26.8",
+ "prims": {
+  "/Cleared": {
+   "local": {
+    "5": [
+     [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      1.0,
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0,
+      1.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ]
+    ],
+    "default": [
+     [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      1.0,
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0,
+      1.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ]
+    ]
+   },
+   "ops": [],
+   "resets_xform_stack": false
+  },
+  "/Matrix": {
+   "local": {
+    "5": [
+     [
+      0.0,
+      1.0,
+      0.0,
+      0.0
+     ],
+     [
+      -1.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0,
+      -8.0,
+      0.0
+     ],
+     [
+      3.0,
+      4.0,
+      5.0,
+      1.0
+     ]
+    ],
+    "default": [
+     [
+      0.0,
+      1.0,
+      0.0,
+      0.0
+     ],
+     [
+      -1.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0,
+      -8.0,
+      0.0
+     ],
+     [
+      3.0,
+      4.0,
+      5.0,
+      1.0
+     ]
+    ]
+   },
+   "ops": [
+    {
+     "inverse": false,
+     "name": "xformOp:transform",
+     "op_type": "transform",
+     "precision": "double"
+    },
+    {
+     "inverse": true,
+     "name": "!invert!xformOp:scaleZ",
+     "op_type": "scaleZ",
+     "precision": "double"
+    }
+   ],
+   "resets_xform_stack": false
+  },
+  "/Oriented": {
+   "local": {
+    "5": [
+     [
+      -3.422854177870249e-08,
+      0.0,
+      -0.9999999999999993,
+      0.0
+     ],
+     [
+      0.866025403784438,
+      0.5000000000000001,
+      -2.964278671485335e-08,
+      0.0
+     ],
+     [
+      0.4999999999999998,
+      -0.8660254037844386,
+      -1.711427088935125e-08,
+      0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ]
+    ],
+    "default": [
+     [
+      -3.422854177870249e-08,
+      0.0,
+      -0.9999999999999993,
+      0.0
+     ],
+     [
+      0.4999999999999996,
+      0.8660254037844387,
+      -1.7114270889351243e-08,
+      0.0
+     ],
+     [
+      0.8660254037844382,
+      -0.49999999999999994,
+      -2.9642786714853357e-08,
+      0.0
+     ],
+     [
+      0.0,
+      0.0,
+      0.0,
+      1.0
+     ]
+    ]
+   },
+   "ops": [
+    {
+     "inverse": false,
+     "name": "xformOp:orient",
+     "op_type": "orient",
+     "precision": "float"
+    },
+    {
+     "inverse": false,
+     "name": "xformOp:rotateX:tilt",
+     "op_type": "rotateX",
+     "precision": "half"
+    }
+   ],
+   "resets_xform_stack": false
+  },
+  "/Pivoted": {
+   "local": {
+    "5": [
+     [
+      1.8477590650225735,
+      0.7653668647301795,
+      0.0,
+      0.0
+     ],
+     [
+      -0.5411961001461969,
+      1.3065629648763764,
+      1.4142135623730951,
+      0.0
+     ],
+     [
+      0.13529902503654925,
+      -0.32664074121909414,
+      0.35355339059327373,
+      0.0
+     ],
+     [
+      0.6437699800069879,
+      1.4539961970253632,
+      2.676776695296637,
+      1.0
+     ]
+    ],
+    "default": [
+     [
+      1.6275953626987476,
+      0.9396926207859083,
+      -0.6840402866513375,
+      0.0
+     ],
+     [
+      -0.8819392210597647,
+      1.7651282385187712,
+      0.32635182233306964,
+      0.0
+     ],
+     [
+      0.18926115318489625,
+      0.00901415561814864,
+      0.4627082891991617,
+      0.0
+     ],
+     [
+      0.7808328952430743,
+      1.5346607674161201,
+      3.0733742879252497,
+      1.0
+     ]
+    ]
+   },
+   "ops": [
+    {
+     "inverse": false,
+     "name": "xformOp:translate",
+     "op_type": "translate",
+     "precision": "double"
+    },
+    {
+     "inverse": false,
+     "name": "xformOp:translate:pivot",
+     "op_type": "translate",
+     "precision": "float"
+    },
+    {
+     "inverse": false,
+     "name": "xformOp:rotateXYZ",
+     "op_type": "rotateXYZ",
+     "precision": "float"
+    },
+    {
+     "inverse": false,
+     "name": "xformOp:scale",
+     "op_type": "scale",
+     "precision": "half"
+    },
+    {
+     "inverse": true,
+     "name": "!invert!xformOp:translate:pivot",
+     "op_type": "translate",
+     "precision": "float"
+    }
+   ],
+   "resets_xform_stack": false
+  },
+  "/Reset": {
+   "local": {
+    "5": [
+     [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      1.0,
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0,
+      1.0,
+      0.0
+     ],
+     [
+      0.0,
+      7.0,
+      0.0,
+      1.0
+     ]
+    ],
+    "default": [
+     [
+      1.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      1.0,
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0,
+      1.0,
+      0.0
+     ],
+     [
+      0.0,
+      7.0,
+      0.0,
+      1.0
+     ]
+    ]
+   },
+   "ops": [
+    {
+     "inverse": false,
+     "name": "xformOp:translate",
+     "op_type": "translate",
+     "precision": "double"
+    }
+   ],
+   "resets_xform_stack": true
+  },
+  "/Unreset": {
+   "local": {
+    "5": [
+     [
+      3.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      3.0,
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0,
+      3.0,
+      0.0
+     ],
+     [
+      1.0,
+      0.0,
+      0.0,
+      1.0
+     ]
+    ],
+    "default": [
+     [
+      3.0,
+      0.0,
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      3.0,
+      0.0,
+      0.0
+     ],
+     [
+      0.0,
+      0.0,
+      3.0,
+      0.0
+     ],
+     [
+      1.0,
+      0.0,
+      0.0,
+      1.0
+     ]
+    ]
+   },
+   "ops": [
+    {
+     "inverse": false,
+     "name": "xformOp:translate",
+     "op_type": "translate",
+     "precision": "float"
+    },
+    {
+     "inverse": false,
+     "name": "xformOp:scale",
+     "op_type": "scale",
+     "precision": "float"
+    }
+   ],
+   "resets_xform_stack": false
+  }
+ }
+}

@@ -19,6 +19,7 @@ pub mod authored;
 pub mod export_fixtures;
 pub mod instancer_fixtures;
 pub mod listop_vectors;
+pub mod matrices;
 pub mod pcp;
 pub mod pcp_txt;
 pub mod save_corpus;

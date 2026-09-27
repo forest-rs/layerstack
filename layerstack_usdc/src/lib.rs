@@ -16,6 +16,11 @@
 //! file reads and memory-mapped I/O. The crate is `no_std` by default; enable
 //! the `std` feature for convenience wrappers that accept file paths.
 //!
+//! For selective access, [`CrateFile`] opens the structural tables and lets
+//! callers inspect specs and decode individual fields on demand. It does not
+//! assemble a layer or load dependencies. [`read_usdc`] remains the bulk import
+//! path, using compact array decoding directly into layer values.
+//!
 //! # Pipeline
 //!
 //! ```text
@@ -33,6 +38,7 @@ extern crate alloc;
 pub mod compression;
 pub mod error;
 pub mod header;
+pub mod reader;
 pub mod section;
 pub mod toc;
 // Value representation decoding pervasively casts u64 file offsets/counts to
@@ -61,6 +67,7 @@ use layerstack::path::PathInterner;
 
 pub use assemble::AssembleResult;
 pub use error::UsdcError;
+pub use reader::{CrateField, CrateFile, CrateSpec};
 pub use value_rep::DecodeBudget;
 pub use version::CrateVersion;
 

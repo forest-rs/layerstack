@@ -97,7 +97,7 @@ pub use span::{Span, TextPosition};
 
 pub mod ast;
 pub mod diagnostic;
-mod ident;
+use layerstack::ident;
 
 #[allow(
     clippy::cast_possible_truncation,

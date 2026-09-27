@@ -523,17 +523,13 @@ fn generated_schema_layers_read_as_definitions() {
         ),
     );
 
+    let main = t.intern("main");
     let declared = [
         SchemaDeclaration {
-            name: slot,
-            kind: SchemaKind::MultipleApplyApi,
-            parent: None,
+            allowed_instance_names: vec![main],
+            ..SchemaDeclaration::new(slot, SchemaKind::MultipleApplyApi)
         },
-        SchemaDeclaration {
-            name: pin,
-            kind: SchemaKind::MultipleApplyApi,
-            parent: None,
-        },
+        SchemaDeclaration::new(pin, SchemaKind::MultipleApplyApi),
     ];
     let schemas = read_generated_schema(&layer, &declared, &mut t, &paths).expect("read");
     let slot_schema = &schemas[0];
@@ -547,6 +543,7 @@ fn generated_schema_layers_read_as_definitions() {
         [index]
     );
     assert_eq!(slot_schema.overrides[0].name, offset);
+    assert_eq!(slot_schema.allowed_instance_names, [main]);
 
     let mut builder = SchemaRegistry::builder();
     for schema in schemas {
@@ -563,13 +560,135 @@ fn generated_schema_layers_read_as_definitions() {
         Some(Value::Float(0.25))
     );
 
-    let missing = [SchemaDeclaration {
-        name: tile,
-        kind: SchemaKind::ConcreteTyped,
-        parent: None,
-    }];
+    let missing = [SchemaDeclaration::new(tile, SchemaKind::ConcreteTyped)];
     assert_eq!(
         read_generated_schema(&layer, &missing, &mut t, &paths),
         Err(GeneratedSchemaError::MissingSchema { name: tile })
     );
+}
+
+/// Where an applied schema may be applied, and with which instance names.
+///
+/// OpenUSD: `UsdPrim::CanApplyAPI`,
+/// `UsdSchemaRegistry::IsAllowedAPISchemaInstanceName`.
+#[test]
+fn can_apply_checks_instance_names_and_prim_types() {
+    let mut t = TokenInterner::default();
+    let [shape, tile, other, label, slot, pin] =
+        ["Shape", "Tile", "Other", "LabelAPI", "SlotAPI", "PinAPI"].map(|n| t.intern(n));
+    let (main, right) = (t.intern("main"), t.intern("right"));
+    let mut builder = SchemaRegistry::builder();
+    builder
+        .register(SchemaDefinition::new(shape, SchemaKind::AbstractTyped))
+        .register(SchemaDefinition::typed(tile).with_parent(shape))
+        .register(SchemaDefinition::typed(other))
+        .register(SchemaDefinition::api(label).with_can_only_apply_to(shape))
+        .register(SchemaDefinition {
+            instance_can_only_apply_to: vec![(right, vec![other]), (main, Vec::new())],
+            ..SchemaDefinition::new(slot, SchemaKind::MultipleApplyApi)
+                .with_allowed_instance_name(main)
+                .with_allowed_instance_name(right)
+        })
+        .register(
+            SchemaDefinition::new(pin, SchemaKind::MultipleApplyApi)
+                .with_property(attr(&mut t, "pin:__INSTANCE_NAME__:offset", 0))
+                .with_property(attr(&mut t, "pin:__INSTANCE_NAME__", 0)),
+        );
+    let registry = builder.build(&mut t);
+
+    assert_eq!(registry.can_apply(Some(tile), label, None, &t), Ok(()));
+    assert_eq!(
+        registry.can_apply(Some(other), label, None, &t),
+        Err(CannotApply::PrimType {
+            allowed: vec![shape]
+        })
+    );
+    assert!(registry.can_apply(None, label, None, &t).is_err());
+    assert_eq!(
+        registry.can_apply(Some(tile), label, Some("x"), &t),
+        Err(CannotApply::UnexpectedInstanceName)
+    );
+    assert_eq!(
+        registry.can_apply(Some(tile), slot, None, &t),
+        Err(CannotApply::MissingInstanceName)
+    );
+    assert_eq!(
+        registry.can_apply(Some(tile), tile, None, &t),
+        Err(CannotApply::NotAnAppliedSchema)
+    );
+
+    // Allowed instance names, and a per-instance type list.
+    assert_eq!(
+        registry.can_apply(Some(tile), slot, Some("main"), &t),
+        Ok(())
+    );
+    // An empty instance list leaves the schema's in force; so does none.
+    let limited = t.intern("LimitedAPI");
+    let (open, empty) = (t.intern("open"), t.intern("empty"));
+    let mut limits = SchemaRegistry::builder();
+    limits
+        .register(SchemaDefinition::new(shape, SchemaKind::AbstractTyped))
+        .register(SchemaDefinition::typed(tile).with_parent(shape))
+        .register(SchemaDefinition {
+            instance_can_only_apply_to: vec![(empty, Vec::new()), (open, vec![shape])],
+            ..SchemaDefinition::new(limited, SchemaKind::MultipleApplyApi)
+                .with_can_only_apply_to(tile)
+        });
+    let limits = limits.build(&mut t);
+    for instance in ["empty", "missing"] {
+        assert_eq!(
+            limits.can_only_apply_to(limited, Some(instance), &t),
+            [tile]
+        );
+        assert!(limits.can_apply(None, limited, Some(instance), &t).is_err());
+        assert_eq!(
+            limits.can_apply(Some(tile), limited, Some(instance), &t),
+            Ok(())
+        );
+    }
+    assert_eq!(limits.can_only_apply_to(limited, Some("open"), &t), [shape]);
+    assert_eq!(
+        registry.can_apply(Some(tile), slot, Some("left"), &t),
+        Err(CannotApply::InstanceNameNotAllowed)
+    );
+    assert!(
+        registry
+            .can_apply(Some(tile), slot, Some("right"), &t)
+            .is_err()
+    );
+    assert_eq!(
+        registry.can_apply(Some(other), slot, Some("right"), &t),
+        Ok(())
+    );
+    assert_eq!(registry.can_only_apply_to(slot, Some("right"), &t), [other]);
+    assert!(
+        registry
+            .can_only_apply_to(slot, Some("main"), &t)
+            .is_empty()
+    );
+
+    // An instance's last identifier may not be a property's base name.
+    for (instance, allowed) in [
+        ("free", true),
+        ("a:b", true),
+        ("offset", false),
+        ("x:offset", false),
+        ("offset:x", true),
+        ("", false),
+        ("1st", false),
+        ("a::b", false),
+        ("é", true),
+        ("℘", true),
+        ("a²", false),
+        ("x:ⅰ", true),
+        ("a\u{0301}", true),
+        ("\u{0301}a", false),
+    ] {
+        assert_eq!(
+            registry.is_allowed_instance_name(pin, instance, &t),
+            allowed,
+            "{instance:?}"
+        );
+    }
+    assert!(!registry.is_allowed_instance_name(label, "free", &t));
 }

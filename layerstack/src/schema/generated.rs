@@ -31,8 +31,9 @@ use crate::{
 };
 
 /// What a schema's plugin declares about it, which a generated schema
-/// layer does not hold: its kind and the typed schema it inherits from.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// layer does not hold: its kind, the typed schema it inherits from, and
+/// where an applied schema may be applied.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SchemaDeclaration {
     /// The schema's name, which is also its prim's name in the layer.
     pub name: TokenId,
@@ -40,6 +41,29 @@ pub struct SchemaDeclaration {
     pub kind: SchemaKind,
     /// The typed schema it inherits from, if any.
     pub parent: Option<TokenId>,
+    /// `apiSchemaCanOnlyApplyTo` ([`SchemaDefinition::can_only_apply_to`]).
+    pub can_only_apply_to: Vec<TokenId>,
+    /// `apiSchemaAllowedInstanceNames`
+    /// ([`SchemaDefinition::allowed_instance_names`]).
+    pub allowed_instance_names: Vec<TokenId>,
+    /// The `apiSchemaCanOnlyApplyTo` of each `apiSchemaInstances` entry
+    /// ([`SchemaDefinition::instance_can_only_apply_to`]).
+    pub instance_can_only_apply_to: Vec<(TokenId, Vec<TokenId>)>,
+}
+
+impl SchemaDeclaration {
+    /// A schema of `kind` with no parent and no application limits.
+    #[must_use]
+    pub fn new(name: TokenId, kind: SchemaKind) -> Self {
+        Self {
+            name,
+            kind,
+            parent: None,
+            can_only_apply_to: Vec::new(),
+            allowed_instance_names: Vec::new(),
+            instance_can_only_apply_to: Vec::new(),
+        }
+    }
 }
 
 /// Why [`read_generated_schema`] could not read a declared schema.
@@ -97,6 +121,15 @@ pub fn read_generated_schema(
                 })?;
             let mut schema = SchemaDefinition::new(declaration.name, declaration.kind);
             schema.parent = declaration.parent;
+            schema
+                .can_only_apply_to
+                .clone_from(&declaration.can_only_apply_to);
+            schema
+                .allowed_instance_names
+                .clone_from(&declaration.allowed_instance_names);
+            schema
+                .instance_can_only_apply_to
+                .clone_from(&declaration.instance_can_only_apply_to);
             if let Some(FieldValue::TokenListOp(list)) = spec.field(api_schemas) {
                 schema.built_ins = list
                     .apply_to(&[])

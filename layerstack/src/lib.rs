@@ -89,6 +89,7 @@ pub mod doc;
 pub mod edit;
 pub(crate) mod expression_variables;
 pub mod half;
+pub mod ident;
 pub mod interner;
 pub mod layer_stack;
 pub mod listop;
@@ -144,8 +145,8 @@ pub use property::{
 };
 pub use relocates::RelocationTable;
 pub use schema::{
-    AppliedSchema, PrimDefinition, PropertyDefinition, SchemaDefinition, SchemaIssue, SchemaKind,
-    SchemaRegistry, SchemaRegistryBuilder,
+    AppliedSchema, CannotApply, PrimDefinition, PropertyDefinition, SchemaDefinition, SchemaIssue,
+    SchemaKind, SchemaRegistry, SchemaRegistryBuilder,
 };
 pub use spec_path::{SpecComponent, SpecPath, SpecPathError};
 pub use spline::SplineData;

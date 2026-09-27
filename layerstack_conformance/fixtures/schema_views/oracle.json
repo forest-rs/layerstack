@@ -1,0 +1,5416 @@
+{
+ "local_variant": {
+  "/Rock.collection:lights:excludes": [],
+  "/Rock.collection:lights:includes": [
+   "/Light",
+   "/Light.intensity",
+   "/Rock/Pebble"
+  ]
+ },
+ "mapped": {
+  "/Instance.collection:lights:excludes": [],
+  "/Instance.collection:lights:includes": [
+   "/Instance/Light",
+   "/Instance/Light.intensity"
+  ]
+ },
+ "openusd_version": "26.8",
+ "properties": {
+  "/Authored_AccessibilityAPI.accessibility:a:description": {
+   "default": "text1",
+   "sample": "text2"
+  },
+  "/Authored_AccessibilityAPI.accessibility:a:label": {
+   "default": "text1",
+   "sample": "text2"
+  },
+  "/Authored_AccessibilityAPI.accessibility:a:priority": {
+   "allowed": [
+    "low",
+    "standard",
+    "high"
+   ],
+   "default": "standard",
+   "sample": "high"
+  },
+  "/Authored_BackPlateAPI.backPlate:a:alpha:image": {
+   "default": "asset1.usda",
+   "sample": "asset2.usda"
+  },
+  "/Authored_BackPlateAPI.backPlate:a:depth:cameraSpaceOffset": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_BackPlateAPI.backPlate:a:depth:image": {
+   "default": "asset1.usda",
+   "sample": "asset2.usda"
+  },
+  "/Authored_BackPlateAPI.backPlate:a:depth:minOffset": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_BackPlateAPI.backPlate:a:depth:normalizingFactor": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_BackPlateAPI.backPlate:a:image": {
+   "default": "asset1.usda",
+   "sample": "asset2.usda"
+  },
+  "/Authored_BackPlateAPI.backPlate:a:luma:gain": {
+   "default": [
+    1.5,
+    2.5,
+    3.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5
+   ]
+  },
+  "/Authored_BackPlateAPI.backPlate:a:luma:gamma": {
+   "default": [
+    1.5,
+    2.5,
+    3.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5
+   ]
+  },
+  "/Authored_BackPlateAPI.backPlate:a:luma:lift": {
+   "default": [
+    1.5,
+    2.5,
+    3.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5
+   ]
+  },
+  "/Authored_BackPlateAPI.backPlate:a:plateVisibility": {
+   "allowed": [
+    "all",
+    "solo",
+    "mute"
+   ],
+   "default": "solo",
+   "sample": "mute"
+  },
+  "/Authored_BackPlateAPI.backPlate:a:rotateXYZ:tweak": {
+   "default": [
+    1.5,
+    2.5,
+    3.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5
+   ]
+  },
+  "/Authored_BackPlateAPI.backPlate:a:scale:tweak": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_BackPlateAPI.backPlate:a:translate:tweak": {
+   "default": [
+    1.5,
+    2.5,
+    3.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5
+   ]
+  },
+  "/Authored_Backdrop.ui:description": {
+   "default": "token1",
+   "sample": "token1"
+  },
+  "/Authored_BasisCurves.accelerations": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_BasisCurves.basis": {
+   "allowed": [
+    "bezier",
+    "bspline",
+    "catmullRom"
+   ],
+   "default": "bspline",
+   "sample": "bspline"
+  },
+  "/Authored_BasisCurves.curveVertexCounts": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    4,
+    5
+   ]
+  },
+  "/Authored_BasisCurves.doubleSided": {
+   "default": true,
+   "sample": true
+  },
+  "/Authored_BasisCurves.extent": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_BasisCurves.normals": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_BasisCurves.orientation": {
+   "allowed": [
+    "rightHanded",
+    "leftHanded"
+   ],
+   "default": "leftHanded",
+   "sample": "leftHanded"
+  },
+  "/Authored_BasisCurves.points": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_BasisCurves.primvars:displayColor": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_BasisCurves.primvars:displayOpacity": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_BasisCurves.proxyPrim": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_BasisCurves.purpose": {
+   "allowed": [
+    "default",
+    "render",
+    "proxy",
+    "guide"
+   ],
+   "default": "render",
+   "sample": "render"
+  },
+  "/Authored_BasisCurves.type": {
+   "allowed": [
+    "linear",
+    "cubic"
+   ],
+   "default": "cubic",
+   "sample": "cubic"
+  },
+  "/Authored_BasisCurves.velocities": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_BasisCurves.visibility": {
+   "allowed": [
+    "inherited",
+    "invisible"
+   ],
+   "default": "invisible",
+   "sample": "inherited"
+  },
+  "/Authored_BasisCurves.widths": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_BasisCurves.wrap": {
+   "allowed": [
+    "nonperiodic",
+    "periodic",
+    "pinned"
+   ],
+   "default": "periodic",
+   "sample": "periodic"
+  },
+  "/Authored_BasisCurves.xformOpOrder": {
+   "default": [
+    "token1",
+    "token2"
+   ],
+   "sample": [
+    "token1",
+    "token2"
+   ]
+  },
+  "/Authored_BlendShape.normalOffsets": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ]
+  },
+  "/Authored_BlendShape.offsets": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ]
+  },
+  "/Authored_BlendShape.pointIndices": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    3,
+    4
+   ]
+  },
+  "/Authored_Camera.clippingPlanes": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5,
+     5.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5,
+     5.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5,
+     6.5
+    ]
+   ]
+  },
+  "/Authored_Camera.clippingRange": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_Camera.exposure": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Camera.exposure:fStop": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Camera.exposure:iso": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Camera.exposure:responsivity": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Camera.exposure:time": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Camera.fStop": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Camera.focalLength": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Camera.focusDistance": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Camera.horizontalAperture": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Camera.horizontalApertureOffset": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Camera.projection": {
+   "allowed": [
+    "perspective",
+    "orthographic"
+   ],
+   "default": "orthographic",
+   "sample": "perspective"
+  },
+  "/Authored_Camera.shutter:close": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Camera.shutter:open": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Camera.stereoRole": {
+   "allowed": [
+    "mono",
+    "left",
+    "right"
+   ],
+   "default": "left",
+   "sample": "left"
+  },
+  "/Authored_Camera.verticalAperture": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Camera.verticalApertureOffset": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Capsule.axis": {
+   "allowed": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "default": "Y",
+   "sample": "Y"
+  },
+  "/Authored_Capsule.height": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Capsule.radius": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Capsule_1.axis": {
+   "allowed": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "default": "Y",
+   "sample": "Y"
+  },
+  "/Authored_Capsule_1.height": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Capsule_1.radiusBottom": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Capsule_1.radiusTop": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_CollectionAPI.collection:a:excludes": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_CollectionAPI.collection:a:expansionRule": {
+   "allowed": [
+    "explicitOnly",
+    "expandPrims",
+    "expandPrimsAndProperties"
+   ],
+   "default": "expandPrims",
+   "sample": "expandPrims"
+  },
+  "/Authored_CollectionAPI.collection:a:includeRoot": {
+   "default": true,
+   "sample": true
+  },
+  "/Authored_CollectionAPI.collection:a:includes": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_CollectionAPI.collection:a:mode": {
+   "allowed": [
+    "automatic",
+    "relationship",
+    "expression"
+   ],
+   "default": "relationship",
+   "sample": "relationship"
+  },
+  "/Authored_ColorSpaceAPI.colorSpace:name": {
+   "default": "token1",
+   "sample": "token1"
+  },
+  "/Authored_ColorSpaceDefinitionAPI.colorSpaceDefinition:a:blueChroma": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_ColorSpaceDefinitionAPI.colorSpaceDefinition:a:gamma": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_ColorSpaceDefinitionAPI.colorSpaceDefinition:a:greenChroma": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_ColorSpaceDefinitionAPI.colorSpaceDefinition:a:linearBias": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_ColorSpaceDefinitionAPI.colorSpaceDefinition:a:name": {
+   "default": "token1",
+   "sample": "token1"
+  },
+  "/Authored_ColorSpaceDefinitionAPI.colorSpaceDefinition:a:redChroma": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_ColorSpaceDefinitionAPI.colorSpaceDefinition:a:whitePoint": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_Cone.axis": {
+   "allowed": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "default": "Y",
+   "sample": "Y"
+  },
+  "/Authored_Cone.height": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Cone.radius": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_CoordSysAPI.coordSys:a:binding": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_Cube.size": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Cylinder.axis": {
+   "allowed": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "default": "Y",
+   "sample": "Y"
+  },
+  "/Authored_Cylinder.height": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Cylinder.radius": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_CylinderLight.inputs:length": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_CylinderLight.inputs:radius": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_CylinderLight.treatAsLine": {
+   "default": true,
+   "sample": false
+  },
+  "/Authored_Cylinder_1.axis": {
+   "allowed": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "default": "Y",
+   "sample": "Y"
+  },
+  "/Authored_Cylinder_1.height": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Cylinder_1.radiusBottom": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Cylinder_1.radiusTop": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_DiskLight.inputs:radius": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_DistantLight.inputs:angle": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_DomeLight.guideRadius": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_DomeLight.inputs:texture:file": {
+   "default": "asset1.usda",
+   "sample": "asset2.usda"
+  },
+  "/Authored_DomeLight.inputs:texture:format": {
+   "allowed": [
+    "automatic",
+    "latlong",
+    "mirroredBall",
+    "angular",
+    "cubeMapVerticalCross"
+   ],
+   "default": "latlong",
+   "sample": "mirroredBall"
+  },
+  "/Authored_DomeLight.portals": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_DomeLight_1.guideRadius": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_DomeLight_1.inputs:texture:file": {
+   "default": "asset1.usda",
+   "sample": "asset2.usda"
+  },
+  "/Authored_DomeLight_1.inputs:texture:format": {
+   "allowed": [
+    "automatic",
+    "latlong",
+    "mirroredBall",
+    "angular",
+    "cubeMapVerticalCross"
+   ],
+   "default": "latlong",
+   "sample": "mirroredBall"
+  },
+  "/Authored_DomeLight_1.poleAxis": {
+   "allowed": [
+    "scene",
+    "Y",
+    "Z"
+   ],
+   "default": "Y",
+   "sample": "Y"
+  },
+  "/Authored_DomeLight_1.portals": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_Field3DAsset.fieldDataType": {
+   "allowed": [
+    "half",
+    "float",
+    "double",
+    "half3",
+    "float3",
+    "double3"
+   ],
+   "default": "token1",
+   "sample": "token2"
+  },
+  "/Authored_Field3DAsset.fieldIndex": {
+   "default": 3,
+   "sample": 4
+  },
+  "/Authored_Field3DAsset.fieldName": {
+   "default": "token1",
+   "sample": "token2"
+  },
+  "/Authored_Field3DAsset.fieldPurpose": {
+   "default": "token1",
+   "sample": "token2"
+  },
+  "/Authored_Field3DAsset.filePath": {
+   "default": "asset1.usda",
+   "sample": "asset2.usda"
+  },
+  "/Authored_Field3DAsset.vectorDataRoleHint": {
+   "allowed": [
+    "None",
+    "Point",
+    "Normal",
+    "Vector",
+    "Color"
+   ],
+   "default": "Point",
+   "sample": "Normal"
+  },
+  "/Authored_GenerativeProcedural.proceduralSystem": {
+   "default": "token1",
+   "sample": "token2"
+  },
+  "/Authored_GeomModelAPI.model:applyDrawMode": {
+   "default": true,
+   "sample": true
+  },
+  "/Authored_GeomModelAPI.model:cardGeometry": {
+   "allowed": [
+    "cross",
+    "box",
+    "fromTexture"
+   ],
+   "default": "box",
+   "sample": "box"
+  },
+  "/Authored_GeomModelAPI.model:cardTextureXNeg": {
+   "default": "asset1.usda",
+   "sample": "asset2.usda"
+  },
+  "/Authored_GeomModelAPI.model:cardTextureXPos": {
+   "default": "asset1.usda",
+   "sample": "asset2.usda"
+  },
+  "/Authored_GeomModelAPI.model:cardTextureYNeg": {
+   "default": "asset1.usda",
+   "sample": "asset2.usda"
+  },
+  "/Authored_GeomModelAPI.model:cardTextureYPos": {
+   "default": "asset1.usda",
+   "sample": "asset2.usda"
+  },
+  "/Authored_GeomModelAPI.model:cardTextureZNeg": {
+   "default": "asset1.usda",
+   "sample": "asset2.usda"
+  },
+  "/Authored_GeomModelAPI.model:cardTextureZPos": {
+   "default": "asset1.usda",
+   "sample": "asset2.usda"
+  },
+  "/Authored_GeomModelAPI.model:cardVisibility": {
+   "allowed": [
+    "full",
+    "simple",
+    "inherited"
+   ],
+   "default": "simple",
+   "sample": "simple"
+  },
+  "/Authored_GeomModelAPI.model:drawMode": {
+   "allowed": [
+    "origin",
+    "bounds",
+    "cards",
+    "default",
+    "inherited"
+   ],
+   "default": "bounds",
+   "sample": "bounds"
+  },
+  "/Authored_GeomModelAPI.model:drawModeColor": {
+   "default": [
+    1.5,
+    2.5,
+    3.5
+   ],
+   "sample": [
+    1.5,
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_GeomSubset.elementType": {
+   "allowed": [
+    "face",
+    "point",
+    "edge",
+    "segment",
+    "tetrahedron"
+   ],
+   "default": "point",
+   "sample": "point"
+  },
+  "/Authored_GeomSubset.familyName": {
+   "default": "token1",
+   "sample": "token1"
+  },
+  "/Authored_GeomSubset.indices": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    4,
+    5
+   ]
+  },
+  "/Authored_GeometryLight.geometry": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_HermiteCurves.tangents": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_HydraGenerativeProceduralAPI.primvars:hdGp:proceduralType": {
+   "default": "token1",
+   "sample": "token2"
+  },
+  "/Authored_HydraGenerativeProceduralAPI.proceduralSystem": {
+   "default": "token1",
+   "sample": "token2"
+  },
+  "/Authored_HydraRenderPassAPI.hydra:rendererName": {
+   "default": "token1",
+   "sample": "token1"
+  },
+  "/Authored_LODDistanceHeuristic.blendThresholds": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    1.5,
+    2.5
+   ]
+  },
+  "/Authored_LODDistanceHeuristic.boundingVolume": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_LODDistanceHeuristic.center": {
+   "default": [
+    1.5,
+    2.5,
+    3.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5
+   ]
+  },
+  "/Authored_LODDistanceHeuristic.lod:domain": {
+   "default": "token1",
+   "sample": "token1"
+  },
+  "/Authored_LODDistanceHeuristic.thresholds": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    1.5,
+    2.5
+   ]
+  },
+  "/Authored_LODOverrideAPI.lod:override:index": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_LODOverrideAPI.lod:override:mode": {
+   "allowed": [
+    "inherited",
+    "noOverride",
+    "indexedLOD",
+    "noLOD",
+    "allLOD"
+   ],
+   "default": "noOverride",
+   "sample": "indexedLOD"
+  },
+  "/Authored_LODRootAPI.lod:default:index": {
+   "default": 3,
+   "sample": 4
+  },
+  "/Authored_LODRootAPI.lod:heuristics": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_LODScreenSizeHeuristic.blendThresholds": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    1.5,
+    2.5
+   ]
+  },
+  "/Authored_LODScreenSizeHeuristic.boundingVolume": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_LODScreenSizeHeuristic.extent": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_LODScreenSizeHeuristic.projectionMethod": {
+   "allowed": [
+    "projectedExtent",
+    "projectedSphere"
+   ],
+   "default": "projectedSphere",
+   "sample": "projectedSphere"
+  },
+  "/Authored_LODScreenSizeHeuristic.thresholds": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    1.5,
+    2.5
+   ]
+  },
+  "/Authored_LightAPI.inputs:color": {
+   "default": [
+    1.5,
+    2.5,
+    3.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5
+   ]
+  },
+  "/Authored_LightAPI.inputs:colorTemperature": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_LightAPI.inputs:diffuse": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_LightAPI.inputs:enableColorTemperature": {
+   "default": true,
+   "sample": false
+  },
+  "/Authored_LightAPI.inputs:exposure": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_LightAPI.inputs:intensity": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_LightAPI.inputs:normalize": {
+   "default": true,
+   "sample": false
+  },
+  "/Authored_LightAPI.inputs:specular": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_LightAPI.light:filters": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_LightAPI.light:materialSyncMode": {
+   "allowed": [
+    "materialGlowTintsLight",
+    "independent",
+    "noMaterialResponse"
+   ],
+   "default": "independent",
+   "sample": "independent"
+  },
+  "/Authored_LightAPI.light:shaderId": {
+   "default": "token1",
+   "sample": "token1"
+  },
+  "/Authored_LightFilter.lightFilter:shaderId": {
+   "default": "token1",
+   "sample": "token1"
+  },
+  "/Authored_LightListAPI.lightList": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_LightListAPI.lightList:cacheBehavior": {
+   "allowed": [
+    "consumeAndHalt",
+    "consumeAndContinue",
+    "ignore"
+   ],
+   "default": "consumeAndContinue",
+   "sample": "ignore"
+  },
+  "/Authored_ListAPI.lightList": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_ListAPI.lightList:cacheBehavior": {
+   "allowed": [
+    "consumeAndHalt",
+    "consumeAndContinue",
+    "ignore"
+   ],
+   "default": "consumeAndContinue",
+   "sample": "ignore"
+  },
+  "/Authored_Material.outputs:displacement": {
+   "default": "token1",
+   "sample": "token2"
+  },
+  "/Authored_Material.outputs:surface": {
+   "default": "token1",
+   "sample": "token2"
+  },
+  "/Authored_Material.outputs:volume": {
+   "default": "token1",
+   "sample": "token2"
+  },
+  "/Authored_Mesh.cornerIndices": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    4,
+    5
+   ]
+  },
+  "/Authored_Mesh.cornerSharpnesses": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_Mesh.creaseIndices": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    4,
+    5
+   ]
+  },
+  "/Authored_Mesh.creaseLengths": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    4,
+    5
+   ]
+  },
+  "/Authored_Mesh.creaseSharpnesses": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_Mesh.faceVaryingLinearInterpolation": {
+   "allowed": [
+    "none",
+    "cornersOnly",
+    "cornersPlus1",
+    "cornersPlus2",
+    "boundaries",
+    "all"
+   ],
+   "default": "cornersOnly",
+   "sample": "cornersPlus1"
+  },
+  "/Authored_Mesh.faceVertexCounts": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    4,
+    5
+   ]
+  },
+  "/Authored_Mesh.faceVertexIndices": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    4,
+    5
+   ]
+  },
+  "/Authored_Mesh.holeIndices": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    4,
+    5
+   ]
+  },
+  "/Authored_Mesh.interpolateBoundary": {
+   "allowed": [
+    "none",
+    "edgeOnly",
+    "edgeAndCorner"
+   ],
+   "default": "edgeOnly",
+   "sample": "edgeAndCorner"
+  },
+  "/Authored_Mesh.subdivisionScheme": {
+   "allowed": [
+    "catmullClark",
+    "loop",
+    "bilinear",
+    "none"
+   ],
+   "default": "loop",
+   "sample": "loop"
+  },
+  "/Authored_Mesh.triangleSubdivisionRule": {
+   "allowed": [
+    "catmullClark",
+    "smooth"
+   ],
+   "default": "smooth",
+   "sample": "catmullClark"
+  },
+  "/Authored_MotionAPI.motion:blurScale": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_MotionAPI.motion:nonlinearSampleCount": {
+   "default": 3,
+   "sample": 4
+  },
+  "/Authored_MotionAPI.motion:velocityScale": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_NodeDefAPI.info:id": {
+   "default": "token1",
+   "sample": "token1"
+  },
+  "/Authored_NodeDefAPI.info:implementationSource": {
+   "allowed": [
+    "id",
+    "sourceAsset",
+    "sourceCode"
+   ],
+   "default": "sourceAsset",
+   "sample": "sourceAsset"
+  },
+  "/Authored_NodeGraphNodeAPI.ui:nodegraph:node:displayColor": {
+   "default": [
+    1.5,
+    2.5,
+    3.5
+   ],
+   "sample": [
+    1.5,
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_NodeGraphNodeAPI.ui:nodegraph:node:docURI": {
+   "default": "text1",
+   "sample": "text1"
+  },
+  "/Authored_NodeGraphNodeAPI.ui:nodegraph:node:expansionState": {
+   "allowed": [
+    "open",
+    "closed",
+    "minimized"
+   ],
+   "default": "closed",
+   "sample": "closed"
+  },
+  "/Authored_NodeGraphNodeAPI.ui:nodegraph:node:icon": {
+   "default": "asset1.usda",
+   "sample": "asset1.usda"
+  },
+  "/Authored_NodeGraphNodeAPI.ui:nodegraph:node:pos": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    1.5,
+    2.5
+   ]
+  },
+  "/Authored_NodeGraphNodeAPI.ui:nodegraph:node:size": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    1.5,
+    2.5
+   ]
+  },
+  "/Authored_NodeGraphNodeAPI.ui:nodegraph:node:stackingOrder": {
+   "default": 3,
+   "sample": 3
+  },
+  "/Authored_NurbsCurves.knots": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_NurbsCurves.order": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    4,
+    5
+   ]
+  },
+  "/Authored_NurbsCurves.pointWeights": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_NurbsCurves.ranges": {
+   "default": [
+    [
+     1.5,
+     2.5
+    ],
+    [
+     2.5,
+     3.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5
+    ],
+    [
+     3.5,
+     4.5
+    ]
+   ]
+  },
+  "/Authored_NurbsPatch.pointWeights": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_NurbsPatch.trimCurve:counts": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    4,
+    5
+   ]
+  },
+  "/Authored_NurbsPatch.trimCurve:knots": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_NurbsPatch.trimCurve:orders": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    4,
+    5
+   ]
+  },
+  "/Authored_NurbsPatch.trimCurve:points": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_NurbsPatch.trimCurve:ranges": {
+   "default": [
+    [
+     1.5,
+     2.5
+    ],
+    [
+     2.5,
+     3.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5
+    ],
+    [
+     3.5,
+     4.5
+    ]
+   ]
+  },
+  "/Authored_NurbsPatch.trimCurve:vertexCounts": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    4,
+    5
+   ]
+  },
+  "/Authored_NurbsPatch.uForm": {
+   "allowed": [
+    "open",
+    "closed",
+    "periodic"
+   ],
+   "default": "closed",
+   "sample": "closed"
+  },
+  "/Authored_NurbsPatch.uKnots": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_NurbsPatch.uOrder": {
+   "default": 3,
+   "sample": 4
+  },
+  "/Authored_NurbsPatch.uRange": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_NurbsPatch.uVertexCount": {
+   "default": 3,
+   "sample": 4
+  },
+  "/Authored_NurbsPatch.vForm": {
+   "allowed": [
+    "open",
+    "closed",
+    "periodic"
+   ],
+   "default": "closed",
+   "sample": "closed"
+  },
+  "/Authored_NurbsPatch.vKnots": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_NurbsPatch.vOrder": {
+   "default": 3,
+   "sample": 4
+  },
+  "/Authored_NurbsPatch.vRange": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_NurbsPatch.vVertexCount": {
+   "default": 3,
+   "sample": 4
+  },
+  "/Authored_OpenVDBAsset.fieldClass": {
+   "allowed": [
+    "levelSet",
+    "fogVolume",
+    "staggered",
+    "unknown"
+   ],
+   "default": "fogVolume",
+   "sample": "staggered"
+  },
+  "/Authored_ParticleField3DGaussianSplat.projectionModeHint": {
+   "allowed": [
+    "perspective",
+    "tangential"
+   ],
+   "default": "tangential",
+   "sample": "tangential"
+  },
+  "/Authored_ParticleField3DGaussianSplat.sortingModeHint": {
+   "allowed": [
+    "zDepth",
+    "cameraDistance",
+    "rayHitDistance"
+   ],
+   "default": "cameraDistance",
+   "sample": "cameraDistance"
+  },
+  "/Authored_ParticleFieldOpacityAttributeAPI.opacities": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_ParticleFieldOpacityAttributeAPI.opacitiesh": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_ParticleFieldOrientationAttributeAPI.orientations": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5,
+     5.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5,
+     5.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5,
+     6.5
+    ]
+   ]
+  },
+  "/Authored_ParticleFieldOrientationAttributeAPI.orientationsh": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5,
+     5.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5,
+     5.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5,
+     6.5
+    ]
+   ]
+  },
+  "/Authored_ParticleFieldPositionAttributeAPI.positions": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_ParticleFieldPositionAttributeAPI.positionsh": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_ParticleFieldScaleAttributeAPI.scales": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_ParticleFieldScaleAttributeAPI.scalesh": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_ParticleFieldSphericalHarmonicsAttributeAPI.radiance:sphericalHarmonicsCoefficients": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_ParticleFieldSphericalHarmonicsAttributeAPI.radiance:sphericalHarmonicsCoefficientsh": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_ParticleFieldSphericalHarmonicsAttributeAPI.radiance:sphericalHarmonicsDegree": {
+   "default": 3,
+   "sample": 3
+  },
+  "/Authored_PhysicsCollisionAPI.physics:collisionEnabled": {
+   "default": true,
+   "sample": false
+  },
+  "/Authored_PhysicsCollisionAPI.physics:simulationOwner": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_PhysicsCollisionGroup.physics:filteredGroups": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_PhysicsCollisionGroup.physics:invertFilteredGroups": {
+   "default": true,
+   "sample": false
+  },
+  "/Authored_PhysicsCollisionGroup.physics:mergeGroup": {
+   "default": "text1",
+   "sample": "text2"
+  },
+  "/Authored_PhysicsDistanceJoint.physics:maxDistance": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsDistanceJoint.physics:minDistance": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsDriveAPI.drive:a:physics:damping": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsDriveAPI.drive:a:physics:maxForce": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsDriveAPI.drive:a:physics:stiffness": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsDriveAPI.drive:a:physics:targetPosition": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsDriveAPI.drive:a:physics:targetVelocity": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsDriveAPI.drive:a:physics:type": {
+   "allowed": [
+    "force",
+    "acceleration"
+   ],
+   "default": "acceleration",
+   "sample": "acceleration"
+  },
+  "/Authored_PhysicsFilteredPairsAPI.physics:filteredPairs": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_PhysicsJoint.physics:body0": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_PhysicsJoint.physics:body1": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_PhysicsJoint.physics:breakForce": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsJoint.physics:breakTorque": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsJoint.physics:collisionEnabled": {
+   "default": true,
+   "sample": false
+  },
+  "/Authored_PhysicsJoint.physics:excludeFromArticulation": {
+   "default": true,
+   "sample": true
+  },
+  "/Authored_PhysicsJoint.physics:jointEnabled": {
+   "default": true,
+   "sample": false
+  },
+  "/Authored_PhysicsJoint.physics:localPos0": {
+   "default": [
+    1.5,
+    2.5,
+    3.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5
+   ]
+  },
+  "/Authored_PhysicsJoint.physics:localPos1": {
+   "default": [
+    1.5,
+    2.5,
+    3.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5
+   ]
+  },
+  "/Authored_PhysicsJoint.physics:localRot0": {
+   "default": [
+    1.5,
+    2.5,
+    3.5,
+    4.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5,
+    5.5
+   ]
+  },
+  "/Authored_PhysicsJoint.physics:localRot1": {
+   "default": [
+    1.5,
+    2.5,
+    3.5,
+    4.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5,
+    5.5
+   ]
+  },
+  "/Authored_PhysicsLimitAPI.limit:a:physics:high": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsLimitAPI.limit:a:physics:low": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsMassAPI.physics:centerOfMass": {
+   "default": [
+    1.5,
+    2.5,
+    3.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5
+   ]
+  },
+  "/Authored_PhysicsMassAPI.physics:density": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsMassAPI.physics:diagonalInertia": {
+   "default": [
+    1.5,
+    2.5,
+    3.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5
+   ]
+  },
+  "/Authored_PhysicsMassAPI.physics:mass": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsMassAPI.physics:principalAxes": {
+   "default": [
+    1.5,
+    2.5,
+    3.5,
+    4.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5,
+    5.5
+   ]
+  },
+  "/Authored_PhysicsMaterialAPI.physics:density": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsMaterialAPI.physics:dynamicFriction": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsMaterialAPI.physics:restitution": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsMaterialAPI.physics:staticFriction": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsMeshCollisionAPI.physics:approximation": {
+   "allowed": [
+    "none",
+    "convexDecomposition",
+    "convexHull",
+    "boundingSphere",
+    "boundingCube",
+    "meshSimplification"
+   ],
+   "default": "convexDecomposition",
+   "sample": "convexDecomposition"
+  },
+  "/Authored_PhysicsPrismaticJoint.physics:axis": {
+   "allowed": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "default": "Y",
+   "sample": "Y"
+  },
+  "/Authored_PhysicsPrismaticJoint.physics:lowerLimit": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsPrismaticJoint.physics:upperLimit": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsRevoluteJoint.physics:axis": {
+   "allowed": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "default": "Y",
+   "sample": "Y"
+  },
+  "/Authored_PhysicsRevoluteJoint.physics:lowerLimit": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsRevoluteJoint.physics:upperLimit": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsRigidBodyAPI.physics:angularVelocity": {
+   "default": [
+    1.5,
+    2.5,
+    3.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5
+   ]
+  },
+  "/Authored_PhysicsRigidBodyAPI.physics:kinematicEnabled": {
+   "default": true,
+   "sample": false
+  },
+  "/Authored_PhysicsRigidBodyAPI.physics:rigidBodyEnabled": {
+   "default": true,
+   "sample": false
+  },
+  "/Authored_PhysicsRigidBodyAPI.physics:simulationOwner": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_PhysicsRigidBodyAPI.physics:startsAsleep": {
+   "default": true,
+   "sample": true
+  },
+  "/Authored_PhysicsRigidBodyAPI.physics:velocity": {
+   "default": [
+    1.5,
+    2.5,
+    3.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5
+   ]
+  },
+  "/Authored_PhysicsScene.physics:gravityDirection": {
+   "default": [
+    1.5,
+    2.5,
+    3.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5
+   ]
+  },
+  "/Authored_PhysicsScene.physics:gravityMagnitude": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsSphericalJoint.physics:axis": {
+   "allowed": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "default": "Y",
+   "sample": "Y"
+  },
+  "/Authored_PhysicsSphericalJoint.physics:coneAngle0Limit": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PhysicsSphericalJoint.physics:coneAngle1Limit": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Plane.axis": {
+   "allowed": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "default": "Y",
+   "sample": "Y"
+  },
+  "/Authored_Plane.length": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_Plane.width": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PointInstancer.accelerations": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_PointInstancer.angularVelocities": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_PointInstancer.ids": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    4,
+    5
+   ]
+  },
+  "/Authored_PointInstancer.invisibleIds": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    4,
+    5
+   ]
+  },
+  "/Authored_PointInstancer.orientations": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5,
+     5.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5,
+     5.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5,
+     6.5
+    ]
+   ]
+  },
+  "/Authored_PointInstancer.orientationsf": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5,
+     5.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5,
+     5.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5,
+     6.5
+    ]
+   ]
+  },
+  "/Authored_PointInstancer.positions": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_PointInstancer.protoIndices": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    4,
+    5
+   ]
+  },
+  "/Authored_PointInstancer.prototypes": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_PointInstancer.scales": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_PointInstancer.velocities": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_Points.ids": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    4,
+    5
+   ]
+  },
+  "/Authored_Points.widths": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_PortalLight.inputs:height": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_PortalLight.inputs:width": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_RectLight.inputs:height": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_RectLight.inputs:texture:file": {
+   "default": "asset1.usda",
+   "sample": "asset2.usda"
+  },
+  "/Authored_RectLight.inputs:width": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_RenderPass.command": {
+   "default": [
+    "text1",
+    "text2"
+   ],
+   "sample": [
+    "text1",
+    "text2"
+   ]
+  },
+  "/Authored_RenderPass.fileName": {
+   "default": "asset1.usda",
+   "sample": "asset1.usda"
+  },
+  "/Authored_RenderPass.inputPasses": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_RenderPass.passType": {
+   "default": "token1",
+   "sample": "token1"
+  },
+  "/Authored_RenderPass.renderSource": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_RenderProduct.aspectRatioConformPolicy": {
+   "allowed": [
+    "expandAperture",
+    "cropAperture",
+    "adjustApertureWidth",
+    "adjustApertureHeight",
+    "adjustPixelAspectRatio"
+   ],
+   "default": "cropAperture",
+   "sample": "cropAperture"
+  },
+  "/Authored_RenderProduct.camera": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_RenderProduct.dataWindowNDC": {
+   "default": [
+    1.5,
+    2.5,
+    3.5,
+    4.5
+   ],
+   "sample": [
+    1.5,
+    2.5,
+    3.5,
+    4.5
+   ]
+  },
+  "/Authored_RenderProduct.disableDepthOfField": {
+   "default": true,
+   "sample": true
+  },
+  "/Authored_RenderProduct.disableMotionBlur": {
+   "default": true,
+   "sample": true
+  },
+  "/Authored_RenderProduct.instantaneousShutter": {
+   "default": true,
+   "sample": true
+  },
+  "/Authored_RenderProduct.orderedVars": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_RenderProduct.pixelAspectRatio": {
+   "default": 1.5,
+   "sample": 1.5
+  },
+  "/Authored_RenderProduct.productName": {
+   "default": "token1",
+   "sample": "token2"
+  },
+  "/Authored_RenderProduct.productType": {
+   "allowed": [
+    "raster",
+    "deepRaster"
+   ],
+   "default": "deepRaster",
+   "sample": "deepRaster"
+  },
+  "/Authored_RenderProduct.resolution": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    3,
+    4
+   ]
+  },
+  "/Authored_RenderSettings.includedPurposes": {
+   "default": [
+    "token1",
+    "token2"
+   ],
+   "sample": [
+    "token1",
+    "token2"
+   ]
+  },
+  "/Authored_RenderSettings.materialBindingPurposes": {
+   "allowed": [
+    "full",
+    "preview",
+    ""
+   ],
+   "default": [
+    "token1",
+    "token2"
+   ],
+   "sample": [
+    "token1",
+    "token2"
+   ]
+  },
+  "/Authored_RenderSettings.products": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_RenderSettings.renderingColorSpace": {
+   "default": "token1",
+   "sample": "token1"
+  },
+  "/Authored_RenderVar.dataType": {
+   "default": "token1",
+   "sample": "token1"
+  },
+  "/Authored_RenderVar.sourceName": {
+   "default": "text1",
+   "sample": "text1"
+  },
+  "/Authored_RenderVar.sourceType": {
+   "allowed": [
+    "raw",
+    "primvar",
+    "lpe",
+    "intrinsic"
+   ],
+   "default": "primvar",
+   "sample": "primvar"
+  },
+  "/Authored_RiMaterialAPI.outputs:ri:displacement": {
+   "default": "token1",
+   "sample": "token2"
+  },
+  "/Authored_RiMaterialAPI.outputs:ri:surface": {
+   "default": "token1",
+   "sample": "token2"
+  },
+  "/Authored_RiMaterialAPI.outputs:ri:volume": {
+   "default": "token1",
+   "sample": "token2"
+  },
+  "/Authored_SceneGraphPrimAPI.ui:displayGroup": {
+   "default": "token1",
+   "sample": "token1"
+  },
+  "/Authored_SceneGraphPrimAPI.ui:displayName": {
+   "default": "token1",
+   "sample": "token1"
+  },
+  "/Authored_SemanticsLabelsAPI.semantics:labels:a": {
+   "default": [
+    "token1",
+    "token2"
+   ],
+   "sample": [
+    "token2",
+    "token3"
+   ]
+  },
+  "/Authored_ShadowAPI.inputs:shadow:color": {
+   "default": [
+    1.5,
+    2.5,
+    3.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5
+   ]
+  },
+  "/Authored_ShadowAPI.inputs:shadow:distance": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_ShadowAPI.inputs:shadow:enable": {
+   "default": true,
+   "sample": false
+  },
+  "/Authored_ShadowAPI.inputs:shadow:falloff": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_ShadowAPI.inputs:shadow:falloffGamma": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_ShapingAPI.inputs:shaping:cone:angle": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_ShapingAPI.inputs:shaping:cone:softness": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_ShapingAPI.inputs:shaping:focus": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_ShapingAPI.inputs:shaping:focusTint": {
+   "default": [
+    1.5,
+    2.5,
+    3.5
+   ],
+   "sample": [
+    2.5,
+    3.5,
+    4.5
+   ]
+  },
+  "/Authored_ShapingAPI.inputs:shaping:ies:angleScale": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_ShapingAPI.inputs:shaping:ies:file": {
+   "default": "asset1.usda",
+   "sample": "asset2.usda"
+  },
+  "/Authored_ShapingAPI.inputs:shaping:ies:normalize": {
+   "default": true,
+   "sample": false
+  },
+  "/Authored_SkelAnimation.blendShapeWeights": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_SkelAnimation.blendShapes": {
+   "default": [
+    "token1",
+    "token2"
+   ],
+   "sample": [
+    "token1",
+    "token2"
+   ]
+  },
+  "/Authored_SkelAnimation.joints": {
+   "default": [
+    "token1",
+    "token2"
+   ],
+   "sample": [
+    "token1",
+    "token2"
+   ]
+  },
+  "/Authored_SkelAnimation.rotations": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5,
+     5.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5,
+     5.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5,
+     6.5
+    ]
+   ]
+  },
+  "/Authored_SkelAnimation.scales": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_SkelAnimation.translations": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5
+    ],
+    [
+     2.5,
+     3.5,
+     4.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     3.5,
+     4.5,
+     5.5
+    ]
+   ]
+  },
+  "/Authored_SkelBindingAPI.primvars:skel:geomBindTransform": {
+   "default": [
+    [
+     1.5,
+     2.5,
+     3.5,
+     4.5
+    ],
+    [
+     5.5,
+     6.5,
+     7.5,
+     8.5
+    ],
+    [
+     9.5,
+     10.5,
+     11.5,
+     12.5
+    ],
+    [
+     13.5,
+     14.5,
+     15.5,
+     16.5
+    ]
+   ],
+   "sample": [
+    [
+     2.5,
+     3.5,
+     4.5,
+     5.5
+    ],
+    [
+     6.5,
+     7.5,
+     8.5,
+     9.5
+    ],
+    [
+     10.5,
+     11.5,
+     12.5,
+     13.5
+    ],
+    [
+     14.5,
+     15.5,
+     16.5,
+     17.5
+    ]
+   ]
+  },
+  "/Authored_SkelBindingAPI.primvars:skel:jointIndices": {
+   "default": [
+    3,
+    4
+   ],
+   "sample": [
+    4,
+    5
+   ]
+  },
+  "/Authored_SkelBindingAPI.primvars:skel:jointWeights": {
+   "default": [
+    1.5,
+    2.5
+   ],
+   "sample": [
+    2.5,
+    3.5
+   ]
+  },
+  "/Authored_SkelBindingAPI.primvars:skel:skinningMethod": {
+   "allowed": [
+    "classicLinear",
+    "dualQuaternion"
+   ],
+   "default": "dualQuaternion",
+   "sample": "dualQuaternion"
+  },
+  "/Authored_SkelBindingAPI.skel:animationSource": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_SkelBindingAPI.skel:blendShapeTargets": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_SkelBindingAPI.skel:blendShapes": {
+   "default": [
+    "token1",
+    "token2"
+   ],
+   "sample": [
+    "token1",
+    "token2"
+   ]
+  },
+  "/Authored_SkelBindingAPI.skel:joints": {
+   "default": [
+    "token1",
+    "token2"
+   ],
+   "sample": [
+    "token1",
+    "token2"
+   ]
+  },
+  "/Authored_SkelBindingAPI.skel:skeleton": {
+   "targets": [
+    "/Target"
+   ]
+  },
+  "/Authored_Skeleton.bindTransforms": {
+   "default": [
+    [
+     [
+      1.5,
+      2.5,
+      3.5,
+      4.5
+     ],
+     [
+      5.5,
+      6.5,
+      7.5,
+      8.5
+     ],
+     [
+      9.5,
+      10.5,
+      11.5,
+      12.5
+     ],
+     [
+      13.5,
+      14.5,
+      15.5,
+      16.5
+     ]
+    ],
+    [
+     [
+      2.5,
+      3.5,
+      4.5,
+      5.5
+     ],
+     [
+      6.5,
+      7.5,
+      8.5,
+      9.5
+     ],
+     [
+      10.5,
+      11.5,
+      12.5,
+      13.5
+     ],
+     [
+      14.5,
+      15.5,
+      16.5,
+      17.5
+     ]
+    ]
+   ],
+   "sample": [
+    [
+     [
+      1.5,
+      2.5,
+      3.5,
+      4.5
+     ],
+     [
+      5.5,
+      6.5,
+      7.5,
+      8.5
+     ],
+     [
+      9.5,
+      10.5,
+      11.5,
+      12.5
+     ],
+     [
+      13.5,
+      14.5,
+      15.5,
+      16.5
+     ]
+    ],
+    [
+     [
+      2.5,
+      3.5,
+      4.5,
+      5.5
+     ],
+     [
+      6.5,
+      7.5,
+      8.5,
+      9.5
+     ],
+     [
+      10.5,
+      11.5,
+      12.5,
+      13.5
+     ],
+     [
+      14.5,
+      15.5,
+      16.5,
+      17.5
+     ]
+    ]
+   ]
+  },
+  "/Authored_Skeleton.jointNames": {
+   "default": [
+    "token1",
+    "token2"
+   ],
+   "sample": [
+    "token1",
+    "token2"
+   ]
+  },
+  "/Authored_Skeleton.joints": {
+   "default": [
+    "token1",
+    "token2"
+   ],
+   "sample": [
+    "token1",
+    "token2"
+   ]
+  },
+  "/Authored_Skeleton.restTransforms": {
+   "default": [
+    [
+     [
+      1.5,
+      2.5,
+      3.5,
+      4.5
+     ],
+     [
+      5.5,
+      6.5,
+      7.5,
+      8.5
+     ],
+     [
+      9.5,
+      10.5,
+      11.5,
+      12.5
+     ],
+     [
+      13.5,
+      14.5,
+      15.5,
+      16.5
+     ]
+    ],
+    [
+     [
+      2.5,
+      3.5,
+      4.5,
+      5.5
+     ],
+     [
+      6.5,
+      7.5,
+      8.5,
+      9.5
+     ],
+     [
+      10.5,
+      11.5,
+      12.5,
+      13.5
+     ],
+     [
+      14.5,
+      15.5,
+      16.5,
+      17.5
+     ]
+    ]
+   ],
+   "sample": [
+    [
+     [
+      1.5,
+      2.5,
+      3.5,
+      4.5
+     ],
+     [
+      5.5,
+      6.5,
+      7.5,
+      8.5
+     ],
+     [
+      9.5,
+      10.5,
+      11.5,
+      12.5
+     ],
+     [
+      13.5,
+      14.5,
+      15.5,
+      16.5
+     ]
+    ],
+    [
+     [
+      2.5,
+      3.5,
+      4.5,
+      5.5
+     ],
+     [
+      6.5,
+      7.5,
+      8.5,
+      9.5
+     ],
+     [
+      10.5,
+      11.5,
+      12.5,
+      13.5
+     ],
+     [
+      14.5,
+      15.5,
+      16.5,
+      17.5
+     ]
+    ]
+   ]
+  },
+  "/Authored_SpatialAudio.auralMode": {
+   "allowed": [
+    "spatial",
+    "nonSpatial"
+   ],
+   "default": "nonSpatial",
+   "sample": "nonSpatial"
+  },
+  "/Authored_SpatialAudio.endTime": {
+   "default": 1.5,
+   "sample": 1.5
+  },
+  "/Authored_SpatialAudio.filePath": {
+   "default": "asset1.usda",
+   "sample": "asset1.usda"
+  },
+  "/Authored_SpatialAudio.gain": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_SpatialAudio.mediaOffset": {
+   "default": 1.5,
+   "sample": 1.5
+  },
+  "/Authored_SpatialAudio.playbackMode": {
+   "allowed": [
+    "onceFromStart",
+    "onceFromStartToEnd",
+    "loopFromStart",
+    "loopFromStartToEnd",
+    "loopFromStage"
+   ],
+   "default": "onceFromStartToEnd",
+   "sample": "onceFromStartToEnd"
+  },
+  "/Authored_SpatialAudio.startTime": {
+   "default": 1.5,
+   "sample": 1.5
+  },
+  "/Authored_Sphere.radius": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_SphereLight.inputs:radius": {
+   "default": 1.5,
+   "sample": 2.5
+  },
+  "/Authored_SphereLight.treatAsPoint": {
+   "default": true,
+   "sample": false
+  },
+  "/Authored_TetMesh.surfaceFaceVertexIndices": {
+   "default": [
+    [
+     3,
+     4,
+     5
+    ],
+    [
+     4,
+     5,
+     6
+    ]
+   ],
+   "sample": [
+    [
+     4,
+     5,
+     6
+    ],
+    [
+     5,
+     6,
+     7
+    ]
+   ]
+  },
+  "/Authored_TetMesh.tetVertexIndices": {
+   "default": [
+    [
+     3,
+     4,
+     5,
+     6
+    ],
+    [
+     4,
+     5,
+     6,
+     7
+    ]
+   ],
+   "sample": [
+    [
+     4,
+     5,
+     6,
+     7
+    ],
+    [
+     5,
+     6,
+     7,
+     8
+    ]
+   ]
+  },
+  "/Authored_VisibilityAPI.guideVisibility": {
+   "allowed": [
+    "inherited",
+    "invisible",
+    "visible"
+   ],
+   "default": "invisible",
+   "sample": "invisible"
+  },
+  "/Authored_VisibilityAPI.proxyVisibility": {
+   "allowed": [
+    "inherited",
+    "invisible",
+    "visible"
+   ],
+   "default": "invisible",
+   "sample": "invisible"
+  },
+  "/Authored_VisibilityAPI.renderVisibility": {
+   "allowed": [
+    "inherited",
+    "invisible",
+    "visible"
+   ],
+   "default": "invisible",
+   "sample": "invisible"
+  },
+  "/Fallback_AccessibilityAPI.accessibility:a:description": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_AccessibilityAPI.accessibility:a:label": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_AccessibilityAPI.accessibility:a:priority": {
+   "allowed": [
+    "low",
+    "standard",
+    "high"
+   ],
+   "default": "standard",
+   "sample": "standard"
+  },
+  "/Fallback_BackPlateAPI.backPlate:a:alpha:image": {
+   "default": "",
+   "sample": ""
+  },
+  "/Fallback_BackPlateAPI.backPlate:a:depth:cameraSpaceOffset": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_BackPlateAPI.backPlate:a:depth:image": {
+   "default": "",
+   "sample": ""
+  },
+  "/Fallback_BackPlateAPI.backPlate:a:depth:minOffset": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_BackPlateAPI.backPlate:a:depth:normalizingFactor": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_BackPlateAPI.backPlate:a:image": {
+   "default": "",
+   "sample": ""
+  },
+  "/Fallback_BackPlateAPI.backPlate:a:luma:gain": {
+   "default": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "sample": [
+    1.0,
+    1.0,
+    1.0
+   ]
+  },
+  "/Fallback_BackPlateAPI.backPlate:a:luma:gamma": {
+   "default": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "sample": [
+    1.0,
+    1.0,
+    1.0
+   ]
+  },
+  "/Fallback_BackPlateAPI.backPlate:a:luma:lift": {
+   "default": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sample": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "/Fallback_BackPlateAPI.backPlate:a:plateVisibility": {
+   "allowed": [
+    "all",
+    "solo",
+    "mute"
+   ],
+   "default": "solo",
+   "sample": "solo"
+  },
+  "/Fallback_BackPlateAPI.backPlate:a:rotateXYZ:tweak": {
+   "default": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sample": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "/Fallback_BackPlateAPI.backPlate:a:scale:tweak": {
+   "default": [
+    1.0,
+    1.0
+   ],
+   "sample": [
+    1.0,
+    1.0
+   ]
+  },
+  "/Fallback_BackPlateAPI.backPlate:a:translate:tweak": {
+   "default": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sample": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "/Fallback_Backdrop.ui:description": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_BasisCurves.accelerations": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_BasisCurves.basis": {
+   "allowed": [
+    "bezier",
+    "bspline",
+    "catmullRom"
+   ],
+   "default": "bezier",
+   "sample": "bezier"
+  },
+  "/Fallback_BasisCurves.curveVertexCounts": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_BasisCurves.doubleSided": {
+   "default": false,
+   "sample": false
+  },
+  "/Fallback_BasisCurves.extent": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_BasisCurves.normals": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_BasisCurves.orientation": {
+   "allowed": [
+    "rightHanded",
+    "leftHanded"
+   ],
+   "default": "rightHanded",
+   "sample": "rightHanded"
+  },
+  "/Fallback_BasisCurves.points": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_BasisCurves.primvars:displayColor": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_BasisCurves.primvars:displayOpacity": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_BasisCurves.proxyPrim": {
+   "targets": []
+  },
+  "/Fallback_BasisCurves.purpose": {
+   "allowed": [
+    "default",
+    "render",
+    "proxy",
+    "guide"
+   ],
+   "default": "default",
+   "sample": "default"
+  },
+  "/Fallback_BasisCurves.type": {
+   "allowed": [
+    "linear",
+    "cubic"
+   ],
+   "default": "cubic",
+   "sample": "cubic"
+  },
+  "/Fallback_BasisCurves.velocities": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_BasisCurves.visibility": {
+   "allowed": [
+    "inherited",
+    "invisible"
+   ],
+   "default": "inherited",
+   "sample": "inherited"
+  },
+  "/Fallback_BasisCurves.widths": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_BasisCurves.wrap": {
+   "allowed": [
+    "nonperiodic",
+    "periodic",
+    "pinned"
+   ],
+   "default": "nonperiodic",
+   "sample": "nonperiodic"
+  },
+  "/Fallback_BasisCurves.xformOpOrder": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_BlendShape.normalOffsets": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_BlendShape.offsets": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_BlendShape.pointIndices": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_Camera.clippingPlanes": {
+   "default": [],
+   "sample": []
+  },
+  "/Fallback_Camera.clippingRange": {
+   "default": [
+    1.0,
+    1000000.0
+   ],
+   "sample": [
+    1.0,
+    1000000.0
+   ]
+  },
+  "/Fallback_Camera.exposure": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_Camera.exposure:fStop": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_Camera.exposure:iso": {
+   "default": 100.0,
+   "sample": 100.0
+  },
+  "/Fallback_Camera.exposure:responsivity": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_Camera.exposure:time": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_Camera.fStop": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_Camera.focalLength": {
+   "default": 50.0,
+   "sample": 50.0
+  },
+  "/Fallback_Camera.focusDistance": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_Camera.horizontalAperture": {
+   "default": 20.954999923706055,
+   "sample": 20.954999923706055
+  },
+  "/Fallback_Camera.horizontalApertureOffset": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_Camera.projection": {
+   "allowed": [
+    "perspective",
+    "orthographic"
+   ],
+   "default": "perspective",
+   "sample": "perspective"
+  },
+  "/Fallback_Camera.shutter:close": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_Camera.shutter:open": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_Camera.stereoRole": {
+   "allowed": [
+    "mono",
+    "left",
+    "right"
+   ],
+   "default": "mono",
+   "sample": "mono"
+  },
+  "/Fallback_Camera.verticalAperture": {
+   "default": 15.290800094604492,
+   "sample": 15.290800094604492
+  },
+  "/Fallback_Camera.verticalApertureOffset": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_Capsule.axis": {
+   "allowed": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "default": "Z",
+   "sample": "Z"
+  },
+  "/Fallback_Capsule.height": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_Capsule.radius": {
+   "default": 0.5,
+   "sample": 0.5
+  },
+  "/Fallback_Capsule_1.axis": {
+   "allowed": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "default": "Z",
+   "sample": "Z"
+  },
+  "/Fallback_Capsule_1.height": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_Capsule_1.radiusBottom": {
+   "default": 0.5,
+   "sample": 0.5
+  },
+  "/Fallback_Capsule_1.radiusTop": {
+   "default": 0.5,
+   "sample": 0.5
+  },
+  "/Fallback_CollectionAPI.collection:a:excludes": {
+   "targets": []
+  },
+  "/Fallback_CollectionAPI.collection:a:expansionRule": {
+   "allowed": [
+    "explicitOnly",
+    "expandPrims",
+    "expandPrimsAndProperties"
+   ],
+   "default": "expandPrims",
+   "sample": "expandPrims"
+  },
+  "/Fallback_CollectionAPI.collection:a:includeRoot": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_CollectionAPI.collection:a:includes": {
+   "targets": []
+  },
+  "/Fallback_CollectionAPI.collection:a:mode": {
+   "allowed": [
+    "automatic",
+    "relationship",
+    "expression"
+   ],
+   "default": "automatic",
+   "sample": "automatic"
+  },
+  "/Fallback_ColorSpaceAPI.colorSpace:name": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_ColorSpaceDefinitionAPI.colorSpaceDefinition:a:blueChroma": {
+   "default": [
+    0.0,
+    0.0
+   ],
+   "sample": [
+    0.0,
+    0.0
+   ]
+  },
+  "/Fallback_ColorSpaceDefinitionAPI.colorSpaceDefinition:a:gamma": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_ColorSpaceDefinitionAPI.colorSpaceDefinition:a:greenChroma": {
+   "default": [
+    0.0,
+    1.0
+   ],
+   "sample": [
+    0.0,
+    1.0
+   ]
+  },
+  "/Fallback_ColorSpaceDefinitionAPI.colorSpaceDefinition:a:linearBias": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_ColorSpaceDefinitionAPI.colorSpaceDefinition:a:name": {
+   "default": "custom",
+   "sample": "custom"
+  },
+  "/Fallback_ColorSpaceDefinitionAPI.colorSpaceDefinition:a:redChroma": {
+   "default": [
+    1.0,
+    0.0
+   ],
+   "sample": [
+    1.0,
+    0.0
+   ]
+  },
+  "/Fallback_ColorSpaceDefinitionAPI.colorSpaceDefinition:a:whitePoint": {
+   "default": [
+    0.3333333432674408,
+    0.3333333432674408
+   ],
+   "sample": [
+    0.3333333432674408,
+    0.3333333432674408
+   ]
+  },
+  "/Fallback_Cone.axis": {
+   "allowed": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "default": "Z",
+   "sample": "Z"
+  },
+  "/Fallback_Cone.height": {
+   "default": 2.0,
+   "sample": 2.0
+  },
+  "/Fallback_Cone.radius": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_CoordSysAPI.coordSys:a:binding": {
+   "targets": []
+  },
+  "/Fallback_Cube.size": {
+   "default": 2.0,
+   "sample": 2.0
+  },
+  "/Fallback_Cylinder.axis": {
+   "allowed": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "default": "Z",
+   "sample": "Z"
+  },
+  "/Fallback_Cylinder.height": {
+   "default": 2.0,
+   "sample": 2.0
+  },
+  "/Fallback_Cylinder.radius": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_CylinderLight.inputs:length": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_CylinderLight.inputs:radius": {
+   "default": 0.5,
+   "sample": 0.5
+  },
+  "/Fallback_CylinderLight.treatAsLine": {
+   "default": false,
+   "sample": false
+  },
+  "/Fallback_Cylinder_1.axis": {
+   "allowed": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "default": "Z",
+   "sample": "Z"
+  },
+  "/Fallback_Cylinder_1.height": {
+   "default": 2.0,
+   "sample": 2.0
+  },
+  "/Fallback_Cylinder_1.radiusBottom": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_Cylinder_1.radiusTop": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_DiskLight.inputs:radius": {
+   "default": 0.5,
+   "sample": 0.5
+  },
+  "/Fallback_DistantLight.inputs:angle": {
+   "default": 0.5299999713897705,
+   "sample": 0.5299999713897705
+  },
+  "/Fallback_DomeLight.guideRadius": {
+   "default": 100000.0,
+   "sample": 100000.0
+  },
+  "/Fallback_DomeLight.inputs:texture:file": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_DomeLight.inputs:texture:format": {
+   "allowed": [
+    "automatic",
+    "latlong",
+    "mirroredBall",
+    "angular",
+    "cubeMapVerticalCross"
+   ],
+   "default": "automatic",
+   "sample": "automatic"
+  },
+  "/Fallback_DomeLight.portals": {
+   "targets": []
+  },
+  "/Fallback_DomeLight_1.guideRadius": {
+   "default": 100000.0,
+   "sample": 100000.0
+  },
+  "/Fallback_DomeLight_1.inputs:texture:file": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_DomeLight_1.inputs:texture:format": {
+   "allowed": [
+    "automatic",
+    "latlong",
+    "mirroredBall",
+    "angular",
+    "cubeMapVerticalCross"
+   ],
+   "default": "automatic",
+   "sample": "automatic"
+  },
+  "/Fallback_DomeLight_1.poleAxis": {
+   "allowed": [
+    "scene",
+    "Y",
+    "Z"
+   ],
+   "default": "scene",
+   "sample": "scene"
+  },
+  "/Fallback_DomeLight_1.portals": {
+   "targets": []
+  },
+  "/Fallback_Field3DAsset.fieldDataType": {
+   "allowed": [
+    "half",
+    "float",
+    "double",
+    "half3",
+    "float3",
+    "double3"
+   ],
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_Field3DAsset.fieldIndex": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_Field3DAsset.fieldName": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_Field3DAsset.fieldPurpose": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_Field3DAsset.filePath": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_Field3DAsset.vectorDataRoleHint": {
+   "allowed": [
+    "None",
+    "Point",
+    "Normal",
+    "Vector",
+    "Color"
+   ],
+   "default": "None",
+   "sample": "None"
+  },
+  "/Fallback_GenerativeProcedural.proceduralSystem": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_GeomModelAPI.model:applyDrawMode": {
+   "default": false,
+   "sample": false
+  },
+  "/Fallback_GeomModelAPI.model:cardGeometry": {
+   "allowed": [
+    "cross",
+    "box",
+    "fromTexture"
+   ],
+   "default": "cross",
+   "sample": "cross"
+  },
+  "/Fallback_GeomModelAPI.model:cardTextureXNeg": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_GeomModelAPI.model:cardTextureXPos": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_GeomModelAPI.model:cardTextureYNeg": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_GeomModelAPI.model:cardTextureYPos": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_GeomModelAPI.model:cardTextureZNeg": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_GeomModelAPI.model:cardTextureZPos": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_GeomModelAPI.model:cardVisibility": {
+   "allowed": [
+    "full",
+    "simple",
+    "inherited"
+   ],
+   "default": "inherited",
+   "sample": "inherited"
+  },
+  "/Fallback_GeomModelAPI.model:drawMode": {
+   "allowed": [
+    "origin",
+    "bounds",
+    "cards",
+    "default",
+    "inherited"
+   ],
+   "default": "inherited",
+   "sample": "inherited"
+  },
+  "/Fallback_GeomModelAPI.model:drawModeColor": {
+   "default": [
+    0.18000000715255737,
+    0.18000000715255737,
+    0.18000000715255737
+   ],
+   "sample": [
+    0.18000000715255737,
+    0.18000000715255737,
+    0.18000000715255737
+   ]
+  },
+  "/Fallback_GeomSubset.elementType": {
+   "allowed": [
+    "face",
+    "point",
+    "edge",
+    "segment",
+    "tetrahedron"
+   ],
+   "default": "face",
+   "sample": "face"
+  },
+  "/Fallback_GeomSubset.familyName": {
+   "default": "",
+   "sample": ""
+  },
+  "/Fallback_GeomSubset.indices": {
+   "default": [],
+   "sample": []
+  },
+  "/Fallback_GeometryLight.geometry": {
+   "targets": []
+  },
+  "/Fallback_HermiteCurves.tangents": {
+   "default": [],
+   "sample": []
+  },
+  "/Fallback_HydraGenerativeProceduralAPI.primvars:hdGp:proceduralType": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_HydraGenerativeProceduralAPI.proceduralSystem": {
+   "default": "hydraGenerativeProcedural",
+   "sample": "hydraGenerativeProcedural"
+  },
+  "/Fallback_HydraRenderPassAPI.hydra:rendererName": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_LODDistanceHeuristic.blendThresholds": {
+   "default": [],
+   "sample": []
+  },
+  "/Fallback_LODDistanceHeuristic.boundingVolume": {
+   "targets": []
+  },
+  "/Fallback_LODDistanceHeuristic.center": {
+   "default": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sample": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "/Fallback_LODDistanceHeuristic.lod:domain": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_LODDistanceHeuristic.thresholds": {
+   "default": [],
+   "sample": []
+  },
+  "/Fallback_LODOverrideAPI.lod:override:index": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_LODOverrideAPI.lod:override:mode": {
+   "allowed": [
+    "inherited",
+    "noOverride",
+    "indexedLOD",
+    "noLOD",
+    "allLOD"
+   ],
+   "default": "inherited",
+   "sample": "inherited"
+  },
+  "/Fallback_LODRootAPI.lod:default:index": {
+   "default": 0,
+   "sample": 0
+  },
+  "/Fallback_LODRootAPI.lod:heuristics": {
+   "targets": []
+  },
+  "/Fallback_LODScreenSizeHeuristic.blendThresholds": {
+   "default": [],
+   "sample": []
+  },
+  "/Fallback_LODScreenSizeHeuristic.boundingVolume": {
+   "targets": []
+  },
+  "/Fallback_LODScreenSizeHeuristic.extent": {
+   "default": [
+    [
+     -1.0,
+     -1.0,
+     -1.0
+    ],
+    [
+     1.0,
+     1.0,
+     1.0
+    ]
+   ],
+   "sample": [
+    [
+     -1.0,
+     -1.0,
+     -1.0
+    ],
+    [
+     1.0,
+     1.0,
+     1.0
+    ]
+   ]
+  },
+  "/Fallback_LODScreenSizeHeuristic.projectionMethod": {
+   "allowed": [
+    "projectedExtent",
+    "projectedSphere"
+   ],
+   "default": "projectedSphere",
+   "sample": "projectedSphere"
+  },
+  "/Fallback_LODScreenSizeHeuristic.thresholds": {
+   "default": [],
+   "sample": []
+  },
+  "/Fallback_LightAPI.inputs:color": {
+   "default": [
+    1.0,
+    1.0,
+    1.0
+   ],
+   "sample": [
+    1.0,
+    1.0,
+    1.0
+   ]
+  },
+  "/Fallback_LightAPI.inputs:colorTemperature": {
+   "default": 6500.0,
+   "sample": 6500.0
+  },
+  "/Fallback_LightAPI.inputs:diffuse": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_LightAPI.inputs:enableColorTemperature": {
+   "default": false,
+   "sample": false
+  },
+  "/Fallback_LightAPI.inputs:exposure": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_LightAPI.inputs:intensity": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_LightAPI.inputs:normalize": {
+   "default": false,
+   "sample": false
+  },
+  "/Fallback_LightAPI.inputs:specular": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_LightAPI.light:filters": {
+   "targets": []
+  },
+  "/Fallback_LightAPI.light:materialSyncMode": {
+   "allowed": [
+    "materialGlowTintsLight",
+    "independent",
+    "noMaterialResponse"
+   ],
+   "default": "noMaterialResponse",
+   "sample": "noMaterialResponse"
+  },
+  "/Fallback_LightAPI.light:shaderId": {
+   "default": "",
+   "sample": ""
+  },
+  "/Fallback_LightFilter.lightFilter:shaderId": {
+   "default": "",
+   "sample": ""
+  },
+  "/Fallback_LightListAPI.lightList": {
+   "targets": []
+  },
+  "/Fallback_LightListAPI.lightList:cacheBehavior": {
+   "allowed": [
+    "consumeAndHalt",
+    "consumeAndContinue",
+    "ignore"
+   ],
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_ListAPI.lightList": {
+   "targets": []
+  },
+  "/Fallback_ListAPI.lightList:cacheBehavior": {
+   "allowed": [
+    "consumeAndHalt",
+    "consumeAndContinue",
+    "ignore"
+   ],
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_Material.outputs:displacement": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_Material.outputs:surface": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_Material.outputs:volume": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_Mesh.cornerIndices": {
+   "default": [],
+   "sample": []
+  },
+  "/Fallback_Mesh.cornerSharpnesses": {
+   "default": [],
+   "sample": []
+  },
+  "/Fallback_Mesh.creaseIndices": {
+   "default": [],
+   "sample": []
+  },
+  "/Fallback_Mesh.creaseLengths": {
+   "default": [],
+   "sample": []
+  },
+  "/Fallback_Mesh.creaseSharpnesses": {
+   "default": [],
+   "sample": []
+  },
+  "/Fallback_Mesh.faceVaryingLinearInterpolation": {
+   "allowed": [
+    "none",
+    "cornersOnly",
+    "cornersPlus1",
+    "cornersPlus2",
+    "boundaries",
+    "all"
+   ],
+   "default": "cornersPlus1",
+   "sample": "cornersPlus1"
+  },
+  "/Fallback_Mesh.faceVertexCounts": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_Mesh.faceVertexIndices": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_Mesh.holeIndices": {
+   "default": [],
+   "sample": []
+  },
+  "/Fallback_Mesh.interpolateBoundary": {
+   "allowed": [
+    "none",
+    "edgeOnly",
+    "edgeAndCorner"
+   ],
+   "default": "edgeAndCorner",
+   "sample": "edgeAndCorner"
+  },
+  "/Fallback_Mesh.subdivisionScheme": {
+   "allowed": [
+    "catmullClark",
+    "loop",
+    "bilinear",
+    "none"
+   ],
+   "default": "catmullClark",
+   "sample": "catmullClark"
+  },
+  "/Fallback_Mesh.triangleSubdivisionRule": {
+   "allowed": [
+    "catmullClark",
+    "smooth"
+   ],
+   "default": "catmullClark",
+   "sample": "catmullClark"
+  },
+  "/Fallback_MotionAPI.motion:blurScale": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_MotionAPI.motion:nonlinearSampleCount": {
+   "default": 3,
+   "sample": 3
+  },
+  "/Fallback_MotionAPI.motion:velocityScale": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_NodeDefAPI.info:id": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NodeDefAPI.info:implementationSource": {
+   "allowed": [
+    "id",
+    "sourceAsset",
+    "sourceCode"
+   ],
+   "default": "id",
+   "sample": "id"
+  },
+  "/Fallback_NodeGraphNodeAPI.ui:nodegraph:node:displayColor": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NodeGraphNodeAPI.ui:nodegraph:node:docURI": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NodeGraphNodeAPI.ui:nodegraph:node:expansionState": {
+   "allowed": [
+    "open",
+    "closed",
+    "minimized"
+   ],
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NodeGraphNodeAPI.ui:nodegraph:node:icon": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NodeGraphNodeAPI.ui:nodegraph:node:pos": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NodeGraphNodeAPI.ui:nodegraph:node:size": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NodeGraphNodeAPI.ui:nodegraph:node:stackingOrder": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NurbsCurves.knots": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NurbsCurves.order": {
+   "default": [],
+   "sample": []
+  },
+  "/Fallback_NurbsCurves.pointWeights": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NurbsCurves.ranges": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NurbsPatch.pointWeights": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NurbsPatch.trimCurve:counts": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NurbsPatch.trimCurve:knots": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NurbsPatch.trimCurve:orders": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NurbsPatch.trimCurve:points": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NurbsPatch.trimCurve:ranges": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NurbsPatch.trimCurve:vertexCounts": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NurbsPatch.uForm": {
+   "allowed": [
+    "open",
+    "closed",
+    "periodic"
+   ],
+   "default": "open",
+   "sample": "open"
+  },
+  "/Fallback_NurbsPatch.uKnots": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NurbsPatch.uOrder": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NurbsPatch.uRange": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NurbsPatch.uVertexCount": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NurbsPatch.vForm": {
+   "allowed": [
+    "open",
+    "closed",
+    "periodic"
+   ],
+   "default": "open",
+   "sample": "open"
+  },
+  "/Fallback_NurbsPatch.vKnots": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NurbsPatch.vOrder": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NurbsPatch.vRange": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_NurbsPatch.vVertexCount": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_OpenVDBAsset.fieldClass": {
+   "allowed": [
+    "levelSet",
+    "fogVolume",
+    "staggered",
+    "unknown"
+   ],
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_ParticleField3DGaussianSplat.projectionModeHint": {
+   "allowed": [
+    "perspective",
+    "tangential"
+   ],
+   "default": "perspective",
+   "sample": "perspective"
+  },
+  "/Fallback_ParticleField3DGaussianSplat.sortingModeHint": {
+   "allowed": [
+    "zDepth",
+    "cameraDistance",
+    "rayHitDistance"
+   ],
+   "default": "zDepth",
+   "sample": "zDepth"
+  },
+  "/Fallback_ParticleFieldOpacityAttributeAPI.opacities": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_ParticleFieldOpacityAttributeAPI.opacitiesh": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_ParticleFieldOrientationAttributeAPI.orientations": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_ParticleFieldOrientationAttributeAPI.orientationsh": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_ParticleFieldPositionAttributeAPI.positions": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_ParticleFieldPositionAttributeAPI.positionsh": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_ParticleFieldScaleAttributeAPI.scales": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_ParticleFieldScaleAttributeAPI.scalesh": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_ParticleFieldSphericalHarmonicsAttributeAPI.radiance:sphericalHarmonicsCoefficients": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_ParticleFieldSphericalHarmonicsAttributeAPI.radiance:sphericalHarmonicsCoefficientsh": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_ParticleFieldSphericalHarmonicsAttributeAPI.radiance:sphericalHarmonicsDegree": {
+   "default": 3,
+   "sample": 3
+  },
+  "/Fallback_PhysicsCollisionAPI.physics:collisionEnabled": {
+   "default": true,
+   "sample": true
+  },
+  "/Fallback_PhysicsCollisionAPI.physics:simulationOwner": {
+   "targets": []
+  },
+  "/Fallback_PhysicsCollisionGroup.physics:filteredGroups": {
+   "targets": []
+  },
+  "/Fallback_PhysicsCollisionGroup.physics:invertFilteredGroups": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_PhysicsCollisionGroup.physics:mergeGroup": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_PhysicsDistanceJoint.physics:maxDistance": {
+   "default": -1.0,
+   "sample": -1.0
+  },
+  "/Fallback_PhysicsDistanceJoint.physics:minDistance": {
+   "default": -1.0,
+   "sample": -1.0
+  },
+  "/Fallback_PhysicsDriveAPI.drive:a:physics:damping": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_PhysicsDriveAPI.drive:a:physics:maxForce": {
+   "default": "inf",
+   "sample": "inf"
+  },
+  "/Fallback_PhysicsDriveAPI.drive:a:physics:stiffness": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_PhysicsDriveAPI.drive:a:physics:targetPosition": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_PhysicsDriveAPI.drive:a:physics:targetVelocity": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_PhysicsDriveAPI.drive:a:physics:type": {
+   "allowed": [
+    "force",
+    "acceleration"
+   ],
+   "default": "force",
+   "sample": "force"
+  },
+  "/Fallback_PhysicsFilteredPairsAPI.physics:filteredPairs": {
+   "targets": []
+  },
+  "/Fallback_PhysicsJoint.physics:body0": {
+   "targets": []
+  },
+  "/Fallback_PhysicsJoint.physics:body1": {
+   "targets": []
+  },
+  "/Fallback_PhysicsJoint.physics:breakForce": {
+   "default": "inf",
+   "sample": "inf"
+  },
+  "/Fallback_PhysicsJoint.physics:breakTorque": {
+   "default": "inf",
+   "sample": "inf"
+  },
+  "/Fallback_PhysicsJoint.physics:collisionEnabled": {
+   "default": false,
+   "sample": false
+  },
+  "/Fallback_PhysicsJoint.physics:excludeFromArticulation": {
+   "default": false,
+   "sample": false
+  },
+  "/Fallback_PhysicsJoint.physics:jointEnabled": {
+   "default": true,
+   "sample": true
+  },
+  "/Fallback_PhysicsJoint.physics:localPos0": {
+   "default": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sample": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "/Fallback_PhysicsJoint.physics:localPos1": {
+   "default": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sample": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "/Fallback_PhysicsJoint.physics:localRot0": {
+   "default": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "sample": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  "/Fallback_PhysicsJoint.physics:localRot1": {
+   "default": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ],
+   "sample": [
+    0.0,
+    0.0,
+    0.0,
+    1.0
+   ]
+  },
+  "/Fallback_PhysicsLimitAPI.limit:a:physics:high": {
+   "default": "inf",
+   "sample": "inf"
+  },
+  "/Fallback_PhysicsLimitAPI.limit:a:physics:low": {
+   "default": "-inf",
+   "sample": "-inf"
+  },
+  "/Fallback_PhysicsMassAPI.physics:centerOfMass": {
+   "default": [
+    "-inf",
+    "-inf",
+    "-inf"
+   ],
+   "sample": [
+    "-inf",
+    "-inf",
+    "-inf"
+   ]
+  },
+  "/Fallback_PhysicsMassAPI.physics:density": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_PhysicsMassAPI.physics:diagonalInertia": {
+   "default": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sample": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "/Fallback_PhysicsMassAPI.physics:mass": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_PhysicsMassAPI.physics:principalAxes": {
+   "default": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sample": [
+    0.0,
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "/Fallback_PhysicsMaterialAPI.physics:density": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_PhysicsMaterialAPI.physics:dynamicFriction": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_PhysicsMaterialAPI.physics:restitution": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_PhysicsMaterialAPI.physics:staticFriction": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_PhysicsMeshCollisionAPI.physics:approximation": {
+   "allowed": [
+    "none",
+    "convexDecomposition",
+    "convexHull",
+    "boundingSphere",
+    "boundingCube",
+    "meshSimplification"
+   ],
+   "default": "none",
+   "sample": "none"
+  },
+  "/Fallback_PhysicsPrismaticJoint.physics:axis": {
+   "allowed": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "default": "X",
+   "sample": "X"
+  },
+  "/Fallback_PhysicsPrismaticJoint.physics:lowerLimit": {
+   "default": "-inf",
+   "sample": "-inf"
+  },
+  "/Fallback_PhysicsPrismaticJoint.physics:upperLimit": {
+   "default": "inf",
+   "sample": "inf"
+  },
+  "/Fallback_PhysicsRevoluteJoint.physics:axis": {
+   "allowed": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "default": "X",
+   "sample": "X"
+  },
+  "/Fallback_PhysicsRevoluteJoint.physics:lowerLimit": {
+   "default": "-inf",
+   "sample": "-inf"
+  },
+  "/Fallback_PhysicsRevoluteJoint.physics:upperLimit": {
+   "default": "inf",
+   "sample": "inf"
+  },
+  "/Fallback_PhysicsRigidBodyAPI.physics:angularVelocity": {
+   "default": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sample": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "/Fallback_PhysicsRigidBodyAPI.physics:kinematicEnabled": {
+   "default": false,
+   "sample": false
+  },
+  "/Fallback_PhysicsRigidBodyAPI.physics:rigidBodyEnabled": {
+   "default": true,
+   "sample": true
+  },
+  "/Fallback_PhysicsRigidBodyAPI.physics:simulationOwner": {
+   "targets": []
+  },
+  "/Fallback_PhysicsRigidBodyAPI.physics:startsAsleep": {
+   "default": false,
+   "sample": false
+  },
+  "/Fallback_PhysicsRigidBodyAPI.physics:velocity": {
+   "default": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sample": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "/Fallback_PhysicsScene.physics:gravityDirection": {
+   "default": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sample": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "/Fallback_PhysicsScene.physics:gravityMagnitude": {
+   "default": "-inf",
+   "sample": "-inf"
+  },
+  "/Fallback_PhysicsSphericalJoint.physics:axis": {
+   "allowed": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "default": "X",
+   "sample": "X"
+  },
+  "/Fallback_PhysicsSphericalJoint.physics:coneAngle0Limit": {
+   "default": -1.0,
+   "sample": -1.0
+  },
+  "/Fallback_PhysicsSphericalJoint.physics:coneAngle1Limit": {
+   "default": -1.0,
+   "sample": -1.0
+  },
+  "/Fallback_Plane.axis": {
+   "allowed": [
+    "X",
+    "Y",
+    "Z"
+   ],
+   "default": "Z",
+   "sample": "Z"
+  },
+  "/Fallback_Plane.length": {
+   "default": 2.0,
+   "sample": 2.0
+  },
+  "/Fallback_Plane.width": {
+   "default": 2.0,
+   "sample": 2.0
+  },
+  "/Fallback_PointInstancer.accelerations": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_PointInstancer.angularVelocities": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_PointInstancer.ids": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_PointInstancer.invisibleIds": {
+   "default": [],
+   "sample": []
+  },
+  "/Fallback_PointInstancer.orientations": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_PointInstancer.orientationsf": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_PointInstancer.positions": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_PointInstancer.protoIndices": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_PointInstancer.prototypes": {
+   "targets": []
+  },
+  "/Fallback_PointInstancer.scales": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_PointInstancer.velocities": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_Points.ids": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_Points.widths": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_PortalLight.inputs:height": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_PortalLight.inputs:width": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_RectLight.inputs:height": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_RectLight.inputs:texture:file": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_RectLight.inputs:width": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_RenderPass.command": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_RenderPass.fileName": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_RenderPass.inputPasses": {
+   "targets": []
+  },
+  "/Fallback_RenderPass.passType": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_RenderPass.renderSource": {
+   "targets": []
+  },
+  "/Fallback_RenderProduct.aspectRatioConformPolicy": {
+   "allowed": [
+    "expandAperture",
+    "cropAperture",
+    "adjustApertureWidth",
+    "adjustApertureHeight",
+    "adjustPixelAspectRatio"
+   ],
+   "default": "expandAperture",
+   "sample": "expandAperture"
+  },
+  "/Fallback_RenderProduct.camera": {
+   "targets": []
+  },
+  "/Fallback_RenderProduct.dataWindowNDC": {
+   "default": [
+    0.0,
+    0.0,
+    1.0,
+    1.0
+   ],
+   "sample": [
+    0.0,
+    0.0,
+    1.0,
+    1.0
+   ]
+  },
+  "/Fallback_RenderProduct.disableDepthOfField": {
+   "default": false,
+   "sample": false
+  },
+  "/Fallback_RenderProduct.disableMotionBlur": {
+   "default": false,
+   "sample": false
+  },
+  "/Fallback_RenderProduct.instantaneousShutter": {
+   "default": false,
+   "sample": false
+  },
+  "/Fallback_RenderProduct.orderedVars": {
+   "targets": []
+  },
+  "/Fallback_RenderProduct.pixelAspectRatio": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_RenderProduct.productName": {
+   "default": "",
+   "sample": ""
+  },
+  "/Fallback_RenderProduct.productType": {
+   "allowed": [
+    "raster",
+    "deepRaster"
+   ],
+   "default": "raster",
+   "sample": "raster"
+  },
+  "/Fallback_RenderProduct.resolution": {
+   "default": [
+    2048,
+    1080
+   ],
+   "sample": [
+    2048,
+    1080
+   ]
+  },
+  "/Fallback_RenderSettings.includedPurposes": {
+   "default": [
+    "default",
+    "render"
+   ],
+   "sample": [
+    "default",
+    "render"
+   ]
+  },
+  "/Fallback_RenderSettings.materialBindingPurposes": {
+   "allowed": [
+    "full",
+    "preview",
+    ""
+   ],
+   "default": [
+    "full",
+    ""
+   ],
+   "sample": [
+    "full",
+    ""
+   ]
+  },
+  "/Fallback_RenderSettings.products": {
+   "targets": []
+  },
+  "/Fallback_RenderSettings.renderingColorSpace": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_RenderVar.dataType": {
+   "default": "color3f",
+   "sample": "color3f"
+  },
+  "/Fallback_RenderVar.sourceName": {
+   "default": "",
+   "sample": ""
+  },
+  "/Fallback_RenderVar.sourceType": {
+   "allowed": [
+    "raw",
+    "primvar",
+    "lpe",
+    "intrinsic"
+   ],
+   "default": "raw",
+   "sample": "raw"
+  },
+  "/Fallback_RiMaterialAPI.outputs:ri:displacement": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_RiMaterialAPI.outputs:ri:surface": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_RiMaterialAPI.outputs:ri:volume": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_SceneGraphPrimAPI.ui:displayGroup": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_SceneGraphPrimAPI.ui:displayName": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_SemanticsLabelsAPI.semantics:labels:a": {
+   "default": [],
+   "sample": []
+  },
+  "/Fallback_ShadowAPI.inputs:shadow:color": {
+   "default": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sample": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "/Fallback_ShadowAPI.inputs:shadow:distance": {
+   "default": -1.0,
+   "sample": -1.0
+  },
+  "/Fallback_ShadowAPI.inputs:shadow:enable": {
+   "default": true,
+   "sample": true
+  },
+  "/Fallback_ShadowAPI.inputs:shadow:falloff": {
+   "default": -1.0,
+   "sample": -1.0
+  },
+  "/Fallback_ShadowAPI.inputs:shadow:falloffGamma": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_ShapingAPI.inputs:shaping:cone:angle": {
+   "default": 90.0,
+   "sample": 90.0
+  },
+  "/Fallback_ShapingAPI.inputs:shaping:cone:softness": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_ShapingAPI.inputs:shaping:focus": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_ShapingAPI.inputs:shaping:focusTint": {
+   "default": [
+    0.0,
+    0.0,
+    0.0
+   ],
+   "sample": [
+    0.0,
+    0.0,
+    0.0
+   ]
+  },
+  "/Fallback_ShapingAPI.inputs:shaping:ies:angleScale": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_ShapingAPI.inputs:shaping:ies:file": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_ShapingAPI.inputs:shaping:ies:normalize": {
+   "default": false,
+   "sample": false
+  },
+  "/Fallback_SkelAnimation.blendShapeWeights": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_SkelAnimation.blendShapes": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_SkelAnimation.joints": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_SkelAnimation.rotations": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_SkelAnimation.scales": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_SkelAnimation.translations": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_SkelBindingAPI.primvars:skel:geomBindTransform": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_SkelBindingAPI.primvars:skel:jointIndices": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_SkelBindingAPI.primvars:skel:jointWeights": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_SkelBindingAPI.primvars:skel:skinningMethod": {
+   "allowed": [
+    "classicLinear",
+    "dualQuaternion"
+   ],
+   "default": "classicLinear",
+   "sample": "classicLinear"
+  },
+  "/Fallback_SkelBindingAPI.skel:animationSource": {
+   "targets": []
+  },
+  "/Fallback_SkelBindingAPI.skel:blendShapeTargets": {
+   "targets": []
+  },
+  "/Fallback_SkelBindingAPI.skel:blendShapes": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_SkelBindingAPI.skel:joints": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_SkelBindingAPI.skel:skeleton": {
+   "targets": []
+  },
+  "/Fallback_Skeleton.bindTransforms": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_Skeleton.jointNames": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_Skeleton.joints": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_Skeleton.restTransforms": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_SpatialAudio.auralMode": {
+   "allowed": [
+    "spatial",
+    "nonSpatial"
+   ],
+   "default": "spatial",
+   "sample": "spatial"
+  },
+  "/Fallback_SpatialAudio.endTime": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_SpatialAudio.filePath": {
+   "default": "",
+   "sample": ""
+  },
+  "/Fallback_SpatialAudio.gain": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_SpatialAudio.mediaOffset": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_SpatialAudio.playbackMode": {
+   "allowed": [
+    "onceFromStart",
+    "onceFromStartToEnd",
+    "loopFromStart",
+    "loopFromStartToEnd",
+    "loopFromStage"
+   ],
+   "default": "onceFromStart",
+   "sample": "onceFromStart"
+  },
+  "/Fallback_SpatialAudio.startTime": {
+   "default": 0.0,
+   "sample": 0.0
+  },
+  "/Fallback_Sphere.radius": {
+   "default": 1.0,
+   "sample": 1.0
+  },
+  "/Fallback_SphereLight.inputs:radius": {
+   "default": 0.5,
+   "sample": 0.5
+  },
+  "/Fallback_SphereLight.treatAsPoint": {
+   "default": false,
+   "sample": false
+  },
+  "/Fallback_TetMesh.surfaceFaceVertexIndices": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_TetMesh.tetVertexIndices": {
+   "default": null,
+   "sample": null
+  },
+  "/Fallback_VisibilityAPI.guideVisibility": {
+   "allowed": [
+    "inherited",
+    "invisible",
+    "visible"
+   ],
+   "default": "invisible",
+   "sample": "invisible"
+  },
+  "/Fallback_VisibilityAPI.proxyVisibility": {
+   "allowed": [
+    "inherited",
+    "invisible",
+    "visible"
+   ],
+   "default": "inherited",
+   "sample": "inherited"
+  },
+  "/Fallback_VisibilityAPI.renderVisibility": {
+   "allowed": [
+    "inherited",
+    "invisible",
+    "visible"
+   ],
+   "default": "inherited",
+   "sample": "inherited"
+  }
+ }
+}

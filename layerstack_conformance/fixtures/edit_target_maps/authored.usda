@@ -1,0 +1,47 @@
+#usda 1.0
+
+class "Class"
+{
+    rel look = [</Class/Child>, </Light>, </Light.intensity>]
+}
+
+def "Base"
+{
+    rel look = [</Light>, </Light.intensity>, </Base/Child>]
+}
+
+def "Inst" (
+    append inherits = </Class>
+)
+{
+}
+
+def "Spec" (
+    append specializes = </Base>
+)
+{
+}
+
+def "Rock" (
+    variants = {
+        string "look" = "a"
+    }
+    prepend variantSets = ["look"]
+)
+{
+    variantSet "look" = {
+        "a" {
+            rel look = [</Light>, </Light.intensity>, </Rock/Pebble>]
+        }
+    }
+}
+
+def "Light"
+{
+}
+
+def "Ref" (
+    append references = @asset.usda@</Asset>
+)
+{
+}

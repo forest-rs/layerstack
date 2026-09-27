@@ -1,0 +1,7 @@
+#usda 1.0
+
+def "Instance" (
+    append references = @mapped_asset.usda@</Asset>
+)
+{
+}

@@ -1,0 +1,12 @@
+#usda 1.0
+
+def "Asset" (
+    prepend apiSchemas = ["CollectionAPI:lights"]
+)
+{
+    rel collection:lights:includes = [</Asset/Light>, </Asset/Light.intensity>]
+
+    def "Light"
+    {
+    }
+}

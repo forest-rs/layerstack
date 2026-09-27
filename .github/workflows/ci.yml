@@ -387,6 +387,20 @@ jobs:
           pxr="$(python -c 'import os, pxr; print(os.path.dirname(pxr.__file__))')"
           cargo run --locked -p layerstack_schemagen -- --check --pxr "$pxr" --source openusd
 
+      # The schema views oracle must be what OpenUSD reads from its scene.
+      - name: check schema views oracle
+        run: |
+          python layerstack_conformance/scripts/schema_views_oracle.py \
+            layerstack_conformance/fixtures/schema_views/scene.usda "$RUNNER_TEMP/oracle.json"
+          diff -u layerstack_conformance/fixtures/schema_views/oracle.json "$RUNNER_TEMP/oracle.json"
+
+      # The edit target oracle must be how OpenUSD's edit targets map.
+      - name: check edit target maps oracle
+        run: |
+          python layerstack_conformance/scripts/edit_target_maps_oracle.py \
+            layerstack_conformance/fixtures/edit_target_maps "$RUNNER_TEMP/edit_target_maps.json"
+          diff -u layerstack_conformance/fixtures/edit_target_maps/oracle.json "$RUNNER_TEMP/edit_target_maps.json"
+
   # If this fails, consider changing your text or adding something to .typos.toml.
   typos:
     runs-on: ubuntu-latest

@@ -1,0 +1,178 @@
+{
+ "cases": {
+  "inherit": {
+   "spec_paths": {
+    "/Class": null,
+    "/Class/X": null,
+    "/Inst": "/Class",
+    "/Inst/Child": "/Class/Child",
+    "/Light": "/Light"
+   },
+   "targets": {
+    "/Class/X": null,
+    "/Inst/Child": {
+     "authored": [
+      "/Class/Child"
+     ],
+     "reads": [
+      "/Inst/Child"
+     ]
+    },
+    "/Light": {
+     "authored": [
+      "/Light"
+     ],
+     "reads": [
+      "/Light"
+     ]
+    },
+    "/Light.intensity": {
+     "authored": [
+      "/Light.intensity"
+     ],
+     "reads": [
+      "/Light.intensity"
+     ]
+    }
+   }
+  },
+  "local_direct_variant": {
+   "spec_paths": {
+    "/Light": "/Light",
+    "/Rock": "/Rock{look=a}",
+    "/Rock/Pebble": "/Rock{look=a}Pebble"
+   },
+   "targets": {
+    "/Light": {
+     "authored": [
+      "/Light"
+     ],
+     "reads": [
+      "/Light"
+     ]
+    },
+    "/Light.intensity": {
+     "authored": [
+      "/Light.intensity"
+     ],
+     "reads": [
+      "/Light.intensity"
+     ]
+    },
+    "/Rock/Pebble": {
+     "authored": [
+      "/Rock/Pebble"
+     ],
+     "reads": [
+      "/Rock/Pebble"
+     ]
+    }
+   }
+  },
+  "specialize": {
+   "spec_paths": {
+    "/Base": null,
+    "/Base/X": null,
+    "/Light": "/Light",
+    "/Spec": "/Base",
+    "/Spec/Child": "/Base/Child"
+   },
+   "targets": {
+    "/Base/X": null,
+    "/Light": {
+     "authored": [
+      "/Light"
+     ],
+     "reads": [
+      "/Light"
+     ]
+    },
+    "/Light.intensity": {
+     "authored": [
+      "/Light.intensity"
+     ],
+     "reads": [
+      "/Light.intensity"
+     ]
+    },
+    "/Spec/Child": {
+     "authored": [
+      "/Base/Child"
+     ],
+     "reads": [
+      "/Spec/Child"
+     ]
+    }
+   }
+  },
+  "variant": {
+   "spec_paths": {
+    "/Light": "/Light",
+    "/Rock": "/Rock{look=a}",
+    "/Rock/Pebble": "/Rock{look=a}Pebble"
+   },
+   "targets": {
+    "/Light": {
+     "authored": [
+      "/Light"
+     ],
+     "reads": [
+      "/Light"
+     ]
+    },
+    "/Light.intensity": {
+     "authored": [
+      "/Light.intensity"
+     ],
+     "reads": [
+      "/Light.intensity"
+     ]
+    },
+    "/Rock/Pebble": {
+     "authored": [
+      "/Rock/Pebble"
+     ],
+     "reads": [
+      "/Rock/Pebble"
+     ]
+    }
+   }
+  },
+  "variant_under_reference": {
+   "spec_paths": {
+    "/Light": null,
+    "/Ref": "/Asset{v=x}",
+    "/Ref/Child": "/Asset{v=x}Child"
+   },
+   "targets": {
+    "/Light": null,
+    "/Ref/Child": {
+     "authored": [
+      "/Asset/Child"
+     ],
+     "reads": [
+      "/Ref/Child"
+     ]
+    }
+   }
+  }
+ },
+ "composed": {
+  "/Inst": [
+   "/Inst/Child",
+   "/Light",
+   "/Light.intensity"
+  ],
+  "/Rock": [
+   "/Light",
+   "/Light.intensity",
+   "/Rock/Pebble"
+  ],
+  "/Spec": [
+   "/Light",
+   "/Light.intensity",
+   "/Spec/Child"
+  ]
+ },
+ "openusd_version": "26.8"
+}

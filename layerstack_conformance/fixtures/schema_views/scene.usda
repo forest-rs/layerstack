@@ -1,0 +1,2197 @@
+#usda 1.0
+
+def Scope "Fallback_CollectionAPI" (
+    prepend apiSchemas = ["CollectionAPI:a"]
+)
+{
+}
+
+def Scope "Authored_CollectionAPI" (
+    prepend apiSchemas = ["CollectionAPI:a"]
+)
+{
+    rel collection:a:excludes = </Target>
+    uniform token collection:a:expansionRule = "expandPrims"
+    uniform bool collection:a:includeRoot = true
+    rel collection:a:includes = </Target>
+    uniform token collection:a:mode = "relationship"
+}
+
+def Scope "Fallback_ColorSpaceAPI" (
+    prepend apiSchemas = ["ColorSpaceAPI"]
+)
+{
+}
+
+def Scope "Authored_ColorSpaceAPI" (
+    prepend apiSchemas = ["ColorSpaceAPI"]
+)
+{
+    uniform token colorSpace:name = "token1"
+}
+
+def Scope "Fallback_ColorSpaceDefinitionAPI" (
+    prepend apiSchemas = ["ColorSpaceDefinitionAPI:a"]
+)
+{
+}
+
+def Scope "Authored_ColorSpaceDefinitionAPI" (
+    prepend apiSchemas = ["ColorSpaceDefinitionAPI:a"]
+)
+{
+    float2 colorSpaceDefinition:a:blueChroma = (1.5, 2.5)
+    float2 colorSpaceDefinition:a:blueChroma.timeSamples = {
+        2: (2.5, 3.5),
+    }
+    float colorSpaceDefinition:a:gamma = 1.5
+    float colorSpaceDefinition:a:gamma.timeSamples = {
+        2: 2.5,
+    }
+    float2 colorSpaceDefinition:a:greenChroma = (1.5, 2.5)
+    float2 colorSpaceDefinition:a:greenChroma.timeSamples = {
+        2: (2.5, 3.5),
+    }
+    float colorSpaceDefinition:a:linearBias = 1.5
+    float colorSpaceDefinition:a:linearBias.timeSamples = {
+        2: 2.5,
+    }
+    uniform token colorSpaceDefinition:a:name = "token1"
+    float2 colorSpaceDefinition:a:redChroma = (1.5, 2.5)
+    float2 colorSpaceDefinition:a:redChroma.timeSamples = {
+        2: (2.5, 3.5),
+    }
+    float2 colorSpaceDefinition:a:whitePoint = (1.5, 2.5)
+    float2 colorSpaceDefinition:a:whitePoint.timeSamples = {
+        2: (2.5, 3.5),
+    }
+}
+
+def Scope "Fallback_BackPlateAPI" (
+    prepend apiSchemas = ["BackPlateAPI:a"]
+)
+{
+}
+
+def Scope "Authored_BackPlateAPI" (
+    prepend apiSchemas = ["BackPlateAPI:a"]
+)
+{
+    asset backPlate:a:alpha:image = @asset1.usda@
+    asset backPlate:a:alpha:image.timeSamples = {
+        2: @asset2.usda@,
+    }
+    float backPlate:a:depth:cameraSpaceOffset = 1.5
+    float backPlate:a:depth:cameraSpaceOffset.timeSamples = {
+        2: 2.5,
+    }
+    asset backPlate:a:depth:image = @asset1.usda@
+    asset backPlate:a:depth:image.timeSamples = {
+        2: @asset2.usda@,
+    }
+    float backPlate:a:depth:minOffset = 1.5
+    float backPlate:a:depth:minOffset.timeSamples = {
+        2: 2.5,
+    }
+    float backPlate:a:depth:normalizingFactor = 1.5
+    float backPlate:a:depth:normalizingFactor.timeSamples = {
+        2: 2.5,
+    }
+    asset backPlate:a:image = @asset1.usda@
+    asset backPlate:a:image.timeSamples = {
+        2: @asset2.usda@,
+    }
+    float3 backPlate:a:luma:gain = (1.5, 2.5, 3.5)
+    float3 backPlate:a:luma:gain.timeSamples = {
+        2: (2.5, 3.5, 4.5),
+    }
+    float3 backPlate:a:luma:gamma = (1.5, 2.5, 3.5)
+    float3 backPlate:a:luma:gamma.timeSamples = {
+        2: (2.5, 3.5, 4.5),
+    }
+    float3 backPlate:a:luma:lift = (1.5, 2.5, 3.5)
+    float3 backPlate:a:luma:lift.timeSamples = {
+        2: (2.5, 3.5, 4.5),
+    }
+    token backPlate:a:plateVisibility = "solo"
+    token backPlate:a:plateVisibility.timeSamples = {
+        2: "mute",
+    }
+    float3 backPlate:a:rotateXYZ:tweak = (1.5, 2.5, 3.5)
+    float3 backPlate:a:rotateXYZ:tweak.timeSamples = {
+        2: (2.5, 3.5, 4.5),
+    }
+    float2 backPlate:a:scale:tweak = (1.5, 2.5)
+    float2 backPlate:a:scale:tweak.timeSamples = {
+        2: (2.5, 3.5),
+    }
+    float3 backPlate:a:translate:tweak = (1.5, 2.5, 3.5)
+    float3 backPlate:a:translate:tweak.timeSamples = {
+        2: (2.5, 3.5, 4.5),
+    }
+}
+
+def BasisCurves "Fallback_BasisCurves"
+{
+}
+
+def BasisCurves "Authored_BasisCurves"
+{
+    uniform token basis = "bspline"
+    uniform token type = "cubic"
+    uniform token wrap = "periodic"
+    float3[] extent = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    float3[] extent.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+    int[] curveVertexCounts = [3, 4]
+    int[] curveVertexCounts.timeSamples = {
+        2: [4, 5],
+    }
+    float[] widths = [1.5, 2.5]
+    float[] widths.timeSamples = {
+        2: [2.5, 3.5],
+    }
+    uniform bool doubleSided = true
+    uniform token orientation = "leftHanded"
+    color3f[] primvars:displayColor = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    color3f[] primvars:displayColor.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+    float[] primvars:displayOpacity = [1.5, 2.5]
+    float[] primvars:displayOpacity.timeSamples = {
+        2: [2.5, 3.5],
+    }
+    rel proxyPrim = </Target>
+    uniform token purpose = "render"
+    token visibility = "invisible"
+    token visibility.timeSamples = {
+        2: "inherited",
+    }
+    vector3f[] accelerations = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    vector3f[] accelerations.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+    normal3f[] normals = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    normal3f[] normals.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+    point3f[] points = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    point3f[] points.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+    vector3f[] velocities = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    vector3f[] velocities.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+    uniform token[] xformOpOrder = ["token1", "token2"]
+}
+
+def Camera "Fallback_Camera"
+{
+}
+
+def Camera "Authored_Camera"
+{
+    float4[] clippingPlanes = [(1.5, 2.5, 3.5, 4.5), (2.5, 3.5, 4.5, 5.5)]
+    float4[] clippingPlanes.timeSamples = {
+        2: [(2.5, 3.5, 4.5, 5.5), (3.5, 4.5, 5.5, 6.5)],
+    }
+    float2 clippingRange = (1.5, 2.5)
+    float2 clippingRange.timeSamples = {
+        2: (2.5, 3.5),
+    }
+    float exposure = 1.5
+    float exposure.timeSamples = {
+        2: 2.5,
+    }
+    float exposure:fStop = 1.5
+    float exposure:fStop.timeSamples = {
+        2: 2.5,
+    }
+    float exposure:iso = 1.5
+    float exposure:iso.timeSamples = {
+        2: 2.5,
+    }
+    float exposure:responsivity = 1.5
+    float exposure:responsivity.timeSamples = {
+        2: 2.5,
+    }
+    float exposure:time = 1.5
+    float exposure:time.timeSamples = {
+        2: 2.5,
+    }
+    float focalLength = 1.5
+    float focalLength.timeSamples = {
+        2: 2.5,
+    }
+    float focusDistance = 1.5
+    float focusDistance.timeSamples = {
+        2: 2.5,
+    }
+    float fStop = 1.5
+    float fStop.timeSamples = {
+        2: 2.5,
+    }
+    float horizontalAperture = 1.5
+    float horizontalAperture.timeSamples = {
+        2: 2.5,
+    }
+    float horizontalApertureOffset = 1.5
+    float horizontalApertureOffset.timeSamples = {
+        2: 2.5,
+    }
+    token projection = "orthographic"
+    token projection.timeSamples = {
+        2: "perspective",
+    }
+    double shutter:close = 1.5
+    double shutter:close.timeSamples = {
+        2: 2.5,
+    }
+    double shutter:open = 1.5
+    double shutter:open.timeSamples = {
+        2: 2.5,
+    }
+    uniform token stereoRole = "left"
+    float verticalAperture = 1.5
+    float verticalAperture.timeSamples = {
+        2: 2.5,
+    }
+    float verticalApertureOffset = 1.5
+    float verticalApertureOffset.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def Capsule "Fallback_Capsule"
+{
+}
+
+def Capsule "Authored_Capsule"
+{
+    uniform token axis = "Y"
+    double height = 1.5
+    double height.timeSamples = {
+        2: 2.5,
+    }
+    double radius = 1.5
+    double radius.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def Capsule_1 "Fallback_Capsule_1"
+{
+}
+
+def Capsule_1 "Authored_Capsule_1"
+{
+    uniform token axis = "Y"
+    double height = 1.5
+    double height.timeSamples = {
+        2: 2.5,
+    }
+    double radiusBottom = 1.5
+    double radiusBottom.timeSamples = {
+        2: 2.5,
+    }
+    double radiusTop = 1.5
+    double radiusTop.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def Cone "Fallback_Cone"
+{
+}
+
+def Cone "Authored_Cone"
+{
+    uniform token axis = "Y"
+    double height = 1.5
+    double height.timeSamples = {
+        2: 2.5,
+    }
+    double radius = 1.5
+    double radius.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def Cube "Fallback_Cube"
+{
+}
+
+def Cube "Authored_Cube"
+{
+    double size = 1.5
+    double size.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def Cylinder "Fallback_Cylinder"
+{
+}
+
+def Cylinder "Authored_Cylinder"
+{
+    uniform token axis = "Y"
+    double height = 1.5
+    double height.timeSamples = {
+        2: 2.5,
+    }
+    double radius = 1.5
+    double radius.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def Cylinder_1 "Fallback_Cylinder_1"
+{
+}
+
+def Cylinder_1 "Authored_Cylinder_1"
+{
+    uniform token axis = "Y"
+    double height = 1.5
+    double height.timeSamples = {
+        2: 2.5,
+    }
+    double radiusBottom = 1.5
+    double radiusBottom.timeSamples = {
+        2: 2.5,
+    }
+    double radiusTop = 1.5
+    double radiusTop.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def Scope "Fallback_GeomModelAPI" (
+    prepend apiSchemas = ["GeomModelAPI"]
+)
+{
+}
+
+def Scope "Authored_GeomModelAPI" (
+    prepend apiSchemas = ["GeomModelAPI"]
+)
+{
+    uniform bool model:applyDrawMode = true
+    uniform token model:cardGeometry = "box"
+    asset model:cardTextureXNeg = @asset1.usda@
+    asset model:cardTextureXNeg.timeSamples = {
+        2: @asset2.usda@,
+    }
+    asset model:cardTextureXPos = @asset1.usda@
+    asset model:cardTextureXPos.timeSamples = {
+        2: @asset2.usda@,
+    }
+    asset model:cardTextureYNeg = @asset1.usda@
+    asset model:cardTextureYNeg.timeSamples = {
+        2: @asset2.usda@,
+    }
+    asset model:cardTextureYPos = @asset1.usda@
+    asset model:cardTextureYPos.timeSamples = {
+        2: @asset2.usda@,
+    }
+    asset model:cardTextureZNeg = @asset1.usda@
+    asset model:cardTextureZNeg.timeSamples = {
+        2: @asset2.usda@,
+    }
+    asset model:cardTextureZPos = @asset1.usda@
+    asset model:cardTextureZPos.timeSamples = {
+        2: @asset2.usda@,
+    }
+    uniform token model:cardVisibility = "simple"
+    uniform token model:drawMode = "bounds"
+    uniform float3 model:drawModeColor = (1.5, 2.5, 3.5)
+}
+
+def GeomSubset "Fallback_GeomSubset"
+{
+}
+
+def GeomSubset "Authored_GeomSubset"
+{
+    uniform token elementType = "point"
+    uniform token familyName = "token1"
+    int[] indices = [3, 4]
+    int[] indices.timeSamples = {
+        2: [4, 5],
+    }
+}
+
+def HermiteCurves "Fallback_HermiteCurves"
+{
+}
+
+def HermiteCurves "Authored_HermiteCurves"
+{
+    vector3f[] tangents = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    vector3f[] tangents.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+}
+
+def Mesh "Fallback_Mesh"
+{
+}
+
+def Mesh "Authored_Mesh"
+{
+    int[] cornerIndices = [3, 4]
+    int[] cornerIndices.timeSamples = {
+        2: [4, 5],
+    }
+    float[] cornerSharpnesses = [1.5, 2.5]
+    float[] cornerSharpnesses.timeSamples = {
+        2: [2.5, 3.5],
+    }
+    int[] creaseIndices = [3, 4]
+    int[] creaseIndices.timeSamples = {
+        2: [4, 5],
+    }
+    int[] creaseLengths = [3, 4]
+    int[] creaseLengths.timeSamples = {
+        2: [4, 5],
+    }
+    float[] creaseSharpnesses = [1.5, 2.5]
+    float[] creaseSharpnesses.timeSamples = {
+        2: [2.5, 3.5],
+    }
+    token faceVaryingLinearInterpolation = "cornersOnly"
+    token faceVaryingLinearInterpolation.timeSamples = {
+        2: "cornersPlus1",
+    }
+    int[] faceVertexCounts = [3, 4]
+    int[] faceVertexCounts.timeSamples = {
+        2: [4, 5],
+    }
+    int[] faceVertexIndices = [3, 4]
+    int[] faceVertexIndices.timeSamples = {
+        2: [4, 5],
+    }
+    int[] holeIndices = [3, 4]
+    int[] holeIndices.timeSamples = {
+        2: [4, 5],
+    }
+    token interpolateBoundary = "edgeOnly"
+    token interpolateBoundary.timeSamples = {
+        2: "edgeAndCorner",
+    }
+    uniform token subdivisionScheme = "loop"
+    token triangleSubdivisionRule = "smooth"
+    token triangleSubdivisionRule.timeSamples = {
+        2: "catmullClark",
+    }
+}
+
+def Scope "Fallback_MotionAPI" (
+    prepend apiSchemas = ["MotionAPI"]
+)
+{
+}
+
+def Scope "Authored_MotionAPI" (
+    prepend apiSchemas = ["MotionAPI"]
+)
+{
+    float motion:blurScale = 1.5
+    float motion:blurScale.timeSamples = {
+        2: 2.5,
+    }
+    int motion:nonlinearSampleCount = 3
+    int motion:nonlinearSampleCount.timeSamples = {
+        2: 4,
+    }
+    float motion:velocityScale = 1.5
+    float motion:velocityScale.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def NurbsCurves "Fallback_NurbsCurves"
+{
+}
+
+def NurbsCurves "Authored_NurbsCurves"
+{
+    double[] knots = [1.5, 2.5]
+    double[] knots.timeSamples = {
+        2: [2.5, 3.5],
+    }
+    int[] order = [3, 4]
+    int[] order.timeSamples = {
+        2: [4, 5],
+    }
+    double[] pointWeights = [1.5, 2.5]
+    double[] pointWeights.timeSamples = {
+        2: [2.5, 3.5],
+    }
+    double2[] ranges = [(1.5, 2.5), (2.5, 3.5)]
+    double2[] ranges.timeSamples = {
+        2: [(2.5, 3.5), (3.5, 4.5)],
+    }
+}
+
+def NurbsPatch "Fallback_NurbsPatch"
+{
+}
+
+def NurbsPatch "Authored_NurbsPatch"
+{
+    double[] pointWeights = [1.5, 2.5]
+    double[] pointWeights.timeSamples = {
+        2: [2.5, 3.5],
+    }
+    int[] trimCurve:counts = [3, 4]
+    int[] trimCurve:counts.timeSamples = {
+        2: [4, 5],
+    }
+    double[] trimCurve:knots = [1.5, 2.5]
+    double[] trimCurve:knots.timeSamples = {
+        2: [2.5, 3.5],
+    }
+    int[] trimCurve:orders = [3, 4]
+    int[] trimCurve:orders.timeSamples = {
+        2: [4, 5],
+    }
+    double3[] trimCurve:points = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    double3[] trimCurve:points.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+    double2[] trimCurve:ranges = [(1.5, 2.5), (2.5, 3.5)]
+    double2[] trimCurve:ranges.timeSamples = {
+        2: [(2.5, 3.5), (3.5, 4.5)],
+    }
+    int[] trimCurve:vertexCounts = [3, 4]
+    int[] trimCurve:vertexCounts.timeSamples = {
+        2: [4, 5],
+    }
+    uniform token uForm = "closed"
+    double[] uKnots = [1.5, 2.5]
+    double[] uKnots.timeSamples = {
+        2: [2.5, 3.5],
+    }
+    int uOrder = 3
+    int uOrder.timeSamples = {
+        2: 4,
+    }
+    double2 uRange = (1.5, 2.5)
+    double2 uRange.timeSamples = {
+        2: (2.5, 3.5),
+    }
+    int uVertexCount = 3
+    int uVertexCount.timeSamples = {
+        2: 4,
+    }
+    uniform token vForm = "closed"
+    double[] vKnots = [1.5, 2.5]
+    double[] vKnots.timeSamples = {
+        2: [2.5, 3.5],
+    }
+    int vOrder = 3
+    int vOrder.timeSamples = {
+        2: 4,
+    }
+    double2 vRange = (1.5, 2.5)
+    double2 vRange.timeSamples = {
+        2: (2.5, 3.5),
+    }
+    int vVertexCount = 3
+    int vVertexCount.timeSamples = {
+        2: 4,
+    }
+}
+
+def Plane "Fallback_Plane"
+{
+}
+
+def Plane "Authored_Plane"
+{
+    uniform token axis = "Y"
+    double length = 1.5
+    double length.timeSamples = {
+        2: 2.5,
+    }
+    double width = 1.5
+    double width.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def PointInstancer "Fallback_PointInstancer"
+{
+}
+
+def PointInstancer "Authored_PointInstancer"
+{
+    vector3f[] accelerations = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    vector3f[] accelerations.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+    vector3f[] angularVelocities = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    vector3f[] angularVelocities.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+    int64[] ids = [3, 4]
+    int64[] ids.timeSamples = {
+        2: [4, 5],
+    }
+    int64[] invisibleIds = [3, 4]
+    int64[] invisibleIds.timeSamples = {
+        2: [4, 5],
+    }
+    quath[] orientations = [(4.5, 1.5, 2.5, 3.5), (5.5, 2.5, 3.5, 4.5)]
+    quath[] orientations.timeSamples = {
+        2: [(5.5, 2.5, 3.5, 4.5), (6.5, 3.5, 4.5, 5.5)],
+    }
+    quatf[] orientationsf = [(4.5, 1.5, 2.5, 3.5), (5.5, 2.5, 3.5, 4.5)]
+    quatf[] orientationsf.timeSamples = {
+        2: [(5.5, 2.5, 3.5, 4.5), (6.5, 3.5, 4.5, 5.5)],
+    }
+    point3f[] positions = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    point3f[] positions.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+    int[] protoIndices = [3, 4]
+    int[] protoIndices.timeSamples = {
+        2: [4, 5],
+    }
+    rel prototypes = </Target>
+    float3[] scales = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    float3[] scales.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+    vector3f[] velocities = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    vector3f[] velocities.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+}
+
+def Points "Fallback_Points"
+{
+}
+
+def Points "Authored_Points"
+{
+    int64[] ids = [3, 4]
+    int64[] ids.timeSamples = {
+        2: [4, 5],
+    }
+    float[] widths = [1.5, 2.5]
+    float[] widths.timeSamples = {
+        2: [2.5, 3.5],
+    }
+}
+
+def Scope "Fallback_Scope"
+{
+}
+
+def Scope "Authored_Scope"
+{
+}
+
+def Sphere "Fallback_Sphere"
+{
+}
+
+def Sphere "Authored_Sphere"
+{
+    double radius = 1.5
+    double radius.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def TetMesh "Fallback_TetMesh"
+{
+}
+
+def TetMesh "Authored_TetMesh"
+{
+    int3[] surfaceFaceVertexIndices = [(3, 4, 5), (4, 5, 6)]
+    int3[] surfaceFaceVertexIndices.timeSamples = {
+        2: [(4, 5, 6), (5, 6, 7)],
+    }
+    int4[] tetVertexIndices = [(3, 4, 5, 6), (4, 5, 6, 7)]
+    int4[] tetVertexIndices.timeSamples = {
+        2: [(4, 5, 6, 7), (5, 6, 7, 8)],
+    }
+}
+
+def BasisCurves "Fallback_VisibilityAPI" (
+    prepend apiSchemas = ["VisibilityAPI"]
+)
+{
+}
+
+def BasisCurves "Authored_VisibilityAPI" (
+    prepend apiSchemas = ["VisibilityAPI"]
+)
+{
+    uniform token guideVisibility = "invisible"
+    uniform token proxyVisibility = "invisible"
+    uniform token renderVisibility = "invisible"
+}
+
+def Xform "Fallback_Xform"
+{
+}
+
+def Xform "Authored_Xform"
+{
+}
+
+def Scope "Fallback_CoordSysAPI" (
+    prepend apiSchemas = ["CoordSysAPI:a"]
+)
+{
+}
+
+def Scope "Authored_CoordSysAPI" (
+    prepend apiSchemas = ["CoordSysAPI:a"]
+)
+{
+    rel coordSys:a:binding = </Target>
+}
+
+def Material "Fallback_Material"
+{
+}
+
+def Material "Authored_Material"
+{
+    token outputs:displacement = "token1"
+    token outputs:displacement.timeSamples = {
+        2: "token2",
+    }
+    token outputs:surface = "token1"
+    token outputs:surface.timeSamples = {
+        2: "token2",
+    }
+    token outputs:volume = "token1"
+    token outputs:volume.timeSamples = {
+        2: "token2",
+    }
+}
+
+def Scope "Fallback_MaterialBindingAPI" (
+    prepend apiSchemas = ["MaterialBindingAPI"]
+)
+{
+}
+
+def Scope "Authored_MaterialBindingAPI" (
+    prepend apiSchemas = ["MaterialBindingAPI"]
+)
+{
+}
+
+def Scope "Fallback_NodeDefAPI" (
+    prepend apiSchemas = ["NodeDefAPI"]
+)
+{
+}
+
+def Scope "Authored_NodeDefAPI" (
+    prepend apiSchemas = ["NodeDefAPI"]
+)
+{
+    uniform token info:id = "token1"
+    uniform token info:implementationSource = "sourceAsset"
+}
+
+def NodeGraph "Fallback_NodeGraph"
+{
+}
+
+def NodeGraph "Authored_NodeGraph"
+{
+}
+
+def Shader "Fallback_Shader"
+{
+}
+
+def Shader "Authored_Shader"
+{
+}
+
+def CylinderLight "Fallback_CylinderLight"
+{
+}
+
+def CylinderLight "Authored_CylinderLight"
+{
+    float inputs:length = 1.5
+    float inputs:length.timeSamples = {
+        2: 2.5,
+    }
+    float inputs:radius = 1.5
+    float inputs:radius.timeSamples = {
+        2: 2.5,
+    }
+    bool treatAsLine = true
+    bool treatAsLine.timeSamples = {
+        2: false,
+    }
+}
+
+def DiskLight "Fallback_DiskLight"
+{
+}
+
+def DiskLight "Authored_DiskLight"
+{
+    float inputs:radius = 1.5
+    float inputs:radius.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def DistantLight "Fallback_DistantLight"
+{
+}
+
+def DistantLight "Authored_DistantLight"
+{
+    float inputs:angle = 1.5
+    float inputs:angle.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def DomeLight "Fallback_DomeLight"
+{
+}
+
+def DomeLight "Authored_DomeLight"
+{
+    float guideRadius = 1.5
+    float guideRadius.timeSamples = {
+        2: 2.5,
+    }
+    asset inputs:texture:file = @asset1.usda@
+    asset inputs:texture:file.timeSamples = {
+        2: @asset2.usda@,
+    }
+    token inputs:texture:format = "latlong"
+    token inputs:texture:format.timeSamples = {
+        2: "mirroredBall",
+    }
+    rel portals = </Target>
+}
+
+def DomeLight_1 "Fallback_DomeLight_1"
+{
+}
+
+def DomeLight_1 "Authored_DomeLight_1"
+{
+    float guideRadius = 1.5
+    float guideRadius.timeSamples = {
+        2: 2.5,
+    }
+    asset inputs:texture:file = @asset1.usda@
+    asset inputs:texture:file.timeSamples = {
+        2: @asset2.usda@,
+    }
+    token inputs:texture:format = "latlong"
+    token inputs:texture:format.timeSamples = {
+        2: "mirroredBall",
+    }
+    uniform token poleAxis = "Y"
+    rel portals = </Target>
+}
+
+def GeometryLight "Fallback_GeometryLight"
+{
+}
+
+def GeometryLight "Authored_GeometryLight"
+{
+    rel geometry = </Target>
+}
+
+def Scope "Fallback_LightAPI" (
+    prepend apiSchemas = ["LightAPI"]
+)
+{
+}
+
+def Scope "Authored_LightAPI" (
+    prepend apiSchemas = ["LightAPI"]
+)
+{
+    color3f inputs:color = (1.5, 2.5, 3.5)
+    color3f inputs:color.timeSamples = {
+        2: (2.5, 3.5, 4.5),
+    }
+    float inputs:colorTemperature = 1.5
+    float inputs:colorTemperature.timeSamples = {
+        2: 2.5,
+    }
+    float inputs:diffuse = 1.5
+    float inputs:diffuse.timeSamples = {
+        2: 2.5,
+    }
+    bool inputs:enableColorTemperature = true
+    bool inputs:enableColorTemperature.timeSamples = {
+        2: false,
+    }
+    float inputs:exposure = 1.5
+    float inputs:exposure.timeSamples = {
+        2: 2.5,
+    }
+    float inputs:intensity = 1.5
+    float inputs:intensity.timeSamples = {
+        2: 2.5,
+    }
+    bool inputs:normalize = true
+    bool inputs:normalize.timeSamples = {
+        2: false,
+    }
+    float inputs:specular = 1.5
+    float inputs:specular.timeSamples = {
+        2: 2.5,
+    }
+    rel light:filters = </Target>
+    uniform token light:materialSyncMode = "independent"
+    uniform token light:shaderId = "token1"
+}
+
+def LightFilter "Fallback_LightFilter"
+{
+}
+
+def LightFilter "Authored_LightFilter"
+{
+    uniform token lightFilter:shaderId = "token1"
+}
+
+def Scope "Fallback_LightListAPI" (
+    prepend apiSchemas = ["LightListAPI"]
+)
+{
+}
+
+def Scope "Authored_LightListAPI" (
+    prepend apiSchemas = ["LightListAPI"]
+)
+{
+    rel lightList = </Target>
+    token lightList:cacheBehavior = "consumeAndContinue"
+    token lightList:cacheBehavior.timeSamples = {
+        2: "ignore",
+    }
+}
+
+def Scope "Fallback_ListAPI" (
+    prepend apiSchemas = ["ListAPI"]
+)
+{
+}
+
+def Scope "Authored_ListAPI" (
+    prepend apiSchemas = ["ListAPI"]
+)
+{
+    rel lightList = </Target>
+    token lightList:cacheBehavior = "consumeAndContinue"
+    token lightList:cacheBehavior.timeSamples = {
+        2: "ignore",
+    }
+}
+
+def Scope "Fallback_MeshLightAPI" (
+    prepend apiSchemas = ["MeshLightAPI"]
+)
+{
+}
+
+def Scope "Authored_MeshLightAPI" (
+    prepend apiSchemas = ["MeshLightAPI"]
+)
+{
+}
+
+def PluginLight "Fallback_PluginLight"
+{
+}
+
+def PluginLight "Authored_PluginLight"
+{
+}
+
+def PluginLightFilter "Fallback_PluginLightFilter"
+{
+}
+
+def PluginLightFilter "Authored_PluginLightFilter"
+{
+}
+
+def PortalLight "Fallback_PortalLight"
+{
+}
+
+def PortalLight "Authored_PortalLight"
+{
+    float inputs:height = 1.5
+    float inputs:height.timeSamples = {
+        2: 2.5,
+    }
+    float inputs:width = 1.5
+    float inputs:width.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def RectLight "Fallback_RectLight"
+{
+}
+
+def RectLight "Authored_RectLight"
+{
+    float inputs:height = 1.5
+    float inputs:height.timeSamples = {
+        2: 2.5,
+    }
+    asset inputs:texture:file = @asset1.usda@
+    asset inputs:texture:file.timeSamples = {
+        2: @asset2.usda@,
+    }
+    float inputs:width = 1.5
+    float inputs:width.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def Scope "Fallback_ShadowAPI" (
+    prepend apiSchemas = ["ShadowAPI"]
+)
+{
+}
+
+def Scope "Authored_ShadowAPI" (
+    prepend apiSchemas = ["ShadowAPI"]
+)
+{
+    color3f inputs:shadow:color = (1.5, 2.5, 3.5)
+    color3f inputs:shadow:color.timeSamples = {
+        2: (2.5, 3.5, 4.5),
+    }
+    float inputs:shadow:distance = 1.5
+    float inputs:shadow:distance.timeSamples = {
+        2: 2.5,
+    }
+    bool inputs:shadow:enable = true
+    bool inputs:shadow:enable.timeSamples = {
+        2: false,
+    }
+    float inputs:shadow:falloff = 1.5
+    float inputs:shadow:falloff.timeSamples = {
+        2: 2.5,
+    }
+    float inputs:shadow:falloffGamma = 1.5
+    float inputs:shadow:falloffGamma.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def Scope "Fallback_ShapingAPI" (
+    prepend apiSchemas = ["ShapingAPI"]
+)
+{
+}
+
+def Scope "Authored_ShapingAPI" (
+    prepend apiSchemas = ["ShapingAPI"]
+)
+{
+    float inputs:shaping:cone:angle = 1.5
+    float inputs:shaping:cone:angle.timeSamples = {
+        2: 2.5,
+    }
+    float inputs:shaping:cone:softness = 1.5
+    float inputs:shaping:cone:softness.timeSamples = {
+        2: 2.5,
+    }
+    float inputs:shaping:focus = 1.5
+    float inputs:shaping:focus.timeSamples = {
+        2: 2.5,
+    }
+    color3f inputs:shaping:focusTint = (1.5, 2.5, 3.5)
+    color3f inputs:shaping:focusTint.timeSamples = {
+        2: (2.5, 3.5, 4.5),
+    }
+    float inputs:shaping:ies:angleScale = 1.5
+    float inputs:shaping:ies:angleScale.timeSamples = {
+        2: 2.5,
+    }
+    asset inputs:shaping:ies:file = @asset1.usda@
+    asset inputs:shaping:ies:file.timeSamples = {
+        2: @asset2.usda@,
+    }
+    bool inputs:shaping:ies:normalize = true
+    bool inputs:shaping:ies:normalize.timeSamples = {
+        2: false,
+    }
+}
+
+def SphereLight "Fallback_SphereLight"
+{
+}
+
+def SphereLight "Authored_SphereLight"
+{
+    float inputs:radius = 1.5
+    float inputs:radius.timeSamples = {
+        2: 2.5,
+    }
+    bool treatAsPoint = true
+    bool treatAsPoint.timeSamples = {
+        2: false,
+    }
+}
+
+def Scope "Fallback_VolumeLightAPI" (
+    prepend apiSchemas = ["VolumeLightAPI"]
+)
+{
+}
+
+def Scope "Authored_VolumeLightAPI" (
+    prepend apiSchemas = ["VolumeLightAPI"]
+)
+{
+}
+
+def BlendShape "Fallback_BlendShape"
+{
+}
+
+def BlendShape "Authored_BlendShape"
+{
+    uniform vector3f[] normalOffsets = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    uniform vector3f[] offsets = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    uniform int[] pointIndices = [3, 4]
+}
+
+def SkelAnimation "Fallback_SkelAnimation"
+{
+}
+
+def SkelAnimation "Authored_SkelAnimation"
+{
+    uniform token[] blendShapes = ["token1", "token2"]
+    float[] blendShapeWeights = [1.5, 2.5]
+    float[] blendShapeWeights.timeSamples = {
+        2: [2.5, 3.5],
+    }
+    uniform token[] joints = ["token1", "token2"]
+    quatf[] rotations = [(4.5, 1.5, 2.5, 3.5), (5.5, 2.5, 3.5, 4.5)]
+    quatf[] rotations.timeSamples = {
+        2: [(5.5, 2.5, 3.5, 4.5), (6.5, 3.5, 4.5, 5.5)],
+    }
+    half3[] scales = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    half3[] scales.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+    float3[] translations = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    float3[] translations.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+}
+
+def Scope "Fallback_SkelBindingAPI" (
+    prepend apiSchemas = ["SkelBindingAPI"]
+)
+{
+}
+
+def Scope "Authored_SkelBindingAPI" (
+    prepend apiSchemas = ["SkelBindingAPI"]
+)
+{
+    matrix4d primvars:skel:geomBindTransform = ( (1.5, 2.5, 3.5, 4.5), (5.5, 6.5, 7.5, 8.5), (9.5, 10.5, 11.5, 12.5), (13.5, 14.5, 15.5, 16.5) )
+    matrix4d primvars:skel:geomBindTransform.timeSamples = {
+        2: ( (2.5, 3.5, 4.5, 5.5), (6.5, 7.5, 8.5, 9.5), (10.5, 11.5, 12.5, 13.5), (14.5, 15.5, 16.5, 17.5) ),
+    }
+    int[] primvars:skel:jointIndices = [3, 4]
+    int[] primvars:skel:jointIndices.timeSamples = {
+        2: [4, 5],
+    }
+    float[] primvars:skel:jointWeights = [1.5, 2.5]
+    float[] primvars:skel:jointWeights.timeSamples = {
+        2: [2.5, 3.5],
+    }
+    uniform token primvars:skel:skinningMethod = "dualQuaternion"
+    rel skel:animationSource = </Target>
+    uniform token[] skel:blendShapes = ["token1", "token2"]
+    rel skel:blendShapeTargets = </Target>
+    uniform token[] skel:joints = ["token1", "token2"]
+    rel skel:skeleton = </Target>
+}
+
+def SkelRoot "Fallback_SkelRoot"
+{
+}
+
+def SkelRoot "Authored_SkelRoot"
+{
+}
+
+def Skeleton "Fallback_Skeleton"
+{
+}
+
+def Skeleton "Authored_Skeleton"
+{
+    uniform matrix4d[] bindTransforms = [( (1.5, 2.5, 3.5, 4.5), (5.5, 6.5, 7.5, 8.5), (9.5, 10.5, 11.5, 12.5), (13.5, 14.5, 15.5, 16.5) ), ( (2.5, 3.5, 4.5, 5.5), (6.5, 7.5, 8.5, 9.5), (10.5, 11.5, 12.5, 13.5), (14.5, 15.5, 16.5, 17.5) )]
+    uniform token[] jointNames = ["token1", "token2"]
+    uniform token[] joints = ["token1", "token2"]
+    uniform matrix4d[] restTransforms = [( (1.5, 2.5, 3.5, 4.5), (5.5, 6.5, 7.5, 8.5), (9.5, 10.5, 11.5, 12.5), (13.5, 14.5, 15.5, 16.5) ), ( (2.5, 3.5, 4.5, 5.5), (6.5, 7.5, 8.5, 9.5), (10.5, 11.5, 12.5, 13.5), (14.5, 15.5, 16.5, 17.5) )]
+}
+
+def Scope "Fallback_PhysicsArticulationRootAPI" (
+    prepend apiSchemas = ["PhysicsArticulationRootAPI"]
+)
+{
+}
+
+def Scope "Authored_PhysicsArticulationRootAPI" (
+    prepend apiSchemas = ["PhysicsArticulationRootAPI"]
+)
+{
+}
+
+def Scope "Fallback_PhysicsCollisionAPI" (
+    prepend apiSchemas = ["PhysicsCollisionAPI"]
+)
+{
+}
+
+def Scope "Authored_PhysicsCollisionAPI" (
+    prepend apiSchemas = ["PhysicsCollisionAPI"]
+)
+{
+    bool physics:collisionEnabled = true
+    bool physics:collisionEnabled.timeSamples = {
+        2: false,
+    }
+    rel physics:simulationOwner = </Target>
+}
+
+def PhysicsCollisionGroup "Fallback_PhysicsCollisionGroup"
+{
+}
+
+def PhysicsCollisionGroup "Authored_PhysicsCollisionGroup"
+{
+    rel physics:filteredGroups = </Target>
+    bool physics:invertFilteredGroups = true
+    bool physics:invertFilteredGroups.timeSamples = {
+        2: false,
+    }
+    string physics:mergeGroup = "text1"
+    string physics:mergeGroup.timeSamples = {
+        2: "text2",
+    }
+}
+
+def PhysicsDistanceJoint "Fallback_PhysicsDistanceJoint"
+{
+}
+
+def PhysicsDistanceJoint "Authored_PhysicsDistanceJoint"
+{
+    float physics:maxDistance = 1.5
+    float physics:maxDistance.timeSamples = {
+        2: 2.5,
+    }
+    float physics:minDistance = 1.5
+    float physics:minDistance.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def Scope "Fallback_PhysicsDriveAPI" (
+    prepend apiSchemas = ["PhysicsDriveAPI:a"]
+)
+{
+}
+
+def Scope "Authored_PhysicsDriveAPI" (
+    prepend apiSchemas = ["PhysicsDriveAPI:a"]
+)
+{
+    float drive:a:physics:damping = 1.5
+    float drive:a:physics:damping.timeSamples = {
+        2: 2.5,
+    }
+    float drive:a:physics:maxForce = 1.5
+    float drive:a:physics:maxForce.timeSamples = {
+        2: 2.5,
+    }
+    float drive:a:physics:stiffness = 1.5
+    float drive:a:physics:stiffness.timeSamples = {
+        2: 2.5,
+    }
+    float drive:a:physics:targetPosition = 1.5
+    float drive:a:physics:targetPosition.timeSamples = {
+        2: 2.5,
+    }
+    float drive:a:physics:targetVelocity = 1.5
+    float drive:a:physics:targetVelocity.timeSamples = {
+        2: 2.5,
+    }
+    uniform token drive:a:physics:type = "acceleration"
+}
+
+def Scope "Fallback_PhysicsFilteredPairsAPI" (
+    prepend apiSchemas = ["PhysicsFilteredPairsAPI"]
+)
+{
+}
+
+def Scope "Authored_PhysicsFilteredPairsAPI" (
+    prepend apiSchemas = ["PhysicsFilteredPairsAPI"]
+)
+{
+    rel physics:filteredPairs = </Target>
+}
+
+def PhysicsFixedJoint "Fallback_PhysicsFixedJoint"
+{
+}
+
+def PhysicsFixedJoint "Authored_PhysicsFixedJoint"
+{
+}
+
+def PhysicsJoint "Fallback_PhysicsJoint"
+{
+}
+
+def PhysicsJoint "Authored_PhysicsJoint"
+{
+    rel physics:body0 = </Target>
+    rel physics:body1 = </Target>
+    float physics:breakForce = 1.5
+    float physics:breakForce.timeSamples = {
+        2: 2.5,
+    }
+    float physics:breakTorque = 1.5
+    float physics:breakTorque.timeSamples = {
+        2: 2.5,
+    }
+    bool physics:collisionEnabled = true
+    bool physics:collisionEnabled.timeSamples = {
+        2: false,
+    }
+    uniform bool physics:excludeFromArticulation = true
+    bool physics:jointEnabled = true
+    bool physics:jointEnabled.timeSamples = {
+        2: false,
+    }
+    point3f physics:localPos0 = (1.5, 2.5, 3.5)
+    point3f physics:localPos0.timeSamples = {
+        2: (2.5, 3.5, 4.5),
+    }
+    point3f physics:localPos1 = (1.5, 2.5, 3.5)
+    point3f physics:localPos1.timeSamples = {
+        2: (2.5, 3.5, 4.5),
+    }
+    quatf physics:localRot0 = (4.5, 1.5, 2.5, 3.5)
+    quatf physics:localRot0.timeSamples = {
+        2: (5.5, 2.5, 3.5, 4.5),
+    }
+    quatf physics:localRot1 = (4.5, 1.5, 2.5, 3.5)
+    quatf physics:localRot1.timeSamples = {
+        2: (5.5, 2.5, 3.5, 4.5),
+    }
+}
+
+def Scope "Fallback_PhysicsLimitAPI" (
+    prepend apiSchemas = ["PhysicsLimitAPI:a"]
+)
+{
+}
+
+def Scope "Authored_PhysicsLimitAPI" (
+    prepend apiSchemas = ["PhysicsLimitAPI:a"]
+)
+{
+    float limit:a:physics:high = 1.5
+    float limit:a:physics:high.timeSamples = {
+        2: 2.5,
+    }
+    float limit:a:physics:low = 1.5
+    float limit:a:physics:low.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def Scope "Fallback_PhysicsMassAPI" (
+    prepend apiSchemas = ["PhysicsMassAPI"]
+)
+{
+}
+
+def Scope "Authored_PhysicsMassAPI" (
+    prepend apiSchemas = ["PhysicsMassAPI"]
+)
+{
+    point3f physics:centerOfMass = (1.5, 2.5, 3.5)
+    point3f physics:centerOfMass.timeSamples = {
+        2: (2.5, 3.5, 4.5),
+    }
+    float physics:density = 1.5
+    float physics:density.timeSamples = {
+        2: 2.5,
+    }
+    float3 physics:diagonalInertia = (1.5, 2.5, 3.5)
+    float3 physics:diagonalInertia.timeSamples = {
+        2: (2.5, 3.5, 4.5),
+    }
+    float physics:mass = 1.5
+    float physics:mass.timeSamples = {
+        2: 2.5,
+    }
+    quatf physics:principalAxes = (4.5, 1.5, 2.5, 3.5)
+    quatf physics:principalAxes.timeSamples = {
+        2: (5.5, 2.5, 3.5, 4.5),
+    }
+}
+
+def Scope "Fallback_PhysicsMaterialAPI" (
+    prepend apiSchemas = ["PhysicsMaterialAPI"]
+)
+{
+}
+
+def Scope "Authored_PhysicsMaterialAPI" (
+    prepend apiSchemas = ["PhysicsMaterialAPI"]
+)
+{
+    float physics:density = 1.5
+    float physics:density.timeSamples = {
+        2: 2.5,
+    }
+    float physics:dynamicFriction = 1.5
+    float physics:dynamicFriction.timeSamples = {
+        2: 2.5,
+    }
+    float physics:restitution = 1.5
+    float physics:restitution.timeSamples = {
+        2: 2.5,
+    }
+    float physics:staticFriction = 1.5
+    float physics:staticFriction.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def Scope "Fallback_PhysicsMeshCollisionAPI" (
+    prepend apiSchemas = ["PhysicsMeshCollisionAPI"]
+)
+{
+}
+
+def Scope "Authored_PhysicsMeshCollisionAPI" (
+    prepend apiSchemas = ["PhysicsMeshCollisionAPI"]
+)
+{
+    uniform token physics:approximation = "convexDecomposition"
+}
+
+def PhysicsPrismaticJoint "Fallback_PhysicsPrismaticJoint"
+{
+}
+
+def PhysicsPrismaticJoint "Authored_PhysicsPrismaticJoint"
+{
+    uniform token physics:axis = "Y"
+    float physics:lowerLimit = 1.5
+    float physics:lowerLimit.timeSamples = {
+        2: 2.5,
+    }
+    float physics:upperLimit = 1.5
+    float physics:upperLimit.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def PhysicsRevoluteJoint "Fallback_PhysicsRevoluteJoint"
+{
+}
+
+def PhysicsRevoluteJoint "Authored_PhysicsRevoluteJoint"
+{
+    uniform token physics:axis = "Y"
+    float physics:lowerLimit = 1.5
+    float physics:lowerLimit.timeSamples = {
+        2: 2.5,
+    }
+    float physics:upperLimit = 1.5
+    float physics:upperLimit.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def Scope "Fallback_PhysicsRigidBodyAPI" (
+    prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+)
+{
+}
+
+def Scope "Authored_PhysicsRigidBodyAPI" (
+    prepend apiSchemas = ["PhysicsRigidBodyAPI"]
+)
+{
+    vector3f physics:angularVelocity = (1.5, 2.5, 3.5)
+    vector3f physics:angularVelocity.timeSamples = {
+        2: (2.5, 3.5, 4.5),
+    }
+    bool physics:kinematicEnabled = true
+    bool physics:kinematicEnabled.timeSamples = {
+        2: false,
+    }
+    bool physics:rigidBodyEnabled = true
+    bool physics:rigidBodyEnabled.timeSamples = {
+        2: false,
+    }
+    rel physics:simulationOwner = </Target>
+    uniform bool physics:startsAsleep = true
+    vector3f physics:velocity = (1.5, 2.5, 3.5)
+    vector3f physics:velocity.timeSamples = {
+        2: (2.5, 3.5, 4.5),
+    }
+}
+
+def PhysicsScene "Fallback_PhysicsScene"
+{
+}
+
+def PhysicsScene "Authored_PhysicsScene"
+{
+    vector3f physics:gravityDirection = (1.5, 2.5, 3.5)
+    vector3f physics:gravityDirection.timeSamples = {
+        2: (2.5, 3.5, 4.5),
+    }
+    float physics:gravityMagnitude = 1.5
+    float physics:gravityMagnitude.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def PhysicsSphericalJoint "Fallback_PhysicsSphericalJoint"
+{
+}
+
+def PhysicsSphericalJoint "Authored_PhysicsSphericalJoint"
+{
+    uniform token physics:axis = "Y"
+    float physics:coneAngle0Limit = 1.5
+    float physics:coneAngle0Limit.timeSamples = {
+        2: 2.5,
+    }
+    float physics:coneAngle1Limit = 1.5
+    float physics:coneAngle1Limit.timeSamples = {
+        2: 2.5,
+    }
+}
+
+def Field3DAsset "Fallback_Field3DAsset"
+{
+}
+
+def Field3DAsset "Authored_Field3DAsset"
+{
+    token fieldPurpose = "token1"
+    token fieldPurpose.timeSamples = {
+        2: "token2",
+    }
+    token fieldDataType = "token1"
+    token fieldDataType.timeSamples = {
+        2: "token2",
+    }
+    int fieldIndex = 3
+    int fieldIndex.timeSamples = {
+        2: 4,
+    }
+    token fieldName = "token1"
+    token fieldName.timeSamples = {
+        2: "token2",
+    }
+    asset filePath = @asset1.usda@
+    asset filePath.timeSamples = {
+        2: @asset2.usda@,
+    }
+    token vectorDataRoleHint = "Point"
+    token vectorDataRoleHint.timeSamples = {
+        2: "Normal",
+    }
+}
+
+def OpenVDBAsset "Fallback_OpenVDBAsset"
+{
+}
+
+def OpenVDBAsset "Authored_OpenVDBAsset"
+{
+    token fieldClass = "fogVolume"
+    token fieldClass.timeSamples = {
+        2: "staggered",
+    }
+}
+
+def ParticleField "Fallback_ParticleField"
+{
+}
+
+def ParticleField "Authored_ParticleField"
+{
+}
+
+def ParticleField3DGaussianSplat "Fallback_ParticleField3DGaussianSplat"
+{
+}
+
+def ParticleField3DGaussianSplat "Authored_ParticleField3DGaussianSplat"
+{
+    uniform token projectionModeHint = "tangential"
+    uniform token sortingModeHint = "cameraDistance"
+}
+
+def Scope "Fallback_ParticleFieldKernelBaseAPI" (
+    prepend apiSchemas = ["ParticleFieldKernelBaseAPI"]
+)
+{
+}
+
+def Scope "Authored_ParticleFieldKernelBaseAPI" (
+    prepend apiSchemas = ["ParticleFieldKernelBaseAPI"]
+)
+{
+}
+
+def ParticleField "Fallback_ParticleFieldKernelConstantSurfletAPI" (
+    prepend apiSchemas = ["ParticleFieldKernelConstantSurfletAPI"]
+)
+{
+}
+
+def ParticleField "Authored_ParticleFieldKernelConstantSurfletAPI" (
+    prepend apiSchemas = ["ParticleFieldKernelConstantSurfletAPI"]
+)
+{
+}
+
+def ParticleField "Fallback_ParticleFieldKernelGaussianEllipsoidAPI" (
+    prepend apiSchemas = ["ParticleFieldKernelGaussianEllipsoidAPI"]
+)
+{
+}
+
+def ParticleField "Authored_ParticleFieldKernelGaussianEllipsoidAPI" (
+    prepend apiSchemas = ["ParticleFieldKernelGaussianEllipsoidAPI"]
+)
+{
+}
+
+def ParticleField "Fallback_ParticleFieldKernelGaussianSurfletAPI" (
+    prepend apiSchemas = ["ParticleFieldKernelGaussianSurfletAPI"]
+)
+{
+}
+
+def ParticleField "Authored_ParticleFieldKernelGaussianSurfletAPI" (
+    prepend apiSchemas = ["ParticleFieldKernelGaussianSurfletAPI"]
+)
+{
+}
+
+def ParticleField "Fallback_ParticleFieldOpacityAttributeAPI" (
+    prepend apiSchemas = ["ParticleFieldOpacityAttributeAPI"]
+)
+{
+}
+
+def ParticleField "Authored_ParticleFieldOpacityAttributeAPI" (
+    prepend apiSchemas = ["ParticleFieldOpacityAttributeAPI"]
+)
+{
+    float[] opacities = [1.5, 2.5]
+    float[] opacities.timeSamples = {
+        2: [2.5, 3.5],
+    }
+    half[] opacitiesh = [1.5, 2.5]
+    half[] opacitiesh.timeSamples = {
+        2: [2.5, 3.5],
+    }
+}
+
+def ParticleField "Fallback_ParticleFieldOrientationAttributeAPI" (
+    prepend apiSchemas = ["ParticleFieldOrientationAttributeAPI"]
+)
+{
+}
+
+def ParticleField "Authored_ParticleFieldOrientationAttributeAPI" (
+    prepend apiSchemas = ["ParticleFieldOrientationAttributeAPI"]
+)
+{
+    quatf[] orientations = [(4.5, 1.5, 2.5, 3.5), (5.5, 2.5, 3.5, 4.5)]
+    quatf[] orientations.timeSamples = {
+        2: [(5.5, 2.5, 3.5, 4.5), (6.5, 3.5, 4.5, 5.5)],
+    }
+    quath[] orientationsh = [(4.5, 1.5, 2.5, 3.5), (5.5, 2.5, 3.5, 4.5)]
+    quath[] orientationsh.timeSamples = {
+        2: [(5.5, 2.5, 3.5, 4.5), (6.5, 3.5, 4.5, 5.5)],
+    }
+}
+
+def ParticleField "Fallback_ParticleFieldPositionAttributeAPI" (
+    prepend apiSchemas = ["ParticleFieldPositionAttributeAPI"]
+)
+{
+}
+
+def ParticleField "Authored_ParticleFieldPositionAttributeAPI" (
+    prepend apiSchemas = ["ParticleFieldPositionAttributeAPI"]
+)
+{
+    point3f[] positions = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    point3f[] positions.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+    point3h[] positionsh = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    point3h[] positionsh.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+}
+
+def Scope "Fallback_ParticleFieldPositionBaseAPI" (
+    prepend apiSchemas = ["ParticleFieldPositionBaseAPI"]
+)
+{
+}
+
+def Scope "Authored_ParticleFieldPositionBaseAPI" (
+    prepend apiSchemas = ["ParticleFieldPositionBaseAPI"]
+)
+{
+}
+
+def Scope "Fallback_ParticleFieldRadianceBaseAPI" (
+    prepend apiSchemas = ["ParticleFieldRadianceBaseAPI"]
+)
+{
+}
+
+def Scope "Authored_ParticleFieldRadianceBaseAPI" (
+    prepend apiSchemas = ["ParticleFieldRadianceBaseAPI"]
+)
+{
+}
+
+def ParticleField "Fallback_ParticleFieldScaleAttributeAPI" (
+    prepend apiSchemas = ["ParticleFieldScaleAttributeAPI"]
+)
+{
+}
+
+def ParticleField "Authored_ParticleFieldScaleAttributeAPI" (
+    prepend apiSchemas = ["ParticleFieldScaleAttributeAPI"]
+)
+{
+    float3[] scales = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    float3[] scales.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+    half3[] scalesh = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    half3[] scalesh.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+}
+
+def ParticleField "Fallback_ParticleFieldSphericalHarmonicsAttributeAPI" (
+    prepend apiSchemas = ["ParticleFieldSphericalHarmonicsAttributeAPI"]
+)
+{
+}
+
+def ParticleField "Authored_ParticleFieldSphericalHarmonicsAttributeAPI" (
+    prepend apiSchemas = ["ParticleFieldSphericalHarmonicsAttributeAPI"]
+)
+{
+    float3[] radiance:sphericalHarmonicsCoefficients = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    float3[] radiance:sphericalHarmonicsCoefficients.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+    half3[] radiance:sphericalHarmonicsCoefficientsh = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    half3[] radiance:sphericalHarmonicsCoefficientsh.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+    uniform int radiance:sphericalHarmonicsDegree = 3
+}
+
+def Volume "Fallback_Volume"
+{
+}
+
+def Volume "Authored_Volume"
+{
+}
+
+def RenderPass "Fallback_RenderPass"
+{
+}
+
+def RenderPass "Authored_RenderPass"
+{
+    uniform string[] command = ["text1", "text2"]
+    uniform asset fileName = @asset1.usda@
+    rel inputPasses = </Target>
+    uniform token passType = "token1"
+    rel renderSource = </Target>
+}
+
+def RenderProduct "Fallback_RenderProduct"
+{
+}
+
+def RenderProduct "Authored_RenderProduct"
+{
+    rel orderedVars = </Target>
+    token productName = "token1"
+    token productName.timeSamples = {
+        2: "token2",
+    }
+    uniform token productType = "deepRaster"
+    uniform token aspectRatioConformPolicy = "cropAperture"
+    rel camera = </Target>
+    uniform float4 dataWindowNDC = (1.5, 2.5, 3.5, 4.5)
+    uniform bool disableDepthOfField = true
+    uniform bool disableMotionBlur = true
+    uniform bool instantaneousShutter = true
+    uniform float pixelAspectRatio = 1.5
+    uniform int2 resolution = (3, 4)
+}
+
+def RenderSettings "Fallback_RenderSettings"
+{
+}
+
+def RenderSettings "Authored_RenderSettings"
+{
+    uniform token[] includedPurposes = ["token1", "token2"]
+    uniform token[] materialBindingPurposes = ["token1", "token2"]
+    rel products = </Target>
+    uniform token renderingColorSpace = "token1"
+}
+
+def RenderVar "Fallback_RenderVar"
+{
+}
+
+def RenderVar "Authored_RenderVar"
+{
+    uniform token dataType = "token1"
+    uniform string sourceName = "text1"
+    uniform token sourceType = "primvar"
+}
+
+def LODDistanceHeuristic "Fallback_LODDistanceHeuristic"
+{
+}
+
+def LODDistanceHeuristic "Authored_LODDistanceHeuristic"
+{
+    uniform float[] blendThresholds = [1.5, 2.5]
+    rel boundingVolume = </Target>
+    point3f center = (1.5, 2.5, 3.5)
+    point3f center.timeSamples = {
+        2: (2.5, 3.5, 4.5),
+    }
+    uniform float[] thresholds = [1.5, 2.5]
+    uniform token lod:domain = "token1"
+}
+
+def Scope "Fallback_LODOverrideAPI" (
+    prepend apiSchemas = ["LODOverrideAPI"]
+)
+{
+}
+
+def Scope "Authored_LODOverrideAPI" (
+    prepend apiSchemas = ["LODOverrideAPI"]
+)
+{
+    float lod:override:index = 1.5
+    float lod:override:index.timeSamples = {
+        2: 2.5,
+    }
+    token lod:override:mode = "noOverride"
+    token lod:override:mode.timeSamples = {
+        2: "indexedLOD",
+    }
+}
+
+def Scope "Fallback_LODRootAPI" (
+    prepend apiSchemas = ["LODRootAPI"]
+)
+{
+}
+
+def Scope "Authored_LODRootAPI" (
+    prepend apiSchemas = ["LODRootAPI"]
+)
+{
+    int lod:default:index = 3
+    int lod:default:index.timeSamples = {
+        2: 4,
+    }
+    rel lod:heuristics = </Target>
+}
+
+def LODScreenSizeHeuristic "Fallback_LODScreenSizeHeuristic"
+{
+}
+
+def LODScreenSizeHeuristic "Authored_LODScreenSizeHeuristic"
+{
+    uniform float[] blendThresholds = [1.5, 2.5]
+    rel boundingVolume = </Target>
+    float3[] extent = [(1.5, 2.5, 3.5), (2.5, 3.5, 4.5)]
+    float3[] extent.timeSamples = {
+        2: [(2.5, 3.5, 4.5), (3.5, 4.5, 5.5)],
+    }
+    uniform token projectionMethod = "projectedSphere"
+    uniform float[] thresholds = [1.5, 2.5]
+}
+
+def Scope "Fallback_AccessibilityAPI" (
+    prepend apiSchemas = ["AccessibilityAPI:a"]
+)
+{
+}
+
+def Scope "Authored_AccessibilityAPI" (
+    prepend apiSchemas = ["AccessibilityAPI:a"]
+)
+{
+    string accessibility:a:description = "text1"
+    string accessibility:a:description.timeSamples = {
+        2: "text2",
+    }
+    string accessibility:a:label = "text1"
+    string accessibility:a:label.timeSamples = {
+        2: "text2",
+    }
+    token accessibility:a:priority = "standard"
+    token accessibility:a:priority.timeSamples = {
+        2: "high",
+    }
+}
+
+def Backdrop "Fallback_Backdrop"
+{
+}
+
+def Backdrop "Authored_Backdrop"
+{
+    uniform token ui:description = "token1"
+}
+
+def Scope "Fallback_NodeGraphNodeAPI" (
+    prepend apiSchemas = ["NodeGraphNodeAPI"]
+)
+{
+}
+
+def Scope "Authored_NodeGraphNodeAPI" (
+    prepend apiSchemas = ["NodeGraphNodeAPI"]
+)
+{
+    uniform color3f ui:nodegraph:node:displayColor = (1.5, 2.5, 3.5)
+    uniform string ui:nodegraph:node:docURI = "text1"
+    uniform token ui:nodegraph:node:expansionState = "closed"
+    uniform asset ui:nodegraph:node:icon = @asset1.usda@
+    uniform float2 ui:nodegraph:node:pos = (1.5, 2.5)
+    uniform float2 ui:nodegraph:node:size = (1.5, 2.5)
+    uniform int ui:nodegraph:node:stackingOrder = 3
+}
+
+def Scope "Fallback_SceneGraphPrimAPI" (
+    prepend apiSchemas = ["SceneGraphPrimAPI"]
+)
+{
+}
+
+def Scope "Authored_SceneGraphPrimAPI" (
+    prepend apiSchemas = ["SceneGraphPrimAPI"]
+)
+{
+    uniform token ui:displayGroup = "token1"
+    uniform token ui:displayName = "token1"
+}
+
+def Scope "Fallback_RiMaterialAPI" (
+    prepend apiSchemas = ["RiMaterialAPI"]
+)
+{
+}
+
+def Scope "Authored_RiMaterialAPI" (
+    prepend apiSchemas = ["RiMaterialAPI"]
+)
+{
+    token outputs:ri:displacement = "token1"
+    token outputs:ri:displacement.timeSamples = {
+        2: "token2",
+    }
+    token outputs:ri:surface = "token1"
+    token outputs:ri:surface.timeSamples = {
+        2: "token2",
+    }
+    token outputs:ri:volume = "token1"
+    token outputs:ri:volume.timeSamples = {
+        2: "token2",
+    }
+}
+
+def Scope "Fallback_RiSplineAPI" (
+    prepend apiSchemas = ["RiSplineAPI"]
+)
+{
+}
+
+def Scope "Authored_RiSplineAPI" (
+    prepend apiSchemas = ["RiSplineAPI"]
+)
+{
+}
+
+def Scope "Fallback_StatementsAPI" (
+    prepend apiSchemas = ["StatementsAPI"]
+)
+{
+}
+
+def Scope "Authored_StatementsAPI" (
+    prepend apiSchemas = ["StatementsAPI"]
+)
+{
+}
+
+def GenerativeProcedural "Fallback_HydraGenerativeProceduralAPI" (
+    prepend apiSchemas = ["HydraGenerativeProceduralAPI"]
+)
+{
+}
+
+def GenerativeProcedural "Authored_HydraGenerativeProceduralAPI" (
+    prepend apiSchemas = ["HydraGenerativeProceduralAPI"]
+)
+{
+    token primvars:hdGp:proceduralType = "token1"
+    token primvars:hdGp:proceduralType.timeSamples = {
+        2: "token2",
+    }
+    token proceduralSystem = "token1"
+    token proceduralSystem.timeSamples = {
+        2: "token2",
+    }
+}
+
+def RenderPass "Fallback_HydraRenderPassAPI" (
+    prepend apiSchemas = ["HydraRenderPassAPI"]
+)
+{
+}
+
+def RenderPass "Authored_HydraRenderPassAPI" (
+    prepend apiSchemas = ["HydraRenderPassAPI"]
+)
+{
+    uniform token hydra:rendererName = "token1"
+}
+
+def Scope "Fallback_AssetPreviewsAPI" (
+    prepend apiSchemas = ["AssetPreviewsAPI"]
+)
+{
+}
+
+def Scope "Authored_AssetPreviewsAPI" (
+    prepend apiSchemas = ["AssetPreviewsAPI"]
+)
+{
+}
+
+def SpatialAudio "Fallback_SpatialAudio"
+{
+}
+
+def SpatialAudio "Authored_SpatialAudio"
+{
+    uniform token auralMode = "nonSpatial"
+    uniform timecode endTime = 1.5
+    uniform asset filePath = @asset1.usda@
+    double gain = 1.5
+    double gain.timeSamples = {
+        2: 2.5,
+    }
+    uniform double mediaOffset = 1.5
+    uniform token playbackMode = "onceFromStartToEnd"
+    uniform timecode startTime = 1.5
+}
+
+def GenerativeProcedural "Fallback_GenerativeProcedural"
+{
+}
+
+def GenerativeProcedural "Authored_GenerativeProcedural"
+{
+    token proceduralSystem = "token1"
+    token proceduralSystem.timeSamples = {
+        2: "token2",
+    }
+}
+
+def Scope "Fallback_SemanticsLabelsAPI" (
+    prepend apiSchemas = ["SemanticsLabelsAPI:a"]
+)
+{
+}
+
+def Scope "Authored_SemanticsLabelsAPI" (
+    prepend apiSchemas = ["SemanticsLabelsAPI:a"]
+)
+{
+    token[] semantics:labels:a = ["token1", "token2"]
+    token[] semantics:labels:a.timeSamples = {
+        2: ["token2", "token3"],
+    }
+}
+
+def Scope "Fallback_ClaimsAPI" (
+    prepend apiSchemas = ["ClaimsAPI"]
+)
+{
+}
+
+def Scope "Authored_ClaimsAPI" (
+    prepend apiSchemas = ["ClaimsAPI"]
+)
+{
+}

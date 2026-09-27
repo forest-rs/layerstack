@@ -1,0 +1,21 @@
+#usda 1.0
+
+def "Rock" (
+    variants = {
+        string "look" = "a"
+    }
+    prepend variantSets = ["look"]
+)
+{
+    variantSet "look" = {
+        "a" (
+            prepend apiSchemas = ["CollectionAPI:lights"]
+        ) {
+            rel collection:lights:includes = [</Light>, </Light.intensity>, </Rock/Pebble>]
+        }
+    }
+}
+
+def "Light"
+{
+}

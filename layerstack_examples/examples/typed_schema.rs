@@ -14,7 +14,10 @@
 //! 3. reads the composed result through the views: the strongest opinion,
 //!    the schema fallback where nothing is authored, enums for
 //!    `allowedTokens`, and inherited properties through `Deref`;
-//! 4. drops to the raw resolved value, with its provenance, for what the
+//! 4. computes what inherits down namespace: the arm's purpose, which the
+//!    shot layer authors on the robot, its visibility and its world
+//!    transform;
+//! 5. drops to the raw resolved value, with its provenance, for what the
 //!    views do not show.
 
 use std::sync::Arc;
@@ -25,9 +28,11 @@ use layerstack::{
     TargetPath,
 };
 use layerstack_schemas::usd::CollectionApi;
-use layerstack_schemas::usd_geom::{Gprim, Mesh, MeshEdit, MeshSubdivisionScheme, Xform};
+use layerstack_schemas::usd_geom::{
+    Gprim, ImageablePurpose, Mesh, MeshEdit, MeshSubdivisionScheme, Xform, XformEdit,
+};
 use layerstack_schemas::usd_lux::SphereLight;
-use layerstack_schemas::{Scene, SchemaEdit};
+use layerstack_schemas::{Scene, SchemaEdit, Time};
 
 fn main() {
     // The shot layer (1) is the root; the base layer (2) is its weaker
@@ -88,6 +93,10 @@ fn main() {
         .expect("the arm is on the stage")
         .set_subdivision_scheme(&mut edit, MeshSubdivisionScheme::None)
         .set_display_color(&mut edit, &[[1.0, 0.0, 0.0]]);
+    // Purpose inherits: the whole robot is for final renders.
+    XformEdit::new(&edit, robot)
+        .expect("the robot is on the stage")
+        .set_purpose(&mut edit, ImageablePurpose::Render);
     let transaction = edit.finish();
     live.apply(&mut store, &transaction)
         .expect("the shot edits apply");
@@ -108,6 +117,30 @@ fn main() {
     // Any mesh is a `Gprim`, so the abstract view reads it too.
     let gprim = Gprim::new(&scene, arm).expect("a mesh is a gprim");
     println!("  doubleSided       = {:?}", gprim.double_sided());
+
+    // What inherits down namespace. The arm authors no purpose; the robot's
+    // is inherited, and the result says where it is authored.
+    let info = mesh.compute_purpose_info();
+    println!(
+        "  computed purpose  = {:?} (authored on {:?})",
+        info.purpose,
+        info.authored_on
+            .map(|p| store.paths.display(p, &store.tokens))
+    );
+    println!(
+        "  visibility        = {:?}",
+        mesh.compute_visibility(Time::Default)
+    );
+    println!(
+        "  guide visibility  = {:?}",
+        mesh.compute_effective_visibility(&ImageablePurpose::Guide, Time::Default)
+    );
+    // Nothing authors transform ops here, so the world transform is the
+    // identity; `world_transforms` shows transforms in motion.
+    println!(
+        "  local-to-world    = {:?}",
+        mesh.compute_local_to_world(Time::at(24.0))
+    );
 
     let light = SphereLight::new(&scene, key).expect("the key is a sphere light");
     println!("/Robot/Key");

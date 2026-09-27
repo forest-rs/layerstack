@@ -414,6 +414,10 @@ jobs:
       - name: check transform op oracle
         run: python layerstack_conformance/scripts/xform_ops_oracle.py --check
 
+      # The binding oracle must be what OpenUSD binds and collects.
+      - name: check binding oracle
+        run: python layerstack_conformance/scripts/binding_oracle.py --check
+
   # If this fails, consider changing your text or adding something to .typos.toml.
   typos:
     runs-on: ubuntu-latest

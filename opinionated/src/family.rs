@@ -55,20 +55,26 @@ pub enum FamilyMember<D, S> {
 pub trait OpinionFamily<Op> {
     /// The dense resolved value this family produces.
     type Value;
-    /// The sparse edit representation this family folds.
-    type Edit;
+    /// The sparse edit representation this family folds. It may borrow from
+    /// the classified operation for its lifetime, or own synthesized data.
+    type Edit<'op>
+    where
+        Op: 'op;
 
     /// Classifies one authored operation.
     ///
-    /// Members are returned owned because sampled or interpolated values are
-    /// synthesized at query time, not borrowed from storage.
-    fn classify(&self, op: &Op) -> FamilyMember<Self::Value, Self::Edit>;
+    /// Dense values are owned so edits can modify the result in place. Sparse
+    /// edits may borrow authored data or own data synthesized at query time;
+    /// the kernel retains them only until this fold completes.
+    fn classify<'op>(&self, op: &'op Op) -> FamilyMember<Self::Value, Self::Edit<'op>>;
 
     /// Applies one sparse edit over a weaker `base` value.
     ///
     /// `edit` is stronger than `base`; the kernel applies accumulated edits
     /// weakest-first so stronger edits have the last word.
-    fn apply(&self, edit: Self::Edit, base: Self::Value) -> Self::Value;
+    fn apply<'op>(&self, edit: Self::Edit<'op>, base: Self::Value) -> Self::Value
+    where
+        Op: 'op;
 
     /// The weakest base value when no dense opinion terminates the chain.
     fn seed(&self) -> Self::Value;
@@ -218,7 +224,7 @@ where
     P: Clone + 'a,
 {
     let mut provenance: Option<P> = None;
-    let mut edits: Vec<F::Edit> = Vec::new();
+    let mut edits: Vec<F::Edit<'a>> = Vec::new();
 
     for (op, prov) in opinions_strong_to_weak {
         match family.classify(op) {
@@ -285,7 +291,7 @@ where
 ///
 /// `edits` are accumulated strongest-to-weakest, so iterating in reverse
 /// applies the weakest edit first and lets stronger edits have the last word.
-fn materialize<Op, F>(family: &F, base: F::Value, edits: Vec<F::Edit>) -> F::Value
+fn materialize<'a, Op: 'a, F>(family: &F, base: F::Value, edits: Vec<F::Edit<'a>>) -> F::Value
 where
     F: OpinionFamily<Op>,
 {
@@ -309,9 +315,15 @@ where
     V: Clone,
 {
     type Value = V;
-    type Edit = Infallible;
+    type Edit<'op>
+        = Infallible
+    where
+        OpinionOp<V, I, K>: 'op;
 
-    fn classify(&self, op: &OpinionOp<V, I, K>) -> FamilyMember<Self::Value, Self::Edit> {
+    fn classify<'op>(
+        &self,
+        op: &'op OpinionOp<V, I, K>,
+    ) -> FamilyMember<Self::Value, Self::Edit<'op>> {
         match op {
             OpinionOp::Set(value) => FamilyMember::Dense(value.clone()),
             OpinionOp::Block => FamilyMember::Block,
@@ -324,7 +336,10 @@ where
         }
     }
 
-    fn apply(&self, edit: Self::Edit, base: Self::Value) -> Self::Value {
+    fn apply<'op>(&self, edit: Self::Edit<'op>, base: Self::Value) -> Self::Value
+    where
+        OpinionOp<V, I, K>: 'op,
+    {
         // `Edit` is uninhabited: the scalar family never produces a sparse
         // edit, so this arm is unreachable at the type level.
         let _ = base;
@@ -351,9 +366,15 @@ where
     I: Clone + Eq,
 {
     type Value = Vec<I>;
-    type Edit = ListOp<I>;
+    type Edit<'op>
+        = ListOp<I>
+    where
+        OpinionOp<V, I, K>: 'op;
 
-    fn classify(&self, op: &OpinionOp<V, I, K>) -> FamilyMember<Self::Value, Self::Edit> {
+    fn classify<'op>(
+        &self,
+        op: &'op OpinionOp<V, I, K>,
+    ) -> FamilyMember<Self::Value, Self::Edit<'op>> {
         match op {
             OpinionOp::List(edit) => FamilyMember::Sparse(edit.clone()),
             OpinionOp::Block => FamilyMember::Block,
@@ -366,7 +387,10 @@ where
         }
     }
 
-    fn apply(&self, edit: Self::Edit, base: Self::Value) -> Self::Value {
+    fn apply<'op>(&self, edit: Self::Edit<'op>, base: Self::Value) -> Self::Value
+    where
+        OpinionOp<V, I, K>: 'op,
+    {
         edit.apply_to(&base)
     }
 
@@ -394,9 +418,15 @@ where
     K: Clone + Ord,
 {
     type Value = Vec<(K, V)>;
-    type Edit = Vec<(K, V)>;
+    type Edit<'op>
+        = Vec<(K, V)>
+    where
+        OpinionOp<V, I, K>: 'op;
 
-    fn classify(&self, op: &OpinionOp<V, I, K>) -> FamilyMember<Self::Value, Self::Edit> {
+    fn classify<'op>(
+        &self,
+        op: &'op OpinionOp<V, I, K>,
+    ) -> FamilyMember<Self::Value, Self::Edit<'op>> {
         match op {
             OpinionOp::Dictionary(entries) => FamilyMember::Sparse(entries.clone()),
             OpinionOp::Block => FamilyMember::Block,
@@ -409,7 +439,10 @@ where
         }
     }
 
-    fn apply(&self, edit: Self::Edit, base: Self::Value) -> Self::Value {
+    fn apply<'op>(&self, edit: Self::Edit<'op>, base: Self::Value) -> Self::Value
+    where
+        OpinionOp<V, I, K>: 'op,
+    {
         // `edit` is stronger than `base`; combining strongest-first lets the
         // stronger entries win by key.
         combine_dictionary_chain(&ShallowOverlay, [edit, base])
@@ -417,5 +450,190 @@ where
 
     fn seed(&self) -> Self::Value {
         Vec::new()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
+    use alloc::{rc::Rc, string::String, vec};
+    use core::cell::Cell;
+
+    // Deliberately not Clone, and borrowing caller-owned data. Neither the
+    // program nor its backing data needs ownership transfer into the fold.
+    struct TextEdit<'data>(&'data str);
+    enum TextOp<'data> {
+        Edit(TextEdit<'data>),
+        Block,
+    }
+    struct TextFamily;
+    impl<'data> OpinionFamily<TextOp<'data>> for TextFamily {
+        type Value = String;
+        type Edit<'op>
+            = &'op TextEdit<'data>
+        where
+            TextOp<'data>: 'op;
+        fn classify<'op>(
+            &self,
+            op: &'op TextOp<'data>,
+        ) -> FamilyMember<Self::Value, Self::Edit<'op>> {
+            match op {
+                TextOp::Edit(edit) => FamilyMember::Sparse(edit),
+                TextOp::Block => FamilyMember::Block,
+            }
+        }
+        fn apply<'op>(&self, edit: Self::Edit<'op>, mut base: Self::Value) -> Self::Value
+        where
+            TextOp<'data>: 'op,
+        {
+            base.push_str(edit.0);
+            base
+        }
+        fn seed(&self) -> String {
+            String::from("seed")
+        }
+    }
+
+    #[test]
+    fn non_clone_edits_borrow_non_static_data_and_preserve_reports() {
+        let strong = String::from("/strong");
+        let weak = String::from("/weak");
+        let ops = [
+            TextOp::Edit(TextEdit(&strong)),
+            TextOp::Edit(TextEdit(&weak)),
+            TextOp::Block,
+        ];
+        let sources = ["strong", "weak", "block"];
+        let chain = || {
+            ops.iter()
+                .zip(sources.iter())
+                .chain(core::iter::once_with(|| panic!("hidden source read")))
+        };
+        let lean = resolve_family_chain(&TextFamily, chain());
+        let report = resolve_family_chain_report(&TextFamily, chain());
+        assert_eq!(lean, report.resolution);
+        assert_eq!(
+            lean.resolved(),
+            Some((String::from("seed/weak/strong"), "strong"))
+        );
+        assert_eq!(
+            report.events,
+            [
+                FamilyEvent::ContributedSparse {
+                    provenance: "strong"
+                },
+                FamilyEvent::ContributedSparse { provenance: "weak" },
+                FamilyEvent::StoppedByBlock {
+                    provenance: "block"
+                },
+            ]
+        );
+    }
+
+    #[derive(Debug)]
+    struct Element {
+        value: i32,
+        clones: Rc<Cell<usize>>,
+    }
+    impl Clone for Element {
+        fn clone(&self) -> Self {
+            self.clones.set(self.clones.get() + 1);
+            Self {
+                value: self.value,
+                clones: self.clones.clone(),
+            }
+        }
+    }
+    enum ArrayOp {
+        Dense(Vec<Element>),
+        Edit(ArrayEdit<Element>),
+    }
+    struct Arrays;
+    impl OpinionFamily<ArrayOp> for Arrays {
+        type Value = Vec<Element>;
+        type Edit<'op> = &'op ArrayEdit<Element>;
+        fn classify<'op>(&self, op: &'op ArrayOp) -> FamilyMember<Self::Value, Self::Edit<'op>> {
+            match op {
+                ArrayOp::Dense(items) => FamilyMember::Dense(items.clone()),
+                ArrayOp::Edit(edit) => FamilyMember::Sparse(edit),
+            }
+        }
+        fn apply<'op>(&self, edit: Self::Edit<'op>, mut base: Self::Value) -> Self::Value
+        where
+            ArrayOp: 'op,
+        {
+            edit.apply_in_place(&mut base, None);
+            base
+        }
+        fn seed(&self) -> Self::Value {
+            Vec::new()
+        }
+    }
+
+    #[test]
+    fn only_dense_elements_and_executed_literals_are_cloned() {
+        let clones = Rc::new(Cell::new(0));
+        let element = |value| Element {
+            value,
+            clones: clones.clone(),
+        };
+        let write = |index, value| ArrayEditOp::Write {
+            index: ArrayIndex::Position(index),
+            src: ArrayEditOperand::Literal(element(value)),
+        };
+        let ops = [
+            ArrayOp::Edit(ArrayEdit {
+                ops: vec![write(0, 99), write(999, 123)],
+            }),
+            ArrayOp::Edit(ArrayEdit {
+                ops: vec![write(0, 7)],
+            }),
+            ArrayOp::Dense(vec![element(1), element(2)]),
+        ];
+        let sources = [0, 1, 2];
+        let chain = || {
+            ops.iter()
+                .zip(sources.iter())
+                .chain(core::iter::once_with(|| panic!("hidden source read")))
+        };
+        let result = resolve_family_chain(&Arrays, chain()).resolved().unwrap();
+        assert_eq!(
+            result.0.iter().map(|v| v.value).collect::<Vec<_>>(),
+            [99, 2]
+        );
+        assert_eq!(result.1, 0);
+        assert_eq!(
+            clones.get(),
+            4,
+            "two dense elements and two executed writes; no program copies"
+        );
+        clones.set(0);
+        let report = resolve_family_chain_report(&Arrays, chain());
+        assert_eq!(report.events.len(), 3);
+        assert_eq!(
+            report
+                .resolution
+                .resolved()
+                .unwrap()
+                .0
+                .iter()
+                .map(|v| v.value)
+                .collect::<Vec<_>>(),
+            [99, 2]
+        );
+        assert_eq!(
+            clones.get(),
+            4,
+            "reporting must not clone the edit programs either"
+        );
+        let ArrayOp::Dense(original) = &ops[2] else {
+            unreachable!()
+        };
+        assert_eq!(
+            original.iter().map(|v| v.value).collect::<Vec<_>>(),
+            [1, 2],
+            "authored inputs stay unchanged"
+        );
     }
 }

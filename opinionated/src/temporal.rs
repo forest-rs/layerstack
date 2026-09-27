@@ -402,12 +402,15 @@ mod tests {
     struct Points<'a>(&'a Cell<usize>);
     impl OpinionFamily<Value> for Points<'_> {
         type Value = Vec<Point>;
-        type Edit = ArrayEdit<Point>;
+        type Edit<'op> = ArrayEdit<Point>;
         fn classify(&self, value: &Value) -> Value {
             self.0.set(self.0.get() + 1);
             value.clone()
         }
-        fn apply(&self, edit: Self::Edit, mut base: Self::Value) -> Self::Value {
+        fn apply<'op>(&self, edit: Self::Edit<'op>, mut base: Self::Value) -> Self::Value
+        where
+            Value: 'op,
+        {
             edit.apply_in_place(&mut base, None);
             base
         }

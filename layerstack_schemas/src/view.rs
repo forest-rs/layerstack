@@ -21,11 +21,53 @@ use core::fmt;
 use alloc::{string::String, vec::Vec};
 
 use layerstack::{
-    InterpolationType, LayerStore, PathId, PropertyPath, ResolvedValue, SchemaKind, Stage,
-    TargetPath, TokenId, TokenInterner, Value,
+    InterpolationType, LayerStore, PathId, PropertyKind, PropertyPath, ResolvedValue, SchemaKind,
+    Stage, TargetPath, TokenId, TokenInterner, Value,
 };
 
 use crate::edit::SchemaEdit;
+
+/// When a computation reads the stage: the default time, or a time code
+/// with the interpolation between its time samples.
+///
+/// OpenUSD: `UsdTimeCode` with the stage's `UsdInterpolationType`; linear
+/// is OpenUSD's default.
+///
+/// Spec: AOUSD Core §12.3 (default values and time samples), §12.5
+/// (interpolation).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Time {
+    /// The default time: only default values, never time samples.
+    Default,
+    /// A time code, interpolating between time samples as `interpolation`
+    /// says.
+    At {
+        /// The time code.
+        code: f64,
+        /// How values between time samples are interpolated.
+        interpolation: InterpolationType,
+    },
+}
+
+impl Time {
+    /// The time code `code`, interpolating linearly (OpenUSD's default).
+    #[must_use]
+    pub fn at(code: f64) -> Self {
+        Self::At {
+            code,
+            interpolation: InterpolationType::Linear,
+        }
+    }
+
+    /// The time code `code`, holding each time sample until the next.
+    #[must_use]
+    pub fn held(code: f64) -> Self {
+        Self::At {
+            code,
+            interpolation: InterpolationType::Held,
+        }
+    }
+}
 
 /// A composed stage and the store it was composed from: what every schema
 /// view reads.
@@ -128,6 +170,13 @@ impl<'a> Scene<'a> {
             .collect()
     }
 
+    /// The parent of the prim at `path` (`/` for a root prim), if `path` is
+    /// not the pseudo-root.
+    pub(crate) fn parent(&self, path: PathId) -> Option<PathId> {
+        let paths = self.store.paths();
+        paths.lookup(&paths.resolve(path).parent()?)
+    }
+
     /// `instance` as the store holds it, if any prim could apply it.
     pub(crate) fn instance_name(&self, instance: &str) -> Option<&'a str> {
         let tokens = self.store.tokens();
@@ -208,6 +257,67 @@ impl<'a> PrimView<'a> {
             self.scene.store,
         )?;
         read(&resolved.value, self.scene.store.tokens())
+    }
+
+    /// The resolved value of the attribute `name` at `time`, schema
+    /// fallback included, as the stage holds it.
+    pub(crate) fn raw_value(&self, name: &str, time: Time) -> Option<Value> {
+        let raw = |value: &Value, _: &TokenInterner| Some(value.clone());
+        match time {
+            Time::Default => self.read_value(name, raw),
+            Time::At {
+                code,
+                interpolation,
+            } => self.read_value_at(name, code, interpolation, raw),
+        }
+    }
+
+    /// Whether an opinion authors a value for the attribute `name`, at any
+    /// time: the strongest opinion with a spline, time samples or a
+    /// default decides, and a default block authors none. Whether that
+    /// value applies at a given time is [`PrimView::raw_value`]'s to say:
+    /// an attribute with only time samples still reads its fallback at the
+    /// default time.
+    ///
+    /// OpenUSD: `UsdAttribute::HasAuthoredValue` (`UsdResolveInfo` with no
+    /// time).
+    ///
+    /// Spec: AOUSD Core §12.3 (value resolution), §12.3.6 (blocks).
+    pub(crate) fn has_authored_value(&self, name: &str) -> bool {
+        let Some(property) = self.property_path(name) else {
+            return false;
+        };
+        let Some(opinions) = self.scene.stage.explain_property_path(property) else {
+            return false;
+        };
+        for spec in opinions.iter().filter_map(|o| o.value.as_property()) {
+            if spec.spline.is_some() || spec.time_samples.as_ref().is_some_and(|s| !s.is_empty()) {
+                return true;
+            }
+            match &spec.default {
+                Some(Value::Blocked) => return false,
+                Some(_) => return true,
+                None => {}
+            }
+        }
+        false
+    }
+
+    /// Whether the prim has an attribute `name`: one an opinion declares or
+    /// its schemas define.
+    ///
+    /// OpenUSD: `UsdPrim::GetAttribute(name)` is valid.
+    pub(crate) fn has_attribute(&self, name: &str) -> bool {
+        let Some(token) = self.scene.token(name) else {
+            return false;
+        };
+        let stage = self.scene.stage;
+        if let Some(declared) = stage.resolve_property_declaration(self.path, token) {
+            return declared.kind == PropertyKind::Attribute;
+        }
+        stage
+            .property_definition(self.path, token, self.scene.store)
+            .is_some_and(|defined| defined.kind == PropertyKind::Attribute)
     }
 
     /// The composed targets of the relationship `name`.

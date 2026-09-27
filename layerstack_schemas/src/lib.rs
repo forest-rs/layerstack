@@ -114,6 +114,75 @@
 //! Each domain is a Cargo feature (`usd-geom`, `usd-lux`, …) that enables
 //! the domains it depends on; `all`, the default, enables every one.
 //!
+//! # Transforms, visibility and purpose
+//!
+//! With `usd-geom`, the views compute what `UsdGeom` defines to inherit
+//! down namespace, as OpenUSD computes it, at a [`Time`] (the default
+//! time, or a time code with linear or held interpolation):
+//!
+//! - `Xformable::local_transform`: the product of the prim's
+//!   `xformOpOrder` ops (every op type and Euler order, in any precision,
+//!   with inverse ops and `!resetXformStack!`), with the ops that could not
+//!   contribute reported as [`XformProblem`]s rather than hidden;
+//!   `Xformable::ordered_xform_ops` lists the ops;
+//! - `Imageable::compute_local_to_world` and `compute_parent_to_world`;
+//!   for many prims, an [`XformCache`] owned by the caller shares each
+//!   ancestor's work, reports what it computed ([`XformCacheStats`]), and
+//!   is invalidated explicitly after edits;
+//! - `Imageable::compute_visibility`, `compute_effective_visibility` for a
+//!   purpose (`VisibilityAPI`), and `compute_purpose_info`, which says
+//!   which prim authors the inherited purpose.
+//!
+//! Matrices are `[[f64; 4]; 4]` rows that transform row vectors, as USD's
+//! are: the translation is the last row, and a prim's local-to-world
+//! transform is its local transform times its parent's.
+//!
+//! Each computation is a pure step over one prim's stage reads and its
+//! parent's result: [`LocalTransformInputs`] (read once, then
+//! `evaluate`d) with [`LocalTransform::local_to_world`];
+//! [`VisibilityInputs`] with [`Visibility::inherit`] and
+//! [`Visibility::effective`]; [`PurposeInputs`] with
+//! [`PurposeInfo::inherit`]. Each inputs type gathers its reads in one
+//! place and names them, so a caller that tracks dependencies can record
+//! them; the views and [`XformCache`] are callers of the same steps.
+//!
+//! ```
+//! use std::sync::Arc;
+//!
+//! use layerstack::edit::EditTarget;
+//! use layerstack::{InMemoryStore, Layer, LayerId, LiveStage, StageOptions};
+//! use layerstack_schemas::usd_geom::{ImageablePurpose, Scope, Sphere};
+//! use layerstack_schemas::{Scene, SchemaEdit, Time, Visibility, XformCache};
+//!
+//! let mut store = InMemoryStore::default();
+//! store.insert_layer(Layer::new(LayerId(1)));
+//! let options = StageOptions {
+//!     schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+//!     ..StageOptions::default()
+//! };
+//! let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+//! let (group, ball) = (store.path("/Guides"), store.path("/Guides/Ball"));
+//!
+//! let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+//! Scope::define(&mut edit, group).set_purpose(&mut edit, ImageablePurpose::Guide);
+//! Sphere::define(&mut edit, ball);
+//! let transaction = edit.finish();
+//! live.apply(&mut store, &transaction).expect("applies");
+//!
+//! let scene = Scene::new(live.stage(), &store);
+//! let sphere = Sphere::new(&scene, ball).expect("a sphere");
+//! let info = sphere.compute_purpose_info();
+//! assert_eq!(info.purpose, ImageablePurpose::Guide);
+//! assert_eq!(info.authored_on, Some(group));
+//! // Guides are hidden unless something makes them visible.
+//! assert_eq!(
+//!     sphere.compute_effective_visibility(&ImageablePurpose::Guide, Time::Default),
+//!     Visibility::Invisible
+//! );
+//! let mut cache = XformCache::new(Time::at(1.0));
+//! assert_eq!(cache.local_to_world(&scene, ball), Some(sphere.compute_local_to_world(Time::at(1.0))));
+//! ```
+//!
 //! # License
 //!
 //! The generated tables are derived from OpenUSD's schema definitions,
@@ -145,13 +214,26 @@ extern crate alloc;
 mod view;
 mod edit;
 mod generated;
+#[cfg(feature = "usd-geom")]
+mod gf;
+#[cfg(feature = "usd-geom")]
+mod imageable;
 mod table;
 mod value;
+#[cfg(feature = "usd-geom")]
+mod xform;
 
 pub use edit::SchemaEdit;
 pub use generated::views::*;
 pub use generated::{Domain, OPENUSD_VERSION};
-pub use view::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene};
+#[cfg(feature = "usd-geom")]
+pub use imageable::{PurposeInfo, PurposeInputs, Visibility, VisibilityInputs};
+pub use view::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, Time};
+#[cfg(feature = "usd-geom")]
+pub use xform::{
+    INVERT_PREFIX, LocalTransform, LocalTransformInputs, RESET_XFORM_STACK, XformCache,
+    XformCacheStats, XformOp, XformOpType, XformOps, XformProblem, XformProblemKind,
+};
 
 use alloc::vec::Vec;
 

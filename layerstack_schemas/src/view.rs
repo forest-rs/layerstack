@@ -177,6 +177,11 @@ impl<'a> Scene<'a> {
         paths.lookup(&paths.resolve(path).parent()?)
     }
 
+    /// The pseudo-root, `/`.
+    pub(crate) fn root(&self) -> Option<PathId> {
+        self.store.paths().lookup(&layerstack::Path::root())
+    }
+
     /// `instance` as the store holds it, if any prim could apply it.
     pub(crate) fn instance_name(&self, instance: &str) -> Option<&'a str> {
         let tokens = self.store.tokens();

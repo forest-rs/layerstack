@@ -21,4 +21,6 @@ ignore-hidden = false
 extend-exclude = [
     "/.git",
     "core-spec-supplemental-release_dec2025/",
+    # OpenUSD's schema documentation, as the views generated from it quote it.
+    "layerstack_schemas/src/generated/views/",
 ]

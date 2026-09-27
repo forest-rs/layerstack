@@ -1,12 +1,16 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! The generator's model of OpenUSD's schemas, read from a usd-core wheel.
+//! The generator's model of OpenUSD's schemas, read from a usd-core wheel,
+//! with each property's `apiName` read from the matching OpenUSD source.
 //!
 //! The model keeps everything the generated code needs, the registry tables
-//! and the typed accessors built from the same schemas: each schema's kind,
-//! parent, built-ins, auto-applies and properties, and each property's
-//! declared type, variability and fallback.
+//! and the typed views built from the same schemas: each schema's kind,
+//! parent, built-ins, auto-applies, documentation and properties, and each
+//! property's declared type, variability, fallback, `allowedTokens`,
+//! documentation and `apiName`. Only `apiName` comes from the source
+//! (`pxr/usd/*/schema.usda`), since usdGenSchema consumes it; everything
+//! else comes from the wheel.
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -14,8 +18,8 @@ use std::path::{Path, PathBuf};
 
 use layerstack::schema::{SchemaDeclaration, read_generated_schema};
 use layerstack::{
-    AssetResolveError, AssetResolver, InMemoryStore, LayerId, PathInterner, PropertyKind,
-    ResolvedAsset, SchemaKind, TokenInterner, Value, Variability,
+    AssetResolveError, AssetResolver, FieldValue, InMemoryStore, LayerId, PathInterner,
+    PropertyKind, ResolvedAsset, SchemaKind, TokenInterner, Value, Variability,
 };
 use serde_json::Value as Json;
 
@@ -60,6 +64,8 @@ pub(crate) struct Schema {
     pub(crate) allowed_instance_names: Vec<String>,
     /// `apiSchemaInstances`' `apiSchemaCanOnlyApplyTo`, by instance name.
     pub(crate) instance_can_only_apply_to: Vec<(String, Vec<String>)>,
+    /// Its `userDocBrief`.
+    pub(crate) doc: String,
 }
 
 /// A property a schema defines or overrides.
@@ -76,6 +82,12 @@ pub(crate) struct Property {
     pub(crate) variability: Variability,
     /// The fallback value.
     pub(crate) fallback: Option<Value>,
+    /// The tokens `allowedTokens` lists.
+    pub(crate) allowed_tokens: Vec<String>,
+    /// Its `userDocBrief`.
+    pub(crate) doc: String,
+    /// Its `apiName` in the OpenUSD source, if it has one.
+    pub(crate) api_name: Option<String>,
 }
 
 /// What the generator read, and from where.
@@ -124,10 +136,18 @@ struct TypeInfo {
 }
 
 /// Reads the model from `pxr`, the `pxr` package directory of a usd-core
-/// wheel.
-pub(crate) fn read(pxr: &Path) -> Result<Model, String> {
+/// wheel, and `source`, an OpenUSD checkout of the same release.
+pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
     let site_packages = pxr.parent().ok_or("the pxr directory has no parent")?;
     let version = wheel_version(site_packages)?;
+    let source_version = source_version(source)?;
+    if source_version != version {
+        return Err(format!(
+            "the OpenUSD source at {} is {source_version}, the wheel is {version}; \
+             check out the matching tag",
+            source.display()
+        ));
+    }
     let mut files = Vec::new();
     let relative = |path: &Path| {
         path.strip_prefix(site_packages)
@@ -204,12 +224,14 @@ pub(crate) fn read(pxr: &Path) -> Result<Model, String> {
     }
 
     let mut store = InMemoryStore::default();
+    let custom_data = store.tokens.intern("customData");
+    let allowed_tokens = store.tokens.intern("allowedTokens");
     let mut domains = Vec::new();
     for (index, &(plugin, variant)) in DOMAINS.iter().enumerate() {
         let path = resources(pxr, plugin).join("generatedSchema.usda");
         files.push(relative(&path));
-        let source = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
-        let parsed = layerstack_usda::parser::parse(&source);
+        let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let parsed = layerstack_usda::parser::parse(&text);
         let emitted = layerstack_usda::emit::emit(
             &parsed.layer,
             LayerId(u64::try_from(index).expect("few domains") + 1),
@@ -273,10 +295,45 @@ pub(crate) fn read(pxr: &Path) -> Result<Model, String> {
             read_generated_schema(&emitted.layer, &declared, &mut store.tokens, &store.paths)
                 .map_err(|e| format!("{}: {e}", path.display()))?;
 
+        let api_names = source_api_names(source, plugin, &mut files)?;
+        let mut used_api_names: Vec<(String, String)> = Vec::new();
         let mut schemas = Vec::new();
         for definition in definitions {
             let name = String::from(store.tokens.resolve(definition.name));
+            let spec = store
+                .paths
+                .lookup(&layerstack::Path::root().join(&[definition.name]))
+                .and_then(|path| emitted.layer.prims.get(&path))
+                .ok_or_else(|| format!("{name}: no prim spec"))?;
+            let class_doc = doc_of(spec.field(custom_data));
+            let schema_name = name.clone();
+            let property_spec = |property: layerstack::TokenId| {
+                spec.properties
+                    .iter()
+                    .find(|entry| entry.name == property)
+                    .map(|entry| &entry.spec)
+            };
             let convert = |p: &layerstack::PropertyDefinition, tokens: &TokenInterner| Property {
+                doc: property_spec(p.name)
+                    .map(|s| doc_of(s.metadata(custom_data)))
+                    .unwrap_or_default(),
+                allowed_tokens: property_spec(p.name)
+                    .and_then(|s| s.metadata(allowed_tokens))
+                    .map(|allowed| match allowed {
+                        FieldValue::Value(Value::Array(items)) => items
+                            .iter()
+                            .filter_map(|item| match item {
+                                Value::Token(token) => Some(tokens.resolve(*token).to_string()),
+                                Value::String(text) => Some(text.to_string()),
+                                _ => None,
+                            })
+                            .collect(),
+                        _ => Vec::new(),
+                    })
+                    .unwrap_or_default(),
+                api_name: api_names
+                    .get(&(schema_name.clone(), tokens.resolve(p.name).to_string()))
+                    .cloned(),
                 name: tokens.resolve(p.name).to_string(),
                 kind: p.kind,
                 value_type: p.type_name.as_ref().map(|t| {
@@ -294,7 +351,14 @@ pub(crate) fn read(pxr: &Path) -> Result<Model, String> {
                     .map(|id| tokens.resolve(*id).to_string())
                     .collect()
             };
+            for property in definition.properties.iter().chain(&definition.overrides) {
+                used_api_names.push((
+                    name.clone(),
+                    store.tokens.resolve(property.name).to_string(),
+                ));
+            }
             schemas.push(Schema {
+                doc: class_doc,
                 can_only_apply_to: names(&definition.can_only_apply_to, &store.tokens),
                 allowed_instance_names: names(&definition.allowed_instance_names, &store.tokens),
                 instance_can_only_apply_to: definition
@@ -328,6 +392,17 @@ pub(crate) fn read(pxr: &Path) -> Result<Model, String> {
                     .map(|p| convert(p, &store.tokens))
                     .collect(),
             });
+        }
+        // Every `apiName` of a generated schema names one of its properties;
+        // one that does not means the source and the wheel differ.
+        for (schema, property) in api_names.keys() {
+            let generated = schemas.iter().any(|s: &Schema| &s.name == schema);
+            if generated && !used_api_names.contains(&(schema.clone(), property.clone())) {
+                return Err(format!(
+                    "{plugin}: the source gives {schema}.{property} an apiName, but the wheel \
+                     defines no such property"
+                ));
+            }
         }
         schemas.sort_by(|a, b| a.name.cmp(&b.name));
         left_out.sort();
@@ -392,6 +467,102 @@ pub(crate) fn read(pxr: &Path) -> Result<Model, String> {
 
 fn intern_all(tokens: &mut TokenInterner, names: &[String]) -> Vec<layerstack::TokenId> {
     names.iter().map(|name| tokens.intern(name)).collect()
+}
+
+/// The first paragraph of the `userDocBrief` in `custom_data`, on one line.
+fn doc_of(custom_data: Option<&FieldValue>) -> String {
+    let Some(FieldValue::Value(Value::Dictionary(entries))) = custom_data else {
+        return String::new();
+    };
+    let Some((_, Value::String(text))) = entries.iter().find(|(key, _)| &**key == "userDocBrief")
+    else {
+        return String::new();
+    };
+    let paragraph = text.split("\n\n").next().unwrap_or_default();
+    paragraph.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// The OpenUSD release of the source checkout at `source`
+/// (`cmake/defaults/Version.cmake`), as the wheel names it (`26.8`).
+fn source_version(source: &Path) -> Result<String, String> {
+    let path = source.join("cmake/defaults/Version.cmake");
+    let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let part = |name: &str| {
+        text.lines()
+            .find_map(|line| {
+                let rest = line.trim().strip_prefix(&format!("set({name} "))?;
+                Some(rest.split('"').nth(1)?.to_string())
+            })
+            .ok_or_else(|| format!("{}: no {name}", path.display()))
+    };
+    let (minor, patch) = (part("PXR_MINOR_VERSION")?, part("PXR_PATCH_VERSION")?);
+    Ok(format!("{minor}.{patch}"))
+}
+
+/// The `apiName` of each property of the domain's source `schema.usda`, by
+/// `(schema, generated property name)`: a multiple-apply schema's property
+/// `p` is generated as `prefix:__INSTANCE_NAME__:p` (`prefix:__INSTANCE_NAME__`
+/// for the property named `__INSTANCE_NAME__`), as usdGenSchema names it.
+fn source_api_names(
+    source: &Path,
+    plugin: &str,
+    files: &mut Vec<String>,
+) -> Result<BTreeMap<(String, String), String>, String> {
+    let relative = format!("pxr/usd/{plugin}/schema.usda");
+    let path = source.join(&relative);
+    files.push(relative);
+    let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let mut store = InMemoryStore::default();
+    let parsed = layerstack_usda::parser::parse(&text);
+    // Its sublayers name other schema files, which need not resolve.
+    let emitted = layerstack_usda::emit::emit(
+        &parsed.layer,
+        LayerId(1),
+        &mut store.tokens,
+        &mut store.paths,
+        &mut NoAssets,
+    );
+    let custom_data = store.tokens.intern("customData");
+    let placeholder = layerstack::schema::INSTANCE_NAME_PLACEHOLDER;
+    let mut names = BTreeMap::new();
+    for (path, spec) in &emitted.layer.prims {
+        let schema_path = store.paths.resolve(*path);
+        if schema_path.depth() != 1 {
+            continue;
+        }
+        let Some(schema) = schema_path
+            .leaf()
+            .map(|t| store.tokens.resolve(t).to_string())
+        else {
+            continue;
+        };
+        let entry = |data: Option<&FieldValue>, key: &str| match data {
+            Some(FieldValue::Value(Value::Dictionary(entries))) => {
+                entries.iter().find_map(|(k, v)| match v {
+                    Value::String(text) if &**k == key => Some(text.to_string()),
+                    Value::Token(token) if &**k == key => {
+                        Some(store.tokens.resolve(*token).to_string())
+                    }
+                    _ => None,
+                })
+            }
+            _ => None,
+        };
+        let prefix = entry(spec.field(custom_data), "propertyNamespacePrefix");
+        for property in &spec.properties {
+            let Some(api_name) = entry(property.spec.metadata(custom_data), "apiName") else {
+                continue;
+            };
+            let raw = store.tokens.resolve(property.name);
+            let generated = match &prefix {
+                None => raw.to_string(),
+                Some(prefix) if raw == placeholder => format!("{prefix}:{placeholder}"),
+                Some(prefix) => format!("{prefix}:{placeholder}:{raw}"),
+            };
+            names.insert((schema.clone(), generated), api_name);
+        }
+    }
+    Ok(names)
 }
 
 /// The schema name an applied name or inclusion starts with.

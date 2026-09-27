@@ -3,7 +3,7 @@
 
 //! Writes the `layerstack_schemas` tables for a [`Model`].
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 
 use layerstack::{PropertyKind, SchemaKind, TokenInterner, Value, Variability};
@@ -37,7 +37,7 @@ pub(crate) fn files(model: &Model) -> Result<Vec<(String, String)>, String> {
 }
 
 /// The header of every generated file.
-fn header(model: &Model) -> String {
+pub(crate) fn header(model: &Model) -> String {
     format!(
         "// Copyright 2016 Pixar\n\
          // Copyright {COPYRIGHT_YEAR} the LayerStack Authors\n\
@@ -47,14 +47,15 @@ fn header(model: &Model) -> String {
          // {version} (the usd-core {version} wheel), which are licensed under the\n\
          // Tomorrow Open Source Technology License 1.0; see `LICENSE-TOST-1.0` and\n\
          // `NOTICE`. Do not edit: regenerate with\n\
-         // `cargo run -p layerstack_schemagen -- --pxr <site-packages>/pxr`.\n",
+         // `cargo run -p layerstack_schemagen -- --pxr <site-packages>/pxr \\\n\
+         //  --source <OpenUSD checkout>`.\n",
         version = model.version
     )
 }
 
 /// The Rust module of a plugin (`usdGeom` → `usd_geom`, `usdUI` →
 /// `usd_ui`).
-fn module(plugin: &str) -> String {
+pub(crate) fn module(plugin: &str) -> String {
     let mut out = String::new();
     let mut previous_lower = false;
     for c in plugin.chars() {
@@ -74,8 +75,9 @@ fn mod_file(model: &Model, types: &ValueTypes) -> String {
         let _ = writeln!(out, "// - `{file}`");
     }
     out.push_str("\n//! The generated tables.\n\n@IMPORTS@\n");
+    out.push_str("pub(crate) mod views;\n\n");
     for domain in &model.domains {
-        let _ = writeln!(out, "mod {};", module(domain.plugin));
+        let _ = writeln!(out, "{}\nmod {};", cfg(domain), module(domain.plugin));
     }
     let _ = write!(
         out,
@@ -101,13 +103,13 @@ fn mod_file(model: &Model, types: &ValueTypes) -> String {
                 let _ = writeln!(out, "    /// - `{name}`, {why}.");
             }
         }
-        let _ = writeln!(out, "    {},", domain.variant);
+        let _ = writeln!(out, "    {}\n    {},", cfg(domain), domain.variant);
     }
     out.push_str(
         "}\n\nimpl Domain {\n    /// Every domain.\n    pub const ALL: &'static [Self] = &[",
     );
     for domain in &model.domains {
-        let _ = write!(out, "Self::{}, ", domain.variant);
+        let _ = write!(out, "{} Self::{}, ", cfg(domain), domain.variant);
     }
     out.push_str(
         "];\n\n    /// The OpenUSD plugin the domain's schemas come from (`usdGeom`).\n    \
@@ -116,8 +118,10 @@ fn mod_file(model: &Model, types: &ValueTypes) -> String {
     for domain in &model.domains {
         let _ = writeln!(
             out,
-            "            Self::{} => {:?},",
-            domain.variant, domain.name
+            "            {}\n            Self::{} => {:?},",
+            cfg(domain),
+            domain.variant,
+            domain.name
         );
     }
     out.push_str(
@@ -141,7 +145,8 @@ fn mod_file(model: &Model, types: &ValueTypes) -> String {
             .collect();
         let _ = writeln!(
             out,
-            "            Self::{} => &[{}],",
+            "            {}\n            Self::{} => &[{}],",
+            cfg(domain),
             domain.variant,
             variants.join(", ")
         );
@@ -152,17 +157,27 @@ fn mod_file(model: &Model, types: &ValueTypes) -> String {
     for domain in &model.domains {
         let _ = writeln!(
             out,
-            "            Self::{} => &{}::TABLES,",
+            "            {}\n            Self::{} => &{}::TABLES,",
+            cfg(domain),
             domain.variant,
             module(domain.plugin)
         );
     }
     out.push_str("        }\n    }\n}\n");
 
-    for (ident, (name, is_array, zero)) in &types.statics {
+    for (ident, (name, is_array, zero, users)) in &types.statics {
+        let features: Vec<String> = users
+            .iter()
+            .map(|plugin| format!("feature = {:?}", crate::views::feature(plugin)))
+            .collect();
+        let condition = if features.len() == 1 {
+            features[0].clone()
+        } else {
+            format!("any({})", features.join(", "))
+        };
         let _ = write!(
             out,
-            "\npub(crate) static {ident}: ValueType = ValueType {{\n    \
+            "\n#[cfg({condition})]\npub(crate) static {ident}: ValueType = ValueType {{\n    \
              name: {name:?},\n    is_array: {is_array},\n    zero: {},\n}};\n",
             closure(zero)
         );
@@ -183,13 +198,22 @@ fn mod_file(model: &Model, types: &ValueTypes) -> String {
 /// The value types the domains declare, each emitted once in `mod.rs`.
 #[derive(Default)]
 struct ValueTypes {
-    /// Static name → (type name, is array, the zero value's expression).
-    statics: BTreeMap<String, (String, bool, String)>,
+    /// Static name → (type name, is array, the zero value's expression, the
+    /// plugins using it).
+    statics: BTreeMap<String, (String, bool, String, BTreeSet<&'static str>)>,
+}
+
+/// The `#[cfg]` of a domain's feature.
+fn cfg(domain: &Domain) -> String {
+    format!(
+        "#[cfg(feature = {:?})]",
+        crate::views::feature(domain.plugin)
+    )
 }
 
 impl ValueTypes {
-    /// The static naming `(name, is_array)`.
-    fn get(&mut self, name: &str, is_array: bool, zero: String) -> String {
+    /// The static naming `(name, is_array)`, which `plugin` uses.
+    fn get(&mut self, name: &str, is_array: bool, zero: String, plugin: &'static str) -> String {
         let base = name.strip_suffix("[]").unwrap_or(name);
         let mut ident: String = base.to_ascii_uppercase();
         if is_array {
@@ -197,7 +221,9 @@ impl ValueTypes {
         }
         self.statics
             .entry(ident.clone())
-            .or_insert((name.into(), is_array, zero));
+            .or_insert((name.into(), is_array, zero, BTreeSet::new()))
+            .3
+            .insert(plugin);
         ident
     }
 }
@@ -232,11 +258,27 @@ fn domain_file(
             schema.name, schema.parent, schema.built_ins
         );
         for property in &schema.properties {
-            property_entry(&mut out, model, &schema.name, property, types, failures);
+            property_entry(
+                &mut out,
+                model,
+                domain.plugin,
+                &schema.name,
+                property,
+                types,
+                failures,
+            );
         }
         out.push_str("            ],\n            overrides: &[\n");
         for property in &schema.overrides {
-            property_entry(&mut out, model, &schema.name, property, types, failures);
+            property_entry(
+                &mut out,
+                model,
+                domain.plugin,
+                &schema.name,
+                property,
+                types,
+                failures,
+            );
         }
         let _ = write!(
             out,
@@ -289,6 +331,7 @@ fn domain_file(
 fn property_entry(
     out: &mut String,
     model: &Model,
+    plugin: &'static str,
     schema: &str,
     property: &Property,
     types: &mut ValueTypes,
@@ -301,7 +344,7 @@ fn property_entry(
     let value_type = match &property.value_type {
         None => "None".to_string(),
         Some((name, is_array, zero)) => match expr(zero, &model.tokens) {
-            Ok(zero) => format!("Some(&super::{})", types.get(name, *is_array, zero)),
+            Ok(zero) => format!("Some(&super::{})", types.get(name, *is_array, zero, plugin)),
             Err(why) => {
                 failures.push(format!("{schema}.{}: type {name}: {why}", property.name));
                 "None".into()

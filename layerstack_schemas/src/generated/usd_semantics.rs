@@ -6,7 +6,8 @@
 // 26.8 (the usd-core 26.8 wheel), which are licensed under the
 // Tomorrow Open Source Technology License 1.0; see `LICENSE-TOST-1.0` and
 // `NOTICE`. Do not edit: regenerate with
-// `cargo run -p layerstack_schemagen -- --pxr <site-packages>/pxr`.
+// `cargo run -p layerstack_schemagen -- --pxr <site-packages>/pxr \
+//  --source <OpenUSD checkout>`.
 
 //! OpenUSD's `usdSemantics` schemas.
 

@@ -22,9 +22,29 @@ include = [
     "LICENSE-TOST-1.0",
 ]
 
+# BEGIN GENERATED FEATURES (layerstack_schemagen)
 [features]
-default = []
+default = ["all"]
 std = []
+# Every domain.
+all = ["usd", "usd-geom", "usd-shade", "usd-lux", "usd-skel", "usd-physics", "usd-vol", "usd-render", "usd-lod", "usd-ui", "usd-ri", "usd-hydra", "usd-media", "usd-proc", "usd-semantics", "usd-profiles"]
+usd = []
+usd-geom = ["usd"]
+usd-shade = ["usd"]
+usd-lux = ["usd", "usd-geom", "usd-shade"]
+usd-skel = ["usd", "usd-geom"]
+usd-physics = ["usd", "usd-geom"]
+usd-vol = ["usd-geom"]
+usd-render = ["usd"]
+usd-lod = ["usd"]
+usd-ui = ["usd"]
+usd-ri = []
+usd-hydra = ["usd-render", "usd-proc"]
+usd-media = ["usd-geom"]
+usd-proc = ["usd-geom"]
+usd-semantics = []
+usd-profiles = []
+# END GENERATED FEATURES
 
 [dependencies]
 layerstack = { path = "../layerstack" }

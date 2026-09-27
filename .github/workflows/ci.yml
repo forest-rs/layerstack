@@ -341,13 +341,27 @@ jobs:
         env:
           RUSTDOCFLAGS: '--cfg docsrs -D warnings'
 
-  # The tables in layerstack_schemas/src/generated must be what
-  # layerstack_schemagen writes from the usd-core release they name.
+  # The tables and views in layerstack_schemas/src/generated, and the test
+  # table in layerstack_conformance/tests/generated, must be what
+  # layerstack_schemagen writes from the usd-core release they name and the
+  # OpenUSD sources of that release (for each property's `apiName`).
   generated-schemas:
     name: generated schemas
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
+      - name: check out OpenUSD's schema sources
+        uses: actions/checkout@v6
+        with:
+          repository: PixarAnimationStudios/OpenUSD
+          ref: v26.08
+          path: openusd
+          fetch-depth: 1
+          sparse-checkout-cone-mode: false
+          sparse-checkout: |
+            cmake/defaults/Version.cmake
+            pxr/usd/*/schema.usda
 
       - name: install stable toolchain
         uses: dtolnay/rust-toolchain@master
@@ -371,7 +385,7 @@ jobs:
       - name: check generated schemas
         run: |
           pxr="$(python -c 'import os, pxr; print(os.path.dirname(pxr.__file__))')"
-          cargo run --locked -p layerstack_schemagen -- --check --pxr "$pxr"
+          cargo run --locked -p layerstack_schemagen -- --check --pxr "$pxr" --source openusd
 
   # If this fails, consider changing your text or adding something to .typos.toml.
   typos:

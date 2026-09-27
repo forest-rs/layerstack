@@ -6,7 +6,8 @@
 // 26.8 (the usd-core 26.8 wheel), which are licensed under the
 // Tomorrow Open Source Technology License 1.0; see `LICENSE-TOST-1.0` and
 // `NOTICE`. Do not edit: regenerate with
-// `cargo run -p layerstack_schemagen -- --pxr <site-packages>/pxr`.
+// `cargo run -p layerstack_schemagen -- --pxr <site-packages>/pxr \
+//  --source <OpenUSD checkout>`.
 //
 // Sources:
 // - `pxr/pluginfo/usd/resources/plugInfo.json`
@@ -26,21 +27,37 @@
 // - `pxr/pluginfo/usdSemantics/resources/plugInfo.json`
 // - `pxr/pluginfo/usdProfiles/resources/plugInfo.json`
 // - `pxr/pluginfo/usd/resources/generatedSchema.usda`
+// - `pxr/usd/usd/schema.usda`
 // - `pxr/pluginfo/usdGeom/resources/generatedSchema.usda`
+// - `pxr/usd/usdGeom/schema.usda`
 // - `pxr/pluginfo/usdShade/resources/generatedSchema.usda`
+// - `pxr/usd/usdShade/schema.usda`
 // - `pxr/pluginfo/usdLux/resources/generatedSchema.usda`
+// - `pxr/usd/usdLux/schema.usda`
 // - `pxr/pluginfo/usdSkel/resources/generatedSchema.usda`
+// - `pxr/usd/usdSkel/schema.usda`
 // - `pxr/pluginfo/usdPhysics/resources/generatedSchema.usda`
+// - `pxr/usd/usdPhysics/schema.usda`
 // - `pxr/pluginfo/usdVol/resources/generatedSchema.usda`
+// - `pxr/usd/usdVol/schema.usda`
 // - `pxr/pluginfo/usdRender/resources/generatedSchema.usda`
+// - `pxr/usd/usdRender/schema.usda`
 // - `pxr/pluginfo/usdLod/resources/generatedSchema.usda`
+// - `pxr/usd/usdLod/schema.usda`
 // - `pxr/pluginfo/usdUI/resources/generatedSchema.usda`
+// - `pxr/usd/usdUI/schema.usda`
 // - `pxr/pluginfo/usdRi/resources/generatedSchema.usda`
+// - `pxr/usd/usdRi/schema.usda`
 // - `pxr/pluginfo/usdHydra/resources/generatedSchema.usda`
+// - `pxr/usd/usdHydra/schema.usda`
 // - `pxr/pluginfo/usdMedia/resources/generatedSchema.usda`
+// - `pxr/usd/usdMedia/schema.usda`
 // - `pxr/pluginfo/usdProc/resources/generatedSchema.usda`
+// - `pxr/usd/usdProc/schema.usda`
 // - `pxr/pluginfo/usdSemantics/resources/generatedSchema.usda`
+// - `pxr/usd/usdSemantics/schema.usda`
 // - `pxr/pluginfo/usdProfiles/resources/generatedSchema.usda`
+// - `pxr/usd/usdProfiles/schema.usda`
 
 //! The generated tables.
 
@@ -50,21 +67,39 @@ use layerstack::Value;
 
 use crate::table::{DomainTables, ValueType};
 
+pub(crate) mod views;
+
+#[cfg(feature = "usd")]
 mod usd;
+#[cfg(feature = "usd-geom")]
 mod usd_geom;
+#[cfg(feature = "usd-hydra")]
 mod usd_hydra;
+#[cfg(feature = "usd-lod")]
 mod usd_lod;
+#[cfg(feature = "usd-lux")]
 mod usd_lux;
+#[cfg(feature = "usd-media")]
 mod usd_media;
+#[cfg(feature = "usd-physics")]
 mod usd_physics;
+#[cfg(feature = "usd-proc")]
 mod usd_proc;
+#[cfg(feature = "usd-profiles")]
 mod usd_profiles;
+#[cfg(feature = "usd-render")]
 mod usd_render;
+#[cfg(feature = "usd-ri")]
 mod usd_ri;
+#[cfg(feature = "usd-semantics")]
 mod usd_semantics;
+#[cfg(feature = "usd-shade")]
 mod usd_shade;
+#[cfg(feature = "usd-skel")]
 mod usd_skel;
+#[cfg(feature = "usd-ui")]
 mod usd_ui;
+#[cfg(feature = "usd-vol")]
 mod usd_vol;
 
 /// The OpenUSD release whose schemas these are.
@@ -83,64 +118,96 @@ pub enum Domain {
     /// - `APISchemaBase`, an abstract base of API schemas.
     /// - `ClipsAPI`, a non-applied API schema.
     /// - `ModelAPI`, a non-applied API schema.
+    #[cfg(feature = "usd")]
     Usd,
     /// OpenUSD's `usdGeom` schemas.
     ///
     /// Leaves out, having no prim definition:
     /// - `PrimvarsAPI`, a non-applied API schema.
     /// - `XformCommonAPI`, a non-applied API schema.
+    #[cfg(feature = "usd-geom")]
     UsdGeom,
     /// OpenUSD's `usdShade` schemas.
     ///
     /// Leaves out, having no prim definition:
     /// - `ConnectableAPI`, a non-applied API schema.
+    #[cfg(feature = "usd-shade")]
     UsdShade,
     /// OpenUSD's `usdLux` schemas.
+    #[cfg(feature = "usd-lux")]
     UsdLux,
     /// OpenUSD's `usdSkel` schemas.
+    #[cfg(feature = "usd-skel")]
     UsdSkel,
     /// OpenUSD's `usdPhysics` schemas.
+    #[cfg(feature = "usd-physics")]
     UsdPhysics,
     /// OpenUSD's `usdVol` schemas.
+    #[cfg(feature = "usd-vol")]
     UsdVol,
     /// OpenUSD's `usdRender` schemas.
+    #[cfg(feature = "usd-render")]
     UsdRender,
     /// OpenUSD's `usdLod` schemas.
+    #[cfg(feature = "usd-lod")]
     UsdLod,
     /// OpenUSD's `usdUI` schemas.
+    #[cfg(feature = "usd-ui")]
     UsdUI,
     /// OpenUSD's `usdRi` schemas.
+    #[cfg(feature = "usd-ri")]
     UsdRi,
     /// OpenUSD's `usdHydra` schemas.
+    #[cfg(feature = "usd-hydra")]
     UsdHydra,
     /// OpenUSD's `usdMedia` schemas.
+    #[cfg(feature = "usd-media")]
     UsdMedia,
     /// OpenUSD's `usdProc` schemas.
+    #[cfg(feature = "usd-proc")]
     UsdProc,
     /// OpenUSD's `usdSemantics` schemas.
+    #[cfg(feature = "usd-semantics")]
     UsdSemantics,
     /// OpenUSD's `UsdProfiles` schemas.
+    #[cfg(feature = "usd-profiles")]
     UsdProfiles,
 }
 
 impl Domain {
     /// Every domain.
     pub const ALL: &'static [Self] = &[
+        #[cfg(feature = "usd")]
         Self::Usd,
+        #[cfg(feature = "usd-geom")]
         Self::UsdGeom,
+        #[cfg(feature = "usd-shade")]
         Self::UsdShade,
+        #[cfg(feature = "usd-lux")]
         Self::UsdLux,
+        #[cfg(feature = "usd-skel")]
         Self::UsdSkel,
+        #[cfg(feature = "usd-physics")]
         Self::UsdPhysics,
+        #[cfg(feature = "usd-vol")]
         Self::UsdVol,
+        #[cfg(feature = "usd-render")]
         Self::UsdRender,
+        #[cfg(feature = "usd-lod")]
         Self::UsdLod,
+        #[cfg(feature = "usd-ui")]
         Self::UsdUI,
+        #[cfg(feature = "usd-ri")]
         Self::UsdRi,
+        #[cfg(feature = "usd-hydra")]
         Self::UsdHydra,
+        #[cfg(feature = "usd-media")]
         Self::UsdMedia,
+        #[cfg(feature = "usd-proc")]
         Self::UsdProc,
+        #[cfg(feature = "usd-semantics")]
         Self::UsdSemantics,
+        #[cfg(feature = "usd-profiles")]
         Self::UsdProfiles,
     ];
 
@@ -148,21 +215,37 @@ impl Domain {
     #[must_use]
     pub fn plugin(self) -> &'static str {
         match self {
+            #[cfg(feature = "usd")]
             Self::Usd => "usd",
+            #[cfg(feature = "usd-geom")]
             Self::UsdGeom => "usdGeom",
+            #[cfg(feature = "usd-shade")]
             Self::UsdShade => "usdShade",
+            #[cfg(feature = "usd-lux")]
             Self::UsdLux => "usdLux",
+            #[cfg(feature = "usd-skel")]
             Self::UsdSkel => "usdSkel",
+            #[cfg(feature = "usd-physics")]
             Self::UsdPhysics => "usdPhysics",
+            #[cfg(feature = "usd-vol")]
             Self::UsdVol => "usdVol",
+            #[cfg(feature = "usd-render")]
             Self::UsdRender => "usdRender",
+            #[cfg(feature = "usd-lod")]
             Self::UsdLod => "usdLod",
+            #[cfg(feature = "usd-ui")]
             Self::UsdUI => "usdUI",
+            #[cfg(feature = "usd-ri")]
             Self::UsdRi => "usdRi",
+            #[cfg(feature = "usd-hydra")]
             Self::UsdHydra => "usdHydra",
+            #[cfg(feature = "usd-media")]
             Self::UsdMedia => "usdMedia",
+            #[cfg(feature = "usd-proc")]
             Self::UsdProc => "usdProc",
+            #[cfg(feature = "usd-semantics")]
             Self::UsdSemantics => "usdSemantics",
+            #[cfg(feature = "usd-profiles")]
             Self::UsdProfiles => "UsdProfiles",
         }
     }
@@ -172,191 +255,286 @@ impl Domain {
     #[must_use]
     pub fn dependencies(self) -> &'static [Self] {
         match self {
+            #[cfg(feature = "usd")]
             Self::Usd => &[],
+            #[cfg(feature = "usd-geom")]
             Self::UsdGeom => &[Self::Usd],
+            #[cfg(feature = "usd-shade")]
             Self::UsdShade => &[Self::Usd],
+            #[cfg(feature = "usd-lux")]
             Self::UsdLux => &[Self::Usd, Self::UsdGeom, Self::UsdShade],
+            #[cfg(feature = "usd-skel")]
             Self::UsdSkel => &[Self::Usd, Self::UsdGeom],
+            #[cfg(feature = "usd-physics")]
             Self::UsdPhysics => &[Self::Usd, Self::UsdGeom],
+            #[cfg(feature = "usd-vol")]
             Self::UsdVol => &[Self::UsdGeom],
+            #[cfg(feature = "usd-render")]
             Self::UsdRender => &[Self::Usd],
+            #[cfg(feature = "usd-lod")]
             Self::UsdLod => &[Self::Usd],
+            #[cfg(feature = "usd-ui")]
             Self::UsdUI => &[Self::Usd],
+            #[cfg(feature = "usd-ri")]
             Self::UsdRi => &[],
+            #[cfg(feature = "usd-hydra")]
             Self::UsdHydra => &[Self::UsdRender, Self::UsdProc],
+            #[cfg(feature = "usd-media")]
             Self::UsdMedia => &[Self::UsdGeom],
+            #[cfg(feature = "usd-proc")]
             Self::UsdProc => &[Self::UsdGeom],
+            #[cfg(feature = "usd-semantics")]
             Self::UsdSemantics => &[],
+            #[cfg(feature = "usd-profiles")]
             Self::UsdProfiles => &[],
         }
     }
 
     pub(crate) fn tables(self) -> &'static DomainTables {
         match self {
+            #[cfg(feature = "usd")]
             Self::Usd => &usd::TABLES,
+            #[cfg(feature = "usd-geom")]
             Self::UsdGeom => &usd_geom::TABLES,
+            #[cfg(feature = "usd-shade")]
             Self::UsdShade => &usd_shade::TABLES,
+            #[cfg(feature = "usd-lux")]
             Self::UsdLux => &usd_lux::TABLES,
+            #[cfg(feature = "usd-skel")]
             Self::UsdSkel => &usd_skel::TABLES,
+            #[cfg(feature = "usd-physics")]
             Self::UsdPhysics => &usd_physics::TABLES,
+            #[cfg(feature = "usd-vol")]
             Self::UsdVol => &usd_vol::TABLES,
+            #[cfg(feature = "usd-render")]
             Self::UsdRender => &usd_render::TABLES,
+            #[cfg(feature = "usd-lod")]
             Self::UsdLod => &usd_lod::TABLES,
+            #[cfg(feature = "usd-ui")]
             Self::UsdUI => &usd_ui::TABLES,
+            #[cfg(feature = "usd-ri")]
             Self::UsdRi => &usd_ri::TABLES,
+            #[cfg(feature = "usd-hydra")]
             Self::UsdHydra => &usd_hydra::TABLES,
+            #[cfg(feature = "usd-media")]
             Self::UsdMedia => &usd_media::TABLES,
+            #[cfg(feature = "usd-proc")]
             Self::UsdProc => &usd_proc::TABLES,
+            #[cfg(feature = "usd-semantics")]
             Self::UsdSemantics => &usd_semantics::TABLES,
+            #[cfg(feature = "usd-profiles")]
             Self::UsdProfiles => &usd_profiles::TABLES,
         }
     }
 }
 
+#[cfg(any(
+    feature = "usd-geom",
+    feature = "usd-lux",
+    feature = "usd-media",
+    feature = "usd-render",
+    feature = "usd-ui",
+    feature = "usd-vol"
+))]
 pub(crate) static ASSET: ValueType = ValueType {
     name: "asset",
     is_array: false,
     zero: |_| Value::Asset(Arc::from("")),
 };
 
+#[cfg(any(
+    feature = "usd",
+    feature = "usd-geom",
+    feature = "usd-lux",
+    feature = "usd-physics",
+    feature = "usd-render",
+    feature = "usd-vol"
+))]
 pub(crate) static BOOL: ValueType = ValueType {
     name: "bool",
     is_array: false,
     zero: |_| Value::Bool(false),
 };
 
+#[cfg(any(feature = "usd-lux", feature = "usd-ui"))]
 pub(crate) static COLOR3F: ValueType = ValueType {
     name: "color3f",
     is_array: false,
     zero: |_| Value::Vec3f([0.0, 0.0, 0.0]),
 };
 
+#[cfg(any(feature = "usd-geom", feature = "usd-vol"))]
 pub(crate) static COLOR3F_ARRAY: ValueType = ValueType {
     name: "color3f",
     is_array: true,
     zero: |_| Value::Vec3f([0.0, 0.0, 0.0]),
 };
 
+#[cfg(any(feature = "usd-geom", feature = "usd-media"))]
 pub(crate) static DOUBLE: ValueType = ValueType {
     name: "double",
     is_array: false,
     zero: |_| Value::Double(0.0),
 };
 
+#[cfg(feature = "usd-geom")]
 pub(crate) static DOUBLE2: ValueType = ValueType {
     name: "double2",
     is_array: false,
     zero: |_| Value::Vec2d([0.0, 0.0]),
 };
 
+#[cfg(feature = "usd-geom")]
 pub(crate) static DOUBLE2_ARRAY: ValueType = ValueType {
     name: "double2",
     is_array: true,
     zero: |_| Value::Vec2d([0.0, 0.0]),
 };
 
+#[cfg(feature = "usd-geom")]
 pub(crate) static DOUBLE3_ARRAY: ValueType = ValueType {
     name: "double3",
     is_array: true,
     zero: |_| Value::Vec3d([0.0, 0.0, 0.0]),
 };
 
+#[cfg(feature = "usd-geom")]
 pub(crate) static DOUBLE_ARRAY: ValueType = ValueType {
     name: "double",
     is_array: true,
     zero: |_| Value::Double(0.0),
 };
 
+#[cfg(any(
+    feature = "usd",
+    feature = "usd-geom",
+    feature = "usd-lod",
+    feature = "usd-lux",
+    feature = "usd-physics",
+    feature = "usd-render"
+))]
 pub(crate) static FLOAT: ValueType = ValueType {
     name: "float",
     is_array: false,
     zero: |_| Value::Float(0.0),
 };
 
+#[cfg(any(feature = "usd", feature = "usd-geom", feature = "usd-ui"))]
 pub(crate) static FLOAT2: ValueType = ValueType {
     name: "float2",
     is_array: false,
     zero: |_| Value::Vec2f([0.0, 0.0]),
 };
 
+#[cfg(any(feature = "usd-geom", feature = "usd-physics"))]
 pub(crate) static FLOAT3: ValueType = ValueType {
     name: "float3",
     is_array: false,
     zero: |_| Value::Vec3f([0.0, 0.0, 0.0]),
 };
 
+#[cfg(any(
+    feature = "usd-geom",
+    feature = "usd-lod",
+    feature = "usd-lux",
+    feature = "usd-proc",
+    feature = "usd-skel",
+    feature = "usd-vol"
+))]
 pub(crate) static FLOAT3_ARRAY: ValueType = ValueType {
     name: "float3",
     is_array: true,
     zero: |_| Value::Vec3f([0.0, 0.0, 0.0]),
 };
 
+#[cfg(feature = "usd-render")]
 pub(crate) static FLOAT4: ValueType = ValueType {
     name: "float4",
     is_array: false,
     zero: |_| Value::Vec4f([0.0, 0.0, 0.0, 0.0]),
 };
 
+#[cfg(feature = "usd-geom")]
 pub(crate) static FLOAT4_ARRAY: ValueType = ValueType {
     name: "float4",
     is_array: true,
     zero: |_| Value::Vec4f([0.0, 0.0, 0.0, 0.0]),
 };
 
+#[cfg(any(
+    feature = "usd-geom",
+    feature = "usd-lod",
+    feature = "usd-skel",
+    feature = "usd-vol"
+))]
 pub(crate) static FLOAT_ARRAY: ValueType = ValueType {
     name: "float",
     is_array: true,
     zero: |_| Value::Float(0.0),
 };
 
+#[cfg(any(feature = "usd-skel", feature = "usd-vol"))]
 pub(crate) static HALF3_ARRAY: ValueType = ValueType {
     name: "half3",
     is_array: true,
     zero: |_| Value::Vec3h([0x0000, 0x0000, 0x0000]),
 };
 
+#[cfg(feature = "usd-vol")]
 pub(crate) static HALF_ARRAY: ValueType = ValueType {
     name: "half",
     is_array: true,
     zero: |_| Value::Half(0x0000),
 };
 
+#[cfg(any(
+    feature = "usd-geom",
+    feature = "usd-lod",
+    feature = "usd-ui",
+    feature = "usd-vol"
+))]
 pub(crate) static INT: ValueType = ValueType {
     name: "int",
     is_array: false,
     zero: |_| Value::Int(0),
 };
 
+#[cfg(feature = "usd-render")]
 pub(crate) static INT2: ValueType = ValueType {
     name: "int2",
     is_array: false,
     zero: |_| Value::Vec2i([0, 0]),
 };
 
+#[cfg(feature = "usd-geom")]
 pub(crate) static INT3_ARRAY: ValueType = ValueType {
     name: "int3",
     is_array: true,
     zero: |_| Value::Vec3i([0, 0, 0]),
 };
 
+#[cfg(feature = "usd-geom")]
 pub(crate) static INT4_ARRAY: ValueType = ValueType {
     name: "int4",
     is_array: true,
     zero: |_| Value::Vec4i([0, 0, 0, 0]),
 };
 
+#[cfg(feature = "usd-geom")]
 pub(crate) static INT64_ARRAY: ValueType = ValueType {
     name: "int64",
     is_array: true,
     zero: |_| Value::Int64(0),
 };
 
+#[cfg(any(feature = "usd-geom", feature = "usd-skel"))]
 pub(crate) static INT_ARRAY: ValueType = ValueType {
     name: "int",
     is_array: true,
     zero: |_| Value::Int(0),
 };
 
+#[cfg(feature = "usd-skel")]
 pub(crate) static MATRIX4D: ValueType = ValueType {
     name: "matrix4d",
     is_array: false,
@@ -367,6 +545,7 @@ pub(crate) static MATRIX4D: ValueType = ValueType {
     },
 };
 
+#[cfg(feature = "usd-skel")]
 pub(crate) static MATRIX4D_ARRAY: ValueType = ValueType {
     name: "matrix4d",
     is_array: true,
@@ -377,96 +556,136 @@ pub(crate) static MATRIX4D_ARRAY: ValueType = ValueType {
     },
 };
 
+#[cfg(feature = "usd-geom")]
 pub(crate) static NORMAL3F_ARRAY: ValueType = ValueType {
     name: "normal3f",
     is_array: true,
     zero: |_| Value::Vec3f([0.0, 0.0, 0.0]),
 };
 
+#[cfg(feature = "usd")]
 pub(crate) static OPAQUE: ValueType = ValueType {
     name: "opaque",
     is_array: false,
     zero: |_| Value::Null,
 };
 
+#[cfg(feature = "usd")]
 pub(crate) static PATHEXPRESSION: ValueType = ValueType {
     name: "pathExpression",
     is_array: false,
     zero: |_| Value::PathExpression(Arc::from("")),
 };
 
+#[cfg(any(feature = "usd-lod", feature = "usd-physics"))]
 pub(crate) static POINT3F: ValueType = ValueType {
     name: "point3f",
     is_array: false,
     zero: |_| Value::Vec3f([0.0, 0.0, 0.0]),
 };
 
+#[cfg(any(feature = "usd-geom", feature = "usd-vol"))]
 pub(crate) static POINT3F_ARRAY: ValueType = ValueType {
     name: "point3f",
     is_array: true,
     zero: |_| Value::Vec3f([0.0, 0.0, 0.0]),
 };
 
+#[cfg(feature = "usd-vol")]
 pub(crate) static POINT3H_ARRAY: ValueType = ValueType {
     name: "point3h",
     is_array: true,
     zero: |_| Value::Vec3h([0x0000, 0x0000, 0x0000]),
 };
 
+#[cfg(feature = "usd-physics")]
 pub(crate) static QUATF: ValueType = ValueType {
     name: "quatf",
     is_array: false,
     zero: |_| Value::Quatf([0.0, 0.0, 0.0, 0.0]),
 };
 
+#[cfg(any(feature = "usd-geom", feature = "usd-skel", feature = "usd-vol"))]
 pub(crate) static QUATF_ARRAY: ValueType = ValueType {
     name: "quatf",
     is_array: true,
     zero: |_| Value::Quatf([0.0, 0.0, 0.0, 0.0]),
 };
 
+#[cfg(any(feature = "usd-geom", feature = "usd-vol"))]
 pub(crate) static QUATH_ARRAY: ValueType = ValueType {
     name: "quath",
     is_array: true,
     zero: |_| Value::Quath([0x0000, 0x0000, 0x0000, 0x0000]),
 };
 
+#[cfg(any(feature = "usd-physics", feature = "usd-render", feature = "usd-ui"))]
 pub(crate) static STRING: ValueType = ValueType {
     name: "string",
     is_array: false,
     zero: |_| Value::String(Arc::from("")),
 };
 
+#[cfg(feature = "usd-render")]
 pub(crate) static STRING_ARRAY: ValueType = ValueType {
     name: "string",
     is_array: true,
     zero: |_| Value::String(Arc::from("")),
 };
 
+#[cfg(feature = "usd-media")]
 pub(crate) static TIMECODE: ValueType = ValueType {
     name: "timecode",
     is_array: false,
     zero: |_| Value::TimeCode(0.0),
 };
 
+#[cfg(any(
+    feature = "usd",
+    feature = "usd-geom",
+    feature = "usd-hydra",
+    feature = "usd-lod",
+    feature = "usd-lux",
+    feature = "usd-media",
+    feature = "usd-physics",
+    feature = "usd-proc",
+    feature = "usd-render",
+    feature = "usd-ri",
+    feature = "usd-shade",
+    feature = "usd-skel",
+    feature = "usd-ui",
+    feature = "usd-vol"
+))]
 pub(crate) static TOKEN: ValueType = ValueType {
     name: "token",
     is_array: false,
     zero: |t| Value::Token(t.intern("")),
 };
 
+#[cfg(any(
+    feature = "usd-geom",
+    feature = "usd-lux",
+    feature = "usd-media",
+    feature = "usd-proc",
+    feature = "usd-render",
+    feature = "usd-semantics",
+    feature = "usd-skel",
+    feature = "usd-vol"
+))]
 pub(crate) static TOKEN_ARRAY: ValueType = ValueType {
     name: "token",
     is_array: true,
     zero: |t| Value::Token(t.intern("")),
 };
 
+#[cfg(feature = "usd-physics")]
 pub(crate) static VECTOR3F: ValueType = ValueType {
     name: "vector3f",
     is_array: false,
     zero: |_| Value::Vec3f([0.0, 0.0, 0.0]),
 };
 
+#[cfg(any(feature = "usd-geom", feature = "usd-skel"))]
 pub(crate) static VECTOR3F_ARRAY: ValueType = ValueType {
     name: "vector3f",
     is_array: true,

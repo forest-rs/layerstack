@@ -13,6 +13,10 @@
 //! - **Value resolution** — scalar (strongest-wins) and [`ListOp`] chaining
 //! - **Composition arcs** — local, inherits, variants, references, payloads,
 //!   specializes (LIVERPS)
+//! - **Path expressions** — sets of prim and property paths
+//!   ([`PathExpression`]: globs, `//`, predicates, set operators and
+//!   references to other expressions), composed as values and matched
+//!   with a caller-supplied predicate library ([`path_expression`])
 //! - **Variable expressions** — sublayer, reference and payload asset paths
 //!   and variant selections authored as expressions, evaluated with each
 //!   layer stack's `expressionVariables` ([`variable_expression`])
@@ -94,7 +98,7 @@ pub mod interner;
 pub mod layer_stack;
 pub mod listop;
 pub mod path;
-pub(crate) mod path_expression;
+pub mod path_expression;
 pub(crate) mod population;
 pub mod prim_index;
 pub mod prim_index_graph;
@@ -138,6 +142,7 @@ pub use path::{
     Path, PathError, PathId, PathInterner, PropertyPath, PropertyPathError, TargetPath,
     TargetPathError,
 };
+pub use path_expression::PathExpression;
 pub use prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue};
 pub use prim_index_graph::{NodeId, PrimIndexGraph, PrimNode};
 pub use property::{

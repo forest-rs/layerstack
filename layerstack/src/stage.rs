@@ -1367,6 +1367,57 @@ impl Stage {
             .unwrap_or_default()
     }
 
+    /// Returns the variant sets of the composed prim `prim`, each with the
+    /// variant composition selected for it: the sets its specs declare,
+    /// those nested in the selected variants included (a set declared only
+    /// in a variant that is not selected is not one), strongest spec
+    /// first, each spec's in `variantSets` order. A selection is the one
+    /// [`Stage::variant_selections`] reports, which may name a variant no
+    /// layer defines; `None` when nothing selects one. Empty when `prim` is
+    /// not on the stage.
+    ///
+    /// OpenUSD: `UsdVariantSets::GetNames`, with
+    /// `UsdVariantSet::GetVariantSelection` for each set (a variant arc of
+    /// the prim index names the selection it composed).
+    ///
+    /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set
+    /// specs), §10.5 (variant selection).
+    #[must_use]
+    pub fn variant_sets(
+        &self,
+        prim: PathId,
+        store: &dyn LayerStore,
+    ) -> Vec<(TokenId, Option<TokenId>)> {
+        let Some(index) = self.prims.get(&prim) else {
+            return Vec::new();
+        };
+        let selections = self.variant_selections(prim, store);
+        let mut sets: Vec<TokenId> = Vec::new();
+        for source in &index.sources {
+            // A site inside one of the prim's own variants (`/P{v=x}`) is
+            // walked from the prim's spec, through its selections.
+            if matches!(
+                source.spec_path.components().last(),
+                Some(crate::spec_path::SpecComponent::VariantSelection { .. })
+            ) {
+                continue;
+            }
+            let Some(spec) = store.layer(source.layer_id).and_then(|layer| {
+                layer.source_prim_spec(source.lookup_path, &source.spec_path, store.paths())
+            }) else {
+                continue;
+            };
+            for set in spec.selected_variant_set_order(&selections) {
+                if !sets.contains(&set) {
+                    sets.push(set);
+                }
+            }
+        }
+        sets.into_iter()
+            .map(|set| (set, selections.get(&set).copied()))
+            .collect()
+    }
+
     /// Returns `true` if the stage contains a prim at `path`.
     #[must_use]
     pub fn has_prim(&self, path: PathId) -> bool {

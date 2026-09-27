@@ -3,9 +3,7 @@
 
 //! Composition of `pathExpression` values.
 //!
-//! A path expression (OpenUSD's `SdfPathExpression`) combines path patterns
-//! and references to other expressions with set operators. Composition
-//! handles it in two steps:
+//! Composition handles a path expression value in two steps:
 //!
 //! - Each opinion is anchored and mapped into the stage namespace: relative
 //!   patterns are made absolute at the prim that authors them, and every
@@ -19,16 +17,16 @@
 //!   weaker opinion is left, it matches nothing. OpenUSD:
 //!   `SdfPathExpression::ComposeOver`.
 //!
-//! Text is written the way `SdfPathExpression::GetText` writes it:
-//! operators spaced, parentheses only where precedence needs them.
-//! Predicates (`{...}`) are kept as authored.
+//! Composed values are written as `SdfPathExpression::GetText` writes
+//! them, except that predicate arguments keep their types
+//! ([`PathExpression::lossless_text`]: OpenUSD composes expression objects,
+//! not text); text that does not parse is left as authored.
 //!
 //! Spec: AOUSD Core §10 (composition arcs map namespace), §12.3 (attribute
 //! value resolution).
 
 use alloc::{
     borrow::{Cow, ToOwned},
-    boxed::Box,
     string::String,
     sync::Arc,
     vec::Vec,
@@ -36,6 +34,7 @@ use alloc::{
 
 use hashbrown::HashMap;
 
+use super::{Expr, PathExpression, RefPath};
 use crate::{
     doc::{FieldValue, InterpolationType, LayerStore, Value},
     path::PathId,
@@ -45,610 +44,13 @@ use crate::{
     stage::value_at_time,
 };
 
-/// A set operator, tightest binding first.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-enum Op {
-    /// Juxtaposition: `a b`.
-    ImpliedUnion,
-    /// `a + b`.
-    Union,
-    /// `a & b`.
-    Intersection,
-    /// `a - b`.
-    Difference,
-}
-
-impl Op {
-    fn text(self) -> &'static str {
-        match self {
-            Self::ImpliedUnion => " ",
-            Self::Union => " + ",
-            Self::Intersection => " & ",
-            Self::Difference => " - ",
-        }
-    }
-}
-
-/// A parsed path expression.
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum Expr {
-    /// The empty expression, which matches nothing.
-    Nothing,
-    Pattern(Pattern),
-    Reference(Reference),
-    Complement(Box<Self>),
-    Op(Op, Box<Self>, Box<Self>),
-}
-
-/// A path pattern: a literal path prefix followed by the rest of the
-/// pattern (wildcards, `//`, predicates), kept verbatim.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Pattern {
-    absolute: bool,
-    /// Literal prim names of the prefix; a relative prefix may also hold
-    /// `.` and `..`.
-    prims: Vec<String>,
-    /// A literal property name ending the prefix.
-    property: Option<String>,
-    /// The rest of the pattern text: when `prims` is not empty, either empty
-    /// or starting with `/` or `.`.
-    rest: String,
-}
-
-/// A reference to another expression: `%_`, `%:name`, `%/Path:name` or a
-/// relative `%../Path:name`.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Reference {
-    /// The prim path, `None` when no path is authored.
-    path: Option<RefPath>,
-    name: String,
-}
-
-/// The prim path of a [`Reference`].
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct RefPath {
-    absolute: bool,
-    /// Prim names; a relative path starts with one or more `..`.
-    prims: Vec<String>,
-}
-
-impl Reference {
-    fn is_weaker(&self) -> bool {
-        self.path.is_none() && self.name == "_"
-    }
-}
-
-impl Pattern {
-    /// `//`: every path.
-    fn is_everything(&self) -> bool {
-        self.absolute && self.prims.is_empty() && self.property.is_none() && self.rest == "/"
-    }
-}
-
-impl Expr {
-    fn everything() -> Self {
-        Self::Pattern(Pattern {
-            absolute: true,
-            prims: Vec::new(),
-            property: None,
-            rest: "/".to_owned(),
-        })
-    }
-
-    fn is_everything(&self) -> bool {
-        matches!(self, Self::Pattern(pattern) if pattern.is_everything())
-    }
-
-    /// `~operand`, simplified as `SdfPathExpression::MakeComplement` does.
-    fn complement(operand: Self) -> Self {
-        match operand {
-            Self::Nothing => Self::everything(),
-            operand if operand.is_everything() => Self::Nothing,
-            Self::Complement(inner) => *inner,
-            operand => Self::Complement(Box::new(operand)),
-        }
-    }
-
-    /// `left op right`, simplified as `SdfPathExpression::MakeOp` does.
-    fn op(op: Op, left: Self, right: Self) -> Self {
-        let (l_nothing, r_nothing) = (left == Self::Nothing, right == Self::Nothing);
-        let (l_all, r_all) = (left.is_everything(), right.is_everything());
-        match op {
-            Op::ImpliedUnion | Op::Union => {
-                if l_all || r_all {
-                    Self::everything()
-                } else if l_nothing {
-                    right
-                } else if r_nothing {
-                    left
-                } else {
-                    Self::Op(op, Box::new(left), Box::new(right))
-                }
-            }
-            Op::Intersection => {
-                if l_nothing || r_nothing {
-                    Self::Nothing
-                } else if l_all {
-                    right
-                } else if r_all {
-                    left
-                } else {
-                    Self::Op(op, Box::new(left), Box::new(right))
-                }
-            }
-            Op::Difference => {
-                if l_nothing || r_all {
-                    Self::Nothing
-                } else if r_nothing {
-                    left
-                } else if l_all {
-                    Self::complement(right)
-                } else {
-                    Self::Op(op, Box::new(left), Box::new(right))
-                }
-            }
-        }
-    }
-
-    /// Whether the expression names the next weaker expression, `%_`.
-    fn has_weaker_reference(&self) -> bool {
-        match self {
-            Self::Nothing | Self::Pattern(_) => false,
-            Self::Reference(reference) => reference.is_weaker(),
-            Self::Complement(operand) => operand.has_weaker_reference(),
-            Self::Op(_, left, right) => left.has_weaker_reference() || right.has_weaker_reference(),
-        }
-    }
-
-    /// Rebuilds the expression bottom-up, replacing each pattern and
-    /// reference through `atom`.
-    fn rebuild(self, atom: &mut impl FnMut(Self) -> Self) -> Self {
-        match self {
-            Self::Nothing => Self::Nothing,
-            Self::Pattern(_) | Self::Reference(_) => atom(self),
-            Self::Complement(operand) => Self::complement(operand.rebuild(atom)),
-            Self::Op(op, left, right) => Self::op(op, left.rebuild(atom), right.rebuild(atom)),
-        }
-    }
-
-    /// The operator precedence of the expression's outermost node; atoms and
-    /// complements bind tightest.
-    fn precedence(&self) -> Option<Op> {
-        match self {
-            Self::Op(op, ..) => Some(*op),
-            _ => None,
-        }
-    }
-
-    fn write(&self, out: &mut String) {
-        match self {
-            Self::Nothing => {}
-            Self::Pattern(pattern) => pattern.write(out),
-            Self::Reference(reference) => {
-                out.push('%');
-                if let Some(path) = &reference.path {
-                    if path.absolute {
-                        write_absolute(out, &path.prims);
-                    } else {
-                        out.push_str(&path.prims.join("/"));
-                    }
-                }
-                if !reference.is_weaker() {
-                    out.push(':');
-                }
-                out.push_str(&reference.name);
-            }
-            Self::Complement(operand) => {
-                out.push('~');
-                operand.write_grouped(out, operand.precedence().is_some());
-            }
-            Self::Op(op, left, right) => {
-                // Left-associative: a right operand of equal precedence
-                // needs parentheses.
-                left.write_grouped(out, left.precedence().is_some_and(|p| p > *op));
-                out.push_str(op.text());
-                right.write_grouped(out, right.precedence().is_some_and(|p| p >= *op));
-            }
-        }
-    }
-
-    fn write_grouped(&self, out: &mut String, grouped: bool) {
-        if grouped {
-            out.push('(');
-        }
-        self.write(out);
-        if grouped {
-            out.push(')');
-        }
-    }
-
-    /// The expression's text, as `SdfPathExpression::GetText` writes it.
-    fn text(&self) -> String {
-        let mut out = String::new();
-        self.write(&mut out);
-        out
-    }
-}
-
-fn write_absolute(out: &mut String, prims: &[String]) {
-    if prims.is_empty() {
-        out.push('/');
-    }
-    for name in prims {
-        out.push('/');
-        out.push_str(name);
-    }
-}
-
-impl Pattern {
-    fn write(&self, out: &mut String) {
-        if self.absolute {
-            write_absolute(out, &self.prims);
-        } else {
-            out.push_str(&self.prims.join("/"));
-        }
-        if let Some(property) = &self.property {
-            out.push('.');
-            out.push_str(property);
-        }
-        out.push_str(&self.rest);
-    }
-
-    /// Makes a relative pattern absolute at the prim `anchor`; `None` when
-    /// `..` climbs above the root.
-    fn anchored(mut self, anchor: &[String]) -> Option<Self> {
-        if self.absolute {
-            return Some(self);
-        }
-        let relative_names = !self.prims.is_empty();
-        let prims = anchor_names(anchor, core::mem::take(&mut self.prims))?;
-        // The rest without the separator that joins it to the prefix: a
-        // relative prefix's rest holds its separator (`/`, or `.` before a
-        // property), a pattern with no literal prefix (`Name*`) has none.
-        let (separated, body) = match self.rest.strip_prefix('/') {
-            Some(body) if relative_names => (true, body),
-            _ => (!relative_names, self.rest.as_str()),
-        };
-        self.rest = if prims.is_empty() || body.is_empty() || !separated {
-            body.to_owned()
-        } else {
-            alloc::format!("/{body}")
-        };
-        self.absolute = true;
-        self.prims = prims;
-        Some(self)
-    }
-}
-
-/// Makes relative prim names (`.`, `..` and names) absolute at `anchor`;
-/// `None` when `..` climbs above the root.
-fn anchor_names(anchor: &[String], relative: Vec<String>) -> Option<Vec<String>> {
-    let mut prims: Vec<String> = anchor.to_vec();
-    for name in relative {
-        match name.as_str() {
-            "." => {}
-            ".." => {
-                prims.pop()?;
-            }
-            _ => prims.push(name),
-        }
-    }
-    Some(prims)
-}
-
-/// Whether `c` may appear in a literal prim or property name.
-fn is_name_char(c: char) -> bool {
-    c.is_alphanumeric() || c == '_'
-}
-
-/// The length of the literal name at the start of `text`, when a
-/// separator or the end follows it; `0` otherwise.
-fn literal_name_len(text: &str) -> usize {
-    let len = text.find(|c: char| !is_name_char(c)).unwrap_or(text.len());
-    let after = &text[len..];
-    if after.is_empty() || after.starts_with(['/', '.']) {
-        len
-    } else {
-        0
-    }
-}
-
-/// Parses one path pattern, splitting its literal prefix from the rest.
-fn parse_pattern(text: &str) -> Option<Pattern> {
-    let absolute = text.starts_with('/');
-    let mut prims: Vec<String> = Vec::new();
-    let mut pos = usize::from(absolute);
-    if !absolute {
-        // `.` (only before `//` or the end) and `..` components.
-        loop {
-            let tail = &text[pos..];
-            let skip = if prims.is_empty() {
-                0
-            } else if tail.starts_with('/') && !tail.starts_with("//") {
-                1
-            } else {
-                break;
-            };
-            let component = &tail[skip..];
-            let len = if component.starts_with("..") {
-                2
-            } else if prims.is_empty() && component.starts_with('.') {
-                1
-            } else {
-                break;
-            };
-            let after = &component[len..];
-            if !(after.is_empty() || after.starts_with('/'))
-                || (len == 1 && after.starts_with('/') && !after.starts_with("//"))
-            {
-                // `.name` and `./Name` are not patterns.
-                return None;
-            }
-            prims.push(component[..len].to_owned());
-            pos += skip + len;
-        }
-    }
-    let mut property = None;
-    let mut first = prims.is_empty();
-    loop {
-        let tail = &text[pos..];
-        // Past the first name, a single `/` separates the next one.
-        let (skip, name) = if first {
-            (0, tail)
-        } else if tail.starts_with('/') && !tail.starts_with("//") {
-            (1, &tail[1..])
-        } else {
-            break;
-        };
-        first = false;
-        let len = literal_name_len(name);
-        if len == 0 {
-            break;
-        }
-        prims.push(name[..len].to_owned());
-        pos += skip + len;
-        if let Some(prop) = name[len..].strip_prefix('.') {
-            // A property ends the prefix when it is literal and ends the
-            // pattern.
-            if !prop.is_empty() && prop.chars().all(|c| is_name_char(c) || c == ':') {
-                property = Some(prop.to_owned());
-                pos = text.len();
-            }
-            break;
-        }
-    }
-    let rest = text[pos..].to_owned();
-    if !absolute && prims.is_empty() && rest.is_empty() {
-        return None;
-    }
-    Some(Pattern {
-        absolute,
-        prims,
-        property,
-        rest,
-    })
-}
-
-fn parse_reference(text: &str) -> Option<Reference> {
-    let body = text.strip_prefix('%')?;
-    if body == "_" {
-        return Some(Reference {
-            path: None,
-            name: "_".to_owned(),
-        });
-    }
-    let (path, name) = body.rsplit_once(':')?;
-    if name.is_empty() || !name.chars().all(is_name_char) {
-        return None;
-    }
-    let path = if path.is_empty() {
-        None
-    } else {
-        // An absolute path, or a relative one that starts with `..`.
-        let (absolute, names) = match path.strip_prefix('/') {
-            Some(names) => (true, names),
-            None if path.starts_with("..") => (false, path),
-            None => return None,
-        };
-        let prims: Vec<String> = if names.is_empty() {
-            Vec::new()
-        } else {
-            names.split('/').map(ToOwned::to_owned).collect()
-        };
-        let leading_parents = if absolute {
-            0
-        } else {
-            prims.iter().take_while(|n| *n == "..").count()
-        };
-        if prims[leading_parents..]
-            .iter()
-            .any(|n| n.is_empty() || !n.chars().all(is_name_char))
-        {
-            return None;
-        }
-        Some(RefPath { absolute, prims })
-    };
-    Some(Reference {
-        path,
-        name: name.to_owned(),
-    })
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Token<'a> {
-    Open,
-    Close,
-    Tilde,
-    Binary(Op),
-    Atom(&'a str),
-}
-
-fn tokenize(text: &str) -> Option<Vec<Token<'_>>> {
-    let mut tokens = Vec::new();
-    let bytes = text.as_bytes();
-    let mut pos = 0;
-    while pos < bytes.len() {
-        let c = bytes[pos];
-        match c {
-            b' ' | b'\t' => pos += 1,
-            b'(' => {
-                tokens.push(Token::Open);
-                pos += 1;
-            }
-            b')' => {
-                tokens.push(Token::Close);
-                pos += 1;
-            }
-            b'~' => {
-                tokens.push(Token::Tilde);
-                pos += 1;
-            }
-            b'+' => {
-                tokens.push(Token::Binary(Op::Union));
-                pos += 1;
-            }
-            b'&' => {
-                tokens.push(Token::Binary(Op::Intersection));
-                pos += 1;
-            }
-            b'-' => {
-                tokens.push(Token::Binary(Op::Difference));
-                pos += 1;
-            }
-            b'\n' | b'\r' => return None,
-            _ => {
-                let start = pos;
-                let mut depth = 0_usize;
-                let mut quote: Option<u8> = None;
-                while pos < bytes.len() {
-                    let c = bytes[pos];
-                    if let Some(q) = quote {
-                        if c == b'\\' {
-                            pos += 1;
-                        } else if c == q {
-                            quote = None;
-                        }
-                    } else if depth > 0 {
-                        match c {
-                            b'{' => depth += 1,
-                            b'}' => depth -= 1,
-                            b'"' | b'\'' => quote = Some(c),
-                            _ => {}
-                        }
-                    } else if c == b'[' {
-                        // A glob character class, `[a-z]` or `[!a-z]`, kept
-                        // whole: `-` inside it is a range, not an operator.
-                        pos += 1;
-                        while bytes.get(pos).is_some_and(|c| *c != b']') {
-                            pos += 1;
-                        }
-                        if pos == bytes.len() {
-                            return None;
-                        }
-                    } else {
-                        match c {
-                            b'{' => depth = 1,
-                            b' ' | b'\t' | b'\n' | b'\r' | b'(' | b')' | b'~' | b'+' | b'&'
-                            | b'-' => break,
-                            _ => {}
-                        }
-                    }
-                    pos += 1;
-                }
-                if depth > 0 || quote.is_some() {
-                    return None;
-                }
-                tokens.push(Token::Atom(&text[start..pos]));
-            }
-        }
-    }
-    Some(tokens)
-}
-
-struct Parser<'a> {
-    tokens: Vec<Token<'a>>,
-    pos: usize,
-}
-
-impl<'a> Parser<'a> {
-    fn peek(&self) -> Option<Token<'a>> {
-        self.tokens.get(self.pos).copied()
-    }
-
-    /// Operators from loosest to tightest: `-`, `&`, `+`, juxtaposition.
-    fn binary(&mut self, level: Op) -> Option<Expr> {
-        let tighter = match level {
-            Op::Difference => Some(Op::Intersection),
-            Op::Intersection => Some(Op::Union),
-            Op::Union => Some(Op::ImpliedUnion),
-            Op::ImpliedUnion => None,
-        };
-        let operand = |parser: &mut Self| match tighter {
-            Some(tighter) => parser.binary(tighter),
-            None => parser.unary(),
-        };
-        let mut left = operand(self)?;
-        loop {
-            match (level, self.peek()) {
-                (Op::ImpliedUnion, Some(Token::Open | Token::Tilde | Token::Atom(_))) => {}
-                (_, Some(Token::Binary(op))) if op == level => self.pos += 1,
-                _ => return Some(left),
-            }
-            let right = operand(self)?;
-            left = Expr::op(level, left, right);
-        }
-    }
-
-    fn unary(&mut self) -> Option<Expr> {
-        let token = self.peek()?;
-        self.pos += 1;
-        match token {
-            Token::Tilde => Some(Expr::complement(self.unary()?)),
-            Token::Open => {
-                let inner = self.binary(Op::Difference)?;
-                (self.peek() == Some(Token::Close)).then(|| {
-                    self.pos += 1;
-                    inner
-                })
-            }
-            Token::Atom(text) if text.starts_with('%') => {
-                parse_reference(text).map(Expr::Reference)
-            }
-            Token::Atom(text) => parse_pattern(text).map(Expr::Pattern),
-            Token::Close | Token::Binary(_) => None,
-        }
-    }
-}
-
-/// Parses path expression text; `None` for text this parser does not
-/// understand, which composition then leaves as authored.
-fn parse(text: &str) -> Option<Expr> {
-    let tokens = tokenize(text)?;
-    if tokens.is_empty() {
-        return Some(Expr::Nothing);
-    }
-    let mut parser = Parser { tokens, pos: 0 };
-    let expr = parser.binary(Op::Difference)?;
-    (parser.pos == parser.tokens.len()).then_some(expr)
-}
-
-/// Splices `weaker` into every `%_` of `stronger`.
-///
-/// OpenUSD: `SdfPathExpression::ComposeOver`.
-fn compose_over(stronger: Expr, weaker: &Expr) -> Expr {
-    stronger.rebuild(&mut |atom| match atom {
-        Expr::Reference(reference) if reference.is_weaker() => weaker.clone(),
-        atom => atom,
-    })
-}
-
 /// One arc's map from its target's namespace to the namespace it is
 /// authored in: `source` maps to `target`, and with `root_identity`, every
 /// other path maps to itself.
 ///
 /// OpenUSD: `PcpMapFunction`.
 #[derive(Clone, Debug)]
-struct ArcMap {
+pub(crate) struct ArcMap {
     source: Vec<String>,
     target: Vec<String>,
     root_identity: bool,
@@ -694,32 +96,38 @@ fn map_path(maps: &[ArcMap], path: &[String]) -> Option<Vec<String>> {
 /// OpenUSD: `SdfPathExpression::MakeAbsolute` and
 /// `PcpMapFunction::MapSourceToTarget` (`_MapPathExpressionImpl` in
 /// `pxr/usd/pcp/mapFunction.cpp`).
-fn anchor_and_map(expr: Expr, anchor: &[String], maps: &[ArcMap]) -> Expr {
+pub(crate) fn anchor_and_map(
+    expr: PathExpression,
+    anchor: &[String],
+    maps: &[ArcMap],
+) -> PathExpression {
     expr.rebuild(&mut |atom| match atom {
-        Expr::Pattern(pattern) => {
-            let Some(mut pattern) = pattern.anchored(anchor) else {
-                return Expr::Nothing;
-            };
+        Expr::Pattern(mut pattern) => {
+            if !pattern.prefix.absolute {
+                let relative = core::mem::take(&mut pattern.prefix.prims);
+                let Some(prims) = anchor_names(anchor, relative) else {
+                    return PathExpression::nothing();
+                };
+                pattern.prefix.prims = prims;
+                pattern.prefix.absolute = true;
+            }
             // A leading stretch (`//...`) matches anywhere and maps to
             // itself; any other prefix, the root included, maps through
             // the arcs. OpenUSD: `HasLeadingStretch`.
-            if pattern.prims.is_empty()
-                && pattern.property.is_none()
-                && pattern.rest.starts_with('/')
-            {
-                return Expr::Pattern(pattern);
+            if pattern.has_leading_stretch() {
+                return PathExpression::pattern(pattern);
             }
-            match map_path(maps, &pattern.prims) {
+            match map_path(maps, &pattern.prefix.prims) {
                 Some(prims) => {
-                    pattern.prims = prims;
-                    Expr::Pattern(pattern)
+                    pattern.prefix.prims = prims;
+                    PathExpression::pattern(pattern)
                 }
-                None => Expr::Nothing,
+                None => PathExpression::nothing(),
             }
         }
         Expr::Reference(mut reference) => {
             let Some(path) = reference.path.take() else {
-                return Expr::Reference(reference);
+                return PathExpression::reference(reference);
             };
             let prims = if path.absolute {
                 Some(path.prims)
@@ -732,13 +140,29 @@ fn anchor_and_map(expr: Expr, anchor: &[String], maps: &[ArcMap]) -> Expr {
                         absolute: true,
                         prims,
                     });
-                    Expr::Reference(reference)
+                    PathExpression::reference(reference)
                 }
-                None => Expr::Nothing,
+                None => PathExpression::nothing(),
             }
         }
-        atom => atom,
+        atom => PathExpression { root: Some(atom) },
     })
+}
+
+/// Makes relative prim names (`.`, `..` and names) absolute at `anchor`;
+/// `None` when `..` climbs above the root.
+fn anchor_names(anchor: &[String], relative: Vec<String>) -> Option<Vec<String>> {
+    let mut prims: Vec<String> = anchor.to_vec();
+    for name in relative {
+        match name.as_str() {
+            "." => {}
+            ".." => {
+                prims.pop()?;
+            }
+            _ => prims.push(name),
+        }
+    }
+    Some(prims)
 }
 
 /// A node's site prim, which anchors its relative expressions, and the
@@ -795,6 +219,12 @@ fn node_maps(
     Some(maps)
 }
 
+/// Parses `text`; `None` for text that does not parse, which composition
+/// leaves as authored.
+fn parse(text: &str) -> Option<PathExpression> {
+    PathExpression::parse(text).ok()
+}
+
 /// Whether this value has expressions the anchoring pass can transform.
 fn has_path_expression(value: &Value) -> bool {
     match value {
@@ -812,7 +242,7 @@ fn anchor_value(value: &mut Value, anchor: &[String], maps: &[ArcMap]) {
     match value {
         Value::PathExpression(text) => {
             if let Some(expression) = parse(text) {
-                *text = Arc::from(anchor_and_map(expression, anchor, maps).text());
+                *text = Arc::from(anchor_and_map(expression, anchor, maps).lossless_text());
             }
         }
         Value::Array(items) if items.iter().any(|v| matches!(v, Value::PathExpression(_))) => {
@@ -928,7 +358,7 @@ pub(crate) fn fold(values: ChainValues<'_>, at_time: bool) -> Option<Fold> {
         fold.value = Some(Value::PathExpression(text.clone()));
         return Some(fold);
     };
-    while expr.has_weaker_reference() {
+    while expr.contains_weaker_reference() {
         let Some((position, weaker)) = values.next() else {
             break;
         };
@@ -947,10 +377,10 @@ pub(crate) fn fold(values: ChainValues<'_>, at_time: bool) -> Option<Fold> {
             break;
         };
         fold.contributors.push(position);
-        expr = compose_over(expr, &weaker);
+        expr = expr.compose_over(&weaker);
     }
-    let expr = compose_over(expr, &Expr::Nothing);
-    fold.value = Some(Value::PathExpression(Arc::from(expr.text())));
+    let expr = expr.compose_over(&PathExpression::nothing());
+    fold.value = Some(Value::PathExpression(Arc::from(expr.lossless_text())));
     Some(fold)
 }
 
@@ -1084,7 +514,10 @@ mod tests {
     #[test]
     fn weaker_references_compose_as_in_openusd() {
         let compose = |strong: &str, weak: &str| {
-            compose_over(parse(strong).unwrap(), &parse(weak).unwrap()).text()
+            parse(strong)
+                .unwrap()
+                .compose_over(&parse(weak).unwrap())
+                .text()
         };
         assert_eq!(compose("/A %_", "/B /C"), "/A (/B /C)");
         assert_eq!(compose("/A & %_", "/B /C"), "/A & /B /C");
@@ -1282,7 +715,7 @@ mod tests {
             expression("Child"),
             Value::Int(7),
             Value::Array(Vec::from([expression("Leaf")])),
-            expression("/A\n/B"),
+            expression("(/A"),
         ]));
         anchor_value(&mut value, &names("/Root"), &[]);
         assert_eq!(
@@ -1291,19 +724,20 @@ mod tests {
                 expression("/Root/Child"),
                 Value::Int(7),
                 Value::Array(Vec::from([expression("/Root/Leaf")])),
-                expression("/A\n/B"),
+                expression("(/A"),
             ]))
         );
     }
 
     #[test]
     fn unsupported_text_is_not_parsed() {
-        assert_eq!(parse("/A\n/B"), None);
         assert_eq!(parse("(/A"), None);
         assert_eq!(parse("/A{isa:Mesh"), None);
         assert_eq!(parse("/A[a-z"), None);
         assert_eq!(parse("/A -"), None);
         assert_eq!(parse("%Sub:foo"), None);
         assert!(parse("/A /B").is_some());
+        // OpenUSD stops reading at a line end.
+        assert_eq!(parse("/A\n/B").map(|e| e.text()), Some("/A".into()));
     }
 }

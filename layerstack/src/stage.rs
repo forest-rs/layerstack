@@ -323,6 +323,44 @@ impl Stage {
         stage
     }
 
+    pub(crate) fn compose_local_paths(
+        store: &mut dyn LayerStore,
+        root: LayerId,
+        options: StageOptions,
+        paths: alloc::collections::BTreeSet<PathId>,
+    ) -> Self {
+        let schemas = options.schemas.clone();
+        let mut stage = crate::compose::compose_stage_with_paths(store, root, options, Some(paths));
+        stage.schemas = schemas;
+        stage.intern_instance_names(store);
+        stage
+    }
+
+    /// Replaces only complete local subtrees and their boundary child lists.
+    /// Supporting ancestors and siblings in the partial stage are not merged.
+    pub(crate) fn merge_local_subtrees(
+        &mut self,
+        mut partial: Self,
+        affected: &[PathId],
+        hierarchy: &[PathId],
+        parents: &[PathId],
+    ) {
+        for path in affected {
+            self.prims.remove(path);
+        }
+        for path in hierarchy.iter().chain(parents) {
+            match partial.children.remove(path) {
+                Some(children) => {
+                    self.children.insert(*path, children);
+                }
+                None => {
+                    self.children.remove(path);
+                }
+            }
+        }
+        self.merge_prims_from(partial, affected);
+    }
+
     /// Interns the names of the multiple-apply schema instances the
     /// composed `apiSchemas` of every prim on the stage applies.
     ///
@@ -557,9 +595,7 @@ impl Stage {
         let recomposed_set: HashSet<PathId> = recomposed.iter().copied().collect();
         let mut out = Vec::new();
         for prim in recomposed {
-            let before = self.prims.get(prim).map(|index| &index.sources);
-            let after = partial.prims.get(prim).map(|index| &index.sources);
-            if before == after {
+            if !self.sources_changed(partial, *prim) {
                 continue;
             }
             out.extend(
@@ -570,6 +606,14 @@ impl Stage {
         out.sort_unstable();
         out.dedup();
         out
+    }
+
+    /// Compares complete ordered spec stacks, including variant context.
+    /// The invalidation source-site lookup intentionally erases that context
+    /// and is not sufficient to decide whether a prim needs a resync.
+    pub(crate) fn sources_changed(&self, partial: &Self, prim: PathId) -> bool {
+        self.prims.get(&prim).map(|index| &index.sources)
+            != partial.prims.get(&prim).map(|index| &index.sources)
     }
 
     /// Returns the source sites that contribute specs or opinions to `prim`,

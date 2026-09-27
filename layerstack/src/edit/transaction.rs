@@ -498,7 +498,7 @@ impl Transaction {
     /// No stage is told about the edits: use
     /// [`LiveStage::apply`](crate::LiveStage::apply) to recompose one.
     pub fn apply(&self, store: &mut dyn LayerStore) -> Result<Self, EditError> {
-        apply::apply(store, self, None).map(|applied| applied.inverse)
+        apply::apply(store, self, None, None).map(|applied| applied.inverse)
     }
 
     fn push(&mut self, op: Op) -> &mut Self {

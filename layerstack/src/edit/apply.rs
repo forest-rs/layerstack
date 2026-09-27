@@ -366,6 +366,10 @@ pub(crate) struct Outcome {
     /// Whether specs were created or removed or variant selections
     /// changed, which changes namespace or composition arcs.
     pub(crate) structural: bool,
+    /// Local prim slots changed, or None if an edit needs general composition.
+    pub(crate) local_structure: Option<Vec<PathId>>,
+    /// Source prims whose property declarations or schema identity changed.
+    pub(crate) resync_sites: Vec<(LayerId, PathId)>,
 }
 
 /// Existing property value slots changed by an atomic transaction. A property
@@ -419,9 +423,16 @@ fn value_edits(steps: &[Guarded], store: &dyn LayerStore) -> Option<Vec<Property
     Some(edits)
 }
 
+/// Optional source candidate lookup supplied by a caller with a current
+/// namespace index. Authoring does not own its lifetime or eligibility policy.
+pub(crate) trait SourceNamespace {
+    fn subtree(&self, layer: LayerId, root: PathId) -> Option<Vec<PathId>>;
+}
+
 /// The inverse steps recorded so far and their effects.
 #[derive(Default)]
-struct Journal {
+struct Journal<'a> {
+    namespace: Option<&'a dyn SourceNamespace>,
     steps: Vec<Guarded>,
     layers: Vec<LayerId>,
     /// The layers whose edits may change namespace or arcs.
@@ -429,7 +440,7 @@ struct Journal {
     touched: Vec<(LayerId, PathId)>,
 }
 
-impl Journal {
+impl Journal<'_> {
     fn run(&mut self, store: &mut dyn LayerStore, step: Raw) -> Result<(), Rejection> {
         self.run_step(store, step).map(|_| ())
     }
@@ -497,9 +508,13 @@ pub(crate) fn apply(
     store: &mut dyn LayerStore,
     txn: &Transaction,
     stage: Option<&Stage>,
+    namespace: Option<&dyn SourceNamespace>,
 ) -> Result<Outcome, EditError> {
     check_preconditions(store, txn)?;
-    let mut journal = Journal::default();
+    let mut journal = Journal {
+        namespace,
+        ..Default::default()
+    };
     for (index, op) in txn.ops.iter().enumerate() {
         let applied = match op {
             Op::Raw(guarded) => journal.run_guarded(store, guarded, index),
@@ -526,11 +541,52 @@ pub(crate) fn apply(
         layers,
         structural_layers,
         touched,
+        namespace: _,
     } = journal;
+    let mut local_structure = Some(Vec::new());
+    let mut resync_sites = Vec::new();
+    for guarded in &steps {
+        // OpenUSD: UsdStage::_ComputePendingChanges groups property additions
+        // and removals, and apiSchemas changes, into resync notices. Our
+        // reports have prim granularity, so invalidate the owning prim.
+        let declaration = match &guarded.written {
+            Raw::Property { layer, loc, .. } => Some((*layer, loc.prim_path())),
+            Raw::Field {
+                layer,
+                loc,
+                property: None,
+                key,
+                ..
+            } if store.tokens().resolve(*key) == "apiSchemas" => Some((*layer, loc.prim_path())),
+            _ => None,
+        };
+        if let Some(site) = declaration {
+            resync_sites.push(site);
+        }
+        match &guarded.written {
+            Raw::PrimSlots { path, .. } => {
+                if let Some(paths) = &mut local_structure {
+                    paths.push(*path);
+                }
+            }
+            Raw::Variant { .. } | Raw::Selection { .. } | Raw::Field { .. } => {
+                local_structure = None;
+            }
+            _ => {}
+        }
+    }
+    if let Some(paths) = &mut local_structure {
+        paths.sort_unstable();
+        paths.dedup();
+    }
+    resync_sites.sort_unstable();
+    resync_sites.dedup();
     let values = value_edits(&steps, store);
     steps.reverse();
     Ok(Outcome {
         values,
+        local_structure,
+        resync_sites,
         inverse: Transaction {
             preconditions: Vec::new(),
             ops: steps.into_iter().map(|g| Op::Raw(Box::new(g))).collect(),
@@ -594,7 +650,7 @@ fn apply_op(
     store: &mut dyn LayerStore,
     op: &Op,
     stage: Option<&Stage>,
-    journal: &mut Journal,
+    journal: &mut Journal<'_>,
 ) -> Result<(), Rejection> {
     match op {
         Op::Raw(guarded) => journal.run(store, guarded.step.clone()),
@@ -929,7 +985,7 @@ fn set_value(
     time: Option<f64>,
     value: &Value,
     stage: Option<&Stage>,
-    journal: &mut Journal,
+    journal: &mut Journal<'_>,
 ) -> Result<(), Rejection> {
     let (path, loc, name) = property_address(store, at)?;
     let id = at.layer();
@@ -1006,7 +1062,7 @@ fn add_applied_schema(
     store: &mut dyn LayerStore,
     at: &Address,
     name: TokenId,
-    journal: &mut Journal,
+    journal: &mut Journal<'_>,
 ) -> Result<(), Rejection> {
     let key = store.tokens_mut().intern("apiSchemas");
     let (path, loc) = resolve(store, at)?;
@@ -1051,7 +1107,7 @@ fn set_targets(
     at: &Address,
     targets: Option<&ListOp<TargetPath>>,
     stage: Option<&Stage>,
-    journal: &mut Journal,
+    journal: &mut Journal<'_>,
 ) -> Result<(), Rejection> {
     let (path, loc, name) = property_address(store, at)?;
     let targets = match targets {
@@ -1139,7 +1195,7 @@ fn ensure(
     store: &mut dyn LayerStore,
     id: LayerId,
     loc: &Loc,
-    journal: &mut Journal,
+    journal: &mut Journal<'_>,
 ) -> Result<(), Rejection> {
     if spec_at(layer(store, id)?, loc).is_some() {
         return Ok(());
@@ -1196,7 +1252,7 @@ fn insert_prim_spec(
     id: LayerId,
     path: PathId,
     spec: PrimSpec,
-    journal: &mut Journal,
+    journal: &mut Journal<'_>,
 ) -> Result<(), Rejection> {
     let found = layer(store, id)?;
     let mut main = found.prims.get(&path).cloned();
@@ -1229,7 +1285,7 @@ fn add_child(
     id: LayerId,
     parent: &Loc,
     name: TokenId,
-    journal: &mut Journal,
+    journal: &mut Journal<'_>,
 ) -> Result<(), Rejection> {
     let spec = spec_at(layer(store, id)?, parent).ok_or_else(|| diverged(store, parent))?;
     let children = spec.children();
@@ -1254,7 +1310,7 @@ fn remove_subtree(
     store: &mut dyn LayerStore,
     id: LayerId,
     loc: &Loc,
-    journal: &mut Journal,
+    journal: &mut Journal<'_>,
 ) -> Result<(), Rejection> {
     // Every prim spec beneath `loc`: at or under its prim path, enclosed by
     // its branches, and by no other branch hosted above it.
@@ -1279,12 +1335,20 @@ fn remove_subtree(
         })
     };
     let found = layer(store, id)?;
-    let mut candidates: Vec<PathId> = found
-        .prims
-        .keys()
-        .chain(found.variant_prims.keys())
-        .copied()
-        .collect();
+    // The snapshot is valid only before the first structural step in this
+    // layer. Later operations in a mixed transaction use current storage.
+    let mut candidates: Vec<PathId> = journal
+        .namespace
+        .filter(|_| !journal.structural_layers.contains(&id))
+        .and_then(|index| index.subtree(id, root))
+        .unwrap_or_else(|| {
+            found
+                .prims
+                .keys()
+                .chain(found.variant_prims.keys())
+                .copied()
+                .collect()
+        });
     candidates.sort_unstable();
     candidates.dedup();
     let mut steps = Vec::new();

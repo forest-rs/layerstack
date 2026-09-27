@@ -336,6 +336,22 @@ def Xform "Targets" (
     }
 }
 
+def Xform "Exprs" (
+    prepend apiSchemas = ["MaterialBindingAPI", "CollectionAPI:e"]
+)
+{
+    pathExpression collection:e:membershipExpression = "/Exprs/Kid"
+    rel material:binding:collection:e = [</Exprs.collection:e>, </Looks/Red>]
+
+    def Xform "Kid"
+    {
+    }
+
+    def Xform "Other"
+    {
+    }
+}
+
 def Xform "Referenced" (
     prepend references = @asset.usda@</Asset>
 )
@@ -348,6 +364,22 @@ def Xform "Referenced" (
     }
 
     over "Grouped"
+    {
+    }
+}
+
+def Xform "Ordered" (
+    prepend apiSchemas = ["MaterialBindingAPI", "CollectionAPI:every", "CollectionAPI:kids"]
+)
+{
+    reorder properties = ["material:binding:collection:z", "material:binding:collection:a"]
+    uniform bool collection:every:includeRoot = true
+    rel collection:kids:includes = </Ordered/Child>
+    rel material:binding:collection:a = [</Ordered.collection:every>, </Looks/Red>]
+    rel material:binding:collection:m = [</Ordered.collection:kids>, </Looks/Green>]
+    rel material:binding:collection:z = [</Ordered.collection:every>, </Looks/Blue>]
+
+    def Xform "Child"
     {
     }
 }

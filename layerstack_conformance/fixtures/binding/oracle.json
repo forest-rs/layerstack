@@ -1,0 +1,1908 @@
+{
+ "bindings": {
+  "/Collections": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Collections/A": {
+   "all@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Collections/A.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Collections/A.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Collections/A.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Collections/A.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Preview",
+    "relationship": "/Collections.material:binding:collection:preview:set"
+   },
+   "preview@strict": {
+    "material": "/Looks/Preview",
+    "relationship": "/Collections.material:binding:collection:preview:set"
+   }
+  },
+  "/Collections/A/Deep": {
+   "all@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Collections/A.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Collections/A.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Collections/A.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Collections/A.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Preview",
+    "relationship": "/Collections.material:binding:collection:preview:set"
+   },
+   "preview@strict": {
+    "material": "/Looks/Preview",
+    "relationship": "/Collections.material:binding:collection:preview:set"
+   }
+  },
+  "/Collections/A/Skip": {
+   "all@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Collections/A.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Collections/A.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Collections/A.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Collections/A.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Collections/A.material:binding"
+   },
+   "preview@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Collections/A.material:binding"
+   }
+  },
+  "/Collections/B": {
+   "all@legacy": {
+    "material": "/Looks/Green",
+    "relationship": "/Collections.material:binding:collection:set"
+   },
+   "all@strict": {
+    "material": "/Looks/Green",
+    "relationship": "/Collections.material:binding:collection:set"
+   },
+   "full@legacy": {
+    "material": "/Looks/Green",
+    "relationship": "/Collections.material:binding:collection:set"
+   },
+   "full@strict": {
+    "material": "/Looks/Green",
+    "relationship": "/Collections.material:binding:collection:set"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Preview",
+    "relationship": "/Collections.material:binding:collection:preview:set"
+   },
+   "preview@strict": {
+    "material": "/Looks/Preview",
+    "relationship": "/Collections.material:binding:collection:preview:set"
+   }
+  },
+  "/Collections/B/Deep": {
+   "all@legacy": {
+    "material": "/Looks/Green",
+    "relationship": "/Collections.material:binding:collection:set"
+   },
+   "all@strict": {
+    "material": "/Looks/Green",
+    "relationship": "/Collections.material:binding:collection:set"
+   },
+   "full@legacy": {
+    "material": "/Looks/Green",
+    "relationship": "/Collections.material:binding:collection:set"
+   },
+   "full@strict": {
+    "material": "/Looks/Green",
+    "relationship": "/Collections.material:binding:collection:set"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Preview",
+    "relationship": "/Collections.material:binding:collection:preview:set"
+   },
+   "preview@strict": {
+    "material": "/Looks/Preview",
+    "relationship": "/Collections.material:binding:collection:preview:set"
+   }
+  },
+  "/Collections/C": {
+   "all@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Collections.material:binding:collection:other"
+   },
+   "all@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Collections.material:binding:collection:other"
+   },
+   "full@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Collections.material:binding:collection:other"
+   },
+   "full@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Collections.material:binding:collection:other"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Collections.material:binding:collection:other"
+   },
+   "preview@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Collections.material:binding:collection:other"
+   }
+  },
+  "/Collections/D": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Direct": {
+   "all@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "preview@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   }
+  },
+  "/Direct/Child": {
+   "all@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "preview@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   }
+  },
+  "/Direct/Own": {
+   "all@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Direct/Own.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Direct/Own.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Direct/Own.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Direct/Own.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Direct/Own.material:binding"
+   },
+   "preview@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Direct/Own.material:binding"
+   }
+  },
+  "/Direct/Own/Leaf": {
+   "all@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Direct/Own.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Direct/Own.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Direct/Own.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Direct/Own.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Direct/Own.material:binding"
+   },
+   "preview@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Direct/Own.material:binding"
+   }
+  },
+  "/Direct/TwoTargets": {
+   "all@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "preview@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   }
+  },
+  "/Direct/Unbound": {
+   "all@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   },
+   "preview@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Direct.material:binding"
+   }
+  },
+  "/Expansion": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Expansion/One": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Expansion/One/Kid": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Expansion/Two": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Expansion/Two/Kid": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Expansion/Two/Kid/Back": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Exprs": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Exprs/Kid": {
+   "all@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Exprs.material:binding:collection:e"
+   },
+   "all@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Exprs.material:binding:collection:e"
+   },
+   "full@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Exprs.material:binding:collection:e"
+   },
+   "full@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Exprs.material:binding:collection:e"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Exprs.material:binding:collection:e"
+   },
+   "preview@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Exprs.material:binding:collection:e"
+   }
+  },
+  "/Exprs/Other": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Looks": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Looks/Blue": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Looks/Full": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Looks/Green": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Looks/NotAMaterial": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Looks/Preview": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Looks/Red": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Nest": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Nest/X": {
+   "all@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Nest.material:binding:collection:outer"
+   },
+   "all@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Nest.material:binding:collection:outer"
+   },
+   "full@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Nest.material:binding:collection:outer"
+   },
+   "full@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Nest.material:binding:collection:outer"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Nest.material:binding:collection:outer"
+   },
+   "preview@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Nest.material:binding:collection:outer"
+   }
+  },
+  "/Nest/X/In": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Nest/X/Out": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Nest/Y": {
+   "all@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Nest.material:binding:collection:outer"
+   },
+   "all@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Nest.material:binding:collection:outer"
+   },
+   "full@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Nest.material:binding:collection:outer"
+   },
+   "full@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Nest.material:binding:collection:outer"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Nest.material:binding:collection:outer"
+   },
+   "preview@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Nest.material:binding:collection:outer"
+   }
+  },
+  "/Nest/Z": {
+   "all@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Nest.material:binding:collection:outer"
+   },
+   "all@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Nest.material:binding:collection:outer"
+   },
+   "full@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Nest.material:binding:collection:outer"
+   },
+   "full@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Nest.material:binding:collection:outer"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Nest.material:binding:collection:outer"
+   },
+   "preview@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Nest.material:binding:collection:outer"
+   }
+  },
+  "/NoApi": {
+   "all@legacy": {
+    "material": "/Looks/Green",
+    "relationship": "/NoApi.material:binding"
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": "/Looks/Green",
+    "relationship": "/NoApi.material:binding"
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": "/Looks/Green",
+    "relationship": "/NoApi.material:binding"
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/NoApi/Child": {
+   "all@legacy": {
+    "material": "/Looks/Green",
+    "relationship": "/NoApi.material:binding"
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": "/Looks/Green",
+    "relationship": "/NoApi.material:binding"
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": "/Looks/Green",
+    "relationship": "/NoApi.material:binding"
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/NoApi/WithApi": {
+   "all@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/NoApi/WithApi.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/NoApi/WithApi.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/NoApi/WithApi.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/NoApi/WithApi.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/NoApi/WithApi.material:binding"
+   },
+   "preview@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/NoApi/WithApi.material:binding"
+   }
+  },
+  "/Ordered": {
+   "all@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Ordered.material:binding:collection:z"
+   },
+   "all@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Ordered.material:binding:collection:z"
+   },
+   "full@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Ordered.material:binding:collection:z"
+   },
+   "full@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Ordered.material:binding:collection:z"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Ordered.material:binding:collection:z"
+   },
+   "preview@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Ordered.material:binding:collection:z"
+   }
+  },
+  "/Ordered/Child": {
+   "all@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Ordered.material:binding:collection:z"
+   },
+   "all@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Ordered.material:binding:collection:z"
+   },
+   "full@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Ordered.material:binding:collection:z"
+   },
+   "full@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Ordered.material:binding:collection:z"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Ordered.material:binding:collection:z"
+   },
+   "preview@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Ordered.material:binding:collection:z"
+   }
+  },
+  "/Purposes": {
+   "all@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Purposes.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Purposes.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Full",
+    "relationship": "/Purposes.material:binding:full"
+   },
+   "full@strict": {
+    "material": "/Looks/Full",
+    "relationship": "/Purposes.material:binding:full"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Preview",
+    "relationship": "/Purposes.material:binding:preview"
+   },
+   "preview@strict": {
+    "material": "/Looks/Preview",
+    "relationship": "/Purposes.material:binding:preview"
+   }
+  },
+  "/Purposes/Child": {
+   "all@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Purposes/Child.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Purposes/Child.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Full",
+    "relationship": "/Purposes.material:binding:full"
+   },
+   "full@strict": {
+    "material": "/Looks/Full",
+    "relationship": "/Purposes.material:binding:full"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Preview",
+    "relationship": "/Purposes.material:binding:preview"
+   },
+   "preview@strict": {
+    "material": "/Looks/Preview",
+    "relationship": "/Purposes.material:binding:preview"
+   }
+  },
+  "/Purposes/EmptyPreview": {
+   "all@legacy": {
+    "material": "/Looks/Green",
+    "relationship": "/Purposes/EmptyPreview.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Green",
+    "relationship": "/Purposes/EmptyPreview.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Full",
+    "relationship": "/Purposes.material:binding:full"
+   },
+   "full@strict": {
+    "material": "/Looks/Full",
+    "relationship": "/Purposes.material:binding:full"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Preview",
+    "relationship": "/Purposes.material:binding:preview"
+   },
+   "preview@strict": {
+    "material": "/Looks/Preview",
+    "relationship": "/Purposes.material:binding:preview"
+   }
+  },
+  "/Purposes/OnlyFull": {
+   "all@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Purposes.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Purposes.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Green",
+    "relationship": "/Purposes/OnlyFull.material:binding:full"
+   },
+   "full@strict": {
+    "material": "/Looks/Green",
+    "relationship": "/Purposes/OnlyFull.material:binding:full"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Preview",
+    "relationship": "/Purposes.material:binding:preview"
+   },
+   "preview@strict": {
+    "material": "/Looks/Preview",
+    "relationship": "/Purposes.material:binding:preview"
+   }
+  },
+  "/Referenced": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Referenced/Grouped": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Referenced/Part": {
+   "all@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Referenced/Part.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Referenced/Part.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Referenced/Part.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Referenced/Part.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Referenced/Part.material:binding"
+   },
+   "preview@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Referenced/Part.material:binding"
+   }
+  },
+  "/Referenced/Plain": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/SameSite": {
+   "all@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/SameSite.material:binding:collection:self"
+   },
+   "all@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/SameSite.material:binding:collection:self"
+   },
+   "full@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/SameSite.material:binding:collection:self"
+   },
+   "full@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/SameSite.material:binding:collection:self"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/SameSite.material:binding:collection:self"
+   },
+   "preview@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/SameSite.material:binding:collection:self"
+   }
+  },
+  "/SameSite/Kid": {
+   "all@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/SameSite.material:binding:collection:self"
+   },
+   "all@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/SameSite.material:binding:collection:self"
+   },
+   "full@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/SameSite.material:binding:collection:self"
+   },
+   "full@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/SameSite.material:binding:collection:self"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/SameSite.material:binding:collection:self"
+   },
+   "preview@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/SameSite.material:binding:collection:self"
+   }
+  },
+  "/Strong": {
+   "all@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "preview@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   }
+  },
+  "/Strong/Child": {
+   "all@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "preview@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   }
+  },
+  "/Strong/Child/StrongerStill": {
+   "all@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "preview@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   }
+  },
+  "/Strong/Weak": {
+   "all@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   },
+   "preview@strict": {
+    "material": "/Looks/Red",
+    "relationship": "/Strong.material:binding"
+   }
+  },
+  "/StrongCollection": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/StrongCollection/Child": {
+   "all@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/StrongCollection.material:binding:collection:all"
+   },
+   "all@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/StrongCollection.material:binding:collection:all"
+   },
+   "full@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/StrongCollection.material:binding:collection:all"
+   },
+   "full@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/StrongCollection.material:binding:collection:all"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/StrongCollection.material:binding:collection:all"
+   },
+   "preview@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/StrongCollection.material:binding:collection:all"
+   }
+  },
+  "/StrongCollection/Child/Grandchild": {
+   "all@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/StrongCollection.material:binding:collection:all"
+   },
+   "all@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/StrongCollection.material:binding:collection:all"
+   },
+   "full@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/StrongCollection.material:binding:collection:all"
+   },
+   "full@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/StrongCollection.material:binding:collection:all"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/StrongCollection.material:binding:collection:all"
+   },
+   "preview@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/StrongCollection.material:binding:collection:all"
+   }
+  },
+  "/Targets": {
+   "all@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": null
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": null
+   }
+  },
+  "/Targets/Forwarded": {
+   "all@legacy": {
+    "material": "/Looks/Green",
+    "relationship": "/Targets/Forwarded.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Green",
+    "relationship": "/Targets/Forwarded.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Green",
+    "relationship": "/Targets/Forwarded.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Green",
+    "relationship": "/Targets/Forwarded.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Green",
+    "relationship": "/Targets/Forwarded.material:binding"
+   },
+   "preview@strict": {
+    "material": "/Looks/Green",
+    "relationship": "/Targets/Forwarded.material:binding"
+   }
+  },
+  "/Targets/Missing": {
+   "all@legacy": {
+    "material": null,
+    "relationship": "/Targets/Missing.material:binding"
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": "/Targets/Missing.material:binding"
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": "/Targets/Missing.material:binding"
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": "/Targets/Missing.material:binding"
+   },
+   "preview@legacy": {
+    "material": null,
+    "relationship": "/Targets/Missing.material:binding"
+   },
+   "preview@strict": {
+    "material": null,
+    "relationship": "/Targets/Missing.material:binding"
+   }
+  },
+  "/Targets/NoCollection": {
+   "all@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Targets/NoCollection.material:binding"
+   },
+   "all@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Targets/NoCollection.material:binding"
+   },
+   "full@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Targets/NoCollection.material:binding"
+   },
+   "full@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Targets/NoCollection.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Blue",
+    "relationship": "/Targets/NoCollection.material:binding"
+   },
+   "preview@strict": {
+    "material": "/Looks/Blue",
+    "relationship": "/Targets/NoCollection.material:binding"
+   }
+  },
+  "/Targets/Wrong": {
+   "all@legacy": {
+    "material": null,
+    "relationship": "/Targets/Wrong.material:binding"
+   },
+   "all@strict": {
+    "material": null,
+    "relationship": "/Targets/Wrong.material:binding"
+   },
+   "full@legacy": {
+    "material": null,
+    "relationship": "/Targets/Wrong.material:binding"
+   },
+   "full@strict": {
+    "material": null,
+    "relationship": "/Targets/Wrong.material:binding"
+   },
+   "preview@legacy": {
+    "material": "/Looks/Preview",
+    "relationship": "/Targets/Wrong.material:binding:preview"
+   },
+   "preview@strict": {
+    "material": "/Looks/Preview",
+    "relationship": "/Targets/Wrong.material:binding:preview"
+   }
+  }
+ },
+ "collections": {
+  "/Collections.collection:other": {
+   "included": [
+    "/Collections/C"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Collections.collection:set": {
+   "included": [
+    "/Collections/A",
+    "/Collections/A/Deep",
+    "/Collections/B",
+    "/Collections/B/Deep"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Expansion.collection:explicit": {
+   "included": [
+    "/Expansion/One",
+    "/Expansion/Two.size"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Expansion.collection:mixed": {
+   "included": [
+    "/Expansion/Two"
+   ],
+   "mode": "relationship",
+   "uses_rule_map": true
+  },
+  "/Expansion.collection:prims": {
+   "included": [
+    "/Expansion/One",
+    "/Expansion/One/Kid",
+    "/Expansion/Two.size"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Expansion.collection:props": {
+   "included": [
+    "/Expansion/One",
+    "/Expansion/One.proxyPrim",
+    "/Expansion/One.purpose",
+    "/Expansion/One.size",
+    "/Expansion/One.visibility",
+    "/Expansion/One.xformOpOrder",
+    "/Expansion/One/Kid",
+    "/Expansion/One/Kid.proxyPrim",
+    "/Expansion/One/Kid.purpose",
+    "/Expansion/One/Kid.visibility",
+    "/Expansion/One/Kid.xformOpOrder"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Expansion.collection:root": {
+   "included": [
+    "/Direct",
+    "/Direct/Child",
+    "/Direct/Own",
+    "/Direct/Own/Leaf",
+    "/Direct/Unbound",
+    "/Direct/TwoTargets",
+    "/Strong",
+    "/Strong/Child",
+    "/Strong/Child/StrongerStill",
+    "/Strong/Weak",
+    "/Purposes",
+    "/Purposes/Child",
+    "/Purposes/EmptyPreview",
+    "/Purposes/OnlyFull",
+    "/NoApi",
+    "/NoApi/Child",
+    "/NoApi/WithApi",
+    "/Collections",
+    "/Collections/A",
+    "/Collections/A/Skip",
+    "/Collections/A/Deep",
+    "/Collections/B",
+    "/Collections/B/Deep",
+    "/Collections/C",
+    "/Collections/D",
+    "/SameSite",
+    "/SameSite/Kid",
+    "/StrongCollection",
+    "/StrongCollection/Child",
+    "/StrongCollection/Child/Grandchild",
+    "/Expansion",
+    "/Expansion/One",
+    "/Expansion/One/Kid",
+    "/Expansion/Two",
+    "/Expansion/Two/Kid",
+    "/Expansion/Two/Kid/Back",
+    "/Nest",
+    "/Nest/X",
+    "/Nest/X/Out",
+    "/Nest/X/In",
+    "/Nest/Y",
+    "/Nest/Z",
+    "/Targets",
+    "/Targets/Wrong",
+    "/Targets/Missing",
+    "/Targets/Forwarded",
+    "/Targets/NoCollection",
+    "/Exprs",
+    "/Exprs/Kid",
+    "/Exprs/Other",
+    "/Referenced",
+    "/Referenced/Part",
+    "/Referenced/Grouped",
+    "/Referenced/Plain",
+    "/Ordered",
+    "/Ordered/Child"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Exprs.collection:e": {
+   "included": [
+    "/Exprs/Kid"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": false
+  },
+  "/Nest.collection:inner": {
+   "included": [
+    "/Nest/X",
+    "/Nest/Z"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Nest.collection:loopA": {
+   "included": [
+    "/Nest/X",
+    "/Nest/X/Out",
+    "/Nest/X/In",
+    "/Nest/Y"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Nest.collection:loopB": {
+   "included": [
+    "/Nest/X",
+    "/Nest/X/Out",
+    "/Nest/X/In",
+    "/Nest/Y"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Nest.collection:outer": {
+   "included": [
+    "/Nest/X",
+    "/Nest/Y",
+    "/Nest/Z"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Ordered.collection:every": {
+   "included": [
+    "/Looks",
+    "/Looks/Red",
+    "/Looks/Blue",
+    "/Looks/Green",
+    "/Looks/Preview",
+    "/Looks/Full",
+    "/Looks/NotAMaterial",
+    "/Direct",
+    "/Direct/Child",
+    "/Direct/Own",
+    "/Direct/Own/Leaf",
+    "/Direct/Unbound",
+    "/Direct/TwoTargets",
+    "/Strong",
+    "/Strong/Child",
+    "/Strong/Child/StrongerStill",
+    "/Strong/Weak",
+    "/Purposes",
+    "/Purposes/Child",
+    "/Purposes/EmptyPreview",
+    "/Purposes/OnlyFull",
+    "/NoApi",
+    "/NoApi/Child",
+    "/NoApi/WithApi",
+    "/Collections",
+    "/Collections/A",
+    "/Collections/A/Skip",
+    "/Collections/A/Deep",
+    "/Collections/B",
+    "/Collections/B/Deep",
+    "/Collections/C",
+    "/Collections/D",
+    "/SameSite",
+    "/SameSite/Kid",
+    "/StrongCollection",
+    "/StrongCollection/Child",
+    "/StrongCollection/Child/Grandchild",
+    "/Expansion",
+    "/Expansion/One",
+    "/Expansion/One/Kid",
+    "/Expansion/Two",
+    "/Expansion/Two/Kid",
+    "/Expansion/Two/Kid/Back",
+    "/Nest",
+    "/Nest/X",
+    "/Nest/X/Out",
+    "/Nest/X/In",
+    "/Nest/Y",
+    "/Nest/Z",
+    "/Targets",
+    "/Targets/Wrong",
+    "/Targets/Missing",
+    "/Targets/Forwarded",
+    "/Targets/NoCollection",
+    "/Exprs",
+    "/Exprs/Kid",
+    "/Exprs/Other",
+    "/Referenced",
+    "/Referenced/Part",
+    "/Referenced/Grouped",
+    "/Referenced/Plain",
+    "/Ordered",
+    "/Ordered/Child"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Ordered.collection:kids": {
+   "included": [
+    "/Ordered/Child"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/Referenced.collection:group": {
+   "included": [
+    "/Referenced/Grouped"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/SameSite.collection:self": {
+   "included": [
+    "/SameSite",
+    "/SameSite/Kid"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  },
+  "/StrongCollection.collection:all": {
+   "included": [
+    "/StrongCollection/Child",
+    "/StrongCollection/Child/Grandchild"
+   ],
+   "mode": "automatic",
+   "uses_rule_map": true
+  }
+ },
+ "openusd_version": "26.8"
+}

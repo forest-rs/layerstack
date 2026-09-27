@@ -8940,6 +8940,41 @@ fn apply_child_order(
     }
 }
 
+/// Applies authored order to a complete source child list at a proven
+/// local-only boundary. The input is already in token-string namespace order.
+/// Child indexes are irrelevant to ordering: the parent's source opinions
+/// supply the order. Visibility is pruned by the caller afterwards, just as
+/// full composition orders before applying activation (AOUSD Core §11).
+pub(crate) fn order_local_children(
+    store: &dyn LayerStore,
+    index: &PrimIndex,
+    children: &mut Vec<PathId>,
+) {
+    let mut authored = Vec::new();
+    let mut orders = Vec::new();
+    for key in &index.sources {
+        let Some(spec) = store.layer(key.layer_id).and_then(|layer| {
+            layer.source_prim_spec(key.lookup_path, &key.spec_path, store.paths())
+        }) else {
+            continue;
+        };
+        if !spec.authored_children.is_empty() {
+            authored.push((key.clone(), spec.authored_children.clone()));
+        }
+        if let Some(order) = &spec.prim_order {
+            orders.push((key.clone(), order.clone()));
+        }
+    }
+    fold_child_order(
+        store,
+        &index.graph,
+        children,
+        &index.sources,
+        &authored,
+        &orders,
+    );
+}
+
 /// Folds the `authored_children` and `prim_order` opinions of one prim's
 /// sources into its child order, weakest first.
 ///
@@ -8967,7 +9002,7 @@ fn fold_child_order(
     if authored.is_empty() && orders.is_empty() {
         return;
     }
-    let mut by_name = HashMap::<TokenId, PathId>::new();
+    let mut by_name = HashMap::<TokenId, PathId>::with_capacity(children.len());
     for child in children.iter().copied() {
         if let Some(name) = store.paths().resolve(child).leaf() {
             by_name.insert(name, child);
@@ -9007,7 +9042,7 @@ fn fold_child_order(
     steps.sort_by(|a, b| graph.cmp_keys(b.0, a.0).then(a.1.cmp(&b.1)));
 
     let mut out = Vec::with_capacity(children.len());
-    let mut seen = HashSet::<PathId>::new();
+    let mut seen = HashSet::<PathId>::with_capacity(children.len());
     for (_, is_order, names) in steps {
         if is_order {
             apply_reorder_op(store, &mut out, names);

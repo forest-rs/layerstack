@@ -48,6 +48,11 @@ impl LocalNamespace {
                 index.children.entry(id).or_default().push(path);
             }
         }
+        // Keep the population order once, so a changed boundary does not
+        // sort every sibling again. Authored ordering is applied separately.
+        for children in index.children.values_mut() {
+            children.sort_by(|a, b| compare_paths(store, *a, *b));
+        }
         Some(index)
     }
 
@@ -57,6 +62,7 @@ impl LocalNamespace {
             .is_some_and(|l| l.generation() == self.generation)
     }
 
+    /// Direct source children in token-string namespace order.
     pub(crate) fn children(&self, path: PathId) -> &[PathId] {
         self.children.get(&path).map_or(&[], Vec::as_slice)
     }
@@ -101,8 +107,10 @@ impl LocalNamespace {
                     return false;
                 }
                 let children = self.children.entry(id).or_default();
-                if !children.contains(&path) {
-                    children.push(path);
+                if let Err(at) =
+                    children.binary_search_by(|child| compare_paths(store, *child, path))
+                {
+                    children.insert(at, path);
                 }
             } else {
                 self.children.remove(&path);
@@ -113,7 +121,11 @@ impl LocalNamespace {
                     .and_then(|p| store.paths().lookup(&p))
                     && let Some(children) = self.children.get_mut(&parent)
                 {
-                    children.retain(|p| *p != path);
+                    if let Ok(at) =
+                        children.binary_search_by(|child| compare_paths(store, *child, path))
+                    {
+                        children.remove(at);
+                    }
                     if children.is_empty() {
                         self.children.remove(&parent);
                     }
@@ -123,6 +135,13 @@ impl LocalNamespace {
         self.generation = layer.generation();
         true
     }
+}
+
+fn compare_paths(store: &dyn LayerStore, a: PathId, b: PathId) -> core::cmp::Ordering {
+    store
+        .paths()
+        .resolve(a)
+        .cmp_with_tokens(store.paths().resolve(b), store.tokens())
 }
 
 fn supported(store: &dyn LayerStore, spec: &PrimSpec) -> bool {

@@ -108,9 +108,35 @@ fn bench_local_structure(c: &mut Criterion) {
             ("toggle_1", 1, 10),
             ("toggle_11", 11, 10),
             ("wide_toggle_1", 1, n),
+            ("wide_parent_toggle_1", 1, n),
+            ("authored_wide_parent_toggle_1", 1, n),
         ] {
             let (mut store, mut live, leaf, _) = build(n, fanout);
-            let name = format!("{}/Chunk", store.paths.resolve(leaf).display(&store.tokens));
+            if case == "authored_wide_parent_toggle_1" {
+                // Parsed layers retain explicit child names; programmatic
+                // insertion can instead derive hierarchy from prim paths.
+                let world = store.path("/World");
+                let names = live
+                    .stage()
+                    .children_of(world)
+                    .unwrap()
+                    .iter()
+                    .map(|path| store.paths.resolve(*path).leaf().unwrap())
+                    .collect();
+                let layer = store.layers.get_mut(&LayerId(1)).unwrap();
+                layer.prims.get_mut(&world).unwrap().authored_children = names;
+                layer.touch();
+                live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+            }
+            let parent = if case.ends_with("parent_toggle_1") {
+                store.path("/World")
+            } else {
+                leaf
+            };
+            let name = format!(
+                "{}/Chunk",
+                store.paths.resolve(parent).display(&store.tokens)
+            );
             let target = store.path(&name);
             let mut setup = Transaction::new();
             setup.create_prim(

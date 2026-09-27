@@ -513,3 +513,44 @@ fn external_arc_edits_expire_the_local_composition_proof() {
         matches_clean(&mut store, &live);
     }
 }
+
+#[test]
+fn boundary_order_keeps_inactive_names_until_after_reordering() {
+    for (inactive, sparse) in (0..16).flat_map(|mask| (0..3).map(move |sparse| (mask, sparse))) {
+        let mut store = InMemoryStore::default();
+        let world = store.path("/World");
+        let mut layer = Layer::new(ROOT);
+        let mut parent = PrimSpec::def();
+        parent.authored_children = ["B", "D", "A", "C"]
+            .map(|name| store.tokens.intern(name))
+            .to_vec();
+        if sparse == 1 {
+            parent.authored_children = ["Ghost", "D"]
+                .map(|name| store.tokens.intern(name))
+                .to_vec();
+        } else if sparse == 2 {
+            parent.authored_children.clear();
+        }
+        parent.prim_order = Some(
+            ["Ghost", "D", "B"]
+                .map(|name| store.tokens.intern(name))
+                .to_vec(),
+        );
+        layer.insert_prim(world, parent);
+        for (i, name) in ["A", "B", "C", "D"].into_iter().enumerate() {
+            let path = store.path(&alloc::format!("/World/{name}"));
+            let mut spec = PrimSpec::def();
+            spec.active = Some(inactive & (1 << i) == 0);
+            layer.insert_prim(path, spec);
+        }
+        store.insert_layer(layer);
+        let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
+        let mut txn = Transaction::new();
+        txn.remove_spec(address(&mut store, "/World/B"));
+        txn.create_prim(address(&mut store, "/World/Between"), Specifier::Def, None);
+        for _ in 0..4 {
+            txn = live.apply(&mut store, &txn).unwrap().inverse;
+            matches_clean(&mut store, &live);
+        }
+    }
+}

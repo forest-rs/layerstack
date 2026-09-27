@@ -137,6 +137,16 @@
 //! are: the translation is the last row, and a prim's local-to-world
 //! transform is its local transform times its parent's.
 //!
+//! Transform ops are authored through `XformableEdit` (any `Xformable`'s
+//! edit handle derefs to it), as `UsdGeomXformable` authors them:
+//! `add_op` (and `add_translate_op`, `add_scale_op`, `add_rotate_xyz_op`,
+//! `add_orient_op`, `add_transform_op`) creates the op's attribute in a
+//! [`XformOpPrecision`] and appends the op to `xformOpOrder`, refusing an
+//! op already listed ([`XformOpError`]); the [`XformOpEdit`] it returns
+//! sets the op's value ([`XformOpValue`]) at the default time or a time
+//! code. `clear_xform_op_order` and `set_reset_xform_stack` edit the order
+//! itself.
+//!
 //! Each computation is a pure step over one prim's stage reads and its
 //! parent's result: [`LocalTransformInputs`] (read once, then
 //! `evaluate`d) with [`LocalTransform::local_to_world`];
@@ -222,6 +232,8 @@ mod table;
 mod value;
 #[cfg(feature = "usd-geom")]
 mod xform;
+#[cfg(feature = "usd-geom")]
+mod xform_edit;
 
 pub use edit::SchemaEdit;
 pub use generated::views::*;
@@ -234,6 +246,8 @@ pub use xform::{
     INVERT_PREFIX, LocalTransform, LocalTransformInputs, RESET_XFORM_STACK, XformCache,
     XformCacheStats, XformOp, XformOpType, XformOps, XformProblem, XformProblemKind,
 };
+#[cfg(feature = "usd-geom")]
+pub use xform_edit::{XformOpEdit, XformOpError, XformOpPrecision, XformOpValue};
 
 use alloc::vec::Vec;
 

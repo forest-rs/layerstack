@@ -9,8 +9,9 @@ use alloc::{string::String, vec::Vec};
 
 use layerstack::edit::{EditTarget, Transaction};
 use layerstack::{
-    CannotApply, LayerStore, ListOp, PathId, PropertyDefinition, PropertyPath, PropertySpec,
-    Specifier, Stage, TargetPath, TokenId, TokenInterner, Value,
+    CannotApply, LayerStore, ListOp, PathId, PropertyDefinition, PropertyKind, PropertyPath,
+    PropertySpec, PropertyType, ResolvedValue, Specifier, Stage, TargetPath, TokenId,
+    TokenInterner, Value,
 };
 
 /// Collects schema edits into a [`Transaction`] for one [`EditTarget`].
@@ -61,8 +62,10 @@ pub struct SchemaEdit<'s> {
     defined: Vec<(PathId, String)>,
     /// Applied schema names this edit adds, by prim.
     applied: Vec<(PathId, TokenId)>,
-    /// Properties this edit creates.
-    created: Vec<(PathId, TokenId)>,
+    /// Properties this edit creates, with an attribute's type name.
+    created: Vec<(PathId, TokenId, Option<PropertyType>)>,
+    /// The defaults this edit sets, latest last.
+    defaults: Vec<(PathId, TokenId, Value)>,
 }
 
 impl fmt::Debug for SchemaEdit<'_> {
@@ -86,6 +89,7 @@ impl<'s> SchemaEdit<'s> {
             defined: Vec::new(),
             applied: Vec::new(),
             created: Vec::new(),
+            defaults: Vec::new(),
         }
     }
 
@@ -172,7 +176,10 @@ impl<'s> SchemaEdit<'s> {
             .stage
             .explain_property_path(PropertyPath::new(path, token))
             .is_some()
-            || self.created.contains(&(path, token));
+            || self
+                .created
+                .iter()
+                .any(|(p, n, _)| (*p, *n) == (path, token));
         let definition = if authored {
             None
         } else {
@@ -180,7 +187,7 @@ impl<'s> SchemaEdit<'s> {
         };
         match definition.and_then(|d| d.type_name.map(|ty| (ty, d.variability))) {
             Some((ty, variability)) => {
-                let mut spec = PropertySpec::typed_attribute(ty);
+                let mut spec = PropertySpec::typed_attribute(ty.clone());
                 spec.variability = variability;
                 match time {
                     None => spec.default = Some(value),
@@ -189,16 +196,81 @@ impl<'s> SchemaEdit<'s> {
                         spec.time_samples = Some(alloc::vec![(time, value)]);
                     }
                 }
+                if time.is_none() {
+                    self.defaults.push((path, token, value_of(&spec)));
+                }
                 self.transaction.create_property(at, spec);
-                self.created.push((path, token));
+                self.created.push((path, token, Some(ty)));
             }
             None => {
                 match time {
-                    None => self.transaction.set_default(at, value),
+                    None => {
+                        self.defaults.push((path, token, value.clone()));
+                        self.transaction.set_default(at, value)
+                    }
                     Some(time) => self.transaction.set_time_sample(at, time, value),
                 };
             }
         }
+    }
+
+    /// The default of the attribute `name` of `path` as this edit leaves
+    /// it: the last default this edit sets, else the stage's (fallback
+    /// included).
+    pub(crate) fn default_value(&mut self, path: PathId, name: &str) -> Option<Value> {
+        let token = self.store.tokens_mut().intern(name);
+        if let Some((_, _, value)) = self
+            .defaults
+            .iter()
+            .rev()
+            .find(|(p, n, _)| (*p, *n) == (path, token))
+        {
+            return Some(value.clone());
+        }
+        match self
+            .stage
+            .resolve_value_with_schema(path, token, &*self.store)?
+            .value
+        {
+            ResolvedValue::Scalar(value) => Some(value),
+            _ => None,
+        }
+    }
+
+    /// The declared type of the attribute `name` of `path` as this edit
+    /// leaves it, if the prim has such an attribute: one this edit creates,
+    /// else the stage's (an opinion's declaration, else the schema's).
+    pub(crate) fn attribute_type(&mut self, path: PathId, name: &str) -> Option<PropertyType> {
+        let token = self.store.tokens_mut().intern(name);
+        if let Some((_, _, ty)) = self
+            .created
+            .iter()
+            .rev()
+            .find(|(p, n, _)| (*p, *n) == (path, token))
+        {
+            return ty.clone();
+        }
+        if let Some(declared) = self.stage.resolve_property_declaration(path, token) {
+            return (declared.kind == PropertyKind::Attribute)
+                .then_some(declared.type_name)
+                .flatten();
+        }
+        self.definition(path, token)
+            .filter(|d| d.kind == PropertyKind::Attribute)
+            .and_then(|d| d.type_name)
+    }
+
+    /// Creates the attribute `name` of `path`, not `custom`, of type `ty`,
+    /// with no value.
+    ///
+    /// OpenUSD: `UsdPrim::CreateAttribute(name, typeName, custom = false)`.
+    pub(crate) fn create_attribute(&mut self, path: PathId, name: &str, ty: PropertyType) {
+        let token = self.store.tokens_mut().intern(name);
+        let at = self.target.property(PropertyPath::new(path, token));
+        let mut spec = PropertySpec::typed_attribute(ty.clone());
+        spec.custom = false;
+        self.transaction.create_property(at, spec);
+        self.created.push((path, token, Some(ty)));
     }
 
     /// Authors `targets` as the explicit targets of the relationship `name`.
@@ -262,4 +334,9 @@ impl<'s> SchemaEdit<'s> {
         self.applied.push((path, applied));
         Ok(())
     }
+}
+
+/// The default value a created property spec holds.
+fn value_of(spec: &PropertySpec) -> Value {
+    spec.default.clone().unwrap_or(Value::Null)
 }

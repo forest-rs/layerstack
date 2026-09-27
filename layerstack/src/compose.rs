@@ -168,8 +168,10 @@ pub(crate) fn compose_stage(
     compose_stage_with_paths(store, root, options, None)
 }
 
-/// Shares all composition and finalization, but allows a proven local namespace
-/// update to supply its complete affected population instead of rediscovering it.
+/// Shares opinion composition and finalization with local namespace updates.
+/// `Some` requires the generation-checked `LocalNamespace` contract: one layer,
+/// no arcs, variants, relocates or instances, and complete authored ancestors.
+/// That proof permits skipping arc discovery as well as population discovery.
 pub(crate) fn compose_stage_with_paths(
     store: &mut dyn LayerStore,
     root: LayerId,
@@ -179,6 +181,7 @@ pub(crate) fn compose_stage_with_paths(
     // The variant fallbacks every selection is resolved with, passed
     // explicitly to each function that resolves selections.
     let fallbacks = &options.variant_fallbacks;
+    let local_only = populated.is_some();
     let mut cycles = CycleDetector::new(root);
     let layer_stack = cycles.gather_layer_stack(store, root);
     // Spec: AOUSD Core §10.3.2.6 (relocates are computed per layer stack;
@@ -243,72 +246,78 @@ pub(crate) fn compose_stage_with_paths(
         &mut prim_order_opinions,
         &mut authored_children_opinions,
         dep_builder.as_mut(),
+        local_only,
     );
-    add_relocated_variant_opinions(
-        store,
-        &layer_stack,
-        &stage_relocates,
-        &[],
-        &stage_relocates,
-        &mut prims,
-        &mut prim_order_opinions,
-        &mut authored_children_opinions,
-        &mut cycles,
-    );
-    add_inherit_opinions(
-        store,
-        fallbacks,
-        &layer_stack,
-        &paths,
-        &mut prims,
-        &mut prim_order_opinions,
-        &mut authored_children_opinions,
-        &mut cycles,
-        dep_builder.as_mut(),
-    );
-    add_reference_opinions(
-        store,
-        fallbacks,
-        &layer_stack,
-        &paths,
-        &mut prims,
-        &mut prim_order_opinions,
-        &mut authored_children_opinions,
-        &mut cycles,
-        dep_builder.as_mut(),
-    );
-    add_payload_opinions(
-        store,
-        fallbacks,
-        &layer_stack,
-        &paths,
-        &mut prims,
-        &mut prim_order_opinions,
-        &mut authored_children_opinions,
-        &mut cycles,
-        dep_builder.as_mut(),
-    );
-    add_specializes_opinions(
-        store,
-        fallbacks,
-        &layer_stack,
-        &paths,
-        &mut prims,
-        &mut prim_order_opinions,
-        &mut authored_children_opinions,
-        &mut cycles,
-        dep_builder.as_mut(),
-    );
-    add_late_variant_branches(
-        store,
-        fallbacks,
-        &layer_stack,
-        &mut prims,
-        &mut prim_order_opinions,
-        &mut authored_children_opinions,
-        &mut cycles,
-        dep_builder.as_mut(),
-    );
+    // The local namespace index proves these arcs absent, including in the
+    // resulting source after a successful transaction. Do not rediscover that
+    // absence for every supporting ancestor (AOUSD Core §9–§12).
+    if !local_only {
+        add_relocated_variant_opinions(
+            store,
+            &layer_stack,
+            &stage_relocates,
+            &[],
+            &stage_relocates,
+            &mut prims,
+            &mut prim_order_opinions,
+            &mut authored_children_opinions,
+            &mut cycles,
+        );
+        add_inherit_opinions(
+            store,
+            fallbacks,
+            &layer_stack,
+            &paths,
+            &mut prims,
+            &mut prim_order_opinions,
+            &mut authored_children_opinions,
+            &mut cycles,
+            dep_builder.as_mut(),
+        );
+        add_reference_opinions(
+            store,
+            fallbacks,
+            &layer_stack,
+            &paths,
+            &mut prims,
+            &mut prim_order_opinions,
+            &mut authored_children_opinions,
+            &mut cycles,
+            dep_builder.as_mut(),
+        );
+        add_payload_opinions(
+            store,
+            fallbacks,
+            &layer_stack,
+            &paths,
+            &mut prims,
+            &mut prim_order_opinions,
+            &mut authored_children_opinions,
+            &mut cycles,
+            dep_builder.as_mut(),
+        );
+        add_specializes_opinions(
+            store,
+            fallbacks,
+            &layer_stack,
+            &paths,
+            &mut prims,
+            &mut prim_order_opinions,
+            &mut authored_children_opinions,
+            &mut cycles,
+            dep_builder.as_mut(),
+        );
+        add_late_variant_branches(
+            store,
+            fallbacks,
+            &layer_stack,
+            &mut prims,
+            &mut prim_order_opinions,
+            &mut authored_children_opinions,
+            &mut cycles,
+            dep_builder.as_mut(),
+        );
+    }
 
     let blocked = cycles.relocations().blocked();
     for (path, prim) in &mut prims {
@@ -333,7 +342,9 @@ pub(crate) fn compose_stage_with_paths(
     }
     cycles.report_relocate_node_opinions(store, &prims);
 
-    prune_unselected_variant_specs(store, fallbacks, &layer_stack, &mut prims);
+    if !local_only {
+        prune_unselected_variant_specs(store, fallbacks, &layer_stack, &mut prims);
+    }
 
     relocated_child_names(
         store,
@@ -349,14 +360,17 @@ pub(crate) fn compose_stage_with_paths(
         &mut children,
     );
 
-    filter_variant_children(store, fallbacks, &prims, &mut children);
-
-    let mut instances = strip_instance_descendants(
-        store,
-        &mut prims,
-        &mut children,
-        &authored_children_opinions,
-    );
+    let mut instances = if local_only {
+        HashSet::new()
+    } else {
+        filter_variant_children(store, fallbacks, &prims, &mut children);
+        strip_instance_descendants(
+            store,
+            &mut prims,
+            &mut children,
+            &authored_children_opinions,
+        )
+    };
 
     prune_deactivated(store, &mut prims, &mut children);
 
@@ -3409,9 +3423,14 @@ fn add_local_and_variant_opinions(
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     authored_children_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
     mut deps: Option<&mut DependencyBuilder>,
+    local_only: bool,
 ) {
     for path in paths.iter().copied() {
-        let selections = resolve_full_variant_selections(store, fallbacks, local_stack, path);
+        let selections = if local_only {
+            HashMap::new()
+        } else {
+            resolve_full_variant_selections(store, fallbacks, local_stack, path)
+        };
 
         for (layer_strength_idx, layer_id) in local_stack.layers.iter().copied().enumerate() {
             let Some(layer) = store.layer(layer_id) else {

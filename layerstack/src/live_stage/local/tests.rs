@@ -486,3 +486,30 @@ fn deep_edits_retain_ancestor_siblings_and_inactive_context() {
         }
     }
 }
+
+#[test]
+fn external_arc_edits_expire_the_local_composition_proof() {
+    for specializes in [false, true] {
+        let (mut store, mut live) = scene();
+        let a = store.path("/World/A");
+        let b = store.path("/World/B");
+        let mut spec = store.layer(ROOT).unwrap().prims[&a].clone();
+        if specializes {
+            spec.specializes.prepend.push(b);
+        } else {
+            spec.inherits.prepend.push(b);
+        }
+        store.layer_mut(ROOT).unwrap().insert_prim(a, spec);
+        // No explicit notification: the changed generation must invalidate
+        // the proof before the subsequent namespace transaction composes.
+        let mut txn = Transaction::new();
+        txn.create_prim(address(&mut store, "/World/A/New"), Specifier::Def, None);
+        let result = live.apply(&mut store, &txn).unwrap();
+        assert_eq!(result.changes.resynced, [store.path("/")]);
+        assert!(live.local_namespace.is_none());
+        matches_clean(&mut store, &live);
+        assert!(live.stage().has_prim(store.path("/World/A/Y")));
+        live.apply(&mut store, &result.inverse).unwrap();
+        matches_clean(&mut store, &live);
+    }
+}

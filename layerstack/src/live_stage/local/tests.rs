@@ -452,3 +452,37 @@ fn undo_restoring_variant_specs_leaves_the_local_fast_path() {
     assert_eq!(removed_again.changes.removed, removed.changes.removed);
     matches_clean(&mut store, &live);
 }
+
+#[test]
+fn deep_edits_retain_ancestor_siblings_and_inactive_context() {
+    let (mut store, _) = scene();
+    let world = store.path("/World");
+    let a = store.path("/World/A");
+    let b = store.path("/World/B");
+    let bn = store.tokens.intern("B");
+    let an = store.tokens.intern("A");
+    store
+        .layer_mut(ROOT)
+        .unwrap()
+        .prims
+        .get_mut(&world)
+        .unwrap()
+        .prim_order = Some(alloc::vec![bn, an]);
+    store
+        .layer_mut(ROOT)
+        .unwrap()
+        .prims
+        .get_mut(&b)
+        .unwrap()
+        .active = Some(false);
+    let mut live = LiveStage::compose(&mut store, ROOT, StageOptions::default());
+    for name in ["/World/A/X/New", "/World/B/Y/Hidden"] {
+        let mut txn = Transaction::new();
+        txn.create_prim(address(&mut store, name), Specifier::Def, None);
+        for _ in 0..4 {
+            txn = live.apply(&mut store, &txn).unwrap().inverse;
+            assert_eq!(live.stage().children_of(world).unwrap(), [a]);
+            matches_clean(&mut store, &live);
+        }
+    }
+}

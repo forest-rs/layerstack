@@ -429,19 +429,34 @@ impl LiveStage {
             .collect();
         parents.sort_unstable();
         parents.dedup();
-        // All ancestor child lists must be complete while finalization orders
-        // and prunes them. Supporting sibling indexes are never merged.
+        // Only boundary parents have child lists that will be merged. Their
+        // siblings must participate in ordering and activation pruning, but
+        // higher ancestor child lists remain in the existing stage unchanged.
+        // Keep the ancestor chain for activation context without composing
+        // unrelated branches (AOUSD Core §7.6, §11.3.1).
         let mut seed: BTreeSet<PathId> = affected.iter().copied().collect();
         for &path in &affected {
             let mut current = store.paths().resolve(path).parent();
             while let Some(parent) = current {
                 let parent_id = store.paths_mut().intern(parent.clone());
                 seed.insert(parent_id);
-                seed.extend(index.children(parent_id).iter().copied());
                 current = parent.parent();
             }
         }
-        seed.insert(store.paths_mut().intern(crate::Path::root()));
+        for &parent in &parents {
+            seed.extend(index.children(parent).iter().copied());
+        }
+        // Deleted specs are removal candidates, not population candidates.
+        // Seeding them would leave an empty child-list entry on a parent
+        // whose clean population has no child-list entry at all.
+        let pseudo_root = store.paths_mut().intern(crate::Path::root());
+        seed.retain(|path| {
+            *path == pseudo_root
+                || store
+                    .layer(self.root)
+                    .is_some_and(|l| l.prims.contains_key(path))
+        });
+        seed.insert(pseudo_root);
         if source_empty {
             seed.clear();
         }

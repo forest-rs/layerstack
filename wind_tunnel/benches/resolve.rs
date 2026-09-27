@@ -56,7 +56,7 @@ fn write_edit(index: usize, value: f32) -> Value {
 ///
 /// The weakest sublayer authors dense arrays; every stronger one authors
 /// sparse edits, a scalar, a dictionary entry and a token list op.
-fn build() -> Scene {
+fn build(layers: u64, points_len: usize) -> Scene {
     let mut store = InMemoryStore::default();
     let points = store.tokens.intern("points");
     let animated = store.tokens.intern("animated");
@@ -67,21 +67,21 @@ fn build() -> Scene {
     let float_array_type = PropertyType::new("float", true, Value::Float(0.0));
 
     let mut root = Layer::new(LayerId(1));
-    root.sublayers = (2..=LAYERS)
+    root.sublayers = (2..=layers)
         .map(|id| SublayerEntry::new(LayerId(id)))
         .collect();
     root.insert_prim(prim, PrimSpec::def());
     store.insert_layer(root);
 
-    for id in 2..=LAYERS {
-        let weakest = id == LAYERS;
+    for id in 2..=layers {
+        let weakest = id == layers;
         let i = id as usize;
         let (points_value, animated_samples) = if weakest {
             (
-                float_array(POINTS, 1.0),
+                float_array(points_len, 1.0),
                 vec![
-                    (0.0, float_array(POINTS, 1.0)),
-                    (10.0, float_array(POINTS, 2.0)),
+                    (0.0, float_array(points_len, 1.0)),
+                    (10.0, float_array(points_len, 2.0)),
                 ],
             )
         } else {
@@ -137,7 +137,7 @@ fn build() -> Scene {
 }
 
 fn bench_resolve(c: &mut Criterion) {
-    let scene = build();
+    let scene = build(LAYERS, POINTS);
     let stage = &scene.stage;
     let mut group = c.benchmark_group("resolve");
 
@@ -171,6 +171,21 @@ fn bench_resolve(c: &mut Criterion) {
     group.bench_function("token_list", |b| {
         b.iter(|| black_box(stage.resolve_token_list(black_box(scene.prim), scene.api_schemas)));
     });
+
+    // Tiny arrays expose planning costs; large arrays include materialization.
+    // Two layers give a dense-only series; deeper stacks add sparse opinions.
+    for (layers, points) in [(2, 1), (20, 1), (100, 1), (100, 1_000)] {
+        let scene = build(layers, points);
+        group.bench_function(format!("temporal/{layers}_layers/{points}_elements"), |b| {
+            b.iter(|| {
+                black_box(scene.stage.resolve_property_path_at_time(
+                    black_box(scene.animated),
+                    black_box(2.5),
+                    InterpolationType::Linear,
+                ))
+            });
+        });
+    }
 
     group.finish();
 }

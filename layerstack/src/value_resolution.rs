@@ -13,10 +13,11 @@
 //!   ([`plan_brackets`]), then fold the chain once per bracketing sample
 //!   through [`PickedArrayFamily`] and interpolate the composed results.
 
-use alloc::{vec, vec::Vec};
+use alloc::vec::Vec;
 
 use opinionated::{
     FamilyEvent, FamilyMember, FamilyResolution, IgnoreReason, OpinionFamily, OpinionKind,
+    SamplePick as Pick, TemporalMode, TemporalPlanner, TemporalSample, TemporalSelection,
     resolve_family_chain, resolve_family_chain_report,
 };
 
@@ -480,7 +481,7 @@ fn fold_array_chain<'o>(
 ///
 /// - composing two series treats their samples as one time
 ///   (`Sdf_timesEqualDefaultFn` in `pxr/usd/sdf/composeTimeSampleSeries.h`),
-///   see [`Entry::compose_under`];
+///   see [`TemporalPlanner::push`];
 /// - within one series, two bracketing samples this close in layer time do
 ///   not interpolate: the lower one holds (`_GetInterpolatingSamplesImpl` in
 ///   `pxr/usd/usd/interpolators.cpp`), see [`Bracket::of`] and
@@ -494,12 +495,7 @@ fn times_close(a: f64, b: f64) -> bool {
     a == b || (a - b).abs() < TIME_EPSILON
 }
 
-/// Which of an opinion's bracketing samples a composed sample is made of.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Pick {
-    Lower,
-    Upper,
-}
+type Entry = TemporalSelection<f64>;
 
 /// One opinion's bracketing samples for a time query, in stage time.
 ///
@@ -607,151 +603,12 @@ impl<'o> Bracket<'o> {
         }
     }
 
-    /// The bracket's distinct samples, as a series of its own.
-    fn entries(&self) -> Vec<Entry> {
-        let own = |(time, value): (f64, Option<&Value>), pick| Entry {
-            time,
-            composes: Composes::of(value),
-            picks: vec![pick],
-        };
-        let mut entries = vec![own(self.lower, Pick::Lower)];
-        if self.upper.0 != self.lower.0 {
-            entries.push(own(self.upper, Pick::Upper));
+    /// Value classification stays in the host; the planner sees no USD values.
+    fn planning_sample(&self, pick: Pick) -> TemporalSample<f64> {
+        TemporalSample {
+            time: self.time(pick),
+            composes: matches!(self.sample(pick), Some(Value::ArrayEdit(_))),
         }
-        entries
-    }
-}
-
-/// Whether a (composed) sample still composes over weaker opinions.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Composes {
-    /// A sparse edit: weaker opinions still contribute.
-    Yes,
-    /// A dense value, a block, or a value outside the family: the fold ends.
-    No,
-}
-
-impl Composes {
-    fn of(value: Option<&Value>) -> Self {
-        if matches!(value, Some(Value::ArrayEdit(_))) {
-            Self::Yes
-        } else {
-            Self::No
-        }
-    }
-
-    /// Composes a stronger sample over a weaker one: the result composes only
-    /// if both do (edit over edit is an edit; an edit over a dense value or a
-    /// block materializes).
-    fn over(self, weaker: Self) -> Self {
-        if self == Self::Yes && weaker == Self::Yes {
-            Self::Yes
-        } else {
-            Self::No
-        }
-    }
-}
-
-/// One sample of a composed series, without its value.
-#[derive(Clone, Debug)]
-struct Entry {
-    /// Stage time of the composed sample.
-    time: f64,
-    /// Whether the composed sample still composes over weaker opinions.
-    composes: Composes,
-    /// For each opinion composed so far (by [`Bracket::index`]), the
-    /// bracketing sample this composed sample is made of.
-    picks: Vec<Pick>,
-}
-
-impl Entry {
-    /// The entry of `series` held at `time` while merging, where `next` is
-    /// the next unmerged index: the entry at (within [`TIME_EPSILON`] of)
-    /// `time`, else the previous entry, else the first (the `held` helper of
-    /// `SdfComposeTimeSampleSeries`).
-    fn held_while_merging(series: &[Self], next: usize, time: f64) -> &Self {
-        if next == series.len() || (next != 0 && !times_close(series[next].time, time)) {
-            &series[next - 1]
-        } else {
-            &series[next]
-        }
-    }
-
-    fn joined(&self, weaker: &Self, time: f64, composes: Composes) -> Self {
-        let mut picks = Vec::with_capacity(self.picks.len() + weaker.picks.len());
-        picks.extend_from_slice(&self.picks);
-        picks.extend_from_slice(&weaker.picks);
-        Self {
-            time,
-            composes,
-            picks,
-        }
-    }
-
-    /// Composes `strong` over `weak`, following `SdfComposeTimeSampleSeries`:
-    /// every stronger sample composes over the weaker sample held at its
-    /// time, a weaker sample appears in the result only where the stronger
-    /// sample held at its time composes, and samples of the two series closer
-    /// than [`TIME_EPSILON`] merge into one.
-    fn compose_under(strong: &[Self], weak: &[Self]) -> Vec<Self> {
-        if strong.is_empty() {
-            return weak.to_vec();
-        }
-        let mut out = Vec::with_capacity(strong.len() + weak.len());
-        let (mut i, mut j) = (0, 0);
-        while i < strong.len() || j < weak.len() {
-            let strong_time = strong.get(i).map_or(f64::INFINITY, |e| e.time);
-            let weak_time = weak.get(j).map_or(f64::INFINITY, |e| e.time);
-            if strong_time <= weak_time {
-                let held = Self::held_while_merging(weak, j, strong_time);
-                let composes = strong[i].composes.over(held.composes);
-                out.push(strong[i].joined(held, strong_time, composes));
-            } else {
-                let held = Self::held_while_merging(strong, i, weak_time);
-                if held.composes == Composes::Yes {
-                    out.push(held.joined(&weak[j], weak_time, weak[j].composes));
-                }
-            }
-            if i == strong.len() {
-                j += 1;
-            } else if j == weak.len() {
-                i += 1;
-            } else if times_close(strong_time, weak_time) {
-                i += 1;
-                j += 1;
-            } else if strong_time < weak_time {
-                i += 1;
-            } else {
-                j += 1;
-            }
-        }
-        out
-    }
-
-    /// Trims `series` to the entries bracketing `time`: the entry at `time`,
-    /// else the entries on either side, else the first or last entry (the
-    /// trimming step of `composeSamples` in `stage.cpp`, with exact times).
-    fn bracketing(mut series: Vec<Self>, time: f64) -> Vec<Self> {
-        let Some(last) = series.len().checked_sub(1) else {
-            return series;
-        };
-        let (from, to) = if last == 0 || time <= series[0].time {
-            (0, 0)
-        } else if time >= series[last].time {
-            (last, last)
-        } else {
-            // Strictly inside the series, so `1..=last` (the clamp only
-            // guards a NaN query time).
-            let next = series.partition_point(|e| e.time < time).clamp(1, last);
-            if series[next].time == time {
-                (next, next)
-            } else {
-                (next - 1, next)
-            }
-        };
-        series.truncate(to + 1);
-        series.drain(..from);
-        series
     }
 }
 
@@ -790,28 +647,30 @@ fn plan_brackets<'o>(
     interp: InterpolationType,
 ) -> BracketPlan<'o> {
     let mut brackets: Vec<Bracket<'o>> = Vec::new();
-    let mut composed: Vec<Entry> = Vec::new();
-    let mut query = time;
-    for (position, opinion) in opinions.into_iter().enumerate() {
+    let mode = match interp {
+        InterpolationType::Held => TemporalMode::Held,
+        InterpolationType::Linear => TemporalMode::Bracketing,
+    };
+    let mut planner = TemporalPlanner::new(time, mode);
+    let mut opinions = opinions.into_iter().enumerate();
+    while let Some(query) = planner.query() {
+        let Some((position, opinion)) = opinions.next() else {
+            break;
+        };
         let Some(bracket) = Bracket::of(opinion, (brackets.len(), position), query, interp) else {
             continue;
         };
-        composed = Entry::bracketing(Entry::compose_under(&composed, &bracket.entries()), time);
+        planner.push(
+            bracket.planning_sample(Pick::Lower),
+            bracket.planning_sample(Pick::Upper),
+            times_close,
+        );
         brackets.push(bracket);
-        // Composing can swallow every sample (a stronger sample that does not
-        // compose, merged with an earlier weaker one); OpenUSD then has no
-        // value.
-        let (Some(lower), Some(upper)) = (composed.first(), composed.last()) else {
-            break;
-        };
-        if lower.composes == Composes::No {
-            if upper.composes == Composes::No || interp == InterpolationType::Held {
-                break;
-            }
-            query = upper.time;
-        }
     }
-    BracketPlan { brackets, composed }
+    BracketPlan {
+        brackets,
+        composed: planner.into_samples(),
+    }
 }
 
 /// [`ArrayFamily`] reading, for one composed sample, the bracketing sample

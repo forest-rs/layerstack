@@ -19,6 +19,7 @@ operations, and provenance.
 - ordered unique-list edits
 - sparse array edit programs over any element type, with a host-supplied
   fill policy
+- temporal sparse-composition recipes over host time keys and values
 - recursive dictionary combination over host values, with shallow overlay as
   a separate named policy
 - provenance, opinion-stack inspection, and key enumeration
@@ -123,3 +124,15 @@ stronger one. That lets a host fold edits through an `OpinionFamily`, keeping
 them sparse until a dense value or block ends the chain. `layerstack` uses
 `ArrayEdit<Value>` for USD sparse array edits and derives the fill from the
 property's type.
+
+## Temporal composition
+
+`TemporalPlanner` accepts already ordered sources, one bracket at a time. It
+requests the time at which to sample the next source and stops when weaker
+sources are hidden. `TemporalSelection` recipes identify the source samples to
+fold with `resolve_family_chain`; interpolation happens after that fold.
+
+The planner reads no values. Hosts retain source brackets and own time mapping,
+sample discovery, time-equivalence policy, fallback seeds, and interpolation.
+Time keys can be integer animation ticks or floating-point times. `TemporalMode`
+selects held or two-bracket planning without imposing a numeric value type.

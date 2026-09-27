@@ -74,6 +74,9 @@ use alloc::{collections::BTreeMap, string::String, vec::Vec};
 mod array_edit;
 mod dictionary;
 mod family;
+mod temporal;
+
+pub use temporal::{SamplePick, TemporalMode, TemporalPlanner, TemporalSample, TemporalSelection};
 
 pub use array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayFill, ArrayIndex, FillWith};
 pub use dictionary::{

@@ -10,7 +10,9 @@
 //! Callers mark roots, and propagation to transitive dependents happens at
 //! drain time during [`LiveStage::recompose`].
 
-use alloc::vec::Vec;
+use alloc::{collections::BTreeSet, vec::Vec};
+
+mod local;
 
 use hashbrown::{HashMap, HashSet};
 use invalidation::{Channel, CycleHandling, InvalidationTracker, TraversalScratch};
@@ -18,7 +20,7 @@ use invalidation::{Channel, CycleHandling, InvalidationTracker, TraversalScratch
 use crate::{
     dependency_map::{ArcDependency, CompositionDeps},
     doc::{LayerId, LayerStore},
-    edit::{Applied, EditError, Transaction},
+    edit::{Applied, Changes, EditError, Transaction},
     expression_variables::VariableReads,
     path::PathId,
     stage::{PopulationMask, Stage, StageOptions},
@@ -40,6 +42,51 @@ fn generations_of(store: &dyn LayerStore, layer: LayerId) -> Option<LayerGenerat
     store
         .layer(layer)
         .map(|found| (found.generation(), found.structural_generation()))
+}
+
+fn is_beneath(store: &dyn LayerStore, path: PathId, roots: &[PathId]) -> bool {
+    roots.iter().any(|root| {
+        store
+            .paths()
+            .resolve(path)
+            .strip_prefix(store.paths().resolve(*root))
+            .is_some()
+    })
+}
+
+fn minimal_roots(store: &dyn LayerStore, paths: &[PathId]) -> Vec<PathId> {
+    let set: HashSet<_> = paths.iter().copied().collect();
+    let mut roots: Vec<_> = set
+        .iter()
+        .copied()
+        .filter(|path| {
+            let mut current = store.paths().resolve(*path).parent();
+            while let Some(parent) = current {
+                if store
+                    .paths()
+                    .lookup(&parent)
+                    .is_some_and(|id| set.contains(&id))
+                {
+                    return false;
+                }
+                current = parent.parent();
+            }
+            true
+        })
+        .collect();
+    roots.sort_unstable();
+    roots
+}
+
+fn include_resyncs(store: &dyn LayerStore, changes: &mut Changes, paths: &[PathId]) {
+    if paths.is_empty() {
+        return;
+    }
+    changes.resynced.extend_from_slice(paths);
+    changes.resynced = minimal_roots(store, &changes.resynced);
+    changes
+        .changed_info_only
+        .retain(|path| !is_beneath(store, *path, &changes.resynced));
 }
 
 /// Every layer a stage rooted at `root` reads or would read: the root's
@@ -121,6 +168,7 @@ fn participating_layers(store: &dyn LayerStore, root: LayerId) -> HashSet<LayerI
 #[derive(Debug)]
 pub struct LiveStage {
     stage: Stage,
+    local_namespace: Option<local::LocalNamespace>,
     /// Tracks dependency topology and dirty prim state.
     tracker: InvalidationTracker<PathId>,
     /// Reused traversal state for lazy invalidation expansion.
@@ -166,6 +214,7 @@ impl LiveStage {
 
         let mut live = Self {
             stage,
+            local_namespace: local::LocalNamespace::build(store, root, &options),
             tracker,
             traversal_scratch: TraversalScratch::new(),
             arc_metadata: deps.arcs,
@@ -195,9 +244,18 @@ impl LiveStage {
     /// prims drawing on those specs are updated. Existing attribute defaults
     /// and samples refresh their cached opinions without rebuilding prim
     /// graphs when source mappings are exact and no other changes are pending.
-    /// Other edits use scoped composition. Edits that create or
-    /// remove specs, or change variant selections, may change namespace and
-    /// are notified as structural changes, which rebuild the stage.
+    /// Local prim creation and removal recompose the affected subtrees when
+    /// the stage has one layer, all authored ancestors, no population mask,
+    /// and no arcs, variants, relocates or instanceable specs. The work also
+    /// includes the ancestors and their direct children to preserve ordering
+    /// and pruning; a wide sibling list can therefore still be expensive.
+    /// Other structural edits rebuild the stage; other opinion edits use
+    /// scoped composition.
+    ///
+    /// [`Applied::changes`] separates exact created/removed prim inventories,
+    /// subtree resync roots and changes that invalidate only the named prim.
+    /// Pending notifications are included in that report. The conservative
+    /// full-rebuild path reports a pseudo-root resync.
     ///
     /// Stage addresses take the declared type of an attribute they create
     /// from this stage's composed declaration of the property
@@ -210,7 +268,47 @@ impl LiveStage {
         store: &mut dyn LayerStore,
         txn: &Transaction,
     ) -> Result<Applied, EditError> {
-        let outcome = crate::edit::apply(store, txn, Some(&self.stage))?;
+        let pending_opinions = self.tracker.has_invalidated(OPINION_EDIT);
+        let local_current = !self.needs_full_rebuild
+            && !pending_opinions
+            && self
+                .local_namespace
+                .as_ref()
+                .is_some_and(|index| index.current(store));
+        let namespace = local_current
+            .then_some(self.local_namespace.as_ref())
+            .flatten()
+            .map(|index| index as &dyn crate::edit::SourceNamespace);
+        let outcome = crate::edit::apply(store, txn, Some(&self.stage), namespace)?;
+        let declaration_resyncs: Vec<_> = outcome
+            .resync_sites
+            .iter()
+            .flat_map(|&(layer, path)| self.composed_prims_for_source(layer, path))
+            .collect();
+        if outcome.structural
+            && local_current
+            && outcome.layers.iter().all(|layer| *layer == self.root)
+            && let Some(paths) = &outcome.local_structure
+            && !paths.is_empty()
+            && let Some((recomposed, mut changes)) =
+                self.refresh_local_structure(store, paths, &outcome.touched)
+        {
+            include_resyncs(store, &mut changes, &declaration_resyncs);
+            return Ok(Applied {
+                inverse: outcome.inverse,
+                recomposed,
+                changes,
+            });
+        }
+        // An unsupported or externally changed namespace cannot reuse its
+        // source index until a full composition establishes eligibility again.
+        if !local_current || outcome.structural || outcome.local_structure.is_none() {
+            self.local_namespace = None;
+        } else if let Some(index) = &mut self.local_namespace
+            && let Some(layer) = store.layer(self.root)
+        {
+            index.generation = layer.generation();
+        }
         // Property values do not change prim indexes, dependency edges or
         // namespace. Do not rediscover population to refresh those slots.
         let refreshed = outcome.values.as_ref().and_then(|edits| {
@@ -263,11 +361,136 @@ impl LiveStage {
                 *seen = found;
             }
         }
-        let recomposed = refreshed.unwrap_or_else(|| self.recompose(store));
+        let mut changes = Changes::default();
+        let recomposed = match refreshed {
+            Some(paths) => {
+                changes.changed_info_only = paths.clone();
+                paths
+            }
+            None => self.recompose_report(store, Some(&mut changes)),
+        };
+        include_resyncs(store, &mut changes, &declaration_resyncs);
+        // External notifications identify affected prims but do not describe
+        // their edits. They may have changed declarations or schema identity;
+        // only transaction-known value edits can promise info-only changes.
+        if pending_opinions {
+            include_resyncs(store, &mut changes, &recomposed);
+        }
         Ok(Applied {
             inverse: outcome.inverse,
             recomposed,
+            changes,
         })
+    }
+
+    /// Updates local namespace regions using the source index. Composition of
+    /// each candidate still uses the same graph construction and finalization.
+    fn refresh_local_structure(
+        &mut self,
+        store: &mut dyn LayerStore,
+        paths: &[PathId],
+        touched: &[(LayerId, PathId)],
+    ) -> Option<(Vec<PathId>, Changes)> {
+        let source_empty = store.layer(self.root)?.prims.is_empty();
+        // Ordinary population of an empty layer has no pseudo-root either.
+        // Include its old index in the removal batch instead of retaining a
+        // synthetic root from the supporting ancestor seed.
+        let roots = if source_empty {
+            alloc::vec![store.paths_mut().intern(crate::Path::root())]
+        } else {
+            minimal_roots(store, paths)
+        };
+        let mut old = HashSet::new();
+        for root in &roots {
+            if self.stage.has_prim(*root) {
+                old.extend(self.stage.traverse(*root));
+            }
+        }
+        let index = self.local_namespace.as_mut()?;
+        if !index.reconcile(store, paths) {
+            return None;
+        }
+        let mut affected = old;
+        for root in &roots {
+            affected.extend(index.subtree(*root));
+        }
+        let hierarchy: Vec<_> = affected.iter().copied().collect();
+        affected.extend(touched.iter().map(|(_, path)| *path));
+        let mut parents: Vec<PathId> = roots
+            .iter()
+            .filter_map(|root| {
+                store
+                    .paths()
+                    .resolve(*root)
+                    .parent()
+                    .and_then(|p| store.paths().lookup(&p))
+            })
+            .filter(|parent| !hierarchy.contains(parent))
+            .collect();
+        parents.sort_unstable();
+        parents.dedup();
+        // All ancestor child lists must be complete while finalization orders
+        // and prunes them. Supporting sibling indexes are never merged.
+        let mut seed: BTreeSet<PathId> = affected.iter().copied().collect();
+        for &path in &affected {
+            let mut current = store.paths().resolve(path).parent();
+            while let Some(parent) = current {
+                let parent_id = store.paths_mut().intern(parent.clone());
+                seed.insert(parent_id);
+                seed.extend(index.children(parent_id).iter().copied());
+                current = parent.parent();
+            }
+        }
+        seed.insert(store.paths_mut().intern(crate::Path::root()));
+        if source_empty {
+            seed.clear();
+        }
+        let options = StageOptions {
+            with_dependencies: true,
+            ..self.options.clone()
+        };
+        let mut partial = Stage::compose_local_paths(store, self.root, options, seed);
+        let deps = partial.take_deps().unwrap_or_default();
+        let mut changes = Changes::default();
+        for path in &affected {
+            match (self.stage.has_prim(*path), partial.has_prim(*path)) {
+                (false, true) => changes.created.push(*path),
+                (true, false) => changes.removed.push(*path),
+                _ => {}
+            }
+        }
+        changes.created.sort_unstable();
+        changes.removed.sort_unstable();
+        changes.resynced = roots
+            .into_iter()
+            .filter(|root| self.stage.has_prim(*root) || partial.has_prim(*root))
+            .collect();
+        changes.changed_info_only = parents
+            .iter()
+            .copied()
+            .chain(touched.iter().map(|(_, path)| *path))
+            .filter(|path| partial.has_prim(*path) && !is_beneath(store, *path, &changes.resynced))
+            .collect();
+        changes.changed_info_only.sort_unstable();
+        changes.changed_info_only.dedup();
+        let mut affected: Vec<_> = affected.into_iter().collect();
+        affected.sort_unstable();
+        self.stage
+            .merge_local_subtrees(partial, &affected, &hierarchy, &parents);
+        self.update_prim_edges(&affected, &deps);
+        for &path in &affected {
+            if !self.stage.has_prim(path) {
+                self.tracker.remove_key(path);
+            }
+            self.reindex_sources(path);
+        }
+        self.generations
+            .insert(self.root, generations_of(store, self.root));
+        let mut recomposed = affected;
+        recomposed.extend(parents);
+        recomposed.sort_unstable();
+        recomposed.dedup();
+        Some((recomposed, changes))
     }
 
     /// Notifies the edits of every layer the stage reads whose
@@ -543,8 +766,16 @@ impl LiveStage {
     /// [`notify_changed_layers`](Self::notify_changed_layers) finds layers
     /// edited without a notification.
     pub fn recompose(&mut self, store: &mut dyn LayerStore) -> Vec<PathId> {
+        self.recompose_report(store, None)
+    }
+
+    fn recompose_report(
+        &mut self,
+        store: &mut dyn LayerStore,
+        mut changes: Option<&mut Changes>,
+    ) -> Vec<PathId> {
         if self.needs_full_rebuild {
-            return self.full_rebuild(store);
+            return self.full_rebuild(store, changes);
         }
 
         if !self.tracker.has_invalidated(OPINION_EDIT) {
@@ -559,6 +790,7 @@ impl LiveStage {
             .scratch(&mut self.traversal_scratch)
             .run()
             .collect();
+        let mut resynced_roots = Vec::new();
         let mut partial = loop {
             let partial = self.compose_scoped(store, &affected);
 
@@ -566,12 +798,20 @@ impl LiveStage {
             // child ordering, ...) cannot be patched from a masked
             // composition, whose child lists are partial by construction.
             if self.stage.hierarchy_diverges(&partial, &affected) {
-                return self.full_rebuild(store);
+                return self.full_rebuild(store, changes);
             }
 
             // A prim whose contributing specs change (another variant
             // branch selected) changes its descendants' prim indexes too:
             // recompose them, and what depends on them, as well.
+            if changes.is_some() {
+                resynced_roots.extend(
+                    affected
+                        .iter()
+                        .copied()
+                        .filter(|path| self.stage.sources_changed(&partial, *path)),
+                );
+            }
             let resynced = self.stage.resynced_descendants(&partial, &affected);
             if resynced.is_empty() {
                 break partial;
@@ -603,6 +843,14 @@ impl LiveStage {
             self.reindex_sources(prim);
         }
 
+        if let Some(changes) = changes.as_mut() {
+            changes.resynced = minimal_roots(store, &resynced_roots);
+            changes.changed_info_only = affected
+                .iter()
+                .copied()
+                .filter(|path| !is_beneath(store, *path, &changes.resynced))
+                .collect();
+        }
         affected
     }
 
@@ -724,7 +972,11 @@ impl LiveStage {
     /// Recomposes the whole stage and returns every path in the new stage
     /// plus every path removed relative to the old one (see
     /// [`recompose`](Self::recompose)), sorted by [`PathId`].
-    fn full_rebuild(&mut self, store: &mut dyn LayerStore) -> Vec<PathId> {
+    fn full_rebuild(
+        &mut self,
+        store: &mut dyn LayerStore,
+        changes: Option<&mut Changes>,
+    ) -> Vec<PathId> {
         self.needs_full_rebuild = false;
         self.tracker.clear(OPINION_EDIT);
         let old_prims: HashSet<PathId> = self.stage.prim_paths().collect();
@@ -747,6 +999,22 @@ impl LiveStage {
         self.expression_variables = deps.expression_variables;
         self.reindex_all_sources();
         self.record_generations(store);
+        self.local_namespace = local::LocalNamespace::build(store, self.root, &self.options);
+        if let Some(changes) = changes {
+            changes.created = self
+                .stage
+                .prim_paths()
+                .filter(|path| !old_prims.contains(path))
+                .collect();
+            changes.removed = old_prims
+                .iter()
+                .copied()
+                .filter(|path| !self.stage.has_prim(*path))
+                .collect();
+            changes.created.sort_unstable();
+            changes.removed.sort_unstable();
+            changes.resynced = alloc::vec![store.paths_mut().intern(crate::Path::root())];
+        }
 
         // A before/after difference, not an edit log: removed paths are those
         // the old stage had and the new one lacks.

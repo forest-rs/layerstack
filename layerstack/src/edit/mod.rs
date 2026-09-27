@@ -93,15 +93,68 @@ pub use error::{EditError, Rejection, Slot};
 pub use target::{Address, EditTarget};
 pub use transaction::Transaction;
 
-pub(crate) use apply::{PropertyValueEdit, apply};
+pub(crate) use apply::{PropertyValueEdit, SourceNamespace, apply};
 
 /// What [`LiveStage::apply`](crate::LiveStage::apply) did.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Applied {
     /// The transaction that undoes the applied one (see [`Transaction`]).
     pub inverse: Transaction,
+    /// Composed existence and invalidation changes caused by the transaction.
+    pub changes: Changes,
     /// The composed prims updated by this transaction. Existing attribute
     /// value edits may refresh opinions without rebuilding prim graphs;
-    /// other edits use [`LiveStage::recompose`](crate::LiveStage::recompose).
+    /// eligible local structural edits replace only their subtrees and
+    /// boundary child lists. Use [`Self::changes`] to invalidate consumers;
+    /// this list includes unchanged survivors after a full rebuild.
     pub recomposed: Vec<PathId>,
+}
+
+/// Composed changes made by one successful live transaction.
+///
+/// Created and removed are exact inventories. Resynced paths are subtree roots:
+/// every descendant is invalidated, including created and removed descendants.
+/// Info-only paths invalidate just themselves and never lie beneath a resync.
+/// A changed opinion may be masked by a stronger one, so info-only notices do
+/// not assert that the resolved value differs. A conservative full rebuild
+/// reports the pseudo-root as resynced, rather than every survivor as changed.
+/// Reports have prim granularity: a property declaration or applied-schema
+/// change conservatively resyncs its owning prim; existing value slots do not.
+/// External opinion notifications lack edit details and conservatively resync
+/// their affected prims, including other prims updated in the same batch.
+/// Every list is sorted by [`PathId`] and contains no duplicates.
+///
+/// ```
+/// use layerstack::{EditTarget, InMemoryStore, Layer, LayerId, LiveStage,
+///     PrimSpec, Specifier, StageOptions, Transaction};
+///
+/// let mut store = InMemoryStore::default();
+/// let layer = LayerId(1);
+/// let world = store.path("/World");
+/// let mut source = Layer::new(layer);
+/// source.insert_prim(world, PrimSpec::def());
+/// store.insert_layer(source);
+/// let mut live = LiveStage::compose(&mut store, layer, StageOptions::default());
+/// let rock = store.path("/World/Rock");
+/// let mut edit = Transaction::new();
+/// edit.create_prim(EditTarget::for_layer(layer).prim(rock), Specifier::Def, None);
+/// let added = live.apply(&mut store, &edit).unwrap();
+/// assert_eq!(added.changes.created, [rock]);
+/// assert_eq!(added.changes.resynced, [rock]);
+/// let undone = live.apply(&mut store, &added.inverse).unwrap();
+/// assert_eq!(undone.changes.removed, [rock]);
+/// ```
+///
+/// OpenUSD: `UsdNotice::ObjectsChanged::GetResyncedPaths` and
+/// `GetChangedInfoOnlyPaths` use the same subtree versus exact-path distinction.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Changes {
+    /// Prim paths present after the transaction but absent before it.
+    pub created: Vec<PathId>,
+    /// Prim paths present before the transaction but absent after it.
+    pub removed: Vec<PathId>,
+    /// Minimal roots whose composed structure may have changed.
+    pub resynced: Vec<PathId>,
+    /// Surviving prims with opinion or child-list changes, without subtree resync.
+    pub changed_info_only: Vec<PathId>,
 }

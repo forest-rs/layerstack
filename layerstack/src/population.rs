@@ -1280,7 +1280,7 @@ fn apply_population_mask(
     paths.retain(|p| allowed.contains(p));
 }
 
-fn build_children_index(
+pub(crate) fn build_children_index(
     store: &mut dyn LayerStore,
     prim_paths: impl IntoIterator<Item = PathId>,
 ) -> HashMap<PathId, Vec<PathId>> {

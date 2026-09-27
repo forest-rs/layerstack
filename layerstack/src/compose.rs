@@ -165,6 +165,17 @@ pub(crate) fn compose_stage(
     root: LayerId,
     options: StageOptions,
 ) -> Stage {
+    compose_stage_with_paths(store, root, options, None)
+}
+
+/// Shares all composition and finalization, but allows a proven local namespace
+/// update to supply its complete affected population instead of rediscovering it.
+pub(crate) fn compose_stage_with_paths(
+    store: &mut dyn LayerStore,
+    root: LayerId,
+    options: StageOptions,
+    populated: Option<BTreeSet<PathId>>,
+) -> Stage {
     // The variant fallbacks every selection is resolved with, passed
     // explicitly to each function that resolves selections.
     let fallbacks = &options.variant_fallbacks;
@@ -174,12 +185,18 @@ pub(crate) fn compose_stage(
     // invalid ones are composition errors of the layer stack authoring
     // them).
     cycles.set_relocations(Relocations::new(store, &layer_stack));
-    let (paths, mut children) = populate(
-        store,
-        &layer_stack,
-        options.mask.as_ref(),
-        cycles.relocations_mut(),
-    );
+    let (paths, mut children) = match populated {
+        Some(paths) => {
+            let children = crate::population::build_children_index(store, paths.iter().copied());
+            (paths, children)
+        }
+        None => populate(
+            store,
+            &layer_stack,
+            options.mask.as_ref(),
+            cycles.relocations_mut(),
+        ),
+    };
     for error in cycles.relocations_mut().take_errors() {
         cycles.report(error);
     }

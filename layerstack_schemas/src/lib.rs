@@ -254,6 +254,11 @@ mod generated;
 mod gf;
 #[cfg(feature = "usd-geom")]
 mod imageable;
+pub mod kind;
+#[cfg(feature = "usd")]
+mod predicate;
+#[cfg(feature = "usd")]
+mod regex;
 mod table;
 mod value;
 #[cfg(feature = "usd-geom")]
@@ -275,6 +280,9 @@ pub use generated::views::*;
 pub use generated::{Domain, OPENUSD_VERSION};
 #[cfg(feature = "usd-geom")]
 pub use imageable::{PurposeInfo, PurposeInputs, Visibility, VisibilityInputs};
+pub use kind::KindRegistry;
+#[cfg(feature = "usd")]
+pub use predicate::{CollectionPredicate, CollectionPredicates};
 pub use view::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, Time};
 #[cfg(feature = "usd-geom")]
 pub use xform::{

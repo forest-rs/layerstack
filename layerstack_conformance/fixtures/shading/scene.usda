@@ -1,0 +1,73 @@
+#usda 1.0
+
+def Shader "S" {
+    token outputs:out
+    token inputs:in
+}
+def Shader "T" {
+    token outputs:out
+}
+def Scope "Plain" {
+    token outputs:out
+    token wrong
+    rel outputs:relationship
+}
+def NodeGraph "Graph" {
+    token outputs:out.connect = </Graph.inputs:in>
+    token inputs:in.connect = </S.outputs:out>
+    token outputs:cycle.connect = </Graph.outputs:cycle2>
+    token outputs:cycle2.connect = </Graph.outputs:cycle>
+    token outputs:diamond.connect = [</Graph.outputs:left>, </Graph.outputs:right>]
+    token outputs:left.connect = </Graph.inputs:in>
+    token outputs:right.connect = </Graph.inputs:in>
+    token outputs:mixed.connect = [</Graph.outputs:cycle>, </T.outputs:out>, </S.outputs:out>]
+}
+def Material "Direct" {
+    token outputs:surface.connect = </S.outputs:out>
+}
+def Material "Through" {
+    token outputs:surface.connect = </Graph.outputs:out>
+}
+def Material "Contexts" {
+    token outputs:surface.connect = </S.outputs:out>
+    token outputs:ri:surface.connect = </T.outputs:out>
+    token outputs:bad:surface.connect = </Graph.outputs:cycle>
+    token outputs:empty:surface
+    token outputs:volume.connect = </T.outputs:out>
+    token outputs:displacement.connect = </Graph.outputs:out>
+}
+def Material "Multiple" {
+    token outputs:surface.connect = </Graph.outputs:diamond>
+}
+def Material "Mixed" {
+    token outputs:surface.connect = </Graph.outputs:mixed>
+}
+def Material "Invalid" {
+    token outputs:surface.connect = [</Missing.outputs:out>, </Plain.wrong>, </Plain.outputs:relationship>, </S.inputs:in>, </T.outputs:out>]
+}
+def Material "NonShader" {
+    token outputs:surface.connect = </Plain.outputs:out>
+}
+def Material "Empty" {}
+
+def Material "OnlyRi" {
+    token outputs:ri:surface.connect = </T.outputs:out>
+}
+def Material "Referenced" (
+    references = </Through>
+) {}
+def Material "Base" {
+    token outputs:surface.connect = [</Base/A.outputs:out>, </Base/B.outputs:out>]
+    def Shader "A" {
+        token outputs:out
+    }
+    def Shader "B" {
+        token outputs:out
+    }
+}
+def Material "Instance" (
+    references = </Base>
+) {
+    delete token outputs:surface.connect = </Instance/A.outputs:out>
+    append token outputs:surface.connect = </T.outputs:out>
+}

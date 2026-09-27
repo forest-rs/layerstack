@@ -48,6 +48,9 @@ usd-profiles = []
 
 [dependencies]
 layerstack = { path = "../layerstack" }
+# Sines, cosines, arccosines and square roots for transforms in `no_std`;
+# `layerstack` already depends on it.
+libm = { workspace = true }
 
 [lints]
 workspace = true

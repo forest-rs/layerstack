@@ -795,22 +795,32 @@ fn node_maps(
     Some(maps)
 }
 
-/// Anchors and maps one authored value, or each element of an array of
-/// path expressions; `None` when nothing changes.
-fn anchor_value(value: &Value, anchor: &[String], maps: &[ArcMap]) -> Option<Value> {
+/// Whether this value has expressions the anchoring pass can transform.
+fn has_path_expression(value: &Value) -> bool {
+    match value {
+        Value::PathExpression(_) => true,
+        Value::Array(items) => items
+            .iter()
+            .any(|item| matches!(item, Value::PathExpression(_))),
+        _ => false,
+    }
+}
+
+/// Anchors expressions in place, leaving other values and unsupported
+/// expression text untouched. Arrays keep their already owned storage.
+fn anchor_value(value: &mut Value, anchor: &[String], maps: &[ArcMap]) {
     match value {
         Value::PathExpression(text) => {
-            let text = anchor_and_map(parse(text)?, anchor, maps).text();
-            Some(Value::PathExpression(Arc::from(text)))
+            if let Some(expression) = parse(text) {
+                *text = Arc::from(anchor_and_map(expression, anchor, maps).text());
+            }
         }
         Value::Array(items) if items.iter().any(|v| matches!(v, Value::PathExpression(_))) => {
-            let items = items
-                .iter()
-                .map(|item| anchor_value(item, anchor, maps).unwrap_or_else(|| item.clone()))
-                .collect();
-            Some(Value::Array(items))
+            for item in items {
+                anchor_value(item, anchor, maps);
+            }
         }
-        _ => None,
+        _ => {}
     }
 }
 
@@ -829,18 +839,17 @@ pub(crate) fn anchor_opinions(store: &dyn LayerStore, prims: &mut HashMap<PathId
         for opinions in index.opinions_by_field.values_mut() {
             for opinion in opinions.iter_mut() {
                 // The default, and each time sample, of a path expression.
-                let authored: Vec<&mut Value> = match &mut opinion.value {
-                    OpinionValue::Field(FieldValue::Value(value)) => Vec::from([value]),
-                    OpinionValue::Property(spec) => spec
-                        .default
-                        .iter_mut()
-                        .chain(spec.time_samples.iter_mut().flatten().map(|(_, v)| v))
-                        .collect(),
-                    OpinionValue::Field(_) => Vec::new(),
+                let (default, samples) = match &mut opinion.value {
+                    OpinionValue::Field(FieldValue::Value(value)) => (Some(value), None),
+                    OpinionValue::Property(spec) => {
+                        (spec.default.as_mut(), spec.time_samples.as_mut())
+                    }
+                    OpinionValue::Field(_) => continue,
                 };
-                let mut authored = authored
+                let mut authored = default
                     .into_iter()
-                    .filter(|value| matches!(value, Value::PathExpression(_) | Value::Array(_)))
+                    .chain(samples.into_iter().flatten().map(|(_, value)| value))
+                    .filter(|value| has_path_expression(value))
                     .peekable();
                 if authored.peek().is_none() {
                     continue;
@@ -857,9 +866,7 @@ pub(crate) fn anchor_opinions(store: &dyn LayerStore, prims: &mut HashMap<PathId
                     continue;
                 };
                 for value in authored {
-                    if let Some(anchored) = anchor_value(value, anchor, node_maps) {
-                        *value = anchored;
-                    }
+                    anchor_value(value, anchor, node_maps);
                 }
             }
         }
@@ -1265,6 +1272,27 @@ mod tests {
             fold_at_time(&[], 1.0, InterpolationType::Held, Some(&expression("/F")))
                 .and_then(|fold| fold.value),
             Some(expression("/F"))
+        );
+    }
+
+    #[test]
+    fn anchoring_arrays_keeps_other_values_and_unsupported_text() {
+        let expression = |text: &str| Value::PathExpression(Arc::from(text));
+        let mut value = Value::Array(Vec::from([
+            expression("Child"),
+            Value::Int(7),
+            Value::Array(Vec::from([expression("Leaf")])),
+            expression("/A\n/B"),
+        ]));
+        anchor_value(&mut value, &names("/Root"), &[]);
+        assert_eq!(
+            value,
+            Value::Array(Vec::from([
+                expression("/Root/Child"),
+                Value::Int(7),
+                Value::Array(Vec::from([expression("/Root/Leaf")])),
+                expression("/A\n/B"),
+            ]))
         );
     }
 

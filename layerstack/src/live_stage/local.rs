@@ -92,49 +92,107 @@ impl LocalNamespace {
         {
             return false;
         }
+        let mut pending: HashMap<PathId, Vec<PathId>> = HashMap::new();
         for &path in changed {
+            let parent = match store.paths().resolve(path).parent() {
+                Some(parent) => {
+                    let Some(id) = store.paths().lookup(&parent) else {
+                        return false;
+                    };
+                    Some((id, parent == Path::root()))
+                }
+                None => None,
+            };
             if let Some(spec) = layer.prims.get(&path) {
-                if !supported(store, spec) {
-                    return false;
-                }
-                let Some(parent) = store.paths().resolve(path).parent() else {
-                    continue;
-                };
-                let Some(id) = store.paths().lookup(&parent) else {
-                    return false;
-                };
-                if parent != Path::root() && !layer.prims.contains_key(&id) {
-                    return false;
-                }
-                let children = self.children.entry(id).or_default();
-                if let Err(at) =
-                    children.binary_search_by(|child| compare_paths(store, *child, path))
+                if !supported(store, spec)
+                    || parent.is_some_and(|(id, root)| !root && !layer.prims.contains_key(&id))
                 {
-                    children.insert(at, path);
+                    return false;
                 }
             } else {
                 self.children.remove(&path);
-                if let Some(parent) = store
-                    .paths()
-                    .resolve(path)
-                    .parent()
-                    .and_then(|p| store.paths().lookup(&p))
-                    && let Some(children) = self.children.get_mut(&parent)
-                {
-                    if let Ok(at) =
-                        children.binary_search_by(|child| compare_paths(store, *child, path))
-                    {
-                        children.remove(at);
-                    }
-                    if children.is_empty() {
-                        self.children.remove(&parent);
-                    }
+            }
+            let Some((parent, _)) = parent else {
+                continue;
+            };
+            if changed.len() == 1 {
+                let children = self.children.entry(parent).or_default();
+                update_child(store, layer, children, path);
+                if children.is_empty() {
+                    self.children.remove(&parent);
                 }
+            } else {
+                pending.entry(parent).or_default().push(path);
+            }
+        }
+        for (parent, mut edits) in pending {
+            let children = self.children.entry(parent).or_default();
+            if edits.len() == 1 {
+                update_child(store, layer, children, edits[0]);
+            } else {
+                merge_child_edits(store, layer, children, &mut edits);
+            }
+            if children.is_empty() {
+                self.children.remove(&parent);
             }
         }
         self.generation = layer.generation();
         true
     }
+}
+
+fn update_child(
+    store: &dyn LayerStore,
+    layer: &crate::Layer,
+    children: &mut Vec<PathId>,
+    path: PathId,
+) {
+    match (
+        children.binary_search_by(|child| compare_paths(store, *child, path)),
+        layer.prims.contains_key(&path),
+    ) {
+        (Err(at), true) => children.insert(at, path),
+        (Ok(at), false) => {
+            children.remove(at);
+        }
+        _ => {}
+    }
+}
+
+/// The committed source marks missing paths as tombstones. Merge each parent's
+/// edits once, copying surviving runs instead of shifting the tail for every
+/// deletion or restoration. Nothing dead is retained between transactions.
+fn merge_child_edits(
+    store: &dyn LayerStore,
+    layer: &crate::Layer,
+    children: &mut Vec<PathId>,
+    edits: &mut Vec<PathId>,
+) {
+    edits.sort_by(|a, b| compare_paths(store, *a, *b));
+    edits.dedup();
+    let mut merged = Vec::with_capacity(children.len() + edits.len());
+    let mut at = 0;
+    for &path in edits.iter() {
+        let start = at;
+        // Consecutive edits often already meet the next child. Search only
+        // when an untouched run needs to be copied ahead of this edit.
+        if children
+            .get(at)
+            .is_some_and(|child| *child != path && compare_paths(store, *child, path).is_lt())
+        {
+            at +=
+                children[at..].partition_point(|child| compare_paths(store, *child, path).is_lt());
+        }
+        merged.extend_from_slice(&children[start..at]);
+        if children.get(at) == Some(&path) {
+            at += 1;
+        }
+        if layer.prims.contains_key(&path) {
+            merged.push(path);
+        }
+    }
+    merged.extend_from_slice(&children[at..]);
+    *children = merged;
 }
 
 fn compare_paths(store: &dyn LayerStore, a: PathId, b: PathId) -> core::cmp::Ordering {

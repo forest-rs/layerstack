@@ -43,3 +43,7 @@ harness = false
 [[bench]]
 name = "usdc_open"
 harness = false
+
+[[bench]]
+name = "live_edits"
+harness = false

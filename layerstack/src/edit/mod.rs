@@ -93,14 +93,15 @@ pub use error::{EditError, Rejection, Slot};
 pub use target::{Address, EditTarget};
 pub use transaction::Transaction;
 
-pub(crate) use apply::apply;
+pub(crate) use apply::{PropertyValueEdit, apply};
 
 /// What [`LiveStage::apply`](crate::LiveStage::apply) did.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Applied {
     /// The transaction that undoes the applied one (see [`Transaction`]).
     pub inverse: Transaction,
-    /// The composed prims that were recomposed, as
-    /// [`LiveStage::recompose`](crate::LiveStage::recompose) reports them.
+    /// The composed prims updated by this transaction. Existing attribute
+    /// value edits may refresh opinions without rebuilding prim graphs;
+    /// other edits use [`LiveStage::recompose`](crate::LiveStage::recompose).
     pub recomposed: Vec<PathId>,
 }

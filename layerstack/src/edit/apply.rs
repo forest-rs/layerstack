@@ -356,6 +356,8 @@ pub(crate) struct Guarded {
 /// What applying a transaction did, for stages to recompose.
 #[derive(Debug)]
 pub(crate) struct Outcome {
+    /// Exact existing-attribute value slots, or None for other edit kinds.
+    pub(crate) values: Option<Vec<PropertyValueEdit>>,
     pub(crate) inverse: Transaction,
     /// Every layer the transaction changed.
     pub(crate) layers: Vec<LayerId>,
@@ -364,6 +366,57 @@ pub(crate) struct Outcome {
     /// Whether specs were created or removed or variant selections
     /// changed, which changes namespace or composition arcs.
     pub(crate) structural: bool,
+}
+
+/// Existing property value slots changed by an atomic transaction. A property
+/// creation is deliberately not a value edit, even if it authors a default.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct PropertyValueEdit {
+    pub(crate) layer: LayerId,
+    pub(crate) path: SpecPath,
+    pub(crate) name: TokenId,
+    pub(crate) default: bool,
+    pub(crate) samples: bool,
+}
+
+impl PropertyValueEdit {
+    pub(crate) fn property<'a>(&self, store: &'a dyn LayerStore) -> Option<&'a PropertySpec> {
+        let loc = Loc::lookup(&self.path, store.paths())?;
+        let spec = spec_at(store.layer(self.layer)?, &loc)?;
+        get_property(spec.properties(), self.name)
+    }
+}
+
+fn value_edits(steps: &[Guarded], store: &dyn LayerStore) -> Option<Vec<PropertyValueEdit>> {
+    let mut edits: Vec<PropertyValueEdit> = Vec::new();
+    for guarded in steps {
+        let (layer, loc, name, default) = match &guarded.written {
+            Raw::Default {
+                layer, loc, name, ..
+            } => (*layer, loc, *name, true),
+            Raw::Sample {
+                layer, loc, name, ..
+            } => (*layer, loc, *name, false),
+            _ => return None,
+        };
+        let path = loc.spec_path(store.paths()).with_property(name);
+        if let Some(edit) = edits
+            .iter_mut()
+            .find(|e| e.layer == layer && e.path == path)
+        {
+            edit.default |= default;
+            edit.samples |= !default;
+        } else {
+            edits.push(PropertyValueEdit {
+                layer,
+                path,
+                name,
+                default,
+                samples: !default,
+            });
+        }
+    }
+    Some(edits)
 }
 
 /// The inverse steps recorded so far and their effects.
@@ -474,8 +527,10 @@ pub(crate) fn apply(
         structural_layers,
         touched,
     } = journal;
+    let values = value_edits(&steps, store);
     steps.reverse();
     Ok(Outcome {
+        values,
         inverse: Transaction {
             preconditions: Vec::new(),
             ops: steps.into_iter().map(|g| Op::Raw(Box::new(g))).collect(),
@@ -897,7 +952,7 @@ fn set_value(
         }
         _ => declared,
     };
-    let existing = attribute_at(store, id, &loc, name, &path)?.cloned();
+    let existing = attribute_at(store, id, &loc, name, &path)?;
     let ty = existing
         .as_ref()
         .and_then(|spec| spec.type_name.clone())

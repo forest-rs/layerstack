@@ -187,12 +187,15 @@ impl LiveStage {
     }
 
     /// Applies `txn` to the layers of `store` (see [`Transaction::apply`])
-    /// and recomposes the prims it affects: the entry point for authoring a
+    /// and updates the prims it affects: the entry point for authoring a
     /// live stage.
     ///
     /// Edits of opinions on existing specs are notified as edits of their
     /// source sites ([`LiveStage::notify_layer_prim_edits`]), so only the
-    /// prims drawing on those specs are recomposed. Edits that create or
+    /// prims drawing on those specs are updated. Existing attribute defaults
+    /// and samples refresh their cached opinions without rebuilding prim
+    /// graphs when source mappings are exact and no other changes are pending.
+    /// Other edits use scoped composition. Edits that create or
     /// remove specs, or change variant selections, may change namespace and
     /// are notified as structural changes, which rebuild the stage.
     ///
@@ -208,11 +211,43 @@ impl LiveStage {
         txn: &Transaction,
     ) -> Result<Applied, EditError> {
         let outcome = crate::edit::apply(store, txn, Some(&self.stage))?;
-        if outcome.structural {
-            self.notify_structural_change();
-        } else {
-            for &(layer, prim) in &outcome.touched {
-                self.notify_layer_prim_edits(layer, &[prim]);
+        // Property values do not change prim indexes, dependency edges or
+        // namespace. Do not rediscover population to refresh those slots.
+        let refreshed = outcome.values.as_ref().and_then(|edits| {
+            if self.needs_full_rebuild || self.tracker.has_invalidated(OPINION_EDIT) {
+                return None;
+            }
+            let dependents: Vec<Vec<PathId>> = edits
+                .iter()
+                .map(|edit| self.composed_prims_for_source(edit.layer, edit.path.prim_path()))
+                .collect();
+            let mut affected: Vec<PathId> = dependents.iter().flatten().copied().collect();
+            affected.sort_unstable();
+            affected.dedup();
+            // An unnotified source edit may have changed more than this
+            // transaction's slots. Leave it to ordinary recomposition.
+            for prim in &affected {
+                for layer in self.prim_to_layers.get(prim).into_iter().flatten() {
+                    let Some(Some(seen)) = self.generations.get(layer) else {
+                        return None;
+                    };
+                    let expected = (seen.0 + u64::from(outcome.layers.contains(layer)), seen.1);
+                    if generations_of(store, *layer) != Some(expected) {
+                        return None;
+                    }
+                }
+            }
+            self.stage
+                .refresh_values(store, edits, &dependents)
+                .then_some(affected)
+        });
+        if refreshed.is_none() {
+            if outcome.structural {
+                self.notify_structural_change();
+            } else {
+                for &(layer, prim) in &outcome.touched {
+                    self.notify_layer_prim_edits(layer, &[prim]);
+                }
             }
         }
         // A value-only transaction moved each layer's generation once, and
@@ -228,7 +263,7 @@ impl LiveStage {
                 *seen = found;
             }
         }
-        let recomposed = self.recompose(store);
+        let recomposed = refreshed.unwrap_or_else(|| self.recompose(store));
         Ok(Applied {
             inverse: outcome.inverse,
             recomposed,

@@ -431,6 +431,92 @@ impl Stage {
         );
     }
 
+    /// Refreshes existing value slots without rebuilding prim graphs. The
+    /// caller supplies only source dependents and verifies their generations.
+    /// Ambiguous provenance takes the ordinary composition path. Preparation
+    /// is atomic: no cached opinion changes unless every mapping is known.
+    ///
+    /// Spec: AOUSD Core §12.3 (attribute value resolution is distinct from
+    /// prim composition). OpenUSD's `PcpChanges::DidChange` skips property-only
+    /// changes in USD mode unless a dynamic file format depends on them.
+    pub(crate) fn refresh_values(
+        &mut self,
+        store: &dyn LayerStore,
+        edits: &[crate::edit::PropertyValueEdit],
+        dependents: &[Vec<PathId>],
+    ) -> bool {
+        let mut patches = Vec::new();
+        for (edit, prims) in edits.iter().zip(dependents) {
+            let Some(authored) = edit.property(store) else {
+                return false;
+            };
+            for &prim in prims {
+                let Some(index) = self.prims.get(&prim) else {
+                    return false;
+                };
+                let Some(opinions) = index.property_opinions(edit.name) else {
+                    return false;
+                };
+                let mut matched = false;
+                for (position, opinion) in opinions.iter().enumerate() {
+                    let key = &opinion.key;
+                    if key.layer_id != edit.layer
+                        || (key.lookup_path != edit.path.prim_path()
+                            && key.spec_path.prim_path() != edit.path.prim_path())
+                    {
+                        continue;
+                    }
+                    // Remapped source paths and mixed variant contexts need
+                    // composition to recover their exact authored locator.
+                    if key.spec_path != edit.path
+                        || !matches!(opinion.value, OpinionValue::Property(_))
+                    {
+                        return false;
+                    }
+                    matched = true;
+                    let mut default = edit.default.then(|| authored.default.clone());
+                    let mut samples = edit.samples.then(|| authored.time_samples.clone());
+                    crate::path_expression::anchor_fresh_values(
+                        store,
+                        &index.graph,
+                        prim,
+                        key.node,
+                        default.iter_mut().flatten().chain(
+                            samples
+                                .iter_mut()
+                                .flatten()
+                                .flatten()
+                                .map(|(_, value)| value),
+                        ),
+                    );
+                    patches.push((prim, edit.name, position, default, samples));
+                }
+                if !matched {
+                    return false;
+                }
+            }
+        }
+        for (prim, name, position, default, samples) in patches {
+            let opinion = &mut self
+                .prims
+                .get_mut(&prim)
+                .expect("validated prim")
+                .opinions_by_field
+                .get_mut(&crate::prim_index::FieldKey::Property(name))
+                .expect("validated field")[position];
+            let OpinionValue::Property(spec) = &mut opinion.value else {
+                unreachable!("validated property");
+            };
+            if let Some(default) = default {
+                spec.default = default;
+            }
+            if let Some(samples) = samples {
+                spec.time_samples = samples;
+            }
+        }
+        true
+    }
+
     /// Returns `true` if a partial composition shows that recomposing
     /// `recomposed` changes hierarchy: a recomposed prim appears or
     /// disappears, its children differ in membership or order, or it becomes

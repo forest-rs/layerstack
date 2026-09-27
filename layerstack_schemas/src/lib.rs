@@ -199,9 +199,14 @@
 //! membership as OpenUSD's `ComputeMembershipQuery` does (includes and
 //! excludes, expansion rules, `includeRoot`, collections included by their
 //! collection paths), and [`MembershipQuery::is_included`] answers for any
-//! prim or property. A collection decided by its `membershipExpression`,
-//! which layerstack does not evaluate yet, answers
-//! [`Membership::ExpressionUnsupported`] rather than a guess.
+//! prim or property. A collection without includes or excludes is decided
+//! by its `membershipExpression`: a path expression (see
+//! `layerstack::path_expression`) whose references to other collections
+//! resolve recursively, matched with OpenUSD's collection predicates
+//! ([`CollectionPredicates`]: `isa`, `hasAPI`, `kind`, `model`, `group`,
+//! `variant`, `specifier`, `abstract`, `defined`), with kinds from the
+//! scene's [`KindRegistry`]. [`MembershipQuery::included_paths`] lists every
+//! member, and [`ExpressionEvaluator`] matches any expression.
 //!
 //! With `usd-shade`, `PrimView::compute_bound_material` (every view derefs
 //! to [`PrimView`]) resolves a prim's material for a [`MaterialPurpose`] as
@@ -210,7 +215,7 @@
 //! namespace. It returns the material and the [`Binding`] that decided it,
 //! including whether that binding's prim lacks `MaterialBindingAPI` (a
 //! legacy binding, which [`BindingOptions`] allows by default as OpenUSD
-//! 26.08 does), or [`Undecided`] when the outcome depends on an expression.
+//! 26.08 does).
 //! [`BindingCache`] resolves many prims, sharing each ancestor's bindings and
 //! each collection's membership; [`BindingInputs`] and
 //! [`BoundMaterial::resolve`] are the pure steps it folds.
@@ -269,11 +274,12 @@ mod xform_edit;
 #[cfg(feature = "usd-shade")]
 pub use binding::{
     Binding, BindingCache, BindingCacheStats, BindingInputs, BindingKind, BindingOptions,
-    BindingStrength, BoundMaterial, CollectionBinding, DirectBinding, MaterialPurpose, Undecided,
+    BindingStrength, BoundMaterial, CollectionBinding, DirectBinding, MaterialPurpose,
 };
 #[cfg(feature = "usd")]
 pub use collection::{
-    ExpansionRule, Membership, MembershipProblem, MembershipQuery, MembershipRule,
+    ExpansionRule, ExpressionEvaluator, ExpressionSearch, Membership, MembershipProblem,
+    MembershipQuery, MembershipRule,
 };
 pub use edit::SchemaEdit;
 pub use generated::views::*;

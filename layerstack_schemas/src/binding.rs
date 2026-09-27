@@ -412,18 +412,6 @@ pub struct BoundMaterial {
     pub binding: Option<Binding>,
 }
 
-/// A binding resolution that depends on a collection membership layerstack
-/// cannot decide (a `membershipExpression`): no material is guessed.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Undecided {
-    /// The prim whose material was asked for.
-    pub prim: PathId,
-    /// The collection binding whose membership decides the outcome.
-    pub relationship: PropertyPath,
-    /// Its collection.
-    pub collection: PropertyPath,
-}
-
 struct Winner {
     prim: PathId,
     binding: Binding,
@@ -445,18 +433,13 @@ impl BoundMaterial {
     /// with a winner ends the search.
     ///
     /// OpenUSD: `UsdShadeMaterialBindingAPI::ComputeBoundMaterial`.
-    ///
-    /// # Errors
-    ///
-    /// [`Undecided`] when a membership the outcome depends on is
-    /// [`Membership::ExpressionUnsupported`].
+    #[must_use]
     pub fn resolve(
-        target: PathId,
         purpose: &MaterialPurpose,
         ancestry: &[(PathId, &BindingInputs)],
         mut membership: impl FnMut(PropertyPath) -> Option<Membership>,
         is_material: impl Fn(PathId) -> bool,
-    ) -> Result<Self, Undecided> {
+    ) -> Self {
         let mut purposes = alloc::vec![purpose.clone()];
         if *purpose != MaterialPurpose::All {
             purposes.push(MaterialPurpose::All);
@@ -490,22 +473,11 @@ impl BoundMaterial {
                     let Some(member) = membership(binding.collection) else {
                         continue;
                     };
+                    if !member.is_included() {
+                        continue;
+                    }
                     let takes = winner.as_ref().is_none_or(|w| w.prim == *prim)
                         || binding.strength == BindingStrength::StrongerThanDescendants;
-                    match member {
-                        Membership::Excluded => continue,
-                        Membership::ExpressionUnsupported => {
-                            if takes {
-                                return Err(Undecided {
-                                    prim: target,
-                                    relationship: binding.relationship,
-                                    collection: binding.collection,
-                                });
-                            }
-                            continue;
-                        }
-                        Membership::Included(_) => {}
-                    }
                     if takes {
                         winner = Some(Winner {
                             prim: *prim,
@@ -526,13 +498,13 @@ impl BoundMaterial {
             }
             if let Some(winner) = winner {
                 let target = winner.binding.target;
-                return Ok(Self {
+                return Self {
                     material: is_material(target).then_some(target),
                     binding: Some(winner.binding),
-                });
+                };
             }
         }
-        Ok(Self::default())
+        Self::default()
     }
 }
 
@@ -642,15 +614,7 @@ impl BindingCache {
     ///
     /// OpenUSD: `UsdShadeMaterialBindingAPI::ComputeBoundMaterial`, and
     /// `ComputeBoundMaterials` for many prims.
-    ///
-    /// # Errors
-    ///
-    /// [`Undecided`], as [`BoundMaterial::resolve`] reports it.
-    pub fn compute_bound_material(
-        &mut self,
-        scene: &Scene<'_>,
-        path: PathId,
-    ) -> Result<BoundMaterial, Undecided> {
+    pub fn compute_bound_material(&mut self, scene: &Scene<'_>, path: PathId) -> BoundMaterial {
         let mut ancestry = Vec::new();
         let mut at = Some(path);
         while let Some(prim) = at {
@@ -689,7 +653,6 @@ impl BindingCache {
             .collect();
         let queries = &self.queries;
         BoundMaterial::resolve(
-            path,
             &self.purpose,
             &chain,
             |collection| {
@@ -709,7 +672,7 @@ impl BindingCache {
         &mut self,
         scene: &Scene<'_>,
         paths: &[PathId],
-    ) -> Vec<Result<BoundMaterial, Undecided>> {
+    ) -> Vec<BoundMaterial> {
         paths
             .iter()
             .map(|path| self.compute_bound_material(scene, *path))
@@ -722,16 +685,12 @@ impl<'a> PrimView<'a> {
     /// that decides it ([`BindingCache`] for many prims).
     ///
     /// OpenUSD: `UsdShadeMaterialBindingAPI(prim).ComputeBoundMaterial`.
-    ///
-    /// # Errors
-    ///
-    /// [`Undecided`] when the outcome depends on a collection's
-    /// `membershipExpression`, which layerstack does not evaluate yet.
+    #[must_use]
     pub fn compute_bound_material(
         &self,
         purpose: &MaterialPurpose,
         options: BindingOptions,
-    ) -> Result<BoundMaterial, Undecided> {
+    ) -> BoundMaterial {
         BindingCache::new(purpose.clone(), options)
             .compute_bound_material(&self.scene(), self.path())
     }

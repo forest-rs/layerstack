@@ -25,10 +25,8 @@
 //! cache agrees with a fresh one.
 //!
 //! Every value must agree, through one `BindingCache` per purpose and mode
-//! and through the views. A collection decided by an expression, which
-//! layerstack does not evaluate yet, must say so
-//! ([`Membership::ExpressionUnsupported`]), and so must every binding whose
-//! outcome depends on it ([`Undecided`]), never guessing.
+//! and through the views, bindings through collections decided by their
+//! `membershipExpression` included.
 //!
 //! Spec: AOUSD Core §13 (applied schemas); OpenUSD's `UsdShade` and
 //! `UsdCollectionAPI` define binding and membership.
@@ -43,8 +41,7 @@ use layerstack_conformance::usda_real::load_entry_usda;
 use layerstack_conformance::workspace_root;
 use layerstack_schemas::usd::CollectionApi;
 use layerstack_schemas::{
-    BindingCache, BindingKind, BindingOptions, MaterialPurpose, Membership, PrimView, Scene,
-    Undecided,
+    BindingCache, BindingKind, BindingOptions, MaterialPurpose, PrimView, Scene,
 };
 use serde::Deserialize;
 
@@ -66,7 +63,6 @@ struct Bound {
 #[derive(Deserialize)]
 struct CollectionRecord {
     uses_rule_map: bool,
-    mode: String,
     included: Vec<String>,
 }
 
@@ -109,7 +105,6 @@ fn bound_materials_match_openusd() {
 
     let mut failures = Vec::new();
     let mut checks = 0;
-    let mut undecided = BTreeSet::new();
     for (purpose, purpose_key) in [
         (MaterialPurpose::All, "all"),
         (MaterialPurpose::Preview, "preview"),
@@ -121,72 +116,39 @@ fn bound_materials_match_openusd() {
             };
             let mut cache = BindingCache::new(purpose.clone(), options);
             let results = cache.compute_bound_materials(&scene, &prims);
-            for (path, result) in prims.iter().zip(results) {
+            for (path, bound) in prims.iter().zip(results) {
                 let text = display(*path);
                 let key = format!("{purpose_key}@{mode}");
                 let expected = &oracle.bindings[&text][&key];
                 let context = format!("{text} {key}");
                 // The one-shot view agrees with the cache.
-                if PrimView::new(scene, *path).compute_bound_material(&purpose, options) != result {
+                if PrimView::new(scene, *path).compute_bound_material(&purpose, options) != bound {
                     failures.push(format!("{context}: the view and the cache differ"));
                 }
                 checks += 1;
-                match result {
-                    Ok(bound) => {
-                        let material = bound.material.map(display);
-                        let relationship = bound.binding.as_ref().map(|b| property(b.relationship));
-                        if material != expected.material || relationship != expected.relationship {
-                            failures.push(format!(
-                                "{context}: {material:?} by {relationship:?}, OpenUSD {:?} by {:?}",
-                                expected.material, expected.relationship
-                            ));
-                        }
-                        if let Some(binding) = &bound.binding {
-                            if binding.without_binding_api && !legacy {
-                                failures
-                                    .push(format!("{context}: a legacy binding in strict mode"));
-                            }
-                            if let BindingKind::Collection { collection } = binding.kind
-                                && !property(binding.relationship).contains(":collection:")
-                            {
-                                failures.push(format!(
-                                    "{context}: {} is no collection binding",
-                                    property(collection)
-                                ));
-                            }
-                        }
+                let material = bound.material.map(display);
+                let relationship = bound.binding.as_ref().map(|b| property(b.relationship));
+                if material != expected.material || relationship != expected.relationship {
+                    failures.push(format!(
+                        "{context}: {material:?} by {relationship:?}, OpenUSD {:?} by {:?}",
+                        expected.material, expected.relationship
+                    ));
+                }
+                if let Some(binding) = &bound.binding {
+                    if binding.without_binding_api && !legacy {
+                        failures.push(format!("{context}: a legacy binding in strict mode"));
                     }
-                    Err(Undecided {
-                        prim, collection, ..
-                    }) => {
-                        undecided.insert(text.clone());
-                        if prim != *path || property(collection) != "/Exprs.collection:e" {
-                            failures
-                                .push(format!("{context}: undecided by {}", property(collection)));
-                        }
+                    if let BindingKind::Collection { collection } = binding.kind
+                        && !property(binding.relationship).contains(":collection:")
+                    {
+                        failures.push(format!(
+                            "{context}: {} is no collection binding",
+                            property(collection)
+                        ));
                     }
                 }
             }
             assert!(cache.stats().hits > 0, "ancestors' bindings are shared");
-        }
-    }
-    // Only the prims whose binding depends on the expression collection are
-    // undecided, and every prim OpenUSD binds through it is.
-    let expected_undecided: BTreeSet<String> = ["/Exprs", "/Exprs/Kid", "/Exprs/Other"]
-        .map(String::from)
-        .into();
-    if undecided != expected_undecided {
-        failures.push(format!("undecided {undecided:?}"));
-    }
-    for (text, entries) in &oracle.bindings {
-        for (key, bound) in entries {
-            if bound.relationship.as_deref() == Some("/Exprs.material:binding:collection:e")
-                && !undecided.contains(text)
-            {
-                failures.push(format!(
-                    "{text} {key}: OpenUSD binds through the expression, yet it is decided"
-                ));
-            }
         }
     }
     eprintln!(
@@ -245,19 +207,9 @@ fn collection_membership_matches_openusd() {
             for path in &paths {
                 let text = display(*path);
                 checks += 1;
-                match query.is_included(&scene, *path) {
-                    Membership::ExpressionUnsupported => {
-                        if expected.uses_rule_map || expected.mode == "relationship" {
-                            failures.push(format!("{name} {text}: undecided with a rule map"));
-                        }
-                    }
-                    membership => {
-                        let got = membership.is_included().expect("decided");
-                        if got != included.contains(&text) {
-                            failures
-                                .push(format!("{name} {text}: included {got}, OpenUSD {}", !got));
-                        }
-                    }
+                let got = query.is_included(&scene, *path).is_included();
+                if got != included.contains(&text) {
+                    failures.push(format!("{name} {text}: included {got}, OpenUSD {}", !got));
                 }
             }
         }
@@ -426,11 +378,7 @@ fn binding_caches_follow_edits() {
     let scene = Scene::new(live.stage(), store);
     failures.extend(stale(&mut cache, &scene, &prims, "reordered"));
     let bound = cache.compute_bound_material(&scene, ordered);
-    assert_eq!(
-        bound.expect("decided").material,
-        Some(red),
-        "`a` comes first"
-    );
+    assert_eq!(bound.material, Some(red), "`a` comes first");
 
     assert!(
         failures.is_empty(),

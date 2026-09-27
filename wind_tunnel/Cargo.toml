@@ -18,6 +18,7 @@ layerstack = { path = "../layerstack" }
 
 [dev-dependencies]
 criterion = { features = ["html_reports"], version = "0.8" }
+layerstack_usdc = { path = "../layerstack_usdc" }
 
 [[bench]]
 name = "arcs"
@@ -37,4 +38,8 @@ harness = false
 
 [[bench]]
 name = "resolve"
+harness = false
+
+[[bench]]
+name = "usdc_open"
 harness = false

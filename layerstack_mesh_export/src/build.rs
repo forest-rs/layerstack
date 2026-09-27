@@ -8,6 +8,7 @@ use alloc::string::{String, ToString};
 use alloc::vec;
 use alloc::vec::Vec;
 
+use layerstack_schemas::{usd_geom as geom, usd_shade as shade};
 use layerstack_usda::writer::{
     Attribute, Document, LayerOffset, ListOp, Metadatum, Prim, Property, Reference, Relationship,
     Specifier, Value,
@@ -96,7 +97,7 @@ pub(crate) fn document(scene: &Scene<'_>, target: Target) -> Result<Document, Ex
     // Materials live inside the root prim, so the `defaultPrim` carries
     // them into any referencing stage and bindings never point outside
     // the asset.
-    let mut scope = Prim::def("Scope", MATERIALS_SCOPE);
+    let mut scope = Prim::def(geom::Scope::SCHEMA, MATERIALS_SCOPE);
     for material in &scene.materials {
         scope.children.push(crate::shading::material_prim(
             material,
@@ -172,7 +173,7 @@ fn check_prototype_cycles(cx: &Context<'_, '_>) -> Result<(), ExportError> {
 
 fn xform_prim(xform: &Xform<'_>, parent: &str, cx: &Context<'_, '_>) -> Result<Prim, ExportError> {
     let path = format!("{parent}/{}", xform.name);
-    let mut prim = Prim::def("Xform", &*xform.name);
+    let mut prim = Prim::def(geom::Xform::SCHEMA, &*xform.name);
     if let Some(kind) = &xform.kind {
         prim.metadata
             .push(Metadatum::new("kind", Value::Token(kind.to_string())));
@@ -255,7 +256,7 @@ fn referenced_instancer_prim(
         }
     }
 
-    let mut group = Prim::def("Xform", &*instancer.name);
+    let mut group = Prim::def(geom::Xform::SCHEMA, &*instancer.name);
     let mut attrs = Vec::new();
     for custom in &instancer.primvars {
         if custom.primvar.interpolation == Interpolation::Constant {
@@ -452,7 +453,7 @@ fn instancer_prim(
             problem,
         })?;
     let scope_path = format!("{path}/{PROTOTYPES_SCOPE}");
-    let mut scope = Prim::def("Scope", PROTOTYPES_SCOPE);
+    let mut scope = Prim::def(geom::Scope::SCHEMA, PROTOTYPES_SCOPE);
     let mut targets = Vec::with_capacity(instancer.prototypes.len());
     for prototype in &instancer.prototypes {
         scope.children.push(node_prim(prototype, &scope_path, cx)?);
@@ -468,14 +469,14 @@ fn instancer_prim(
         )]
         let extent = vec![lo.map(|c| c as f32), hi.map(|c| c as f32)];
         attrs.push(Attribute::new(
-            "extent",
+            geom::Boundable::EXTENT,
             "float3[]",
             Value::Float3Array(extent),
         ));
     }
     if let Some(ids) = &instancer.ids {
         attrs.push(Attribute::new(
-            "ids",
+            geom::PointInstancer::IDS,
             "int64[]",
             Value::Int64Array(ids.to_vec()),
         ));
@@ -485,7 +486,7 @@ fn instancer_prim(
     // `OrientationPrecision` for which are written.
     if let Some(orientations) = checked.half_orientations {
         attrs.push(Attribute::new(
-            "orientations",
+            geom::PointInstancer::ORIENTATIONS,
             "quath[]",
             Value::QuathArray(orientations),
         ));
@@ -496,13 +497,13 @@ fn instancer_prim(
         .filter(|_| instancer.orientation_precision.writes_float())
     {
         attrs.push(Attribute::new(
-            "orientationsf",
+            geom::PointInstancer::ORIENTATIONSF,
             "quatf[]",
             Value::QuatfArray(orientations.to_vec()),
         ));
     }
     attrs.push(Attribute::new(
-        "positions",
+        geom::PointInstancer::POSITIONS,
         "point3f[]",
         Value::Float3Array(instancer.positions.to_vec()),
     ));
@@ -517,13 +518,13 @@ fn instancer_prim(
         );
     }
     attrs.push(Attribute::new(
-        "protoIndices",
+        geom::PointInstancer::PROTO_INDICES,
         "int[]",
         Value::IntArray(checked.proto_indices),
     ));
     if let Some(scales) = &instancer.scales {
         attrs.push(Attribute::new(
-            "scales",
+            geom::PointInstancer::SCALES,
             "float3[]",
             Value::Float3Array(scales.to_vec()),
         ));
@@ -541,13 +542,13 @@ fn instancer_prim(
         );
     }
 
-    let mut prim = Prim::def("PointInstancer", &*instancer.name);
+    let mut prim = Prim::def(geom::PointInstancer::SCHEMA, &*instancer.name);
     prim.properties
         .extend(attrs.into_iter().map(Property::Attribute));
     // `prototypes` is an ordered target list: a prototype's position in it
     // is the value `protoIndices` uses for it.
     prim.push_property(Relationship {
-        name: "prototypes".into(),
+        name: geom::PointInstancer::PROTOTYPES.into(),
         custom: false,
         targets: Some(ListOp::explicit(targets)),
         metadata: Vec::new(),
@@ -599,18 +600,18 @@ fn mesh_prim(mesh: &Mesh<'_>, parent: &str, cx: &Context<'_, '_>) -> Result<Prim
     // no extent.
     if let Some(extent) = extent(&mesh.points).map_err(fail)? {
         attrs.push(Attribute::new(
-            "extent",
+            geom::Boundable::EXTENT,
             "float3[]",
             Value::Float3Array(extent.to_vec()),
         ));
     }
     attrs.push(Attribute::new(
-        "faceVertexCounts",
+        geom::Mesh::FACE_VERTEX_COUNTS,
         "int[]",
         Value::IntArray(counts),
     ));
     attrs.push(Attribute::new(
-        "faceVertexIndices",
+        geom::Mesh::FACE_VERTEX_INDICES,
         "int[]",
         Value::IntArray(indices),
     ));
@@ -621,9 +622,15 @@ fn mesh_prim(mesh: &Mesh<'_>, parent: &str, cx: &Context<'_, '_>) -> Result<Prim
             // `normals` is a plain attribute with an `interpolation`, not a
             // primvar, so it cannot be indexed (`pxr/usd/usdGeom/pointBased.h`).
             None => {
-                check_primvar("normals", normals.values.len(), normals, sites).map_err(fail)?;
+                check_primvar(
+                    geom::PointBased::NORMALS,
+                    normals.values.len(),
+                    normals,
+                    sites,
+                )
+                .map_err(fail)?;
                 attrs.push(
-                    Attribute::new("normals", "normal3f[]", values).with_metadata(
+                    Attribute::new(geom::PointBased::NORMALS, "normal3f[]", values).with_metadata(
                         "interpolation",
                         Value::Token(normals.interpolation.token().into()),
                     ),
@@ -648,15 +655,22 @@ fn mesh_prim(mesh: &Mesh<'_>, parent: &str, cx: &Context<'_, '_>) -> Result<Prim
     // fallback, so the winding convention is explicit in the file
     // (`pxr/usd/usdGeom/gprim.h:212`).
     let orientation = match mesh.orientation {
-        Orientation::RightHanded => "rightHanded",
-        Orientation::LeftHanded => "leftHanded",
+        Orientation::RightHanded => geom::GprimOrientation::RightHanded,
+        Orientation::LeftHanded => geom::GprimOrientation::LeftHanded,
     };
-    attrs.push(Attribute::new("orientation", "token", Value::Token(orientation.into())).uniform());
+    attrs.push(
+        Attribute::new(
+            geom::Gprim::ORIENTATION,
+            "token",
+            Value::Token(orientation.as_str().into()),
+        )
+        .uniform(),
+    );
     if mesh.double_sided {
-        attrs.push(Attribute::new("doubleSided", "bool", Value::Bool(true)).uniform());
+        attrs.push(Attribute::new(geom::Gprim::DOUBLE_SIDED, "bool", Value::Bool(true)).uniform());
     }
     attrs.push(Attribute::new(
-        "points",
+        geom::PointBased::POINTS,
         "point3f[]",
         Value::Float3Array(mesh.points.to_vec()),
     ));
@@ -691,11 +705,18 @@ fn mesh_prim(mesh: &Mesh<'_>, parent: &str, cx: &Context<'_, '_>) -> Result<Prim
 
     // The schema fallback is `catmullClark`; polygonal kernel output must
     // opt out explicitly or consumers will smooth it (`pxr/usd/usdGeom/mesh.h:62`).
-    attrs.push(Attribute::new("subdivisionScheme", "token", Value::Token("none".into())).uniform());
+    attrs.push(
+        Attribute::new(
+            geom::Mesh::SUBDIVISION_SCHEME,
+            "token",
+            Value::Token(geom::MeshSubdivisionScheme::None.as_str().into()),
+        )
+        .uniform(),
+    );
     push_transform(&mut attrs, mesh.transform);
     push_custom(&mut attrs, &mesh.attributes);
 
-    let mut prim = Prim::def("Mesh", &*mesh.name);
+    let mut prim = Prim::def(geom::Mesh::SCHEMA, &*mesh.name);
     prim.properties
         .extend(attrs.into_iter().map(Property::Attribute));
     let binding = mesh
@@ -773,14 +794,28 @@ fn subset_prim(subset: &MaterialSubset<'_>, material: String) -> Result<Prim, Me
         .iter()
         .map(|&face| to_int(face))
         .collect::<Result<Vec<_>, _>>()?;
-    let mut prim = Prim::def("GeomSubset", &*subset.name);
+    let mut prim = Prim::def(geom::GeomSubset::SCHEMA, &*subset.name);
     prim.push_property(
-        Attribute::new("elementType", "token", Value::Token("face".into())).uniform(),
+        Attribute::new(
+            geom::GeomSubset::ELEMENT_TYPE,
+            "token",
+            Value::Token(geom::GeomSubsetElementType::Face.as_str().into()),
+        )
+        .uniform(),
     );
     prim.push_property(
-        Attribute::new("familyName", "token", Value::Token("materialBind".into())).uniform(),
+        Attribute::new(
+            geom::GeomSubset::FAMILY_NAME,
+            "token",
+            Value::Token("materialBind".into()),
+        )
+        .uniform(),
     );
-    prim.push_property(Attribute::new("indices", "int[]", Value::IntArray(indices)));
+    prim.push_property(Attribute::new(
+        geom::GeomSubset::INDICES,
+        "int[]",
+        Value::IntArray(indices),
+    ));
     apply_binding(&mut prim, material);
     Ok(prim)
 }
@@ -834,7 +869,9 @@ fn material_binding(
 fn apply_binding(prim: &mut Prim, material: String) {
     prim.metadata.push(Metadatum::new(
         "apiSchemas",
-        Value::TokenListOp(ListOp::prepend(vec![String::from("MaterialBindingAPI")])),
+        Value::TokenListOp(ListOp::prepend(vec![String::from(
+            shade::MaterialBindingApi::SCHEMA,
+        )])),
     ));
     prim.push_property(Relationship::new("material:binding", material));
 }
@@ -1012,7 +1049,7 @@ fn push_transform(attrs: &mut Vec<Attribute>, transform: Option<Transform>) {
     ));
     attrs.push(
         Attribute::new(
-            "xformOpOrder",
+            geom::Xformable::XFORM_OP_ORDER,
             "token[]",
             Value::TokenArray(vec![String::from("xformOp:transform")]),
         )

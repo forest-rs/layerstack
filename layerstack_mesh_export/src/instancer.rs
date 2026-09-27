@@ -6,6 +6,7 @@
 use alloc::borrow::Cow;
 use alloc::vec;
 use alloc::vec::Vec;
+use layerstack_schemas::usd_geom as geom;
 
 use layerstack_usda::writer::Value;
 
@@ -369,10 +370,10 @@ impl<'a> Node<'a> {
 /// static export does not support (`pxr/usd/usdGeom/pointInstancer.h`:
 /// `velocities`, `accelerations`, `angularVelocities`, `invisibleIds`).
 const UNSUPPORTED: [&str; 4] = [
-    "velocities",
-    "accelerations",
-    "angularVelocities",
-    "invisibleIds",
+    geom::PointInstancer::VELOCITIES,
+    geom::PointInstancer::ACCELERATIONS,
+    geom::PointInstancer::ANGULAR_VELOCITIES,
+    geom::PointInstancer::INVISIBLE_IDS,
 ];
 
 /// The custom attribute that holds a [`PointInstancer`]'s per-instance
@@ -390,15 +391,15 @@ pub const INSTANCE_ID: &str = "instancer:id";
 const RESERVED: [&str; 11] = [
     INSTANCE_NAMES,
     INSTANCE_ID,
-    "prototypes",
-    "protoIndices",
-    "ids",
-    "positions",
-    "orientations",
-    "orientationsf",
-    "scales",
-    "extent",
-    "xformOpOrder",
+    geom::PointInstancer::PROTOTYPES,
+    geom::PointInstancer::PROTO_INDICES,
+    geom::PointInstancer::IDS,
+    geom::PointInstancer::POSITIONS,
+    geom::PointInstancer::ORIENTATIONS,
+    geom::PointInstancer::ORIENTATIONSF,
+    geom::PointInstancer::SCALES,
+    geom::Boundable::EXTENT,
+    geom::Xformable::XFORM_OP_ORDER,
 ];
 
 /// The per-instance arrays in their authored form, after validation.

@@ -6,7 +6,12 @@
 //! This crate is the adapter between a mesh kernel's buffers and the
 //! `UsdGeom` schemas. The kernel describes its data with plain slices —
 //! positions, face topology, normals, UVs, extra primvars, transforms — and
-//! the adapter applies the USD conventions explicitly:
+//! the adapter applies the USD conventions explicitly. The schema,
+//! property and token names it authors come from `layerstack_schemas`
+//! (generated from OpenUSD's schema definitions), so a schema change breaks
+//! the build rather than the files; where it authors a value equal to a
+//! schema fallback, it states that value deliberately rather than leaving
+//! it to the reader:
 //!
 //! - positions become `points` (`point3f[]`), topology becomes
 //!   `faceVertexCounts` / `faceVertexIndices`, and every mesh authors

@@ -3241,4 +3241,107 @@ mod tests {
         let definition = stage.prim_definition(prim, &store).expect("on the stage");
         assert!(definition.has_api_instance(slot, left_upper));
     }
+
+    /// Setting a property only the prim's schemas declare creates its spec
+    /// with the definition's type and variability, as OpenUSD's
+    /// `UsdPrim::CreateAttribute` does for a schema attribute; a value of
+    /// another type is rejected; undo restores its absence exactly and redo
+    /// restores it.
+    ///
+    /// Spec: AOUSD Core §13.3.2.3 (the prim definition).
+    #[test]
+    fn setting_a_schema_property_creates_it_as_the_schema_declares() {
+        use crate::{
+            PropertyKind,
+            edit::{EditError, EditTarget, Rejection, Transaction},
+            property::{PropertyType, Variability},
+            schema::{PropertyDefinition, SchemaDefinition, SchemaRegistry},
+        };
+        use alloc::sync::Arc;
+
+        let mut store = InMemoryStore::default();
+        let prim = p(&mut store, "/Rock");
+        let rock = store.tokens.intern("Rock");
+        let width = store.tokens.intern("width");
+        let target = store.tokens.intern("target");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(prim, PrimSpec::def().with_type_name(rock));
+        store.insert_layer(layer);
+        let mut builder = SchemaRegistry::builder();
+        builder.register(
+            SchemaDefinition::typed(rock)
+                .with_property(
+                    PropertyDefinition::attribute(width)
+                        .with_type(PropertyType::new("float", false, Value::Float(0.0)))
+                        .with_fallback(Value::Float(1.0))
+                        .uniform(),
+                )
+                .with_property(PropertyDefinition::relationship(target)),
+        );
+        let options = StageOptions {
+            schemas: Some(Arc::new(builder.build(&mut store.tokens))),
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+        let properties =
+            |store: &InMemoryStore| store.layers[&LayerId(1)].prims[&prim].properties.clone();
+        let absent = properties(&store);
+        let at = |name| EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(prim, name));
+        let resolved = |live: &LiveStage, store: &InMemoryStore| {
+            live.stage()
+                .resolve_field_with_schema(prim, width, store)
+                .map(|r| r.value)
+        };
+
+        // A value of another type is rejected, and nothing is authored.
+        let mut wrong = Transaction::new();
+        wrong.set_default(at(width), Value::Int(3));
+        assert!(matches!(
+            live.apply(&mut store, &wrong),
+            Err(EditError::Rejected {
+                reason: Rejection::TypeMismatch { .. },
+                ..
+            })
+        ));
+        assert_eq!(properties(&store), absent);
+
+        // A relationship is not an attribute.
+        let mut relationship = Transaction::new();
+        relationship.set_default(at(target), Value::Float(1.0));
+        assert!(matches!(
+            live.apply(&mut store, &relationship),
+            Err(EditError::Rejected {
+                reason: Rejection::NotAnAttribute(_),
+                ..
+            })
+        ));
+
+        let mut set = Transaction::new();
+        set.set_default(at(width), Value::Float(2.0));
+        let applied = live
+            .apply(&mut store, &set)
+            .expect("the schema declares it");
+        let created = properties(&store);
+        let spec = &created
+            .iter()
+            .find(|entry| entry.name == width)
+            .expect("created")
+            .spec;
+        assert_eq!(spec.kind, PropertyKind::Attribute);
+        assert_eq!(
+            spec.type_name.as_ref().map(|t| &*t.type_name),
+            Some("float")
+        );
+        assert_eq!(spec.variability, Variability::Uniform);
+        assert_eq!(spec.default, Some(Value::Float(2.0)));
+        assert_eq!(resolved(&live, &store), Some(Value::Float(2.0)));
+
+        let undone = live.apply(&mut store, &applied.inverse).expect("undo");
+        assert_eq!(properties(&store), absent, "no spec is left behind");
+        assert_eq!(resolved(&live, &store), Some(Value::Float(1.0)));
+
+        live.apply(&mut store, &undone.inverse).expect("redo");
+        assert_eq!(properties(&store), created);
+        assert_eq!(resolved(&live, &store), Some(Value::Float(2.0)));
+    }
 }

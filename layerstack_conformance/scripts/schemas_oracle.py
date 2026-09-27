@@ -46,8 +46,15 @@ The sets:
   properties (including a variability change, which is ignored, a type
   change, which drops the override, and an override of nothing),
   auto-applies to an abstract base and to an API schema, an inclusion
-  cycle, invalid `apiSchemas` entries, and fallbacks shadowed by an
-  authored value and by a default block.
+  cycle, invalid `apiSchemas` entries, fallbacks shadowed by an
+  authored value and by a default block, and where applied schemas may be
+  applied (`apiSchemaCanOnlyApplyTo`, `apiSchemaAllowedInstanceNames` and a
+  per-instance `apiSchemaCanOnlyApplyTo`).
+
+For every prim the vectors also record `CanApplyAPI` for each applied
+schema, with a set of instance names for multiple-apply ones, and for the
+set `IsAllowedAPISchemaInstanceName` and `GetAPISchemaCanOnlyApplyToTypeNames`
+for the same schemas and instance names.
 """
 import json
 import os
@@ -250,6 +257,26 @@ def Bar "myFoo" (
             ("CycleTwoAPI", "singleApplyAPI", None, []),
         ],
         "auto_apply": {"PinAPI:auto": ["LabelAPI"]},
+        "apply": {
+            "LabelAPI": {"apiSchemaCanOnlyApplyTo": ["Shape"]},
+            "OverrideAPI": {"apiSchemaCanOnlyApplyTo": ["Tile"]},
+            "SlotAPI": {
+                "apiSchemaAllowedInstanceNames": ["main", "right", "left:upper"],
+                "apiSchemaInstances": {
+                    "right": {"apiSchemaCanOnlyApplyTo": ["Panel"]},
+                },
+            },
+            # A general restriction that an empty instance list, and an
+            # instance entry without one, leave in force.
+            "PinAPI": {
+                "apiSchemaCanOnlyApplyTo": ["Tile"],
+                "apiSchemaInstances": {
+                    "main": {"apiSchemaCanOnlyApplyTo": []},
+                    "fresh": {},
+                    "right": {"apiSchemaCanOnlyApplyTo": ["Shape"]},
+                },
+            },
+        },
         "generated": '''
 class "Shape"
 {
@@ -438,6 +465,16 @@ def "CycleFromTwo" (
 }
 
 
+# Instance names the applicability queries are recorded with: allowed and
+# disallowed ones, ones containing `:`, and ones whose last identifier is a
+# property's base name.
+INSTANCE_PROBES = [
+    "main", "right", "left:upper", "fresh", "x:fresh", "index", "x:index",
+    "offset", "offset:x", "pinned", "barbazprop", "1st", "é", "℘", "a²",
+    "x:ⅰ", "a\u0301", "\u0301a",
+]
+
+
 def type_name_for(identifier):
     return "LayerstackTest" + identifier
 
@@ -462,6 +499,7 @@ def plug_info(spec):
         }
         if auto_apply_to:
             entry["apiSchemaAutoApplyTo"] = auto_apply_to
+        entry.update(spec.get("apply", {}).get(identifier, {}))
         types[type_name_for(identifier)] = entry
     info = {"Types": types}
     if spec["auto_apply"]:
@@ -566,11 +604,29 @@ def record(name, spec, directory):
             ],
             "property_names": [str(n) for n in prim.GetPropertyNames()],
             "properties": properties,
+            "can_apply": [
+                [s, "", bool(prim.CanApplyAPI(s))] for s in single
+            ] + [
+                [s, instance, bool(prim.CanApplyAPI(s, instance))]
+                for s in multiple for instance in INSTANCE_PROBES
+            ],
         })
     return {
         "openusd_version": ".".join(str(v) for v in Usd.GetVersion()),
         "set": name,
         "prims": prims,
+        "allowed_instance_names": [
+            [s, instance, bool(Usd.SchemaRegistry.IsAllowedAPISchemaInstanceName(s, instance))]
+            for s in multiple for instance in INSTANCE_PROBES
+        ],
+        "can_only_apply_to": [
+            [s, "", [str(t) for t in Usd.SchemaRegistry.GetAPISchemaCanOnlyApplyToTypeNames(s)]]
+            for s in single
+        ] + [
+            [s, instance, [str(t) for t in
+                           Usd.SchemaRegistry.GetAPISchemaCanOnlyApplyToTypeNames(s, instance)]]
+            for s in multiple for instance in INSTANCE_PROBES
+        ],
     }
 
 

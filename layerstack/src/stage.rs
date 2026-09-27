@@ -37,7 +37,7 @@ use crate::{
     prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue, PrimIndex},
     prim_index_graph::{NodeId, PrimIndexGraph},
     property::{PropertyKind, PropertySpec, PropertyType, Variability},
-    schema::{PrimDefinition, PropertyDefinition, SchemaRegistry},
+    schema::{CannotApply, PrimDefinition, PropertyDefinition, SchemaRegistry},
     spec_path::SpecPath,
     spline::{SplineData, SplineDataType},
     value_resolution::{
@@ -1710,6 +1710,35 @@ impl Stage {
         let type_name = self.resolve_type_name(prim, store);
         let applied = self.applied_schema_names(prim, store);
         schemas.property_definition(type_name, &applied, property, store.tokens())
+    }
+
+    /// Whether the applied schema `schema`, with `instance` for a
+    /// multiple-apply schema, may be applied to `prim`, given its resolved
+    /// type name ([`SchemaRegistry::can_apply`]), and why not.
+    ///
+    /// # Errors
+    ///
+    /// [`CannotApply::NoSuchPrim`] when `prim` is not on the stage,
+    /// [`CannotApply::NotAnAppliedSchema`] when the stage has no schemas,
+    /// and otherwise what [`SchemaRegistry::can_apply`] reports.
+    ///
+    /// OpenUSD: `UsdPrim::CanApplyAPI`.
+    pub fn can_apply(
+        &self,
+        prim: PathId,
+        schema: TokenId,
+        instance: Option<&str>,
+        store: &dyn LayerStore,
+    ) -> Result<(), CannotApply> {
+        if !self.has_prim(prim) {
+            return Err(CannotApply::NoSuchPrim);
+        }
+        let schemas = self
+            .schemas
+            .as_deref()
+            .ok_or(CannotApply::NotAnAppliedSchema)?;
+        let type_name = self.resolve_type_name(prim, store);
+        schemas.can_apply(type_name, schema, instance, store.tokens())
     }
 
     /// The composed `apiSchemas` metadata of `prim`.

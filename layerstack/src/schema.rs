@@ -240,6 +240,26 @@ pub struct SchemaDefinition {
     ///
     /// Spec: AOUSD Core §13.3.2.2 (override properties).
     pub overrides: Vec<PropertyDefinition>,
+    /// For an applied schema: the typed schemas a prim's type must be, or
+    /// derive from, for the schema to be applied to it; empty when it may be
+    /// applied to any prim.
+    ///
+    /// This restricts authoring ([`SchemaRegistry::can_apply`]), never
+    /// composition: a prim whose `apiSchemas` apply the schema anyway has
+    /// it. OpenUSD: `apiSchemaCanOnlyApplyTo`
+    /// (`UsdSchemaRegistry::GetAPISchemaCanOnlyApplyToTypeNames`).
+    pub can_only_apply_to: Vec<TokenId>,
+    /// For a multiple-apply schema: the only instance names it may be
+    /// applied with; empty when any valid instance name may be used.
+    ///
+    /// OpenUSD: `apiSchemaAllowedInstanceNames`.
+    pub allowed_instance_names: Vec<TokenId>,
+    /// For a multiple-apply schema: instance names whose own
+    /// [`SchemaDefinition::can_only_apply_to`] list replaces the schema's.
+    /// An empty list replaces nothing.
+    ///
+    /// OpenUSD: `apiSchemaInstances` entries' `apiSchemaCanOnlyApplyTo`.
+    pub instance_can_only_apply_to: Vec<(TokenId, Vec<TokenId>)>,
 }
 
 impl SchemaDefinition {
@@ -253,6 +273,9 @@ impl SchemaDefinition {
             built_ins: Vec::new(),
             properties: Vec::new(),
             overrides: Vec::new(),
+            can_only_apply_to: Vec::new(),
+            allowed_instance_names: Vec::new(),
+            instance_can_only_apply_to: Vec::new(),
         }
     }
 
@@ -296,7 +319,63 @@ impl SchemaDefinition {
         self.overrides.push(property);
         self
     }
+
+    /// Adds a typed schema this applied schema may be applied to
+    /// ([`SchemaDefinition::can_only_apply_to`]) (builder).
+    #[must_use]
+    pub fn with_can_only_apply_to(mut self, type_name: TokenId) -> Self {
+        self.can_only_apply_to.push(type_name);
+        self
+    }
+
+    /// Adds an instance name this multiple-apply schema may be applied with
+    /// ([`SchemaDefinition::allowed_instance_names`]) (builder).
+    #[must_use]
+    pub fn with_allowed_instance_name(mut self, instance: TokenId) -> Self {
+        self.allowed_instance_names.push(instance);
+        self
+    }
 }
+
+/// Why an applied schema cannot be applied to a prim
+/// ([`SchemaRegistry::can_apply`], [`crate::Stage::can_apply`]).
+///
+/// OpenUSD: `UsdPrim::CanApplyAPI`, whose `whyNot` these name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CannotApply {
+    /// No prim is at the path.
+    NoSuchPrim,
+    /// The name is not a registered applied schema.
+    NotAnAppliedSchema,
+    /// A multiple-apply schema was named without an instance name.
+    MissingInstanceName,
+    /// A single-apply schema was named with an instance name.
+    UnexpectedInstanceName,
+    /// The instance name is not one the schema allows
+    /// ([`SchemaRegistry::is_allowed_instance_name`]).
+    InstanceNameNotAllowed,
+    /// The prim is typeless, or its type is none of these typed schemas and
+    /// derives from none of them ([`SchemaRegistry::can_only_apply_to`]).
+    PrimType {
+        /// The typed schemas the schema can only be applied to.
+        allowed: Vec<TokenId>,
+    },
+}
+
+impl core::fmt::Display for CannotApply {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(match self {
+            Self::NoSuchPrim => "no prim is at the path",
+            Self::NotAnAppliedSchema => "not a registered applied schema",
+            Self::MissingInstanceName => "a multiple-apply schema needs an instance name",
+            Self::UnexpectedInstanceName => "a single-apply schema takes no instance name",
+            Self::InstanceNameNotAllowed => "the schema does not allow this instance name",
+            Self::PrimType { .. } => "the prim's type is not one the schema can apply to",
+        })
+    }
+}
+
+impl core::error::Error for CannotApply {}
 
 /// Something a [`SchemaRegistryBuilder::build`] skipped, and why. Building
 /// never fails: what an issue names is left out, as OpenUSD leaves it out
@@ -502,6 +581,141 @@ impl SchemaRegistry {
         &self.issues
     }
 
+    /// The typed schemas a prim's type must be, or derive from, for the
+    /// applied schema `schema` to be applied to it with `instance`: the
+    /// instance's own list when the schema gives a non-empty one, otherwise
+    /// the schema's. An empty instance list leaves the schema's in force, as
+    /// OpenUSD reads `apiSchemaInstances`. Empty when it may be applied to any prim, or `schema` is not
+    /// registered.
+    ///
+    /// OpenUSD: `UsdSchemaRegistry::GetAPISchemaCanOnlyApplyToTypeNames`.
+    #[must_use]
+    pub fn can_only_apply_to(
+        &self,
+        schema: TokenId,
+        instance: Option<&str>,
+        tokens: &TokenInterner,
+    ) -> &[TokenId] {
+        let Some(definition) = self.schemas.get(&schema) else {
+            return &[];
+        };
+        if let Some(instance) = instance.and_then(|instance| tokens.lookup(instance))
+            && let Some((_, types)) = definition
+                .instance_can_only_apply_to
+                .iter()
+                .find(|(name, types)| *name == instance && !types.is_empty())
+        {
+            return types;
+        }
+        &definition.can_only_apply_to
+    }
+
+    /// Whether the multiple-apply schema `schema` may be applied with the
+    /// instance name `instance`: it is a valid property name (identifiers
+    /// joined by `:`), one of the schema's
+    /// [`SchemaDefinition::allowed_instance_names`] when it lists any, and
+    /// its last identifier is not the base name of a property of the
+    /// schema's definition (the part of the name after the placeholder), so
+    /// no two properties of an instance can share a name.
+    ///
+    /// Spec: AOUSD Core §13.3.2 (an instance name follows property name
+    /// rules). OpenUSD: `UsdSchemaRegistry::IsAllowedAPISchemaInstanceName`.
+    #[must_use]
+    pub fn is_allowed_instance_name(
+        &self,
+        schema: TokenId,
+        instance: &str,
+        tokens: &TokenInterner,
+    ) -> bool {
+        let Some(definition) = self.schemas.get(&schema) else {
+            return false;
+        };
+        if definition.kind != SchemaKind::MultipleApplyApi || instance.is_empty() {
+            return false;
+        }
+        if !definition.allowed_instance_names.is_empty()
+            && !tokens
+                .lookup(instance)
+                .is_some_and(|name| definition.allowed_instance_names.contains(&name))
+        {
+            return false;
+        }
+        let segments: Vec<&str> = instance.split(':').collect();
+        // Spec: AOUSD Core §7.3.3, §16.2.8 (identifiers are XID).
+        if !segments
+            .iter()
+            .all(|segment| crate::ident::is_identifier(segment))
+        {
+            return false;
+        }
+        let base = segments[segments.len() - 1];
+        self.definitions.get(&schema).is_none_or(|template| {
+            template
+                .properties()
+                .iter()
+                .all(|property| template_base_name(tokens.resolve(property.name)) != base)
+        })
+    }
+
+    /// Whether the applied schema `schema`, with `instance` for a
+    /// multiple-apply schema, may be applied to a prim whose resolved type
+    /// name is `type_name`, and why not.
+    ///
+    /// The instance name must be allowed
+    /// ([`SchemaRegistry::is_allowed_instance_name`]), and when the schema
+    /// can only be applied to some typed schemas
+    /// ([`SchemaRegistry::can_only_apply_to`]) the prim's type must be one
+    /// of them or derive from one; a typeless prim is none.
+    ///
+    /// These restrict authoring only; composition applies whatever
+    /// `apiSchemas` lists (AOUSD Core §13.3.2).
+    ///
+    /// # Errors
+    ///
+    /// The [`CannotApply`] reason.
+    ///
+    /// OpenUSD: `UsdPrim::CanApplyAPI`.
+    pub fn can_apply(
+        &self,
+        type_name: Option<TokenId>,
+        schema: TokenId,
+        instance: Option<&str>,
+        tokens: &TokenInterner,
+    ) -> Result<(), CannotApply> {
+        let definition = self
+            .schemas
+            .get(&schema)
+            .ok_or(CannotApply::NotAnAppliedSchema)?;
+        match (definition.kind, instance) {
+            (SchemaKind::ConcreteTyped | SchemaKind::AbstractTyped, _) => {
+                return Err(CannotApply::NotAnAppliedSchema);
+            }
+            (SchemaKind::SingleApplyApi, Some(_)) => {
+                return Err(CannotApply::UnexpectedInstanceName);
+            }
+            (SchemaKind::MultipleApplyApi, None) => {
+                return Err(CannotApply::MissingInstanceName);
+            }
+            (SchemaKind::MultipleApplyApi, Some(instance)) => {
+                if !self.is_allowed_instance_name(schema, instance, tokens) {
+                    return Err(CannotApply::InstanceNameNotAllowed);
+                }
+            }
+            (SchemaKind::SingleApplyApi, None) => {}
+        }
+        let allowed = self.can_only_apply_to(schema, instance, tokens);
+        if allowed.is_empty()
+            || self
+                .typed(type_name)
+                .is_some_and(|typed| allowed.iter().any(|allowed| typed.is_a(*allowed)))
+        {
+            return Ok(());
+        }
+        Err(CannotApply::PrimType {
+            allowed: allowed.to_vec(),
+        })
+    }
+
     /// Whether the typed schema `type_name` is `schema` or inherits from it,
     /// abstract ancestors included.
     ///
@@ -668,6 +882,20 @@ impl SchemaRegistry {
         };
         fits.then(|| Some((self.definitions.get(&schema.name)?, instance)))
             .flatten()
+    }
+}
+
+/// The part of a multiple-apply template name after its placeholder: `index`
+/// for `slot:__INSTANCE_NAME__:index`, empty for `slot:__INSTANCE_NAME__`,
+/// the name itself when it has no placeholder.
+///
+/// OpenUSD: `UsdSchemaRegistry::GetMultipleApplyNameTemplateBaseName`.
+fn template_base_name(name: &str) -> &str {
+    match placeholder_offset(name) {
+        None => name,
+        Some(offset) => name
+            .get(offset + INSTANCE_NAME_PLACEHOLDER.len() + 1..)
+            .unwrap_or(""),
     }
 }
 

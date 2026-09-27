@@ -13,7 +13,10 @@
 //! report the same prim definitions: each prim's type (or none), `IsA`,
 //! applied schemas, `HasAPI` by schema and by instance, property names,
 //! and for each property whether a schema defines it, its kind, type,
-//! variability, fallback and resolved default value.
+//! variability, fallback and resolved default value. It must also agree on
+//! where applied schemas may be applied: `CanApplyAPI` for each prim,
+//! schema and probed instance name, `IsAllowedAPISchemaInstanceName` and
+//! `GetAPISchemaCanOnlyApplyToTypeNames`.
 //!
 //! The sets cover the AOUSD Core §13.3 examples (`typed_and_applied`,
 //! `inclusions`, `fallback_order`) and a set exercising the rest of §13.3
@@ -67,6 +70,8 @@ struct Oracle {
     openusd_version: String,
     set: String,
     prims: Vec<Prim>,
+    allowed_instance_names: Vec<(String, String, bool)>,
+    can_only_apply_to: Vec<(String, String, Vec<String>)>,
 }
 
 #[derive(Deserialize)]
@@ -80,6 +85,7 @@ struct Prim {
     has_api_instance: Vec<(String, String, bool)>,
     property_names: Vec<String>,
     properties: BTreeMap<String, Property>,
+    can_apply: Vec<(String, String, bool)>,
 }
 
 #[derive(Deserialize)]
@@ -121,6 +127,18 @@ struct TypeInfo {
     kind: String,
     #[serde(rename = "apiSchemaAutoApplyTo", default)]
     auto_apply_to: Vec<String>,
+    #[serde(rename = "apiSchemaCanOnlyApplyTo", default)]
+    can_only_apply_to: Vec<String>,
+    #[serde(rename = "apiSchemaAllowedInstanceNames", default)]
+    allowed_instance_names: Vec<String>,
+    #[serde(rename = "apiSchemaInstances", default)]
+    instances: BTreeMap<String, InstanceInfo>,
+}
+
+#[derive(Deserialize)]
+struct InstanceInfo {
+    #[serde(rename = "apiSchemaCanOnlyApplyTo", default)]
+    can_only_apply_to: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -178,10 +196,33 @@ fn registry(set: &str, store: &mut InMemoryStore) -> SchemaRegistry {
             .iter()
             .find_map(|base| info.types.get(base))
             .map(|base| store.tokens.intern(&base.identifier));
+        let mut intern_all = |names: &[String]| {
+            names
+                .iter()
+                .map(|n| store.tokens.intern(n))
+                .collect::<Vec<_>>()
+        };
+        let can_only_apply_to = intern_all(&info_type.can_only_apply_to);
+        let allowed_instance_names = intern_all(&info_type.allowed_instance_names);
+        let instance_can_only_apply_to = info_type
+            .instances
+            .iter()
+            .map(|(instance, info)| {
+                (
+                    store.tokens.intern(instance),
+                    info.can_only_apply_to
+                        .iter()
+                        .map(|n| store.tokens.intern(n))
+                        .collect(),
+                )
+            })
+            .collect();
         declared.push(SchemaDeclaration {
-            name: store.tokens.intern(&info_type.identifier),
-            kind,
             parent,
+            can_only_apply_to,
+            allowed_instance_names,
+            instance_can_only_apply_to,
+            ..SchemaDeclaration::new(store.tokens.intern(&info_type.identifier), kind)
         });
     }
 
@@ -349,6 +390,22 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
             );
         }
 
+        for (schema, instance, can) in &expected.can_apply {
+            let ours = stage
+                .can_apply(
+                    prim,
+                    store.tokens.intern(schema),
+                    (!instance.is_empty()).then_some(instance.as_str()),
+                    store,
+                )
+                .is_ok();
+            check(
+                format!("{path} CanApplyAPI {schema} {instance:?}"),
+                json!(ours),
+                json!(can),
+            );
+        }
+
         // The single-property lookup agrees with the built definition for
         // every name it defines, every template name of every schema, and
         // names one segment off them.
@@ -459,6 +516,30 @@ fn check_set(set: &str, failures: &mut Vec<String>) {
             };
             check(what("value"), json!(value), json!(theirs));
         }
+    }
+
+    for (schema, instance, allowed) in &oracle.allowed_instance_names {
+        let schema_token = store.tokens.intern(schema);
+        let ours = registry.is_allowed_instance_name(schema_token, instance, &store.tokens);
+        check(
+            format!("IsAllowedAPISchemaInstanceName {schema} {instance:?}"),
+            json!(ours),
+            json!(allowed),
+        );
+    }
+    for (schema, instance, types) in &oracle.can_only_apply_to {
+        let schema_token = store.tokens.intern(schema);
+        let instance = (!instance.is_empty()).then_some(instance.as_str());
+        let ours: Vec<&str> = registry
+            .can_only_apply_to(schema_token, instance, &store.tokens)
+            .iter()
+            .map(|t| store.tokens.resolve(*t))
+            .collect();
+        check(
+            format!("GetAPISchemaCanOnlyApplyToTypeNames {schema} {instance:?}"),
+            json!(ours),
+            json!(types),
+        );
     }
 }
 

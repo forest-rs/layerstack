@@ -145,8 +145,9 @@ type PurposeBounds = Vec<(crate::usd_geom::ImageablePurpose, BoundingBox)>;
 
 /// Caller-owned bounds at one time and for one scene.
 ///
-/// Call [`Self::invalidate`] after edits affecting geometry, transforms, purpose,
-/// visibility, kinds or topology; it evicts cached descendants and ancestors by
+/// Pass each successful live change report to [`Self::apply_changes`]. For
+/// manual edits affecting geometry, transforms, purpose, visibility, kinds or
+/// topology, [`Self::invalidate`] evicts cached descendants and ancestors by
 /// indexed dependencies. It does not observe edits automatically. Clear between
 /// unrelated scenes. Extent providers and point instancers are not implemented;
 /// missing geometry is an error, never a silently incomplete bound.
@@ -218,6 +219,24 @@ impl BoundsCache {
     /// every cached prim.
     pub fn invalidate(&mut self, scene: &Scene<'_>, path: PathId) {
         self.transforms.invalidate(scene, path);
+        self.invalidate_bounds(scene, path);
+    }
+
+    /// Applies a complete successful live change report against the resulting
+    /// scene. Transform invalidation shares stage topology. Bounds retain their
+    /// own reduction dependencies, including excluded children and ancestors.
+    /// Pass every report before querying results affected by edits.
+    pub fn apply_changes(&mut self, scene: &Scene<'_>, changes: &layerstack::Changes) {
+        self.transforms.apply_changes(scene, changes);
+        // Resync roots cover removals too. Retained reduction dependencies
+        // reach deleted and excluded descendants without revisiting ancestors
+        // once for every entry in the exact removal inventory.
+        for &path in changes.resynced.iter().chain(&changes.changed_info_only) {
+            self.invalidate_bounds(scene, path);
+        }
+    }
+
+    fn invalidate_bounds(&mut self, scene: &Scene<'_>, path: PathId) {
         let mut pending = vec![path];
         while let Some(at) = pending.pop() {
             self.stats.invalidated += usize::from(self.entries.remove(&at).is_some());

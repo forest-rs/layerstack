@@ -75,6 +75,32 @@ fn bench(c: &mut Criterion) {
                 });
             },
         );
+        let mut reported = XformCache::new(Time::Default);
+        for &path in &paths {
+            black_box(reported.local_to_world(&scene, path));
+        }
+        for (label, root, all) in [
+            ("leaf_resync_report_query", leaf, false),
+            ("root_resync_report_requery_all", root, true),
+        ] {
+            let changes = layerstack::Changes {
+                resynced: vec![root],
+                ..layerstack::Changes::default()
+            };
+            group.bench_with_input(BenchmarkId::new(label, n), &n, |b, _| {
+                b.iter(|| {
+                    reported.apply_changes(&scene, &changes);
+                    if all {
+                        for &path in &paths {
+                            black_box(reported.local_to_world(&scene, path));
+                        }
+                    } else {
+                        black_box(reported.local_to_world(&scene, leaf));
+                    }
+                });
+            });
+        }
+        drop(reported);
         // Keep teardown out of population timing, without hiding it in the
         // existing cold_all lifecycle measurement below.
         group.bench_with_input(BenchmarkId::new("cold_population", n), &n, |b, _| {

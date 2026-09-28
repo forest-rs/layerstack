@@ -26,6 +26,13 @@ struct Record {
     ignore: bool,
     purposes: Vec<String>,
     bounds: BTreeMap<String, BoxRecord>,
+    relative_to: Option<String>,
+    transform: Option<TransformRecord>,
+}
+#[derive(Deserialize)]
+struct TransformRecord {
+    matrix: [[f64; 4]; 4],
+    reset: bool,
 }
 #[derive(Deserialize)]
 struct BoxRecord {
@@ -83,10 +90,16 @@ fn authored_bounds_match_cpp() {
         .iter()
         .map(|r| loaded.store.path(&r.path))
         .collect();
+    let targets: Vec<_> = oracle
+        .records
+        .iter()
+        .map(|r| r.relative_to.as_ref().map(|p| loaded.store.path(p)))
+        .collect();
     let scene = Scene::new(&stage, &loaded.store);
+    let mut transforms = layerstack_schemas::XformCache::new(Time::Default);
     let mut previous = None;
     let mut cache = BoundsCache::new(Time::Default, BoundsOptions::default());
-    for (record, path) in oracle.records.iter().zip(paths) {
+    for ((record, path), target) in oracle.records.iter().zip(paths).zip(targets) {
         let options = BoundsOptions {
             included_purposes: record
                 .purposes
@@ -101,8 +114,28 @@ fn authored_bounds_match_cpp() {
             previous = Some(options);
         }
         cache.set_time(record.time.map_or(Time::Default, Time::at));
+        transforms.set_time(record.time.map_or(Time::Default, Time::at));
+        if let Some(expected) = &record.transform {
+            let actual = transforms
+                .relative_transform(&scene, path, target.unwrap())
+                .unwrap();
+            assert_eq!(actual.resets_xform_stack, expected.reset);
+            for (a, b) in actual
+                .matrix
+                .into_iter()
+                .flatten()
+                .zip(expected.matrix.into_iter().flatten())
+            {
+                assert!(
+                    (a - b).abs() <= 1e-9 * b.abs().max(1.0),
+                    "relative transform {}: {a} != {b}",
+                    record.path
+                );
+            }
+        }
         for (name, expected) in &record.bounds {
             let actual = match name.as_str() {
+                "relative" => cache.relative_bound(&scene, path, target.unwrap()),
                 "world" => cache.world_bound(&scene, path),
                 "local" => cache.local_bound(&scene, path),
                 _ => cache.untransformed_bound(&scene, path),

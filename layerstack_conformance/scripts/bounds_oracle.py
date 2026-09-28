@@ -132,6 +132,22 @@ for time in (0.0, 1.0, 2.0):
         box = method(prim)
         bounds[name] = {"min": list(box.GetRange().GetMin()), "max": list(box.GetRange().GetMax()), "matrix": [list(row) for row in box.GetMatrix()]}
     records.append({"path": str(prim.GetPath()), "time": time, "hints": False, "ignore": True, "purposes": ["default"], "bounds": bounds})
+for time in (0.0, 1.0, 2.0):
+    cache = UsdGeom.BBoxCache(Usd.TimeCode(time), ["default"], False, True)
+    cache.ComputeWorldBound(stage.GetPrimAtPath("/World"))
+    xforms = UsdGeom.XformCache(Usd.TimeCode(time))
+    for path, target in (("/World/Model/Tilt/A", "/World/Model"), ("/World/Model/Reset/B", "/World/Model"), ("/World/Model/Reset/B", "/World/Model/Reset"), ("/World/Model/Tilt", "/World/Model/Tilt"), ("/World/Model/Tilt/A", "/World/Hint"), ("/World/Model/Tilt/A", "/")):
+        prim, ancestor = stage.GetPrimAtPath(path), stage.GetPrimAtPath(target)
+        box = cache.ComputeRelativeBound(prim, ancestor)
+        # OpenUSD 26.8's Python wrapper leaves resetXformStack uninitialized
+        # when prim == ancestor: the C++ loop never writes it. Do not serialize
+        # that undefined result. Rust tests the identity/false contract directly;
+        # the relative-bound comparison below still covers the self case.
+        transform = {}
+        if prim != ancestor:
+            matrix, reset = xforms.ComputeRelativeTransform(prim, ancestor)
+            transform = {"transform": {"matrix": [list(row) for row in matrix], "reset": reset}}
+        records.append({"path": path, "relative_to": target, "time": time, "hints": False, "ignore": True, "purposes": ["default"], "bounds": {"relative": {"min": list(box.GetRange().GetMin()), "max": list(box.GetRange().GetMax()), "matrix": [list(row) for row in box.GetMatrix()]}}, **transform})
 # One record per line keeps oracle diffs local without redundant indentation.
 header = json.dumps({"openusd_version": ".".join(map(str, Usd.GetVersion()[1:]))})[:-1]
 output = header + ',"records":[\n' + ',\n'.join(json.dumps(record, separators=(",", ":")) for record in records) + '\n]}\n'

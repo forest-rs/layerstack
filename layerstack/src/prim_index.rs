@@ -11,7 +11,7 @@
 //!
 //! Spec: AOUSD Core §10 (composition arcs and strength ordering) and §12 (value resolution).
 
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
 use hashbrown::HashMap;
 
@@ -238,6 +238,8 @@ impl FieldKey {
 /// A per-prim composition result, keyed by field identity.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct PrimIndex {
+    /// Schema identity captured with this composed prim snapshot.
+    pub(crate) type_info: Option<Arc<crate::stage::PrimTypeInfo>>,
     /// The arc expansions contributing to the prim; every key below names
     /// one of its nodes.
     pub(crate) graph: PrimIndexGraph,

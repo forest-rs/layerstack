@@ -3,7 +3,7 @@
 
 //! Sparse local-cache queries and namespace invalidation in a populated scene.
 
-use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
+use criterion::{BatchSize, BenchmarkId, Criterion, criterion_group, criterion_main};
 use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, Stage, StageOptions};
 use layerstack_schemas::{Scene, Time, XformCache};
 use std::{hint::black_box, sync::Arc};
@@ -28,7 +28,7 @@ fn bench(c: &mut Criterion) {
             schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
             ..StageOptions::default()
         };
-        let stage = Stage::compose(&mut store, LayerId(1), options);
+        let stage = Stage::compose(&mut store, LayerId(1), options.clone());
         let scene = Scene::new(&stage, &store);
         let mut cache = XformCache::new(Time::Default);
         for &path in &paths {
@@ -75,6 +75,19 @@ fn bench(c: &mut Criterion) {
                 });
             },
         );
+        // Keep teardown out of population timing, without hiding it in the
+        // existing cold_all lifecycle measurement below.
+        group.bench_with_input(BenchmarkId::new("cold_population", n), &n, |b, _| {
+            b.iter_batched_ref(
+                || XformCache::new(Time::Default),
+                |cache| {
+                    for &path in &paths {
+                        black_box(cache.local_to_world(&scene, path));
+                    }
+                },
+                BatchSize::PerIteration,
+            );
+        });
         group.bench_with_input(BenchmarkId::new("cold_all", n), &n, |b, _| {
             b.iter(|| {
                 let mut cache = XformCache::new(Time::Default);
@@ -83,6 +96,21 @@ fn bench(c: &mut Criterion) {
                 }
                 black_box(cache);
             });
+        });
+        group.bench_with_input(BenchmarkId::new("compose_and_populate", n), &n, |b, _| {
+            b.iter_batched(
+                || options.clone(),
+                |options| {
+                    let stage = Stage::compose(&mut store, LayerId(1), options);
+                    let mut cache = XformCache::new(Time::Default);
+                    let scene = Scene::new(&stage, &store);
+                    for &path in &paths {
+                        black_box(cache.local_to_world(&scene, path));
+                    }
+                    (stage, cache)
+                },
+                BatchSize::PerIteration,
+            );
         });
     }
     group.finish();

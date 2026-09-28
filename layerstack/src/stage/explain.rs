@@ -359,7 +359,7 @@ impl Stage {
                     field,
                     opinions,
                     index.property_type_for(&field),
-                    fallback.as_ref(),
+                    fallback,
                 )
             } else {
                 self.explain_value_by(prim, field, Lookup::Property)?
@@ -375,9 +375,9 @@ impl Stage {
         };
         let value = Some(match fallback {
             Value::Dictionary(d) => {
-                ResolvedValue::Dictionary(crate::doc::combine_dictionary_chain([d]))
+                ResolvedValue::Dictionary(crate::doc::combine_dictionary_chain([d.as_slice()]))
             }
-            v => ResolvedValue::Scalar(v),
+            v => ResolvedValue::Scalar(v.clone()),
         });
         Some(with_fallback(explained, value))
     }
@@ -401,7 +401,7 @@ impl Stage {
         store: &dyn LayerStore,
     ) -> Option<ValueExplanation<'_, Value>> {
         let fallback = self.schema_fallback(prim, field, store);
-        let seed = fallback.as_ref();
+        let seed = fallback;
         let explained = self
             .opinions(prim, field, Lookup::Property)
             .map(|(index, opinions)| {
@@ -419,7 +419,7 @@ impl Stage {
             Value::Dictionary(entries) => {
                 Value::Dictionary(crate::doc::combine_dictionary_chain([entries.as_slice()]))
             }
-            value => value,
+            value => value.clone(),
         });
         Some(with_fallback(explained, value))
     }

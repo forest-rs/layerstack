@@ -17,7 +17,11 @@ pub use flatten::{
     FlattenError, FlattenReport, FlattenRequirements, FlattenVerification, Flattened,
 };
 
-use alloc::{sync::Arc, vec, vec::Vec};
+use alloc::{
+    sync::{Arc, Weak},
+    vec,
+    vec::Vec,
+};
 
 use hashbrown::{HashMap, HashSet};
 
@@ -54,6 +58,20 @@ pub struct Provenance {
     pub spec_path: SpecPath,
     /// The field that was resolved.
     pub field: TokenId,
+}
+
+// Spec: AOUSD Core §13.3.2.3. Type identity belongs to a composed prim;
+// equivalent prims share immutable definitions, independently of query caches.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct SchemaIdentity {
+    type_name: Option<TokenId>,
+    applied: Vec<TokenId>,
+}
+
+#[derive(Debug)]
+pub(crate) struct PrimTypeInfo {
+    identity: SchemaIdentity,
+    definition: Arc<PrimDefinition>,
 }
 
 /// A resolved value (optionally with provenance).
@@ -305,12 +323,14 @@ pub struct Stage {
     variant_fallbacks: VariantFallbacks,
     /// The schemas the stage was composed with ([`StageOptions::schemas`]).
     schemas: Option<Arc<SchemaRegistry>>,
+    type_infos: HashMap<SchemaIdentity, Weak<PrimTypeInfo>>,
 }
 
 impl Stage {
     /// Composes a stage from a root layer.
     ///
-    /// With schemas ([`StageOptions::schemas`]), this also interns the
+    /// Captures each prim's type identity with its composed opinions. With
+    /// schemas ([`StageOptions::schemas`]), this also interns the
     /// names of the multiple-apply schema instances each composed prim's
     /// `apiSchemas` applies ([`SchemaRegistry::intern_instance_names`]), so
     /// the schema queries read the store without mutating it. A masked
@@ -319,7 +339,7 @@ impl Stage {
         let schemas = options.schemas.clone();
         let mut stage = crate::compose::compose_stage(store, root, options);
         stage.schemas = schemas;
-        stage.intern_instance_names(store);
+        stage.prepare_type_info(store);
         stage
     }
 
@@ -332,7 +352,7 @@ impl Stage {
         let schemas = options.schemas.clone();
         let mut stage = crate::compose::compose_stage_with_paths(store, root, options, Some(paths));
         stage.schemas = schemas;
-        stage.intern_instance_names(store);
+        stage.prepare_type_info(store);
         stage
     }
 
@@ -348,7 +368,9 @@ impl Stage {
         boundary_children: Vec<(PathId, Vec<PathId>)>,
     ) {
         for path in affected {
-            self.prims.remove(path);
+            if let Some(old) = self.prims.remove(path) {
+                self.forget_type_info(old.type_info);
+            }
         }
         for path in hierarchy {
             match partial.children.remove(path) {
@@ -378,21 +400,64 @@ impl Stage {
         }
     }
 
-    /// Interns the names of the multiple-apply schema instances the
-    /// composed `apiSchemas` of every prim on the stage applies.
-    ///
-    /// Spec: AOUSD Core §13.3.2 (instance names form property names).
-    fn intern_instance_names(&self, store: &mut dyn LayerStore) {
-        let Some(schemas) = self.schemas.as_deref() else {
-            return;
-        };
-        let Some(api_schemas) = store.tokens().lookup("apiSchemas") else {
-            return;
-        };
-        for &prim in self.prims.keys() {
-            if let Some(applied) = self.resolve_token_list(prim, api_schemas) {
-                schemas.intern_instance_names(&applied.value, store.tokens_mut());
-            }
+    /// Resolve schema identity once with the composed snapshot. Ordinary value
+    /// refreshes retain it; partial composition replaces affected identities.
+    fn prepare_type_info(&mut self, store: &mut dyn LayerStore) {
+        let empty = Arc::new(PrimDefinition::default());
+        // Resolve only authored API lists through the normal metadata fold.
+        // The common plain typed case needs no temporary entry or path list.
+        let mut applied: HashMap<_, _> =
+            match (self.schemas.as_ref(), store.tokens().lookup("apiSchemas")) {
+                (Some(_), Some(field)) => self
+                    .prims
+                    .iter()
+                    .filter(|(_, index)| index.metadata_opinions(field).is_some())
+                    .map(|(&path, _)| (path, self.applied_schema_names(path, store)))
+                    .collect(),
+                _ => HashMap::new(),
+            };
+        for (&path, index) in &mut self.prims {
+            let identity = SchemaIdentity {
+                type_name: Self::source_type_name(index, store),
+                applied: applied.remove(&path).unwrap_or_default(),
+            };
+            let info = self
+                .type_infos
+                .get(&identity)
+                .and_then(Weak::upgrade)
+                .unwrap_or_else(|| {
+                    let definition = match self.schemas.as_deref() {
+                        None => empty.clone(),
+                        Some(schemas) if identity.applied.is_empty() => schemas
+                            .shared_typed(identity.type_name)
+                            .unwrap_or_else(|| empty.clone()),
+                        Some(schemas) => {
+                            schemas.intern_instance_names(&identity.applied, store.tokens_mut());
+                            Arc::new(schemas.prim_definition(
+                                identity.type_name,
+                                &identity.applied,
+                                store.tokens(),
+                            ))
+                        }
+                    };
+                    let info = Arc::new(PrimTypeInfo {
+                        identity: identity.clone(),
+                        definition,
+                    });
+                    self.type_infos.insert(identity, Arc::downgrade(&info));
+                    info
+                });
+            index.type_info = Some(info);
+        }
+    }
+
+    // Retire only identities whose last prim was removed. A sweep of every
+    // distinct schema combination would make a local edit scale with the stage.
+    fn forget_type_info(&mut self, info: Option<Arc<PrimTypeInfo>>) {
+        if let Some(info) = info
+            && Arc::strong_count(&info) == 1
+        {
+            self.type_infos.remove(&info.identity);
         }
     }
 
@@ -417,6 +482,7 @@ impl Stage {
             instances: HashSet::new(),
             variant_fallbacks: VariantFallbacks::default(),
             schemas: None,
+            type_infos: HashMap::new(),
         }
     }
 
@@ -466,8 +532,20 @@ impl Stage {
     /// only through structural edits, which rebuild the whole stage.
     pub(crate) fn merge_prims_from(&mut self, mut partial: Self, recomposed: &[PathId]) {
         for path in recomposed {
-            if let Some(index) = partial.prims.remove(path) {
-                self.prims.insert(*path, index);
+            if let Some(mut index) = partial.prims.remove(path) {
+                if let Some(info) = &mut index.type_info {
+                    if let Some(shared) =
+                        self.type_infos.get(&info.identity).and_then(Weak::upgrade)
+                    {
+                        *info = shared;
+                    } else {
+                        self.type_infos
+                            .insert(info.identity.clone(), Arc::downgrade(info));
+                    }
+                }
+                if let Some(old) = self.prims.insert(*path, index) {
+                    self.forget_type_info(old.type_info);
+                }
             }
             if partial.instances.contains(path) {
                 self.instances.insert(*path);
@@ -1340,8 +1418,7 @@ impl Stage {
     /// ([`apply_property_order`]), as OpenUSD's `UsdPrim::GetPropertyNames`
     /// orders them.
     ///
-    /// This builds the prim's definition ([`Stage::prim_definition`]);
-    /// nothing is cached. Without schemas ([`StageOptions::schemas`]) these
+    /// Reads the shared prim definition. Without schemas ([`StageOptions::schemas`]) these
     /// are the authored names alone ([`Stage::authored_property_names`]).
     ///
     /// Spec: AOUSD Core §7.3.3 (a prim's properties share one name space),
@@ -1350,7 +1427,7 @@ impl Stage {
     #[must_use]
     pub fn property_names(&self, prim: PathId, store: &dyn LayerStore) -> Vec<TokenId> {
         let mut names = self.authored_names(prim);
-        if let Some(definition) = self.prim_definition(prim, store) {
+        if let Some(definition) = self.prim_definition_ref(prim) {
             let authored: HashSet<TokenId> = names.iter().copied().collect();
             names.extend(
                 definition
@@ -1650,14 +1727,23 @@ impl Stage {
     /// Resolves the type name for a composed prim.
     ///
     /// Returns the strongest opinion's type name. If no contributing source
-    /// has a type name, returns `None`. An empty type name and `__AnyType__`
+    /// has a type name, returns `None`. The result belongs to the composed
+    /// snapshot; source type edits require recomposition. An empty type name and `__AnyType__`
     /// are no opinion, as in OpenUSD (`_ComposeTypeName` in
     /// `pxr/usd/usd/stage.cpp`).
     ///
     /// Spec: AOUSD Core §7.6 (typeName field), §12.2.3 (type name resolution).
     #[must_use]
-    pub fn resolve_type_name(&self, prim: PathId, store: &dyn LayerStore) -> Option<TokenId> {
-        let index = self.prims.get(&prim)?;
+    pub fn resolve_type_name(&self, prim: PathId, _store: &dyn LayerStore) -> Option<TokenId> {
+        self.prims
+            .get(&prim)?
+            .type_info
+            .as_ref()?
+            .identity
+            .type_name
+    }
+
+    fn source_type_name(index: &PrimIndex, store: &dyn LayerStore) -> Option<TokenId> {
         for key in &index.sources {
             let Some(layer) = store.layer(key.layer_id) else {
                 continue;
@@ -1722,12 +1808,9 @@ impl Stage {
                 //
                 // Spec: AOUSD Core §6.6.2.1, §12.3.6, §13.3.2.4 (fallback
                 // value resolution).
-                if let Some(resolved) = self.resolve_default(
-                    field,
-                    opinions,
-                    index.property_type_for(&field),
-                    fallback.as_ref(),
-                ) {
+                if let Some(resolved) =
+                    self.resolve_default(field, opinions, index.property_type_for(&field), fallback)
+                {
                     return Some(resolved);
                 }
             } else if let Some(resolved) = self.resolve_value_by(prim, field, Lookup::Property) {
@@ -1740,8 +1823,10 @@ impl Stage {
 
         Some(Resolved {
             value: match fallback {
-                Value::Dictionary(d) => ResolvedValue::Dictionary(combine_dictionary_chain([d])),
-                v => ResolvedValue::Scalar(v),
+                Value::Dictionary(d) => {
+                    ResolvedValue::Dictionary(combine_dictionary_chain([d.as_slice()]))
+                }
+                v => ResolvedValue::Scalar(v.clone()),
             },
             provenance: None,
         })
@@ -1810,21 +1895,16 @@ impl Stage {
         store: &dyn LayerStore,
     ) -> Option<Resolved<Value>> {
         let fallback = self.schema_fallback(prim, field, store);
-        if let Some(resolved) = self.resolve_value_at_time_by(
-            prim,
-            field,
-            time,
-            interp,
-            Lookup::Property,
-            fallback.as_ref(),
-        ) {
+        if let Some(resolved) =
+            self.resolve_value_at_time_by(prim, field, time, interp, Lookup::Property, fallback)
+        {
             return Some(resolved);
         }
         let value = match fallback? {
             Value::Dictionary(entries) => {
                 Value::Dictionary(combine_dictionary_chain([entries.as_slice()]))
             }
-            value => value,
+            value => value.clone(),
         };
         Some(Resolved {
             value,
@@ -1839,9 +1919,9 @@ impl Stage {
         &self,
         prim: PathId,
         field: TokenId,
-        store: &dyn LayerStore,
-    ) -> Option<Value> {
-        self.property_definition(prim, field, store)?.fallback
+        _store: &dyn LayerStore,
+    ) -> Option<&Value> {
+        self.property_definition_ref(prim, field)?.fallback.as_ref()
     }
 
     /// The prim definition of `prim`: its typed schema (or none: it is
@@ -1849,11 +1929,8 @@ impl Stage {
     /// they define. Empty when the stage has no schemas
     /// ([`StageOptions::schemas`]); `None` when `prim` is not on the stage.
     ///
-    /// Each call builds the definition anew, from the prim's resolved type
-    /// name ([`Stage::resolve_type_name`]) and its composed `apiSchemas`
-    /// metadata ([`SchemaRegistry::prim_definition`]); nothing is cached.
-    /// To look up one property without building the whole definition, use
-    /// [`Stage::property_definition`].
+    /// Returns an owned copy of the shared definition captured at composition.
+    /// Use [`Stage::prim_definition_ref`] to borrow it without cloning.
     ///
     /// ```
     /// use std::sync::Arc;
@@ -1888,37 +1965,46 @@ impl Stage {
     /// Spec: AOUSD Core §13.3.1 (typeless prims), §13.3.2.3 (the prim
     /// definition). OpenUSD: `UsdPrim::GetPrimDefinition`.
     #[must_use]
-    pub fn prim_definition(&self, prim: PathId, store: &dyn LayerStore) -> Option<PrimDefinition> {
-        if !self.has_prim(prim) {
-            return None;
-        }
-        let Some(schemas) = self.schemas.as_deref() else {
-            return Some(PrimDefinition::default());
-        };
-        let type_name = self.resolve_type_name(prim, store);
-        let applied = self.applied_schema_names(prim, store);
-        Some(schemas.prim_definition(type_name, &applied, store.tokens()))
+    pub fn prim_definition(&self, prim: PathId, _store: &dyn LayerStore) -> Option<PrimDefinition> {
+        self.prim_definition_ref(prim).cloned()
     }
 
-    /// The definition the schemas of `prim` give its property `property`:
-    /// its kind, declared type, variability and fallback, as its prim
-    /// definition ([`Stage::prim_definition`]) has it. `None` when no
-    /// schema of the prim defines it, the stage has no schemas or `prim` is
-    /// not on the stage.
+    /// Borrows the immutable schema definition captured when this prim was composed.
+    /// Equivalent schema identities share one definition. Source schema edits
+    /// become visible after recomposition, as with other composed opinions.
+    /// Returns an empty definition without schemas, or `None` for an absent prim.
     ///
-    /// Spec: AOUSD Core §13.3.2.3 (the prim definition), §13.3.2.4
-    /// (fallback values in its order).
+    /// Spec: AOUSD Core §13.3.2.3 (the prim definition).
+    #[must_use]
+    pub fn prim_definition_ref(&self, prim: PathId) -> Option<&PrimDefinition> {
+        Some(&self.prims.get(&prim)?.type_info.as_ref()?.definition)
+    }
+
+    /// The owned schema definition of a property. Use
+    /// [`Self::property_definition_ref`] when an owned copy is unnecessary.
+    ///
+    /// Spec: AOUSD Core §13.3.2.3–§13.3.2.4.
     #[must_use]
     pub fn property_definition(
         &self,
         prim: PathId,
         property: TokenId,
-        store: &dyn LayerStore,
+        _store: &dyn LayerStore,
     ) -> Option<PropertyDefinition> {
-        let schemas = self.schemas.as_deref()?;
-        let type_name = self.resolve_type_name(prim, store);
-        let applied = self.applied_schema_names(prim, store);
-        schemas.property_definition(type_name, &applied, property, store.tokens())
+        self.property_definition_ref(prim, property).cloned()
+    }
+
+    /// Borrows a property's definition from the prim's composed schema identity.
+    /// Returns `None` when the prim or schema property is absent.
+    ///
+    /// Spec: AOUSD Core §13.3.2.3–§13.3.2.4.
+    #[must_use]
+    pub fn property_definition_ref(
+        &self,
+        prim: PathId,
+        property: TokenId,
+    ) -> Option<&PropertyDefinition> {
+        self.prim_definition_ref(prim)?.property(property)
     }
 
     /// Whether the applied schema `schema`, with `instance` for a
@@ -2197,6 +2283,163 @@ mod tests {
     };
     use alloc::sync::Arc;
     use alloc::vec;
+
+    #[test]
+    fn shared_schema_identity_tracks_edits_and_undo_without_retaining_history() {
+        use crate::{
+            EditTarget, InMemoryStore, Layer, LiveStage, PrimSpec, SchemaDefinition, Transaction,
+        };
+        let mut store = InMemoryStore::default();
+        let a = store.path("/A");
+        let b = store.path("/B");
+        let ty = store.tokens.intern("Thing");
+        let api = store.tokens.intern("ExtraAPI");
+        let field = store.tokens.intern("extra");
+        let mut builder = SchemaRegistry::builder();
+        builder.register(SchemaDefinition::typed(ty));
+        builder.register(
+            SchemaDefinition::api(api)
+                .with_property(PropertyDefinition::attribute(field).with_fallback(7)),
+        );
+        let registry = Arc::new(builder.build(&mut store.tokens));
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(a, PrimSpec::def().with_type_name(ty));
+        layer.insert_prim(b, PrimSpec::def().with_type_name(ty));
+        store.insert_layer(layer);
+        let mut live = LiveStage::compose(
+            &mut store,
+            LayerId(1),
+            StageOptions {
+                schemas: Some(registry.clone()),
+                ..StageOptions::default()
+            },
+        );
+        assert!(core::ptr::eq(
+            live.stage().prim_definition_ref(a).unwrap(),
+            registry.schema_definition(ty).unwrap()
+        ));
+        assert!(core::ptr::eq(
+            live.stage().prim_definition_ref(a).unwrap(),
+            live.stage().prim_definition_ref(b).unwrap()
+        ));
+        let at = EditTarget::for_layer(LayerId(1));
+        let value = store.tokens.intern("value");
+        let mut create_value = Transaction::new();
+        create_value.create_property(
+            at.property(PropertyPath::new(a, value)),
+            PropertySpec::attribute()
+                .with_type(PropertyType::new("int", false, Value::Int(0)))
+                .with_default(Value::Int(1)),
+        );
+        live.apply(&mut store, &create_value).unwrap();
+        let held = live.stage().prims[&a].type_info.clone().unwrap();
+        let mut change_value = Transaction::new();
+        change_value.set_default(at.property(PropertyPath::new(a, value)), Value::Int(2));
+        let changed = live.apply(&mut store, &change_value).unwrap();
+        assert!(changed.changes.resynced.is_empty());
+        assert!(Arc::ptr_eq(
+            &held,
+            live.stage().prims[&a].type_info.as_ref().unwrap()
+        ));
+        live.apply(&mut store, &changed.inverse).unwrap();
+        drop(held);
+        let mut add = Transaction::new();
+        add.add_applied_schema(at.prim(a), api);
+        let undo = live.apply(&mut store, &add).unwrap().inverse;
+        assert_eq!(
+            live.stage()
+                .resolve_field_with_schema(a, field, &store)
+                .unwrap()
+                .value,
+            Value::Int(7)
+        );
+        assert!(live.stage().property_definition_ref(b, field).is_none());
+        let mut add_b = Transaction::new();
+        add_b.add_applied_schema(at.prim(b), api);
+        let undo_b = live.apply(&mut store, &add_b).unwrap().inverse;
+        assert!(core::ptr::eq(
+            live.stage().prim_definition_ref(a).unwrap(),
+            live.stage().prim_definition_ref(b).unwrap()
+        ));
+        live.apply(&mut store, &undo_b).unwrap();
+        live.apply(&mut store, &undo).unwrap();
+        for _ in 0..20 {
+            let applied = live.apply(&mut store, &add).unwrap();
+            let fresh = Stage::compose(
+                &mut store,
+                LayerId(1),
+                StageOptions {
+                    schemas: Some(registry.clone()),
+                    ..StageOptions::default()
+                },
+            );
+            assert_eq!(
+                live.stage().prim_definition_ref(a),
+                fresh.prim_definition_ref(a)
+            );
+            live.apply(&mut store, &applied.inverse).unwrap();
+        }
+        assert!(live.stage().property_definition_ref(a, field).is_none());
+        // Includes the pseudo-root identity; old combinations do not accumulate.
+        assert!(live.stage().type_infos.len() <= 2);
+    }
+
+    #[test]
+    fn type_identity_is_a_composed_snapshot() {
+        use crate::{InMemoryStore, Layer, LiveStage, PrimSpec, SchemaDefinition};
+        let mut store = InMemoryStore::default();
+        let path = store.path("/A");
+        let a = store.tokens.intern("TypeA");
+        let b = store.tokens.intern("TypeB");
+        let field = store.tokens.intern("x");
+        let mut builder = SchemaRegistry::builder();
+        builder.register(
+            SchemaDefinition::typed(a)
+                .with_property(PropertyDefinition::attribute(field).with_fallback(1)),
+        );
+        builder.register(
+            SchemaDefinition::typed(b)
+                .with_property(PropertyDefinition::attribute(field).with_fallback(2)),
+        );
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(path, PrimSpec::def().with_type_name(a));
+        store.insert_layer(layer);
+        let registry = Arc::new(builder.build(&mut store.tokens));
+        let mut live = LiveStage::compose(
+            &mut store,
+            LayerId(1),
+            StageOptions {
+                schemas: Some(registry),
+                ..StageOptions::default()
+            },
+        );
+        store
+            .layers
+            .get_mut(&LayerId(1))
+            .unwrap()
+            .prims
+            .get_mut(&path)
+            .unwrap()
+            .type_name = Some(b);
+        assert_eq!(live.stage().resolve_type_name(path, &store), Some(a));
+        assert_eq!(
+            live.stage()
+                .resolve_field_with_schema(path, field, &store)
+                .unwrap()
+                .value,
+            Value::Int(1)
+        );
+        live.notify_layer_edit(LayerId(1));
+        live.recompose(&mut store);
+        assert_eq!(live.stage().resolve_type_name(path, &store), Some(b));
+        assert_eq!(
+            live.stage()
+                .resolve_field_with_schema(path, field, &store)
+                .unwrap()
+                .value,
+            Value::Int(2)
+        );
+    }
 
     /// Layer 1 authors `class "C"` and `over "A"`, which references `/B` of
     /// layer 2; layer 2 authors `class "C"` and `def "B"`, which inherits
@@ -2525,6 +2768,7 @@ mod tests {
         let mut stage =
             Stage::from_parts(HashMap::from([(prim, index)]), HashMap::new(), false, None);
         stage.schemas = Some(Arc::new(registry));
+        stage.prepare_type_info(&mut store);
         (stage, store, prim, field)
     }
 

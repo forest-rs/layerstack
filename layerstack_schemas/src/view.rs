@@ -21,8 +21,8 @@ use core::fmt;
 use alloc::{string::String, vec::Vec};
 
 use layerstack::{
-    InterpolationType, LayerStore, PathId, PropertyKind, PropertyPath, ResolvedValue, SchemaKind,
-    Stage, TargetPath, TokenId, TokenInterner, Value,
+    InterpolationType, LayerStore, PathId, PropertyKind, PropertyPath, ResolvedValue, Stage,
+    TargetPath, TokenId, TokenInterner, Value,
 };
 
 use crate::edit::SchemaEdit;
@@ -204,18 +204,11 @@ impl<'a> Scene<'a> {
     /// Spec: AOUSD Core §13.3.1.
     #[must_use]
     pub fn is_a(&self, path: PathId, schema: &str) -> bool {
-        let Some(registry) = self.stage.schemas() else {
-            return false;
-        };
-        let Some(type_name) = self.stage.resolve_type_name(path, self.store) else {
-            return false;
-        };
-        registry
-            .schema(type_name)
-            .is_some_and(|s| s.kind == SchemaKind::ConcreteTyped)
-            && self
-                .token(schema)
-                .is_some_and(|schema| registry.is_a(type_name, schema))
+        self.token(schema).is_some_and(|schema| {
+            self.stage
+                .prim_definition_ref(path)
+                .is_some_and(|definition| definition.is_a(schema))
+        })
     }
 
     /// Whether the applied schema `schema` is applied to the prim at
@@ -227,7 +220,7 @@ impl<'a> Scene<'a> {
         let Some(schema) = self.token(schema) else {
             return false;
         };
-        let Some(definition) = self.stage.prim_definition(path, self.store) else {
+        let Some(definition) = self.stage.prim_definition_ref(path) else {
             return false;
         };
         match instance {
@@ -243,10 +236,9 @@ impl<'a> Scene<'a> {
     /// applies them.
     #[must_use]
     pub fn instances(&self, path: PathId, schema: &str) -> Vec<&'a str> {
-        let (Some(schema), Some(definition)) = (
-            self.token(schema),
-            self.stage.prim_definition(path, self.store),
-        ) else {
+        let (Some(schema), Some(definition)) =
+            (self.token(schema), self.stage.prim_definition_ref(path))
+        else {
             return Vec::new();
         };
         let tokens = self.store.tokens();
@@ -409,7 +401,7 @@ impl<'a> PrimView<'a> {
             return declared.kind == PropertyKind::Attribute;
         }
         stage
-            .property_definition(self.path, token, self.scene.store)
+            .property_definition_ref(self.path, token)
             .is_some_and(|defined| defined.kind == PropertyKind::Attribute)
     }
 

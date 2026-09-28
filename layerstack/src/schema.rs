@@ -39,7 +39,7 @@ mod generated;
 pub use definition::{AppliedSchema, PrimDefinition};
 pub use generated::{GeneratedSchemaError, SchemaDeclaration, read_generated_schema};
 
-use alloc::{format, string::String, vec, vec::Vec};
+use alloc::{format, string::String, sync::Arc, vec, vec::Vec};
 
 use hashbrown::{HashMap, HashSet};
 
@@ -521,7 +521,7 @@ impl SchemaRegistryBuilder {
             } else {
                 build.api_definition(name, &mut Vec::new()).0
             };
-            definitions.insert(name, definition);
+            definitions.insert(name, Arc::new(definition));
         }
         let issues = build.issues;
         SchemaRegistry {
@@ -542,7 +542,7 @@ impl SchemaRegistryBuilder {
 #[derive(Clone, Debug, Default)]
 pub struct SchemaRegistry {
     schemas: HashMap<TokenId, SchemaDefinition>,
-    definitions: HashMap<TokenId, PrimDefinition>,
+    definitions: HashMap<TokenId, Arc<PrimDefinition>>,
     issues: Vec<SchemaIssue>,
 }
 
@@ -572,7 +572,7 @@ impl SchemaRegistry {
     /// Spec: AOUSD Core §13.3.2.3 (`build_prim_definition`).
     #[must_use]
     pub fn schema_definition(&self, name: TokenId) -> Option<&PrimDefinition> {
-        self.definitions.get(&name)
+        self.definitions.get(&name).map(Arc::as_ref)
     }
 
     /// What building the registry skipped, in the order found.
@@ -849,6 +849,14 @@ impl SchemaRegistry {
         found
     }
 
+    /// Reuse the registry-owned definition for a plain concrete type.
+    pub(crate) fn shared_typed(&self, name: Option<TokenId>) -> Option<Arc<PrimDefinition>> {
+        let name = name?;
+        (self.schemas.get(&name)?.kind == SchemaKind::ConcreteTyped)
+            .then(|| self.definitions.get(&name).cloned())
+            .flatten()
+    }
+
     /// The definition of the concrete typed schema `type_name`, if it is
     /// one; otherwise the prim is typeless.
     ///
@@ -856,7 +864,7 @@ impl SchemaRegistry {
     fn typed(&self, type_name: Option<TokenId>) -> Option<&PrimDefinition> {
         let type_name = type_name?;
         (self.schemas.get(&type_name)?.kind == SchemaKind::ConcreteTyped)
-            .then(|| self.definitions.get(&type_name))
+            .then(|| self.definitions.get(&type_name).map(Arc::as_ref))
             .flatten()
     }
 
@@ -880,7 +888,7 @@ impl SchemaRegistry {
             SchemaKind::MultipleApplyApi => instance.is_some(),
             SchemaKind::ConcreteTyped | SchemaKind::AbstractTyped => false,
         };
-        fits.then(|| Some((self.definitions.get(&schema.name)?, instance)))
+        fits.then(|| Some((self.definitions.get(&schema.name)?.as_ref(), instance)))
             .flatten()
     }
 }

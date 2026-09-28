@@ -111,7 +111,10 @@ fn authored_bounds_match_cpp() {
             compare(
                 actual,
                 expected,
-                &format!("{} {name} {:?}", record.path, previous),
+                &format!(
+                    "{} {name} time={:?} {:?}",
+                    record.path, record.time, previous
+                ),
             );
         }
     }
@@ -248,8 +251,14 @@ fn invalidation_reaches_independently_queried_descendants() {
     cache.world_bound(&scene, leaf).unwrap();
     assert_eq!(cache.stats().computed, 3);
     cache.set_time(Time::at(1.0));
-    assert!(cache.is_empty());
-    assert_eq!(cache.stats().computed, 0);
+    assert_eq!(cache.len(), 2);
+    let computed = cache.stats().computed;
+    cache.world_bound(&scene, other).unwrap();
+    assert_eq!(
+        cache.stats().computed,
+        computed,
+        "static extent survives a time change"
+    );
 }
 
 #[test]
@@ -389,5 +398,66 @@ fn excluded_children_track_visibility_type_and_deletion_changes() {
         );
         // An explicitly queried boundable still owns its authored extent.
         assert!(!cache.world_bound(&scene, leaf).unwrap().range.is_empty());
+    }
+}
+
+#[test]
+fn temporal_bounds_match_fresh_queries_in_any_order() {
+    let mut loaded = load_entry_usda(
+        &workspace_root().join("layerstack_conformance/fixtures/bounds/scene.usda"),
+    );
+    let options = StageOptions {
+        schemas: Some(Arc::new(layerstack_schemas::openusd(
+            &mut loaded.store.tokens,
+        ))),
+        ..StageOptions::default()
+    };
+    let stage = Stage::compose(&mut loaded.store, loaded.root_layer, options);
+    let paths: Vec<_> = [
+        "/World/Model/Hidden",
+        "/World/Hint",
+        "/World/Model/Reset",
+        "/World/Unmodelled",
+        "/World",
+        "/World/Model/Tilt/A",
+    ]
+    .map(|path| loaded.store.path(path))
+    .into();
+    let scene = Scene::new(&stage, &loaded.store);
+    for hints in [false, true] {
+        let options = BoundsOptions {
+            use_extents_hint: hints,
+            ..BoundsOptions::default()
+        };
+        let mut cache = BoundsCache::new(Time::Default, options.clone());
+        for time in [
+            Time::Default,
+            Time::at(0.0),
+            Time::at(1.0),
+            Time::held(1.0),
+            Time::at(2.0),
+            Time::at(0.0),
+            Time::Default,
+        ] {
+            cache.set_time(time);
+            for &path in &paths {
+                let mut fresh = BoundsCache::new(time, options.clone());
+                assert_eq!(
+                    cache.world_bound(&scene, path),
+                    fresh.world_bound(&scene, path),
+                    "world {path:?} {time:?}"
+                );
+                assert_eq!(
+                    cache.local_bound(&scene, path),
+                    fresh.local_bound(&scene, path),
+                    "local {path:?} {time:?}"
+                );
+                assert_eq!(
+                    cache.untransformed_bound(&scene, path),
+                    fresh.untransformed_bound(&scene, path),
+                    "untransformed {path:?} {time:?}"
+                );
+            }
+        }
     }
 }

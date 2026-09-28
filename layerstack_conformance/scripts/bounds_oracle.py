@@ -78,6 +78,16 @@ for name, specifier in (("Undefined", Sdf.SpecifierOver), ("Abstract", Sdf.Speci
 animated = UsdGeom.Mesh.Get(stage, "/World/Model/Tilt/A")
 animated.GetExtentAttr().Set([(-2,-3,-4),(3,4,5)], 0.0)
 animated.GetExtentAttr().Set([(-4,-5,-6),(5,6,7)], 2.0)
+# Temporal dependencies include ancestors, reset stacks, excluded visibility,
+# and hints that are blocked at one time but become authoritative later.
+stage.GetPrimAtPath("/World").GetAttribute("xformOp:rotateZ").Set(23, 0.0)
+stage.GetPrimAtPath("/World").GetAttribute("xformOp:rotateZ").Set(61, 2.0)
+hidden = stage.GetPrimAtPath("/World/Model/Hidden").GetAttribute("visibility")
+hidden.Set("invisible", 0.0)
+hidden.Set("inherited", 2.0)
+hints_attr = hint.GetPrim().GetAttribute("extentsHint")
+hints_attr.Set(Sdf.ValueBlock(), 0.0)
+hints_attr.Set([(-30, -3, -3), (30, 3, 3)], 2.0)
 DEST.mkdir(parents=True, exist_ok=True)
 scene_text = stage.GetRootLayer().ExportToString().rstrip() + "\n"
 if "--check" in sys.argv:
@@ -97,15 +107,31 @@ for hints in (False, True):
                     extent = box.GetRange()
                     bounds[name] = {"min": list(extent.GetMin()), "max": list(extent.GetMax()), "matrix": [list(row) for row in box.GetMatrix()]}
                 records.append({"path": str(prim.GetPath()), "hints": hints, "ignore": ignore, "purposes": purposes, "bounds": bounds})
+for hints in (False, True):
+    for time in (0.0, 1.0, 2.0, 0.0, None):
+        cache = UsdGeom.BBoxCache(Usd.TimeCode.Default() if time is None else Usd.TimeCode(time), ["default"], hints)
+        # OpenUSD 26.8 _Resolve swaps _ctmCache before computing the initial
+        # component inverse, which then uses time zero for a cold non-component
+        # query. Populate through /World so this oracle measures the intended
+        # component-space result, independent of that cold-query defect.
+        # Hidden is tested below with visibility bypassed so traversal reaches it.
+        cache.ComputeWorldBound(stage.GetPrimAtPath("/World"))
+        for path in ("/World", "/World/Model", "/World/Model/Tilt", "/World/Model/Tilt/A", "/World/Model/Reset", "/World/Hint", "/World/Unmodelled"):
+            prim = stage.GetPrimAtPath(path)
+            bounds = {}
+            for name, method in (("world", cache.ComputeWorldBound), ("local", cache.ComputeLocalBound), ("untransformed", cache.ComputeUntransformedBound)):
+                box = method(prim)
+                bounds[name] = {"min": list(box.GetRange().GetMin()), "max": list(box.GetRange().GetMax()), "matrix": [list(row) for row in box.GetMatrix()]}
+            records.append({"path": path, "time": time, "hints": hints, "ignore": False, "purposes": ["default"], "bounds": bounds})
 for time in (0.0, 1.0, 2.0):
-    cache = UsdGeom.BBoxCache(Usd.TimeCode(time), ["default"])
-    for path in ("/World", "/World/Model", "/World/Model/Tilt/A"):
-        prim = stage.GetPrimAtPath(path)
-        bounds = {}
-        for name, method in (("world", cache.ComputeWorldBound), ("local", cache.ComputeLocalBound), ("untransformed", cache.ComputeUntransformedBound)):
-            box = method(prim)
-            bounds[name] = {"min": list(box.GetRange().GetMin()), "max": list(box.GetRange().GetMax()), "matrix": [list(row) for row in box.GetMatrix()]}
-        records.append({"path": path, "time": time, "hints": False, "ignore": False, "purposes": ["default"], "bounds": bounds})
+    cache = UsdGeom.BBoxCache(Usd.TimeCode(time), ["default"], False, True)
+    cache.ComputeWorldBound(stage.GetPrimAtPath("/World/Model"))
+    prim = stage.GetPrimAtPath("/World/Model/Hidden")
+    bounds = {}
+    for name, method in (("world", cache.ComputeWorldBound), ("local", cache.ComputeLocalBound), ("untransformed", cache.ComputeUntransformedBound)):
+        box = method(prim)
+        bounds[name] = {"min": list(box.GetRange().GetMin()), "max": list(box.GetRange().GetMax()), "matrix": [list(row) for row in box.GetMatrix()]}
+    records.append({"path": str(prim.GetPath()), "time": time, "hints": False, "ignore": True, "purposes": ["default"], "bounds": bounds})
 # One record per line keeps oracle diffs local without redundant indentation.
 header = json.dumps({"openusd_version": ".".join(map(str, Usd.GetVersion()[1:]))})[:-1]
 output = header + ',"records":[\n' + ',\n'.join(json.dumps(record, separators=(",", ":")) for record in records) + '\n]}\n'

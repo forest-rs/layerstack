@@ -626,6 +626,7 @@ struct Node {
     world_stamp: u64,
     validated: u64,
     world_valid: bool,
+    world_time_dependent: bool,
     time_dependency: TimeDependency,
 }
 
@@ -1025,6 +1026,7 @@ impl XformCache {
                 world_stamp: 0,
                 validated: 0,
                 world_valid: false,
+                world_time_dependent: false,
                 time_dependency: TimeDependency::Unknown,
             };
             let transforms = Transforms {
@@ -1079,21 +1081,11 @@ impl XformCache {
             // Single samples and splines can differ from default-time values.
             let view = PrimView::new(*scene, path);
             if self.nodes[index].time_dependency == TimeDependency::Unknown {
-                let varying = inputs.ops.ops.iter().any(|op| {
-                    view.property_path(op.attribute)
-                        .and_then(|property| scene.stage().explain_property_path(property))
-                        .is_some_and(|opinions| {
-                            opinions.iter().any(|opinion| {
-                                opinion.value.as_property().is_some_and(|spec| {
-                                    spec.spline.is_some()
-                                        || spec
-                                            .time_samples
-                                            .as_ref()
-                                            .is_some_and(|samples| !samples.is_empty())
-                                })
-                            })
-                        })
-                });
+                let varying = inputs
+                    .ops
+                    .ops
+                    .iter()
+                    .any(|op| view.property_might_vary(op.attribute));
                 self.nodes[index].time_dependency = if varying {
                     TimeDependency::Varying
                 } else {
@@ -1144,6 +1136,7 @@ impl XformCache {
         let mut at = Some(self.ensure_slot(scene, path));
         let mut above = gf::IDENTITY;
         let mut above_stamp = 0;
+        let mut above_time_dependent = false;
         while let Some(slot) = at {
             let index = slot.get() - 1;
             let node = &self.nodes[index];
@@ -1151,6 +1144,7 @@ impl XformCache {
                 self.stats.hits += 1;
                 above = self.transforms[index].world;
                 above_stamp = node.world_stamp;
+                above_time_dependent = node.world_time_dependent;
                 break;
             }
             self.chain.push(slot);
@@ -1180,11 +1174,22 @@ impl XformCache {
             } else {
                 self.stats.hits += 1;
             }
+            node.world_time_dependent = node.time_dependency == TimeDependency::Varying
+                || (!local.resets_xform_stack && above_time_dependent);
+            above_time_dependent = node.world_time_dependent;
             node.validated = self.epoch;
             above = transforms.world;
             above_stamp = stamp;
         }
         Some(above)
+    }
+
+    // Called after a successful world query by bounds reduction. The world
+    // dependency follows reset boundaries exactly like the matrix itself.
+    pub(crate) fn world_might_vary(&self, path: PathId) -> bool {
+        self.entries
+            .get(&path)
+            .is_some_and(|slot| self.nodes[slot.get() - 1].world_time_dependent)
     }
 
     /// The local-to-world transform of the parent of the prim at `path`,

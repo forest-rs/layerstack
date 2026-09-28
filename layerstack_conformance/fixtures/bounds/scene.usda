@@ -5,6 +5,10 @@ def Xform "World" (
 )
 {
     float xformOp:rotateZ = 23
+    float xformOp:rotateZ.timeSamples = {
+        0: 23,
+        2: 61,
+    }
     double3 xformOp:translate = (3, 4, 5)
     uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateZ"]
 
@@ -53,6 +57,10 @@ def Xform "World" (
         def Xform "Hidden"
         {
             token visibility = "invisible"
+            token visibility.timeSamples = {
+                0: "invisible",
+                2: "inherited",
+            }
             float xformOp:rotateZ = 12
             double3 xformOp:translate = (0, 0, 0)
             uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateZ"]
@@ -121,6 +129,10 @@ def Xform "World" (
     )
     {
         custom float3[] extentsHint = [(-10, -1, -1), (10, 1, 1), (-20, -2, -2), (20, 2, 2), (1, 1, 1), (-1, -1, -1), (-40, -4, -4), (40, 4, 4)]
+        float3[] extentsHint.timeSamples = {
+            0: None,
+            2: [(-30, -3, -3), (30, 3, 3)],
+        }
         float xformOp:rotateZ = 11
         double3 xformOp:translate = (0, 0, 0)
         uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateZ"]

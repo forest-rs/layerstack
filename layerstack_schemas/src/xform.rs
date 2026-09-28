@@ -595,6 +595,13 @@ enum Parent {
     Vacant(Option<Slot>),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum TimeDependency {
+    Unknown,
+    Static,
+    Varying,
+}
+
 #[derive(Clone, Copy, Debug)]
 struct Node {
     path: PathId,
@@ -603,6 +610,7 @@ struct Node {
     world_stamp: u64,
     validated: u64,
     world_valid: bool,
+    time_dependency: TimeDependency,
 }
 
 #[derive(Clone, Debug)]
@@ -654,6 +662,7 @@ pub struct XformCache {
     namespace: Option<BTreeMap<Path, PathId>>,
     chain: Vec<Slot>,
     epoch: u64,
+    time_stamp: u64,
     stats: XformCacheStats,
 }
 
@@ -670,6 +679,7 @@ impl XformCache {
             namespace: None,
             chain: Vec::new(),
             epoch: 0,
+            time_stamp: 0,
             stats: XformCacheStats::default(),
         }
     }
@@ -680,10 +690,28 @@ impl XformCache {
         self.time
     }
 
-    /// Holds transforms at `time` instead, dropping everything held.
+    /// Evaluates subsequent queries at `time`, retaining topology and static locals.
+    ///
+    /// This advances a timestamp without visiting cached nodes. On lookup,
+    /// locals with any sampled or spline opinion are reevaluated conservatively;
+    /// descendant worlds validate lazily. This includes single samples because
+    /// numeric and default time can differ. Statistics remain cumulative.
+    /// Setting the same time is a no-op. Source edits still require notification.
+    ///
+    /// Spec: AOUSD Core §12.3 (default values and time samples), §12.5
+    /// (interpolation). Unlike source opinions, evaluated cache values may be
+    /// discarded without changing authored state.
     pub fn set_time(&mut self, time: Time) {
+        if time == self.time {
+            return;
+        }
         self.time = time;
-        self.clear();
+        if self.epoch == u64::MAX {
+            self.clear();
+            return;
+        }
+        self.epoch += 1;
+        self.time_stamp = self.epoch;
     }
 
     /// Drops everything held, and the statistics.
@@ -695,6 +723,7 @@ impl XformCache {
         self.namespace = None;
         self.chain.clear();
         self.epoch = 0;
+        self.time_stamp = 0;
         self.stats = XformCacheStats::default();
     }
 
@@ -833,6 +862,7 @@ impl XformCache {
             self.transforms[index].local = None;
             self.nodes[index].world_valid = false;
             self.nodes[index].local_stamp = self.epoch;
+            self.nodes[index].time_dependency = TimeDependency::Unknown;
         }
     }
 
@@ -878,6 +908,7 @@ impl XformCache {
                 world_stamp: 0,
                 validated: 0,
                 world_valid: false,
+                time_dependency: TimeDependency::Unknown,
             };
             let transforms = Transforms {
                 local: None,
@@ -906,12 +937,48 @@ impl XformCache {
 
     fn ensure_local(&mut self, scene: &Scene<'_>, slot: Slot) {
         let index = slot.get() - 1;
+        // Time is a dependency of sampled locals only. Reuse the edit stamp
+        // as their evaluation stamp, so advancing time needs no cache scan or
+        // separate per-node clock. Source edits also advance this same epoch.
+        if self.nodes[index].time_dependency == TimeDependency::Varying
+            && self.nodes[index].local_stamp < self.time_stamp
+        {
+            self.transforms[index].local = None;
+            self.nodes[index].world_valid = false;
+            self.nodes[index].local_stamp = self.time_stamp;
+        }
         if self.transforms[index].local.is_some() {
             self.stats.hits += 1;
         } else {
-            self.transforms[index].local = Some(
-                LocalTransformInputs::read(scene, self.nodes[index].path, self.time).evaluate(),
-            );
+            let path = self.nodes[index].path;
+            let inputs = LocalTransformInputs::read(scene, path, self.time);
+            // Check all opinions, including weaker masked samples. This is a
+            // conservative dependency classification, not a second resolver.
+            // Single samples and splines can differ from default-time values.
+            let view = PrimView::new(*scene, path);
+            if self.nodes[index].time_dependency == TimeDependency::Unknown {
+                let varying = inputs.ops.ops.iter().any(|op| {
+                    view.property_path(op.attribute)
+                        .and_then(|property| scene.stage().explain_property_path(property))
+                        .is_some_and(|opinions| {
+                            opinions.iter().any(|opinion| {
+                                opinion.value.as_property().is_some_and(|spec| {
+                                    spec.spline.is_some()
+                                        || spec
+                                            .time_samples
+                                            .as_ref()
+                                            .is_some_and(|samples| !samples.is_empty())
+                                })
+                            })
+                        })
+                });
+                self.nodes[index].time_dependency = if varying {
+                    TimeDependency::Varying
+                } else {
+                    TimeDependency::Static
+                };
+            }
+            self.transforms[index].local = Some(inputs.evaluate());
             self.stats.local_computed += 1;
         }
     }
@@ -1554,11 +1621,95 @@ mod cache_tests {
         assert_arena_links(&cloned, &scene);
         assert_arena_links(&cache, &scene);
         cache.set_time(Time::at(1.0));
-        assert!(cache.nodes.is_empty());
-        assert!(cache.free.is_none());
+        assert_eq!(cache.nodes.len(), length);
+        assert_arena_links(&cache, &scene);
         assert_eq!(
             cache.local_to_world(&scene, normal),
             XformCache::new(Time::at(1.0)).local_to_world(&scene, normal)
+        );
+    }
+
+    #[test]
+    fn time_changes_retain_static_locals_and_follow_animated_ancestors() {
+        let (mut store, mut live, [root, normal, reset, leaf, other]) = transform_scene();
+        let translate = store.tokens.intern("xformOp:translate");
+        let address = EditTarget::for_layer(LayerId(1))
+            .property(layerstack::PropertyPath::new(root, translate));
+        let mut tx = Transaction::new();
+        tx.set_time_sample(address.clone(), 0.0, Value::Vec3d([10.0, 0.0, 0.0]));
+        let single = live.apply(&mut store, &tx).unwrap();
+        let mut cache = XformCache::new(Time::Default);
+        let paths = [root, normal, reset, leaf, other];
+        let scene = Scene::new(live.stage(), &store);
+        for path in paths {
+            cache.local_to_world(&scene, path);
+        }
+        let slots = paths.map(|path| cache.entries[&path]);
+        let before = cache.stats();
+        cache.set_time(Time::at(5.0));
+        // Advancing time touches no node and evaluates nothing until queried.
+        assert_eq!(cache.stats(), before);
+        assert!(local(&cache, root).is_some());
+        assert!(world(&cache, normal).is_some());
+        for path in paths {
+            assert_eq!(
+                cache.local_to_world(&scene, path),
+                XformCache::new(Time::at(5.0)).local_to_world(&scene, path)
+            );
+        }
+        assert_eq!(cache.stats().local_computed - before.local_computed, 1);
+        assert_eq!(cache.stats().world_computed - before.world_computed, 2);
+        assert_eq!(paths.map(|path| cache.entries[&path]), slots);
+        let before = cache.stats();
+        cache.set_time(Time::at(5.0));
+        assert_eq!(cache.stats(), before);
+        assert_eq!(cache.epoch, node(&cache, normal).validated);
+        let mut tx = Transaction::new();
+        tx.set_time_sample(address, 10.0, Value::Vec3d([20.0, 0.0, 0.0]));
+        let edited = live.apply(&mut store, &tx).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        cache.apply_changes(&scene, &edited.changes);
+        for time in [
+            Time::at(5.0),
+            Time::held(5.0),
+            Time::Default,
+            Time::at(10.0),
+        ] {
+            cache.set_time(time);
+            let mut fresh = XformCache::new(time);
+            for path in paths {
+                assert_eq!(
+                    cache.local_to_world(&scene, path),
+                    fresh.local_to_world(&scene, path)
+                );
+            }
+            assert_arena_links(&cache, &scene);
+        }
+        // Remove all samples through authored undo; the cached classification
+        // must become static again rather than retain historical animation.
+        let undone = live.apply(&mut store, &edited.inverse).unwrap();
+        cache.apply_changes(&Scene::new(live.stage(), &store), &undone.changes);
+        let undone = live.apply(&mut store, &single.inverse).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        cache.apply_changes(&scene, &undone.changes);
+        for path in paths {
+            cache.local_to_world(&scene, path);
+        }
+        assert_eq!(node(&cache, root).time_dependency, TimeDependency::Static);
+        let before = cache.stats();
+        cache.set_time(Time::Default);
+        for path in paths {
+            cache.local_to_world(&scene, path);
+        }
+        assert_eq!(cache.stats().local_computed, before.local_computed);
+        assert_eq!(cache.stats().world_computed, before.world_computed);
+        // Clock wrap is still an explicit complete reset.
+        cache.epoch = u64::MAX;
+        cache.set_time(Time::at(3.0));
+        assert!(cache.is_empty());
+        assert_eq!(
+            cache.local_to_world(&scene, normal),
+            XformCache::new(Time::at(3.0)).local_to_world(&scene, normal)
         );
     }
 

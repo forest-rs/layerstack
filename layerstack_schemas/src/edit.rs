@@ -260,6 +260,42 @@ impl<'s> SchemaEdit<'s> {
             .and_then(|d| d.type_name)
     }
 
+    #[cfg(feature = "usd-shade")]
+    pub(crate) fn property_kind(&mut self, path: PathId, name: &str) -> Option<PropertyKind> {
+        let token = self.store.tokens_mut().intern(name);
+        if let Some((_, _, ty)) = self
+            .created
+            .iter()
+            .rev()
+            .find(|(p, n, _)| (*p, *n) == (path, token))
+        {
+            return Some(if ty.is_some() {
+                PropertyKind::Attribute
+            } else {
+                PropertyKind::Relationship
+            });
+        }
+        self.stage
+            .resolve_property_declaration(path, token)
+            .map(|d| d.kind)
+            .or_else(|| self.definition(path, token).map(|d| d.kind))
+    }
+
+    #[cfg(feature = "usd-shade")]
+    pub(crate) fn set_connection_op(
+        &mut self,
+        path: PathId,
+        name: &str,
+        op: Option<ListOp<TargetPath>>,
+    ) {
+        let at = self.property(path, name);
+        if let Some(op) = op {
+            self.transaction.set_targets(at, op);
+        } else {
+            self.transaction.clear_targets(at);
+        }
+    }
+
     /// Creates the attribute `name` of `path`, not `custom`, of type `ty`,
     /// with no value.
     ///

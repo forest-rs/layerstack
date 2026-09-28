@@ -11,6 +11,9 @@
 //! behavior follows `NodeGraph` inheritance; custom OpenUSD connectability plugins
 //! are not loaded.
 
+mod ports;
+pub use ports::{Port, PortEdit, PortError, PortKind};
+
 use crate::{PrimView, Scene, usd_shade::Material};
 use alloc::{format, string::String, vec::Vec};
 use layerstack::{PathId, PropertyKind, PropertyPath, TargetPath};
@@ -74,6 +77,40 @@ pub struct ShaderSources {
     pub dependencies: Vec<ShadingDependency>,
 }
 
+/// How a value-producing attribute supplies a shading input.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ValueSourceKind {
+    /// An output on a non-container prim. Check its prim schema before
+    /// treating it as an executable shader result.
+    ShaderOutput,
+    /// An authored value on an input or output. Read it at the desired time
+    /// through the stage's normal value resolver; it may be animated.
+    AuthoredValue,
+}
+
+/// A value-producing attribute and the connection branch leading to it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ValueSource {
+    /// The contributing input or output attribute.
+    pub attribute: PropertyPath,
+    /// Whether to read an authored value or evaluate a shader output.
+    pub kind: ValueSourceKind,
+    /// Requested attribute first, contributing attribute last.
+    pub chain: Vec<PropertyPath>,
+}
+
+/// Ordered value providers, branch diagnostics and inspected properties.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ValueSources {
+    /// Depth-first connection order, retaining duplicate providers reached
+    /// through different branches. No value is evaluated by this query.
+    pub sources: Vec<ValueSource>,
+    /// Recoverable failures; successful sibling branches are retained.
+    pub issues: Vec<ShadingIssue>,
+    /// Every inspected property, including failed targets and fallback values.
+    pub dependencies: Vec<ShadingDependency>,
+}
+
 /// A material output terminal.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum MaterialTerminal {
@@ -117,6 +154,14 @@ impl MaterialSource {
     pub fn selected(&self) -> Option<&ShaderSource> {
         self.trace.sources.first()
     }
+}
+
+// Build either public result directly: shader-only queries need no intermediate
+// value-source array or conversion allocation.
+struct SourceTrace<T> {
+    sources: Vec<T>,
+    issues: Vec<ShadingIssue>,
+    dependencies: Vec<ShadingDependency>,
 }
 
 impl Scene<'_> {
@@ -163,17 +208,79 @@ impl Scene<'_> {
     /// Traversal uses an explicit stack and branch-local cycle detection.
     #[must_use]
     pub fn shader_sources(&self, attribute: PropertyPath) -> ShaderSources {
+        let result = self.trace_sources(attribute, false, |output, _, chain| ShaderSource {
+            output,
+            chain,
+        });
+        ShaderSources {
+            sources: result.sources,
+            issues: result.issues,
+            dependencies: result.dependencies,
+        }
+    }
+
+    /// Finds shader outputs or authored values supplying a shading attribute.
+    ///
+    /// OpenUSD: `UsdShadeUtils::GetValueProducingAttributes` with
+    /// `shaderOutputsOnly=false`. Node graphs pass connections through. If no
+    /// connection yields a provider, the attribute's own authored value is used.
+    /// A default block is not an authored value; time samples and splines are.
+    /// This selects attributes, not values at a time (AOUSD Core §12.3–12.4).
+    /// Cycles terminate only their branch; order and duplicate paths through
+    /// separate branches are preserved. Custom connectability plugins are not
+    /// loaded, as for [`Self::shader_sources`].
+    #[must_use]
+    pub fn value_sources(&self, attribute: PropertyPath) -> ValueSources {
+        let result = self.trace_sources(attribute, true, |attribute, kind, chain| ValueSource {
+            attribute,
+            kind,
+            chain,
+        });
+        ValueSources {
+            sources: result.sources,
+            issues: result.issues,
+            dependencies: result.dependencies,
+        }
+    }
+
+    fn trace_sources<T>(
+        &self,
+        attribute: PropertyPath,
+        authored_values: bool,
+        make_source: impl Fn(PropertyPath, ValueSourceKind, Vec<PropertyPath>) -> T,
+    ) -> SourceTrace<T> {
         enum Work {
             Visit(PropertyPath, bool),
-            Leave,
+            Finish(PropertyPath, usize),
         }
-        let mut result = ShaderSources::default();
+        let mut result = SourceTrace {
+            sources: Vec::new(),
+            issues: Vec::new(),
+            dependencies: Vec::new(),
+        };
         let mut chain = Vec::new();
         let mut stack = alloc::vec![Work::Visit(attribute, true)];
         while let Some(work) = stack.pop() {
-            let Work::Visit(path, initial) = work else {
-                chain.pop();
-                continue;
+            let (path, initial) = match work {
+                Work::Visit(path, initial) => (path, initial),
+                Work::Finish(path, before) => {
+                    // Postorder is essential: an invalid/cyclic connection may
+                    // still fall back to this attribute, while one successful
+                    // branch suppresses the fallback for the whole attribute.
+                    if authored_values
+                        && result.sources.len() == before
+                        && PrimView::new(*self, path.prim_path())
+                            .has_authored_value(self.store().tokens().resolve(path.property()))
+                    {
+                        result.sources.push(make_source(
+                            path,
+                            ValueSourceKind::AuthoredValue,
+                            chain.clone(),
+                        ));
+                    }
+                    chain.pop();
+                    continue;
+                }
             };
             result.dependencies.push(ShadingDependency {
                 prim: path.prim_path(),
@@ -187,10 +294,9 @@ impl Scene<'_> {
                 if kind == Some(false) {
                     let mut branch = chain.clone();
                     branch.push(path);
-                    result.sources.push(ShaderSource {
-                        output: path,
-                        chain: branch,
-                    });
+                    result
+                        .sources
+                        .push(make_source(path, ValueSourceKind::ShaderOutput, branch));
                 } else {
                     result.issues.push(ShadingIssue::NonContainerInput(path));
                 }
@@ -213,7 +319,7 @@ impl Scene<'_> {
                     .push(ShadingIssue::InvalidTarget { from: path, target });
             }
             chain.push(path);
-            stack.push(Work::Leave);
+            stack.push(Work::Finish(path, result.sources.len()));
             stack.extend(
                 connected
                     .sources

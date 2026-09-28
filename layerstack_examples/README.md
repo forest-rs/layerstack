@@ -41,3 +41,6 @@ Small runnable programs that demonstrate how to use the `layerstack` API, and th
   `push_affine` (mirrors become negative scales), is an index, a position, an orientation, a
   scale and an id; the `arkit` package writes the instances as references, which Apple's
   viewers draw)
+
+`cargo run -p layerstack_examples --bin shading_values` authors a material interface
+input and traces the value supplying a shader input.

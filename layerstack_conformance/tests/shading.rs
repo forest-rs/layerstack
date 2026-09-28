@@ -26,6 +26,7 @@ struct Connections {
     sources: Vec<String>,
     invalid: Vec<String>,
     terminals: Vec<String>,
+    values: Vec<String>,
 }
 #[derive(Deserialize)]
 struct Terminal {
@@ -77,6 +78,20 @@ fn shading_matches_openusd() {
             expected.invalid,
             "invalid {name}"
         );
+        let values = scene.value_sources(path);
+        assert_eq!(
+            values
+                .sources
+                .iter()
+                .map(|s| display(s.attribute))
+                .collect::<Vec<_>>(),
+            expected.values,
+            "values {name}"
+        );
+        for source in &values.sources {
+            assert_eq!(source.chain.first(), Some(&path));
+            assert_eq!(source.chain.last(), Some(&source.attribute));
+        }
         let traced = scene.shader_sources(path);
         assert_eq!(
             traced
@@ -253,4 +268,49 @@ fn retarget_and_undo_preserve_source_and_dependency_evidence() {
     assert_eq!(after.selected().unwrap().chain.len(), 4);
     live.apply(&mut loaded.store, &applied.inverse).unwrap();
     assert_eq!(read(live.stage(), &loaded.store), before);
+}
+
+#[test]
+fn authored_providers_are_not_evaluated_until_a_time_is_requested() {
+    use layerstack_schemas::{
+        Time,
+        shading::{Port, ValueSourceKind},
+    };
+    let mut loaded = load_entry_usda(
+        &workspace_root().join("layerstack_conformance/fixtures/shading/scene.usda"),
+    );
+    let schemas = Arc::new(layerstack_schemas::openusd(&mut loaded.store.tokens));
+    let stage = Stage::compose(
+        &mut loaded.store,
+        loaded.root_layer,
+        StageOptions {
+            schemas: Some(schemas),
+            ..StageOptions::default()
+        },
+    );
+    let reader = loaded.store.path("/Values/Reader");
+    let scene = Scene::new(&stage, &loaded.store);
+    let view = layerstack_schemas::usd_shade::Shader::new(&scene, reader).unwrap();
+    let result = view.input("animated").unwrap().value_sources();
+    assert_eq!(result.sources.len(), 1);
+    assert_eq!(result.sources[0].kind, ValueSourceKind::AuthoredValue);
+    let provider = Port::get(&scene, result.sources[0].attribute).unwrap();
+    assert_eq!(provider.value(Time::Default), None);
+    assert_eq!(
+        provider.value(Time::at(0.0)),
+        Some(layerstack::Value::Float(1.0))
+    );
+    assert_eq!(
+        provider.value(Time::at(1.0)),
+        Some(layerstack::Value::Float(2.0))
+    );
+    assert!(
+        view.input("blocked")
+            .unwrap()
+            .value_sources()
+            .sources
+            .is_empty()
+    );
+    let constant = view.input("outputConstant").unwrap().value_sources();
+    assert_eq!(constant.sources[0].kind, ValueSourceKind::AuthoredValue);
 }

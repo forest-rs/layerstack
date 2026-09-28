@@ -1,0 +1,55 @@
+{
+  "version": "26.8",
+  "records": [
+    {
+      "name": "inherited",
+      "connections": [
+        "/Material.inputs:roughness"
+      ],
+      "providers": [
+        "/Material.inputs:roughness"
+      ],
+      "local_connections": false
+    },
+    {
+      "name": "disconnected",
+      "connections": [],
+      "providers": [
+        "/Material/Shader.inputs:roughness"
+      ],
+      "local_connections": true
+    },
+    {
+      "name": "cleared",
+      "connections": [
+        "/Material.inputs:roughness"
+      ],
+      "providers": [
+        "/Material.inputs:roughness"
+      ],
+      "local_connections": false
+    },
+    {
+      "name": "replaced",
+      "connections": [
+        "/Material/Shader.outputs:result",
+        "/Material.inputs:roughness"
+      ],
+      "providers": [
+        "/Material/Shader.outputs:result",
+        "/Material.inputs:roughness"
+      ],
+      "local_connections": true
+    },
+    {
+      "name": "cleared_again",
+      "connections": [
+        "/Material.inputs:roughness"
+      ],
+      "providers": [
+        "/Material.inputs:roughness"
+      ],
+      "local_connections": false
+    }
+  ]
+}

@@ -71,3 +71,35 @@ def Material "Instance" (
     delete token outputs:surface.connect = </Instance/A.outputs:out>
     append token outputs:surface.connect = </T.outputs:out>
 }
+
+
+def Material "Values" {
+    float inputs:constant = 0.25
+    float inputs:blocked = None
+    float inputs:animated.timeSamples = {0: 1, 2: 3}
+    float outputs:constant = 0.5
+    float inputs:passthrough.connect = </Values.inputs:constant>
+    float inputs:broken = 0.75
+    float inputs:broken.connect = </Absent.outputs:missing>
+    float inputs:selfCycle = 1
+    float inputs:selfCycle.connect = </Values.inputs:selfCycle>
+    float inputs:cycleA = 2
+    float inputs:cycleA.connect = </Values.inputs:cycleB>
+    float inputs:cycleB.connect = </Values.inputs:cycleA>
+    float inputs:diamond.connect = [</Values.inputs:left>, </Values.inputs:right>]
+    float inputs:left.connect = </Values.inputs:constant>
+    float inputs:right.connect = </Values.inputs:constant>
+    float inputs:mixed = 4
+    float inputs:mixed.connect = [</Absent.outputs:missing>, </Values.inputs:constant>, </S.outputs:out>]
+    float inputs:shaderWins = 9
+    float inputs:shaderWins.connect = </S.outputs:out>
+    float inputs:illegal = 6
+    float inputs:illegal.connect = </Values/Reader.inputs:constant>
+    def Shader "Reader" {
+        float inputs:constant = 2
+        float inputs:fromInterface.connect = </Values.inputs:constant>
+        float inputs:animated.connect = </Values.inputs:animated>
+        float inputs:outputConstant.connect = </Values.outputs:constant>
+        float inputs:blocked.connect = </Values.inputs:blocked>
+    }
+}

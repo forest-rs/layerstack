@@ -424,6 +424,8 @@ jobs:
       - name: check binding oracle
         run: python layerstack_conformance/scripts/binding_oracle.py --check
 
+      - name: check shading port authoring oracle
+        run: python layerstack_conformance/scripts/shading_ports_oracle.py --check
       - name: check shading source oracle
         run: python layerstack_conformance/scripts/shading_oracle.py --check
 

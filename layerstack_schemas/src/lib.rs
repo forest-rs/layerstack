@@ -208,6 +208,12 @@
 //! scene's [`KindRegistry`]. [`MembershipQuery::included_paths`] lists every
 //! member, and [`ExpressionEvaluator`] matches any expression.
 //!
+//! With `usd-geom`, [`bounds::BoundsCache`] computes oriented local and world
+//! bounds from authored extents and model extent hints, partitioned by purpose.
+//! It indexes cached namespace dependencies so edits evict the affected subtree
+//! and its ancestors. Procedural extents and point-instancer bounds are explicit
+//! unsupported results in this first slice; see [`bounds`].
+//!
 //! With `usd-shade`, [`Scene::connected_sources`] reads composed shading
 //! connections and [`Scene::shader_sources`] traces node-graph passthroughs.
 //! [`usd_shade::Material::compute_surface_source`] selects a terminal through
@@ -257,6 +263,8 @@ extern crate alloc;
 mod view;
 #[cfg(feature = "usd-shade")]
 mod binding;
+#[cfg(feature = "usd-geom")]
+pub mod bounds;
 #[cfg(feature = "usd")]
 mod collection;
 mod edit;

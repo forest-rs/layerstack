@@ -17,7 +17,7 @@
 //! multiply-adds.
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
-use core::ops::Bound;
+use core::{num::NonZeroUsize, ops::Bound};
 
 use layerstack::{HashMap, Path, PathId, Value, half};
 
@@ -583,17 +583,32 @@ pub struct XformCacheStats {
     pub hits: usize,
 }
 
-#[derive(Clone, Debug, Default)]
-struct Entry {
-    local: Option<LocalTransform>,
-    world: Option<Matrix4>,
-    // A PathId's namespace parent is immutable within the owning store.
-    parent: Option<PathId>,
-    // Local edit stamp, maximum dependency stamp of the held world, and the
-    // cache epoch at which that world was last validated.
+// Slots never escape the cache. Vec relocation preserves indices, and subtree
+// retirement removes every incoming parent link before a slot can be reused.
+type Slot = NonZeroUsize;
+
+#[derive(Clone, Copy, Debug)]
+enum Parent {
+    Unresolved,
+    Root,
+    Cached(Slot),
+    Vacant(Option<Slot>),
+}
+
+#[derive(Clone, Copy, Debug)]
+struct Node {
+    path: PathId,
+    parent: Parent,
     local_stamp: u64,
     world_stamp: u64,
     validated: u64,
+    world_valid: bool,
+}
+
+#[derive(Clone, Debug)]
+struct Transforms {
+    local: Option<LocalTransform>,
+    world: Matrix4,
 }
 
 /// Local and local-to-world transforms of many prims at one time, sharing
@@ -620,16 +635,24 @@ struct Entry {
 /// retains unchanged local transforms and independent reset subtrees. Nothing
 /// is invalidated by itself.
 ///
+/// Cached parents are private arena links. Structural invalidation retires all
+/// cached descendants before reusing their slots. Storage is reused across edits
+/// and clearing; retained arena capacity follows peak demand.
+///
 /// OpenUSD: `UsdGeomXformCache`.
 #[derive(Clone, Debug)]
 pub struct XformCache {
     time: Time,
-    entries: HashMap<PathId, Entry>,
+    entries: HashMap<PathId, Slot>,
+    // Keep traversal metadata apart from the much larger transform payloads.
+    nodes: Vec<Node>,
+    transforms: Vec<Transforms>,
+    free: Option<Slot>,
     // Path's segment ordering places a prefix and its descendants together.
-    // Only manual subtree invalidation needs a retained index, including for
-    // sparse entries after deletion. Change-report users share stage topology.
+    // Manual invalidation builds this lazily, including sparse local-only
+    // entries and deleted subtrees. Report users share stage topology instead.
     namespace: Option<BTreeMap<Path, PathId>>,
-    chain: Vec<PathId>,
+    chain: Vec<Slot>,
     epoch: u64,
     stats: XformCacheStats,
 }
@@ -641,6 +664,9 @@ impl XformCache {
         Self {
             time,
             entries: HashMap::new(),
+            nodes: Vec::new(),
+            transforms: Vec::new(),
+            free: None,
             namespace: None,
             chain: Vec::new(),
             epoch: 0,
@@ -663,6 +689,9 @@ impl XformCache {
     /// Drops everything held, and the statistics.
     pub fn clear(&mut self) {
         self.entries.clear();
+        self.nodes.clear();
+        self.transforms.clear();
+        self.free = None;
         self.namespace = None;
         self.chain.clear();
         self.epoch = 0;
@@ -692,9 +721,9 @@ impl XformCache {
             .map(|(_, id)| *id)
             .collect();
         for id in removed {
-            namespace.remove(paths.resolve(id));
-            self.entries.remove(&id);
+            self.remove_cached(scene, id);
         }
+        self.finish_retirement();
     }
 
     /// Applies a complete successful `LiveStage::apply` change report against
@@ -721,8 +750,16 @@ impl XformCache {
                 if visited == budget {
                     let paths = scene.store().paths();
                     let prefix = paths.resolve(root);
-                    self.entries
-                        .retain(|path, _| !prefix.is_prefix_of(paths.resolve(*path)));
+                    let nodes = &mut self.nodes;
+                    let transforms = &mut self.transforms;
+                    let free = &mut self.free;
+                    self.entries.retain(|path, slot| {
+                        if !prefix.is_prefix_of(paths.resolve(*path)) {
+                            return true;
+                        }
+                        Self::retire_slot(nodes, transforms, free, *slot);
+                        false
+                    });
                     if let Some(namespace) = &mut self.namespace {
                         namespace.retain(|path, _| !prefix.is_prefix_of(path));
                     }
@@ -731,15 +768,42 @@ impl XformCache {
                 self.remove_cached(scene, path);
             }
         }
+        self.finish_retirement();
         for &path in &changes.changed_info_only {
             self.invalidate_transform(path);
         }
     }
 
     fn remove_cached(&mut self, scene: &Scene<'_>, path: PathId) {
-        self.entries.remove(&path);
+        if let Some(slot) = self.entries.remove(&path) {
+            Self::retire_slot(&mut self.nodes, &mut self.transforms, &mut self.free, slot);
+        }
         if let Some(namespace) = &mut self.namespace {
             namespace.remove(scene.store().paths().resolve(path));
+        }
+    }
+
+    fn retire_slot(
+        nodes: &mut [Node],
+        transforms: &mut [Transforms],
+        free: &mut Option<Slot>,
+        slot: Slot,
+    ) {
+        let index = slot.get() - 1;
+        transforms[index].local = None;
+        nodes[index].world_valid = false;
+        nodes[index].parent = Parent::Vacant(*free);
+        *free = Some(slot);
+    }
+
+    fn finish_retirement(&mut self) {
+        // A complete structural batch retires all incoming descendant links
+        // before any slot can be reused by a query.
+        self.chain.clear();
+        if self.entries.is_empty() {
+            self.nodes.clear();
+            self.transforms.clear();
+            self.free = None;
         }
     }
 
@@ -764,10 +828,11 @@ impl XformCache {
             self.clear();
         }
         self.epoch += 1;
-        if let Some(entry) = self.entries.get_mut(&path) {
-            entry.local = None;
-            entry.world = None;
-            entry.local_stamp = self.epoch;
+        if let Some(slot) = self.entries.get(&path) {
+            let index = slot.get() - 1;
+            self.transforms[index].local = None;
+            self.nodes[index].world_valid = false;
+            self.nodes[index].local_stamp = self.epoch;
         }
     }
 
@@ -797,24 +862,77 @@ impl XformCache {
         if !scene.stage().has_prim(path) {
             return None;
         }
-        let time = self.time;
-        let entry = self.entries.entry(path).or_insert_with(|| {
+        let slot = self.ensure_slot(scene, path);
+        self.ensure_local(scene, slot);
+        self.transforms[slot.get() - 1].local.as_ref()
+    }
+
+    // The caller has checked existence, or followed a retained parent link in
+    // this cache's scene. Structural edits require subtree invalidation.
+    fn ensure_slot(&mut self, scene: &Scene<'_>, path: PathId) -> Slot {
+        *self.entries.entry(path).or_insert_with(|| {
+            let node = Node {
+                path,
+                parent: Parent::Unresolved,
+                local_stamp: self.epoch,
+                world_stamp: 0,
+                validated: 0,
+                world_valid: false,
+            };
+            let transforms = Transforms {
+                local: None,
+                world: gf::IDENTITY,
+            };
+            let slot = if let Some(slot) = self.free {
+                let index = slot.get() - 1;
+                let Parent::Vacant(next) = self.nodes[index].parent else {
+                    unreachable!("free list contains only retired slots")
+                };
+                self.free = next;
+                self.nodes[index] = node;
+                self.transforms[index] = transforms;
+                slot
+            } else {
+                self.nodes.push(node);
+                self.transforms.push(transforms);
+                Slot::new(self.nodes.len()).expect("pushed slot is nonzero")
+            };
             if let Some(namespace) = &mut self.namespace {
                 namespace.insert(scene.store().paths().resolve(path).clone(), path);
             }
-            Entry {
-                parent: scene.parent(path),
-                local_stamp: self.epoch,
-                ..Entry::default()
-            }
-        });
-        if entry.local.is_some() {
+            slot
+        })
+    }
+
+    fn ensure_local(&mut self, scene: &Scene<'_>, slot: Slot) {
+        let index = slot.get() - 1;
+        if self.transforms[index].local.is_some() {
             self.stats.hits += 1;
         } else {
-            entry.local = Some(LocalTransformInputs::read(scene, path, time).evaluate());
+            self.transforms[index].local = Some(
+                LocalTransformInputs::read(scene, self.nodes[index].path, self.time).evaluate(),
+            );
             self.stats.local_computed += 1;
         }
-        entry.local.as_ref()
+    }
+
+    // None is the identity pseudo-root. Only the first traversal resolves a
+    // namespace parent; later walks use the arena link, including after edits.
+    fn parent_slot(&mut self, scene: &Scene<'_>, slot: Slot) -> Option<Slot> {
+        let index = slot.get() - 1;
+        match self.nodes[index].parent {
+            Parent::Cached(parent) => Some(parent),
+            Parent::Root => None,
+            Parent::Unresolved => {
+                let parent = scene.parent(self.nodes[index].path).and_then(|path| {
+                    (!scene.store().paths().resolve(path).segments().is_empty())
+                        .then(|| self.ensure_slot(scene, path))
+                });
+                self.nodes[index].parent = parent.map_or(Parent::Root, Parent::Cached);
+                parent
+            }
+            Parent::Vacant(_) => unreachable!("live nodes never link to retired slots"),
+        }
     }
 
     /// The transform from the prim at `path` to the world, or `None` if no
@@ -825,58 +943,51 @@ impl XformCache {
         if !scene.stage().has_prim(path) {
             return None;
         }
-        // The prims up to the nearest ancestor whose world transform is
-        // held, or the pseudo-root.
+        if scene.store().paths().resolve(path).segments().is_empty() {
+            return Some(gf::IDENTITY);
+        }
         self.chain.clear();
-        let mut at = Some(path);
+        let mut at = Some(self.ensure_slot(scene, path));
         let mut above = gf::IDENTITY;
         let mut above_stamp = 0;
-        while let Some(current) = at {
-            if let Some(entry) = self.entries.get(&current)
-                && entry.validated == self.epoch
-                && let Some(world) = entry.world
-            {
+        while let Some(slot) = at {
+            let index = slot.get() - 1;
+            let node = &self.nodes[index];
+            if node.validated == self.epoch && node.world_valid {
                 self.stats.hits += 1;
-                above = world;
-                above_stamp = entry.world_stamp;
+                above = self.transforms[index].world;
+                above_stamp = node.world_stamp;
                 break;
             }
-            let Some(parent) = self
-                .entries
-                .get(&current)
-                .map_or_else(|| scene.parent(current), |entry| entry.parent)
-            else {
-                // The pseudo-root: the identity.
-                break;
-            };
-            self.chain.push(current);
-            // OpenUSD UsdGeomXformCache::_GetCtm does not query a parent
-            // above a reset. Evaluate while walking so a cold reset subtree
-            // does not populate unrelated ancestor transforms.
-            if self.local_transform(scene, current)?.resets_xform_stack {
+            self.chain.push(slot);
+            self.ensure_local(scene, slot);
+            // OpenUSD UsdGeomXformCache::_GetCtm stops at reset. Do not even
+            // allocate a parent slot above a cold reset subtree.
+            if self.transforms[index].local.as_ref()?.resets_xform_stack {
                 break;
             }
-            at = Some(parent);
+            at = self.parent_slot(scene, slot);
         }
-        while let Some(current) = self.chain.pop() {
-            let entry = self.entries.get_mut(&current)?;
-            let local = entry.local.as_ref()?;
+        while let Some(slot) = self.chain.pop() {
+            let index = slot.get() - 1;
+            let node = &mut self.nodes[index];
+            let transforms = &mut self.transforms[index];
+            let local = transforms.local.as_ref()?;
             let stamp = if local.resets_xform_stack {
-                entry.local_stamp
+                node.local_stamp
             } else {
-                entry.local_stamp.max(above_stamp)
+                node.local_stamp.max(above_stamp)
             };
-            // Shared ancestor validation amortizes a batch of lookups. An edit
-            // elsewhere advances the epoch but need not redo this composition.
-            if entry.world.is_none() || entry.world_stamp != stamp {
-                entry.world = Some(local.local_to_world(&above));
-                entry.world_stamp = stamp;
+            if !node.world_valid || node.world_stamp != stamp {
+                transforms.world = local.local_to_world(&above);
+                node.world_valid = true;
+                node.world_stamp = stamp;
                 self.stats.world_computed += 1;
             } else {
                 self.stats.hits += 1;
             }
-            entry.validated = self.epoch;
-            above = entry.world?;
+            node.validated = self.epoch;
+            above = transforms.world;
             above_stamp = stamp;
         }
         Some(above)
@@ -903,6 +1014,22 @@ mod cache_tests {
     use layerstack::{
         EditTarget, InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, StageOptions, Transaction,
     };
+
+    fn node(cache: &XformCache, path: PathId) -> &Node {
+        &cache.nodes[cache.entries[&path].get() - 1]
+    }
+
+    fn local(cache: &XformCache, path: PathId) -> Option<&LocalTransform> {
+        cache.transforms[cache.entries[&path].get() - 1]
+            .local
+            .as_ref()
+    }
+
+    fn world(cache: &XformCache, path: PathId) -> Option<Matrix4> {
+        node(cache, path)
+            .world_valid
+            .then(|| cache.transforms[cache.entries[&path].get() - 1].world)
+    }
 
     #[test]
     fn invalidation_finds_sparse_locals_after_source_removal() {
@@ -1056,6 +1183,7 @@ mod cache_tests {
         assert_eq!(cache.len(), 1);
         assert!(cache.entries.contains_key(&other));
         assert!(cache.namespace.is_none());
+        assert_arena_links(&cache, &scene);
         for path in [normal, leaf] {
             cache.local_to_world(&scene, path).unwrap();
         }
@@ -1120,9 +1248,9 @@ mod cache_tests {
         for path in [normal, leaf, other] {
             cache.local_to_world(&scene, path).unwrap();
         }
-        let held_reset = cache.entries[&reset].world;
-        let held_leaf = cache.entries[&leaf].world;
-        let held_other = cache.entries[&other].world;
+        let held_reset = world(&cache, reset);
+        let held_leaf = world(&cache, leaf);
+        let held_other = world(&cache, other);
         let initial = cache.stats();
         let translate = store.tokens.intern("xformOp:translate");
         let mut tx = Transaction::new();
@@ -1133,13 +1261,13 @@ mod cache_tests {
         live.apply(&mut store, &tx).unwrap();
         let scene = Scene::new(live.stage(), &store);
         cache.invalidate_transform(root);
-        assert!(cache.entries[&root].local.is_none());
-        assert!(cache.entries[&root].world.is_none());
-        assert!(cache.entries[&normal].local.is_some());
-        assert!(cache.entries[&normal].world.is_some(), "validation is lazy");
-        assert_eq!(cache.entries[&reset].world, held_reset);
-        assert_eq!(cache.entries[&leaf].world, held_leaf);
-        assert_eq!(cache.entries[&other].world, held_other);
+        assert!(local(&cache, root).is_none());
+        assert!(world(&cache, root).is_none());
+        assert!(local(&cache, normal).is_some());
+        assert!(world(&cache, normal).is_some(), "validation is lazy");
+        assert_eq!(world(&cache, reset), held_reset);
+        assert_eq!(world(&cache, leaf), held_leaf);
+        assert_eq!(world(&cache, other), held_other);
         for path in [root, normal, reset, leaf, other] {
             assert_eq!(
                 cache.local_to_world(&scene, path),
@@ -1160,9 +1288,9 @@ mod cache_tests {
         let applied = live.apply(&mut store, &tx).unwrap();
         let scene = Scene::new(live.stage(), &store);
         cache.invalidate_transform(reset);
-        assert!(cache.entries[&reset].local.is_none());
-        assert!(cache.entries[&leaf].local.is_some());
-        assert!(cache.entries[&leaf].world.is_some(), "validation is lazy");
+        assert!(local(&cache, reset).is_none());
+        assert!(local(&cache, leaf).is_some());
+        assert!(world(&cache, leaf).is_some(), "validation is lazy");
         let now = cache.local_to_world(&scene, leaf);
         assert_ne!(now, held_leaf);
         assert_eq!(
@@ -1188,7 +1316,7 @@ mod cache_tests {
         let initial = cache.stats();
         cache.invalidate_transform(root);
         assert_eq!(cache.len(), 2);
-        assert!(cache.entries[&leaf].local.is_some());
+        assert!(local(&cache, leaf).is_some());
         assert_eq!(
             cache.stats(),
             initial,
@@ -1214,8 +1342,8 @@ mod cache_tests {
         assert_eq!(cache.local_to_world(&scene, normal), expected);
         assert_eq!(cache.stats().world_computed, before.world_computed);
         assert_eq!(cache.stats().local_computed, before.local_computed);
-        assert_eq!(cache.entries[&root].validated, cache.epoch);
-        assert_eq!(cache.entries[&normal].validated, cache.epoch);
+        assert_eq!(node(&cache, root).validated, cache.epoch);
+        assert_eq!(node(&cache, normal).validated, cache.epoch);
         let mut cloned = cache.clone();
         cloned.invalidate_transform(root);
         assert_eq!(cloned.local_to_world(&scene, normal), expected);
@@ -1285,6 +1413,181 @@ mod cache_tests {
         cache.clear();
         assert_eq!(cache.epoch, 0);
         assert_eq!(cache.local_to_world(&scene, normal), expected);
+    }
+
+    fn assert_arena_links(cache: &XformCache, scene: &Scene<'_>) {
+        use alloc::collections::BTreeSet;
+        assert_eq!(cache.nodes.len(), cache.transforms.len());
+        if let Some(namespace) = &cache.namespace {
+            assert_eq!(cache.entries.len(), namespace.len());
+        }
+        let mut seen = BTreeSet::new();
+        for (&path, &slot) in &cache.entries {
+            assert!(seen.insert(slot));
+            let node = &cache.nodes[slot.get() - 1];
+            assert_eq!(node.path, path);
+            if let Some(namespace) = &cache.namespace {
+                assert_eq!(namespace[scene.store().paths().resolve(path)], path);
+            }
+            if let Parent::Cached(parent) = node.parent {
+                let parent_node = &cache.nodes[parent.get() - 1];
+                assert_eq!(scene.parent(path), Some(parent_node.path));
+                assert_eq!(cache.entries.get(&parent_node.path), Some(&parent));
+            }
+            assert!(!matches!(node.parent, Parent::Vacant(_)));
+        }
+        let mut at = cache.free;
+        while let Some(slot) = at {
+            assert!(seen.insert(slot), "free list is disjoint and acyclic");
+            let index = slot.get() - 1;
+            assert!(cache.transforms[index].local.is_none());
+            let Parent::Vacant(next) = cache.nodes[index].parent else {
+                panic!("free slot is live")
+            };
+            at = next;
+        }
+        assert_eq!(seen.len(), cache.nodes.len());
+    }
+
+    #[test]
+    fn retired_slots_can_host_unrelated_prims_before_undo() {
+        for report in [false, true] {
+            let (mut store, mut live, [root, normal, reset, leaf, other]) = transform_scene();
+            let replacement = store.path("/Replacement");
+            let mut cache = XformCache::new(Time::Default);
+            for path in [normal, leaf, other] {
+                cache
+                    .local_to_world(&Scene::new(live.stage(), &store), path)
+                    .unwrap();
+            }
+            let old_slots: Vec<_> = [root, normal, reset, leaf]
+                .map(|path| cache.entries[&path])
+                .into();
+            let retained_other = cache.entries[&other];
+            let mut tx = Transaction::new();
+            tx.remove_spec(EditTarget::for_layer(LayerId(1)).prim(root));
+            tx.create_prim(
+                EditTarget::for_layer(LayerId(1)).prim(replacement),
+                layerstack::Specifier::Def,
+                None,
+            );
+            let applied = live.apply(&mut store, &tx).unwrap();
+            let scene = Scene::new(live.stage(), &store);
+            if report {
+                cache.apply_changes(&scene, &applied.changes);
+            } else {
+                cache.invalidate(&scene, root);
+            }
+            assert_arena_links(&cache, &scene);
+            assert_eq!(
+                cache.local_to_world(&scene, replacement),
+                Some(gf::IDENTITY)
+            );
+            // A report may conservatively resync the pseudo-root for this
+            // create/remove batch. Manual invalidation keeps the other branch.
+            assert!(old_slots.contains(&cache.entries[&replacement]));
+            if !report {
+                assert_eq!(cache.entries[&other], retained_other);
+            }
+            assert_arena_links(&cache, &scene);
+            let restored = live.apply(&mut store, &applied.inverse).unwrap();
+            let scene = Scene::new(live.stage(), &store);
+            cache.apply_changes(&scene, &restored.changes);
+            for path in [leaf, normal, other] {
+                assert_eq!(
+                    cache.local_to_world(&scene, path),
+                    XformCache::new(Time::Default).local_to_world(&scene, path)
+                );
+            }
+            assert_arena_links(&cache, &scene);
+        }
+    }
+
+    #[test]
+    fn sparse_queries_and_churn_keep_parent_links_and_storage_bounded() {
+        let (store, live, [root, normal, reset, leaf, other]) = transform_scene();
+        let scene = Scene::new(live.stage(), &store);
+        let mut cache = XformCache::new(Time::Default);
+        cache.local_transform(&scene, normal);
+        assert!(matches!(node(&cache, normal).parent, Parent::Unresolved));
+        assert!(!cache.entries.contains_key(&root));
+        cache.local_to_world(&scene, normal);
+        assert!(matches!(node(&cache, normal).parent, Parent::Cached(_)));
+        for path in [leaf, other] {
+            cache.local_to_world(&scene, path);
+        }
+        let capacity = (cache.nodes.capacity(), cache.transforms.capacity());
+        let length = cache.nodes.len();
+        for round in 0..100 {
+            // Keep the other branch alive, forcing real free-list reuse instead
+            // of the empty-cache shortcut. Include sparse local-only rebuilds.
+            if round % 2 == 0 {
+                cache.apply_changes(
+                    &scene,
+                    &layerstack::Changes {
+                        resynced: alloc::vec![root],
+                        ..layerstack::Changes::default()
+                    },
+                );
+            } else {
+                cache.invalidate(&scene, root);
+            }
+            cache.local_transform(&scene, leaf);
+            cache.local_to_world(&scene, normal);
+            cache.local_to_world(&scene, leaf);
+            cache.invalidate_transform(root);
+            for path in [other, normal, reset, leaf] {
+                assert_eq!(
+                    cache.local_to_world(&scene, path),
+                    XformCache::new(Time::Default).local_to_world(&scene, path)
+                );
+            }
+            assert_arena_links(&cache, &scene);
+            assert_eq!(cache.nodes.len(), length);
+            assert_eq!(
+                (cache.nodes.capacity(), cache.transforms.capacity()),
+                capacity
+            );
+        }
+        let mut cloned = cache.clone();
+        cloned.invalidate(&scene, root);
+        assert_arena_links(&cloned, &scene);
+        assert_arena_links(&cache, &scene);
+        cache.set_time(Time::at(1.0));
+        assert!(cache.nodes.is_empty());
+        assert!(cache.free.is_none());
+        assert_eq!(
+            cache.local_to_world(&scene, normal),
+            XformCache::new(Time::at(1.0)).local_to_world(&scene, normal)
+        );
+    }
+
+    #[test]
+    fn deep_parent_walk_survives_vector_growth_and_is_iterative() {
+        let mut store = InMemoryStore::default();
+        let mut layer = Layer::new(LayerId(1));
+        let mut name = String::new();
+        let mut paths = Vec::new();
+        for _ in 0..256 {
+            name.push_str("/N");
+            let path = store.path(&name);
+            layer.insert_prim(path, PrimSpec::def());
+            paths.push(path);
+        }
+        store.insert_layer(layer);
+        let live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let scene = Scene::new(live.stage(), &store);
+        let mut cache = XformCache::new(Time::Default);
+        let leaf = *paths.last().unwrap();
+        assert_eq!(cache.local_to_world(&scene, leaf), Some(gf::IDENTITY));
+        assert_eq!(cache.len(), 256);
+        assert_arena_links(&cache, &scene);
+        let before = cache.stats();
+        cache.invalidate_transform(paths[128]);
+        assert_eq!(cache.local_to_world(&scene, leaf), Some(gf::IDENTITY));
+        assert_eq!(cache.stats().local_computed - before.local_computed, 1);
+        assert_eq!(cache.stats().world_computed - before.world_computed, 128);
+        assert_arena_links(&cache, &scene);
     }
 
     #[test]

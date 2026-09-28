@@ -1,10 +1,10 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Bounds from authored extents, with component-space accumulation.
+//! Bounds from authored or intrinsic extents, with component-space accumulation.
 //!
-//! This deliberately bounded implementation does not run procedural extent
-//! plugins: a boundable without a valid authored extent returns an error.
+//! Built-in geometry can compute its extent from points or shape parameters.
+//! Other procedural extent plugins are not run; missing geometry is an error.
 //! It preserves an oriented range and matrix, rather than repeatedly aligning
 //! boxes in every ancestor's coordinates. OpenUSD: `UsdGeomBBoxCache`.
 
@@ -161,8 +161,10 @@ impl<T> Entry<T> {
 /// manual edits affecting geometry, transforms, purpose, visibility, kinds or
 /// topology, [`Self::invalidate`] evicts cached descendants and ancestors by
 /// indexed dependencies. It does not observe edits automatically. Clear between
-/// unrelated scenes. Extent providers and point instancers are not implemented;
-/// missing geometry is an error, never a silently incomplete bound.
+/// unrelated scenes. Intrinsic extents are computed for meshes, cubes, spheres, cylinders, cones
+/// and capsules when a valid authored extent is unavailable. Other extent
+/// providers and point instancers are not implemented; missing geometry is an
+/// error, never a silently incomplete bound.
 ///
 /// Child inclusion follows OpenUSD's defined, non-abstract, imageable/unknown
 /// type traversal and local visibility. A query includes its root even when
@@ -399,8 +401,8 @@ impl BoundsCache {
                 (bounds, varying || hint_varying || inclusion_varying)
             } else {
                 self.track(scene, current);
-                if let Some(bounds) = self.direct_bounds(scene, current)? {
-                    (bounds, hint_varying || prim.property_might_vary("extent"))
+                if let Some((bounds, varying)) = self.direct_bounds(scene, current)? {
+                    (bounds, hint_varying || varying)
                 } else {
                     let children: Vec<_> = scene
                         .stage()
@@ -468,32 +470,41 @@ impl BoundsCache {
         &self,
         scene: &Scene<'_>,
         path: PathId,
-    ) -> Result<Option<PurposeBounds>, BoundsError> {
+    ) -> Result<Option<(PurposeBounds, bool)>, BoundsError> {
         let prim = PrimView::new(*scene, path);
         if self.options.use_extents_hint
             && scene.is_model(path)
             && let Some(hint) = vectors(&prim, "extentsHint", self.time).filter(|v| v.len() >= 2)
         {
             use crate::usd_geom::ImageablePurpose::{Default, Guide, Proxy, Render};
-            return Ok(Some(
+            return Ok(Some((
                 [Default, Render, Proxy, Guide]
                     .into_iter()
                     .zip(hint.as_chunks::<2>().0)
                     .map(|(purpose, extent)| (purpose, box_from_extent(extent)))
                     .collect(),
-            ));
+                prim.property_might_vary("extentsHint"),
+            )));
         }
         if scene.is_a(path, "PointInstancer") {
             return Err(BoundsError::PointInstancerUnsupported(path));
         }
         if scene.is_a(path, "Boundable") {
-            let extent = vectors(&prim, "extent", self.time)
-                .filter(|v| v.len() == 2)
+            let (range, varying) = crate::extent::compute(scene, path, self.time)
                 .ok_or(BoundsError::ExtentUnavailable(path))?;
             let purpose = Imageable::new(scene, path)
                 .expect("Boundable is Imageable")
                 .compute_purpose();
-            return Ok(Some(vec![(purpose, box_from_extent(&extent))]));
+            return Ok(Some((
+                vec![(
+                    purpose,
+                    BoundingBox {
+                        range,
+                        matrix: gf::IDENTITY,
+                    },
+                )],
+                varying,
+            )));
         }
         Ok(None)
     }

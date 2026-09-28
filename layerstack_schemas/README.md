@@ -28,7 +28,7 @@ The `usd-geom` feature provides caller-owned transform and bounds caches:
   `relative_transform` walks local operations toward an ancestor, stopping at
   and reporting a reset.
 - `bounds::BoundsCache` computes oriented world, local, untransformed and
-  relative bounds from authored extents and model `extentsHint`, with purpose
+  relative bounds from authored or computed extents and model `extentsHint`, with purpose
   and visibility filtering. Relative bounds convert coordinate frames even
   across resets. Time changes retain static bounds and reevaluate temporal
   dependencies on demand, including sampled visibility of excluded children.
@@ -46,9 +46,10 @@ implicitly; clear them before using an unrelated scene. Bounds source edits
 still evict affected descendants and reduction ancestors. Cache stats expose
 computed, reused and invalidated work.
 
-The bounds implementation requires authored extents or usable model hints.
-Procedural extent providers and point-instancer bounds remain unsupported and
-return explicit errors. Common transform helpers do not decompose arbitrary
+When no valid extent is authored, bounds are computed from mesh points or
+cube, sphere, cylinder, cone and capsule parameters. Other procedural extent
+providers and point-instancer bounds remain unsupported and return explicit
+errors. Common transform helpers do not decompose arbitrary
 matrices or rewrite incompatible op stacks. Prepared operation recipes remain
 an internal cache implementation detail.
 

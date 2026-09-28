@@ -157,4 +157,57 @@ pub struct Changes {
     pub resynced: Vec<PathId>,
     /// Surviving prims with opinion or child-list changes, without subtree resync.
     pub changed_info_only: Vec<PathId>,
+    /// Complete property-field inventories for a subset of info-only prims.
+    /// A prim absent here must be treated conservatively: any field may have
+    /// changed. Resynced prims never have a precise inventory.
+    pub property_changes: Vec<PrimPropertyChanges>,
+}
+
+/// An authored property field changed by a transaction.
+///
+/// These identify authored operations, not differences between resolved values.
+/// AOUSD Core §12 (properties); OpenUSD `UsdNotice::ObjectsChanged::GetChangedFields`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PropertyField {
+    /// The attribute's default value, including authored absence and blocks.
+    Default,
+    /// One or more authored time samples.
+    TimeSamples,
+    /// Attribute connections or relationship targets.
+    Targets,
+    /// A named property metadata field.
+    Metadata(crate::TokenId),
+}
+
+/// One changed field of a composed property.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PropertyChange {
+    /// Property name in the composed namespace.
+    pub name: crate::TokenId,
+    /// Authored field affected by the operation.
+    pub field: PropertyField,
+}
+
+/// A complete inventory of changed fields for one info-only composed prim.
+///
+/// Consumers may ignore fields outside their dependencies only when this entry
+/// is present. Inventories are sorted and deduplicated; source edits are mapped
+/// through the stage's contributing source sites, including references.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PrimPropertyChanges {
+    /// The composed prim whose properties changed.
+    pub prim: PathId,
+    /// All potentially changed property fields on this prim.
+    pub fields: Vec<PropertyChange>,
+}
+
+impl Changes {
+    /// Complete changed property fields, or `None` when precision is unknown.
+    #[must_use]
+    pub fn properties_for(&self, prim: PathId) -> Option<&[PropertyChange]> {
+        self.property_changes
+            .binary_search_by_key(&prim, |p| p.prim)
+            .ok()
+            .map(|i| self.property_changes[i].fields.as_slice())
+    }
 }

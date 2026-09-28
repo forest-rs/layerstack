@@ -270,6 +270,12 @@ impl LiveStage {
         txn: &Transaction,
     ) -> Result<Applied, EditError> {
         let pending_opinions = self.tracker.has_invalidated(OPINION_EDIT);
+        // Precision is valid only against the source generations we composed.
+        // Unknown external edits must not be hidden behind this transaction.
+        let sources_current = self
+            .generations
+            .iter()
+            .all(|(&layer, seen)| generations_of(store, layer) == *seen);
         let local_current = !self.needs_full_rebuild
             && !pending_opinions
             && self
@@ -281,6 +287,21 @@ impl LiveStage {
             .flatten()
             .map(|index| index as &dyn crate::edit::SourceNamespace);
         let outcome = crate::edit::apply(store, txn, Some(&self.stage), namespace)?;
+        let mut property_changes = alloc::collections::BTreeMap::new();
+        if sources_current
+            && !pending_opinions
+            && !self.needs_full_rebuild
+            && let Some(properties) = &outcome.properties
+        {
+            for &(layer, source, field) in properties {
+                for prim in self.composed_prims_for_source(layer, source) {
+                    property_changes
+                        .entry(prim)
+                        .or_insert_with(Vec::new)
+                        .push(field);
+                }
+            }
+        }
         let declaration_resyncs: Vec<_> = outcome
             .resync_sites
             .iter()
@@ -377,6 +398,15 @@ impl LiveStage {
         if pending_opinions {
             include_resyncs(store, &mut changes, &recomposed);
         }
+        changes.property_changes = property_changes
+            .into_iter()
+            .filter(|(prim, _)| changes.changed_info_only.contains(prim))
+            .map(|(prim, mut fields)| {
+                fields.sort_unstable();
+                fields.dedup();
+                crate::PrimPropertyChanges { prim, fields }
+            })
+            .collect();
         Ok(Applied {
             inverse: outcome.inverse,
             recomposed,
@@ -782,6 +812,19 @@ impl LiveStage {
     /// edited without a notification.
     pub fn recompose(&mut self, store: &mut dyn LayerStore) -> Vec<PathId> {
         self.recompose_report(store, None)
+    }
+
+    /// Recomposes pending external edits and returns conservative change evidence.
+    ///
+    /// Call `notify_changed_layers` or an explicit notification first. External
+    /// edits do not carry field inventories, so affected prims are resynced.
+    /// Unlike `recompose`, this distinguishes removals and subtree invalidation.
+    pub fn recompose_changes(&mut self, store: &mut dyn LayerStore) -> Changes {
+        let mut changes = Changes::default();
+        self.recompose_report(store, Some(&mut changes));
+        let info_only = core::mem::take(&mut changes.changed_info_only);
+        include_resyncs(store, &mut changes, &info_only);
+        changes
     }
 
     fn recompose_report(

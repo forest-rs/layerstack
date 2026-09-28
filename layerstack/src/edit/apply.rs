@@ -356,6 +356,8 @@ pub(crate) struct Guarded {
 /// What applying a transaction did, for stages to recompose.
 #[derive(Debug)]
 pub(crate) struct Outcome {
+    /// Complete source property changes, or None if any operation is broader.
+    pub(crate) properties: Option<Vec<(LayerId, PathId, super::PropertyChange)>>,
     /// Exact existing-attribute value slots, or None for other edit kinds.
     pub(crate) values: Option<Vec<PropertyValueEdit>>,
     pub(crate) inverse: Transaction,
@@ -389,6 +391,35 @@ impl PropertyValueEdit {
         let spec = spec_at(store.layer(self.layer)?, &loc)?;
         get_property(spec.properties(), self.name)
     }
+}
+
+fn property_edits(steps: &[Guarded]) -> Option<Vec<(LayerId, PathId, super::PropertyChange)>> {
+    use super::{PropertyChange, PropertyField};
+    steps
+        .iter()
+        .map(|step| {
+            let (layer, loc, name, field) = match &step.written {
+                Raw::Default {
+                    layer, loc, name, ..
+                } => (*layer, loc, *name, PropertyField::Default),
+                Raw::Sample {
+                    layer, loc, name, ..
+                } => (*layer, loc, *name, PropertyField::TimeSamples),
+                Raw::Targets {
+                    layer, loc, name, ..
+                } => (*layer, loc, *name, PropertyField::Targets),
+                Raw::Field {
+                    layer,
+                    loc,
+                    property: Some(name),
+                    key,
+                    ..
+                } => (*layer, loc, *name, PropertyField::Metadata(*key)),
+                _ => return None,
+            };
+            Some((layer, loc.prim_path(), PropertyChange { name, field }))
+        })
+        .collect()
 }
 
 fn value_edits(steps: &[Guarded], store: &dyn LayerStore) -> Option<Vec<PropertyValueEdit>> {
@@ -590,8 +621,10 @@ pub(crate) fn apply(
     resync_sites.sort_unstable();
     resync_sites.dedup();
     let values = value_edits(&steps, store);
+    let properties = property_edits(&steps);
     steps.reverse();
     Ok(Outcome {
+        properties,
         values,
         local_structure,
         resync_sites,

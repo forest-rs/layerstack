@@ -338,7 +338,7 @@ fn encode(
 
 impl XformableEdit {
     /// The prim's `xformOpOrder` as the edit leaves it.
-    fn order(&self, edit: &mut SchemaEdit<'_>) -> Vec<String> {
+    pub(crate) fn order(&self, edit: &mut SchemaEdit<'_>) -> Vec<String> {
         let tokens = |edit: &mut SchemaEdit<'_>, value: Value| match value {
             Value::Array(items) => items
                 .iter()
@@ -354,7 +354,7 @@ impl XformableEdit {
             .unwrap_or_default()
     }
 
-    fn set_order(&self, edit: &mut SchemaEdit<'_>, order: &[String]) {
+    pub(crate) fn set_order(&self, edit: &mut SchemaEdit<'_>, order: &[String]) {
         let order: Vec<&str> = order.iter().map(String::as_str).collect();
         self.set_xform_op_order(edit, &order);
     }

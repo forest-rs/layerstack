@@ -154,7 +154,10 @@
 //! op already listed ([`XformOpError`]); the [`XformOpEdit`] it returns
 //! sets the op's value ([`XformOpValue`]) at the default time or a time
 //! code. `clear_xform_op_order` and `set_reset_xform_stack` edit the order
-//! itself.
+//! itself. `set_common_transform` and `set_common_transform_at` author a
+//! compatible translation/pivot/Euler rotation/scale stack from
+//! [`CommonTransform`], rejecting incompatible ops before writing. They retain
+//! existing vector precision and the reset flag; they do not decompose matrices.
 //!
 //! Each computation is a pure step over one prim's stage reads and its
 //! parent's result: [`LocalTransformInputs`] (read once, then
@@ -276,6 +279,8 @@ mod binding;
 pub mod bounds;
 #[cfg(feature = "usd")]
 mod collection;
+#[cfg(feature = "usd-geom")]
+mod common_xform;
 mod edit;
 mod generated;
 #[cfg(feature = "usd-geom")]
@@ -295,6 +300,8 @@ mod value;
 mod xform;
 #[cfg(feature = "usd-geom")]
 mod xform_edit;
+#[cfg(feature = "usd-geom")]
+pub use common_xform::{CommonTransform, CommonTransformError, RotationOrder};
 
 #[cfg(feature = "usd-shade")]
 pub use binding::{

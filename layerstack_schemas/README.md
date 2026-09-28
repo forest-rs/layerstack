@@ -43,7 +43,10 @@ The `usd-geom` feature provides caller-owned transform and bounds caches:
 Pass every successful `LiveStage` change report to each cache's `apply_changes`,
 or explicitly invalidate after manual edits. Caches do not observe edits
 implicitly; clear them before using an unrelated scene. Bounds source edits
-still evict affected descendants and reduction ancestors. Cache stats expose
+evict affected descendants and dirty reduction ancestors. Wide static parents
+lazily retain reductions after their first edit; subsequent leaf edits update
+only changed contributions and their reduction paths. Small or animated parents
+use the ordinary child fold, and structural changes rebuild affected reductions. Cache stats expose
 computed, reused and invalidated work.
 
 When no valid extent is authored, bounds are computed from mesh points or

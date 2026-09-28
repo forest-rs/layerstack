@@ -8,6 +8,9 @@
 //! It preserves an oriented range and matrix, rather than repeatedly aligning
 //! boxes in every ancestor's coordinates. OpenUSD: `UsdGeomBBoxCache`.
 
+mod reduction;
+use reduction::{MIN_CHILDREN, Reduction};
+
 use crate::{
     gf,
     imageable::{Visibility, VisibilityInputs},
@@ -159,9 +162,11 @@ impl<T> Entry<T> {
 ///
 /// Pass each successful live change report to [`Self::apply_changes`]. For
 /// manual edits affecting geometry, transforms, purpose, visibility, kinds or
-/// topology, [`Self::invalidate`] evicts cached descendants and ancestors by
-/// indexed dependencies. It does not observe edits automatically. Clear between
-/// unrelated scenes. Intrinsic extents are computed for meshes, cubes, spheres, cylinders, cones
+/// topology, [`Self::invalidate`] evicts cached descendants and marks ancestors
+/// dirty by indexed dependencies. After an edit, wide static parents retain
+/// range reductions so later leaf edits update only their contribution paths.
+/// It does not observe edits automatically. Clear between unrelated scenes.
+/// Intrinsic extents are computed for meshes, cubes, spheres, cylinders, cones
 /// and capsules when a valid authored extent is unavailable. Other extent
 /// providers and point instancers are not implemented; missing geometry is an
 /// error, never a silently incomplete bound.
@@ -179,6 +184,8 @@ pub struct BoundsCache {
     inclusions: HashMap<PathId, Entry<bool>>,
     children: HashMap<PathId, HashSet<PathId>>,
     transforms: XformCache,
+    reductions: HashMap<PathId, Reduction>,
+    promote: HashSet<PathId>,
     stats: BoundsStats,
     epoch: u64,
 }
@@ -193,6 +200,8 @@ impl BoundsCache {
             inclusions: HashMap::new(),
             children: HashMap::new(),
             transforms: XformCache::new(time),
+            reductions: HashMap::new(),
+            promote: HashSet::new(),
             stats: BoundsStats::default(),
             epoch: 1,
         }
@@ -218,6 +227,8 @@ impl BoundsCache {
         self.inclusions.clear();
         self.children.clear();
         self.transforms.clear();
+        self.reductions.clear();
+        self.promote.clear();
         self.stats = BoundsStats::default();
         self.epoch = 1;
     }
@@ -236,11 +247,14 @@ impl BoundsCache {
             self.transforms.set_time(time);
         }
     }
-    /// Evict `path`, cached descendants, and ancestors whose bounds include it.
+    /// Invalidate `path`, cached descendants, and ancestors whose bounds include it.
     ///
     /// Deleted paths may be passed: their interned namespace is sufficient.
     /// Visits indexed descendants and namespace ancestors, rather than scanning
-    /// every cached prim.
+    /// every cached prim. A wide static parent's first edit builds a retained
+    /// reduction; later child changes update it in logarithmic work per purpose.
+    /// Structural changes retire affected reductions. Animated and small
+    /// parents continue to fold their children when recomputed.
     pub fn invalidate(&mut self, scene: &Scene<'_>, path: PathId) {
         self.transforms.invalidate(scene, path);
         self.invalidate_bounds(scene, path);
@@ -265,6 +279,8 @@ impl BoundsCache {
         while let Some(at) = pending.pop() {
             self.stats.invalidated += usize::from(self.entries.remove(&at).is_some());
             self.inclusions.remove(&at);
+            self.reductions.remove(&at);
+            self.promote.remove(&at);
             if let Some(children) = self.children.remove(&at) {
                 pending.extend(children);
             }
@@ -274,10 +290,23 @@ impl BoundsCache {
         {
             children.remove(&path);
         }
-        let mut at = scene.parent(path);
-        while let Some(path) = at {
-            self.stats.invalidated += usize::from(self.entries.remove(&path).is_some());
-            at = scene.parent(path);
+        let mut child = path;
+        while let Some(parent) = scene.parent(child) {
+            self.stats.invalidated += usize::from(self.entries.remove(&parent).is_some());
+            let count = scene.stage().children_of(parent).map_or(0, <[PathId]>::len);
+            let retained = self
+                .reductions
+                .get_mut(&parent)
+                .is_some_and(|reduction| reduction.mark(child, count));
+            if !retained {
+                self.reductions.remove(&parent);
+                if count >= MIN_CHILDREN {
+                    self.promote.insert(parent);
+                } else {
+                    self.promote.remove(&parent);
+                }
+            }
+            child = parent;
         }
     }
     /// Bound in the queried prim's own coordinates, retaining its orientation.
@@ -386,30 +415,38 @@ impl BoundsCache {
                 && scene.is_model(current)
                 && prim.property_might_vary("extentsHint");
             let (bounds, varying) = if let Some(children) = children {
+                // A retained reduction was entirely static when built. Only
+                // dirty children's inclusion inputs can introduce variability.
+                let inclusion_varies = |child: &PathId| {
+                    self.inclusions
+                        .get(child)
+                        .is_some_and(|entry| entry.varying)
+                };
+                let inclusion_varying = if let Some(reduction) = self.reductions.get(&current) {
+                    reduction.dirty.iter().any(inclusion_varies)
+                } else {
+                    scene
+                        .stage()
+                        .children_of(current)
+                        .unwrap_or(&[])
+                        .iter()
+                        .any(inclusion_varies)
+                };
                 let (bounds, varying) = self.compute(scene, current, &children)?;
-                // Inclusion changes matter even for children currently omitted.
-                let inclusion_varying = scene
-                    .stage()
-                    .children_of(current)
-                    .unwrap_or(&[])
-                    .iter()
-                    .any(|child| {
-                        self.inclusions
-                            .get(child)
-                            .is_some_and(|entry| entry.varying)
-                    });
                 (bounds, varying || hint_varying || inclusion_varying)
             } else {
                 self.track(scene, current);
                 if let Some((bounds, varying)) = self.direct_bounds(scene, current)? {
                     (bounds, hint_varying || varying)
                 } else {
-                    let children: Vec<_> = scene
-                        .stage()
-                        .children_of(current)
-                        .unwrap_or(&[])
-                        .iter()
-                        .copied()
+                    let candidates: Vec<_> = if let Some(reduction) = self.reductions.get(&current)
+                    {
+                        reduction.dirty.iter().copied().collect()
+                    } else {
+                        scene.stage().children_of(current).unwrap_or(&[]).to_vec()
+                    };
+                    let children: Vec<_> = candidates
+                        .into_iter()
                         .filter(|&child| self.include_child(scene, child))
                         .collect();
                     let pending: Vec<_> = children
@@ -423,6 +460,12 @@ impl BoundsCache {
                     continue;
                 }
             };
+            if varying {
+                // Time changes remain O(1). Animated reductions use the normal
+                // traversal, rather than maintaining a second temporal index.
+                self.reductions.remove(&current);
+            }
+            self.promote.remove(&current);
             self.stats.computed += 1;
             self.entries.insert(
                 current,
@@ -537,6 +580,18 @@ impl BoundsCache {
         }
         let mut varying =
             self.transforms.world_might_vary(component) || self.transforms.world_might_vary(path);
+        let retained = self.reductions.remove(&path);
+        let incremental = retained.is_some();
+        let mut reduction = retained.or_else(|| {
+            self.promote
+                .contains(&path)
+                .then(|| Reduction::new(scene.stage().children_of(path).unwrap_or(&[])))
+        });
+        if let Some(reduction) = &mut reduction {
+            // Leave a rebuild request behind if any later child query fails.
+            self.promote.insert(path);
+            reduction.clear_dirty_leaves();
+        }
         let mut result: PurposeBounds = Vec::new();
         for &child in children {
             self.stats.hits += 1;
@@ -544,6 +599,25 @@ impl BoundsCache {
             varying |= self.transforms.world_might_vary(child) || self.entries[&child].varying;
             for (purpose, bbox) in &self.entries[&child].value {
                 let range = bbox.transformed(&child_to_component).aligned_range();
+                if let Some(reduction) = &mut reduction {
+                    if !reduction.set(child, purpose, range) {
+                        // A scene may author arbitrarily many purpose tokens.
+                        // Bound retained storage to four arrays; fall back to
+                        // the ordinary fold for this query. This retry cannot
+                        // recurse again: both promotion and the tree are gone.
+                        self.promote.remove(&path);
+                        let all: Vec<_> = scene
+                            .stage()
+                            .children_of(path)
+                            .unwrap_or(&[])
+                            .iter()
+                            .copied()
+                            .filter(|&child| self.include_child(scene, child))
+                            .collect();
+                        return self.compute(scene, path, &all);
+                    }
+                    continue;
+                }
                 if let Some((_, held)) = result.iter_mut().find(|(p, _)| p == purpose) {
                     held.range.union_with(range);
                 } else {
@@ -556,6 +630,16 @@ impl BoundsCache {
                     ));
                 }
             }
+        }
+        if let Some(mut reduction) = reduction {
+            if incremental {
+                reduction.update_dirty();
+            } else {
+                reduction.build();
+            }
+            reduction.dirty.clear();
+            result = reduction.bounds(component_to_local);
+            self.reductions.insert(path, reduction);
         }
         Ok((result, varying))
     }
@@ -605,6 +689,150 @@ mod tests {
     use layerstack::{
         InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, Stage, StageOptions, Value,
     };
+
+    #[test]
+    fn wide_reductions_follow_edits_and_retire_on_structure_time_and_errors() {
+        use layerstack::{
+            LiveStage, PropertyPath,
+            edit::{EditTarget, Transaction},
+        };
+        let mut store = InMemoryStore::default();
+        let root = store.path("/World");
+        let xform = store.tokens.intern("Xform");
+        let cube = store.tokens.intern("Cube");
+        let size = store.tokens.intern("size");
+        let purpose = store.tokens.intern("purpose");
+        let visibility = store.tokens.intern("visibility");
+        let render = store.tokens.intern("render");
+        let default = store.tokens.intern("default");
+        let invisible = store.tokens.intern("invisible");
+        let inherited = store.tokens.intern("inherited");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(root, PrimSpec::def().with_type_name(xform));
+        let mut leaves = Vec::new();
+        for i in 0..70 {
+            let path = store.path(&alloc::format!("/World/P{i}"));
+            layer.insert_prim(path, PrimSpec::def().with_type_name(cube));
+            leaves.push(path);
+        }
+        store.insert_layer(layer);
+        let options = StageOptions {
+            schemas: Some(Arc::new(crate::openusd(&mut store.tokens))),
+            ..StageOptions::default()
+        };
+        let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+        let target = EditTarget::for_layer(LayerId(1));
+        let mut cache = BoundsCache::new(Time::Default, BoundsOptions::default());
+        cache
+            .world_bound(&Scene::new(live.stage(), &store), root)
+            .unwrap();
+        assert!(
+            cache.reductions.is_empty(),
+            "cold queries do not allocate reductions"
+        );
+        let check = |cache: &mut BoundsCache, live: &LiveStage, store: &InMemoryStore| {
+            let scene = Scene::new(live.stage(), store);
+            let mut fresh = BoundsCache::new(cache.time, cache.options.clone());
+            assert_eq!(
+                cache.world_bound(&scene, root),
+                fresh.world_bound(&scene, root)
+            );
+        };
+        for (field, value) in [
+            (size, Value::Double(20.0)),
+            (size, Value::Double(3.0)),
+            (purpose, Value::Token(render)),
+            (purpose, Value::Token(default)),
+            (visibility, Value::Token(invisible)),
+            (visibility, Value::Token(inherited)),
+            (size, Value::Double(1.0)),
+        ] {
+            let promoted = cache.reductions.contains_key(&root);
+            let hits = cache.stats.hits;
+            let mut edit = Transaction::new();
+            edit.set_default(target.property(PropertyPath::new(leaves[0], field)), value);
+            let applied = live.apply(&mut store, &edit).unwrap();
+            cache.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);
+            check(&mut cache, &live, &store);
+            assert!(cache.reductions.contains_key(&root));
+            if promoted {
+                assert!(
+                    cache.stats.hits - hits < 10,
+                    "unchanged siblings are not queried"
+                );
+            }
+        }
+        // Both pending edits must contribute, including shrinking a prior max.
+        let mut edit = Transaction::new();
+        edit.set_default(
+            target.property(PropertyPath::new(leaves[0], size)),
+            Value::Double(2.0),
+        );
+        edit.set_default(
+            target.property(PropertyPath::new(leaves[1], size)),
+            Value::Double(30.0),
+        );
+        let applied = live.apply(&mut store, &edit).unwrap();
+        cache.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);
+        check(&mut cache, &live, &store);
+        let mut edit = Transaction::new();
+        edit.remove_spec(target.prim(leaves[1]));
+        let removed = live.apply(&mut store, &edit).unwrap();
+        cache.apply_changes(&Scene::new(live.stage(), &store), &removed.changes);
+        check(&mut cache, &live, &store);
+        let restored = live.apply(&mut store, &removed.inverse).unwrap();
+        cache.apply_changes(&Scene::new(live.stage(), &store), &restored.changes);
+        check(&mut cache, &live, &store);
+        // Unknown purposes must remain correct without one full-size tree
+        // per arbitrary token. Exceeding four buckets falls back to a fold.
+        let mut edit = Transaction::new();
+        for (i, &leaf) in leaves.iter().take(5).enumerate() {
+            let custom = store.tokens.intern(alloc::format!("custom{i}"));
+            edit.set_default(
+                target.property(PropertyPath::new(leaf, purpose)),
+                Value::Token(custom),
+            );
+        }
+        let many_purposes = live.apply(&mut store, &edit).unwrap();
+        cache.apply_changes(&Scene::new(live.stage(), &store), &many_purposes.changes);
+        check(&mut cache, &live, &store);
+        assert!(cache.reductions.is_empty());
+        let restored = live.apply(&mut store, &many_purposes.inverse).unwrap();
+        cache.apply_changes(&Scene::new(live.stage(), &store), &restored.changes);
+        check(&mut cache, &live, &store);
+        // Failed geometry must not leave a half-updated reduction reusable.
+        let mut edit = Transaction::new();
+        edit.remove_spec(target.prim(leaves[0]));
+        edit.create_prim(
+            target.prim(leaves[0]),
+            layerstack::Specifier::Def,
+            Some(store.tokens.intern("Mesh")),
+        );
+        let bad = live.apply(&mut store, &edit).unwrap();
+        cache.apply_changes(&Scene::new(live.stage(), &store), &bad.changes);
+        for _ in 0..2 {
+            check(&mut cache, &live, &store);
+        }
+        let fixed = live.apply(&mut store, &bad.inverse).unwrap();
+        cache.apply_changes(&Scene::new(live.stage(), &store), &fixed.changes);
+        check(&mut cache, &live, &store);
+        // A newly temporal input retires the static reduction.
+        let mut edit = Transaction::new();
+        for (time, size_value) in [(0.0, 4.0), (2.0, 40.0)] {
+            edit.set_time_sample(
+                target.property(PropertyPath::new(leaves[0], size)),
+                time,
+                Value::Double(size_value),
+            );
+        }
+        let animated = live.apply(&mut store, &edit).unwrap();
+        cache.apply_changes(&Scene::new(live.stage(), &store), &animated.changes);
+        for time in [Time::at(0.0), Time::at(2.0), Time::Default] {
+            cache.set_time(time);
+            check(&mut cache, &live, &store);
+            assert!(cache.reductions.is_empty());
+        }
+    }
 
     #[test]
     fn relative_queries_report_missing_and_singular_frames() {

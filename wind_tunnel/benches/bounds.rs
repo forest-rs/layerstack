@@ -65,6 +65,25 @@ fn bench(c: &mut Criterion) {
                 },
             );
             group.bench_with_input(
+                BenchmarkId::new(format!("{shape}_first_leaf_edit"), n),
+                &n,
+                |b, _| {
+                    b.iter_batched_ref(
+                        || {
+                            let mut cache =
+                                BoundsCache::new(Time::Default, BoundsOptions::default());
+                            black_box(cache.world_bound(&scene, root).unwrap());
+                            cache
+                        },
+                        |cache| {
+                            cache.invalidate(&scene, leaf);
+                            black_box(cache.world_bound(&scene, root).unwrap());
+                        },
+                        criterion::BatchSize::PerIteration,
+                    );
+                },
+            );
+            group.bench_with_input(
                 BenchmarkId::new(format!("{shape}_warm_root"), n),
                 &n,
                 |b, _| b.iter(|| black_box(cache.world_bound(&scene, root).unwrap())),

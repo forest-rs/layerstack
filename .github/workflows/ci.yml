@@ -410,6 +410,9 @@ jobs:
       - name: check transform oracle
         run: python layerstack_conformance/scripts/xform_oracle.py --check
 
+      - name: check transform time query oracle
+        run: python layerstack_conformance/scripts/transform_queries_oracle.py --check
+
       # The authored transform ops must read, and add, as in OpenUSD.
       - name: check transform op oracle
         run: python layerstack_conformance/scripts/xform_ops_oracle.py --check

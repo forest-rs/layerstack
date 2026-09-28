@@ -1,0 +1,86 @@
+#usda 1.0
+
+def Xform "Source"
+{
+    double3 xformOp:translate.timeSamples = {
+        0: (1, 1, 1),
+        2: (2, 2, 2),
+    }
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+}
+
+def "Offset" (
+    prepend references = </Source> (offset = 5; scale = 2)
+)
+{
+}
+
+def "Masked" (
+    prepend references = </Source> (offset = 5; scale = 2)
+)
+{
+    double3 xformOp:translate = (7, 7, 7)
+}
+
+def "Blocked" (
+    prepend references = </Source> (offset = 5; scale = 2)
+)
+{
+    double3 xformOp:translate = None
+}
+
+def Xform "Animated"
+{
+    float3 xformOp:rotateXYZ.timeSamples = {
+        1: (1, 1, 1),
+        3: (2, 2, 2),
+    }
+    double3 xformOp:translate.timeSamples = {
+        0: (1, 1, 1),
+        2: (2, 2, 2),
+    }
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
+}
+
+def Xform "Single"
+{
+    double3 xformOp:translate = (1, 1, 1)
+    double3 xformOp:translate.timeSamples = {
+        4: (2, 2, 2),
+    }
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+}
+
+def Xform "Static"
+{
+    double3 xformOp:translate = (3, 3, 3)
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+}
+
+def Xform "Reset"
+{
+    float3 xformOp:scale = (1, 1, 1)
+    double3 xformOp:translate.timeSamples = {
+        0: (1, 1, 1),
+        2: (2, 2, 2),
+    }
+    uniform token[] xformOpOrder = ["xformOp:translate", "!resetXformStack!", "xformOp:scale"]
+}
+
+def Xform "Inverse"
+{
+    double3 xformOp:translate:pivot.timeSamples = {
+        0: (1, 1, 1),
+        2: (2, 2, 2),
+    }
+    uniform token[] xformOpOrder = ["xformOp:translate:pivot", "!invert!xformOp:translate:pivot"]
+}
+
+def Xform "Spline"
+{
+    double xformOp:rotateZ.spline = {
+        0: 0; pre (0, 0); post linear,
+        2: 30; post linear,
+    }
+    uniform token[] xformOpOrder = ["xformOp:rotateZ"]
+}

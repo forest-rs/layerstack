@@ -1007,7 +1007,8 @@ impl XformCache {
     /// For a sparse cache, traversal stops after a budget equal to its entry
     /// count and filters the remaining cache by namespace instead. Child lists
     /// are borrowed lazily, so wide scenes allocate no wide traversal frontier.
-    /// Info-only changes conservatively invalidate the prim's local transform;
+    /// Info-only changes invalidate the local transform when transform fields
+    /// changed or the report lacks a complete property inventory;
     /// descendant worlds validate lazily. No namespace index is constructed.
     ///
     /// Spec: AOUSD Core §11 (population), §12 (composed changes).
@@ -1046,7 +1047,13 @@ impl XformCache {
         }
         self.finish_retirement();
         for &path in &changes.changed_info_only {
-            self.invalidate_transform(path);
+            if changes.properties_for(path).is_none_or(|fields| {
+                fields
+                    .iter()
+                    .any(|field| transform_property(scene.store().tokens().resolve(field.name)))
+            }) {
+                self.invalidate_transform(path);
+            }
         }
     }
 
@@ -1377,6 +1384,12 @@ impl XformCache {
             None => Some(gf::IDENTITY),
         }
     }
+}
+
+// UsdGeomXformable reads only xformOpOrder and the named xformOp attributes.
+// Match the whole namespace conservatively, including currently unused ops.
+pub(crate) fn transform_property(name: &str) -> bool {
+    name == "xformOpOrder" || name.starts_with("xformOp:")
 }
 
 #[cfg(test)]

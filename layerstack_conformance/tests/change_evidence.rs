@@ -79,3 +79,84 @@ fn referenced_values_and_undo_report_composed_properties() {
         "reports are drained once"
     );
 }
+
+#[test]
+fn precise_unrelated_edits_preserve_geometry_caches() {
+    use layerstack_schemas::{
+        Scene, Time, XformCache,
+        bounds::{BoundsCache, BoundsOptions},
+    };
+    use std::sync::Arc;
+    let mut store = InMemoryStore::default();
+    let root = store.path("/World");
+    let child = store.path("/World/Shape");
+    let cube = store.tokens.intern("Cube");
+    let size = store.tokens.intern("size");
+    let color = store.tokens.intern("inputs:roughness");
+    let attr = |v| {
+        PropertySpec::typed_attribute(layerstack::PropertyType::new(
+            "double",
+            false,
+            Value::Double(0.0),
+        ))
+        .with_default(Value::Double(v))
+    };
+    let mut layer = Layer::new(LayerId(1));
+    layer.insert_prim(root, PrimSpec::def().with_property(color, attr(0.5)));
+    layer.insert_prim(
+        child,
+        PrimSpec::def()
+            .with_type_name(cube)
+            .with_property(size, attr(2.0)),
+    );
+    store.insert_layer(layer);
+    let options = StageOptions {
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        ..StageOptions::default()
+    };
+    let mut live = LiveStage::compose(&mut store, LayerId(1), options);
+    let mut xforms = XformCache::new(Time::Default);
+    let mut bounds = BoundsCache::new(Time::Default, BoundsOptions::default());
+    let scene = Scene::new(live.stage(), &store);
+    xforms.local_to_world(&scene, child);
+    let before = bounds.world_bound(&scene, root).unwrap();
+    let xcomputed = xforms.stats().local_computed;
+    let bcomputed = bounds.stats().computed;
+    let mut txn = Transaction::new();
+    txn.set_default(
+        EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(root, color)),
+        Value::Double(0.7),
+    );
+    let applied = live.apply(&mut store, &txn).unwrap();
+    let scene = Scene::new(live.stage(), &store);
+    xforms.apply_changes(&scene, &applied.changes);
+    bounds.apply_changes(&scene, &applied.changes);
+    xforms.local_to_world(&scene, child);
+    assert_eq!(bounds.world_bound(&scene, root).unwrap(), before);
+    assert_eq!(
+        xforms.stats().local_computed,
+        xcomputed,
+        "unrelated fields retain transforms"
+    );
+    assert_eq!(
+        bounds.stats().computed,
+        bcomputed,
+        "unrelated fields retain bounds"
+    );
+    let mut txn = Transaction::new();
+    txn.set_default(
+        EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(child, size)),
+        Value::Double(4.0),
+    );
+    let applied = live.apply(&mut store, &txn).unwrap();
+    let scene = Scene::new(live.stage(), &store);
+    bounds.apply_changes(&scene, &applied.changes);
+    let after = bounds.world_bound(&scene, root).unwrap();
+    assert_ne!(before, after, "geometry edits still update bounds");
+    assert_eq!(
+        after,
+        BoundsCache::new(Time::Default, BoundsOptions::default())
+            .world_bound(&scene, root)
+            .unwrap()
+    );
+}

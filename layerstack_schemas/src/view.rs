@@ -137,8 +137,17 @@ impl<'a> Scene<'a> {
         let Some(parent) = self.parent(path) else {
             return (true, true);
         };
-        if !self.model_flags(parent).0 {
-            return (false, false);
+        // AOUSD Core §11.4–11.5: every proper ancestor below the
+        // pseudo-root must be a group. Walk iteratively for deep namespaces.
+        let mut at = parent;
+        while let Some(above) = self.parent(at) {
+            if !self
+                .kind(at)
+                .is_some_and(|kind| self.kinds.is_a(kind, crate::kind::GROUP))
+            {
+                return (false, false);
+            }
+            at = above;
         }
         let Some(kind) = self.kind(path) else {
             return (false, false);
@@ -739,4 +748,46 @@ macro_rules! set_uniform_attribute {
             self
         }
     };
+}
+
+#[cfg(test)]
+mod model_hierarchy_tests {
+    use super::*;
+    use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, StageOptions};
+
+    #[test]
+    fn model_requires_group_ancestors_through_a_deep_namespace() {
+        let mut store = InMemoryStore::default();
+        let kind = store.tokens.intern("kind");
+        let group = store.tokens.intern("group");
+        let component = store.tokens.intern("component");
+        let mut layer = Layer::new(LayerId(1));
+        let mut name = String::new();
+        for _ in 0..256 {
+            name.push_str("/Group");
+            let path = store.path(&name);
+            layer.insert_prim(path, PrimSpec::def().with_field(kind, Value::Token(group)));
+        }
+        let deepest_group = store.path(&name);
+        name.push_str("/Asset");
+        let asset = store.path(&name);
+        layer.insert_prim(
+            asset,
+            PrimSpec::def().with_field(kind, Value::Token(component)),
+        );
+        name.push_str("/NestedGroup");
+        let invalid = store.path(&name);
+        layer.insert_prim(
+            invalid,
+            PrimSpec::def().with_field(kind, Value::Token(group)),
+        );
+        store.insert_layer(layer);
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        let scene = Scene::new(&stage, &store);
+        assert!(scene.is_group(deepest_group));
+        assert!(scene.is_model(asset));
+        assert!(!scene.is_group(asset));
+        assert!(!scene.is_model(invalid));
+        assert!(!scene.is_group(invalid));
+    }
 }

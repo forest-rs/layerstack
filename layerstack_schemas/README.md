@@ -21,6 +21,12 @@ The `usd-shade` feature also resolves composed connections and material surface,
 displacement and volume sources through node graphs and ordered render contexts.
 Results retain the selected endpoint, other candidates, diagnostics and dependencies.
 
+The `usd-geom` feature provides caller-owned transform and bounds caches.
+`bounds::BoundsCache` computes oriented local/world bounds from authored extents
+and model extent hints, with purpose and visibility filtering. Invalidate after
+edits to evict affected descendants and ancestors. Procedural extent providers
+and point-instancer bounds return explicit unsupported errors.
+
 To regenerate after an OpenUSD upgrade, install the matching usd-core wheel,
 check out OpenUSD's sources at the same release (for each property's
 `apiName`, which names the accessors, and for `usdMtlx`, which the wheel is

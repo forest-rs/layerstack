@@ -52,3 +52,7 @@ harness = false
 [[bench]]
 name = "xform_cache"
 harness = false
+
+[[bench]]
+name = "bounds"
+harness = false

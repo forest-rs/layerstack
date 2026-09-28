@@ -64,3 +64,7 @@ harness = false
 [[bench]]
 name = "stage_notices"
 harness = false
+
+[[bench]]
+name = "query_changes"
+harness = false

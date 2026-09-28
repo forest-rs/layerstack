@@ -269,8 +269,17 @@ impl BoundsCache {
         // Resync roots cover removals too. Retained reduction dependencies
         // reach deleted and excluded descendants without revisiting ancestors
         // once for every entry in the exact removal inventory.
-        for &path in changes.resynced.iter().chain(&changes.changed_info_only) {
+        for &path in &changes.resynced {
             self.invalidate_bounds(scene, path);
+        }
+        for &path in &changes.changed_info_only {
+            if changes.properties_for(path).is_none_or(|fields| {
+                fields
+                    .iter()
+                    .any(|field| bounds_property(scene.store().tokens().resolve(field.name)))
+            }) {
+                self.invalidate_bounds(scene, path);
+            }
         }
     }
 
@@ -680,6 +689,24 @@ fn box_from_extent(extent: &[[f32; 3]]) -> BoundingBox {
         },
         matrix: gf::IDENTITY,
     }
+}
+
+// Keep this inventory with the built-in extent providers in extent.rs. Unknown
+// prim edits (including kind/schema changes) always invalidate conservatively.
+pub(crate) fn bounds_property(name: &str) -> bool {
+    crate::xform::transform_property(name)
+        || matches!(
+            name,
+            "extent"
+                | "extentsHint"
+                | "points"
+                | "size"
+                | "radius"
+                | "height"
+                | "axis"
+                | "purpose"
+                | "visibility"
+        )
 }
 
 #[cfg(test)]

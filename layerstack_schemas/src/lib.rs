@@ -128,7 +128,13 @@
 //! - `Imageable::compute_local_to_world` and `compute_parent_to_world`;
 //!   for many prims, an [`XformCache`] owned by the caller shares each
 //!   ancestor's work, reports what it computed ([`XformCacheStats`]), and
-//!   is invalidated explicitly after edits;
+//!   is invalidated explicitly after edits. `relative_transform` composes
+//!   local ops toward an ancestor and reports any intervening reset;
+//! - `bounds::BoundsCache` computes world, local, untransformed and relative
+//!   bounds from authored extents or model extents hints, with purpose and
+//!   visibility filtering. Relative bounds convert world coordinate frames,
+//!   including across transform resets. Time changes preserve static results;
+//!   point-instancer bounds and procedural extent providers remain unsupported;
 //! - `Imageable::compute_visibility`, `compute_effective_visibility` for a
 //!   purpose (`VisibilityAPI`), and `compute_purpose_info`, which says
 //!   which prim authors the inherited purpose.
@@ -308,8 +314,8 @@ pub use predicate::{CollectionPredicate, CollectionPredicates};
 pub use view::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, Time};
 #[cfg(feature = "usd-geom")]
 pub use xform::{
-    INVERT_PREFIX, LocalTransform, LocalTransformInputs, RESET_XFORM_STACK, XformCache,
-    XformCacheStats, XformOp, XformOpType, XformOps, XformProblem, XformProblemKind,
+    INVERT_PREFIX, LocalTransform, LocalTransformInputs, RESET_XFORM_STACK, RelativeTransform,
+    XformCache, XformCacheStats, XformOp, XformOpType, XformOps, XformProblem, XformProblemKind,
 };
 #[cfg(feature = "usd-geom")]
 pub use xform_edit::{XformOpEdit, XformOpError, XformOpPrecision, XformOpValue};

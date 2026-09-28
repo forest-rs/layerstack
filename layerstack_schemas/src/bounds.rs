@@ -321,6 +321,24 @@ impl BoundsCache {
         let bbox = self.untransformed_bound(scene, path)?;
         Ok(bbox.transformed(&self.world(scene, path)?))
     }
+    /// Bound expressed in `relative_to`'s coordinate frame.
+    ///
+    /// OpenUSD: `UsdGeomBBoxCache::ComputeRelativeBound`. Applies the
+    /// queried prim's world transform and the inverse target world transform,
+    /// including across reset boundaries. The target need not be an ancestor.
+    /// Unlike `XformCache::relative_transform`, this always converts frames.
+    /// Missing prims and singular target transforms return explicit errors.
+    pub fn relative_bound(
+        &mut self,
+        scene: &Scene<'_>,
+        path: PathId,
+        relative_to: PathId,
+    ) -> Result<BoundingBox, BoundsError> {
+        let bbox = self.untransformed_bound(scene, path)?;
+        let inverse = self.inverse_world(scene, relative_to)?;
+        Ok(bbox.transformed(&gf::mul(&self.world(scene, path)?, &inverse)))
+    }
+
     fn world(&mut self, scene: &Scene<'_>, path: PathId) -> Result<gf::Matrix4, BoundsError> {
         self.transforms
             .local_to_world(scene, path)
@@ -576,6 +594,70 @@ mod tests {
     use layerstack::{
         InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, Stage, StageOptions, Value,
     };
+
+    #[test]
+    fn relative_queries_report_missing_and_singular_frames() {
+        let mut store = InMemoryStore::default();
+        let path = store.path("/Mesh");
+        let missing = store.path("/Missing");
+        let mesh = store.tokens.intern("Mesh");
+        let extent = store.tokens.intern("extent");
+        let scale = store.tokens.intern("xformOp:scale");
+        let order = store.tokens.intern("xformOpOrder");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(
+            path,
+            PrimSpec::def()
+                .with_type_name(mesh)
+                .with_property(
+                    extent,
+                    PropertySpec::attribute().with_default(Value::Array(vec![
+                        Value::Vec3f([-1.0; 3]),
+                        Value::Vec3f([1.0; 3]),
+                    ])),
+                )
+                .with_property(
+                    scale,
+                    PropertySpec::attribute().with_default(Value::Vec3d([0.0; 3])),
+                )
+                .with_property(
+                    order,
+                    PropertySpec::attribute().with_default(Value::Array(vec![Value::Token(scale)])),
+                ),
+        );
+        store.insert_layer(layer);
+        let options = StageOptions {
+            schemas: Some(Arc::new(crate::openusd(&mut store.tokens))),
+            ..StageOptions::default()
+        };
+        let stage = Stage::compose(&mut store, LayerId(1), options);
+        let scene = Scene::new(&stage, &store);
+        let mut cache = BoundsCache::new(Time::Default, BoundsOptions::default());
+        assert_eq!(
+            cache.relative_bound(&scene, path, missing),
+            Err(BoundsError::MissingPrim(missing))
+        );
+        assert_eq!(
+            cache.relative_bound(&scene, missing, path),
+            Err(BoundsError::MissingPrim(missing))
+        );
+        assert_eq!(
+            cache.relative_bound(&scene, path, path),
+            Err(BoundsError::SingularTransform(path))
+        );
+        assert!(
+            cache
+                .transforms
+                .relative_transform(&scene, path, missing)
+                .is_none()
+        );
+        let relative = cache
+            .transforms
+            .relative_transform(&scene, path, path)
+            .unwrap();
+        assert_eq!(relative.matrix, gf::IDENTITY, "local walk needs no inverse");
+        assert!(!relative.resets_xform_stack);
+    }
 
     #[test]
     fn temporal_reuse_preserves_single_samples_errors_and_epoch_wrap() {

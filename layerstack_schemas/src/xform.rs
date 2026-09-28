@@ -588,6 +588,17 @@ impl<'a> Imageable<'a> {
     }
 }
 
+/// Local operations composed from a prim toward a requested ancestor.
+/// A reset stops the walk, so the result is then world-relative rather than
+/// relative to an ancestor above the reset.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RelativeTransform {
+    /// Row-vector transform from the queried prim's coordinates.
+    pub matrix: [[f64; 4]; 4],
+    /// Whether the walk encountered a reset before reaching the ancestor.
+    pub resets_xform_stack: bool,
+}
+
 /// What an [`XformCache`] has done since it was made or cleared.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct XformCacheStats {
@@ -1182,6 +1193,47 @@ impl XformCache {
             above_stamp = stamp;
         }
         Some(above)
+    }
+
+    /// Compose local operations up to, but excluding, `ancestor`.
+    ///
+    /// OpenUSD: `UsdGeomXformCache::ComputeRelativeTransform`. Stops at a
+    /// reset and reports it; this is not a world-matrix quotient. If the
+    /// requested ancestor is outside the prim's ancestry, the walk ends at
+    /// the pseudo-root and returns the world transform. Equal paths return
+    /// identity without a reset. Returns `None` if either prim is missing.
+    pub fn relative_transform(
+        &mut self,
+        scene: &Scene<'_>,
+        path: PathId,
+        ancestor: PathId,
+    ) -> Option<RelativeTransform> {
+        if !scene.stage().has_prim(path) || !scene.stage().has_prim(ancestor) {
+            return None;
+        }
+        let mut result = RelativeTransform {
+            matrix: gf::IDENTITY,
+            resets_xform_stack: false,
+        };
+        if path == ancestor || scene.store().paths().resolve(path).segments().is_empty() {
+            return Some(result);
+        }
+        let mut at = Some(self.ensure_slot(scene, path));
+        while let Some(slot) = at {
+            let index = slot.get() - 1;
+            if self.nodes[index].path == ancestor {
+                break;
+            }
+            self.ensure_local(scene, slot);
+            let local = self.transforms[index].local.as_ref()?;
+            result.matrix = gf::mul(&result.matrix, &local.matrix);
+            if local.resets_xform_stack {
+                result.resets_xform_stack = true;
+                break;
+            }
+            at = self.parent_slot(scene, slot);
+        }
+        Some(result)
     }
 
     // Called after a successful world query by bounds reduction. The world

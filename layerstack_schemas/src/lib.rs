@@ -231,6 +231,12 @@
 //! [`usd_shade::Material::compute_surface_source`] selects a terminal through
 //! ordered render contexts and universal fallback. Results retain candidate
 //! endpoints, branch diagnostics and dependencies, including missing properties.
+//! [`Scene::value_sources`] also finds authored values behind material and
+//! node-graph interface inputs. [`shading::Port`] reads a provider's value at a
+//! chosen time. [`PrimEdit::create_input`] and [`PrimEdit::create_output`] create
+//! typed ports; [`shading::PortEdit`] sets values and replaces connections through
+//! normal source transactions. Disconnecting authors an empty list; clearing
+//! removes the source opinion to reveal weaker connections.
 //!
 //! With `usd-shade`, `PrimView::compute_bound_material` (every view derefs
 //! to [`PrimView`]) resolves a prim's material for a [`MaterialPurpose`] as

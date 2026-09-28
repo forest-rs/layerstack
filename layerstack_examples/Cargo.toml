@@ -1,5 +1,6 @@
 [package]
 name = "layerstack_examples"
+default-run = "layerstack_examples"
 description = "Runnable examples for the layerstack composition kernel and opinionated."
 readme = "README.md"
 version.workspace = true

@@ -73,3 +73,26 @@ The generated tables and views in `src/generated` derive from OpenUSD's schema
 definitions and are under the Tomorrow Open Source Technology License 1.0
 (`LICENSE-TOST-1.0`, `NOTICE`). The rest of the crate is under Apache-2.0 OR
 MIT (`LICENSE-APACHE`, `LICENSE-MIT`).
+
+### Shading values and port authoring
+
+`Scene::value_sources` follows connections through material and node-graph
+interfaces to shader outputs **or authored values**. It preserves branch traces,
+cycles and invalid targets. A local authored value is used only when none of
+that attribute's connections produces a source. `shader_sources` remains the
+shader-only query used for material terminals.
+
+Views expose `input(name)`, `output(name)` and `ports(kind)`. A `shading::Port`
+can read its own value at a time or trace its providers; tracing does not evaluate
+shaders. Edit handles expose `create_input`/`create_output`, returning `PortEdit`
+for values and explicit connection replacement. `disconnect_sources` blocks
+weaker connections with an empty list; `clear_sources` removes the local opinion.
+Both use the existing mapped transaction and undo path.
+
+This slice requires source ports to exist (including ports created earlier in
+the edit). It does not implement `CanConnect`, source-port auto-creation,
+individual list insertion/deletion helpers, Sdr, or connectability plugins.
+Those policies are separate from composed connection inspection.
+
+Run `cargo run -p layerstack_examples --bin shading_values` for a complete
+interface-input authoring and value-source inspection example.

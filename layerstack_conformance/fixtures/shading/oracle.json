@@ -3,7 +3,8 @@
     "/Base.outputs:displacement": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Base.outputs:surface": {
       "invalid": [],
@@ -14,29 +15,37 @@
       "terminals": [
         "/Base/A.outputs:out",
         "/Base/B.outputs:out"
+      ],
+      "values": [
+        "/Base/A.outputs:out",
+        "/Base/B.outputs:out"
       ]
     },
     "/Base.outputs:volume": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Base/A.outputs:out": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Base/B.outputs:out": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Contexts.outputs:bad:surface": {
       "invalid": [],
       "sources": [
         "/Graph.outputs:cycle"
       ],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Contexts.outputs:displacement": {
       "invalid": [],
@@ -45,12 +54,16 @@
       ],
       "terminals": [
         "/S.outputs:out"
+      ],
+      "values": [
+        "/S.outputs:out"
       ]
     },
     "/Contexts.outputs:empty:surface": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Contexts.outputs:ri:surface": {
       "invalid": [],
@@ -58,6 +71,9 @@
         "/T.outputs:out"
       ],
       "terminals": [
+        "/T.outputs:out"
+      ],
+      "values": [
         "/T.outputs:out"
       ]
     },
@@ -68,6 +84,9 @@
       ],
       "terminals": [
         "/S.outputs:out"
+      ],
+      "values": [
+        "/S.outputs:out"
       ]
     },
     "/Contexts.outputs:volume": {
@@ -77,12 +96,16 @@
       ],
       "terminals": [
         "/T.outputs:out"
+      ],
+      "values": [
+        "/T.outputs:out"
       ]
     },
     "/Direct.outputs:displacement": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Direct.outputs:surface": {
       "invalid": [],
@@ -91,27 +114,34 @@
       ],
       "terminals": [
         "/S.outputs:out"
+      ],
+      "values": [
+        "/S.outputs:out"
       ]
     },
     "/Direct.outputs:volume": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Empty.outputs:displacement": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Empty.outputs:surface": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Empty.outputs:volume": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Graph.inputs:in": {
       "invalid": [],
@@ -120,6 +150,9 @@
       ],
       "terminals": [
         "/S.outputs:out"
+      ],
+      "values": [
+        "/S.outputs:out"
       ]
     },
     "/Graph.outputs:cycle": {
@@ -127,14 +160,16 @@
       "sources": [
         "/Graph.outputs:cycle2"
       ],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Graph.outputs:cycle2": {
       "invalid": [],
       "sources": [
         "/Graph.outputs:cycle"
       ],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Graph.outputs:diamond": {
       "invalid": [],
@@ -145,6 +180,10 @@
       "terminals": [
         "/S.outputs:out",
         "/S.outputs:out"
+      ],
+      "values": [
+        "/S.outputs:out",
+        "/S.outputs:out"
       ]
     },
     "/Graph.outputs:left": {
@@ -153,6 +192,9 @@
         "/Graph.inputs:in"
       ],
       "terminals": [
+        "/S.outputs:out"
+      ],
+      "values": [
         "/S.outputs:out"
       ]
     },
@@ -166,6 +208,10 @@
       "terminals": [
         "/T.outputs:out",
         "/S.outputs:out"
+      ],
+      "values": [
+        "/T.outputs:out",
+        "/S.outputs:out"
       ]
     },
     "/Graph.outputs:out": {
@@ -174,6 +220,9 @@
         "/Graph.inputs:in"
       ],
       "terminals": [
+        "/S.outputs:out"
+      ],
+      "values": [
         "/S.outputs:out"
       ]
     },
@@ -184,12 +233,16 @@
       ],
       "terminals": [
         "/S.outputs:out"
+      ],
+      "values": [
+        "/S.outputs:out"
       ]
     },
     "/Instance.outputs:displacement": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Instance.outputs:surface": {
       "invalid": [],
@@ -200,27 +253,35 @@
       "terminals": [
         "/Instance/B.outputs:out",
         "/T.outputs:out"
+      ],
+      "values": [
+        "/Instance/B.outputs:out",
+        "/T.outputs:out"
       ]
     },
     "/Instance.outputs:volume": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Instance/A.outputs:out": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Instance/B.outputs:out": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Invalid.outputs:displacement": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Invalid.outputs:surface": {
       "invalid": [
@@ -234,17 +295,22 @@
       ],
       "terminals": [
         "/T.outputs:out"
+      ],
+      "values": [
+        "/T.outputs:out"
       ]
     },
     "/Invalid.outputs:volume": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Mixed.outputs:displacement": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Mixed.outputs:surface": {
       "invalid": [],
@@ -254,17 +320,23 @@
       "terminals": [
         "/T.outputs:out",
         "/S.outputs:out"
+      ],
+      "values": [
+        "/T.outputs:out",
+        "/S.outputs:out"
       ]
     },
     "/Mixed.outputs:volume": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Multiple.outputs:displacement": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Multiple.outputs:surface": {
       "invalid": [],
@@ -274,17 +346,23 @@
       "terminals": [
         "/S.outputs:out",
         "/S.outputs:out"
+      ],
+      "values": [
+        "/S.outputs:out",
+        "/S.outputs:out"
       ]
     },
     "/Multiple.outputs:volume": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/NonShader.outputs:displacement": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/NonShader.outputs:surface": {
       "invalid": [],
@@ -293,17 +371,22 @@
       ],
       "terminals": [
         "/Plain.outputs:out"
+      ],
+      "values": [
+        "/Plain.outputs:out"
       ]
     },
     "/NonShader.outputs:volume": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/OnlyRi.outputs:displacement": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/OnlyRi.outputs:ri:surface": {
       "invalid": [],
@@ -312,27 +395,34 @@
       ],
       "terminals": [
         "/T.outputs:out"
+      ],
+      "values": [
+        "/T.outputs:out"
       ]
     },
     "/OnlyRi.outputs:surface": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/OnlyRi.outputs:volume": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Plain.outputs:out": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Referenced.outputs:displacement": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Referenced.outputs:surface": {
       "invalid": [],
@@ -341,32 +431,40 @@
       ],
       "terminals": [
         "/S.outputs:out"
+      ],
+      "values": [
+        "/S.outputs:out"
       ]
     },
     "/Referenced.outputs:volume": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/S.inputs:in": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/S.outputs:out": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/T.outputs:out": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Through.outputs:displacement": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
     },
     "/Through.outputs:surface": {
       "invalid": [],
@@ -375,12 +473,230 @@
       ],
       "terminals": [
         "/S.outputs:out"
+      ],
+      "values": [
+        "/S.outputs:out"
       ]
     },
     "/Through.outputs:volume": {
       "invalid": [],
       "sources": [],
-      "terminals": []
+      "terminals": [],
+      "values": []
+    },
+    "/Values.inputs:animated": {
+      "invalid": [],
+      "sources": [],
+      "terminals": [],
+      "values": [
+        "/Values.inputs:animated"
+      ]
+    },
+    "/Values.inputs:blocked": {
+      "invalid": [],
+      "sources": [],
+      "terminals": [],
+      "values": []
+    },
+    "/Values.inputs:broken": {
+      "invalid": [
+        "/Absent.outputs:missing"
+      ],
+      "sources": [],
+      "terminals": [],
+      "values": [
+        "/Values.inputs:broken"
+      ]
+    },
+    "/Values.inputs:constant": {
+      "invalid": [],
+      "sources": [],
+      "terminals": [],
+      "values": [
+        "/Values.inputs:constant"
+      ]
+    },
+    "/Values.inputs:cycleA": {
+      "invalid": [],
+      "sources": [
+        "/Values.inputs:cycleB"
+      ],
+      "terminals": [],
+      "values": [
+        "/Values.inputs:cycleA"
+      ]
+    },
+    "/Values.inputs:cycleB": {
+      "invalid": [],
+      "sources": [
+        "/Values.inputs:cycleA"
+      ],
+      "terminals": [],
+      "values": [
+        "/Values.inputs:cycleA"
+      ]
+    },
+    "/Values.inputs:diamond": {
+      "invalid": [],
+      "sources": [
+        "/Values.inputs:left",
+        "/Values.inputs:right"
+      ],
+      "terminals": [],
+      "values": [
+        "/Values.inputs:constant",
+        "/Values.inputs:constant"
+      ]
+    },
+    "/Values.inputs:illegal": {
+      "invalid": [],
+      "sources": [
+        "/Values/Reader.inputs:constant"
+      ],
+      "terminals": [],
+      "values": [
+        "/Values.inputs:illegal"
+      ]
+    },
+    "/Values.inputs:left": {
+      "invalid": [],
+      "sources": [
+        "/Values.inputs:constant"
+      ],
+      "terminals": [],
+      "values": [
+        "/Values.inputs:constant"
+      ]
+    },
+    "/Values.inputs:mixed": {
+      "invalid": [
+        "/Absent.outputs:missing"
+      ],
+      "sources": [
+        "/Values.inputs:constant",
+        "/S.outputs:out"
+      ],
+      "terminals": [
+        "/S.outputs:out"
+      ],
+      "values": [
+        "/Values.inputs:constant",
+        "/S.outputs:out"
+      ]
+    },
+    "/Values.inputs:passthrough": {
+      "invalid": [],
+      "sources": [
+        "/Values.inputs:constant"
+      ],
+      "terminals": [],
+      "values": [
+        "/Values.inputs:constant"
+      ]
+    },
+    "/Values.inputs:right": {
+      "invalid": [],
+      "sources": [
+        "/Values.inputs:constant"
+      ],
+      "terminals": [],
+      "values": [
+        "/Values.inputs:constant"
+      ]
+    },
+    "/Values.inputs:selfCycle": {
+      "invalid": [],
+      "sources": [
+        "/Values.inputs:selfCycle"
+      ],
+      "terminals": [],
+      "values": [
+        "/Values.inputs:selfCycle"
+      ]
+    },
+    "/Values.inputs:shaderWins": {
+      "invalid": [],
+      "sources": [
+        "/S.outputs:out"
+      ],
+      "terminals": [
+        "/S.outputs:out"
+      ],
+      "values": [
+        "/S.outputs:out"
+      ]
+    },
+    "/Values.outputs:constant": {
+      "invalid": [],
+      "sources": [],
+      "terminals": [],
+      "values": [
+        "/Values.outputs:constant"
+      ]
+    },
+    "/Values.outputs:displacement": {
+      "invalid": [],
+      "sources": [],
+      "terminals": [],
+      "values": []
+    },
+    "/Values.outputs:surface": {
+      "invalid": [],
+      "sources": [],
+      "terminals": [],
+      "values": []
+    },
+    "/Values.outputs:volume": {
+      "invalid": [],
+      "sources": [],
+      "terminals": [],
+      "values": []
+    },
+    "/Values/Reader.inputs:animated": {
+      "invalid": [],
+      "sources": [
+        "/Values.inputs:animated"
+      ],
+      "terminals": [],
+      "values": [
+        "/Values.inputs:animated"
+      ]
+    },
+    "/Values/Reader.inputs:blocked": {
+      "invalid": [],
+      "sources": [
+        "/Values.inputs:blocked"
+      ],
+      "terminals": [],
+      "values": []
+    },
+    "/Values/Reader.inputs:constant": {
+      "invalid": [],
+      "sources": [],
+      "terminals": [],
+      "values": [
+        "/Values/Reader.inputs:constant"
+      ]
+    },
+    "/Values/Reader.inputs:fromInterface": {
+      "invalid": [],
+      "sources": [
+        "/Values.inputs:constant"
+      ],
+      "terminals": [],
+      "values": [
+        "/Values.inputs:constant"
+      ]
+    },
+    "/Values/Reader.inputs:outputConstant": {
+      "invalid": [],
+      "sources": [
+        "/Values.outputs:constant"
+      ],
+      "terminals": [],
+      "values": [
+        "/Values.outputs:constant"
+      ]
     }
   },
   "materials": [
@@ -1461,6 +1777,96 @@
     {
       "context": "empty",
       "material": "/Instance",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "",
+      "material": "/Values",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "",
+      "material": "/Values",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "",
+      "material": "/Values",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "ri",
+      "material": "/Values",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "ri",
+      "material": "/Values",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "ri",
+      "material": "/Values",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "missing",
+      "material": "/Values",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "missing",
+      "material": "/Values",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "missing",
+      "material": "/Values",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "bad",
+      "material": "/Values",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "bad",
+      "material": "/Values",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "bad",
+      "material": "/Values",
+      "selected": null,
+      "terminal": "volume"
+    },
+    {
+      "context": "empty",
+      "material": "/Values",
+      "selected": null,
+      "terminal": "surface"
+    },
+    {
+      "context": "empty",
+      "material": "/Values",
+      "selected": null,
+      "terminal": "displacement"
+    },
+    {
+      "context": "empty",
+      "material": "/Values",
       "selected": null,
       "terminal": "volume"
     }

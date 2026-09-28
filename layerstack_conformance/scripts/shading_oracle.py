@@ -24,6 +24,7 @@ def record():
             connections[str(attr.GetPath())] = {
                 "sources": endpoints, "invalid": [str(p) for p in invalid],
                 "terminals": [str(a.GetPath()) for a in UsdShade.Utils.GetValueProducingAttributes(port, True)],
+                "values": [str(a.GetPath()) for a in UsdShade.Utils.GetValueProducingAttributes(port, False)],
             }
         material = UsdShade.Material(prim)
         if material:

@@ -16,10 +16,10 @@
 //! to within the rounding of the platform's trigonometry and fused
 //! multiply-adds.
 
-use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use alloc::{borrow::Cow, boxed::Box, collections::BTreeMap, format, string::String, vec::Vec};
 use core::{num::NonZeroUsize, ops::Bound};
 
-use layerstack::{HashMap, Path, PathId, Value, half};
+use layerstack::{HashMap, Path, PathId, ResolvedValue, TokenId, Value, half};
 
 use crate::gf::{self, Matrix4, Rotation};
 use crate::usd_geom::{Imageable, Xformable};
@@ -459,14 +459,30 @@ fn op_matrix(
 
 /// The product of `ops`, with `values` their values in order.
 fn evaluate(ordered: &XformOps<'_>, values: &[Option<Value>]) -> LocalTransform {
-    let mut problems = ordered.problems.clone();
+    evaluate_ops(
+        ordered.ops.len(),
+        ordered.resets_xform_stack,
+        ordered.problems.clone(),
+        |i| ordered.ops[i].clone(),
+        |i| values.get(i).and_then(Option::as_ref).map(Cow::Borrowed),
+        |i| ordered.ops[i].name.into(),
+    )
+}
+
+fn evaluate_ops<'a, 'v>(
+    count: usize,
+    resets_xform_stack: bool,
+    mut problems: Vec<XformProblem>,
+    get_op: impl Fn(usize) -> XformOp<'a>,
+    get_value: impl Fn(usize) -> Option<Cow<'v, Value>>,
+    get_name: impl Fn(usize) -> String,
+) -> LocalTransform {
     let mut matrix = gf::IDENTITY;
-    let ops = &ordered.ops;
-    let mut i = ops.len();
+    let mut i = count;
     while i > 0 {
-        let op = &ops[i - 1];
+        let op = get_op(i - 1);
         if i >= 2 {
-            let next = &ops[i - 2];
+            let next = get_op(i - 2);
             if next.attribute == op.attribute && next.inverse != op.inverse {
                 i -= 2;
                 continue;
@@ -475,26 +491,26 @@ fn evaluate(ordered: &XformOps<'_>, values: &[Option<Value>]) -> LocalTransform 
         i -= 1;
         let Some(op_type) = op.op_type else {
             problems.push(XformProblem {
-                op: op.name.into(),
+                op: get_name(i),
                 kind: XformProblemKind::UnknownOpType,
             });
             continue;
         };
-        let Some(value) = values.get(i).and_then(Option::as_ref) else {
+        let Some(value) = get_value(i) else {
             problems.push(XformProblem {
-                op: op.name.into(),
+                op: get_name(i),
                 kind: XformProblemKind::NoValue,
             });
             continue;
         };
-        let op_matrix = match op_matrix(op_type, value, op.inverse) {
+        let op_matrix = match op_matrix(op_type, &value, op.inverse) {
             Ok(m) => m,
             Err(kind) => {
                 problems.push(XformProblem {
-                    op: op.name.into(),
+                    op: get_name(i),
                     kind,
                 });
-                match (kind, value) {
+                match (kind, value.as_ref()) {
                     // OpenUSD still applies `GetInverse`'s result.
                     (XformProblemKind::Singular, Value::Matrix4d(m)) => {
                         let m: Matrix4 =
@@ -511,7 +527,7 @@ fn evaluate(ordered: &XformOps<'_>, values: &[Option<Value>]) -> LocalTransform 
     }
     LocalTransform {
         matrix,
-        resets_xform_stack: ordered.resets_xform_stack,
+        resets_xform_stack,
         problems,
     }
 }
@@ -619,6 +635,100 @@ struct Transforms {
     world: Matrix4,
 }
 
+// Only sampled transforms need a retained operation recipe. Static and empty
+// stacks keep their evaluated local result without an extra per-node allocation.
+#[derive(Clone, Debug)]
+struct PreparedTransform {
+    ops: Box<[PreparedOp]>,
+    resets: bool,
+    problems: Vec<XformProblem>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct PreparedOp {
+    attribute: TokenId,
+    kind: Option<XformOpType>,
+    inverse: bool,
+}
+
+impl PreparedTransform {
+    fn new(scene: &Scene<'_>, inputs: &LocalTransformInputs<'_>) -> Option<Self> {
+        let ops: Option<Vec<_>> = inputs
+            .ops
+            .ops
+            .iter()
+            .map(|op| {
+                Some(PreparedOp {
+                    attribute: scene.store().tokens().lookup(op.attribute)?,
+                    kind: op.op_type,
+                    inverse: op.inverse,
+                })
+            })
+            .collect();
+        Some(Self {
+            ops: ops?.into_boxed_slice(),
+            resets: inputs.ops.resets_xform_stack,
+            problems: inputs.ops.problems.clone(),
+        })
+    }
+
+    fn evaluate(&self, scene: &Scene<'_>, path: PathId, time: Time) -> LocalTransform {
+        evaluate_ops(
+            self.ops.len(),
+            self.resets,
+            self.problems.clone(),
+            |i| {
+                let op = self.ops[i];
+                let attribute = scene.store().tokens().resolve(op.attribute);
+                XformOp {
+                    name: attribute,
+                    attribute,
+                    op_type: op.kind,
+                    inverse: op.inverse,
+                }
+            },
+            |i| {
+                let token = self.ops[i].attribute;
+                let value = match time {
+                    Time::Default => match scene
+                        .stage()
+                        .resolve_value_with_schema(path, token, scene.store())?
+                        .value
+                    {
+                        ResolvedValue::Scalar(value) => value,
+                        _ => return None,
+                    },
+                    Time::At {
+                        code,
+                        interpolation,
+                    } => {
+                        scene
+                            .stage()
+                            .resolve_value_at_time_with_schema(
+                                path,
+                                token,
+                                code,
+                                interpolation,
+                                scene.store(),
+                            )?
+                            .value
+                    }
+                };
+                Some(Cow::Owned(value))
+            },
+            |i| {
+                let op = self.ops[i];
+                let attribute = scene.store().tokens().resolve(op.attribute);
+                if op.inverse {
+                    format!("{INVERT_PREFIX}{attribute}")
+                } else {
+                    attribute.into()
+                }
+            },
+        )
+    }
+}
+
 /// Local and local-to-world transforms of many prims at one time, sharing
 /// each ancestor's work.
 ///
@@ -655,6 +765,7 @@ pub struct XformCache {
     // Keep traversal metadata apart from the much larger transform payloads.
     nodes: Vec<Node>,
     transforms: Vec<Transforms>,
+    prepared: HashMap<Slot, PreparedTransform>,
     free: Option<Slot>,
     // Path's segment ordering places a prefix and its descendants together.
     // Manual invalidation builds this lazily, including sparse local-only
@@ -675,6 +786,7 @@ impl XformCache {
             entries: HashMap::new(),
             nodes: Vec::new(),
             transforms: Vec::new(),
+            prepared: HashMap::new(),
             free: None,
             namespace: None,
             chain: Vec::new(),
@@ -719,6 +831,7 @@ impl XformCache {
         self.entries.clear();
         self.nodes.clear();
         self.transforms.clear();
+        self.prepared.clear();
         self.free = None;
         self.namespace = None;
         self.chain.clear();
@@ -782,10 +895,12 @@ impl XformCache {
                     let nodes = &mut self.nodes;
                     let transforms = &mut self.transforms;
                     let free = &mut self.free;
+                    let prepared = &mut self.prepared;
                     self.entries.retain(|path, slot| {
                         if !prefix.is_prefix_of(paths.resolve(*path)) {
                             return true;
                         }
+                        prepared.remove(slot);
                         Self::retire_slot(nodes, transforms, free, *slot);
                         false
                     });
@@ -805,6 +920,7 @@ impl XformCache {
 
     fn remove_cached(&mut self, scene: &Scene<'_>, path: PathId) {
         if let Some(slot) = self.entries.remove(&path) {
+            self.prepared.remove(&slot);
             Self::retire_slot(&mut self.nodes, &mut self.transforms, &mut self.free, slot);
         }
         if let Some(namespace) = &mut self.namespace {
@@ -858,6 +974,7 @@ impl XformCache {
         }
         self.epoch += 1;
         if let Some(slot) = self.entries.get(&path) {
+            self.prepared.remove(slot);
             let index = slot.get() - 1;
             self.transforms[index].local = None;
             self.nodes[index].world_valid = false;
@@ -951,6 +1068,11 @@ impl XformCache {
             self.stats.hits += 1;
         } else {
             let path = self.nodes[index].path;
+            if let Some(prepared) = self.prepared.get(&slot) {
+                self.transforms[index].local = Some(prepared.evaluate(scene, path, self.time));
+                self.stats.local_computed += 1;
+                return;
+            }
             let inputs = LocalTransformInputs::read(scene, path, self.time);
             // Check all opinions, including weaker masked samples. This is a
             // conservative dependency classification, not a second resolver.
@@ -977,6 +1099,11 @@ impl XformCache {
                 } else {
                     TimeDependency::Static
                 };
+            }
+            if self.nodes[index].time_dependency == TimeDependency::Varying
+                && let Some(prepared) = PreparedTransform::new(scene, &inputs)
+            {
+                self.prepared.insert(slot, prepared);
             }
             self.transforms[index].local = Some(inputs.evaluate());
             self.stats.local_computed += 1;
@@ -1503,6 +1630,9 @@ mod cache_tests {
             }
             assert!(!matches!(node.parent, Parent::Vacant(_)));
         }
+        for slot in cache.prepared.keys() {
+            assert!(seen.contains(slot), "a recipe belongs to a live slot");
+        }
         let mut at = cache.free;
         while let Some(slot) = at {
             assert!(seen.insert(slot), "free list is disjoint and acyclic");
@@ -1711,6 +1841,73 @@ mod cache_tests {
             cache.local_to_world(&scene, normal),
             XformCache::new(Time::at(3.0)).local_to_world(&scene, normal)
         );
+    }
+
+    #[test]
+    fn prepared_recipes_follow_source_edits_and_retirement() {
+        let (mut store, mut live, [root, normal, _, _, other]) = transform_scene();
+        let translate = store.tokens.intern("xformOp:translate");
+        let order = store.tokens.intern("xformOpOrder");
+        let target = EditTarget::for_layer(LayerId(1));
+        let mut tx = Transaction::new();
+        tx.set_time_sample(
+            target.property(layerstack::PropertyPath::new(root, translate)),
+            0.0,
+            Value::Vec3d([10.0, 0.0, 0.0]),
+        );
+        live.apply(&mut store, &tx).unwrap();
+        let mut cache = XformCache::new(Time::at(0.0));
+        cache.local_to_world(&Scene::new(live.stage(), &store), normal);
+        assert_eq!(cache.prepared.len(), 1);
+        let capacity = cache.prepared[&cache.entries[&root]].ops.as_ptr();
+        for time in [Time::at(3.0), Time::held(2.0), Time::Default] {
+            cache.set_time(time);
+            let scene = Scene::new(live.stage(), &store);
+            assert_eq!(
+                cache.local_to_world(&scene, normal),
+                XformCache::new(time).local_to_world(&scene, normal)
+            );
+            assert_eq!(cache.prepared[&cache.entries[&root]].ops.as_ptr(), capacity);
+        }
+        let mut edit = Transaction::new();
+        edit.set_default(
+            target.property(layerstack::PropertyPath::new(root, order)),
+            Value::Array(alloc::vec![
+                Value::Token(translate),
+                Value::Token(store.tokens.intern("!invert!xformOp:translate"))
+            ]),
+        );
+        let edited = live.apply(&mut store, &edit).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        cache.apply_changes(&scene, &edited.changes);
+        assert!(cache.prepared.is_empty());
+        cache.set_time(Time::at(4.0));
+        assert_eq!(
+            cache.local_transform(&scene, root).unwrap().matrix,
+            gf::IDENTITY
+        );
+        let mut copied = cache.clone();
+        copied.set_time(Time::at(5.0));
+        assert_eq!(
+            copied.local_to_world(&scene, normal),
+            XformCache::new(Time::at(5.0)).local_to_world(&scene, normal)
+        );
+        let mut remove = Transaction::new();
+        remove.remove_spec(target.prim(root));
+        let removed = live.apply(&mut store, &remove).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        cache.apply_changes(&scene, &removed.changes);
+        assert!(cache.prepared.is_empty());
+        cache.local_to_world(&scene, other);
+        assert_arena_links(&cache, &scene);
+        let restored = live.apply(&mut store, &removed.inverse).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        cache.apply_changes(&scene, &restored.changes);
+        assert_eq!(
+            cache.local_to_world(&scene, normal),
+            XformCache::new(cache.time()).local_to_world(&scene, normal)
+        );
+        assert_arena_links(&cache, &scene);
     }
 
     #[test]

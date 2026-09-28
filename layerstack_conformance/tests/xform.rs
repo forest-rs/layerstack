@@ -125,9 +125,11 @@ fn transforms_visibility_and_purpose_match_openusd() {
         .samples
         .keys()
         .collect();
+    let mut cache = XformCache::new(Time::Default);
     for key in keys {
         let time = time(key);
-        let mut cache = XformCache::new(time);
+        cache.set_time(time);
+        let before = cache.stats().world_computed;
         for (text, record) in &oracle.prims {
             let path = paths[text];
             let sample = &record.samples[key];
@@ -202,11 +204,13 @@ fn transforms_visibility_and_purpose_match_openusd() {
             }
         }
         let stats = cache.stats();
-        assert_eq!(
-            stats.world_computed,
-            oracle.prims.len(),
-            "each world transform once at {key}"
+        assert!(
+            stats.world_computed - before <= oracle.prims.len(),
+            "each world transform at most once at {key}"
         );
+        if before == 0 {
+            assert_eq!(stats.world_computed, oracle.prims.len());
+        }
     }
 
     for (text, record) in &oracle.prims {

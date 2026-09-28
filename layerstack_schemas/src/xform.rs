@@ -587,6 +587,13 @@ pub struct XformCacheStats {
 struct Entry {
     local: Option<LocalTransform>,
     world: Option<Matrix4>,
+    // A PathId's namespace parent is immutable within the owning store.
+    parent: Option<PathId>,
+    // Local edit stamp, maximum dependency stamp of the held world, and the
+    // cache epoch at which that world was last validated.
+    local_stamp: u64,
+    world_stamp: u64,
+    validated: u64,
 }
 
 /// Local and local-to-world transforms of many prims at one time, sharing
@@ -607,7 +614,9 @@ struct Entry {
 /// prim's `xformOpOrder` or `xformOp:*` attributes changes that prim's
 /// transform and its descendants' world transforms, which
 /// [`XformCache::invalidate`] drops; [`XformCache::clear`] drops
-/// everything. Nothing is invalidated by itself.
+/// everything. For transform-only changes, [`XformCache::invalidate_transform`]
+/// retains unchanged local transforms and independent reset subtrees. Nothing
+/// is invalidated by itself.
 ///
 /// OpenUSD: `UsdGeomXformCache`.
 #[derive(Clone, Debug)]
@@ -618,6 +627,8 @@ pub struct XformCache {
     // This index also covers locally queried entries whose parents were never
     // cached, and survives deletion of the subtree from the composed stage.
     namespace: BTreeMap<Path, PathId>,
+    chain: Vec<PathId>,
+    epoch: u64,
     stats: XformCacheStats,
 }
 
@@ -629,6 +640,8 @@ impl XformCache {
             time,
             entries: HashMap::new(),
             namespace: BTreeMap::new(),
+            chain: Vec::new(),
+            epoch: 0,
             stats: XformCacheStats::default(),
         }
     }
@@ -649,6 +662,8 @@ impl XformCache {
     pub fn clear(&mut self) {
         self.entries.clear();
         self.namespace.clear();
+        self.chain.clear();
+        self.epoch = 0;
         self.stats = XformCacheStats::default();
     }
 
@@ -669,6 +684,34 @@ impl XformCache {
         for id in removed {
             self.namespace.remove(paths.resolve(id));
             self.entries.remove(&id);
+        }
+    }
+
+    /// Invalidates a transform-only edit on `path`, retaining descendant locals.
+    ///
+    /// Use this only when the prim namespace, types and applied schemas are
+    /// unchanged, and only this prim's `xformOpOrder` or `xformOp:*` attributes
+    /// changed. This includes adding/removing ops or toggling its reset marker.
+    /// If a source edit changes several composed prims, invalidate each one.
+    /// Use [`Self::invalidate`] for structural, type or schema changes instead.
+    ///
+    /// Only the edited prim loses its local and world values. Descendant worlds
+    /// are validated lazily on lookup, stopping at a current ancestor or reset.
+    /// Unchanged dependencies advance the validation stamp without multiplying
+    /// matrices. Notifications do not walk or allocate for descendants.
+    ///
+    /// This cache owns its validation clock; it is not a source revision.
+    /// Structural changes still require [`Self::invalidate`].
+    pub fn invalidate_transform(&mut self, path: PathId) {
+        if self.epoch == u64::MAX {
+            // Never let an old validation stamp compare equal after wraparound.
+            self.clear();
+        }
+        self.epoch += 1;
+        if let Some(entry) = self.entries.get_mut(&path) {
+            entry.local = None;
+            entry.world = None;
+            entry.local_stamp = self.epoch;
         }
     }
 
@@ -702,7 +745,11 @@ impl XformCache {
         let entry = self.entries.entry(path).or_insert_with(|| {
             self.namespace
                 .insert(scene.store().paths().resolve(path).clone(), path);
-            Entry::default()
+            Entry {
+                parent: scene.parent(path),
+                local_stamp: self.epoch,
+                ..Entry::default()
+            }
         });
         if entry.local.is_some() {
             self.stats.hits += 1;
@@ -723,38 +770,57 @@ impl XformCache {
         }
         // The prims up to the nearest ancestor whose world transform is
         // held, or the pseudo-root.
-        let mut chain = Vec::new();
+        self.chain.clear();
         let mut at = Some(path);
         let mut above = gf::IDENTITY;
+        let mut above_stamp = 0;
         while let Some(current) = at {
-            if scene.parent(current).is_none() {
-                // The pseudo-root: the identity.
-                break;
-            }
-            if let Some(world) = self.entries.get(&current).and_then(|e| e.world) {
+            if let Some(entry) = self.entries.get(&current)
+                && entry.validated == self.epoch
+                && let Some(world) = entry.world
+            {
                 self.stats.hits += 1;
                 above = world;
+                above_stamp = entry.world_stamp;
                 break;
             }
-            chain.push(current);
+            let Some(parent) = self
+                .entries
+                .get(&current)
+                .map_or_else(|| scene.parent(current), |entry| entry.parent)
+            else {
+                // The pseudo-root: the identity.
+                break;
+            };
+            self.chain.push(current);
             // OpenUSD UsdGeomXformCache::_GetCtm does not query a parent
             // above a reset. Evaluate while walking so a cold reset subtree
             // does not populate unrelated ancestor transforms.
             if self.local_transform(scene, current)?.resets_xform_stack {
                 break;
             }
-            at = scene.parent(current);
+            at = Some(parent);
         }
-        for current in chain.into_iter().rev() {
-            let world = self
-                .entries
-                .get(&current)?
-                .local
-                .as_ref()?
-                .local_to_world(&above);
-            self.entries.entry(current).or_default().world = Some(world);
-            self.stats.world_computed += 1;
-            above = world;
+        while let Some(current) = self.chain.pop() {
+            let entry = self.entries.get_mut(&current)?;
+            let local = entry.local.as_ref()?;
+            let stamp = if local.resets_xform_stack {
+                entry.local_stamp
+            } else {
+                entry.local_stamp.max(above_stamp)
+            };
+            // Shared ancestor validation amortizes a batch of lookups. An edit
+            // elsewhere advances the epoch but need not redo this composition.
+            if entry.world.is_none() || entry.world_stamp != stamp {
+                entry.world = Some(local.local_to_world(&above));
+                entry.world_stamp = stamp;
+                self.stats.world_computed += 1;
+            } else {
+                self.stats.hits += 1;
+            }
+            entry.validated = self.epoch;
+            above = entry.world?;
+            above_stamp = stamp;
         }
         Some(above)
     }
@@ -852,6 +918,243 @@ mod cache_tests {
         assert_eq!(cache.stats().world_computed, 1);
         assert_eq!(cache.len(), 1);
         assert!(!cache.entries.contains_key(&root));
+    }
+
+    fn transform_scene() -> (InMemoryStore, LiveStage, [PathId; 5]) {
+        use alloc::{sync::Arc, vec};
+        use layerstack::PropertySpec;
+        let mut store = InMemoryStore::default();
+        let paths = [
+            "/Root",
+            "/Root/Normal",
+            "/Root/Reset",
+            "/Root/Reset/Leaf",
+            "/Other",
+        ]
+        .map(|name| store.path(name));
+        let xform = store.tokens.intern("Xform");
+        let order = store.tokens.intern("xformOpOrder");
+        let translate = store.tokens.intern("xformOp:translate");
+        let reset = store.tokens.intern(RESET_XFORM_STACK);
+        let mut layer = Layer::new(LayerId(1));
+        for (i, &path) in paths.iter().enumerate() {
+            let ops = if i == 2 {
+                vec![Value::Token(reset), Value::Token(translate)]
+            } else {
+                vec![Value::Token(translate)]
+            };
+            layer.insert_prim(
+                path,
+                PrimSpec::def()
+                    .with_type_name(xform)
+                    .with_property(
+                        order,
+                        PropertySpec::typed_attribute(layerstack::PropertyType::new(
+                            "token",
+                            true,
+                            Value::Token(translate),
+                        ))
+                        .with_default(Value::Array(ops)),
+                    )
+                    .with_property(
+                        translate,
+                        PropertySpec::typed_attribute(layerstack::PropertyType::new(
+                            "double3",
+                            false,
+                            Value::Vec3d([0.0; 3]),
+                        ))
+                        .with_default(Value::Vec3d([
+                            i as f64 + 1.0,
+                            0.0,
+                            0.0,
+                        ])),
+                    ),
+            );
+        }
+        store.insert_layer(layer);
+        let options = StageOptions {
+            schemas: Some(Arc::new(crate::openusd(&mut store.tokens))),
+            ..StageOptions::default()
+        };
+        let live = LiveStage::compose(&mut store, LayerId(1), options);
+        (store, live, paths)
+    }
+
+    #[test]
+    fn transform_edits_reuse_locals_and_preserve_reset_worlds() {
+        use alloc::vec;
+        use layerstack::PropertyPath;
+        let (mut store, mut live, [root, normal, reset, leaf, other]) = transform_scene();
+        let mut cache = XformCache::new(Time::Default);
+        let scene = Scene::new(live.stage(), &store);
+        for path in [normal, leaf, other] {
+            cache.local_to_world(&scene, path).unwrap();
+        }
+        let held_reset = cache.entries[&reset].world;
+        let held_leaf = cache.entries[&leaf].world;
+        let held_other = cache.entries[&other].world;
+        let initial = cache.stats();
+        let translate = store.tokens.intern("xformOp:translate");
+        let mut tx = Transaction::new();
+        tx.set_default(
+            EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(root, translate)),
+            Value::Vec3d([100.0, 0.0, 0.0]),
+        );
+        live.apply(&mut store, &tx).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        cache.invalidate_transform(root);
+        assert!(cache.entries[&root].local.is_none());
+        assert!(cache.entries[&root].world.is_none());
+        assert!(cache.entries[&normal].local.is_some());
+        assert!(cache.entries[&normal].world.is_some(), "validation is lazy");
+        assert_eq!(cache.entries[&reset].world, held_reset);
+        assert_eq!(cache.entries[&leaf].world, held_leaf);
+        assert_eq!(cache.entries[&other].world, held_other);
+        for path in [root, normal, reset, leaf, other] {
+            assert_eq!(
+                cache.local_to_world(&scene, path),
+                XformCache::new(Time::Default).local_to_world(&scene, path)
+            );
+        }
+        assert_eq!(cache.stats().local_computed - initial.local_computed, 1);
+        assert_eq!(cache.stats().world_computed - initial.world_computed, 2);
+
+        // Turning off this boundary invalidates its world subtree while keeping
+        // both the leaf's local transform and unrelated cached branches.
+        let order = store.tokens.intern("xformOpOrder");
+        let mut tx = Transaction::new();
+        tx.set_default(
+            EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(reset, order)),
+            Value::Array(vec![Value::Token(translate)]),
+        );
+        let applied = live.apply(&mut store, &tx).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        cache.invalidate_transform(reset);
+        assert!(cache.entries[&reset].local.is_none());
+        assert!(cache.entries[&leaf].local.is_some());
+        assert!(cache.entries[&leaf].world.is_some(), "validation is lazy");
+        let now = cache.local_to_world(&scene, leaf);
+        assert_ne!(now, held_leaf);
+        assert_eq!(
+            now,
+            XformCache::new(Time::Default).local_to_world(&scene, leaf)
+        );
+        live.apply(&mut store, &applied.inverse).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        cache.invalidate_transform(reset);
+        assert_eq!(cache.local_to_world(&scene, leaf), held_leaf);
+    }
+
+    #[test]
+    fn transform_invalidation_keeps_sparse_locals_but_structural_removal_evicts() {
+        let (mut store, mut live, [root, normal, reset, leaf, _]) = transform_scene();
+        let mut cache = XformCache::new(Time::Default);
+        let scene = Scene::new(live.stage(), &store);
+        for path in [normal, leaf] {
+            cache.local_transform(&scene, path).unwrap();
+        }
+        assert!(!cache.entries.contains_key(&root));
+        assert!(!cache.entries.contains_key(&reset));
+        let initial = cache.stats();
+        cache.invalidate_transform(root);
+        assert_eq!(cache.len(), 2);
+        assert!(cache.entries[&leaf].local.is_some());
+        assert_eq!(
+            cache.stats(),
+            initial,
+            "invalidation performs no property evaluation"
+        );
+        let mut tx = Transaction::new();
+        tx.remove_spec(EditTarget::for_layer(LayerId(1)).prim(root));
+        live.apply(&mut store, &tx).unwrap();
+        cache.invalidate(&Scene::new(live.stage(), &store), root);
+        assert!(cache.entries.is_empty());
+        assert!(cache.namespace.is_empty());
+    }
+
+    #[test]
+    fn unrelated_edits_validate_without_recomposing() {
+        let (store, live, [root, normal, _, leaf, other]) = transform_scene();
+        let scene = Scene::new(live.stage(), &store);
+        let mut cache = XformCache::new(Time::Default);
+        let expected = cache.local_to_world(&scene, normal);
+        cache.local_to_world(&scene, leaf);
+        let before = cache.stats();
+        cache.invalidate_transform(other);
+        assert_eq!(cache.local_to_world(&scene, normal), expected);
+        assert_eq!(cache.stats().world_computed, before.world_computed);
+        assert_eq!(cache.stats().local_computed, before.local_computed);
+        assert_eq!(cache.entries[&root].validated, cache.epoch);
+        assert_eq!(cache.entries[&normal].validated, cache.epoch);
+        let mut cloned = cache.clone();
+        cloned.invalidate_transform(root);
+        assert_eq!(cloned.local_to_world(&scene, normal), expected);
+        assert_eq!(cache.local_to_world(&scene, normal), expected);
+        assert_ne!(cloned.epoch, cache.epoch);
+    }
+
+    #[test]
+    fn batched_transform_stamps_match_fresh_results() {
+        use alloc::vec;
+        use layerstack::PropertyPath;
+        let (mut store, mut live, paths) = transform_scene();
+        let mut cache = XformCache::new(Time::Default);
+        let translate = store.tokens.intern("xformOp:translate");
+        let order = store.tokens.intern("xformOpOrder");
+        let reset = store.tokens.intern(RESET_XFORM_STACK);
+        // Several notifications before querying, including an ancestor and a
+        // descendant, reset toggles, sparse reads, and interleaved local reads.
+        for round in 0..60 {
+            for edit in 0..3 {
+                let path = paths[(round + edit * 2) % paths.len()];
+                let mut tx = Transaction::new();
+                tx.set_default(
+                    EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(path, translate)),
+                    Value::Vec3d([round as f64, edit as f64, -1.0]),
+                );
+                if edit == 1 {
+                    let ops = if round % 2 == 0 {
+                        vec![Value::Token(reset), Value::Token(translate)]
+                    } else {
+                        vec![Value::Token(translate)]
+                    };
+                    tx.set_default(
+                        EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(path, order)),
+                        Value::Array(ops),
+                    );
+                }
+                live.apply(&mut store, &tx).unwrap();
+                cache.invalidate_transform(path);
+                if edit == 0 {
+                    cache.local_transform(&Scene::new(live.stage(), &store), path);
+                }
+            }
+            let scene = Scene::new(live.stage(), &store);
+            for i in 0..paths.len() {
+                let path = paths[(round + i) % paths.len()];
+                assert_eq!(
+                    cache.local_to_world(&scene, path),
+                    XformCache::new(Time::Default).local_to_world(&scene, path),
+                    "round {round}, path {path:?}",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn validation_clock_wrap_clears_old_stamps() {
+        let (store, live, [root, normal, _, _, _]) = transform_scene();
+        let scene = Scene::new(live.stage(), &store);
+        let mut cache = XformCache::new(Time::Default);
+        let expected = cache.local_to_world(&scene, normal);
+        cache.epoch = u64::MAX;
+        cache.invalidate_transform(root);
+        assert!(cache.is_empty());
+        assert_eq!(cache.epoch, 1);
+        assert_eq!(cache.local_to_world(&scene, normal), expected);
+        cache.clear();
+        assert_eq!(cache.epoch, 0);
+        assert_eq!(cache.local_to_world(&scene, normal), expected);
     }
 
     #[test]

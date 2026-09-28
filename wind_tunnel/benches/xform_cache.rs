@@ -44,6 +44,37 @@ fn bench(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("warm_query", n), &n, |b, _| {
             b.iter(|| black_box(cache.local_to_world(&scene, leaf)));
         });
+        // Identical warm scene and requery set: measure invalidation policy,
+        // excluding source authoring/composition from both paths.
+        for transform_only in [false, true] {
+            let label = if transform_only {
+                "root_transform_invalidate_requery_all"
+            } else {
+                "root_full_invalidate_requery_all"
+            };
+            group.bench_with_input(BenchmarkId::new(label, n), &n, |b, _| {
+                b.iter(|| {
+                    if transform_only {
+                        cache.invalidate_transform(root);
+                    } else {
+                        cache.invalidate(&scene, root);
+                    }
+                    for &path in &paths {
+                        black_box(cache.local_to_world(&scene, path));
+                    }
+                });
+            });
+        }
+        group.bench_with_input(
+            BenchmarkId::new("root_transform_invalidate_query_leaf", n),
+            &n,
+            |b, _| {
+                b.iter(|| {
+                    cache.invalidate_transform(root);
+                    black_box(cache.local_to_world(&scene, leaf));
+                });
+            },
+        );
         group.bench_with_input(BenchmarkId::new("cold_all", n), &n, |b, _| {
             b.iter(|| {
                 let mut cache = XformCache::new(Time::Default);

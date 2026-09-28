@@ -357,6 +357,25 @@ impl<'a> PrimView<'a> {
         }
     }
 
+    // Conservative temporal dependency, not a competing value resolver.
+    // Include masked samples, splines and single samples: default time can
+    // differ even when all numeric times agree (AOUSD Core §12.3, §12.5).
+    pub(crate) fn property_might_vary(&self, name: &str) -> bool {
+        self.property_path(name)
+            .and_then(|property| self.scene.stage.explain_property_path(property))
+            .is_some_and(|opinions| {
+                opinions.iter().any(|opinion| {
+                    opinion.value.as_property().is_some_and(|spec| {
+                        spec.spline.is_some()
+                            || spec
+                                .time_samples
+                                .as_ref()
+                                .is_some_and(|samples| !samples.is_empty())
+                    })
+                })
+            })
+    }
+
     /// Whether an opinion authors a value for the attribute `name`, at any
     /// time: the strongest opinion with a spline, time samples or a
     /// default decides, and a default block authors none. Whether that

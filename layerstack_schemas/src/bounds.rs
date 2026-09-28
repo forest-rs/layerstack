@@ -143,6 +143,18 @@ pub struct BoundsStats {
 
 type PurposeBounds = Vec<(crate::usd_geom::ImageablePurpose, BoundingBox)>;
 
+#[derive(Clone, Debug)]
+struct Entry<T> {
+    value: T,
+    varying: bool,
+    epoch: u64,
+}
+impl<T> Entry<T> {
+    fn valid(&self, epoch: u64) -> bool {
+        !self.varying || self.epoch == epoch
+    }
+}
+
 /// Caller-owned bounds at one time and for one scene.
 ///
 /// Pass each successful live change report to [`Self::apply_changes`]. For
@@ -159,13 +171,14 @@ type PurposeBounds = Vec<(crate::usd_geom::ImageablePurpose, BoundingBox)>;
 pub struct BoundsCache {
     time: Time,
     options: BoundsOptions,
-    entries: HashMap<PathId, PurposeBounds>,
+    entries: HashMap<PathId, Entry<PurposeBounds>>,
     // Inclusion is an input of the parent reduction, including when false.
     // Keep it independently of bounds so excluded subtrees need no evaluation.
-    inclusions: HashMap<PathId, bool>,
+    inclusions: HashMap<PathId, Entry<bool>>,
     children: HashMap<PathId, HashSet<PathId>>,
     transforms: XformCache,
     stats: BoundsStats,
+    epoch: u64,
 }
 impl BoundsCache {
     /// An empty cache at `time`, with explicit traversal policies.
@@ -179,6 +192,7 @@ impl BoundsCache {
             children: HashMap::new(),
             transforms: XformCache::new(time),
             stats: BoundsStats::default(),
+            epoch: 1,
         }
     }
     /// Work counters since construction or clearing.
@@ -203,11 +217,19 @@ impl BoundsCache {
         self.children.clear();
         self.transforms.clear();
         self.stats = BoundsStats::default();
+        self.epoch = 1;
     }
-    /// Change time and clear cached results if it differs.
+    /// Change time in O(1), retaining static bounds and transform state.
+    /// Sampled bounds and inclusion decisions are reevaluated on demand;
+    /// counters and cache occupancy are retained. Single samples count as
+    /// dependencies because numeric time can differ from default time.
     pub fn set_time(&mut self, time: Time) {
         if self.time != time {
-            self.clear();
+            if let Some(epoch) = self.epoch.checked_add(1) {
+                self.epoch = epoch;
+            } else {
+                self.clear();
+            }
             self.time = time;
             self.transforms.set_time(time);
         }
@@ -263,7 +285,7 @@ impl BoundsCache {
         path: PathId,
     ) -> Result<BoundingBox, BoundsError> {
         self.resolve(scene, path)?;
-        let bounds = &self.entries[&path];
+        let bounds = &self.entries[&path].value;
         let mut result = BoundingBox::default();
         for (purpose, bbox) in bounds {
             if self.options.included_purposes.contains(purpose) && !bbox.range.is_empty() {
@@ -328,7 +350,7 @@ impl BoundsCache {
         if !scene.stage().has_prim(path) {
             return Err(BoundsError::MissingPrim(path));
         }
-        if self.entries.contains_key(&path) {
+        if self.valid(path) {
             self.stats.hits += 1;
             return Ok(());
         }
@@ -336,15 +358,31 @@ impl BoundsCache {
         // the Rust call stack. Children are filtered once per recomputed parent.
         let mut work: Vec<(PathId, Option<Vec<PathId>>)> = vec![(path, None)];
         while let Some((current, children)) = work.pop() {
-            if self.entries.contains_key(&current) {
+            if self.valid(current) {
                 continue;
             }
-            let bounds = if let Some(children) = children {
-                self.compute(scene, current, &children)?
+            let prim = PrimView::new(*scene, current);
+            let hint_varying = self.options.use_extents_hint
+                && scene.is_model(current)
+                && prim.property_might_vary("extentsHint");
+            let (bounds, varying) = if let Some(children) = children {
+                let (bounds, varying) = self.compute(scene, current, &children)?;
+                // Inclusion changes matter even for children currently omitted.
+                let inclusion_varying = scene
+                    .stage()
+                    .children_of(current)
+                    .unwrap_or(&[])
+                    .iter()
+                    .any(|child| {
+                        self.inclusions
+                            .get(child)
+                            .is_some_and(|entry| entry.varying)
+                    });
+                (bounds, varying || hint_varying || inclusion_varying)
             } else {
                 self.track(scene, current);
                 if let Some(bounds) = self.direct_bounds(scene, current)? {
-                    bounds
+                    (bounds, hint_varying || prim.property_might_vary("extent"))
                 } else {
                     let children: Vec<_> = scene
                         .stage()
@@ -358,7 +396,7 @@ impl BoundsCache {
                         .iter()
                         .rev()
                         .copied()
-                        .filter(|child| !self.entries.contains_key(child))
+                        .filter(|child| !self.valid(*child))
                         .collect();
                     work.push((current, Some(children)));
                     work.extend(pending.into_iter().map(|child| (child, None)));
@@ -366,13 +404,27 @@ impl BoundsCache {
                 }
             };
             self.stats.computed += 1;
-            self.entries.insert(current, bounds);
+            self.entries.insert(
+                current,
+                Entry {
+                    value: bounds,
+                    varying,
+                    epoch: self.epoch,
+                },
+            );
         }
         Ok(())
     }
+    fn valid(&self, path: PathId) -> bool {
+        self.entries
+            .get(&path)
+            .is_some_and(|entry| entry.valid(self.epoch))
+    }
     fn include_child(&mut self, scene: &Scene<'_>, child: PathId) -> bool {
-        if let Some(&included) = self.inclusions.get(&child) {
-            return included;
+        if let Some(entry) = self.inclusions.get(&child)
+            && entry.valid(self.epoch)
+        {
+            return entry.value;
         }
         // Even a skipped child depends on its own type/visibility/definition.
         // Index it before returning false, so ancestor invalidation reaches it.
@@ -382,7 +434,16 @@ impl BoundsCache {
                 || ((!scene.is_a(child, "Typed") || scene.is_a(child, "Imageable"))
                     && VisibilityInputs::read(scene, child, self.time).visibility
                         != Some(Visibility::Invisible)));
-        self.inclusions.insert(child, included);
+        let varying = !self.options.ignore_visibility
+            && PrimView::new(*scene, child).property_might_vary("visibility");
+        self.inclusions.insert(
+            child,
+            Entry {
+                value: included,
+                varying,
+                epoch: self.epoch,
+            },
+        );
         included
     }
     fn direct_bounds(
@@ -424,7 +485,7 @@ impl BoundsCache {
         scene: &Scene<'_>,
         path: PathId,
         children: &[PathId],
-    ) -> Result<PurposeBounds, BoundsError> {
+    ) -> Result<(PurposeBounds, bool), BoundsError> {
         // OpenUSD bboxCache.cpp _ResolvePrim: accumulate in nearest component
         // or subcomponent space, then retain the component-to-local matrix.
         let mut component = path;
@@ -446,11 +507,14 @@ impl BoundsCache {
         if determinant == 0.0 {
             return Err(BoundsError::SingularTransform(path));
         }
+        let mut varying =
+            self.transforms.world_might_vary(component) || self.transforms.world_might_vary(path);
         let mut result: PurposeBounds = Vec::new();
         for &child in children {
             self.stats.hits += 1;
             let child_to_component = gf::mul(&self.world(scene, child)?, &inverse_component);
-            for (purpose, bbox) in &self.entries[&child] {
+            varying |= self.transforms.world_might_vary(child) || self.entries[&child].varying;
+            for (purpose, bbox) in &self.entries[&child].value {
                 let range = bbox.transformed(&child_to_component).aligned_range();
                 if let Some((_, held)) = result.iter_mut().find(|(p, _)| p == purpose) {
                     held.range.union_with(range);
@@ -465,7 +529,7 @@ impl BoundsCache {
                 }
             }
         }
-        Ok(result)
+        Ok((result, varying))
     }
 }
 // UsdPrim default traversal predicates inherit undefined and abstract flags.
@@ -501,5 +565,73 @@ fn box_from_extent(extent: &[[f32; 3]]) -> BoundingBox {
             max: extent[1].map(f64::from),
         },
         matrix: gf::IDENTITY,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::sync::Arc;
+    use layerstack::{
+        InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, Stage, StageOptions, Value,
+    };
+
+    #[test]
+    fn temporal_reuse_preserves_single_samples_errors_and_epoch_wrap() {
+        let mut store = InMemoryStore::default();
+        let root = store.path("/World");
+        let static_leaf = store.path("/World/Static");
+        let animated = store.path("/World/Animated");
+        let xform = store.tokens.intern("Xform");
+        let mesh = store.tokens.intern("Mesh");
+        let extent = store.tokens.intern("extent");
+        let value =
+            |size: f32| Value::Array(vec![Value::Vec3f([-size; 3]), Value::Vec3f([size; 3])]);
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(root, PrimSpec::def().with_type_name(xform));
+        layer.insert_prim(
+            static_leaf,
+            PrimSpec::def()
+                .with_type_name(mesh)
+                .with_property(extent, PropertySpec::attribute().with_default(value(1.0))),
+        );
+        layer.insert_prim(
+            animated,
+            PrimSpec::def().with_type_name(mesh).with_property(
+                extent,
+                PropertySpec::attribute()
+                    .with_default(Value::Blocked)
+                    .with_time_samples(vec![(0.0, value(2.0))]),
+            ),
+        );
+        store.insert_layer(layer);
+        let options = StageOptions {
+            schemas: Some(Arc::new(crate::openusd(&mut store.tokens))),
+            ..StageOptions::default()
+        };
+        let stage = Stage::compose(&mut store, LayerId(1), options);
+        let scene = Scene::new(&stage, &store);
+        let mut cache = BoundsCache::new(Time::at(0.0), BoundsOptions::default());
+        assert_eq!(cache.world_bound(&scene, root).unwrap().range.max, [2.0; 3]);
+        assert_eq!(cache.stats.computed, 3);
+        cache.set_time(Time::at(1.0));
+        cache.world_bound(&scene, root).unwrap();
+        assert_eq!(cache.stats.computed, 5, "static sibling is retained");
+        cache.set_time(Time::Default);
+        assert_eq!(
+            cache.world_bound(&scene, root),
+            Err(BoundsError::ExtentUnavailable(animated))
+        );
+        // A failed evaluation must not make a stale parent current.
+        assert_eq!(
+            cache.world_bound(&scene, root),
+            Err(BoundsError::ExtentUnavailable(animated))
+        );
+        cache.set_time(Time::at(0.0));
+        assert_eq!(cache.world_bound(&scene, root).unwrap().range.max, [2.0; 3]);
+        cache.epoch = u64::MAX;
+        cache.set_time(Time::at(1.0));
+        assert!(cache.is_empty());
+        assert_eq!(cache.world_bound(&scene, root).unwrap().range.max, [2.0; 3]);
     }
 }

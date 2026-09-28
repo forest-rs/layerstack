@@ -83,5 +83,55 @@ fn bench(c: &mut Criterion) {
     }
     group.finish();
 }
-criterion_group!(benches, bench);
+fn animation(c: &mut Criterion) {
+    let mut group = c.benchmark_group("bounds_animation");
+    group.sample_size(10);
+    for (name, every) in [("static", 0), ("mixed", 10), ("animated", 1)] {
+        let mut store = InMemoryStore::default();
+        let xform = store.tokens.intern("Xform");
+        let mesh = store.tokens.intern("Mesh");
+        let extent = store.tokens.intern("extent");
+        let mut layer = Layer::new(LayerId(1));
+        let root = store.path("/World");
+        layer.insert_prim(root, PrimSpec::def().with_type_name(xform));
+        for i in 0..10_000 {
+            let parent = store.path(&format!("/World/G{}", i / 16));
+            if i % 16 == 0 {
+                layer.insert_prim(parent, PrimSpec::def().with_type_name(xform));
+            }
+            let path = store.path(&format!("/World/G{}/P{i}", i / 16));
+            let value =
+                |size: f32| Value::Array(vec![Value::Vec3f([-size; 3]), Value::Vec3f([size; 3])]);
+            let mut spec = PropertySpec::attribute().with_default(value(1.0));
+            if every != 0 && i % every == 0 {
+                spec = spec.with_time_samples(vec![(0.0, value(1.0)), (10.0, value(2.0))]);
+            }
+            layer.insert_prim(
+                path,
+                PrimSpec::def()
+                    .with_type_name(mesh)
+                    .with_property(extent, spec),
+            );
+        }
+        store.insert_layer(layer);
+        let options = StageOptions {
+            schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+            ..StageOptions::default()
+        };
+        let stage = Stage::compose(&mut store, LayerId(1), options);
+        let scene = Scene::new(&stage, &store);
+        let mut cache = BoundsCache::new(Time::at(0.0), BoundsOptions::default());
+        black_box(cache.world_bound(&scene, root).unwrap());
+        let mut frame = 0;
+        group.bench_function(name, |b| {
+            b.iter(|| {
+                frame = (frame + 1) % 20;
+                cache.set_time(Time::at(f64::from(frame) * 0.5));
+                black_box(cache.world_bound(&scene, root).unwrap());
+            });
+        });
+    }
+    group.finish();
+}
+criterion_group!(benches, bench, animation);
 criterion_main!(benches);

@@ -134,7 +134,10 @@ pub use doc::{
     combine_dictionary_chain, get_field, get_field_mut, insert_field_if_absent, remove_field,
     set_field_vec,
 };
-pub use edit::{Address, Applied, Changes, EditError, EditTarget, Transaction};
+pub use edit::{
+    Address, Applied, Changes, EditError, EditTarget, PrimPropertyChanges, PropertyChange,
+    PropertyField, Transaction,
+};
 pub use interner::{TokenId, TokenInterner};
 pub use layer_stack::LayerStack;
 pub use listop::ListOp;

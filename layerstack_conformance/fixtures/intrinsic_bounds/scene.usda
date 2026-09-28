@@ -1,0 +1,260 @@
+#usda 1.0
+
+def Cube "CubeDefault"
+{
+}
+
+def Cube "CubeZ"
+{
+    double size = 7.25
+    double size.timeSamples = {
+        0: 1.25,
+        2: 3.75,
+    }
+}
+
+def Cube "CubeNegative"
+{
+    double size = -2
+}
+
+def Sphere "SphereDefault"
+{
+}
+
+def Sphere "SphereZ"
+{
+    double radius = 2.25
+    double radius.timeSamples = {
+        0: 1.25,
+        2: 3.75,
+    }
+}
+
+def Sphere "SphereNegative"
+{
+    double radius = -2
+}
+
+def Cylinder "CylinderDefault"
+{
+}
+
+def Cylinder "CylinderX"
+{
+    uniform token axis = "X"
+    double height = 5.25
+    double radius = 2.25
+    double radius.timeSamples = {
+        0: 1.25,
+        2: 3.75,
+    }
+}
+
+def Cylinder "CylinderY"
+{
+    uniform token axis = "Y"
+    double height = 5.25
+    double radius = 2.25
+    double radius.timeSamples = {
+        0: 1.25,
+        2: 3.75,
+    }
+}
+
+def Cylinder "CylinderZ"
+{
+    uniform token axis = "Z"
+    double height = 5.25
+    double radius = 2.25
+    double radius.timeSamples = {
+        0: 1.25,
+        2: 3.75,
+    }
+}
+
+def Cylinder "Cylinderinvalid"
+{
+    uniform token axis = "invalid"
+    double height = 5.25
+    double radius = 2.25
+    double radius.timeSamples = {
+        0: 1.25,
+        2: 3.75,
+    }
+}
+
+def Cylinder "CylinderNegative"
+{
+    double radius = -2
+}
+
+def Cone "ConeDefault"
+{
+}
+
+def Cone "ConeX"
+{
+    uniform token axis = "X"
+    double height = 5.25
+    double radius = 2.25
+    double radius.timeSamples = {
+        0: 1.25,
+        2: 3.75,
+    }
+}
+
+def Cone "ConeY"
+{
+    uniform token axis = "Y"
+    double height = 5.25
+    double radius = 2.25
+    double radius.timeSamples = {
+        0: 1.25,
+        2: 3.75,
+    }
+}
+
+def Cone "ConeZ"
+{
+    uniform token axis = "Z"
+    double height = 5.25
+    double radius = 2.25
+    double radius.timeSamples = {
+        0: 1.25,
+        2: 3.75,
+    }
+}
+
+def Cone "Coneinvalid"
+{
+    uniform token axis = "invalid"
+    double height = 5.25
+    double radius = 2.25
+    double radius.timeSamples = {
+        0: 1.25,
+        2: 3.75,
+    }
+}
+
+def Cone "ConeNegative"
+{
+    double radius = -2
+}
+
+def Capsule "CapsuleDefault"
+{
+}
+
+def Capsule "CapsuleX"
+{
+    uniform token axis = "X"
+    double height = 5.25
+    double radius = 2.25
+    double radius.timeSamples = {
+        0: 1.25,
+        2: 3.75,
+    }
+}
+
+def Capsule "CapsuleY"
+{
+    uniform token axis = "Y"
+    double height = 5.25
+    double radius = 2.25
+    double radius.timeSamples = {
+        0: 1.25,
+        2: 3.75,
+    }
+}
+
+def Capsule "CapsuleZ"
+{
+    uniform token axis = "Z"
+    double height = 5.25
+    double radius = 2.25
+    double radius.timeSamples = {
+        0: 1.25,
+        2: 3.75,
+    }
+}
+
+def Capsule "Capsuleinvalid"
+{
+    uniform token axis = "invalid"
+    double height = 5.25
+    double radius = 2.25
+    double radius.timeSamples = {
+        0: 1.25,
+        2: 3.75,
+    }
+}
+
+def Capsule "CapsuleNegative"
+{
+    double radius = -2
+}
+
+def Cube "CubeAuthored"
+{
+    float3[] extent = [(-8, -9, -10), (8, 9, 10)]
+    double size = 12
+}
+
+def Cube "CubeMalformed"
+{
+    float3[] extent = [(1, 2, 3)]
+    double size = 12
+}
+
+def Cube "CubeBlocked"
+{
+    float3[] extent = None
+    double size = 12
+}
+
+def Cube "CubeChangingExtent"
+{
+    float3[] extent.timeSamples = {
+        0: None,
+        2: [(-2, -3, -4), (2, 3, 4)],
+    }
+    double size = 12
+}
+
+def Cylinder "CylinderChangingAxis"
+{
+    uniform token axis.timeSamples = {
+        0: "X",
+        2: "Y",
+    }
+    double height = 8
+}
+
+def Mesh "Mesh"
+{
+    point3f[] points = [(-3, 2, -1), (4, -5, 6), (1, 2, 3)]
+}
+
+def Mesh "EmptyMesh"
+{
+    point3f[] points = []
+}
+
+def Mesh "AnimatedMesh"
+{
+    point3f[] points = [(-1, -2, -3), (1, 2, 3)]
+    point3f[] points.timeSamples = {
+        0: [(-2, -3, -4), (2, 3, 4)],
+        2: [(-4, -5, -6), (4, 5, 6)],
+    }
+}
+
+def Mesh "MissingPoints"
+{
+}
+
+def Sphere "BlockedRadius"
+{
+    double radius = None
+}

@@ -282,6 +282,8 @@ mod collection;
 #[cfg(feature = "usd-geom")]
 mod common_xform;
 mod edit;
+#[cfg(feature = "usd-geom")]
+mod extent;
 mod generated;
 #[cfg(feature = "usd-geom")]
 mod gf;

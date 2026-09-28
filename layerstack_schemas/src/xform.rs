@@ -16,7 +16,9 @@
 //! to within the rounding of the platform's trigonometry and fused
 //! multiply-adds.
 
-use alloc::{borrow::Cow, boxed::Box, collections::BTreeMap, format, string::String, vec::Vec};
+use alloc::{
+    borrow::Cow, boxed::Box, collections::BTreeMap, format, string::String, sync::Arc, vec::Vec,
+};
 use core::{num::NonZeroUsize, ops::Bound};
 
 use layerstack::{HashMap, Path, PathId, ResolvedValue, TokenId, Value, half};
@@ -160,7 +162,7 @@ pub struct XformOps<'a> {
 /// evaluates such an op as the identity (or, for
 /// [`XformProblemKind::Singular`], a huge scale) and warns; so does this
 /// crate, and reports it here.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct XformProblem {
     /// The `xformOpOrder` entry.
     pub op: String,
@@ -727,14 +729,14 @@ struct Transforms {
 
 // Only sampled transforms need a retained operation recipe. Static and empty
 // stacks keep their evaluated local result without an extra per-node allocation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct PreparedTransform {
     ops: Box<[PreparedOp]>,
     resets: bool,
     problems: Vec<XformProblem>,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct PreparedOp {
     attribute: TokenId,
     kind: Option<XformOpType>,
@@ -819,6 +821,46 @@ impl PreparedTransform {
     }
 }
 
+// Recipes contain no prim-specific values. Share equal op layouts within a
+// cache, but count this cache's users explicitly: Arc counts would also include
+// cloned caches and would retain dead recipes here while another clone lives.
+#[derive(Clone, Debug, Default)]
+struct PreparedCache {
+    by_slot: HashMap<Slot, Arc<PreparedTransform>>,
+    recipes: HashMap<Arc<PreparedTransform>, usize>,
+}
+impl PreparedCache {
+    fn get(&self, slot: &Slot) -> Option<&PreparedTransform> {
+        self.by_slot.get(slot).map(Arc::as_ref)
+    }
+    fn insert(&mut self, slot: Slot, prepared: PreparedTransform) {
+        self.remove(&slot);
+        let recipe = self
+            .recipes
+            .get_key_value(&prepared)
+            .map(|(recipe, _)| Arc::clone(recipe))
+            .unwrap_or_else(|| Arc::new(prepared));
+        *self.recipes.entry(Arc::clone(&recipe)).or_default() += 1;
+        self.by_slot.insert(slot, recipe);
+    }
+    fn remove(&mut self, slot: &Slot) {
+        if let Some(recipe) = self.by_slot.remove(slot) {
+            let users = self
+                .recipes
+                .get_mut(&recipe)
+                .expect("live recipe has a user count");
+            *users -= 1;
+            if *users == 0 {
+                self.recipes.remove(&recipe);
+            }
+        }
+    }
+    fn clear(&mut self) {
+        self.by_slot.clear();
+        self.recipes.clear();
+    }
+}
+
 /// Local and local-to-world transforms of many prims at one time, sharing
 /// each ancestor's work.
 ///
@@ -855,7 +897,7 @@ pub struct XformCache {
     // Keep traversal metadata apart from the much larger transform payloads.
     nodes: Vec<Node>,
     transforms: Vec<Transforms>,
-    prepared: HashMap<Slot, PreparedTransform>,
+    prepared: PreparedCache,
     free: Option<Slot>,
     // Path's segment ordering places a prefix and its descendants together.
     // Manual invalidation builds this lazily, including sparse local-only
@@ -876,7 +918,7 @@ impl XformCache {
             entries: HashMap::new(),
             nodes: Vec::new(),
             transforms: Vec::new(),
-            prepared: HashMap::new(),
+            prepared: PreparedCache::default(),
             free: None,
             namespace: None,
             chain: Vec::new(),
@@ -1765,8 +1807,23 @@ mod cache_tests {
             }
             assert!(!matches!(node.parent, Parent::Vacant(_)));
         }
-        for slot in cache.prepared.keys() {
+        for slot in cache.prepared.by_slot.keys() {
             assert!(seen.contains(slot), "a recipe belongs to a live slot");
+        }
+        assert_eq!(
+            cache.prepared.recipes.values().sum::<usize>(),
+            cache.prepared.by_slot.len()
+        );
+        for (recipe, users) in &cache.prepared.recipes {
+            assert_eq!(
+                *users,
+                cache
+                    .prepared
+                    .by_slot
+                    .values()
+                    .filter(|held| Arc::ptr_eq(held, recipe))
+                    .count()
+            );
         }
         let mut at = cache.free;
         while let Some(slot) = at {
@@ -1979,6 +2036,49 @@ mod cache_tests {
     }
 
     #[test]
+    fn equal_recipes_share_storage_and_retire_independently_across_clones() {
+        let (mut store, mut live, paths) = transform_scene();
+        let translate = store.tokens.intern("xformOp:translate");
+        let mut tx = Transaction::new();
+        for path in paths {
+            let address = EditTarget::for_layer(LayerId(1))
+                .property(layerstack::PropertyPath::new(path, translate));
+            tx.set_time_sample(address, 0.0, Value::Vec3d([1.0; 3]));
+        }
+        live.apply(&mut store, &tx).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        let mut cache = XformCache::new(Time::at(0.0));
+        for path in paths {
+            cache.local_to_world(&scene, path);
+        }
+        assert_eq!(cache.prepared.by_slot.len(), 5);
+        assert_eq!(
+            cache.prepared.recipes.len(),
+            2,
+            "reset and ordinary layouts"
+        );
+        assert_arena_links(&cache, &scene);
+        let mut cloned = cache.clone();
+        for path in paths {
+            cache.invalidate_transform(path);
+        }
+        assert!(
+            cache.prepared.recipes.is_empty(),
+            "other clone cannot retain local dead recipes"
+        );
+        assert_eq!(cloned.prepared.recipes.len(), 2);
+        for path in paths {
+            cloned.invalidate(&scene, path);
+        }
+        assert!(cloned.prepared.recipes.is_empty());
+        for path in paths {
+            cache.local_to_world(&scene, path);
+        }
+        assert_eq!(cache.prepared.recipes.len(), 2);
+        assert_arena_links(&cache, &scene);
+    }
+
+    #[test]
     fn prepared_recipes_follow_source_edits_and_retirement() {
         let (mut store, mut live, [root, normal, _, _, other]) = transform_scene();
         let translate = store.tokens.intern("xformOp:translate");
@@ -1993,8 +2093,8 @@ mod cache_tests {
         live.apply(&mut store, &tx).unwrap();
         let mut cache = XformCache::new(Time::at(0.0));
         cache.local_to_world(&Scene::new(live.stage(), &store), normal);
-        assert_eq!(cache.prepared.len(), 1);
-        let capacity = cache.prepared[&cache.entries[&root]].ops.as_ptr();
+        assert_eq!(cache.prepared.by_slot.len(), 1);
+        let capacity = cache.prepared.by_slot[&cache.entries[&root]].ops.as_ptr();
         for time in [Time::at(3.0), Time::held(2.0), Time::Default] {
             cache.set_time(time);
             let scene = Scene::new(live.stage(), &store);
@@ -2002,7 +2102,10 @@ mod cache_tests {
                 cache.local_to_world(&scene, normal),
                 XformCache::new(time).local_to_world(&scene, normal)
             );
-            assert_eq!(cache.prepared[&cache.entries[&root]].ops.as_ptr(), capacity);
+            assert_eq!(
+                cache.prepared.by_slot[&cache.entries[&root]].ops.as_ptr(),
+                capacity
+            );
         }
         let mut edit = Transaction::new();
         edit.set_default(
@@ -2015,7 +2118,7 @@ mod cache_tests {
         let edited = live.apply(&mut store, &edit).unwrap();
         let scene = Scene::new(live.stage(), &store);
         cache.apply_changes(&scene, &edited.changes);
-        assert!(cache.prepared.is_empty());
+        assert!(cache.prepared.by_slot.is_empty());
         cache.set_time(Time::at(4.0));
         assert_eq!(
             cache.local_transform(&scene, root).unwrap().matrix,
@@ -2032,7 +2135,7 @@ mod cache_tests {
         let removed = live.apply(&mut store, &remove).unwrap();
         let scene = Scene::new(live.stage(), &store);
         cache.apply_changes(&scene, &removed.changes);
-        assert!(cache.prepared.is_empty());
+        assert!(cache.prepared.by_slot.is_empty());
         cache.local_to_world(&scene, other);
         assert_arena_links(&cache, &scene);
         let restored = live.apply(&mut store, &removed.inverse).unwrap();

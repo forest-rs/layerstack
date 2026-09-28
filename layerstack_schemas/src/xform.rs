@@ -609,7 +609,9 @@ struct Entry {
 /// with: query it with one scene, or [`XformCache::clear`] it between
 /// scenes.
 ///
-/// After an edit, drop what it changed: a structural change
+/// After `LiveStage::apply`, pass its change report to [`Self::apply_changes`].
+/// This reuses composed topology and exact removal inventories. For manual
+/// notifications, drop what changed: a structural change
 /// (`LiveStage::apply` reports subtree roots in `changes.resynced`) or an edit of a
 /// prim's `xformOpOrder` or `xformOp:*` attributes changes that prim's
 /// transform and its descendants' world transforms, which
@@ -624,9 +626,9 @@ pub struct XformCache {
     time: Time,
     entries: HashMap<PathId, Entry>,
     // Path's segment ordering places a prefix and its descendants together.
-    // This index also covers locally queried entries whose parents were never
-    // cached, and survives deletion of the subtree from the composed stage.
-    namespace: BTreeMap<Path, PathId>,
+    // Only manual subtree invalidation needs a retained index, including for
+    // sparse entries after deletion. Change-report users share stage topology.
+    namespace: Option<BTreeMap<Path, PathId>>,
     chain: Vec<PathId>,
     epoch: u64,
     stats: XformCacheStats,
@@ -639,7 +641,7 @@ impl XformCache {
         Self {
             time,
             entries: HashMap::new(),
-            namespace: BTreeMap::new(),
+            namespace: None,
             chain: Vec::new(),
             epoch: 0,
             stats: XformCacheStats::default(),
@@ -661,7 +663,7 @@ impl XformCache {
     /// Drops everything held, and the statistics.
     pub fn clear(&mut self) {
         self.entries.clear();
-        self.namespace.clear();
+        self.namespace = None;
         self.chain.clear();
         self.epoch = 0;
         self.stats = XformCacheStats::default();
@@ -671,19 +673,73 @@ impl XformCache {
     ///
     /// An ordered namespace index limits the search to cached descendants,
     /// even when the subtree has already been removed from the stage. The
-    /// index retains one owned path per cached prim.
+    /// index retains one owned path per cached prim. It is built lazily on the
+    /// first call, which visits the whole cache. Subsequent calls search only
+    /// the indexed subtree. [`Self::apply_changes`] uses stage topology instead
+    /// and avoids maintaining this index.
     pub fn invalidate(&mut self, scene: &Scene<'_>, path: PathId) {
         let paths = scene.store().paths();
         let root = paths.resolve(path);
-        let removed: Vec<_> = self
-            .namespace
+        let namespace = self.namespace.get_or_insert_with(|| {
+            self.entries
+                .keys()
+                .map(|&id| (paths.resolve(id).clone(), id))
+                .collect()
+        });
+        let removed: Vec<_> = namespace
             .range::<Path, _>((Bound::Included(root), Bound::Unbounded))
             .take_while(|(held, _)| root.is_prefix_of(held))
             .map(|(_, id)| *id)
             .collect();
         for id in removed {
-            self.namespace.remove(paths.resolve(id));
+            namespace.remove(paths.resolve(id));
             self.entries.remove(&id);
+        }
+    }
+
+    /// Applies a complete successful `LiveStage::apply` change report against
+    /// the resulting scene. Pass every report before querying changed results.
+    ///
+    /// Exact removed paths retire old entries; resyncs use composed child lists.
+    /// For a sparse cache, traversal stops after a budget equal to its entry
+    /// count and filters the remaining cache by namespace instead. Child lists
+    /// are borrowed lazily, so wide scenes allocate no wide traversal frontier.
+    /// Info-only changes conservatively invalidate the prim's local transform;
+    /// descendant worlds validate lazily. No namespace index is constructed.
+    ///
+    /// Spec: AOUSD Core §11 (population), §12 (composed changes).
+    pub fn apply_changes(&mut self, scene: &Scene<'_>, changes: &layerstack::Changes) {
+        for &path in &changes.removed {
+            self.remove_cached(scene, path);
+        }
+        for &root in &changes.resynced {
+            if self.entries.is_empty() {
+                break;
+            }
+            let budget = self.entries.len();
+            for (visited, path) in scene.stage().traverse(root).enumerate() {
+                if visited == budget {
+                    let paths = scene.store().paths();
+                    let prefix = paths.resolve(root);
+                    self.entries
+                        .retain(|path, _| !prefix.is_prefix_of(paths.resolve(*path)));
+                    if let Some(namespace) = &mut self.namespace {
+                        namespace.retain(|path, _| !prefix.is_prefix_of(path));
+                    }
+                    break;
+                }
+                self.remove_cached(scene, path);
+            }
+        }
+        for &path in &changes.changed_info_only {
+            self.invalidate_transform(path);
+        }
+    }
+
+    fn remove_cached(&mut self, scene: &Scene<'_>, path: PathId) {
+        self.entries.remove(&path);
+        if let Some(namespace) = &mut self.namespace {
+            namespace.remove(scene.store().paths().resolve(path));
         }
     }
 
@@ -743,8 +799,9 @@ impl XformCache {
         }
         let time = self.time;
         let entry = self.entries.entry(path).or_insert_with(|| {
-            self.namespace
-                .insert(scene.store().paths().resolve(path).clone(), path);
+            if let Some(namespace) = &mut self.namespace {
+                namespace.insert(scene.store().paths().resolve(path).clone(), path);
+            }
             Entry {
                 parent: scene.parent(path),
                 local_stamp: self.epoch,
@@ -874,7 +931,7 @@ mod cache_tests {
         cache.invalidate(&Scene::new(live.stage(), &store), branch);
         assert_eq!(cache.len(), 2);
         assert!(!cache.entries.contains_key(&child));
-        assert_eq!(cache.namespace.len(), 2);
+        assert_eq!(cache.namespace.as_ref().unwrap().len(), 2);
         live.apply(&mut store, &applied.inverse).unwrap();
         cache.local_transform(&Scene::new(live.stage(), &store), child);
         cache.invalidate(&Scene::new(live.stage(), &store), root);
@@ -883,7 +940,7 @@ mod cache_tests {
         let pseudo = store.path("/");
         cache.invalidate(&Scene::new(live.stage(), &store), pseudo);
         assert!(cache.is_empty());
-        assert!(cache.namespace.is_empty());
+        assert!(cache.namespace.as_ref().is_none_or(BTreeMap::is_empty));
     }
 
     #[test]
@@ -981,6 +1038,79 @@ mod cache_tests {
     }
 
     #[test]
+    fn change_reports_reuse_stage_topology_for_sparse_reads_and_undo() {
+        let (mut store, mut live, [root, normal, reset, leaf, other]) = transform_scene();
+        let mut cache = XformCache::new(Time::Default);
+        let scene = Scene::new(live.stage(), &store);
+        cache.local_transform(&scene, leaf).unwrap();
+        cache.local_transform(&scene, other).unwrap();
+        // More stage descendants than cached entries: take the bounded sparse
+        // path, including a local-only query with no cached ancestors.
+        cache.apply_changes(
+            &scene,
+            &layerstack::Changes {
+                resynced: alloc::vec![root],
+                ..layerstack::Changes::default()
+            },
+        );
+        assert_eq!(cache.len(), 1);
+        assert!(cache.entries.contains_key(&other));
+        assert!(cache.namespace.is_none());
+        for path in [normal, leaf] {
+            cache.local_to_world(&scene, path).unwrap();
+        }
+        let mut remove = Transaction::new();
+        remove.remove_spec(EditTarget::for_layer(LayerId(1)).prim(root));
+        let removed = live.apply(&mut store, &remove).unwrap();
+        cache.apply_changes(&Scene::new(live.stage(), &store), &removed.changes);
+        assert!(!cache.entries.contains_key(&leaf));
+        assert!(!cache.entries.contains_key(&reset));
+        let restored = live.apply(&mut store, &removed.inverse).unwrap();
+        cache.apply_changes(&Scene::new(live.stage(), &store), &restored.changes);
+        let translate = store.tokens.intern("xformOp:translate");
+        let order = store.tokens.intern("xformOpOrder");
+        for round in 0..6 {
+            let mut edit = Transaction::new();
+            edit.set_default(
+                EditTarget::for_layer(LayerId(1))
+                    .property(layerstack::PropertyPath::new(root, translate)),
+                Value::Vec3d([round as f64, 2.0, 3.0]),
+            );
+            edit.set_default(
+                EditTarget::for_layer(LayerId(1))
+                    .property(layerstack::PropertyPath::new(reset, order)),
+                Value::Array(if round % 2 == 0 {
+                    alloc::vec![Value::Token(translate)]
+                } else {
+                    alloc::vec![
+                        Value::Token(store.tokens.intern(RESET_XFORM_STACK)),
+                        Value::Token(translate)
+                    ]
+                }),
+            );
+            let applied = live.apply(&mut store, &edit).unwrap();
+            let scene = Scene::new(live.stage(), &store);
+            cache.apply_changes(&scene, &applied.changes);
+            let mut fresh = XformCache::new(Time::Default);
+            for path in [root, normal, reset, leaf, other] {
+                assert_eq!(
+                    cache.local_to_world(&scene, path),
+                    fresh.local_to_world(&scene, path)
+                );
+            }
+        }
+        assert!(cache.namespace.is_none());
+        // Mixing manual and report-driven invalidation keeps the optional
+        // compatibility index coherent too.
+        cache.invalidate(&Scene::new(live.stage(), &store), leaf);
+        cache.local_transform(&Scene::new(live.stage(), &store), leaf);
+        let removed = live.apply(&mut store, &remove).unwrap();
+        cache.apply_changes(&Scene::new(live.stage(), &store), &removed.changes);
+        assert_eq!(cache.namespace.as_ref().unwrap().len(), cache.len());
+        assert!(!cache.entries.contains_key(&leaf));
+    }
+
+    #[test]
     fn transform_edits_reuse_locals_and_preserve_reset_worlds() {
         use alloc::vec;
         use layerstack::PropertyPath;
@@ -1069,7 +1199,7 @@ mod cache_tests {
         live.apply(&mut store, &tx).unwrap();
         cache.invalidate(&Scene::new(live.stage(), &store), root);
         assert!(cache.entries.is_empty());
-        assert!(cache.namespace.is_empty());
+        assert!(cache.namespace.as_ref().is_none_or(BTreeMap::is_empty));
     }
 
     #[test]
@@ -1173,7 +1303,7 @@ mod cache_tests {
         assert!(copied.is_empty());
         assert_eq!(cache.len(), 1);
         cache.set_time(Time::at(1.0));
-        assert!(cache.namespace.is_empty());
+        assert!(cache.namespace.as_ref().is_none_or(BTreeMap::is_empty));
         cache.local_to_world(&scene, path);
         cache.invalidate(&scene, path);
         assert!(cache.is_empty());

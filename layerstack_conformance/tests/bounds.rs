@@ -151,7 +151,7 @@ fn edits_invalidate_ancestors_and_descendants_but_keep_other_branches() {
     );
     let applied = live.apply(&mut loaded.store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &loaded.store);
-    cache.invalidate(&scene, changed_parent);
+    cache.apply_changes(&scene, &applied.changes);
     let computed = cache.stats().computed;
     assert_eq!(cache.world_bound(&scene, other).unwrap(), other_bound);
     assert_eq!(cache.stats().computed, computed, "unrelated branch reused");
@@ -159,24 +159,24 @@ fn edits_invalidate_ancestors_and_descendants_but_keep_other_branches() {
     let actual = cache.world_bound(&scene, root).unwrap();
     let mut clean = BoundsCache::new(Time::Default, BoundsOptions::default());
     assert_eq!(actual, clean.world_bound(&scene, root).unwrap());
-    live.apply(&mut loaded.store, &applied.inverse).unwrap();
+    let undone = live.apply(&mut loaded.store, &applied.inverse).unwrap();
     let scene = Scene::new(live.stage(), &loaded.store);
-    cache.invalidate(&scene, changed_parent);
+    cache.apply_changes(&scene, &undone.changes);
     assert_eq!(cache.world_bound(&scene, leaf).unwrap(), original);
     let mut removal = Transaction::new();
     removal.remove_spec(EditTarget::for_layer(loaded.root_layer).prim(changed_parent));
     let removed = live.apply(&mut loaded.store, &removal).unwrap();
     let scene = Scene::new(live.stage(), &loaded.store);
-    cache.invalidate(&scene, changed_parent);
+    cache.apply_changes(&scene, &removed.changes);
     assert!(cache.world_bound(&scene, leaf).is_err());
     let mut clean = BoundsCache::new(Time::Default, BoundsOptions::default());
     assert_eq!(
         cache.world_bound(&scene, root).unwrap(),
         clean.world_bound(&scene, root).unwrap()
     );
-    live.apply(&mut loaded.store, &removed.inverse).unwrap();
+    let restored = live.apply(&mut loaded.store, &removed.inverse).unwrap();
     let scene = Scene::new(live.stage(), &loaded.store);
-    cache.invalidate(&scene, changed_parent);
+    cache.apply_changes(&scene, &restored.changes);
     assert_eq!(cache.world_bound(&scene, leaf).unwrap(), original);
 }
 

@@ -19,7 +19,6 @@ pub use flatten::{
 
 use alloc::{
     sync::{Arc, Weak},
-    vec,
     vec::Vec,
 };
 
@@ -1483,13 +1482,13 @@ impl Stage {
     }
 
     /// Traverses prims in a deterministic preorder.
+    /// Borrows child lists lazily; auxiliary storage grows with depth, not fan-out.
     pub fn traverse(&self, root: PathId) -> Traverse<'_> {
         Traverse::new(self, root)
     }
 
-    /// Returns the direct children of `prim` in deterministic order.
-    ///
-    /// This is an inspection API intended for conformance and debugging.
+    /// Borrows the direct children of `prim` in composed traversal order.
+    /// Consumers can reuse this topology without maintaining a namespace copy.
     ///
     /// Spec: AOUSD Core §11 (stage population) requires deterministic traversal.
     #[must_use]
@@ -2161,14 +2160,16 @@ pub(crate) fn dictionary_cmp(a: &str, b: &str) -> core::cmp::Ordering {
 #[derive(Debug)]
 pub struct Traverse<'a> {
     stage: &'a Stage,
-    stack: Vec<PathId>,
+    root: Option<PathId>,
+    stack: Vec<core::slice::Iter<'a, PathId>>,
 }
 
 impl<'a> Traverse<'a> {
     fn new(stage: &'a Stage, root: PathId) -> Self {
         Self {
             stage,
-            stack: vec![root],
+            root: Some(root),
+            stack: Vec::new(),
         }
     }
 }
@@ -2177,11 +2178,23 @@ impl Iterator for Traverse<'_> {
     type Item = PathId;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let next = self.stack.pop()?;
-        if let Some(children) = self.stage.children.get(&next) {
-            for child in children.iter().rev() {
-                self.stack.push(*child);
+        let next = if let Some(root) = self.root.take() {
+            root
+        } else {
+            loop {
+                if let Some(&path) = self.stack.last_mut()?.next() {
+                    if self.stack.last()?.as_slice().is_empty() {
+                        self.stack.pop();
+                    }
+                    break path;
+                }
+                self.stack.pop();
             }
+        };
+        if let Some(children) = self.stage.children_of(next)
+            && !children.is_empty()
+        {
+            self.stack.push(children.iter());
         }
         Some(next)
     }
@@ -2283,6 +2296,33 @@ mod tests {
     };
     use alloc::sync::Arc;
     use alloc::vec;
+
+    #[test]
+    fn traversal_borrows_wide_child_lists_and_preserves_preorder() {
+        let root = PathId::from_raw(0);
+        let children: Vec<_> = (1..=100_000).map(PathId::from_raw).collect();
+        let stage = Stage::from_parts(
+            HashMap::new(),
+            HashMap::from([
+                (root, children.clone()),
+                (PathId::from_raw(1), vec![PathId::from_raw(100_001)]),
+            ]),
+            false,
+            None,
+        );
+        let mut walk = stage.traverse(root);
+        assert!(walk.stack.is_empty());
+        assert_eq!(walk.next(), Some(root));
+        assert_eq!(
+            walk.stack.len(),
+            1,
+            "one borrowed iterator, not 100k queued children"
+        );
+        assert_eq!(walk.next(), Some(PathId::from_raw(1)));
+        assert_eq!(walk.stack.len(), 2);
+        assert_eq!(walk.next(), Some(PathId::from_raw(100_001)));
+        assert_eq!(walk.collect::<Vec<_>>(), children[1..]);
+    }
 
     #[test]
     fn shared_schema_identity_tracks_edits_and_undo_without_retaining_history() {

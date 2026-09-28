@@ -543,6 +543,68 @@ impl<'a> Xformable<'a> {
         ordered_ops(self, &self.xform_op_order().unwrap_or_default())
     }
 
+    /// Whether an effective local transform op might vary across numeric times.
+    ///
+    /// OpenUSD: `UsdGeomXformable::TransformMightBeTimeVarying`. Two or more
+    /// samples, or a spline, count as varying even if their values agree.
+    /// Stronger defaults and blocks mask weaker animation. Only operations
+    /// after the last reset contribute; ancestors are not inspected.
+    /// A single sample returns false, although it may differ from the default
+    /// value. This query is not sufficient to invalidate a cache when moving
+    /// between default and numeric time.
+    #[must_use]
+    pub fn transform_might_be_time_varying(&self) -> bool {
+        self.ordered_xform_ops().ops.iter().any(|op| {
+            op.op_type.is_some()
+                && transform_op_source(self, op.attribute).is_some_and(|source| {
+                    source.value.spline().is_some()
+                        || source
+                            .value
+                            .time_samples()
+                            .is_some_and(|samples| samples.len() > 1)
+                })
+        })
+    }
+
+    /// Sorted, unique stage-time samples of the effective local transform ops.
+    ///
+    /// OpenUSD: `UsdGeomXformable::GetTimeSamples`. Uses composed value
+    /// sources and accumulated layer offsets (AOUSD Core §12.3.2.1); defaults
+    /// and blocks mask weaker samples. Ops before the last reset and ancestor
+    /// transforms are excluded. Splines have no discrete time samples; use
+    /// [`Self::transform_might_be_time_varying`] to detect their variability.
+    #[must_use]
+    pub fn transform_time_samples(&self) -> Vec<f64> {
+        let mut times = Vec::new();
+        for op in self.ordered_xform_ops().ops {
+            if op.op_type.is_none() {
+                continue;
+            }
+            if let Some(source) = transform_op_source(self, op.attribute)
+                && let Some(samples) = source.value.time_samples()
+            {
+                times.extend(samples.iter().map(|(time, _)| {
+                    time * source.layer_offset.scale + source.layer_offset.offset
+                }));
+            }
+        }
+        times.sort_by(f64::total_cmp);
+        times.dedup_by(|a, b| *a == *b);
+        times
+    }
+
+    /// [`Self::transform_time_samples`] restricted to an inclusive interval.
+    /// Reversed or NaN endpoints produce an empty result.
+    #[must_use]
+    pub fn transform_time_samples_in_interval(&self, start: f64, end: f64) -> Vec<f64> {
+        if start > end || start.is_nan() || end.is_nan() {
+            return Vec::new();
+        }
+        let mut times = self.transform_time_samples();
+        times.retain(|time| *time >= start && *time <= end);
+        times
+    }
+
     /// The stage reads the prim's local transform at `time` depends on
     /// ([`LocalTransformInputs`]).
     #[must_use]
@@ -561,6 +623,22 @@ impl<'a> Xformable<'a> {
     pub fn local_transform(&self, time: Time) -> LocalTransform {
         self.local_transform_inputs(time).evaluate()
     }
+}
+
+// Transform op values are atomic scalars/vectors/matrices, never sparse-array
+// opinions. Numeric source precedence is samples, spline, then default at each
+// site (AOUSD Core §12.3). Keep this separate from conservative cache dependency
+// classification, which must also cover default/numeric transitions.
+fn transform_op_source<'a>(prim: &Xformable<'a>, name: &str) -> Option<&'a layerstack::Opinion> {
+    prim.scene()
+        .stage()
+        .explain_property_path(prim.property_path(name)?)?
+        .iter()
+        .find(|opinion| {
+            opinion.value.time_samples().is_some()
+                || opinion.value.spline().is_some()
+                || opinion.value.default_value().is_some()
+        })
 }
 
 impl<'a> Imageable<'a> {

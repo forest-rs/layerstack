@@ -1,0 +1,93 @@
+{
+  "version": "26.8",
+  "records": [
+    {
+      "path": "/Source",
+      "varying": true,
+      "times": [
+        0.0,
+        2.0
+      ],
+      "interval": [
+        2.0
+      ]
+    },
+    {
+      "path": "/Offset",
+      "varying": true,
+      "times": [
+        5.0,
+        9.0
+      ],
+      "interval": [
+        5.0
+      ]
+    },
+    {
+      "path": "/Masked",
+      "varying": false,
+      "times": [],
+      "interval": []
+    },
+    {
+      "path": "/Blocked",
+      "varying": false,
+      "times": [],
+      "interval": []
+    },
+    {
+      "path": "/Animated",
+      "varying": true,
+      "times": [
+        0.0,
+        1.0,
+        2.0,
+        3.0
+      ],
+      "interval": [
+        1.0,
+        2.0,
+        3.0
+      ]
+    },
+    {
+      "path": "/Single",
+      "varying": false,
+      "times": [
+        4.0
+      ],
+      "interval": [
+        4.0
+      ]
+    },
+    {
+      "path": "/Static",
+      "varying": false,
+      "times": [],
+      "interval": []
+    },
+    {
+      "path": "/Reset",
+      "varying": false,
+      "times": [],
+      "interval": []
+    },
+    {
+      "path": "/Inverse",
+      "varying": true,
+      "times": [
+        0.0,
+        2.0
+      ],
+      "interval": [
+        2.0
+      ]
+    },
+    {
+      "path": "/Spline",
+      "varying": true,
+      "times": [],
+      "interval": []
+    }
+  ]
+}

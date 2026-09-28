@@ -124,7 +124,10 @@
 //!   `xformOpOrder` ops (every op type and Euler order, in any precision,
 //!   with inverse ops and `!resetXformStack!`), with the ops that could not
 //!   contribute reported as [`XformProblem`]s rather than hidden;
-//!   `Xformable::ordered_xform_ops` lists the ops;
+//!   `Xformable::ordered_xform_ops` lists the ops. `transform_time_samples`
+//!   returns their composed sample times in stage time;
+//!   `transform_might_be_time_varying` detects numeric-time variability,
+//!   including splines;
 //! - `Imageable::compute_local_to_world` and `compute_parent_to_world`;
 //!   for many prims, an [`XformCache`] owned by the caller shares each
 //!   ancestor's work, reports what it computed ([`XformCacheStats`]), and

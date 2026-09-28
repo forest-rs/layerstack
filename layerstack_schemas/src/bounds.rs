@@ -454,8 +454,7 @@ impl BoundsCache {
         let prim = PrimView::new(*scene, path);
         if self.options.use_extents_hint
             && scene.is_model(path)
-            && let Some(hint) =
-                vectors(scene, &prim, "extentsHint", self.time).filter(|v| v.len() >= 2)
+            && let Some(hint) = vectors(&prim, "extentsHint", self.time).filter(|v| v.len() >= 2)
         {
             use crate::usd_geom::ImageablePurpose::{Default, Guide, Proxy, Render};
             return Ok(Some(
@@ -470,7 +469,7 @@ impl BoundsCache {
             return Err(BoundsError::PointInstancerUnsupported(path));
         }
         if scene.is_a(path, "Boundable") {
-            let extent = vectors(scene, &prim, "extent", self.time)
+            let extent = vectors(&prim, "extent", self.time)
                 .filter(|v| v.len() == 2)
                 .ok_or(BoundsError::ExtentUnavailable(path))?;
             let purpose = Imageable::new(scene, path)
@@ -546,17 +545,19 @@ fn concrete_ancestry(scene: &Scene<'_>, path: PathId) -> bool {
     true
 }
 
-fn vectors(
-    scene: &Scene<'_>,
-    prim: &PrimView<'_>,
-    name: &str,
-    time: Time,
-) -> Option<Vec<[f32; 3]>> {
-    crate::value::read_array(
-        &prim.raw_value(name, time)?,
-        scene.store().tokens(),
-        crate::value::read_float3,
-    )
+fn vectors(prim: &PrimView<'_>, name: &str, time: Time) -> Option<Vec<[f32; 3]>> {
+    let read = |value: &layerstack::Value, tokens: &layerstack::TokenInterner| {
+        crate::value::read_array(value, tokens, crate::value::read_float3)
+    };
+    // Decode the resolver's owned value directly; raw_value would clone the
+    // whole array before immediately turning it into vectors.
+    match time {
+        Time::Default => prim.read_value(name, read),
+        Time::At {
+            code,
+            interpolation,
+        } => prim.read_value_at(name, code, interpolation, read),
+    }
 }
 fn box_from_extent(extent: &[[f32; 3]]) -> BoundingBox {
     BoundingBox {

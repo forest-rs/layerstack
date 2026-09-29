@@ -1363,6 +1363,42 @@ impl XformCache {
         Some(result)
     }
 
+    // Called immediately after a world query. Reuse its already validated
+    // parent slots and reset boundary; subscription preparation must not
+    // rediscover xform ops or enumerate unrelated schema properties.
+    pub(crate) fn world_dependencies(&self, path: PathId) -> Vec<PathId> {
+        let Some(&first) = self.entries.get(&path) else {
+            return alloc::vec![path]; // missing prim or identity pseudo-root
+        };
+        // A pseudo-root can have a cached local identity while world queries
+        // deliberately bypass its slot. It has no ancestor dependencies.
+        if !self.nodes[first.get() - 1].world_valid {
+            return alloc::vec![path];
+        }
+        let mut paths = Vec::new();
+        let mut at = first;
+        loop {
+            let index = at.get() - 1;
+            let node = &self.nodes[index];
+            paths.push(node.path);
+            if self.transforms[index]
+                .local
+                .as_ref()
+                .is_some_and(|local| local.resets_xform_stack)
+            {
+                break;
+            }
+            match node.parent {
+                Parent::Cached(parent) => at = parent,
+                Parent::Root => break,
+                Parent::Unresolved | Parent::Vacant(_) => {
+                    unreachable!("world dependencies were validated")
+                }
+            }
+        }
+        paths
+    }
+
     // Called after a successful world query by bounds reduction. The world
     // dependency follows reset boundaries exactly like the matrix itself.
     pub(crate) fn world_might_vary(&self, path: PathId) -> bool {

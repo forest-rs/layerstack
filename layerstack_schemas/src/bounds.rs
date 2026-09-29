@@ -211,6 +211,12 @@ impl BoundsCache {
     pub fn stats(&self) -> BoundsStats {
         self.stats
     }
+    pub(crate) fn transforms_mut(&mut self) -> &mut XformCache {
+        &mut self.transforms
+    }
+    pub(crate) fn transform_stats(&self) -> crate::XformCacheStats {
+        self.transforms.stats()
+    }
     /// Number of cached prim bounds.
     #[must_use]
     pub fn len(&self) -> usize {

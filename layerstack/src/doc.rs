@@ -312,6 +312,16 @@ fn fmt_matrix(f: &mut fmt::Formatter<'_>, m: &[f64], cols: usize) -> fmt::Result
 }
 
 impl Value {
+    /// Whether two values have identical representations, including float bits.
+    ///
+    /// Unlike `PartialEq`, unchanged NaNs compare equal and positive and negative
+    /// zero remain distinct. Applies recursively to arrays, dictionaries and
+    /// sparse edits. Useful for retained-result comparison and authored guards.
+    #[must_use]
+    pub fn same_representation(&self, other: &Self) -> bool {
+        crate::edit::same::Same::same(self, other)
+    }
+
     /// Creates a string value.
     pub fn string(s: impl Into<Arc<str>>) -> Self {
         Self::String(s.into())

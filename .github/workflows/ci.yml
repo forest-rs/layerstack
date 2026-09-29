@@ -426,6 +426,9 @@ jobs:
 
       - name: check shading port authoring oracle
         run: python layerstack_conformance/scripts/shading_ports_oracle.py --check
+      - name: check retained query oracle
+        run: python layerstack_conformance/scripts/retained_queries_oracle.py --check
+
       - name: check shading source oracle
         run: python layerstack_conformance/scripts/shading_oracle.py --check
 

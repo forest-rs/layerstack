@@ -77,7 +77,7 @@
 
 mod apply;
 mod error;
-mod same;
+pub(crate) mod same;
 mod spec;
 mod target;
 mod transaction;

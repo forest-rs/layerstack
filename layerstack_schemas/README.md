@@ -96,3 +96,12 @@ Those policies are separate from composed connection inspection.
 
 Run `cargo run -p layerstack_examples --bin shading_values` for a complete
 interface-input authoring and value-source inspection example.
+
+Retained computed queries are available in `retained` with `usd-geom` and
+`usd-shade`. Caller-owned `RetainedQueries` observe a host-owned `LiveStage`, retaining world
+transforms, world bounds and shading providers through edits and time changes.
+Stage callbacks are independently usable; `QuerySession` optionally bundles scene
+ownership and queries. Explicit polling
+reports answer, dependency and provenance changes separately, with bounded causes
+and computation counters. See [the model and limits](../docs/retained-queries.md)
+and the `retained_queries` example in `layerstack_examples`.

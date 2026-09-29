@@ -60,3 +60,7 @@ harness = false
 [[bench]]
 name = "xform_animation"
 harness = false
+
+[[bench]]
+name = "stage_notices"
+harness = false

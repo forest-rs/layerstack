@@ -118,8 +118,9 @@ pub struct Applied {
 /// A changed opinion may be masked by a stronger one, so info-only notices do
 /// not assert that the resolved value differs. A conservative full rebuild
 /// reports the pseudo-root as resynced, rather than every survivor as changed.
-/// Reports have prim granularity: a property declaration or applied-schema
-/// change conservatively resyncs its owning prim; existing value slots do not.
+/// Structural invalidation has prim granularity: a property declaration or
+/// applied-schema change conservatively resyncs its owning prim. Info-only
+/// reports can include complete property-field inventories in `property_changes`.
 /// External opinion notifications lack edit details and conservatively resync
 /// their affected prims, including other prims updated in the same batch.
 /// Every list is sorted by [`PathId`] and contains no duplicates.

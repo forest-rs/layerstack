@@ -13,6 +13,8 @@
 use alloc::{collections::BTreeSet, vec::Vec};
 
 mod local;
+mod notices;
+pub use notices::{ChangeCursor, ChangeHistoryError, ChangeNotice, ChangeSubscription};
 
 use hashbrown::{HashMap, HashSet};
 use invalidation::{Channel, CycleHandling, InvalidationTracker, TraversalScratch};
@@ -198,6 +200,7 @@ pub struct LiveStage {
     root: LayerId,
     options: StageOptions,
     needs_full_rebuild: bool,
+    notices: notices::Journal,
 }
 
 impl LiveStage {
@@ -229,6 +232,7 @@ impl LiveStage {
             root,
             options,
             needs_full_rebuild: false,
+            notices: notices::Journal::default(),
         };
         live.reindex_all_sources();
         live.record_generations(store);
@@ -316,6 +320,7 @@ impl LiveStage {
                 self.refresh_local_structure(store, paths, &outcome.touched)
         {
             include_resyncs(store, &mut changes, &declaration_resyncs);
+            self.notices.publish(&changes, &self.stage, store);
             return Ok(Applied {
                 inverse: outcome.inverse,
                 recomposed,
@@ -407,6 +412,7 @@ impl LiveStage {
                 crate::PrimPropertyChanges { prim, fields }
             })
             .collect();
+        self.notices.publish(&changes, &self.stage, store);
         Ok(Applied {
             inverse: outcome.inverse,
             recomposed,
@@ -811,7 +817,12 @@ impl LiveStage {
     /// [`notify_changed_layers`](Self::notify_changed_layers) finds layers
     /// edited without a notification.
     pub fn recompose(&mut self, store: &mut dyn LayerStore) -> Vec<PathId> {
-        self.recompose_report(store, None)
+        let mut changes = Changes::default();
+        let paths = self.recompose_report(store, Some(&mut changes));
+        let info_only = core::mem::take(&mut changes.changed_info_only);
+        include_resyncs(store, &mut changes, &info_only);
+        self.notices.publish(&changes, &self.stage, store);
+        paths
     }
 
     /// Recomposes pending external edits and returns conservative change evidence.
@@ -824,7 +835,67 @@ impl LiveStage {
         self.recompose_report(store, Some(&mut changes));
         let info_only = core::mem::take(&mut changes.changed_info_only);
         include_resyncs(store, &mut changes, &info_only);
+        self.notices.publish(&changes, &self.stage, store);
         changes
+    }
+
+    /// Detects source edits and recomposes before exposing a current scene.
+    ///
+    /// Scans participating layer generations once per call. Layer methods and
+    /// transactions need no observer-specific authoring session. Direct writes
+    /// to importer fields must call [`crate::Layer::touch`]. Unknown source
+    /// changes produce conservative resyncs. Like OpenUSD's layer notices,
+    /// evidence belongs to the stage, independently of its consumers; unlike
+    /// OpenUSD's synchronous dispatch, synchronization here is explicit.
+    pub fn synchronize(&mut self, store: &mut dyn LayerStore) {
+        self.notify_changed_layers(store);
+        self.recompose_changes(store);
+    }
+
+    /// Registers a callback after each completed composed change batch.
+    ///
+    /// Runs synchronously after `apply`, `recompose`, `recompose_changes` or
+    /// `synchronize` updates the stage. Source edits outside the stage are
+    /// discovered at synchronization, not at mutation time. Callbacks may inspect
+    /// the notice's stage/store but cannot mutate them while borrowed. Queue
+    /// follow-up edits for after this call returns. Callbacks run in registration
+    /// order; a panic propagates and skips later callbacks, but history is already
+    /// recorded. Callbacks remain installed until unsubscribed or the stage drops.
+    /// Send + Sync preserve `LiveStage`'s thread-transfer traits; dispatch itself
+    /// is synchronous and never starts threads.
+    pub fn subscribe_changes(
+        &mut self,
+        callback: impl FnMut(ChangeNotice<'_>) + Send + Sync + 'static,
+    ) -> ChangeSubscription {
+        self.notices.subscribe(callback)
+    }
+
+    /// Removes a callback. Returns false for an absent or foreign subscription.
+    pub fn unsubscribe_changes(&mut self, subscription: &ChangeSubscription) -> bool {
+        self.notices.unsubscribe(subscription)
+    }
+
+    /// Starts an independent observer at the current composed revision.
+    ///
+    /// Reports are retained only after the first observer subscribes. At most
+    /// 64 batches are retained; a slower reader receives an explicit history
+    /// error and must refresh its derived state. No callbacks are registered.
+    pub fn change_cursor(&mut self) -> ChangeCursor {
+        self.notices.cursor()
+    }
+
+    /// Borrows reports since this cursor and advances it to the current revision.
+    ///
+    /// Reading never consumes another observer's reports. An expired cursor is
+    /// advanced too: the caller must rebuild before using it again. A cursor
+    /// from another stage is rejected without modification. The returned
+    /// iterator must be processed in full; dropping it discards the remainder
+    /// for this cursor. Call [`Self::synchronize`] first to detect source edits.
+    pub fn changes_since<'a>(
+        &'a self,
+        cursor: &mut ChangeCursor,
+    ) -> Result<impl Iterator<Item = &'a Changes> + use<'a>, ChangeHistoryError> {
+        self.notices.read(cursor)
     }
 
     fn recompose_report(

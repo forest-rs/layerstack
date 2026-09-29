@@ -300,6 +300,8 @@ pub mod kind;
 mod predicate;
 #[cfg(feature = "usd")]
 mod regex;
+#[cfg(all(feature = "usd-geom", feature = "usd-shade"))]
+pub mod retained;
 #[cfg(feature = "usd-shade")]
 pub mod shading;
 mod table;

@@ -2181,8 +2181,22 @@ pub struct InMemoryStore {
 
 impl InMemoryStore {
     /// Inserts (or replaces) a layer.
-    pub fn insert_layer(&mut self, layer: Layer) {
+    /// Replacing a layer advances its generations so live stages detect reloads,
+    /// even when the new layer happened to have the same generation counters.
+    pub fn insert_layer(&mut self, mut layer: Layer) {
         debug_assert_ne!(layer.id, LayerId::UNRESOLVED, "reserved layer ID");
+        if let Some(previous) = self.layers.get(&layer.id) {
+            layer.generation = layer
+                .generation
+                .max(previous.generation)
+                .checked_add(1)
+                .expect("layer generation exhausted");
+            layer.structure = layer
+                .structure
+                .max(previous.structure)
+                .checked_add(1)
+                .expect("layer structural generation exhausted");
+        }
         self.layers.insert(layer.id, layer);
     }
 

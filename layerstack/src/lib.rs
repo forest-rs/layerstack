@@ -166,4 +166,6 @@ pub use stage::{
 };
 pub use variant_fallbacks::VariantFallbacks;
 
-pub use live_stage::LiveStage;
+pub use live_stage::{
+    ChangeCursor, ChangeHistoryError, ChangeNotice, ChangeSubscription, LiveStage,
+};

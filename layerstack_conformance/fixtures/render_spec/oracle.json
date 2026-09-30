@@ -1,0 +1,1275 @@
+[
+  {
+    "bindings": [
+      {
+        "material": "/SurfaceMaterial",
+        "path": "/BindingCycle"
+      },
+      {
+        "material": null,
+        "path": "/BindingEmptyCycle"
+      },
+      {
+        "material": null,
+        "path": "/BindingMissing"
+      }
+    ],
+    "included": [
+      "default",
+      "render",
+      "proxy"
+    ],
+    "material": [
+      "preview",
+      ""
+    ],
+    "namespaces": [],
+    "products": [
+      {
+        "aperture": [
+          48.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [
+          0,
+          1
+        ],
+        "name": "expand.exr",
+        "path": "/Expand",
+        "pixel_aspect": 1.5,
+        "policy": "expandAperture",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {
+          "orderedVars": [
+            "/Color",
+            "/Depth",
+            "/Missing",
+            "/BadProduct"
+          ],
+          "ri:quality": 0.25
+        },
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          24.0,
+          9.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [
+          1,
+          0
+        ],
+        "name": "crop.exr",
+        "path": "/Crop",
+        "pixel_aspect": 1.5,
+        "policy": "cropAperture",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {
+          "orderedVars": [
+            "/Depth",
+            "/Color"
+          ]
+        },
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          48.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [],
+        "name": "",
+        "path": "/Width",
+        "pixel_aspect": 1.5,
+        "policy": "adjustApertureWidth",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          24.0,
+          9.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [],
+        "name": "",
+        "path": "/Height",
+        "pixel_aspect": 1.5,
+        "policy": "adjustApertureHeight",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          24.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [],
+        "name": "",
+        "path": "/Pixel",
+        "pixel_aspect": 0.75,
+        "policy": "adjustPixelAspectRatio",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          40.0,
+          20.0
+        ],
+        "camera": "/OtherCamera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [
+          0,
+          1
+        ],
+        "name": "override.exr",
+        "path": "/Override",
+        "pixel_aspect": 2.0,
+        "policy": "expandAperture",
+        "resolution": [
+          100,
+          100
+        ],
+        "settings": {
+          "camera": [
+            "/OtherCamera"
+          ],
+          "orderedVars": [
+            "/Forward.vars"
+          ]
+        },
+        "type": "deep",
+        "window": [
+          -0.10000000149011612,
+          -0.20000000298023224,
+          1.100000023841858,
+          1.2000000476837158
+        ]
+      },
+      {
+        "aperture": [
+          48.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": false,
+        "indices": [],
+        "name": "",
+        "path": "/EmptyCamera",
+        "pixel_aspect": 1.5,
+        "policy": "expandAperture",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {
+          "camera": []
+        },
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          24.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [],
+        "name": "",
+        "path": "/InvalidResolution",
+        "pixel_aspect": 1.5,
+        "policy": "unknown",
+        "resolution": [
+          0,
+          100
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          34.133331298828125,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": false,
+        "disable_motion": false,
+        "indices": [],
+        "name": "",
+        "path": "/Sampled",
+        "pixel_aspect": 1.0,
+        "policy": "expandAperture",
+        "resolution": [
+          2048,
+          1080
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          24.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [],
+        "name": "",
+        "path": "/ZeroPixel",
+        "pixel_aspect": 0.0,
+        "policy": "expandAperture",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          48.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [],
+        "name": "",
+        "path": "/CycleCamera",
+        "pixel_aspect": 1.5,
+        "policy": "expandAperture",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {
+          "camera": [
+            "/CameraForward.camera"
+          ]
+        },
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          34.133331298828125,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": false,
+        "indices": [],
+        "name": "",
+        "path": "/WrongType",
+        "pixel_aspect": 1.0,
+        "policy": "expandAperture",
+        "resolution": [
+          2048,
+          1080
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      }
+    ],
+    "settings": {
+      "arnold:enabled": true,
+      "camera": [
+        "/Camera"
+      ],
+      "extra": [
+        "/Camera"
+      ],
+      "outputs:ri:shader": [
+        "/Shader"
+      ],
+      "products": [
+        "/Expand",
+        "/Crop",
+        "/Width",
+        "/Height",
+        "/Pixel",
+        "/Override",
+        "/EmptyCamera",
+        "/BadCamera",
+        "/BadProduct",
+        "/InvalidResolution",
+        "/Sampled",
+        "/ZeroPixel",
+        "/CycleCamera",
+        "/NonCamera",
+        "/PropertyCamera",
+        "/WrongType"
+      ],
+      "ri:integrator:name": "path",
+      "ri:quality": 0.5
+    },
+    "vars": [
+      {
+        "data_type": "color3f",
+        "path": "/Color",
+        "settings": {
+          "ri:precision": 16
+        },
+        "source_name": "C",
+        "source_type": "raw"
+      },
+      {
+        "data_type": "float",
+        "path": "/Depth",
+        "settings": {
+          "ri:filter": false
+        },
+        "source_name": "depth",
+        "source_type": "lpe"
+      }
+    ]
+  },
+  {
+    "bindings": [
+      {
+        "material": "/SurfaceMaterial",
+        "path": "/BindingCycle"
+      },
+      {
+        "material": null,
+        "path": "/BindingEmptyCycle"
+      },
+      {
+        "material": null,
+        "path": "/BindingMissing"
+      }
+    ],
+    "included": [
+      "default",
+      "render",
+      "proxy"
+    ],
+    "material": [
+      "preview",
+      ""
+    ],
+    "namespaces": [
+      "ri"
+    ],
+    "products": [
+      {
+        "aperture": [
+          48.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [
+          0,
+          1
+        ],
+        "name": "expand.exr",
+        "path": "/Expand",
+        "pixel_aspect": 1.5,
+        "policy": "expandAperture",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {
+          "orderedVars": [
+            "/Color",
+            "/Depth",
+            "/Missing",
+            "/BadProduct"
+          ],
+          "ri:quality": 0.25
+        },
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          24.0,
+          9.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [
+          1,
+          0
+        ],
+        "name": "crop.exr",
+        "path": "/Crop",
+        "pixel_aspect": 1.5,
+        "policy": "cropAperture",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {
+          "orderedVars": [
+            "/Depth",
+            "/Color"
+          ]
+        },
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          48.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [],
+        "name": "",
+        "path": "/Width",
+        "pixel_aspect": 1.5,
+        "policy": "adjustApertureWidth",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          24.0,
+          9.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [],
+        "name": "",
+        "path": "/Height",
+        "pixel_aspect": 1.5,
+        "policy": "adjustApertureHeight",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          24.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [],
+        "name": "",
+        "path": "/Pixel",
+        "pixel_aspect": 0.75,
+        "policy": "adjustPixelAspectRatio",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          40.0,
+          20.0
+        ],
+        "camera": "/OtherCamera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [
+          0,
+          1
+        ],
+        "name": "override.exr",
+        "path": "/Override",
+        "pixel_aspect": 2.0,
+        "policy": "expandAperture",
+        "resolution": [
+          100,
+          100
+        ],
+        "settings": {
+          "camera": [
+            "/OtherCamera"
+          ],
+          "orderedVars": [
+            "/Forward.vars"
+          ]
+        },
+        "type": "deep",
+        "window": [
+          -0.10000000149011612,
+          -0.20000000298023224,
+          1.100000023841858,
+          1.2000000476837158
+        ]
+      },
+      {
+        "aperture": [
+          48.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": false,
+        "indices": [],
+        "name": "",
+        "path": "/EmptyCamera",
+        "pixel_aspect": 1.5,
+        "policy": "expandAperture",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {
+          "camera": []
+        },
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          24.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [],
+        "name": "",
+        "path": "/InvalidResolution",
+        "pixel_aspect": 1.5,
+        "policy": "unknown",
+        "resolution": [
+          0,
+          100
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          34.133331298828125,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": false,
+        "disable_motion": false,
+        "indices": [],
+        "name": "",
+        "path": "/Sampled",
+        "pixel_aspect": 1.0,
+        "policy": "expandAperture",
+        "resolution": [
+          2048,
+          1080
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          24.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [],
+        "name": "",
+        "path": "/ZeroPixel",
+        "pixel_aspect": 0.0,
+        "policy": "expandAperture",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          48.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [],
+        "name": "",
+        "path": "/CycleCamera",
+        "pixel_aspect": 1.5,
+        "policy": "expandAperture",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {
+          "camera": [
+            "/CameraForward.camera"
+          ]
+        },
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          34.133331298828125,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": false,
+        "indices": [],
+        "name": "",
+        "path": "/WrongType",
+        "pixel_aspect": 1.0,
+        "policy": "expandAperture",
+        "resolution": [
+          2048,
+          1080
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      }
+    ],
+    "settings": {
+      "camera": [
+        "/Camera"
+      ],
+      "extra": [
+        "/Camera"
+      ],
+      "outputs:ri:shader": [
+        "/Shader"
+      ],
+      "products": [
+        "/Expand",
+        "/Crop",
+        "/Width",
+        "/Height",
+        "/Pixel",
+        "/Override",
+        "/EmptyCamera",
+        "/BadCamera",
+        "/BadProduct",
+        "/InvalidResolution",
+        "/Sampled",
+        "/ZeroPixel",
+        "/CycleCamera",
+        "/NonCamera",
+        "/PropertyCamera",
+        "/WrongType"
+      ],
+      "ri:integrator:name": "path",
+      "ri:quality": 0.5
+    },
+    "vars": [
+      {
+        "data_type": "color3f",
+        "path": "/Color",
+        "settings": {
+          "ri:precision": 16
+        },
+        "source_name": "C",
+        "source_type": "raw"
+      },
+      {
+        "data_type": "float",
+        "path": "/Depth",
+        "settings": {
+          "ri:filter": false
+        },
+        "source_name": "depth",
+        "source_type": "lpe"
+      }
+    ]
+  },
+  {
+    "bindings": [
+      {
+        "material": "/SurfaceMaterial",
+        "path": "/BindingCycle"
+      },
+      {
+        "material": null,
+        "path": "/BindingEmptyCycle"
+      },
+      {
+        "material": null,
+        "path": "/BindingMissing"
+      }
+    ],
+    "included": [
+      "default",
+      "render",
+      "proxy"
+    ],
+    "material": [
+      "preview",
+      ""
+    ],
+    "namespaces": [
+      "ri:integrator"
+    ],
+    "products": [
+      {
+        "aperture": [
+          48.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [
+          0,
+          1
+        ],
+        "name": "expand.exr",
+        "path": "/Expand",
+        "pixel_aspect": 1.5,
+        "policy": "expandAperture",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {
+          "orderedVars": [
+            "/Color",
+            "/Depth",
+            "/Missing",
+            "/BadProduct"
+          ]
+        },
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          24.0,
+          9.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [
+          1,
+          0
+        ],
+        "name": "crop.exr",
+        "path": "/Crop",
+        "pixel_aspect": 1.5,
+        "policy": "cropAperture",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {
+          "orderedVars": [
+            "/Depth",
+            "/Color"
+          ]
+        },
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          48.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [],
+        "name": "",
+        "path": "/Width",
+        "pixel_aspect": 1.5,
+        "policy": "adjustApertureWidth",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          24.0,
+          9.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [],
+        "name": "",
+        "path": "/Height",
+        "pixel_aspect": 1.5,
+        "policy": "adjustApertureHeight",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          24.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [],
+        "name": "",
+        "path": "/Pixel",
+        "pixel_aspect": 0.75,
+        "policy": "adjustPixelAspectRatio",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          40.0,
+          20.0
+        ],
+        "camera": "/OtherCamera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [
+          0,
+          1
+        ],
+        "name": "override.exr",
+        "path": "/Override",
+        "pixel_aspect": 2.0,
+        "policy": "expandAperture",
+        "resolution": [
+          100,
+          100
+        ],
+        "settings": {
+          "camera": [
+            "/OtherCamera"
+          ],
+          "orderedVars": [
+            "/Forward.vars"
+          ]
+        },
+        "type": "deep",
+        "window": [
+          -0.10000000149011612,
+          -0.20000000298023224,
+          1.100000023841858,
+          1.2000000476837158
+        ]
+      },
+      {
+        "aperture": [
+          48.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": false,
+        "indices": [],
+        "name": "",
+        "path": "/EmptyCamera",
+        "pixel_aspect": 1.5,
+        "policy": "expandAperture",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {
+          "camera": []
+        },
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          24.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [],
+        "name": "",
+        "path": "/InvalidResolution",
+        "pixel_aspect": 1.5,
+        "policy": "unknown",
+        "resolution": [
+          0,
+          100
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          34.133331298828125,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": false,
+        "disable_motion": false,
+        "indices": [],
+        "name": "",
+        "path": "/Sampled",
+        "pixel_aspect": 1.0,
+        "policy": "expandAperture",
+        "resolution": [
+          2048,
+          1080
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          24.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [],
+        "name": "",
+        "path": "/ZeroPixel",
+        "pixel_aspect": 0.0,
+        "policy": "expandAperture",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          48.0,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": true,
+        "indices": [],
+        "name": "",
+        "path": "/CycleCamera",
+        "pixel_aspect": 1.5,
+        "policy": "expandAperture",
+        "resolution": [
+          1920,
+          1080
+        ],
+        "settings": {
+          "camera": [
+            "/CameraForward.camera"
+          ]
+        },
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      },
+      {
+        "aperture": [
+          34.133331298828125,
+          18.0
+        ],
+        "camera": "/Camera",
+        "disable_dof": true,
+        "disable_motion": false,
+        "indices": [],
+        "name": "",
+        "path": "/WrongType",
+        "pixel_aspect": 1.0,
+        "policy": "expandAperture",
+        "resolution": [
+          2048,
+          1080
+        ],
+        "settings": {},
+        "type": "raster",
+        "window": [
+          0.0,
+          0.0,
+          1.0,
+          1.0
+        ]
+      }
+    ],
+    "settings": {
+      "camera": [
+        "/Camera"
+      ],
+      "extra": [
+        "/Camera"
+      ],
+      "products": [
+        "/Expand",
+        "/Crop",
+        "/Width",
+        "/Height",
+        "/Pixel",
+        "/Override",
+        "/EmptyCamera",
+        "/BadCamera",
+        "/BadProduct",
+        "/InvalidResolution",
+        "/Sampled",
+        "/ZeroPixel",
+        "/CycleCamera",
+        "/NonCamera",
+        "/PropertyCamera",
+        "/WrongType"
+      ]
+    },
+    "vars": [
+      {
+        "data_type": "color3f",
+        "path": "/Color",
+        "settings": {},
+        "source_name": "C",
+        "source_type": "raw"
+      },
+      {
+        "data_type": "float",
+        "path": "/Depth",
+        "settings": {},
+        "source_name": "depth",
+        "source_type": "lpe"
+      }
+    ]
+  }
+]

@@ -749,6 +749,51 @@ macro_rules! set_uniform_attribute {
     };
 }
 
+/// Whether an authored declaration or schema defines a relationship on an existing prim.
+#[cfg(any(feature = "usd-shade", feature = "usd-render"))]
+pub(crate) fn is_relationship(scene: &Scene<'_>, path: PropertyPath) -> bool {
+    let stage = scene.stage();
+    if !stage.has_prim(path.prim_path()) {
+        return false;
+    }
+    if let Some(declared) = stage.resolve_property_declaration(path.prim_path(), path.property()) {
+        return declared.kind == PropertyKind::Relationship;
+    }
+    stage
+        .property_definition(path.prim_path(), path.property(), scene.store())
+        .is_some_and(|defined| defined.kind == PropertyKind::Relationship)
+}
+
+/// Ordered relationship targets after recursively forwarding relationship paths.
+/// OpenUSD: `UsdRelationship::GetForwardedTargets`.
+#[cfg(any(feature = "usd-shade", feature = "usd-render"))]
+pub(crate) fn forwarded_targets(scene: &Scene<'_>, root: PropertyPath) -> Vec<TargetPath> {
+    if !is_relationship(scene, root) {
+        return Vec::new();
+    }
+    // OpenUSD: UsdRelationship::GetForwardedTargets. Stack traversal avoids
+    // recursion on adversarial relationship chains; visited edges stop cycles.
+    let mut stack = alloc::vec![TargetPath::Property(root)];
+    let mut seen = layerstack::HashSet::new();
+    let mut out = Vec::new();
+    let mut unique = layerstack::HashSet::new();
+    while let Some(target) = stack.pop() {
+        if let TargetPath::Property(path) = target
+            && is_relationship(scene, path)
+        {
+            if !seen.insert(path) {
+                continue;
+            }
+            if let Some(targets) = scene.stage().resolve_target_list_path(path) {
+                stack.extend(targets.value.into_iter().rev());
+            }
+        } else if unique.insert(target) {
+            out.push(target);
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod model_hierarchy_tests {
     use super::*;

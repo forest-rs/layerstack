@@ -470,6 +470,16 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
                 dependencies.push(plugin);
             }
         }
+        // The render computation also reads Camera schema fallbacks and
+        // traces UsdShade output providers. Those behavioral dependencies
+        // are not expressed by RenderSettings' schema inheritance.
+        if domain.plugin == "usdRender" {
+            for plugin in ["usdGeom", "usdShade"] {
+                if !dependencies.contains(&plugin) {
+                    dependencies.push(plugin);
+                }
+            }
+        }
         dependencies.sort_by_key(|plugin| DOMAINS.iter().position(|(p, _, _)| p == plugin));
         domain.dependencies = dependencies;
     }

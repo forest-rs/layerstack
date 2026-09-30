@@ -20,6 +20,7 @@ layerstack = { path = "../layerstack" }
 criterion = { features = ["html_reports"], version = "0.8" }
 layerstack_schemas = { default-features = false, features = ["usd-geom", "usd-shade"], path = "../layerstack_schemas" }
 layerstack_usdc = { path = "../layerstack_usdc" }
+opinionated.workspace = true
 
 [[bench]]
 name = "arcs"
@@ -71,4 +72,8 @@ harness = false
 
 [[bench]]
 name = "retained_queries"
+harness = false
+
+[[bench]]
+name = "opinionated"
 harness = false

@@ -717,6 +717,7 @@ dependencies = [
  "layerstack",
  "layerstack_schemas",
  "layerstack_usdc",
+ "opinionated",
 ]
 
 [[package]]

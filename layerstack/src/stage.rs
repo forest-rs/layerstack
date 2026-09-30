@@ -137,7 +137,7 @@ impl ListChainer for LeanLists {
         values: impl Iterator<Item = &'a FieldValue>,
         pick: impl Fn(&'a FieldValue) -> Option<&'a ListOp<T>>,
     ) -> Vec<T> {
-        resolve_list_chain::<T>(&[], values.filter_map(pick).cloned())
+        resolve_list_chain::<T>(&[], values.filter_map(pick))
     }
 }
 
@@ -914,10 +914,7 @@ impl Stage {
         if strongest_with_targets.is_none() && !is_relationship {
             return None;
         }
-        let ops: Vec<ListOp<TargetPath>> = opinions
-            .iter()
-            .filter_map(|op| op.value.targets().cloned())
-            .collect();
+        let ops = opinions.iter().filter_map(|op| op.value.targets());
         Some(Resolved {
             value: resolve_list_chain::<TargetPath>(&[], ops),
             provenance: self.provenance_for(field, strongest_with_targets.unwrap_or(&opinions[0])),

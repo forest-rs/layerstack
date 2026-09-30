@@ -70,6 +70,7 @@
 extern crate alloc;
 
 use alloc::{collections::BTreeMap, string::String, vec::Vec};
+use core::borrow::Borrow;
 
 mod array_edit;
 mod dictionary;
@@ -376,13 +377,30 @@ impl<T: Clone + Eq> ListOp<T> {
     /// `pxr/usd/sdf/listOp.cpp`.
     #[must_use]
     pub fn apply_to(&self, base: &[T]) -> Vec<T> {
+        let mut out = if self.explicit.is_some() {
+            Vec::new()
+        } else {
+            base.to_vec()
+        };
+        self.apply_in_place(&mut out);
+        out
+    }
+
+    /// Applies this operation to an owned result, retaining its allocation.
+    ///
+    /// This has the same semantics as [`Self::apply_to`], but does not clone
+    /// unchanged elements. Only authored elements inserted or replaced by
+    /// this operation are cloned. An explicit list replaces the result and
+    /// makes the operation's other edits spurious.
+    pub fn apply_in_place(&self, out: &mut Vec<T>) {
         if let Some(explicit) = &self.explicit {
-            return explicit.clone();
+            out.clone_from(explicit);
+            return;
         }
 
-        let mut out = base.to_vec();
-
-        out.retain(|item| !self.delete.contains(item));
+        if !self.delete.is_empty() {
+            out.retain(|item| !self.delete.contains(item));
+        }
 
         for item in &self.add {
             if !out.contains(item) {
@@ -400,7 +418,9 @@ impl<T: Clone + Eq> ListOp<T> {
             out.push(item.clone());
         }
 
-        reorder(out, &self.reorder)
+        if !self.reorder.is_empty() {
+            *out = reorder(core::mem::take(out), &self.reorder);
+        }
     }
 }
 
@@ -433,16 +453,35 @@ fn reorder<T: Clone + Eq>(list: Vec<T>, order: &[T]) -> Vec<T> {
     scratch
 }
 
-/// Resolves a strong-to-weak chain of list operations.
+/// Resolves a strongest-to-weakest chain of owned or borrowed list operations.
+///
+/// Stops pulling opinions at the first explicit list, which hides the
+/// fallback and every weaker operation (AOUSD Core §12.4, list ops). Stronger
+/// edits are applied weakest-first to one owned result; the authored operations
+/// are never cloned. Without an explicit list, the fallback is cloned once.
+///
+/// ```
+/// use opinionated::{ListOp, resolve_list_chain};
+/// let ops = [ListOp::appended(vec![3]), ListOp::explicit(vec![1, 2])];
+/// assert_eq!(resolve_list_chain(&[], &ops), vec![1, 2, 3]);
+/// ```
 #[must_use]
 pub fn resolve_list_chain<T: Clone + Eq>(
     fallback: &[T],
-    ops_strong_to_weak: impl IntoIterator<Item = ListOp<T>>,
+    ops_strong_to_weak: impl IntoIterator<Item = impl Borrow<ListOp<T>>>,
 ) -> Vec<T> {
-    let mut ops: Vec<ListOp<T>> = ops_strong_to_weak.into_iter().collect();
-    let mut out = fallback.to_vec();
-    while let Some(op) = ops.pop() {
-        out = op.apply_to(&out);
+    let mut ops = Vec::new();
+    let mut out = None;
+    for op in ops_strong_to_weak {
+        if let Some(explicit) = &op.borrow().explicit {
+            out = Some(explicit.clone());
+            break;
+        }
+        ops.push(op);
+    }
+    let mut out = out.unwrap_or_else(|| fallback.to_vec());
+    for op in ops.into_iter().rev() {
+        op.borrow().apply_in_place(&mut out);
     }
     out
 }
@@ -1005,15 +1044,14 @@ where
             provenance: strongest.provenance.clone(),
         }),
         OpinionOp::List(op) => {
-            let mut ops = Vec::new();
-            ops.push(op.clone());
-            for opinion in opinions {
-                match opinion.op {
-                    OpinionOp::List(op) => ops.push(op.clone()),
-                    OpinionOp::Block => break,
-                    OpinionOp::Set(_) | OpinionOp::Dictionary(_) => {}
-                }
-            }
+            let ops = core::iter::once(op).chain(
+                opinions
+                    .take_while(|opinion| !matches!(opinion.op, OpinionOp::Block))
+                    .filter_map(|opinion| match opinion.op {
+                        OpinionOp::List(op) => Some(op),
+                        _ => None,
+                    }),
+            );
             let seed = match fallback {
                 Some(ResolvedValue::List(items)) => items.as_slice(),
                 _ => &[],
@@ -1142,16 +1180,15 @@ where
 
 fn record_list_events<'a, V, I, K, P>(
     opinions: &[ChainOpinion<'a, V, I, K, P>],
-    ops: &mut Vec<ListOp<I>>,
+    ops: &mut Vec<&'a ListOp<I>>,
     events: &mut Vec<ResolutionEvent<P>>,
 ) where
-    I: Clone,
     P: Clone,
 {
     for (index, opinion) in opinions.iter().enumerate() {
         match opinion.op {
             OpinionOp::List(op) => {
-                ops.push(op.clone());
+                ops.push(op);
                 events.push(ResolutionEvent::Contributed {
                     provenance: opinion.provenance.clone(),
                     kind: OpinionKind::List,

@@ -245,18 +245,20 @@ fn spec_branches_selected(
 
 /// Returns the specs of `prim` in `layer` whose own arcs and variant
 /// selections apply (see [`spec_arcs_apply`]).
-fn arc_specs<'a>(
-    store: &dyn LayerStore,
-    fallbacks: &VariantFallbacks,
-    stack: &LayerStack,
+fn arc_specs<'a, 'q>(
+    store: &'q dyn LayerStore,
+    fallbacks: &'q VariantFallbacks,
+    stack: &'q LayerStack,
     layer: &'a Layer,
     prim: PathId,
-    scope: SelectionScope<'_>,
-) -> Vec<&'a PrimSpec> {
+    scope: SelectionScope<'q>,
+) -> impl Iterator<Item = &'a PrimSpec> + 'q
+where
+    'a: 'q,
+{
     layer
         .prim_specs(prim)
-        .filter(|spec| spec_arcs_apply(store, fallbacks, stack, prim, spec, scope))
-        .collect()
+        .filter(move |spec| spec_arcs_apply(store, fallbacks, stack, prim, spec, scope))
 }
 
 /// Returns the specs of `prim` in `layer` whose variant sets compose: every
@@ -266,18 +268,20 @@ fn arc_specs<'a>(
 ///
 /// Spec: AOUSD Core §7.3.6 (variant specs may contain variant set specs),
 /// §10.3.2.5 (variants).
-fn variant_host_specs<'a>(
-    store: &dyn LayerStore,
-    fallbacks: &VariantFallbacks,
-    stack: &LayerStack,
+fn variant_host_specs<'a, 'q>(
+    store: &'q dyn LayerStore,
+    fallbacks: &'q VariantFallbacks,
+    stack: &'q LayerStack,
     layer: &'a Layer,
     prim: PathId,
-    scope: SelectionScope<'_>,
-) -> Vec<&'a PrimSpec> {
+    scope: SelectionScope<'q>,
+) -> impl Iterator<Item = &'a PrimSpec> + 'q
+where
+    'a: 'q,
+{
     layer
         .prim_specs(prim)
-        .filter(|spec| spec_branches_selected(store, fallbacks, stack, spec, scope))
-        .collect()
+        .filter(move |spec| spec_branches_selected(store, fallbacks, stack, spec, scope))
 }
 
 /// Finds which layer of a node of `prim` in `stack` authors one of the
@@ -718,7 +722,6 @@ pub(crate) fn resolve_variant_selections_for_prim(
                     prim,
                     SelectionScope::Stack,
                 )
-                .into_iter()
                 .map(move |spec| (spec, context))
             })
             .collect();
@@ -784,7 +787,6 @@ pub(crate) fn selection_host_specs<'a, 's>(
                 prim,
                 SelectionScope::Stack,
             )
-            .into_iter()
             .map(move |spec| (spec, chain))
         })
         .collect()
@@ -873,7 +875,6 @@ pub(crate) fn resolve_references_for_prim_selected(
         .filter_map(|id| store.layer(*id))
         .flat_map(|layer| {
             variant_host_specs(store, fallbacks, local_stack, layer, prim, scope)
-                .into_iter()
                 .map(move |spec| (layer.id, spec))
         })
         .collect();

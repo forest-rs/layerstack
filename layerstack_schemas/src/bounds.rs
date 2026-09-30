@@ -13,8 +13,7 @@ use reduction::{MIN_CHILDREN, Reduction};
 
 use crate::{
     Time, gf,
-    imageable::{Visibility, VisibilityInputs},
-    usd_geom::Imageable,
+    imageable::{PurposeInfo, PurposeInputs, Visibility, VisibilityInputs},
     view::{PrimView, Scene},
     xform::XformCache,
 };
@@ -146,6 +145,15 @@ pub struct BoundsStats {
 
 type PurposeBounds = Vec<(crate::usd_geom::ImageablePurpose, BoundingBox)>;
 
+// Ancestry inputs belong to the tracked parent, not to each child query.
+// Reuse the dependency entry instead of retaining a second per-prim index.
+#[derive(Clone, Debug, Default)]
+struct Children {
+    tracked: HashSet<PathId>,
+    concrete: Option<bool>,
+    purpose: Option<PurposeInfo>,
+}
+
 #[derive(Clone, Debug)]
 struct Entry<T> {
     value: T,
@@ -182,7 +190,8 @@ pub struct BoundsCache {
     // Inclusion is an input of the parent reduction, including when false.
     // Keep it independently of bounds so excluded subtrees need no evaluation.
     inclusions: HashMap<PathId, Entry<bool>>,
-    children: HashMap<PathId, HashSet<PathId>>,
+    children: HashMap<PathId, Children>,
+    ancestry: Vec<PathId>,
     transforms: XformCache,
     reductions: HashMap<PathId, Reduction>,
     promote: HashSet<PathId>,
@@ -199,6 +208,7 @@ impl BoundsCache {
             entries: HashMap::new(),
             inclusions: HashMap::new(),
             children: HashMap::new(),
+            ancestry: Vec::new(),
             transforms: XformCache::new(time),
             reductions: HashMap::new(),
             promote: HashSet::new(),
@@ -232,6 +242,7 @@ impl BoundsCache {
         self.entries.clear();
         self.inclusions.clear();
         self.children.clear();
+        self.ancestry.clear();
         self.transforms.clear();
         self.reductions.clear();
         self.promote.clear();
@@ -297,13 +308,13 @@ impl BoundsCache {
             self.reductions.remove(&at);
             self.promote.remove(&at);
             if let Some(children) = self.children.remove(&at) {
-                pending.extend(children);
+                pending.extend(children.tracked);
             }
         }
         if let Some(parent) = scene.parent(path)
             && let Some(children) = self.children.get_mut(&parent)
         {
-            children.remove(&path);
+            children.tracked.remove(&path);
         }
         let mut child = path;
         while let Some(parent) = scene.parent(child) {
@@ -404,11 +415,79 @@ impl BoundsCache {
     fn track(&mut self, scene: &Scene<'_>, path: PathId) {
         let mut child = path;
         while let Some(parent) = scene.parent(child) {
-            if !self.children.entry(parent).or_default().insert(child) {
+            if !self
+                .children
+                .entry(parent)
+                .or_default()
+                .tracked
+                .insert(child)
+            {
                 break;
             }
             child = parent;
         }
+    }
+
+    fn concrete_ancestry(&mut self, scene: &Scene<'_>, path: PathId) -> bool {
+        self.ancestry.clear();
+        let mut at = path;
+        let concrete = loop {
+            if let Some(concrete) = self.children.get(&at).and_then(|entry| entry.concrete) {
+                break concrete;
+            }
+            // UsdPrim's defined/abstract traversal flags inherit through the
+            // namespace. The pseudo-root supplies the initial true flag.
+            let Some(parent) = scene.parent(at) else {
+                break true;
+            };
+            self.ancestry.push(at);
+            if scene.stage().resolve_specifier(at, scene.store())
+                != Some(layerstack::Specifier::Def)
+            {
+                break false;
+            }
+            at = parent;
+        };
+        for &at in &self.ancestry {
+            if let Some(entry) = self.children.get_mut(&at) {
+                entry.concrete = Some(concrete);
+            }
+        }
+        concrete
+    }
+
+    fn purpose(&mut self, scene: &Scene<'_>, path: PathId) -> crate::usd_geom::ImageablePurpose {
+        self.ancestry.clear();
+        let mut at = path;
+        let mut info = loop {
+            if let Some(info) = self
+                .children
+                .get(&at)
+                .and_then(|entry| entry.purpose.as_ref())
+            {
+                break Some(info.clone());
+            }
+            let Some(parent) = scene.parent(at) else {
+                break None;
+            };
+            self.ancestry.push(at);
+            at = parent;
+        };
+        // OpenUSD bboxCache.cpp _ComputePurposeInfo uses the parent's retained
+        // purpose to avoid rediscovering the entire lineage for every leaf.
+        // Purpose is a default-time input; source changes retire this metadata
+        // with its existing namespace dependency entry, while time changes do not.
+        while let Some(at) = self.ancestry.pop() {
+            let own = PurposeInputs::read(scene, at);
+            let current = PurposeInfo::inherit(info.as_ref(), &own, at);
+            if let Some(entry) = self.children.get_mut(&at) {
+                entry.purpose = Some(current.clone());
+            }
+            info = Some(current);
+        }
+        info.map_or(crate::usd_geom::ImageablePurpose::Default, |info| {
+            info.purpose
+        })
     }
     fn resolve(&mut self, scene: &Scene<'_>, path: PathId) -> Result<(), BoundsError> {
         if !scene.stage().has_prim(path) {
@@ -507,7 +586,7 @@ impl BoundsCache {
         // Even a skipped child depends on its own type/visibility/definition.
         // Index it before returning false, so ancestor invalidation reaches it.
         self.track(scene, child);
-        let included = concrete_ancestry(scene, child)
+        let included = self.concrete_ancestry(scene, child)
             && (self.options.ignore_visibility
                 || ((!scene.is_a(child, "Typed") || scene.is_a(child, "Imageable"))
                     && VisibilityInputs::read(scene, child, self.time).visibility
@@ -525,7 +604,7 @@ impl BoundsCache {
         included
     }
     fn direct_bounds(
-        &self,
+        &mut self,
         scene: &Scene<'_>,
         path: PathId,
     ) -> Result<Option<(PurposeBounds, bool)>, BoundsError> {
@@ -550,9 +629,7 @@ impl BoundsCache {
         if scene.is_a(path, "Boundable") {
             let (range, varying) = crate::extent::compute(scene, path, self.time)
                 .ok_or(BoundsError::ExtentUnavailable(path))?;
-            let purpose = Imageable::new(scene, path)
-                .expect("Boundable is Imageable")
-                .compute_purpose();
+            let purpose = self.purpose(scene, path);
             return Ok(Some((
                 vec![(
                     purpose,
@@ -659,20 +736,6 @@ impl BoundsCache {
         Ok((result, varying))
     }
 }
-// UsdPrim default traversal predicates inherit undefined and abstract flags.
-// Stage's predicates inspect the site's resolved specifier; fold them up the
-// namespace here without changing direct queries of an authored boundable.
-fn concrete_ancestry(scene: &Scene<'_>, path: PathId) -> bool {
-    let mut at = path;
-    while let Some(parent) = scene.parent(at) {
-        if scene.stage().resolve_specifier(at, scene.store()) != Some(layerstack::Specifier::Def) {
-            return false;
-        }
-        at = parent;
-    }
-    true
-}
-
 fn vectors(prim: &PrimView<'_>, name: &str, time: Time) -> Option<Vec<[f32; 3]>> {
     let read = |value: &layerstack::Value, tokens: &layerstack::TokenInterner| {
         crate::value::read_array(value, tokens, crate::value::read_float3)
@@ -722,6 +785,78 @@ mod tests {
     use layerstack::{
         InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, Stage, StageOptions, Value,
     };
+
+    #[test]
+    fn parent_inputs_retire_with_changed_subtrees() {
+        use crate::usd_geom::ImageablePurpose;
+        let mut store = InMemoryStore::default();
+        let root = store.path("/World");
+        let group = store.path("/World/Group");
+        let leaves = [store.path("/World/Group/A"), store.path("/World/Group/B")];
+        let xform = store.tokens.intern("Xform");
+        let cube = store.tokens.intern("Cube");
+        let purpose = store.tokens.intern("purpose");
+        let render = store.tokens.intern("render");
+        let proxy = store.tokens.intern("proxy");
+        let schemas = Arc::new(crate::openusd(&mut store.tokens));
+        let mut cache = BoundsCache::new(
+            Time::Default,
+            BoundsOptions {
+                included_purposes: vec![ImageablePurpose::Render],
+                ..BoundsOptions::default()
+            },
+        );
+        for (specifier, inherited, override_leaf, expected_empty) in [
+            (layerstack::Specifier::Def, render, false, false),
+            (layerstack::Specifier::Def, proxy, false, true),
+            (layerstack::Specifier::Def, proxy, true, false),
+            (layerstack::Specifier::Class, render, false, true),
+            (layerstack::Specifier::Over, render, false, true),
+            (layerstack::Specifier::Def, render, false, false),
+        ] {
+            let mut layer = Layer::new(LayerId(1));
+            layer.insert_prim(root, PrimSpec::def().with_type_name(xform));
+            let mut group_spec = PrimSpec::def().with_type_name(xform).with_property(
+                purpose,
+                PropertySpec::attribute().with_default(Value::Token(inherited)),
+            );
+            group_spec.specifier = Some(specifier);
+            layer.insert_prim(group, group_spec);
+            for leaf in leaves {
+                let mut spec = PrimSpec::def().with_type_name(cube);
+                if override_leaf {
+                    spec = spec.with_property(
+                        purpose,
+                        PropertySpec::attribute().with_default(Value::Token(render)),
+                    );
+                }
+                layer.insert_prim(leaf, spec);
+            }
+            store.insert_layer(layer);
+            let stage = Stage::compose(
+                &mut store,
+                LayerId(1),
+                StageOptions {
+                    schemas: Some(Arc::clone(&schemas)),
+                    ..StageOptions::default()
+                },
+            );
+            let scene = Scene::new(&stage, &store);
+            cache.invalidate(&scene, group);
+            let bound = cache.world_bound(&scene, root).unwrap();
+            assert_eq!(bound.range.is_empty(), expected_empty);
+            let mut fresh = BoundsCache::new(Time::Default, cache.options.clone());
+            assert_eq!(bound, fresh.world_bound(&scene, root).unwrap());
+            // Direct boundable queries do not inherit traversal exclusion.
+            let direct = cache.world_bound(&scene, leaves[0]).unwrap();
+            assert_eq!(
+                direct.range.is_empty(),
+                inherited == proxy && !override_leaf
+            );
+            // Only tracked parents retain the ancestry state.
+            assert!(!cache.children.contains_key(&leaves[0]));
+        }
+    }
 
     #[test]
     fn wide_reductions_follow_edits_and_retire_on_structure_time_and_errors() {

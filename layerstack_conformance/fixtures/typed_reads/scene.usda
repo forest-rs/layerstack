@@ -95,3 +95,28 @@ over "SparseCompatibleBase"
 {
     float[] value = edit [append 4]
 }
+
+over "SparseSampledBase"
+{
+    float[] value = edit [append 4]
+    float[] value.timeSamples = { 0: edit [append 4], 10: edit [append 8] }
+}
+over "SparseScalarBase"
+{
+    float[] value = edit [append 4]
+}
+over "SparseWrongDense"
+{
+    double[] value = [2]
+}
+
+over "SparseWrongLower"
+{
+    float[] value = edit [append 4]
+    float[] value.timeSamples = { 0: edit [append 4], 10: edit [append 8] }
+}
+over "SparseWrongUpper"
+{
+    float[] value = edit [append 4]
+    float[] value.timeSamples = { 0: edit [append 4], 10: edit [append 8] }
+}

@@ -318,6 +318,45 @@ pub(crate) fn resolve_sparse_default_matching(
     fold_array_chain(&family, opinions, &mut Lean)
 }
 
+/// Resolves typed numeric sparse values without searching past a selected
+/// incompatible dense source. Retained edits materialize over an empty base.
+/// Source selection precedes conversion, unlike default-time typed retries.
+///
+/// OpenUSD: `UsdAttribute::Get<T>` and `_GetValueFromResolveInfoImpl`; sparse-array-edits
+/// proposal, "Composing and Evaluating Time-Varying Sparse Opinions".
+pub(crate) fn resolve_sparse_at_time_matching(
+    opinions: &[Opinion],
+    property_type: Option<&PropertyType>,
+    time: f64,
+    interp: InterpolationType,
+    fallback: Option<&Value>,
+    accepts: &dyn Fn(&Value) -> bool,
+) -> SparseResolveResult {
+    if SparseValueFamily::for_query(
+        opinions,
+        SparseQuery::AtTime {
+            time,
+            interp,
+            fallback,
+        },
+    )
+    .is_none()
+    {
+        return SparseResolveResult::NotApplicable;
+    }
+    resolve_array_at_time(
+        opinions,
+        time,
+        interp,
+        ArrayFamily {
+            property_type,
+            fallback: fallback.filter(|value| accepts(value)),
+        },
+        Some(accepts),
+        &mut Lean,
+    )
+}
+
 /// Resolves exactly as [`resolve_sparse_value`] and reports every fold.
 ///
 /// The folds run through [`resolve_family_chain_report`] instead of
@@ -433,6 +472,7 @@ impl SparseValueFamily {
                         property_type,
                         fallback,
                     },
+                    None,
                     folder,
                 ),
             },
@@ -643,6 +683,9 @@ struct BracketPlan<'o> {
     /// The composed series' samples bracketing the query time. Empty when no
     /// opinion participates, or when composing left no sample at all.
     composed: Vec<Entry>,
+    /// The incompatible selected source, which ends a typed chain without
+    /// contributing its values or times to stronger sparse samples.
+    incompatible: Option<&'o Value>,
 }
 
 /// Composes the opinions' bracketing samples, strongest first, into the
@@ -667,6 +710,7 @@ fn plan_brackets<'o>(
     opinions: impl IntoIterator<Item = &'o Opinion>,
     time: f64,
     interp: InterpolationType,
+    accepts: Option<&dyn Fn(&Value) -> bool>,
 ) -> BracketPlan<'o> {
     let mut brackets: Vec<Bracket<'o>> = Vec::new();
     let mode = match interp {
@@ -675,13 +719,40 @@ fn plan_brackets<'o>(
     };
     let mut planner = TemporalPlanner::new(time, mode);
     let mut opinions = opinions.into_iter().enumerate();
+    let mut incompatible = None;
     while let Some(query) = planner.query() {
         let Some((position, opinion)) = opinions.next() else {
             break;
         };
-        let Some(bracket) = Bracket::of(opinion, (brackets.len(), position), query, interp) else {
+        let Some(mut bracket) = Bracket::of(opinion, (brackets.len(), position), query, interp)
+        else {
             continue;
         };
+        // A lone dense source is converted once by the caller. Compatibility
+        // checks are needed only when sparse composition depends on it; an
+        // owned-array converter need not copy a dense result just to check it.
+        let composing = !brackets.is_empty()
+            || matches!(bracket.sample(Pick::Lower), Some(Value::ArrayEdit(_)))
+            || matches!(bracket.sample(Pick::Upper), Some(Value::ArrayEdit(_)));
+        let rejected = |value: Option<&Value>| {
+            composing
+                && value.is_some_and(|value| {
+                    !matches!(value, Value::ArrayEdit(_) | Value::Blocked)
+                        && accepts.is_some_and(|accepts| !accepts(value))
+                })
+        };
+        if rejected(bracket.sample(Pick::Lower)) {
+            // Selection has already found this authored source: no weaker
+            // source or fallback may replace it. Failed sample reads supply
+            // neither values nor timestamps to stronger composing samples.
+            incompatible = bracket.sample(Pick::Lower);
+            break;
+        }
+        if rejected(bracket.sample(Pick::Upper)) {
+            // OpenUSD `_GetInterpolatingSamplesImpl`: a failed upper sample
+            // read holds the lower sample instead of interpolating.
+            bracket.upper = bracket.lower;
+        }
         planner.push(
             bracket.planning_sample(Pick::Lower),
             bracket.planning_sample(Pick::Upper),
@@ -692,6 +763,7 @@ fn plan_brackets<'o>(
     BracketPlan {
         brackets,
         composed: planner.into_samples(),
+        incompatible,
     }
 }
 
@@ -753,9 +825,23 @@ fn resolve_array_at_time(
     time: f64,
     interp: InterpolationType,
     array: ArrayFamily<'_>,
+    accepts: Option<&dyn Fn(&Value) -> bool>,
     folder: &mut impl Folder,
 ) -> SparseResolveResult {
-    let plan = plan_brackets(opinions, time, interp);
+    let plan = plan_brackets(opinions, time, interp, accepts);
+    if plan.composed.is_empty()
+        && let Some(value) = plan.incompatible
+    {
+        return SparseResolveResult::Resolved(value.clone());
+    }
+    let array = if plan.incompatible.is_some() {
+        ArrayFamily {
+            fallback: None,
+            ..array
+        }
+    } else {
+        array
+    };
     let (Some(lower_entry), Some(upper_entry)) = (plan.composed.first(), plan.composed.last())
     else {
         return if plan.brackets.is_empty() {
@@ -1461,7 +1547,12 @@ mod tests {
         interp: InterpolationType,
     ) -> (Vec<f64>, usize) {
         let mut visited = 0;
-        let plan = plan_brackets(opinions.iter().inspect(|_| visited += 1), time, interp);
+        let plan = plan_brackets(
+            opinions.iter().inspect(|_| visited += 1),
+            time,
+            interp,
+            None,
+        );
         let times = plan.composed.iter().map(|e| e.time).collect();
         (times, visited)
     }
@@ -1739,6 +1830,95 @@ mod tests {
 
     fn float_array_type() -> PropertyType {
         PropertyType::new(Arc::<str>::from("float"), true, Value::Float(0.0))
+    }
+
+    #[test]
+    fn typed_sparse_selection_keeps_default_retry_separate_from_numeric_cutoff() {
+        let (path, field) = test_ids();
+        let ty = float_array_type();
+        let fallback = float_array(&[100.0]);
+        let accepts = |value: &Value| {
+            value.array_ref().is_some_and(|array| match array.typed() {
+                Some(typed) => typed.as_float().is_some(),
+                None => array.iter().all(|value| matches!(&*value, Value::Float(_))),
+            })
+        };
+        for bad in [
+            Value::array(vec![Value::Double(2.0)]),
+            Value::array_with_element(Vec::new(), Some(&Value::Double(0.0))),
+        ] {
+            let opinions = vec![
+                array_opinion(
+                    path,
+                    field,
+                    FieldValue::Value(edit(append(Value::Float(4.0)))),
+                    0,
+                ),
+                array_opinion(path, field, FieldValue::Value(bad.clone()), 1),
+                array_opinion(path, field, FieldValue::Value(float_array(&[1.0])), 2),
+            ];
+            assert_eq!(
+                resolve_sparse_default_matching(&opinions, Some(&ty), Some(&fallback), accepts),
+                SparseResolveResult::Resolved(float_array(&[1.0, 4.0])),
+            );
+            for interpolation in [InterpolationType::Held, InterpolationType::Linear] {
+                assert_eq!(
+                    resolve_sparse_at_time_matching(
+                        &opinions,
+                        Some(&ty),
+                        9.0,
+                        interpolation,
+                        Some(&fallback),
+                        &accepts
+                    ),
+                    SparseResolveResult::Resolved(float_array(&[4.0])),
+                    "numeric rejection must not replace an authored base with weaker values or fallback",
+                );
+                assert_eq!(
+                    resolve_sparse_at_time_matching(
+                        &opinions[1..],
+                        Some(&ty),
+                        9.0,
+                        interpolation,
+                        Some(&fallback),
+                        &accepts
+                    ),
+                    SparseResolveResult::Resolved(bad.clone()),
+                    "without stronger edits, the selected wrong-kind dense source remains unreadable",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn typed_dense_numeric_selection_does_not_convert_a_buffer_twice() {
+        let (path, field) = test_ids();
+        let ty = float_array_type();
+        let value = float_array(&[1.0, 2.0]);
+        let opinions = [array_opinion(
+            path,
+            field,
+            FieldValue::Value(value.clone()),
+            0,
+        )];
+        let checked = core::cell::Cell::new(0);
+        let resolved = resolve_sparse_at_time_matching(
+            &opinions,
+            Some(&ty),
+            9.0,
+            InterpolationType::Linear,
+            None,
+            &|_| {
+                checked.set(checked.get() + 1);
+                true
+            },
+        );
+        assert_eq!(resolved, SparseResolveResult::Resolved(value));
+        assert_eq!(
+            checked.get(),
+            0,
+            "the caller converts the selected dense buffer once"
+        );
     }
 
     fn float3_array(values: &[[f32; 3]]) -> Value {
@@ -2358,6 +2538,7 @@ mod tests {
                             property_type: Some(&ty),
                             fallback: seed_value.as_ref(),
                         },
+                        None,
                         &mut Lean,
                     );
                     let expected = reference::evaluate(&opinions, time, interp, &ty, seed);

@@ -1033,7 +1033,7 @@ impl Stage {
     ) -> Option<Resolved<ResolvedValue>> {
         // Spec: AOUSD Core §12.3.2.1 (`timecode` values are read in stage
         // time, through each opinion's layer offset).
-        let opinions = stage_time::opinions_in_stage_time(opinions, property_type);
+        let opinions = stage_time::opinions_in_stage_time(opinions);
         let opinions: &[Opinion] = &opinions;
         let strongest_default = opinions
             .iter()
@@ -1134,6 +1134,7 @@ impl Stage {
             time,
             interp,
             fallback,
+            None,
         )
     }
 
@@ -1147,10 +1148,11 @@ impl Stage {
         time: f64,
         interp: InterpolationType,
         fallback: Option<&Value>,
+        accepts: Option<&dyn Fn(&Value) -> bool>,
     ) -> Option<Resolved<Value>> {
         // Spec: AOUSD Core §12.3.2.1 (`timecode` values are read in stage
         // time, through each opinion's layer offset).
-        let opinions = stage_time::opinions_in_stage_time(opinions, property_type);
+        let opinions = stage_time::opinions_in_stage_time(opinions);
         let opinions: &[Opinion] = &opinions;
 
         // Spec: AOUSD Core §12.3 (a path expression's `%_` composes over
@@ -1163,15 +1165,26 @@ impl Stage {
             });
         }
 
-        match resolve_sparse_value(
-            opinions,
-            SparseQuery::AtTime {
+        let sparse = match accepts {
+            Some(accepts) => crate::value_resolution::resolve_sparse_at_time_matching(
+                opinions,
+                property_type,
                 time,
                 interp,
                 fallback,
-            },
-            property_type,
-        ) {
+                accepts,
+            ),
+            None => resolve_sparse_value(
+                opinions,
+                SparseQuery::AtTime {
+                    time,
+                    interp,
+                    fallback,
+                },
+                property_type,
+            ),
+        };
+        match sparse {
             SparseResolveResult::Resolved(value) => {
                 return Some(Resolved {
                     value,
@@ -1211,8 +1224,7 @@ impl Stage {
         key: TokenId,
     ) -> Option<Resolved<ResolvedValue>> {
         let opinions = self.prims.get(&prim)?.property_opinions(property)?;
-        let property_type = self.prims.get(&prim)?.property_type_for(&property);
-        self.resolve_property_metadata_over(opinions, property_type, property, key)
+        self.resolve_property_metadata_over(opinions, property, key)
     }
 
     /// Resolves the property metadata field `key` over a chain of property
@@ -1220,12 +1232,11 @@ impl Stage {
     fn resolve_property_metadata_over(
         &self,
         opinions: &[Opinion],
-        property_type: Option<&PropertyType>,
         property: TokenId,
         key: TokenId,
     ) -> Option<Resolved<ResolvedValue>> {
         // Spec: AOUSD Core §12.3.2.1 (`timecode` values in stage time).
-        let opinions = stage_time::opinions_in_stage_time(opinions, property_type);
+        let opinions = stage_time::opinions_in_stage_time(opinions);
         let authored: Vec<(&Opinion, &FieldValue)> = opinions
             .iter()
             .filter_map(|op| Some((op, op.value.as_property()?.metadata(key)?)))
@@ -1865,14 +1876,19 @@ impl Stage {
                 interpolation,
             } => {
                 let fallback = self.schema_fallback(prim, field);
-                let resolved = self.resolve_value_at_time_by(
-                    prim,
-                    field,
-                    code,
-                    interpolation,
-                    Lookup::Property,
-                    fallback,
-                );
+                let resolved =
+                    self.opinions(prim, field, Lookup::Property)
+                        .and_then(|(index, opinions)| {
+                            self.resolve_at_time_over(
+                                field,
+                                opinions,
+                                index.property_type_for(&field),
+                                code,
+                                interpolation,
+                                fallback,
+                                Some(&|value| read(value).is_some()),
+                            )
+                        });
                 match resolved {
                     Some(resolved) => Some(Resolved {
                         value: read(&resolved.value)?,
@@ -1923,10 +1939,7 @@ impl Stage {
                     break;
                 }
                 if matches!(value, Value::ArrayEdit(_)) {
-                    let mapped = stage_time::opinions_in_stage_time(
-                        &opinions[position..],
-                        index.property_type_for(&field),
-                    );
+                    let mapped = stage_time::opinions_in_stage_time(&opinions[position..]);
                     let resolved = crate::value_resolution::resolve_sparse_default_matching(
                         &mapped,
                         index.property_type_for(&field),

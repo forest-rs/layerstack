@@ -9112,50 +9112,14 @@ fn source_authors_child(store: &dyn LayerStore, key: &OpinionKey, name: TokenId)
 /// ignored.
 ///
 /// OpenUSD: `SdfApplyListOrdering` in `pxr/usd/sdf/listOp.cpp`.
-fn apply_reorder_op(store: &dyn LayerStore, children: &mut Vec<PathId>, order: &[TokenId]) {
-    let mut by_name = HashMap::<TokenId, PathId>::new();
-    for child in children.iter().copied() {
-        if let Some(name) = store.paths().resolve(child).leaf() {
-            by_name.insert(name, child);
-        }
-    }
-
-    let mut order_set = HashSet::<TokenId>::new();
-    let order: Vec<TokenId> = order
-        .iter()
-        .copied()
-        .filter(|name| by_name.contains_key(name) && order_set.insert(*name))
-        .collect();
-    if order.is_empty() {
-        return;
-    }
-
-    let mut prefix = Vec::new();
-    let mut segments: HashMap<TokenId, Vec<PathId>> = HashMap::new();
-    let mut current = None;
-    for child in children.iter().copied() {
-        let Some(name) = store.paths().resolve(child).leaf() else {
-            continue;
-        };
-        if order_set.contains(&name) {
-            segments.entry(name).or_default();
-            current = Some(name);
-        } else if let Some(owner) = current {
-            segments.entry(owner).or_default().push(child);
-        } else {
-            prefix.push(child);
-        }
-    }
-
-    let mut out = Vec::with_capacity(children.len());
-    out.extend(prefix);
-    for name in &order {
-        out.push(by_name[name]);
-        if let Some(seg) = segments.get(name) {
-            out.extend(seg.iter().copied());
-        }
-    }
-    *children = out;
+fn apply_reorder_op(store: &dyn LayerStore, children: &mut [PathId], order: &[TokenId]) {
+    opinionated::apply_list_order_by_key(children, order, |child| {
+        store
+            .paths()
+            .resolve(*child)
+            .leaf()
+            .expect("children have leaf names")
+    });
 }
 
 #[cfg(test)]

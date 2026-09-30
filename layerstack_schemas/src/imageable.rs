@@ -134,9 +134,7 @@ impl VisibilityInputs {
             return Self::default();
         }
         let prim = PrimView::new(*scene, path);
-        let visibility = prim
-            .raw_value(Imageable::VISIBILITY, time)
-            .and_then(|v| visibility_token(scene, &v));
+        let visibility = local_visibility(&prim, time);
         if !scene.has_api(path, VisibilityApi::SCHEMA, None) {
             return Self {
                 imageable: true,
@@ -285,6 +283,13 @@ fn token<'a>(scene: &Scene<'a>, value: &Value) -> Option<&'a str> {
 
 fn visibility_token(scene: &Scene<'_>, value: &Value) -> Option<Visibility> {
     token(scene, value).and_then(Visibility::from_token)
+}
+
+// The prim is already known to be Imageable. Bounds need only ordinary
+// visibility, not VisibilityAPI's independent purpose-visibility inputs.
+pub(crate) fn local_visibility(prim: &PrimView<'_>, time: Time) -> Option<Visibility> {
+    prim.raw_value(Imageable::VISIBILITY, time)
+        .and_then(|value| visibility_token(&prim.scene(), &value))
 }
 
 /// The prims from the pseudo-root's children down to `path`, root first.

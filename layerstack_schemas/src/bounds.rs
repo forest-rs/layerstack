@@ -13,7 +13,7 @@ use reduction::{MIN_CHILDREN, Reduction};
 
 use crate::{
     Time, gf,
-    imageable::{PurposeInfo, PurposeInputs, Visibility, VisibilityInputs},
+    imageable::{PurposeInfo, PurposeInputs, Visibility, local_visibility},
     view::{PrimView, Scene},
     xform::XformCache,
 };
@@ -587,10 +587,16 @@ impl BoundsCache {
         // Index it before returning false, so ancestor invalidation reaches it.
         self.track(scene, child);
         let included = self.concrete_ancestry(scene, child)
-            && (self.options.ignore_visibility
-                || ((!scene.is_a(child, "Typed") || scene.is_a(child, "Imageable"))
-                    && VisibilityInputs::read(scene, child, self.time).visibility
-                        != Some(Visibility::Invisible)));
+            && (self.options.ignore_visibility || {
+                // OpenUSD bboxCache.cpp _ShouldIncludePrim reads only ordinary
+                // visibility. Most geometry is Imageable; test it first and
+                // avoid rediscovering that type when reading the attribute.
+                let imageable = scene.is_a(child, "Imageable");
+                (imageable || !scene.is_a(child, "Typed"))
+                    && (!imageable
+                        || local_visibility(&PrimView::new(*scene, child), self.time)
+                            != Some(Visibility::Invisible))
+            });
         let varying = !self.options.ignore_visibility
             && PrimView::new(*scene, child).property_might_vary("visibility");
         self.inclusions.insert(

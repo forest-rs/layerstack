@@ -104,5 +104,45 @@ fn bench_open(c: &mut Criterion) {
     }
     group.finish();
 }
-criterion_group!(benches, bench_open);
+fn bench_integer_decode(c: &mut Criterion) {
+    let mut group = c.benchmark_group("usdc_integer_decode");
+    for width in [4, 8] {
+        for count in [64_usize, 262_144] {
+            for mixed in [false, true] {
+                let mut bytes = 1_i64.to_le_bytes()[..width].to_vec();
+                bytes.resize(width + count.div_ceil(4), if mixed { 0xe4 } else { 0 });
+                if mixed {
+                    for i in 0..count {
+                        let size = match i % 4 {
+                            0 => 0,
+                            1 => width / 4,
+                            2 => width / 2,
+                            _ => width,
+                        };
+                        bytes.extend_from_slice(&(-7_i64).to_le_bytes()[..size]);
+                    }
+                }
+                let pattern = if mixed { "mixed" } else { "common" };
+                group.bench_with_input(
+                    BenchmarkId::new(format!("{width}/{pattern}"), count),
+                    &bytes,
+                    |b, bytes| {
+                        b.iter(|| {
+                            black_box(
+                                layerstack_usdc::compression::decode_integer_array(
+                                    black_box(bytes),
+                                    count,
+                                    width,
+                                )
+                                .unwrap(),
+                            );
+                        });
+                    },
+                );
+            }
+        }
+    }
+    group.finish();
+}
+criterion_group!(benches, bench_open, bench_integer_decode);
 criterion_main!(benches);

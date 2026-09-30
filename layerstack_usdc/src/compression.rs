@@ -161,6 +161,23 @@ fn decode_integer_array_width(
     let code_bytes = &rest[..num_code_bytes];
     let value_bytes = &rest[num_code_bytes..];
 
+    // Constant deltas occur in sequential indices and repeated table entries.
+    // No value bytes are consumed in this case; avoid interpreting every code.
+    if code_bytes.iter().all(|&code| code == 0) {
+        let mut prev = 0_i64;
+        return Ok((0..count)
+            .map(|_| {
+                prev = prev.wrapping_add(common_value);
+                if int_size == 4 {
+                    #[allow(clippy::cast_possible_truncation, reason = "int32 wrap")]
+                    let wrapped = prev as i32;
+                    prev = i64::from(wrapped);
+                }
+                prev
+            })
+            .collect());
+    }
+
     let quarter_size = int_size / 4;
     let half_size = int_size / 2;
 
@@ -408,6 +425,39 @@ mod tests {
         data.extend_from_slice(&i32::MIN.to_le_bytes());
         let result = decode_integer_array(&data, 2, 4).unwrap();
         assert_eq!(result, vec![i64::from(i32::MIN), i64::from(i32::MAX)]);
+    }
+
+    #[test]
+    fn common_deltas_wrap_at_both_widths_and_every_tail_length() {
+        for width in [4, 8] {
+            for common in [0_i64, -1, i64::from(i32::MAX), i64::MIN, i64::MAX] {
+                for count in 0_usize..12 {
+                    let mut data = common.to_le_bytes()[..width].to_vec();
+                    data.resize(width + count.div_ceil(4), 0);
+                    let delta = read_signed_le(&data[..width]);
+                    // A wider mathematical sum checks the scan independently
+                    // of the decoder's per-element wrapping arithmetic.
+                    let modulus = 1_i128 << (width * 8);
+                    let expected: Vec<i64> = (1..=count)
+                        .map(|i| {
+                            let unsigned = (i128::from(delta) * i128::try_from(i).unwrap())
+                                .rem_euclid(modulus);
+                            let signed = if unsigned >= modulus / 2 {
+                                unsigned - modulus
+                            } else {
+                                unsigned
+                            };
+                            i64::try_from(signed).unwrap()
+                        })
+                        .collect();
+                    assert_eq!(decode_integer_array(&data, count, width).unwrap(), expected);
+                }
+            }
+        }
+        // Unused high bits of a partial code byte do not describe elements.
+        let mut data = 7_i32.to_le_bytes().to_vec();
+        data.push(0xfc);
+        assert_eq!(decode_integer_array(&data, 1, 4).unwrap(), [7]);
     }
 
     #[test]

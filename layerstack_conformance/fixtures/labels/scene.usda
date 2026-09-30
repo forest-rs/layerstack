@@ -1,0 +1,40 @@
+#usda 1.0
+# Copyright 2026 the LayerStack Authors
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+
+def "Root" (prepend apiSchemas = ["SemanticsLabelsAPI:kind", "SemanticsLabelsAPI:role"]) {
+    token[] semantics:labels:kind = ["scene", "object", "scene"]
+    token[] semantics:labels:role = ["environment"]
+    def "Child" (prepend apiSchemas = ["SemanticsLabelsAPI:kind"]) {
+        token[] semantics:labels:kind.timeSamples = {
+            1: ["red", "object"],
+            3: ["green"],
+            5: ["blue", "blue"]
+        }
+        def "Unapplied" {
+            token[] semantics:labels:kind = ["ignored"]
+        }
+        def "Blocked" (prepend apiSchemas = ["SemanticsLabelsAPI:kind"]) {
+            token[] semantics:labels:kind = None
+        }
+    }
+    def "Empty" (prepend apiSchemas = ["SemanticsLabelsAPI:kind", "SemanticsLabelsAPI:empty"]) {}
+}
+def "Other" (prepend apiSchemas = ["SemanticsLabelsAPI:role"]) {
+    token[] semantics:labels:role = ["subject"]
+}
+def "Referenced" (
+    references = @source.usda@</Asset> (offset = 10; scale = 2)
+) {}
+def "Masked" (
+    references = @source.usda@</Asset>
+) {
+    token[] semantics:labels:kind = ["local"]
+}
+def "SampleBlocks" (prepend apiSchemas = ["SemanticsLabelsAPI:kind"]) {
+    token[] semantics:labels:kind.timeSamples = {
+        1: ["before"],
+        3: None,
+        5: ["after"]
+    }
+}

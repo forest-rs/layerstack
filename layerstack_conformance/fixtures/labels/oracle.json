@@ -1,0 +1,6373 @@
+{
+  "queries": [
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "object",
+        "scene"
+      ],
+      "end": null,
+      "has_direct": true,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root/Child",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root/Child/Unapplied",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root/Child/Blocked",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root/Empty",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Other",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Referenced",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "local"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "local"
+      ],
+      "mode": "time",
+      "path": "/Masked",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/SampleBlocks",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "object",
+        "scene"
+      ],
+      "end": null,
+      "has_direct": true,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "object",
+        "red"
+      ],
+      "end": null,
+      "has_direct": true,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "red",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root/Child",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "red",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root/Child/Unapplied",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "red",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root/Child/Blocked",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root/Empty",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Other",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "early"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "early"
+      ],
+      "mode": "time",
+      "path": "/Referenced",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "local"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "local"
+      ],
+      "mode": "time",
+      "path": "/Masked",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "before"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "before"
+      ],
+      "mode": "time",
+      "path": "/SampleBlocks",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "object",
+        "scene"
+      ],
+      "end": null,
+      "has_direct": true,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "object",
+        "red"
+      ],
+      "end": null,
+      "has_direct": true,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "red",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root/Child",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "red",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root/Child/Unapplied",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "red",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root/Child/Blocked",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root/Empty",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Other",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "early"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "early"
+      ],
+      "mode": "time",
+      "path": "/Referenced",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "local"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "local"
+      ],
+      "mode": "time",
+      "path": "/Masked",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "before"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "before"
+      ],
+      "mode": "time",
+      "path": "/SampleBlocks",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "object",
+        "scene"
+      ],
+      "end": null,
+      "has_direct": true,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "green"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "green",
+        "object",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root/Child",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "green",
+        "object",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root/Child/Unapplied",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "green",
+        "object",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root/Child/Blocked",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "time",
+      "path": "/Root/Empty",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Other",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "early"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "early"
+      ],
+      "mode": "time",
+      "path": "/Referenced",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "local"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "local"
+      ],
+      "mode": "time",
+      "path": "/Masked",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/SampleBlocks",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "object",
+        "scene"
+      ],
+      "end": 6,
+      "has_direct": true,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "blue",
+        "green",
+        "object",
+        "red"
+      ],
+      "end": 6,
+      "has_direct": true,
+      "has_inherited": true,
+      "inherited": [
+        "blue",
+        "green",
+        "object",
+        "red",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "blue",
+        "green",
+        "object",
+        "red",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "blue",
+        "green",
+        "object",
+        "red",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "early"
+      ],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "early"
+      ],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "local"
+      ],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "local"
+      ],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 0,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "object",
+        "scene"
+      ],
+      "end": 4,
+      "has_direct": true,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "green",
+        "object",
+        "red"
+      ],
+      "end": 4,
+      "has_direct": true,
+      "has_inherited": true,
+      "inherited": [
+        "green",
+        "object",
+        "red",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "green",
+        "object",
+        "red",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "green",
+        "object",
+        "red",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "early"
+      ],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "early"
+      ],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "local"
+      ],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "local"
+      ],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 2,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 3,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "object",
+        "scene"
+      ],
+      "end": 3,
+      "has_direct": true,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 3,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "green"
+      ],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "green",
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 3,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "green",
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 3,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "green",
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 3,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 3,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 3,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "early"
+      ],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "early"
+      ],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 3,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "local"
+      ],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "local"
+      ],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 3,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 3,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 1,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [
+        "object",
+        "scene"
+      ],
+      "end": 3,
+      "has_direct": true,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 1,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [
+        "object",
+        "red"
+      ],
+      "end": 3,
+      "has_direct": true,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "red",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 1,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "red",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 1,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "red",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 1,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 1,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 1,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [
+        "early"
+      ],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "early"
+      ],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 1,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [
+        "local"
+      ],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "local"
+      ],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 1,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [
+        "before"
+      ],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "before"
+      ],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 1,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [
+        "object",
+        "scene"
+      ],
+      "end": 4,
+      "has_direct": true,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [
+        "green",
+        "object",
+        "red"
+      ],
+      "end": 4,
+      "has_direct": true,
+      "has_inherited": true,
+      "inherited": [
+        "green",
+        "object",
+        "red",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "green",
+        "object",
+        "red",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "green",
+        "object",
+        "red",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [
+        "early"
+      ],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "early"
+      ],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [
+        "local"
+      ],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "local"
+      ],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": null,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [
+        "object",
+        "scene"
+      ],
+      "end": null,
+      "has_direct": true,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [
+        "blue",
+        "green"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "blue",
+        "green",
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "blue",
+        "green",
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "blue",
+        "green",
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [
+        "early",
+        "late"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "early",
+        "late"
+      ],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [
+        "local"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "local"
+      ],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 4,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 10,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "object",
+        "scene"
+      ],
+      "end": 17,
+      "has_direct": true,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 10,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "blue"
+      ],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "blue",
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 10,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "blue",
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 10,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "blue",
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 10,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": true,
+      "inherited": [
+        "object",
+        "scene"
+      ],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 10,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 10,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "early",
+        "late"
+      ],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "early",
+        "late"
+      ],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 10,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "local"
+      ],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "local"
+      ],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 10,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "after"
+      ],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "after"
+      ],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 10,
+      "taxonomy": "kind"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "environment"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root/Child",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root/Child/Unapplied",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root/Child/Blocked",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root/Empty",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "subject"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "subject"
+      ],
+      "mode": "time",
+      "path": "/Other",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Referenced",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Masked",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/SampleBlocks",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "environment"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root/Child",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root/Child/Unapplied",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root/Child/Blocked",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root/Empty",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "subject"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "subject"
+      ],
+      "mode": "time",
+      "path": "/Other",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Referenced",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Masked",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/SampleBlocks",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "environment"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root/Child",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root/Child/Unapplied",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root/Child/Blocked",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root/Empty",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "subject"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "subject"
+      ],
+      "mode": "time",
+      "path": "/Other",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Referenced",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Masked",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/SampleBlocks",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "environment"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root/Child",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root/Child/Unapplied",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root/Child/Blocked",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "time",
+      "path": "/Root/Empty",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "subject"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "subject"
+      ],
+      "mode": "time",
+      "path": "/Other",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Referenced",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Masked",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/SampleBlocks",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "environment"
+      ],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "subject"
+      ],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "subject"
+      ],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 0,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "environment"
+      ],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "subject"
+      ],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "subject"
+      ],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 2,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 3,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "environment"
+      ],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 3,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 3,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 3,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 3,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 3,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "subject"
+      ],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "subject"
+      ],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 3,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 3,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 3,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 3,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 1,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [
+        "environment"
+      ],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 1,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 1,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 1,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 1,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 1,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [
+        "subject"
+      ],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "subject"
+      ],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 1,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 1,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 1,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 1,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [
+        "environment"
+      ],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [
+        "subject"
+      ],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "subject"
+      ],
+      "mode": "interval",
+      "path": "/Other",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": null,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [
+        "environment"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [
+        "subject"
+      ],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "subject"
+      ],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 4,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 10,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "environment"
+      ],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 10,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 10,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 10,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 10,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "environment"
+      ],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 10,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [
+        "subject"
+      ],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [
+        "subject"
+      ],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 10,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 10,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 10,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 10,
+      "taxonomy": "role"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child/Unapplied",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child/Blocked",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Empty",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Other",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Referenced",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Masked",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/SampleBlocks",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child/Unapplied",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child/Blocked",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Empty",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Other",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Referenced",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Masked",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/SampleBlocks",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child/Unapplied",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child/Blocked",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Empty",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Other",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Referenced",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Masked",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/SampleBlocks",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child/Unapplied",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child/Blocked",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Empty",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Other",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Referenced",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Masked",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/SampleBlocks",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 0,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 2,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 3,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 3,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 3,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 3,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 3,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 3,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 3,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 3,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 3,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 3,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 1,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 1,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 1,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 1,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 1,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 1,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 1,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 1,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 1,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 1,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": null,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 4,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 10,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 10,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 10,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 10,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 10,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 10,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 10,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 10,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 10,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 10,
+      "taxonomy": "empty"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child/Unapplied",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child/Blocked",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Empty",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Other",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Referenced",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Masked",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/SampleBlocks",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child/Unapplied",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child/Blocked",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Empty",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Other",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Referenced",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Masked",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/SampleBlocks",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child/Unapplied",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child/Blocked",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Empty",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Other",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Referenced",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Masked",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/SampleBlocks",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child/Unapplied",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Child/Blocked",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Root/Empty",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Other",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Referenced",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/Masked",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "time",
+      "path": "/SampleBlocks",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 6,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 0,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 2,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 3,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 3,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 3,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 3,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 3,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 3,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 3,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 3,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 3,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 3,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 1,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 1,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 1,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 1,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 1,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 1,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 1,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 1,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 1,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": false,
+      "direct": [],
+      "end": 3,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 1,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": false,
+      "direct": [],
+      "end": 4,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": null,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": false,
+      "closed_start": true,
+      "direct": [],
+      "end": null,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 4,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/",
+      "start": 10,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root",
+      "start": 10,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child",
+      "start": 10,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Unapplied",
+      "start": 10,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Child/Blocked",
+      "start": 10,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Root/Empty",
+      "start": 10,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Other",
+      "start": 10,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Referenced",
+      "start": 10,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/Masked",
+      "start": 10,
+      "taxonomy": "missing"
+    },
+    {
+      "closed_end": true,
+      "closed_start": true,
+      "direct": [],
+      "end": 17,
+      "has_direct": false,
+      "has_inherited": false,
+      "inherited": [],
+      "mode": "interval",
+      "path": "/SampleBlocks",
+      "start": 10,
+      "taxonomy": "missing"
+    }
+  ],
+  "taxonomies": [
+    {
+      "direct": [],
+      "inherited": [],
+      "path": "/"
+    },
+    {
+      "direct": [
+        "kind",
+        "role"
+      ],
+      "inherited": [
+        "kind",
+        "role"
+      ],
+      "path": "/Root"
+    },
+    {
+      "direct": [
+        "kind"
+      ],
+      "inherited": [
+        "kind",
+        "role"
+      ],
+      "path": "/Root/Child"
+    },
+    {
+      "direct": [],
+      "inherited": [
+        "kind",
+        "role"
+      ],
+      "path": "/Root/Child/Unapplied"
+    },
+    {
+      "direct": [
+        "kind"
+      ],
+      "inherited": [
+        "kind",
+        "role"
+      ],
+      "path": "/Root/Child/Blocked"
+    },
+    {
+      "direct": [
+        "kind",
+        "empty"
+      ],
+      "inherited": [
+        "empty",
+        "kind",
+        "role"
+      ],
+      "path": "/Root/Empty"
+    },
+    {
+      "direct": [
+        "role"
+      ],
+      "inherited": [
+        "role"
+      ],
+      "path": "/Other"
+    },
+    {
+      "direct": [
+        "kind"
+      ],
+      "inherited": [
+        "kind"
+      ],
+      "path": "/Referenced"
+    },
+    {
+      "direct": [
+        "kind"
+      ],
+      "inherited": [
+        "kind"
+      ],
+      "path": "/Masked"
+    },
+    {
+      "direct": [
+        "kind"
+      ],
+      "inherited": [
+        "kind"
+      ],
+      "path": "/SampleBlocks"
+    }
+  ],
+  "version": "26.8"
+}

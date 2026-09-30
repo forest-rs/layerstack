@@ -67,6 +67,12 @@ errors. Common transform helpers do not decompose arbitrary
 matrices or rewrite incompatible op stacks. Prepared operation recipes remain
 an internal cache implementation detail.
 
+With `usd-semantics`, `Scene::direct_taxonomies` and `inherited_taxonomies`
+discover applied label taxonomies. `LabelsQuery` computes sorted direct and
+inherited labels at one time or over an open/closed interval. It retains only
+labeled prims in a caller-owned cache tied to one scene snapshot; construct a
+new query after edits. Empty interval configurations are rejected explicitly.
+
 To regenerate after an OpenUSD upgrade, install the matching usd-core wheel,
 check out OpenUSD's sources at the same release (for each property's
 `apiName`, which names the accessors, and for `usdMtlx`, which the wheel is

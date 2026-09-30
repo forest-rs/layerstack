@@ -9,7 +9,7 @@
 
 use alloc::{boxed::Box, string::String, vec::Vec};
 
-use core::cmp::Ordering;
+use core::{borrow::Borrow, cmp::Ordering};
 
 use crate::interner::{TokenId, TokenInterner};
 use hashbrown::HashMap;
@@ -204,6 +204,12 @@ pub struct Path {
     segments: Box<[TokenId]>,
 }
 
+impl Borrow<[TokenId]> for Path {
+    fn borrow(&self) -> &[TokenId] {
+        &self.segments
+    }
+}
+
 impl Path {
     /// Returns the root path (`/`).
     #[must_use]
@@ -385,6 +391,16 @@ impl PathInterner {
         self.by_path.get(path).copied()
     }
 
+    /// Looks up the namespace parent of `id` without allocating a path.
+    ///
+    /// Returns `None` for the root or when the parent has not been interned.
+    /// Interning a child does not implicitly intern its ancestors.
+    #[must_use]
+    pub fn parent(&self, id: PathId) -> Option<PathId> {
+        let (_, parent) = self.resolve(id).segments().split_last()?;
+        self.by_path.get(parent).copied()
+    }
+
     /// Formats a [`PathId`] as a string (e.g. `/Robot/Arm`).
     ///
     /// This is a convenience for `self.resolve(id).display(tokens)`.
@@ -446,6 +462,20 @@ impl From<PathError> for PropertyPathError {
 mod tests {
     use super::*;
     use crate::interner::TokenInterner;
+
+    #[test]
+    fn interned_parent_lookup_handles_missing_and_later_ancestors() {
+        let mut tokens = TokenInterner::default();
+        let mut paths = PathInterner::default();
+        let child = paths.intern(Path::parse_absolute("/World/Leaf", &mut tokens).unwrap());
+        assert_eq!(paths.parent(child), None);
+        let parent = paths.intern(Path::parse_absolute("/World", &mut tokens).unwrap());
+        assert_eq!(paths.parent(child), Some(parent));
+        assert_eq!(paths.parent(parent), None);
+        let root = paths.intern(Path::root());
+        assert_eq!(paths.parent(parent), Some(root));
+        assert_eq!(paths.parent(root), None);
+    }
 
     #[test]
     fn property_path_parse_round_trips() {

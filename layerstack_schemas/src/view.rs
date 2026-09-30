@@ -213,8 +213,7 @@ impl<'a> Scene<'a> {
     /// The parent of the prim at `path` (`/` for a root prim), if `path` is
     /// not the pseudo-root.
     pub(crate) fn parent(&self, path: PathId) -> Option<PathId> {
-        let paths = self.store.paths();
-        paths.lookup(&paths.resolve(path).parent()?)
+        self.store.paths().parent(path)
     }
 
     /// The pseudo-root, `/`.

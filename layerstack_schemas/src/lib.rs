@@ -141,6 +141,9 @@
 //! - `Imageable::compute_visibility`, `compute_effective_visibility` for a
 //!   purpose (`VisibilityAPI`), and `compute_purpose_info`, which says
 //!   which prim authors the inherited purpose.
+//! - `Scene::compute_motion_blur_scale`, `compute_nonlinear_sample_count`
+//!   and `compute_velocity_scale` inherit readable authored `MotionAPI`
+//!   settings through any prim type; the API view offers the same methods.
 //!
 //! Matrices are `[[f64; 4]; 4]` rows that transform row vectors, as USD's
 //! are: the translation is the last row, and a prim's local-to-world
@@ -296,6 +299,8 @@ mod gf;
 #[cfg(feature = "usd-geom")]
 mod imageable;
 pub mod kind;
+#[cfg(feature = "usd-geom")]
+mod motion;
 #[cfg(feature = "usd")]
 mod predicate;
 #[cfg(feature = "usd")]

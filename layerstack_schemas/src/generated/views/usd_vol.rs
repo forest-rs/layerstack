@@ -1082,7 +1082,7 @@ impl<'a> ParticleFieldOpacityAttributeApi<'a> {
         #[doc = "Defines the opacity for each particle."]
         #[doc = ""]
         #[doc = "USD attribute `opacities` (`float\\[\\]`)."]
-        opacities, opacities_at, "opacities", ::alloc::vec::Vec<f32>, |v, t| crate::value::read_array(v, t, crate::value::read_float)
+        opacities, opacities_at, "opacities", ::alloc::vec::Vec<f32>, crate::value::read_float_array
     }
     /// The USD name of [`Self::opacitiesh`].
     pub const OPACITIESH: &'static str = "opacitiesh";
@@ -1091,7 +1091,7 @@ impl<'a> ParticleFieldOpacityAttributeApi<'a> {
         #[doc = "Defines the opacity for each particle."]
         #[doc = ""]
         #[doc = "USD attribute `opacitiesh` (`half\\[\\]`)."]
-        opacitiesh, opacitiesh_at, "opacitiesh", ::alloc::vec::Vec<f32>, |v, t| crate::value::read_array(v, t, crate::value::read_half)
+        opacitiesh, opacitiesh_at, "opacitiesh", ::alloc::vec::Vec<f32>, crate::value::read_half_array
     }
 }
 
@@ -1128,13 +1128,13 @@ impl ParticleFieldOpacityAttributeApiEdit {
         #[doc = "Defines the opacity for each particle."]
         #[doc = ""]
         #[doc = "USD attribute `opacities` (`float\\[\\]`)."]
-        set_opacities, set_opacities_at, "opacities", &[f32], |v, t| crate::value::write_array(v, t, crate::value::write_float)
+        set_opacities, set_opacities_at, "opacities", &[f32], crate::value::write_float_array
     }
     set_attribute! {
         #[doc = "Defines the opacity for each particle."]
         #[doc = ""]
         #[doc = "USD attribute `opacitiesh` (`half\\[\\]`)."]
-        set_opacitiesh, set_opacitiesh_at, "opacitiesh", &[f32], |v, t| crate::value::write_array(v, t, crate::value::write_half)
+        set_opacitiesh, set_opacitiesh_at, "opacitiesh", &[f32], crate::value::write_half_array
     }
 }
 
@@ -1200,7 +1200,7 @@ impl<'a> ParticleFieldOrientationAttributeApi<'a> {
         #[doc = "Defines the quaternion orientation for each particle."]
         #[doc = ""]
         #[doc = "USD attribute `orientations` (`quatf\\[\\]`)."]
-        orientations, orientations_at, "orientations", ::alloc::vec::Vec<[f32; 4]>, |v, t| crate::value::read_array(v, t, crate::value::read_quatf)
+        orientations, orientations_at, "orientations", ::alloc::vec::Vec<[f32; 4]>, crate::value::read_quatf_array
     }
     /// The USD name of [`Self::orientationsh`].
     pub const ORIENTATIONSH: &'static str = "orientationsh";
@@ -1209,7 +1209,7 @@ impl<'a> ParticleFieldOrientationAttributeApi<'a> {
         #[doc = "Defines the quaternion orientation for each particle."]
         #[doc = ""]
         #[doc = "USD attribute `orientationsh` (`quath\\[\\]`)."]
-        orientationsh, orientationsh_at, "orientationsh", ::alloc::vec::Vec<[f32; 4]>, |v, t| crate::value::read_array(v, t, crate::value::read_quath)
+        orientationsh, orientationsh_at, "orientationsh", ::alloc::vec::Vec<[f32; 4]>, crate::value::read_quath_array
     }
 }
 
@@ -1246,13 +1246,13 @@ impl ParticleFieldOrientationAttributeApiEdit {
         #[doc = "Defines the quaternion orientation for each particle."]
         #[doc = ""]
         #[doc = "USD attribute `orientations` (`quatf\\[\\]`)."]
-        set_orientations, set_orientations_at, "orientations", &[[f32; 4]], |v, t| crate::value::write_array(v, t, crate::value::write_quatf)
+        set_orientations, set_orientations_at, "orientations", &[[f32; 4]], crate::value::write_quatf_array
     }
     set_attribute! {
         #[doc = "Defines the quaternion orientation for each particle."]
         #[doc = ""]
         #[doc = "USD attribute `orientationsh` (`quath\\[\\]`)."]
-        set_orientationsh, set_orientationsh_at, "orientationsh", &[[f32; 4]], |v, t| crate::value::write_array(v, t, crate::value::write_quath)
+        set_orientationsh, set_orientationsh_at, "orientationsh", &[[f32; 4]], crate::value::write_quath_array
     }
 }
 
@@ -1318,7 +1318,7 @@ impl<'a> ParticleFieldPositionAttributeApi<'a> {
         #[doc = "Defines the position for each particle in local space."]
         #[doc = ""]
         #[doc = "USD attribute `positions` (`point3f\\[\\]`)."]
-        positions, positions_at, "positions", ::alloc::vec::Vec<[f32; 3]>, |v, t| crate::value::read_array(v, t, crate::value::read_float3)
+        positions, positions_at, "positions", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_float3_array
     }
     /// The USD name of [`Self::positionsh`].
     pub const POSITIONSH: &'static str = "positionsh";
@@ -1327,7 +1327,7 @@ impl<'a> ParticleFieldPositionAttributeApi<'a> {
         #[doc = "Defines the position for each particle in local space."]
         #[doc = ""]
         #[doc = "USD attribute `positionsh` (`point3h\\[\\]`)."]
-        positionsh, positionsh_at, "positionsh", ::alloc::vec::Vec<[f32; 3]>, |v, t| crate::value::read_array(v, t, crate::value::read_half3)
+        positionsh, positionsh_at, "positionsh", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_half3_array
     }
 }
 
@@ -1364,13 +1364,13 @@ impl ParticleFieldPositionAttributeApiEdit {
         #[doc = "Defines the position for each particle in local space."]
         #[doc = ""]
         #[doc = "USD attribute `positions` (`point3f\\[\\]`)."]
-        set_positions, set_positions_at, "positions", &[[f32; 3]], |v, t| crate::value::write_array(v, t, crate::value::write_float3)
+        set_positions, set_positions_at, "positions", &[[f32; 3]], crate::value::write_float3_array
     }
     set_attribute! {
         #[doc = "Defines the position for each particle in local space."]
         #[doc = ""]
         #[doc = "USD attribute `positionsh` (`point3h\\[\\]`)."]
-        set_positionsh, set_positionsh_at, "positionsh", &[[f32; 3]], |v, t| crate::value::write_array(v, t, crate::value::write_half3)
+        set_positionsh, set_positionsh_at, "positionsh", &[[f32; 3]], crate::value::write_half3_array
     }
 }
 
@@ -1608,7 +1608,7 @@ impl<'a> ParticleFieldScaleAttributeApi<'a> {
         #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
         #[doc = ""]
         #[doc = "USD attribute `scales` (`float3\\[\\]`)."]
-        scales, scales_at, "scales", ::alloc::vec::Vec<[f32; 3]>, |v, t| crate::value::read_array(v, t, crate::value::read_float3)
+        scales, scales_at, "scales", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_float3_array
     }
     /// The USD name of [`Self::scalesh`].
     pub const SCALESH: &'static str = "scalesh";
@@ -1617,7 +1617,7 @@ impl<'a> ParticleFieldScaleAttributeApi<'a> {
         #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
         #[doc = ""]
         #[doc = "USD attribute `scalesh` (`half3\\[\\]`)."]
-        scalesh, scalesh_at, "scalesh", ::alloc::vec::Vec<[f32; 3]>, |v, t| crate::value::read_array(v, t, crate::value::read_half3)
+        scalesh, scalesh_at, "scalesh", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_half3_array
     }
 }
 
@@ -1654,13 +1654,13 @@ impl ParticleFieldScaleAttributeApiEdit {
         #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
         #[doc = ""]
         #[doc = "USD attribute `scales` (`float3\\[\\]`)."]
-        set_scales, set_scales_at, "scales", &[[f32; 3]], |v, t| crate::value::write_array(v, t, crate::value::write_float3)
+        set_scales, set_scales_at, "scales", &[[f32; 3]], crate::value::write_float3_array
     }
     set_attribute! {
         #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
         #[doc = ""]
         #[doc = "USD attribute `scalesh` (`half3\\[\\]`)."]
-        set_scalesh, set_scalesh_at, "scalesh", &[[f32; 3]], |v, t| crate::value::write_array(v, t, crate::value::write_half3)
+        set_scalesh, set_scalesh_at, "scalesh", &[[f32; 3]], crate::value::write_half3_array
     }
 }
 
@@ -1729,7 +1729,7 @@ impl<'a> ParticleFieldSphericalHarmonicsAttributeApi<'a> {
         #[doc = "An array of spherical harmonics coefficients."]
         #[doc = ""]
         #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficients` (`float3\\[\\]`)."]
-        radiance_spherical_harmonics_coefficients, radiance_spherical_harmonics_coefficients_at, "radiance:sphericalHarmonicsCoefficients", ::alloc::vec::Vec<[f32; 3]>, |v, t| crate::value::read_array(v, t, crate::value::read_float3)
+        radiance_spherical_harmonics_coefficients, radiance_spherical_harmonics_coefficients_at, "radiance:sphericalHarmonicsCoefficients", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_float3_array
     }
     /// The USD name of [`Self::radiance_spherical_harmonics_coefficientsh`].
     pub const RADIANCE_SPHERICAL_HARMONICS_COEFFICIENTSH: &'static str =
@@ -1739,7 +1739,7 @@ impl<'a> ParticleFieldSphericalHarmonicsAttributeApi<'a> {
         #[doc = "An array of spherical harmonics coefficients."]
         #[doc = ""]
         #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficientsh` (`half3\\[\\]`)."]
-        radiance_spherical_harmonics_coefficientsh, radiance_spherical_harmonics_coefficientsh_at, "radiance:sphericalHarmonicsCoefficientsh", ::alloc::vec::Vec<[f32; 3]>, |v, t| crate::value::read_array(v, t, crate::value::read_half3)
+        radiance_spherical_harmonics_coefficientsh, radiance_spherical_harmonics_coefficientsh_at, "radiance:sphericalHarmonicsCoefficientsh", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_half3_array
     }
     /// The USD name of [`Self::radiance_spherical_harmonics_degree`].
     pub const RADIANCE_SPHERICAL_HARMONICS_DEGREE: &'static str =
@@ -1786,13 +1786,13 @@ impl ParticleFieldSphericalHarmonicsAttributeApiEdit {
         #[doc = "An array of spherical harmonics coefficients."]
         #[doc = ""]
         #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficients` (`float3\\[\\]`)."]
-        set_radiance_spherical_harmonics_coefficients, set_radiance_spherical_harmonics_coefficients_at, "radiance:sphericalHarmonicsCoefficients", &[[f32; 3]], |v, t| crate::value::write_array(v, t, crate::value::write_float3)
+        set_radiance_spherical_harmonics_coefficients, set_radiance_spherical_harmonics_coefficients_at, "radiance:sphericalHarmonicsCoefficients", &[[f32; 3]], crate::value::write_float3_array
     }
     set_attribute! {
         #[doc = "An array of spherical harmonics coefficients."]
         #[doc = ""]
         #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficientsh` (`half3\\[\\]`)."]
-        set_radiance_spherical_harmonics_coefficientsh, set_radiance_spherical_harmonics_coefficientsh_at, "radiance:sphericalHarmonicsCoefficientsh", &[[f32; 3]], |v, t| crate::value::write_array(v, t, crate::value::write_half3)
+        set_radiance_spherical_harmonics_coefficientsh, set_radiance_spherical_harmonics_coefficientsh_at, "radiance:sphericalHarmonicsCoefficientsh", &[[f32; 3]], crate::value::write_half3_array
     }
     set_uniform_attribute! {
         #[doc = "The highest degree of the spherical harmonics."]

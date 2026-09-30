@@ -80,7 +80,7 @@ impl<'a> BlendShape<'a> {
         #[doc = "\\*\\*Required property\\*\\*."]
         #[doc = ""]
         #[doc = "USD attribute `normalOffsets` (`vector3f\\[\\]`, uniform)."]
-        normal_offsets, "normalOffsets", ::alloc::vec::Vec<[f32; 3]>, |v, t| crate::value::read_array(v, t, crate::value::read_float3)
+        normal_offsets, "normalOffsets", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_float3_array
     }
     /// The USD name of [`Self::offsets`].
     pub const OFFSETS: &'static str = "offsets";
@@ -89,7 +89,7 @@ impl<'a> BlendShape<'a> {
         #[doc = "\\*\\*Required property\\*\\*."]
         #[doc = ""]
         #[doc = "USD attribute `offsets` (`vector3f\\[\\]`, uniform)."]
-        offsets, "offsets", ::alloc::vec::Vec<[f32; 3]>, |v, t| crate::value::read_array(v, t, crate::value::read_float3)
+        offsets, "offsets", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_float3_array
     }
     /// The USD name of [`Self::point_indices`].
     pub const POINT_INDICES: &'static str = "pointIndices";
@@ -98,7 +98,7 @@ impl<'a> BlendShape<'a> {
         #[doc = "\\*\\*Optional property\\*\\*."]
         #[doc = ""]
         #[doc = "USD attribute `pointIndices` (`int\\[\\]`, uniform)."]
-        point_indices, "pointIndices", ::alloc::vec::Vec<i32>, |v, t| crate::value::read_array(v, t, crate::value::read_int)
+        point_indices, "pointIndices", ::alloc::vec::Vec<i32>, crate::value::read_int_array
     }
 }
 
@@ -135,19 +135,19 @@ impl BlendShapeEdit {
         #[doc = "\\*\\*Required property\\*\\*."]
         #[doc = ""]
         #[doc = "USD attribute `normalOffsets` (`vector3f\\[\\]`, uniform)."]
-        set_normal_offsets, "normalOffsets", &[[f32; 3]], |v, t| crate::value::write_array(v, t, crate::value::write_float3)
+        set_normal_offsets, "normalOffsets", &[[f32; 3]], crate::value::write_float3_array
     }
     set_uniform_attribute! {
         #[doc = "\\*\\*Required property\\*\\*."]
         #[doc = ""]
         #[doc = "USD attribute `offsets` (`vector3f\\[\\]`, uniform)."]
-        set_offsets, "offsets", &[[f32; 3]], |v, t| crate::value::write_array(v, t, crate::value::write_float3)
+        set_offsets, "offsets", &[[f32; 3]], crate::value::write_float3_array
     }
     set_uniform_attribute! {
         #[doc = "\\*\\*Optional property\\*\\*."]
         #[doc = ""]
         #[doc = "USD attribute `pointIndices` (`int\\[\\]`, uniform)."]
-        set_point_indices, "pointIndices", &[i32], |v, t| crate::value::write_array(v, t, crate::value::write_int)
+        set_point_indices, "pointIndices", &[i32], crate::value::write_int_array
     }
 }
 
@@ -217,7 +217,7 @@ impl<'a> SkelAnimation<'a> {
         #[doc = "Array of weight values for each blend shape."]
         #[doc = ""]
         #[doc = "USD attribute `blendShapeWeights` (`float\\[\\]`)."]
-        blend_shape_weights, blend_shape_weights_at, "blendShapeWeights", ::alloc::vec::Vec<f32>, |v, t| crate::value::read_array(v, t, crate::value::read_float)
+        blend_shape_weights, blend_shape_weights_at, "blendShapeWeights", ::alloc::vec::Vec<f32>, crate::value::read_float_array
     }
     /// The USD name of [`Self::joints`].
     pub const JOINTS: &'static str = "joints";
@@ -235,7 +235,7 @@ impl<'a> SkelAnimation<'a> {
         #[doc = "Joint-local unit quaternion rotations of all affected joints, in 32-bit precision."]
         #[doc = ""]
         #[doc = "USD attribute `rotations` (`quatf\\[\\]`)."]
-        rotations, rotations_at, "rotations", ::alloc::vec::Vec<[f32; 4]>, |v, t| crate::value::read_array(v, t, crate::value::read_quatf)
+        rotations, rotations_at, "rotations", ::alloc::vec::Vec<[f32; 4]>, crate::value::read_quatf_array
     }
     /// The USD name of [`Self::scales`].
     pub const SCALES: &'static str = "scales";
@@ -244,7 +244,7 @@ impl<'a> SkelAnimation<'a> {
         #[doc = "Joint-local scales of all affected joints, in 16 bit precision."]
         #[doc = ""]
         #[doc = "USD attribute `scales` (`half3\\[\\]`)."]
-        scales, scales_at, "scales", ::alloc::vec::Vec<[f32; 3]>, |v, t| crate::value::read_array(v, t, crate::value::read_half3)
+        scales, scales_at, "scales", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_half3_array
     }
     /// The USD name of [`Self::translations`].
     pub const TRANSLATIONS: &'static str = "translations";
@@ -253,7 +253,7 @@ impl<'a> SkelAnimation<'a> {
         #[doc = "Joint-local translations of all affected joints."]
         #[doc = ""]
         #[doc = "USD attribute `translations` (`float3\\[\\]`)."]
-        translations, translations_at, "translations", ::alloc::vec::Vec<[f32; 3]>, |v, t| crate::value::read_array(v, t, crate::value::read_float3)
+        translations, translations_at, "translations", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_float3_array
     }
 }
 
@@ -296,7 +296,7 @@ impl SkelAnimationEdit {
         #[doc = "Array of weight values for each blend shape."]
         #[doc = ""]
         #[doc = "USD attribute `blendShapeWeights` (`float\\[\\]`)."]
-        set_blend_shape_weights, set_blend_shape_weights_at, "blendShapeWeights", &[f32], |v, t| crate::value::write_array(v, t, crate::value::write_float)
+        set_blend_shape_weights, set_blend_shape_weights_at, "blendShapeWeights", &[f32], crate::value::write_float_array
     }
     set_uniform_attribute! {
         #[doc = "Array of tokens identifying which joints this animation's data applies to."]
@@ -308,19 +308,19 @@ impl SkelAnimationEdit {
         #[doc = "Joint-local unit quaternion rotations of all affected joints, in 32-bit precision."]
         #[doc = ""]
         #[doc = "USD attribute `rotations` (`quatf\\[\\]`)."]
-        set_rotations, set_rotations_at, "rotations", &[[f32; 4]], |v, t| crate::value::write_array(v, t, crate::value::write_quatf)
+        set_rotations, set_rotations_at, "rotations", &[[f32; 4]], crate::value::write_quatf_array
     }
     set_attribute! {
         #[doc = "Joint-local scales of all affected joints, in 16 bit precision."]
         #[doc = ""]
         #[doc = "USD attribute `scales` (`half3\\[\\]`)."]
-        set_scales, set_scales_at, "scales", &[[f32; 3]], |v, t| crate::value::write_array(v, t, crate::value::write_half3)
+        set_scales, set_scales_at, "scales", &[[f32; 3]], crate::value::write_half3_array
     }
     set_attribute! {
         #[doc = "Joint-local translations of all affected joints."]
         #[doc = ""]
         #[doc = "USD attribute `translations` (`float3\\[\\]`)."]
-        set_translations, set_translations_at, "translations", &[[f32; 3]], |v, t| crate::value::write_array(v, t, crate::value::write_float3)
+        set_translations, set_translations_at, "translations", &[[f32; 3]], crate::value::write_float3_array
     }
 }
 
@@ -405,7 +405,7 @@ impl<'a> SkelBindingApi<'a> {
         #[doc = "Indices into the \\*joints\\* attribute of the closest (in namespace) bound Skeleton that affect each point of a PointBased gprim."]
         #[doc = ""]
         #[doc = "USD attribute `primvars:skel:jointIndices` (`int\\[\\]`)."]
-        joint_indices, joint_indices_at, "primvars:skel:jointIndices", ::alloc::vec::Vec<i32>, |v, t| crate::value::read_array(v, t, crate::value::read_int)
+        joint_indices, joint_indices_at, "primvars:skel:jointIndices", ::alloc::vec::Vec<i32>, crate::value::read_int_array
     }
     /// The USD name of [`Self::joint_weights`].
     pub const JOINT_WEIGHTS: &'static str = "primvars:skel:jointWeights";
@@ -414,7 +414,7 @@ impl<'a> SkelBindingApi<'a> {
         #[doc = "Weights for the joints that affect each point of a PointBased gprim."]
         #[doc = ""]
         #[doc = "USD attribute `primvars:skel:jointWeights` (`float\\[\\]`)."]
-        joint_weights, joint_weights_at, "primvars:skel:jointWeights", ::alloc::vec::Vec<f32>, |v, t| crate::value::read_array(v, t, crate::value::read_float)
+        joint_weights, joint_weights_at, "primvars:skel:jointWeights", ::alloc::vec::Vec<f32>, crate::value::read_float_array
     }
     /// The USD name of [`Self::skinning_method`].
     pub const SKINNING_METHOD: &'static str = "primvars:skel:skinningMethod";
@@ -511,13 +511,13 @@ impl SkelBindingApiEdit {
         #[doc = "Indices into the \\*joints\\* attribute of the closest (in namespace) bound Skeleton that affect each point of a PointBased gprim."]
         #[doc = ""]
         #[doc = "USD attribute `primvars:skel:jointIndices` (`int\\[\\]`)."]
-        set_joint_indices, set_joint_indices_at, "primvars:skel:jointIndices", &[i32], |v, t| crate::value::write_array(v, t, crate::value::write_int)
+        set_joint_indices, set_joint_indices_at, "primvars:skel:jointIndices", &[i32], crate::value::write_int_array
     }
     set_attribute! {
         #[doc = "Weights for the joints that affect each point of a PointBased gprim."]
         #[doc = ""]
         #[doc = "USD attribute `primvars:skel:jointWeights` (`float\\[\\]`)."]
-        set_joint_weights, set_joint_weights_at, "primvars:skel:jointWeights", &[f32], |v, t| crate::value::write_array(v, t, crate::value::write_float)
+        set_joint_weights, set_joint_weights_at, "primvars:skel:jointWeights", &[f32], crate::value::write_float_array
     }
     set_uniform_attribute! {
         #[doc = "The skinningMethod specifies the skinning method for the prim."]
@@ -695,7 +695,7 @@ impl<'a> Skeleton<'a> {
         #[doc = "Specifies the bind-pose transforms of each joint in \\*\\*world space\\*\\*, in the ordering imposed by \\*joints\\*."]
         #[doc = ""]
         #[doc = "USD attribute `bindTransforms` (`matrix4d\\[\\]`, uniform)."]
-        bind_transforms, "bindTransforms", ::alloc::vec::Vec<[[f64; 4]; 4]>, |v, t| crate::value::read_array(v, t, crate::value::read_matrix4d)
+        bind_transforms, "bindTransforms", ::alloc::vec::Vec<[[f64; 4]; 4]>, crate::value::read_matrix4d_array
     }
     /// The USD name of [`Self::joint_names`].
     pub const JOINT_NAMES: &'static str = "jointNames";
@@ -722,7 +722,7 @@ impl<'a> Skeleton<'a> {
         #[doc = "Specifies the rest-pose transforms of each joint in \\*\\*local space\\*\\*, in the ordering imposed by \\*joints\\*."]
         #[doc = ""]
         #[doc = "USD attribute `restTransforms` (`matrix4d\\[\\]`, uniform)."]
-        rest_transforms, "restTransforms", ::alloc::vec::Vec<[[f64; 4]; 4]>, |v, t| crate::value::read_array(v, t, crate::value::read_matrix4d)
+        rest_transforms, "restTransforms", ::alloc::vec::Vec<[[f64; 4]; 4]>, crate::value::read_matrix4d_array
     }
 }
 
@@ -759,7 +759,7 @@ impl SkeletonEdit {
         #[doc = "Specifies the bind-pose transforms of each joint in \\*\\*world space\\*\\*, in the ordering imposed by \\*joints\\*."]
         #[doc = ""]
         #[doc = "USD attribute `bindTransforms` (`matrix4d\\[\\]`, uniform)."]
-        set_bind_transforms, "bindTransforms", &[[[f64; 4]; 4]], |v, t| crate::value::write_array(v, t, crate::value::write_matrix4d)
+        set_bind_transforms, "bindTransforms", &[[[f64; 4]; 4]], crate::value::write_matrix4d_array
     }
     set_uniform_attribute! {
         #[doc = "If authored, provides a unique name per joint."]
@@ -777,6 +777,6 @@ impl SkeletonEdit {
         #[doc = "Specifies the rest-pose transforms of each joint in \\*\\*local space\\*\\*, in the ordering imposed by \\*joints\\*."]
         #[doc = ""]
         #[doc = "USD attribute `restTransforms` (`matrix4d\\[\\]`, uniform)."]
-        set_rest_transforms, "restTransforms", &[[[f64; 4]; 4]], |v, t| crate::value::write_array(v, t, crate::value::write_matrix4d)
+        set_rest_transforms, "restTransforms", &[[[f64; 4]; 4]], crate::value::write_matrix4d_array
     }
 }

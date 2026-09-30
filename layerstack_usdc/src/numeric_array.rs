@@ -19,7 +19,11 @@ pub(crate) fn float_array(array: FloatArray) -> layerstack::TypedArray {
 }
 
 pub(crate) fn integer_array(array: IntegerArray) -> layerstack::TypedArray {
-    let Value::TypedArray(value) = convert_integer_array(array.value_type, &array.values) else {
+    if array.value_type == ValueType::Int64 {
+        return layerstack::TypedArray::Int64(Arc::new(array.values));
+    }
+    let Value::TypedArray(value) = integer_values(array.value_type, array.values.into_iter())
+    else {
         unreachable!("numeric array")
     };
     value
@@ -41,14 +45,23 @@ pub(crate) fn math_array(array: &MathArray<'_>) -> layerstack::TypedArray {
     reason = "integer element bit patterns"
 )]
 pub(crate) fn convert_integer_array(vtype: ValueType, values: &[i64]) -> Value {
+    integer_values(vtype, values.iter().copied())
+}
+
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "integer element bit patterns"
+)]
+fn integer_values(vtype: ValueType, values: impl Iterator<Item = i64>) -> Value {
     use layerstack::TypedArray as A;
     Value::TypedArray(match vtype {
-        ValueType::Bool => A::Bool(Arc::new(values.iter().map(|&v| v != 0).collect())),
-        ValueType::UChar => A::UChar(Arc::new(values.iter().map(|&v| v as u8).collect())),
-        ValueType::Int => A::Int(Arc::new(values.iter().map(|&v| v as i32).collect())),
-        ValueType::UInt => A::UInt(Arc::new(values.iter().map(|&v| v as u32).collect())),
-        ValueType::Int64 => A::Int64(Arc::new(values.to_vec())),
-        ValueType::UInt64 => A::UInt64(Arc::new(values.iter().map(|&v| v as u64).collect())),
+        ValueType::Bool => A::Bool(Arc::new(values.map(|v| v != 0).collect())),
+        ValueType::UChar => A::UChar(Arc::new(values.map(|v| v as u8).collect())),
+        ValueType::Int => A::Int(Arc::new(values.map(|v| v as i32).collect())),
+        ValueType::UInt => A::UInt(Arc::new(values.map(|v| v as u32).collect())),
+        ValueType::Int64 => A::Int64(Arc::new(values.collect())),
+        ValueType::UInt64 => A::UInt64(Arc::new(values.map(|v| v as u64).collect())),
         _ => unreachable!("integer array types are selected by decode_field_within"),
     })
 }
@@ -185,13 +198,37 @@ fn i32_le(d: &[u8], idx: usize) -> i32 {
 
 #[cfg(test)]
 mod tests {
+    use super::integer_array;
+    use crate::value_rep::IntegerArray;
     use crate::value_rep::{
         CrateValue, DecodeBudget, DecodedField, RawValueRep, decode_field_within, decode_value,
     };
     use crate::value_type::SpecForm;
+    use crate::value_type::ValueType;
     use crate::writer::{Spec, Specifier, Value as W, write_crate};
     use crate::{header::parse_header, section::parse_sections, toc::parse_toc};
     use alloc::vec;
+
+    #[test]
+    fn owned_int64_decode_retains_its_buffer() {
+        let values = vec![i64::MIN, -1, 0, i64::MAX];
+        let pointer = values.as_ptr();
+        let layerstack::TypedArray::Int64(retained) = integer_array(IntegerArray {
+            value_type: ValueType::Int64,
+            values,
+        }) else {
+            panic!("int64 buffer");
+        };
+        assert_eq!(retained.as_ptr(), pointer);
+        assert_eq!(retained.as_slice(), [i64::MIN, -1, 0, i64::MAX]);
+        let layerstack::TypedArray::UInt64(unsigned) = integer_array(IntegerArray {
+            value_type: ValueType::UInt64,
+            values: vec![-1, i64::MIN],
+        }) else {
+            panic!("uint64 buffer");
+        };
+        assert_eq!(unsigned.as_slice(), [u64::MAX, 1_u64 << 63]);
+    }
 
     #[test]
     fn sampled_and_dictionary_arrays_decode_natively_without_changing_generic_reads() {

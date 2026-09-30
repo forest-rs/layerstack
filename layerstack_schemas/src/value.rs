@@ -45,7 +45,7 @@ pub(crate) fn write_array<T: Copy>(
 }
 
 macro_rules! plain {
-    ($read:ident, $write:ident, $ty:ty, $variant:ident) => {
+    ($read:ident, $write:ident, $ty:ty, $variant:ident, $read_array:ident, $write_array:ident) => {
         pub(crate) fn $read(value: &Value, _: &TokenInterner) -> Option<$ty> {
             match value {
                 Value::$variant(v) => Some(*v),
@@ -56,29 +56,183 @@ macro_rules! plain {
         pub(crate) fn $write(value: $ty, _: &mut TokenInterner) -> Value {
             Value::$variant(value)
         }
+
+        pub(crate) fn $read_array(value: &Value, tokens: &TokenInterner) -> Option<Vec<$ty>> {
+            match value {
+                Value::TypedArray(layerstack::TypedArray::$variant(items)) => {
+                    Some(items.as_ref().clone())
+                }
+                Value::TypedArray(_) => None,
+                _ => read_array(value, tokens, $read),
+            }
+        }
+
+        pub(crate) fn $write_array(items: &[$ty], _: &mut TokenInterner) -> Value {
+            Value::TypedArray(layerstack::TypedArray::$variant(Arc::new(items.to_vec())))
+        }
     };
 }
 
-plain!(read_bool, write_bool, bool, Bool);
-plain!(read_uchar, write_uchar, u8, UChar);
-plain!(read_int, write_int, i32, Int);
-plain!(read_uint, write_uint, u32, UInt);
-plain!(read_int64, write_int64, i64, Int64);
-plain!(read_uint64, write_uint64, u64, UInt64);
-plain!(read_float, write_float, f32, Float);
-plain!(read_double, write_double, f64, Double);
-plain!(read_timecode, write_timecode, f64, TimeCode);
-plain!(read_float2, write_float2, [f32; 2], Vec2f);
-plain!(read_float3, write_float3, [f32; 3], Vec3f);
-plain!(read_float4, write_float4, [f32; 4], Vec4f);
-plain!(read_double2, write_double2, [f64; 2], Vec2d);
-plain!(read_double3, write_double3, [f64; 3], Vec3d);
-plain!(read_double4, write_double4, [f64; 4], Vec4d);
-plain!(read_int2, write_int2, [i32; 2], Vec2i);
-plain!(read_int3, write_int3, [i32; 3], Vec3i);
-plain!(read_int4, write_int4, [i32; 4], Vec4i);
-plain!(read_quatf, write_quatf, [f32; 4], Quatf);
-plain!(read_quatd, write_quatd, [f64; 4], Quatd);
+plain!(
+    read_bool,
+    write_bool,
+    bool,
+    Bool,
+    read_bool_array,
+    write_bool_array
+);
+plain!(
+    read_uchar,
+    write_uchar,
+    u8,
+    UChar,
+    read_uchar_array,
+    write_uchar_array
+);
+plain!(
+    read_int,
+    write_int,
+    i32,
+    Int,
+    read_int_array,
+    write_int_array
+);
+plain!(
+    read_uint,
+    write_uint,
+    u32,
+    UInt,
+    read_uint_array,
+    write_uint_array
+);
+plain!(
+    read_int64,
+    write_int64,
+    i64,
+    Int64,
+    read_int64_array,
+    write_int64_array
+);
+plain!(
+    read_uint64,
+    write_uint64,
+    u64,
+    UInt64,
+    read_uint64_array,
+    write_uint64_array
+);
+plain!(
+    read_float,
+    write_float,
+    f32,
+    Float,
+    read_float_array,
+    write_float_array
+);
+plain!(
+    read_double,
+    write_double,
+    f64,
+    Double,
+    read_double_array,
+    write_double_array
+);
+plain!(
+    read_timecode,
+    write_timecode,
+    f64,
+    TimeCode,
+    read_timecode_array,
+    write_timecode_array
+);
+plain!(
+    read_float2,
+    write_float2,
+    [f32; 2],
+    Vec2f,
+    read_float2_array,
+    write_float2_array
+);
+plain!(
+    read_float3,
+    write_float3,
+    [f32; 3],
+    Vec3f,
+    read_float3_array,
+    write_float3_array
+);
+plain!(
+    read_float4,
+    write_float4,
+    [f32; 4],
+    Vec4f,
+    read_float4_array,
+    write_float4_array
+);
+plain!(
+    read_double2,
+    write_double2,
+    [f64; 2],
+    Vec2d,
+    read_double2_array,
+    write_double2_array
+);
+plain!(
+    read_double3,
+    write_double3,
+    [f64; 3],
+    Vec3d,
+    read_double3_array,
+    write_double3_array
+);
+plain!(
+    read_double4,
+    write_double4,
+    [f64; 4],
+    Vec4d,
+    read_double4_array,
+    write_double4_array
+);
+plain!(
+    read_int2,
+    write_int2,
+    [i32; 2],
+    Vec2i,
+    read_int2_array,
+    write_int2_array
+);
+plain!(
+    read_int3,
+    write_int3,
+    [i32; 3],
+    Vec3i,
+    read_int3_array,
+    write_int3_array
+);
+plain!(
+    read_int4,
+    write_int4,
+    [i32; 4],
+    Vec4i,
+    read_int4_array,
+    write_int4_array
+);
+plain!(
+    read_quatf,
+    write_quatf,
+    [f32; 4],
+    Quatf,
+    read_quatf_array,
+    write_quatf_array
+);
+plain!(
+    read_quatd,
+    write_quatd,
+    [f64; 4],
+    Quatd,
+    read_quatd_array,
+    write_quatd_array
+);
 
 macro_rules! text {
     ($read:ident, $write:ident, $variant:ident) => {
@@ -121,8 +275,24 @@ pub(crate) fn write_half(value: f32, _: &mut TokenInterner) -> Value {
     Value::Half(half::from_f32(value))
 }
 
+pub(crate) fn read_half_array(value: &Value, tokens: &TokenInterner) -> Option<Vec<f32>> {
+    match value {
+        Value::TypedArray(layerstack::TypedArray::Half(items)) => {
+            Some(items.iter().copied().map(half::to_f32).collect())
+        }
+        Value::TypedArray(_) => None,
+        _ => read_array(value, tokens, read_half),
+    }
+}
+
+pub(crate) fn write_half_array(items: &[f32], _: &mut TokenInterner) -> Value {
+    Value::TypedArray(layerstack::TypedArray::Half(Arc::new(
+        items.iter().copied().map(half::from_f32).collect(),
+    )))
+}
+
 macro_rules! halves {
-    ($read:ident, $write:ident, $n:literal, $variant:ident) => {
+    ($read:ident, $write:ident, $n:literal, $variant:ident, $read_array:ident, $write_array:ident) => {
         pub(crate) fn $read(value: &Value, _: &TokenInterner) -> Option<[f32; $n]> {
             match value {
                 Value::$variant(bits) => Some(bits.map(half::to_f32)),
@@ -133,16 +303,63 @@ macro_rules! halves {
         pub(crate) fn $write(value: [f32; $n], _: &mut TokenInterner) -> Value {
             Value::$variant(value.map(half::from_f32))
         }
+
+        pub(crate) fn $read_array(value: &Value, tokens: &TokenInterner) -> Option<Vec<[f32; $n]>> {
+            match value {
+                Value::TypedArray(layerstack::TypedArray::$variant(items)) => {
+                    Some(items.iter().map(|bits| bits.map(half::to_f32)).collect())
+                }
+                Value::TypedArray(_) => None,
+                _ => read_array(value, tokens, $read),
+            }
+        }
+
+        pub(crate) fn $write_array(items: &[[f32; $n]], _: &mut TokenInterner) -> Value {
+            Value::TypedArray(layerstack::TypedArray::$variant(Arc::new(
+                items
+                    .iter()
+                    .map(|value| value.map(half::from_f32))
+                    .collect(),
+            )))
+        }
     };
 }
 
-halves!(read_half2, write_half2, 2, Vec2h);
-halves!(read_half3, write_half3, 3, Vec3h);
-halves!(read_half4, write_half4, 4, Vec4h);
-halves!(read_quath, write_quath, 4, Quath);
+halves!(
+    read_half2,
+    write_half2,
+    2,
+    Vec2h,
+    read_half2_array,
+    write_half2_array
+);
+halves!(
+    read_half3,
+    write_half3,
+    3,
+    Vec3h,
+    read_half3_array,
+    write_half3_array
+);
+halves!(
+    read_half4,
+    write_half4,
+    4,
+    Vec4h,
+    read_half4_array,
+    write_half4_array
+);
+halves!(
+    read_quath,
+    write_quath,
+    4,
+    Quath,
+    read_quath_array,
+    write_quath_array
+);
 
 macro_rules! matrix {
-    ($read:ident, $write:ident, $n:literal, $variant:ident) => {
+    ($read:ident, $write:ident, $n:literal, $variant:ident, $read_array:ident, $write_array:ident) => {
         pub(crate) fn $read(value: &Value, _: &TokenInterner) -> Option<[[f64; $n]; $n]> {
             match value {
                 Value::$variant(m) => {
@@ -163,16 +380,130 @@ macro_rules! matrix {
             }
             Value::$variant(alloc::boxed::Box::new(flat))
         }
+
+        pub(crate) fn $read_array(
+            value: &Value,
+            tokens: &TokenInterner,
+        ) -> Option<Vec<[[f64; $n]; $n]>> {
+            match value {
+                Value::TypedArray(layerstack::TypedArray::$variant(items)) => Some(
+                    items
+                        .iter()
+                        .map(|flat| {
+                            core::array::from_fn(|row| {
+                                core::array::from_fn(|column| flat[row * $n + column])
+                            })
+                        })
+                        .collect(),
+                ),
+                Value::TypedArray(_) => None,
+                _ => read_array(value, tokens, $read),
+            }
+        }
+
+        pub(crate) fn $write_array(items: &[[[f64; $n]; $n]], _: &mut TokenInterner) -> Value {
+            Value::TypedArray(layerstack::TypedArray::$variant(Arc::new(
+                items
+                    .iter()
+                    .map(|rows| {
+                        let mut flat = [0.0; $n * $n];
+                        for (i, row) in rows.iter().enumerate() {
+                            flat[i * $n..(i + 1) * $n].copy_from_slice(row);
+                        }
+                        flat
+                    })
+                    .collect(),
+            )))
+        }
     };
 }
 
-matrix!(read_matrix2d, write_matrix2d, 2, Matrix2d);
-matrix!(read_matrix3d, write_matrix3d, 3, Matrix3d);
-matrix!(read_matrix4d, write_matrix4d, 4, Matrix4d);
+matrix!(
+    read_matrix2d,
+    write_matrix2d,
+    2,
+    Matrix2d,
+    read_matrix2d_array,
+    write_matrix2d_array
+);
+matrix!(
+    read_matrix3d,
+    write_matrix3d,
+    3,
+    Matrix3d,
+    read_matrix3d_array,
+    write_matrix3d_array
+);
+matrix!(
+    read_matrix4d,
+    write_matrix4d,
+    4,
+    Matrix4d,
+    read_matrix4d_array,
+    write_matrix4d_array
+);
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn native_array_readers_keep_kind_and_bits() {
+        let mut tokens = TokenInterner::default();
+        let values = [[-0.0_f32, f32::from_bits(0x7fc0_1234), 2.0]];
+        let native = write_float3_array(&values, &mut tokens);
+        let read = read_float3_array(&native, &tokens).unwrap();
+        assert_eq!(read[0].map(f32::to_bits), values[0].map(f32::to_bits));
+        let empty = write_float3_array(&[], &mut tokens);
+        assert!(matches!(
+            empty,
+            Value::TypedArray(layerstack::TypedArray::Vec3f(_))
+        ));
+        assert_eq!(read_float3_array(&empty, &tokens), Some(Vec::new()));
+        assert_eq!(read_double3_array(&empty, &tokens), None);
+        assert_eq!(read_quatf_array(&empty, &tokens), None);
+        assert_eq!(
+            read_float3_array(&Value::Array(Vec::new()), &tokens),
+            Some(Vec::new())
+        );
+
+        let times = write_timecode_array(&[1.0, -0.0], &mut tokens);
+        assert_eq!(
+            read_timecode_array(&times, &tokens),
+            Some(alloc::vec![1.0, -0.0])
+        );
+        assert_eq!(read_double_array(&times, &tokens), None);
+        let halves = [[0.5, 1.0, 2.0]];
+        assert_eq!(
+            read_half3_array(&write_half3_array(&halves, &mut tokens), &tokens),
+            Some(halves.to_vec())
+        );
+    }
+
+    #[test]
+    fn native_matrix_arrays_convert_rows_without_scalar_boxes() {
+        let mut tokens = TokenInterner::default();
+        let rows = core::array::from_fn::<_, 4, _>(|row| {
+            core::array::from_fn::<_, 4, _>(|column| {
+                f64::from(u8::try_from(row * 4 + column).unwrap())
+            })
+        });
+        let native = write_matrix4d_array(&[rows], &mut tokens);
+        let Value::TypedArray(layerstack::TypedArray::Matrix4d(flat)) = &native else {
+            panic!("native matrix storage");
+        };
+        assert_eq!(flat[0][6], rows[1][2]);
+        assert_eq!(
+            read_matrix4d_array(&native, &tokens),
+            Some(alloc::vec![rows])
+        );
+        let legacy = Value::Array(alloc::vec![write_matrix4d(rows, &mut tokens)]);
+        assert_eq!(
+            read_matrix4d_array(&legacy, &tokens),
+            read_matrix4d_array(&native, &tokens)
+        );
+        assert_eq!(read_matrix3d_array(&native, &tokens), None);
+    }
 
     #[test]
     fn values_round_trip() {

@@ -10,6 +10,7 @@ use layerstack::{
     ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, InMemoryStore, Layer, LayerId, PrimSpec,
     PropertyPath, PropertySpec, PropertyType, ResolvedValue, Stage, StageOptions, Value,
 };
+use layerstack_schemas::{Scene, usd_geom::Mesh};
 
 fn arrays(c: &mut Criterion) {
     let mut group = c.benchmark_group("numeric_arrays");
@@ -46,10 +47,11 @@ fn arrays(c: &mut Criterion) {
             let mut store = InMemoryStore::default();
             let prim = store.path("/Mesh");
             let name = store.tokens.intern("points");
+            let mesh = store.tokens.intern("Mesh");
             let mut layer = Layer::new(LayerId(1));
             layer.insert_prim(
                 prim,
-                PrimSpec::def().with_property(
+                PrimSpec::def().with_type_name(mesh).with_property(
                     name,
                     PropertySpec::typed_attribute(PropertyType::new(
                         "point3f",
@@ -60,7 +62,13 @@ fn arrays(c: &mut Criterion) {
                 ),
             );
             store.insert_layer(layer);
-            let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+            let options = StageOptions {
+                schemas: Some(std::sync::Arc::new(layerstack_schemas::openusd(
+                    &mut store.tokens,
+                ))),
+                ..StageOptions::default()
+            };
+            let stage = Stage::compose(&mut store, LayerId(1), options);
             let property = PropertyPath::new(prim, name);
             group.bench_function(BenchmarkId::new("resolve_scan", len), |b| {
                 b.iter(|| {
@@ -76,6 +84,11 @@ fn arrays(c: &mut Criterion) {
                     let sum: f32 = black_box(points).iter().map(|point| point[0]).sum();
                     black_box(sum)
                 });
+            });
+            let scene = Scene::new(&stage, &store);
+            let mesh = Mesh::new(&scene, prim).unwrap();
+            group.bench_function(BenchmarkId::new("schema_points", len), |b| {
+                b.iter(|| black_box(mesh.points().unwrap()));
             });
         }
     }

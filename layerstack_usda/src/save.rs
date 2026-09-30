@@ -64,7 +64,7 @@
 //! [`layer_document`] checks the whole layer before a writer runs and
 //! returns the first problem it finds, naming its source path:
 //!
-//! - [`SaveError::Unsupported`]: sparse array edits (as a
+//! - [`SaveError::Unsupported`]: layer relocates; sparse array edits (as a
 //!   default or a time sample); list ops mixing an explicit list with
 //!   edits; `varying` relationships; path list-op metadata; and values the
 //!   writers have no representation for (`pathExpression`, `opaque`, and
@@ -82,8 +82,9 @@
 //!   paths that are not prim paths, an arc list that repeats an item within
 //!   one operation, ...).
 //!
-//! The crate writer additionally rejects metadata keys that OpenUSD does not
-//! register, since it cannot store them as the text parser would.
+//! The crate writer additionally rejects unregistered list-op metadata and
+//! metadata of the wrong type. Other unregistered metadata is stored as text
+//! or dictionaries, following the text parser's representation.
 //!
 //! Spec: AOUSD Core §7 (scene description: layers, specs, fields and
 //! metadata), §16.2 (USDA), §16.3 (crate format).

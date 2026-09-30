@@ -18,7 +18,7 @@ members = [
 version = "0.1.0"
 edition = "2024"
 # Keep in sync with RUST_MIN_VER in .github/workflows/ci.yml, with the relevant README.md files
-# and with the MSRV in the `Unreleased` section of CHANGELOG.md.
+# and with the MSRV in the release notes for the affected crates.
 rust-version = "1.88"
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/forest-rs/layerstack"
@@ -29,6 +29,12 @@ hashbrown = { default-features = false, features = [
     "default-hasher",
 ], version = "0.17.0" }
 invalidation = { default-features = false, version = "0.2.0" }
+layerstack = { path = "layerstack", version = "0.1.0" }
+layerstack_mesh_export = { path = "layerstack_mesh_export", version = "0.1.0" }
+layerstack_schemas = { default-features = false, path = "layerstack_schemas", version = "0.1.0" }
+layerstack_usda = { path = "layerstack_usda", version = "0.1.0" }
+layerstack_usdc = { path = "layerstack_usdc", version = "0.1.0" }
+layerstack_usdz = { path = "layerstack_usdz", version = "0.1.0" }
 libm = { default-features = false, version = "0.2.16" }
 lz4_flex = { default-features = false, version = "0.11" }
 opinionated = { path = "opinionated", version = "0.1.0" }

@@ -1,12 +1,13 @@
 [package]
 name = "layerstack_usdz"
-description = "USDZ (packaged scene) reader and writer for layerstack — §16.4 compliant."
+description = "USDZ (packaged scene) reader and writer for layerstack."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-readme = "../README.md"
+readme = "README.md"
+documentation = "https://docs.rs/layerstack_usdz"
 keywords = ["usd", "usdz", "package", "scene-description"]
 categories = ["parser-implementations"]
 
@@ -15,9 +16,9 @@ default = []
 std = []
 
 [dependencies]
-layerstack = { path = "../layerstack" }
-layerstack_usda = { path = "../layerstack_usda" }
-layerstack_usdc = { path = "../layerstack_usdc" }
+layerstack = { workspace = true }
+layerstack_usda = { workspace = true }
+layerstack_usdc = { workspace = true }
 
 [dev-dependencies]
 

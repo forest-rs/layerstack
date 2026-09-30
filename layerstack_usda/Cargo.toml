@@ -6,7 +6,8 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-readme = "../README.md"
+readme = "README.md"
+documentation = "https://docs.rs/layerstack_usda"
 keywords = ["usd", "usda", "parser", "scene-description"]
 categories = ["parser-implementations"]
 
@@ -15,7 +16,7 @@ default = []
 std = []
 
 [dependencies]
-layerstack = { path = "../layerstack" }
+layerstack = { workspace = true }
 smallvec = { workspace = true }
 
 [dev-dependencies]

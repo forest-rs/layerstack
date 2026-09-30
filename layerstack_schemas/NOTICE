@@ -1,6 +1,6 @@
 layerstack_schemas
 
-The tables in `src/generated` are generated from the schema definitions of
+The tables and views in `src/generated` are generated from the schema definitions of
 OpenUSD 26.8 (the `generatedSchema.usda` and `plugInfo.json` files of the
 usd-core 26.8 wheel), which are distributed under the Tomorrow Open Source
 Technology License 1.0; see `LICENSE-TOST-1.0`. OpenUSD's notice follows.

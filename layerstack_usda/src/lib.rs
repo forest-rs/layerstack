@@ -3,7 +3,7 @@
 
 //! USDA (text format) parser and writer for layerstack.
 //!
-//! This crate provides a production-quality parser for the USDA scene
+//! This crate provides a parser for the USDA scene
 //! description format as specified in AOUSD Core §16.2, plus a deterministic
 //! writer. It is organized in these layers:
 //!
@@ -17,7 +17,7 @@
 //!    can be recovered from the CST. This enables formatters, refactoring
 //!    tools, and syntax highlighting.
 //!
-//! 3. **AST** (abstract syntax tree) — A typed, validated tree stripped of
+//! 3. **AST** (abstract syntax tree) — A typed tree stripped of
 //!    syntactic noise. Represents what was *authored* in the file, not what
 //!    composition produces.
 //!
@@ -70,9 +70,10 @@
 //!
 //! # `no_std` support
 //!
-//! This crate is `no_std` by default, operating on byte slices (`&[u8]`)
-//! and `&str` buffers. Enable the `std` feature for file I/O convenience
-//! methods and `std::error::Error` integration.
+//! This crate uses `no_std` with `alloc` and requires Rust 1.88 or later.
+//! Parsing consumes `&str` buffers and writing returns owned strings. The
+//! declared `std` feature currently adds no APIs; file I/O belongs to the
+//! caller. Writer and save errors implement `core::error::Error` without it.
 //!
 //! [`Layer`]: layerstack::Layer
 //! [`PrimSpec`]: layerstack::PrimSpec

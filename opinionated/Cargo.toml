@@ -2,6 +2,7 @@
 name = "opinionated"
 description = "Layered sparse opinion resolution over typed addresses."
 readme = "README.md"
+documentation = "https://docs.rs/opinionated"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -11,8 +11,8 @@ categories = ["development-tools"]
 publish = false
 
 [dependencies]
-layerstack = { path = "../layerstack" }
-layerstack_usda = { path = "../layerstack_usda" }
+layerstack = { workspace = true }
+layerstack_usda = { workspace = true }
 # Reads each schema's kind, bases and auto-applies from OpenUSD's
 # `plugInfo.json`; this tool is never a dependency of a published crate.
 serde_json = { version = "1.0" }

@@ -8,6 +8,73 @@ settings scopes, document sections, game items, or any other stable typed key.
 The resolver only knows layer strength, address/field identity, authored
 operations, and provenance.
 
+[API documentation](https://docs.rs/opinionated) ·
+[Source](https://github.com/forest-rs/layerstack/tree/main/opinionated)
+
+## Installation
+
+```toml
+[dependencies]
+opinionated = "0.1"
+```
+
+Requires Rust **1.88** or later. The crate uses `no_std` with `alloc`, has no
+dependencies, and has no feature flags. An allocator is required; there is no
+allocation-free mode.
+
+## Getting started
+
+Supply layers strongest-to-weakest, then author opinions at address/field keys.
+Removing a stronger opinion reveals the weaker one again:
+
+```rust
+use opinionated::{OpinionOp, SparseComposer};
+
+// Layer, address, field, scalar value, list item, dictionary key, provenance.
+type Settings = SparseComposer<
+    &'static str, &'static str, &'static str, &'static str,
+    &'static str, &'static str, &'static str,
+>;
+
+let mut settings = Settings::try_new(["project", "defaults"]).unwrap();
+settings.set_opinion(
+    "defaults", "workspace", "theme", OpinionOp::Set("light"), "defaults file",
+).unwrap();
+settings.set_opinion(
+    "project", "workspace", "theme", OpinionOp::Set("dark"), "project file",
+).unwrap();
+
+let result = settings.resolve("workspace", "theme").resolved().unwrap();
+assert_eq!(result.value.as_scalar(), Some(&"dark"));
+assert_eq!(result.provenance, "project file");
+
+settings.remove_opinion("project", "workspace", "theme").unwrap();
+let result = settings.resolve("workspace", "theme").resolved().unwrap();
+assert_eq!(result.value.as_scalar(), Some(&"light"));
+```
+
+Keys and provenance can be your own types. The crate does not require strings
+or prescribe what a provenance value identifies.
+
+## Choosing an API
+
+| Need | Entry point |
+| --- | --- |
+| Store sparse opinions and edit them by layer | `SparseComposer` |
+| Resolve an already ordered stack of scalar, list, or shallow dictionary opinions | `resolve_ordered_chain` |
+| Resolve borrowed list opinions with a fallback seed | `resolve_list_chain` |
+| Explain that resolution | `SparseComposer::explain` or `resolve_ordered_chain_report` |
+| Fold a host-defined value/edit family | `OpinionFamily` and `resolve_family_chain` |
+| Merge nested dictionaries represented by host values | `DictionaryAdapter` and `combine_dictionary_chain` |
+| Execute or compose sparse array edit programs | `ArrayEdit<T>` |
+
+`OpinionFamily` classifies operations as dense values, sparse edits, blocks,
+or foreign operations. The caller selects the family; the kernel accumulates
+edits until a dense value, block, or the end of the chain, then applies them
+weakest-first. `ScalarFamily`, `ListFamily`, and `DictionaryFamily` adapt the
+built-in operations. `DictionaryFamily` uses shallow overlay; recursive
+dictionary composition has its own strongest-first fold, described below.
+
 ## Scope
 
 `opinionated` owns:
@@ -33,7 +100,7 @@ It explicitly does not own:
 - table storage or binary encoding
 - materialization into a domain artifact
 
-## Current Shape
+## Resolution semantics
 
 Layers are supplied strongest-to-weakest through `SparseComposer::try_new` and
 are fixed for the lifetime of the composer. Duplicate layers are rejected at
@@ -143,3 +210,10 @@ The planner reads no values. Hosts retain source brackets and own time mapping,
 sample discovery, time-equivalence policy, fallback seeds, and interpolation.
 Time keys can be integer animation ticks or floating-point times. `TemporalMode`
 selects held or two-bracket planning without imposing a numeric value type.
+
+## License
+
+See [CHANGELOG.md](CHANGELOG.md) for release status.
+
+Licensed under either [Apache License, Version 2.0](LICENSE-APACHE) or
+[MIT license](LICENSE-MIT), at your option.

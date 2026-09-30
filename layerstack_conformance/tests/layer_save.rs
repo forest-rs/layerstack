@@ -46,6 +46,42 @@ fn emit_into(store: &mut InMemoryStore, id: u64, text: &str) {
     store.insert_layer(result.layer);
 }
 
+/// Numeric buffers retain the kind of an empty array, including metadata
+/// without a property declaration. Property aliases remain authored separately.
+#[test]
+fn native_empty_array_kinds_survive_both_save_formats() {
+    let source = r#"#usda 1.0
+def Mesh "Mesh" (
+    customData = {
+        float3[] native = []
+    }
+) {
+    point3f[] points = []
+    timecode[] clock = []
+    matrix4d[] matrices = []
+}
+"#;
+    let layer = Imported::usda(source);
+    let saved = layer.save_usda().unwrap();
+    assert!(saved.contains("float3[]"), "{saved}");
+    assert!(saved.contains("point3f[] points = []"), "{saved}");
+    for mut imported in [
+        Imported::usda(&saved),
+        Imported::usdc(&layer.save_usdc().unwrap()),
+    ] {
+        assert!(
+            matches!(imported.property("/Mesh.points").default, Some(layerstack::Value::TypedArray(layerstack::TypedArray::Vec3f(ref values))) if values.is_empty())
+        );
+        assert!(
+            matches!(imported.property("/Mesh.clock").default, Some(layerstack::Value::TypedArray(layerstack::TypedArray::TimeCode(ref values))) if values.is_empty())
+        );
+        assert!(
+            matches!(imported.property("/Mesh.matrices").default, Some(layerstack::Value::TypedArray(layerstack::TypedArray::Matrix4d(ref values))) if values.is_empty())
+        );
+        assert_eq!(imported.save_usda().unwrap(), saved);
+    }
+}
+
 /// Saved explicit-empty target and connection lists still block a weaker
 /// layer's opinions when composed, from both formats; a bare declaration
 /// does not, and a deleted target is removed from the weaker list.

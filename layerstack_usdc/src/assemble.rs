@@ -455,6 +455,19 @@ impl<'a> AssembleCtx<'a> {
                 self.budget.charge_text(field_name.len())?;
                 let rep = RawValueRep::new(field_def.value_rep);
                 let value = decode_field_within(&rep, self.data, self.sections, self.budget)?;
+                // This is the ownership boundary: assembly subsequently borrows
+                // fields, so retain decoded numeric allocations before that borrow.
+                // Raw math arrays already borrow the file bytes and are converted
+                // once by assembly; the generic decoder remains unchanged.
+                let value = match value {
+                    DecodedField::FloatArray(array) => {
+                        DecodedField::Value(CrateValue::TypedArray(float_array(array)))
+                    }
+                    DecodedField::IntegerArray(array) => {
+                        DecodedField::Value(CrateValue::TypedArray(integer_array(array)))
+                    }
+                    other => other,
+                };
                 result.push((field_name, value));
             }
             idx += 1;

@@ -8,7 +8,7 @@ use std::hint::black_box;
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use opinionated::{
     ChainOpinion, ListOp, OpinionOp, apply_list_order_by_key, resolve_list_chain,
-    resolve_ordered_chain_report,
+    resolve_list_chain_report, resolve_ordered_chain_report,
 };
 
 fn bench_lists(c: &mut Criterion) {
@@ -23,6 +23,18 @@ fn bench_lists(c: &mut Criterion) {
                 b.iter(|| black_box(resolve_list_chain(black_box(&seed), ops.iter())));
             },
         );
+        group.bench_with_input(
+            BenchmarkId::new("list_report", format!("{depth}x{width}")),
+            &ops,
+            |b, ops| {
+                b.iter(|| {
+                    black_box(resolve_list_chain_report(
+                        black_box(&seed),
+                        ops.iter().enumerate().map(|(position, op)| (op, position)),
+                    ))
+                });
+            },
+        );
         let mut cutoff = ops.clone();
         cutoff[0] = ListOp::explicit(vec![width]);
         group.bench_with_input(
@@ -35,19 +47,16 @@ fn bench_lists(c: &mut Criterion) {
         let opinions: Vec<OpinionOp<(), usize, ()>> =
             ops.into_iter().map(OpinionOp::List).collect();
         let positions: Vec<_> = (0..opinions.len()).collect();
-        group.bench_function(
-            BenchmarkId::new("report", format!("{depth}x{width}")),
-            |b| {
-                b.iter(|| {
-                    black_box(resolve_ordered_chain_report(
-                        opinions
-                            .iter()
-                            .zip(&positions)
-                            .map(|(op, provenance)| ChainOpinion { op, provenance }),
-                    ))
-                });
-            },
-        );
+        group.bench_function(BenchmarkId::new("report", depth), |b| {
+            b.iter(|| {
+                black_box(resolve_ordered_chain_report(
+                    opinions
+                        .iter()
+                        .zip(&positions)
+                        .map(|(op, provenance)| ChainOpinion { op, provenance }),
+                ))
+            });
+        });
     }
     group.finish();
 

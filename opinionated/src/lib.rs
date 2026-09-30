@@ -88,8 +88,8 @@ pub use dictionary::{
     combine_dictionary_chain, combine_dictionary_chain_report,
 };
 pub use family::{
-    DictionaryFamily, FamilyEvent, FamilyMember, FamilyReport, FamilyResolution, ListFamily,
-    OpinionFamily, ScalarFamily, resolve_family_chain, resolve_family_chain_report,
+    DictionaryFamily, FamilyBase, FamilyEvent, FamilyMember, FamilyReport, FamilyResolution,
+    ListFamily, OpinionFamily, ScalarFamily, resolve_family_chain, resolve_family_chain_report,
 };
 
 /// A stable key for resolving one field on one address.
@@ -458,6 +458,46 @@ pub fn resolve_list_chain<T: Clone + Eq>(
     out
 }
 
+/// A composed list paired with events for every authored list operation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ListReport<T, P> {
+    /// The list, exactly as [`resolve_list_chain`] returns it.
+    pub value: Vec<T>,
+    /// Events in strongest-to-weakest order, including hidden operations.
+    pub events: Vec<ResolutionEvent<P>>,
+}
+
+/// Resolves borrowed list operations and explains their contributions.
+///
+/// Uses the same fold as [`resolve_list_chain`]. Operations below an explicit
+/// list are visited for diagnostics but never applied, and are reported with
+/// [`IgnoreReason::WeakerThanExplicit`]. Caller-owned provenance is moved into
+/// the report rather than cloned. An empty chain returns the fallback with no
+/// events; this low-level list kernel does not model field absence or blocks.
+#[must_use]
+pub fn resolve_list_chain_report<'a, T: Clone + Eq + 'a, P>(
+    fallback: &[T],
+    ops_strong_to_weak: impl IntoIterator<Item = (&'a ListOp<T>, P)>,
+) -> ListReport<T, P> {
+    let mut ops = ops_strong_to_weak.into_iter();
+    let mut events = Vec::new();
+    let value = resolve_list_chain(
+        fallback,
+        ops.by_ref().map(|(op, provenance)| {
+            events.push(ResolutionEvent::Contributed {
+                provenance,
+                kind: OpinionKind::List,
+            });
+            op
+        }),
+    );
+    events.extend(ops.map(|(_, provenance)| ResolutionEvent::Ignored {
+        provenance,
+        reason: IgnoreReason::WeakerThanExplicit,
+    }));
+    ListReport { value, events }
+}
+
 /// An authored operation for one `(address, field)` key.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum OpinionOp<V, I = V, K = String> {
@@ -622,6 +662,8 @@ pub enum ResolutionEvent<P = ()> {
 pub enum IgnoreReason {
     /// A stronger scalar set already resolved the value.
     WeakerThanSet,
+    /// A stronger explicit list replaces every weaker operation.
+    WeakerThanExplicit,
     /// A stronger block cut off this weaker opinion.
     WeakerThanBlock,
     /// The opinion's operation kind is incompatible with the resolved kind.
@@ -1157,9 +1199,18 @@ fn record_list_events<'a, V, I, K, P>(
 ) where
     P: Clone,
 {
+    let mut explicit = false;
     for (index, opinion) in opinions.iter().enumerate() {
+        if explicit {
+            events.push(ResolutionEvent::Ignored {
+                provenance: opinion.provenance.clone(),
+                reason: IgnoreReason::WeakerThanExplicit,
+            });
+            continue;
+        }
         match opinion.op {
             OpinionOp::List(op) => {
+                explicit = op.explicit.is_some();
                 ops.push(op);
                 events.push(ResolutionEvent::Contributed {
                     provenance: opinion.provenance.clone(),

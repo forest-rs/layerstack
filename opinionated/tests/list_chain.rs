@@ -264,3 +264,51 @@ fn family_explicit_cutoff_is_dense_and_does_not_classify_weaker_edits() {
         vec![FamilyEvent::ContributedDense { provenance: 0 }]
     );
 }
+
+#[test]
+fn list_report_moves_provenance_and_never_applies_hidden_operations() {
+    use opinionated::{IgnoreReason, ResolutionEvent, resolve_list_chain_report};
+    #[derive(Debug, Eq, PartialEq)]
+    struct Source(usize); // Deliberately not Clone.
+    let clones = std::rc::Rc::new(std::cell::Cell::new(0));
+    let item = |value| Counted {
+        value,
+        clones: clones.clone(),
+    };
+    let ops = [
+        ListOp::appended(vec![item(2)]),
+        ListOp::explicit(vec![item(1)]),
+        ListOp::appended(vec![item(99)]),
+    ];
+    let report = resolve_list_chain_report(
+        &[item(0)],
+        ops.iter()
+            .enumerate()
+            .map(|(index, op)| (op, Source(index))),
+    );
+    assert_eq!(
+        report
+            .value
+            .iter()
+            .map(|item| item.value)
+            .collect::<Vec<_>>(),
+        [1, 2]
+    );
+    assert_eq!(clones.get(), 2);
+    assert!(matches!(
+        report.events.last(),
+        Some(ResolutionEvent::Ignored {
+            provenance: Source(2),
+            reason: IgnoreReason::WeakerThanExplicit
+        })
+    ));
+    assert_eq!(report.events.len(), 3);
+}
+
+#[test]
+fn list_report_without_opinions_returns_the_fallback_without_events() {
+    use opinionated::resolve_list_chain_report;
+    let report = resolve_list_chain_report(&[1, 2], core::iter::empty::<(&ListOp<u32>, ())>());
+    assert_eq!(report.value, [1, 2]);
+    assert!(report.events.is_empty());
+}

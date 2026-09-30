@@ -444,9 +444,25 @@ impl<T: Clone + Eq> NodeLists<T> {
     /// Adds `op`, authored at the site inside the branches `sites`, to its
     /// node, after the stronger ops of that node.
     pub(crate) fn push(&mut self, sites: &[VariantSelectionSite], op: ListOp<T>) {
+        // Keep the first site's position even when it authors no operation:
+        // a weaker layer may add arcs there after another node was seen.
+        // AOUSD Core §12.4: an explicit empty list is an operation and must
+        // clear weaker arcs.
+        let authored = !op.is_empty();
         match self.nodes.iter_mut().find(|(node, _)| node == sites) {
-            Some((_, ops)) => ops.push(op),
-            None => self.nodes.push((sites.to_vec(), alloc::vec![op])),
+            Some((_, ops)) => {
+                if authored {
+                    ops.push(op);
+                }
+            }
+            None => {
+                let ops = if authored {
+                    alloc::vec![op]
+                } else {
+                    Vec::new()
+                };
+                self.nodes.push((sites.to_vec(), ops));
+            }
         }
     }
 
@@ -1568,4 +1584,43 @@ pub(crate) fn resolve_payloads_for_prim_in(
         |spec| &spec.payloads,
         |op, layer| anchor_internal_arcs(store, op, layer, anchor),
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unauthored_lists_preserve_node_order_and_weaker_arcs() {
+        let mut tokens = crate::TokenInterner::default();
+        let branch = [VariantSelectionSite {
+            host_path: PathId::from_raw(1),
+            set: tokens.intern("shape"),
+            variant: tokens.intern("round"),
+        }];
+        let mut lists = NodeLists::new();
+        lists.push(&[], ListOp::new());
+        lists.push(&branch, ListOp::explicit(alloc::vec![2]));
+        lists.push(&[], ListOp::explicit(alloc::vec![1]));
+        lists.push(&[], ListOp::new());
+        assert_eq!(
+            lists.resolve(),
+            alloc::vec![(1, Vec::new()), (2, branch.to_vec())]
+        );
+    }
+
+    #[test]
+    fn explicit_empty_list_clears_only_its_node() {
+        let mut tokens = crate::TokenInterner::default();
+        let branch = [VariantSelectionSite {
+            host_path: PathId::from_raw(1),
+            set: tokens.intern("shape"),
+            variant: tokens.intern("round"),
+        }];
+        let mut lists = NodeLists::new();
+        lists.push(&[], ListOp::explicit(Vec::new()));
+        lists.push(&branch, ListOp::explicit(alloc::vec![2]));
+        lists.push(&[], ListOp::explicit(alloc::vec![1]));
+        assert_eq!(lists.resolve(), alloc::vec![(2, branch.to_vec())]);
+    }
 }

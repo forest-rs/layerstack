@@ -14,10 +14,11 @@ use reduction::{MIN_CHILDREN, Reduction};
 use crate::{
     Time, gf,
     imageable::{PurposeInfo, PurposeInputs, Visibility, local_visibility},
+    usd_geom::ImageablePurpose,
     view::{PrimView, Scene},
     xform::XformCache,
 };
-use alloc::{vec, vec::Vec};
+use alloc::{boxed::Box, vec, vec::Vec};
 use layerstack::{HashMap, HashSet, PathId};
 
 /// An axis-aligned double-precision range. A reversed axis denotes emptiness.
@@ -115,7 +116,7 @@ pub enum BoundsError {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BoundsOptions {
     /// Purposes contributing to queried bounds, in any order.
-    pub included_purposes: Vec<crate::usd_geom::ImageablePurpose>,
+    pub included_purposes: Vec<ImageablePurpose>,
     /// Use `extentsHint` on models, in default/render/proxy/guide order.
     pub use_extents_hint: bool,
     /// Include invisible and non-imageable typed child subtrees, as OpenUSD
@@ -125,7 +126,7 @@ pub struct BoundsOptions {
 impl Default for BoundsOptions {
     fn default() -> Self {
         Self {
-            included_purposes: vec![crate::usd_geom::ImageablePurpose::Default],
+            included_purposes: vec![ImageablePurpose::Default],
             use_extents_hint: false,
             ignore_visibility: false,
         }
@@ -143,7 +144,8 @@ pub struct BoundsStats {
     pub invalidated: usize,
 }
 
-type PurposeBounds = Vec<(crate::usd_geom::ImageablePurpose, BoundingBox)>;
+// A cached result is replaced as a whole; it never needs spare capacity.
+type PurposeBounds = Box<[(ImageablePurpose, BoundingBox)]>;
 
 // Ancestry inputs belong to the tracked parent, not to each child query.
 // Reuse the dependency entry instead of retaining a second per-prim index.
@@ -456,7 +458,7 @@ impl BoundsCache {
         concrete
     }
 
-    fn purpose(&mut self, scene: &Scene<'_>, path: PathId) -> crate::usd_geom::ImageablePurpose {
+    fn purpose(&mut self, scene: &Scene<'_>, path: PathId) -> ImageablePurpose {
         self.ancestry.clear();
         let mut at = path;
         let mut info = loop {
@@ -485,9 +487,7 @@ impl BoundsCache {
             }
             info = Some(current);
         }
-        info.map_or(crate::usd_geom::ImageablePurpose::Default, |info| {
-            info.purpose
-        })
+        info.map_or(ImageablePurpose::Default, |info| info.purpose)
     }
     fn resolve(&mut self, scene: &Scene<'_>, path: PathId) -> Result<(), BoundsError> {
         if !scene.stage().has_prim(path) {
@@ -619,7 +619,7 @@ impl BoundsCache {
             && scene.is_model(path)
             && let Some(hint) = vectors(&prim, "extentsHint", self.time).filter(|v| v.len() >= 2)
         {
-            use crate::usd_geom::ImageablePurpose::{Default, Guide, Proxy, Render};
+            use ImageablePurpose::{Default, Guide, Proxy, Render};
             return Ok(Some((
                 [Default, Render, Proxy, Guide]
                     .into_iter()
@@ -637,13 +637,13 @@ impl BoundsCache {
                 .ok_or(BoundsError::ExtentUnavailable(path))?;
             let purpose = self.purpose(scene, path);
             return Ok(Some((
-                vec![(
+                Box::new([(
                     purpose,
                     BoundingBox {
                         range,
                         matrix: gf::IDENTITY,
                     },
-                )],
+                )]),
                 varying,
             )));
         }
@@ -690,7 +690,7 @@ impl BoundsCache {
             self.promote.insert(path);
             reduction.clear_dirty_leaves();
         }
-        let mut result: PurposeBounds = Vec::new();
+        let mut result: Vec<(ImageablePurpose, BoundingBox)> = Vec::new();
         for &child in children {
             self.stats.hits += 1;
             let child_to_component = gf::mul(&self.world(scene, child)?, &inverse_component);
@@ -719,6 +719,12 @@ impl BoundsCache {
                 if let Some((_, held)) = result.iter_mut().find(|(p, _)| p == purpose) {
                     held.range.union_with(range);
                 } else {
+                    // Most parents observe just one purpose. Allocate only
+                    // when a contribution exists, without Vec's four-element
+                    // minimum for the first push or a later shrinking realloc.
+                    if result.is_empty() {
+                        result.reserve_exact(1);
+                    }
                     result.push((
                         purpose.clone(),
                         BoundingBox {
@@ -736,10 +742,11 @@ impl BoundsCache {
                 reduction.build();
             }
             reduction.dirty.clear();
-            result = reduction.bounds(component_to_local);
+            let result = reduction.bounds(component_to_local);
             self.reductions.insert(path, reduction);
+            return Ok((result, varying));
         }
-        Ok((result, varying))
+        Ok((result.into_boxed_slice(), varying))
     }
 }
 fn vectors(prim: &PrimView<'_>, name: &str, time: Time) -> Option<Vec<[f32; 3]>> {
@@ -794,7 +801,6 @@ mod tests {
 
     #[test]
     fn parent_inputs_retire_with_changed_subtrees() {
-        use crate::usd_geom::ImageablePurpose;
         let mut store = InMemoryStore::default();
         let root = store.path("/World");
         let group = store.path("/World/Group");

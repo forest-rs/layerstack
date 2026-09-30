@@ -3362,6 +3362,32 @@ mod tests {
         assert!(decode_value(&RawValueRep::new(bytes), &[], &sections).is_err());
     }
 
+    #[test]
+    fn array_edit_rejects_literals_of_another_actual_kind() {
+        let mut data = vec![0; 25];
+        // The edit representation says float, independently of any attribute
+        // declaration. Its payload must also contain float literals.
+        data[8 + 6] = ValueType::Double as u8;
+        data[8 + 7] = 0x80; // empty double[]
+        data[16 + 6] = ValueType::Int64 as u8;
+        data[16 + 7] = 0x80; // empty instruction array
+        let mut bytes = [0; 8];
+        bytes[0] = 8;
+        bytes[6] = ValueType::Float as u8;
+        bytes[7] = 0x10;
+        assert_eq!(
+            decode_value(
+                &RawValueRep::new(bytes),
+                &data,
+                &sections_with(CrateVersion::ARRAY_EDITS),
+            )
+            .err(),
+            Some(UsdcError::Inconsistent {
+                message: "array edit literals are not an array of the element type",
+            })
+        );
+    }
+
     fn sections_with(version: CrateVersion) -> CrateSections {
         CrateSections {
             tokens: vec!["./ref.usd".into(), "note".into()],

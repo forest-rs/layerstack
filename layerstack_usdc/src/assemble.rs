@@ -1119,7 +1119,15 @@ impl<'a> AssembleCtx<'a> {
                 // Splines are handled as FieldValue::Spline, not plain values.
                 Value::Null
             }
-            CrateValue::ArrayEdit(edit) => Value::ArrayEdit(self.convert_array_edit(edit)),
+            CrateValue::ArrayEdit(edit) => {
+                // OpenUSD crateFile::_ValueHandler::PackArrayEdit keeps T in the
+                // value representation even for an identity edit. The Sdf
+                // attribute declaration is independent of that actual kind.
+                let name = array_edit_element_name(edit.element_type);
+                let value_type =
+                    PropertyType::new(name, true, default_scalar_for_type(name, self.tokens));
+                Value::typed_array_edit(self.convert_array_edit(edit), value_type)
+            }
         }
     }
 
@@ -1941,6 +1949,45 @@ fn crate_value_is_array(value: &CrateValue) -> bool {
     }
 }
 
+fn array_edit_element_name(value_type: ValueType) -> &'static str {
+    match value_type {
+        ValueType::Bool => "bool",
+        ValueType::UChar => "uchar",
+        ValueType::Int => "int",
+        ValueType::UInt => "uint",
+        ValueType::Int64 => "int64",
+        ValueType::UInt64 => "uint64",
+        ValueType::Half => "half",
+        ValueType::Float => "float",
+        ValueType::Double => "double",
+        ValueType::String => "string",
+        ValueType::Token => "token",
+        ValueType::AssetPath => "asset",
+        ValueType::Matrix2d => "matrix2d",
+        ValueType::Matrix3d => "matrix3d",
+        ValueType::Matrix4d => "matrix4d",
+        ValueType::Quatd => "quatd",
+        ValueType::Quatf => "quatf",
+        ValueType::Quath => "quath",
+        ValueType::Vec2d => "double2",
+        ValueType::Vec2f => "float2",
+        ValueType::Vec2h => "half2",
+        ValueType::Vec2i => "int2",
+        ValueType::Vec3d => "double3",
+        ValueType::Vec3f => "float3",
+        ValueType::Vec3h => "half3",
+        ValueType::Vec3i => "int3",
+        ValueType::Vec4d => "double4",
+        ValueType::Vec4f => "float4",
+        ValueType::Vec4h => "half4",
+        ValueType::Vec4i => "int4",
+        ValueType::TimeCode => "timecode",
+        ValueType::PathExpression => "pathExpression",
+        // decode_array_edit rejects these before a CrateArrayEdit is built.
+        _ => unreachable!("decoded array edit has an array element type"),
+    }
+}
+
 fn default_scalar_for_type(type_hint: &str, tokens: &mut TokenInterner) -> Value {
     match type_hint {
         "bool" => Value::Bool(false),
@@ -2122,6 +2169,74 @@ mod tests {
 
         fn resolved_path(&self, _: LayerId) -> Option<&str> {
             None
+        }
+    }
+
+    #[test]
+    fn identity_array_edits_retain_actual_kind_independently_of_declaration() {
+        for byte in (1..=30).chain([56, 57]) {
+            let kind = ValueType::try_from(byte).unwrap();
+            let mut edit_rep = [0; 8];
+            edit_rep[6] = byte;
+            edit_rep[7] = 0x10; // identity edit, no payload or literals
+            let mut declaration_rep = [0; 8];
+            declaration_rep[0] = 2; // token index of "double[]"
+            declaration_rep[6] = ValueType::Token as u8;
+            declaration_rep[7] = 0x40;
+            let sections = CrateSections {
+                tokens: alloc::vec!["default".into(), "typeName".into(), "double[]".into()],
+                strings: Vec::new(),
+                fields: alloc::vec![
+                    FieldDef {
+                        token_index: 0,
+                        value_rep: edit_rep
+                    },
+                    FieldDef {
+                        token_index: 1,
+                        value_rep: declaration_rep
+                    },
+                ],
+                fieldsets: alloc::vec![-1, 0, 1, -1],
+                paths: alloc::vec!["/A".into(), "/A.a".into()],
+                specs: alloc::vec![
+                    SpecDef {
+                        path_index: 0,
+                        fieldset_index: 0,
+                        form: SpecForm::Prim
+                    },
+                    SpecDef {
+                        path_index: 1,
+                        fieldset_index: 1,
+                        form: SpecForm::Attribute
+                    },
+                ],
+                version: CrateVersion::NEWEST_READABLE,
+            };
+            let mut tokens = TokenInterner::default();
+            let read = assemble(
+                &[],
+                &sections,
+                LayerId(1),
+                &mut tokens,
+                &mut PathInterner::default(),
+                &mut NoAssets,
+                &mut DecodeBudget::with_limit(10_000),
+            )
+            .unwrap();
+            let property = &read.layer.prims.values().next().unwrap().properties[0].spec;
+            assert_eq!(
+                property.type_name.as_ref().unwrap().type_name.as_ref(),
+                "double"
+            );
+            let value = property.default.as_ref().unwrap();
+            assert!(value.array_edit_ref().unwrap().ops.is_empty());
+            let actual = value.array_edit_type().unwrap();
+            assert_eq!(actual.type_name.as_ref(), array_edit_element_name(kind));
+            assert!(actual.is_array);
+            assert_eq!(
+                actual.default_scalar,
+                default_scalar_for_type(array_edit_element_name(kind), &mut tokens)
+            );
         }
     }
 

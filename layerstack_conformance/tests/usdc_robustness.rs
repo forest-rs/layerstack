@@ -474,7 +474,7 @@ fn shared_array_edit_literals_stay_within_the_budget() {
     let mut literal_ops = 0;
     for prim in read.layer.prims.values() {
         for entry in &prim.properties {
-            let Some(Value::ArrayEdit(edit)) = &entry.spec.default else {
+            let Some(edit) = entry.spec.default.as_ref().and_then(Value::array_edit_ref) else {
                 continue;
             };
             for op in &edit.ops {

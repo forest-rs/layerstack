@@ -411,10 +411,20 @@ fn authored(name: &str, prim: &str, attribute: &str) -> PropertySpec {
 }
 
 fn authored_edit(prim: &str, attribute: &str) -> ArrayEdit {
-    match authored("array_edits_strong.usdc", prim, attribute).default {
-        Some(Value::ArrayEdit(edit)) => edit,
-        other => panic!("{prim}.{attribute} is not an array edit: {other:?}"),
-    }
+    let value = authored("array_edits_strong.usdc", prim, attribute)
+        .default
+        .unwrap();
+    let actual = value.array_edit_type().expect("actual array edit type");
+    assert_eq!(
+        actual.default_scalar,
+        Value::Int(0),
+        "{prim}.{attribute}: int array edit"
+    );
+    assert!(
+        actual.is_array,
+        "{prim}.{attribute}: actual type is an array"
+    );
+    value.array_edit_ref().expect("array edit").clone()
 }
 
 fn lit(value: i32) -> ArrayEditOperand {
@@ -539,7 +549,8 @@ fn array_edits_decode_to_the_authored_instructions() {
             assert!(
                 samples
                     .iter()
-                    .all(|(_, value)| matches!(value, Value::ArrayEdit(_)))
+                    .all(|(_, value)| value.array_edit_ref().is_some()
+                        && value.array_edit_type().unwrap().default_scalar == Value::Int(0))
             );
         }
         other => panic!("expected time samples, got {other:?}"),

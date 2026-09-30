@@ -38,6 +38,43 @@ const MIN_COMPRESSED_ARRAY_SIZE: usize = 16;
 /// Largest value-representation payload (48 bits).
 const MAX_PAYLOAD: u64 = (1 << 48) - 1;
 
+/// Cheap, bitwise equality for common metadata leaves. Other kinds fall
+/// through to canonical encoded-byte deduplication, not `Value::PartialEq`,
+/// whose numerical float equality would conflate signed zeros.
+fn same_metadata_value(a: &Value, b: &Value) -> bool {
+    match (a, b) {
+        (Value::Float(a), Value::Float(b)) => a.to_bits() == b.to_bits(),
+        (Value::Double(a), Value::Double(b)) | (Value::TimeCode(a), Value::TimeCode(b)) => {
+            a.to_bits() == b.to_bits()
+        }
+        (a, b)
+            if matches!(
+                a,
+                Value::Block
+                    | Value::Bool(_)
+                    | Value::UChar(_)
+                    | Value::Int(_)
+                    | Value::UInt(_)
+                    | Value::Int64(_)
+                    | Value::UInt64(_)
+                    | Value::Half(_)
+                    | Value::String(_)
+                    | Value::Token(_)
+                    | Value::Asset(_)
+                    | Value::Specifier(_)
+                    | Value::Variability(_)
+                    | Value::Permission(_)
+            ) =>
+        {
+            a == b
+        }
+        (a, b) => match (Array::from_value(a), Array::from_value(b)) {
+            (Some(a), Some(b)) => a.same(b),
+            _ => false,
+        },
+    }
+}
+
 // ── Value representations ────────────────────────────────────────────────
 
 const ARRAY_BIT: u64 = 1 << 63;
@@ -95,11 +132,15 @@ fn index(len: usize) -> Result<u32, UsdcWriteError> {
         .ok_or(UsdcWriteError::TooLarge)
 }
 
+type SortedDictionary<'a> = SmallVec<[&'a (String, Value); 8]>;
+
 /// The tables and value data of a file being written.
 struct Packer<'a> {
     /// Bootstrap placeholder, then value data, then sections.
     out: Vec<u8>,
     arrays: ArrayDedup<'a>,
+    /// Last sorted map of each size: a borrowed fast path before child packing.
+    dictionaries: HashMap<usize, (SortedDictionary<'a>, u64)>,
     tokens: Vec<String>,
     token_index: BTreeMap<String, u32>,
     /// Token index of each string (`_strings`).
@@ -141,6 +182,7 @@ impl<'a> Packer<'a> {
             specs: Vec::new(),
             blobs: HashMap::default(),
             arrays: ArrayDedup::default(),
+            dictionaries: HashMap::default(),
         };
         // `CrateFile::StartPacking`: token 0 is one that can never be a
         // property name, because the path tree marks property elements by
@@ -231,9 +273,10 @@ impl<'a> Packer<'a> {
         &mut self,
         ty: ValueType,
         flags: u64,
-        bytes: Vec<u8>,
+        bytes: impl AsRef<[u8]>,
         align: bool,
     ) -> Result<u64, UsdcWriteError> {
+        let bytes = bytes.as_ref();
         let index = if align {
             self.out.len().next_multiple_of(8)
         } else {
@@ -243,11 +286,11 @@ impl<'a> Packer<'a> {
             ty as u8,
             flags,
             bytes.len(),
-            self.blobs.hasher().hash_one(&bytes),
+            self.blobs.hasher().hash_one(bytes),
         );
         let candidates = self.blobs.entry(key).or_default();
         for &offset in candidates.iter() {
-            if self.out[offset..offset + bytes.len()] == bytes {
+            if &self.out[offset..offset + bytes.len()] == bytes {
                 return Ok(rep(ty, flags, offset as u64));
             }
         }
@@ -257,7 +300,7 @@ impl<'a> Packer<'a> {
             return Err(UsdcWriteError::TooLarge);
         }
         self.out.resize(index, 0);
-        self.out.extend_from_slice(&bytes);
+        self.out.extend_from_slice(bytes);
         Ok(rep(ty, flags, offset))
     }
 
@@ -295,11 +338,11 @@ impl<'a> Packer<'a> {
             #[allow(clippy::cast_sign_loss, reason = "bit pattern")]
             Value::Int64(v) => match i32::try_from(*v) {
                 Ok(small) => inlined(T::Int64, small as u32),
-                Err(_) => self.blob(T::Int64, 0, v.to_le_bytes().to_vec(), false)?,
+                Err(_) => self.blob(T::Int64, 0, v.to_le_bytes(), false)?,
             },
             Value::UInt64(v) => match u32::try_from(*v) {
                 Ok(small) => inlined(T::UInt64, small),
-                Err(_) => self.blob(T::UInt64, 0, v.to_le_bytes().to_vec(), false)?,
+                Err(_) => self.blob(T::UInt64, 0, v.to_le_bytes(), false)?,
             },
             Value::Half(v) => inlined(T::Half, u32::from(*v)),
             Value::Float(v) => inlined(T::Float, v.to_bits()),
@@ -307,9 +350,9 @@ impl<'a> Packer<'a> {
             // exactly a float.
             Value::Double(v) => match exact_f32(*v) {
                 Some(f) => inlined(T::Double, f.to_bits()),
-                None => self.blob(T::Double, 0, v.to_le_bytes().to_vec(), false)?,
+                None => self.blob(T::Double, 0, v.to_le_bytes(), false)?,
             },
-            Value::TimeCode(v) => self.blob(T::TimeCode, 0, v.to_le_bytes().to_vec(), false)?,
+            Value::TimeCode(v) => self.blob(T::TimeCode, 0, v.to_le_bytes(), false)?,
             Value::String(v) => {
                 site.check_text(v)?;
                 inlined(T::String, self.string(v)?)
@@ -639,35 +682,22 @@ impl<'a> Packer<'a> {
                 field: site.field.into(),
             });
         }
-        let offset = self.out.len() as u64;
-        if offset > MAX_PAYLOAD {
-            return Err(UsdcWriteError::TooLarge);
-        }
-        let at = self.out.len();
-        self.out.extend_from_slice(&[0; 8]);
         let mut times = (samples.len() as u64).to_le_bytes().to_vec();
         for (time, _) in samples {
             times.extend_from_slice(&time.to_le_bytes());
         }
         let times_rep = self.blob(ValueType::DoubleVector, 0, times, false)?;
-        let jump = (self.out.len() - at) as u64;
-        self.out[at..at + 8].copy_from_slice(&jump.to_le_bytes());
-        self.out.extend_from_slice(&times_rep.to_le_bytes());
-
-        let at = self.out.len();
-        self.out.extend_from_slice(&[0; 8]);
-        let mut reps = Vec::with_capacity(samples.len());
+        // Pack dependencies first. Every recursive jump is then eight bytes,
+        // so equal sample maps have equal bytes regardless of where written.
+        let mut bytes = Vec::with_capacity(32 + samples.len() * 8);
+        bytes.extend_from_slice(&8_u64.to_le_bytes());
+        bytes.extend_from_slice(&times_rep.to_le_bytes());
+        bytes.extend_from_slice(&8_u64.to_le_bytes());
+        bytes.extend_from_slice(&(samples.len() as u64).to_le_bytes());
         for (_, value) in samples {
-            reps.push(self.pack(value, site)?);
+            bytes.extend_from_slice(&self.pack(value, site)?.to_le_bytes());
         }
-        let jump = (self.out.len() - at) as u64;
-        self.out[at..at + 8].copy_from_slice(&jump.to_le_bytes());
-        self.out
-            .extend_from_slice(&(samples.len() as u64).to_le_bytes());
-        for value_rep in reps {
-            self.out.extend_from_slice(&value_rep.to_le_bytes());
-        }
-        Ok(rep(ValueType::TimeSamples, 0, offset))
+        self.blob(ValueType::TimeSamples, 0, bytes, false)
     }
 
     /// Adds each text to a table, returning the `u32` indexes as bytes.
@@ -879,8 +909,10 @@ impl<'a> Packer<'a> {
     /// `WriteMap(VtDictionary)`: count, then per entry (in key order) the
     /// key's string index and the value written through
     /// `_RecursiveWrite` — a relative offset to the value representation,
-    /// preceded by any data the value itself needs. An empty dictionary is
-    /// inlined.
+    /// preceded by any data the value itself needs. Dependencies are packed
+    /// before the map, leaving fixed eight-byte jumps and canonical bytes for
+    /// deduplication. OpenUSD's `_ValueHandler<VtDictionary>` likewise shares
+    /// dictionaries. An empty dictionary is inlined.
     fn dictionary(
         &mut self,
         entries: &'a [(String, Value)],
@@ -889,7 +921,7 @@ impl<'a> Packer<'a> {
         if entries.is_empty() {
             return Ok(inlined(ValueType::Dictionary, 0));
         }
-        let mut sorted: Vec<&(String, Value)> = entries.iter().collect();
+        let mut sorted: SortedDictionary<'a> = entries.iter().collect();
         sorted.sort_by(|a, b| a.0.cmp(&b.0));
         if let Some(pair) = sorted.windows(2).find(|w| w[0].0 == w[1].0) {
             return Err(UsdcWriteError::DuplicateDictionaryKey {
@@ -898,24 +930,30 @@ impl<'a> Packer<'a> {
                 key: pair[0].0.clone(),
             });
         }
-        let offset = self.out.len() as u64;
-        if offset > MAX_PAYLOAD {
-            return Err(UsdcWriteError::TooLarge);
+        if let Some((previous, value_rep)) = self.dictionaries.get(&sorted.len())
+            && sorted
+                .iter()
+                .zip(previous)
+                .all(|(a, b)| a.0 == b.0 && same_metadata_value(&a.1, &b.1))
+        {
+            return Ok(*value_rep);
         }
-        self.out
-            .extend_from_slice(&(sorted.len() as u64).to_le_bytes());
-        for (key, value) in sorted {
+        // Small metadata maps need no temporary heap allocation. Large maps
+        // retain a borrowed sort index and encode into a temporary byte buffer,
+        // never cloning the authored values into a deduplication key.
+        let mut bytes: SmallVec<[u8; 256]> = SmallVec::with_capacity(8 + sorted.len() * 20);
+        bytes.extend_from_slice(&(sorted.len() as u64).to_le_bytes());
+        for &(key, value) in &sorted {
             site.check_text(key)?;
             let key = self.string(key)?;
-            self.out.extend_from_slice(&key.to_le_bytes());
-            let at = self.out.len();
-            self.out.extend_from_slice(&[0; 8]);
             let value_rep = self.pack(value, site)?;
-            let jump = (self.out.len() - at) as u64;
-            self.out[at..at + 8].copy_from_slice(&jump.to_le_bytes());
-            self.out.extend_from_slice(&value_rep.to_le_bytes());
+            bytes.extend_from_slice(&key.to_le_bytes());
+            bytes.extend_from_slice(&8_u64.to_le_bytes());
+            bytes.extend_from_slice(&value_rep.to_le_bytes());
         }
-        Ok(rep(ValueType::Dictionary, 0, offset))
+        let value_rep = self.blob(ValueType::Dictionary, 0, bytes, false)?;
+        self.dictionaries.insert(sorted.len(), (sorted, value_rep));
+        Ok(value_rep)
     }
 
     /// `Write(SdfUnregisteredValue)`: the held value written through
@@ -923,17 +961,11 @@ impl<'a> Packer<'a> {
     /// offset to the value representation, preceded by any data the value
     /// itself needs.
     fn unregistered(&mut self, inner: &'a Value, site: Site<'_>) -> Result<u64, UsdcWriteError> {
-        let offset = self.out.len() as u64;
-        if offset > MAX_PAYLOAD {
-            return Err(UsdcWriteError::TooLarge);
-        }
-        let at = self.out.len();
-        self.out.extend_from_slice(&[0; 8]);
         let value_rep = self.pack(inner, site)?;
-        let jump = (self.out.len() - at) as u64;
-        self.out[at..at + 8].copy_from_slice(&jump.to_le_bytes());
-        self.out.extend_from_slice(&value_rep.to_le_bytes());
-        Ok(rep(ValueType::UnregisteredValue, 0, offset))
+        let mut bytes = [0_u8; 16];
+        bytes[..8].copy_from_slice(&8_u64.to_le_bytes());
+        bytes[8..].copy_from_slice(&value_rep.to_le_bytes());
+        self.blob(ValueType::UnregisteredValue, 0, bytes, false)
     }
 
     /// A path list op item: the index of an absolute path.
@@ -1575,9 +1607,7 @@ mod blob_tests {
         let mut packer = Packer::new();
         let first_bytes = [1, 2, 3, 4];
         let second_bytes = [1, 2, 3, 5];
-        let first = packer
-            .blob(ValueType::Vec2h, 0, first_bytes.to_vec(), true)
-            .unwrap();
+        let first = packer.blob(ValueType::Vec2h, 0, first_bytes, true).unwrap();
         let first_offset = usize::try_from(first & MAX_PAYLOAD).unwrap();
         // Force an unequal candidate into the second value's hash bucket.
         let key = (
@@ -1588,29 +1618,25 @@ mod blob_tests {
         );
         packer.blobs.entry(key).or_default().push(first_offset);
         let second = packer
-            .blob(ValueType::Vec2h, 0, second_bytes.to_vec(), true)
+            .blob(ValueType::Vec2h, 0, second_bytes, true)
             .unwrap();
         assert_ne!(first, second, "unequal bytes must not deduplicate");
         let end = packer.out.len();
         assert_eq!(
             packer
-                .blob(ValueType::Vec2h, 0, second_bytes.to_vec(), true)
+                .blob(ValueType::Vec2h, 0, second_bytes, true)
                 .unwrap(),
             second
         );
         assert_eq!(packer.out.len(), end);
         packer.out.extend_from_slice(&[0; 4096]);
         assert_eq!(
-            packer
-                .blob(ValueType::Vec2h, 0, first_bytes.to_vec(), true)
-                .unwrap(),
+            packer.blob(ValueType::Vec2h, 0, first_bytes, true).unwrap(),
             first
         );
-        let other_type = packer
-            .blob(ValueType::Vec2f, 0, first_bytes.to_vec(), true)
-            .unwrap();
+        let other_type = packer.blob(ValueType::Vec2f, 0, first_bytes, true).unwrap();
         let other_flags = packer
-            .blob(ValueType::Vec2h, ARRAY_BIT, first_bytes.to_vec(), true)
+            .blob(ValueType::Vec2h, ARRAY_BIT, first_bytes, true)
             .unwrap();
         assert_ne!(other_type & MAX_PAYLOAD, first & MAX_PAYLOAD);
         assert_ne!(other_flags & MAX_PAYLOAD, first & MAX_PAYLOAD);

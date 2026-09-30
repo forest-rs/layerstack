@@ -77,3 +77,7 @@ harness = false
 [[bench]]
 name = "opinionated"
 harness = false
+
+[[bench]]
+name = "usdc_write"
+harness = false

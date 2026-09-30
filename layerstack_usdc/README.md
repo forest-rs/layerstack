@@ -49,6 +49,9 @@ For applications that own crate-level specs and fields, `writer::write_crate`
 provides the lower-level route. The caller supplies hierarchy and field
 semantics explicitly; this is not a replacement for document validation.
 
+Repeated arrays and metadata dictionaries share encoded payloads, including
+nested dictionaries. Sharing preserves value types and floating-point bits.
+
 ## Read a file
 
 [`read_usdc`](https://docs.rs/layerstack_usdc/latest/layerstack_usdc/fn.read_usdc.html)

@@ -1328,6 +1328,137 @@ fn repeated_arrays_reuse_representations_across_all_supported_types() {
 }
 
 #[test]
+fn repeated_dictionaries_share_every_supported_value_kind() {
+    for (name, value) in every_kind() {
+        let value = Value::Dictionary(vec![("value".into(), value)]);
+        let file = Decoded::new(
+            write_crate(&layer_with(&[("first", value.clone()), ("second", value)])).unwrap(),
+        );
+        assert_eq!(
+            file.rep("/Root.first", "default"),
+            file.rep("/Root.second", "default"),
+            "{name}: maps reuse their representation, including recursive values"
+        );
+        assert_eq!(
+            alloc::format!(
+                "{:?}",
+                decode_value(
+                    &file.rep("/Root.first", "default"),
+                    &file.data,
+                    &file.sections
+                )
+                .unwrap()
+            ),
+            alloc::format!(
+                "{:?}",
+                decode_value(
+                    &file.rep("/Root.second", "default"),
+                    &file.data,
+                    &file.sections
+                )
+                .unwrap()
+            ),
+            "{name}: shared map decodes"
+        );
+    }
+}
+
+#[test]
+fn nested_dictionaries_share_independently_of_authored_order() {
+    let nested = Value::Dictionary(vec![
+        ("z".into(), Value::FloatArray(vec![1.25; 32])),
+        ("a".into(), Value::String("shared".into())),
+    ]);
+    let reversed = Value::Dictionary(vec![
+        ("a".into(), Value::String("shared".into())),
+        ("z".into(), Value::FloatArray(vec![1.25; 32])),
+    ]);
+    let values = [
+        (
+            "a",
+            Value::Dictionary(vec![("child".into(), nested.clone())]),
+        ),
+        ("b", Value::Dictionary(vec![("child".into(), reversed)])),
+        ("child", nested.clone()),
+        ("wrapped", Value::UnregisteredValue(Box::new(nested))),
+    ];
+    let file = Decoded::new(write_crate(&layer_with(&values)).unwrap());
+    assert_eq!(
+        file.rep("/Root.a", "default"),
+        file.rep("/Root.b", "default")
+    );
+    let decoded =
+        decode_value(&file.rep("/Root.a", "default"), &file.data, &file.sections).unwrap();
+    let CrateValue::Dictionary(entries) = decoded else {
+        panic!("expected outer dictionary");
+    };
+    assert_eq!(entries.len(), 1);
+    assert_eq!(entries[0].0, "child");
+    assert_eq!(
+        alloc::format!("{:?}", entries[0].1),
+        alloc::format!(
+            "{:?}",
+            decode_value(
+                &file.rep("/Root.child", "default"),
+                &file.data,
+                &file.sections
+            )
+            .unwrap()
+        )
+    );
+    let child_rep = u64::from_le_bytes(file.rep("/Root.child", "default").bytes);
+    let parent = payload(file.rep("/Root.a", "default"));
+    let nested_rep = u64::from_le_bytes(file.data[parent + 20..parent + 28].try_into().unwrap());
+    assert_eq!(nested_rep, child_rep, "parent uses the shared child map");
+    let wrapped = payload(file.rep("/Root.wrapped", "default"));
+    let wrapped_rep = u64::from_le_bytes(file.data[wrapped + 8..wrapped + 16].try_into().unwrap());
+    assert_eq!(
+        wrapped_rep, child_rep,
+        "unknown field uses the same child map"
+    );
+}
+
+#[test]
+fn dictionary_sharing_preserves_float_bits_and_value_types() {
+    let values = [
+        ("positive", Value::Float(0.0)),
+        ("negative", Value::Float(-0.0)),
+        ("nan1", Value::Float(f32::from_bits(0x7fc0_0001))),
+        ("nan2", Value::Float(f32::from_bits(0x7fc0_0002))),
+        ("double", Value::Double(0.0)),
+        ("token", Value::Token("text".into())),
+        ("string", Value::String("text".into())),
+        ("asset", Value::Asset("text".into())),
+    ]
+    .map(|(name, value)| (name, Value::Dictionary(vec![("value".into(), value)])));
+    let file = Decoded::new(write_crate(&layer_with(&values)).unwrap());
+    for (index, (name, _)) in values.iter().enumerate() {
+        for (other, _) in &values[index + 1..] {
+            assert_ne!(
+                file.rep(&alloc::format!("/Root.{name}"), "default"),
+                file.rep(&alloc::format!("/Root.{other}"), "default"),
+                "{name} != {other}"
+            );
+        }
+    }
+    for (name, bits) in [
+        ("positive", 0),
+        ("negative", 0x8000_0000),
+        ("nan1", 0x7fc0_0001),
+        ("nan2", 0x7fc0_0002),
+    ] {
+        let Value::Dictionary(entries) = file.value(&alloc::format!("/Root.{name}"), "default")
+        else {
+            panic!("dictionary")
+        };
+        let Value::Float(value) = entries[0].1 else {
+            panic!("float")
+        };
+        assert_eq!(value.to_bits(), bits);
+    }
+}
+
+#[test]
 fn text_arrays_keep_their_types_when_interleaved() {
     let texts = vec!["shared".into(), "asset.png".into()];
     let values = [

@@ -174,7 +174,7 @@ impl<'a> Array<'a> {
         })
     }
 
-    fn same(self, other: Self) -> bool {
+    pub(super) fn same(self, other: Self) -> bool {
         self.ty == other.ty && self.components.same(other.components)
     }
 }

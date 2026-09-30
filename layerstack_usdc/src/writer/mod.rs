@@ -38,9 +38,9 @@
 //! Specs are laid out in `Sdf_CrateData::Save` order (prim paths in
 //! `SdfPath` order, then properties grouped by name), whatever order they
 //! are given in; fields keep the given order; dictionaries are written in
-//! key order, as `VtDictionary` holds them. Identical values are stored
-//! once, except dictionaries, which OpenUSD also shares; that only affects
-//! file size.
+//! key order, as `VtDictionary` holds them. Identical values, including nested
+//! dictionaries and recursive sample maps, share their encoded payloads.
+//! Sharing is bitwise: signed zeros and distinct NaN payloads remain distinct.
 //!
 //! # Version
 //!

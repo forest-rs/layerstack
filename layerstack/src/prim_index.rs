@@ -261,9 +261,11 @@ impl PrimIndex {
     }
 
     pub(crate) fn add_opinion(&mut self, opinion: Opinion) {
+        // Most fields have one source. Avoid reserving four large opinions
+        // on the first push; genuinely layered fields grow as usual.
         self.opinions_by_field
             .entry(FieldKey::of(&opinion))
-            .or_default()
+            .or_insert_with(|| Vec::with_capacity(1))
             .push(opinion);
     }
 
@@ -293,7 +295,7 @@ impl PrimIndex {
     ) {
         self.property_types_by_field
             .entry(field)
-            .or_default()
+            .or_insert_with(|| Vec::with_capacity(1))
             .push((key, property_type));
     }
 

@@ -164,7 +164,7 @@ pub mod variant_fallbacks;
 
 pub mod live_stage;
 
-pub use array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
+pub use array_edit::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, TypedArrayEdit};
 pub use asset::{
     AssetResolveError, AssetResolver, ExpressionAssetPath, ResolvedAsset, expression_asset_paths,
 };

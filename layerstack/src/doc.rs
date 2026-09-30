@@ -209,6 +209,11 @@ pub enum Value {
     /// Resolved attribute values never expose this directly; it exists in
     /// authored scene description and during composition.
     ArrayEdit(ArrayEdit),
+    /// A shared sparse edit retaining its actual array value type.
+    ///
+    /// Unlike an attribute declaration, this tag survives literal-free
+    /// programs and inconsistent source declarations. See [`crate::TypedArrayEdit`].
+    TypedArrayEdit(Arc<crate::TypedArrayEdit>),
 }
 
 impl PartialEq for Value {
@@ -260,6 +265,7 @@ impl PartialEq for Value {
             (Self::Matrix4d(a), Self::Matrix4d(b)) => a == b,
             (Self::Dictionary(a), Self::Dictionary(b)) => a == b,
             (Self::ArrayEdit(a), Self::ArrayEdit(b)) => a == b,
+            (Self::TypedArrayEdit(a), Self::TypedArrayEdit(b)) => a == b,
             (
                 Self::Opaque {
                     type_name: at,
@@ -367,6 +373,7 @@ impl fmt::Display for Value {
                 write!(f, "}}")
             }
             Self::ArrayEdit(edit) => write!(f, "edit({} ops)", edit.ops.len()),
+            Self::TypedArrayEdit(edit) => write!(f, "edit({} ops)", edit.edit().ops.len()),
         }
     }
 }
@@ -391,6 +398,33 @@ fn fmt_matrix(f: &mut fmt::Formatter<'_>, m: &[f64], cols: usize) -> fmt::Result
 }
 
 impl Value {
+    /// Stores an edit with its actual array value type, independently of the
+    /// attribute declaration. Clones share the immutable program and type.
+    #[must_use]
+    pub fn typed_array_edit(edit: ArrayEdit, value_type: PropertyType) -> Self {
+        Self::TypedArrayEdit(Arc::new(crate::TypedArrayEdit::new(edit, value_type)))
+    }
+
+    /// Borrows either an untagged generic or a typed sparse edit program.
+    #[must_use]
+    pub fn array_edit_ref(&self) -> Option<&ArrayEdit> {
+        match self {
+            Self::ArrayEdit(edit) => Some(edit),
+            Self::TypedArrayEdit(edit) => Some(edit.edit()),
+            _ => None,
+        }
+    }
+
+    /// The actual type of a tagged edit. Generic host-authored programs have
+    /// no type tag and return `None`.
+    #[must_use]
+    pub fn array_edit_type(&self) -> Option<&PropertyType> {
+        match self {
+            Self::TypedArrayEdit(edit) => Some(edit.value_type()),
+            _ => None,
+        }
+    }
+
     /// Packs a homogeneous numeric array into native storage. Heterogeneous,
     /// string and token arrays keep their general value representation.
     #[must_use]

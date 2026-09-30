@@ -197,6 +197,7 @@ impl ArrayFamily<'_> {
         match value {
             Value::Array(_) | Value::TypedArray(_) => FamilyMember::Dense(value.clone()),
             Value::ArrayEdit(edit) => FamilyMember::Sparse(edit),
+            Value::TypedArrayEdit(edit) => FamilyMember::Sparse(edit.edit()),
             // A sampled block blocks exactly like an authored default block,
             // wherever it is the held sample. OpenUSD 26.08 lets opinions
             // weaker than a held sampled block show through when the block's
@@ -254,6 +255,10 @@ impl OpinionFamily<Opinion> for ArrayFamily<'_> {
     fn seed(&self) -> Self::Value {
         match self.fallback {
             Some(value @ (Value::Array(_) | Value::TypedArray(_))) => value.clone(),
+            Some(Value::TypedArrayEdit(edit)) => Value::array_with_element(
+                apply_to_array(edit.edit(), &[], Some(edit.value_type())),
+                Some(&edit.value_type().default_scalar),
+            ),
             Some(Value::ArrayEdit(edit)) => Value::array_with_element(
                 apply_to_array(edit, &[], self.property_type),
                 self.property_type.map(|p| &p.default_scalar),
@@ -390,7 +395,11 @@ pub(crate) fn reads_array_family(opinion: &Opinion, at_time: bool) -> bool {
     let in_family = |value: &Value| {
         matches!(
             value,
-            Value::Array(_) | Value::TypedArray(_) | Value::ArrayEdit(_) | Value::Blocked
+            Value::Array(_)
+                | Value::TypedArray(_)
+                | Value::ArrayEdit(_)
+                | Value::TypedArrayEdit(_)
+                | Value::Blocked
         )
     };
     if !at_time {
@@ -430,7 +439,10 @@ impl SparseValueFamily {
 
     fn for_value(value: &Value) -> Option<Self> {
         match value {
-            Value::Array(_) | Value::TypedArray(_) | Value::ArrayEdit(_) => Some(Self::Array),
+            Value::Array(_)
+            | Value::TypedArray(_)
+            | Value::ArrayEdit(_)
+            | Value::TypedArrayEdit(_) => Some(Self::Array),
             _ => None,
         }
     }
@@ -485,7 +497,11 @@ fn is_foreign_default(value: &OpinionValue) -> bool {
     value.default_value().is_some_and(|value| {
         !matches!(
             value,
-            Value::Array(_) | Value::TypedArray(_) | Value::ArrayEdit(_) | Value::Blocked
+            Value::Array(_)
+                | Value::TypedArray(_)
+                | Value::ArrayEdit(_)
+                | Value::TypedArrayEdit(_)
+                | Value::Blocked
         )
     })
 }
@@ -669,7 +685,10 @@ impl<'o> Bracket<'o> {
     fn planning_sample(&self, pick: Pick) -> TemporalSample<f64> {
         TemporalSample {
             time: self.time(pick),
-            composes: matches!(self.sample(pick), Some(Value::ArrayEdit(_))),
+            composes: matches!(
+                self.sample(pick),
+                Some(Value::ArrayEdit(_) | Value::TypedArrayEdit(_))
+            ),
         }
     }
 }
@@ -732,13 +751,21 @@ fn plan_brackets<'o>(
         // checks are needed only when sparse composition depends on it; an
         // owned-array converter need not copy a dense result just to check it.
         let composing = !brackets.is_empty()
-            || matches!(bracket.sample(Pick::Lower), Some(Value::ArrayEdit(_)))
-            || matches!(bracket.sample(Pick::Upper), Some(Value::ArrayEdit(_)));
+            || matches!(
+                bracket.sample(Pick::Lower),
+                Some(Value::ArrayEdit(_) | Value::TypedArrayEdit(_))
+            )
+            || matches!(
+                bracket.sample(Pick::Upper),
+                Some(Value::ArrayEdit(_) | Value::TypedArrayEdit(_))
+            );
         let rejected = |value: Option<&Value>| {
             composing
                 && value.is_some_and(|value| {
-                    !matches!(value, Value::ArrayEdit(_) | Value::Blocked)
-                        && accepts.is_some_and(|accepts| !accepts(value))
+                    !matches!(
+                        value,
+                        Value::ArrayEdit(_) | Value::TypedArrayEdit(_) | Value::Blocked
+                    ) && accepts.is_some_and(|accepts| !accepts(value))
                 })
         };
         if rejected(bracket.sample(Pick::Lower)) {
@@ -890,7 +917,13 @@ fn fold_entry(
         .take_while(|bracket| {
             matches!(
                 bracket.sample(entry.picks[bracket.index]),
-                Some(Value::Array(_) | Value::TypedArray(_) | Value::ArrayEdit(_) | Value::Blocked)
+                Some(
+                    Value::Array(_)
+                        | Value::TypedArray(_)
+                        | Value::ArrayEdit(_)
+                        | Value::TypedArrayEdit(_)
+                        | Value::Blocked
+                )
             )
         })
         .map(|bracket| {

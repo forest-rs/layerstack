@@ -328,6 +328,30 @@ pub(crate) fn conforms(ty: &PropertyType, value: &Value) -> bool {
     match value {
         Value::Blocked => true,
         Value::ArrayEdit(_) => ty.is_array,
+        Value::TypedArrayEdit(edit) => {
+            ty.is_array
+                && core::mem::discriminant(&ty.default_scalar)
+                    == core::mem::discriminant(&edit.value_type().default_scalar)
+                && edit.edit().ops.iter().all(|op| match op {
+                    crate::ArrayEditOp::Write {
+                        src: crate::ArrayEditOperand::Literal(value),
+                        ..
+                    }
+                    | crate::ArrayEditOp::Insert {
+                        src: crate::ArrayEditOperand::Literal(value),
+                        ..
+                    }
+                    | crate::ArrayEditOp::MinSizeFill { fill: value, .. }
+                    | crate::ArrayEditOp::ResizeFill { fill: value, .. } => {
+                        // Tagged USD operands already have canonical element storage.
+                        // Accepting tuple spellings here would retain nested arrays
+                        // that cannot satisfy a typed array read.
+                        core::mem::discriminant(&edit.value_type().default_scalar)
+                            == core::mem::discriminant(value)
+                    }
+                    _ => true,
+                })
+        }
         Value::Array(items) if ty.is_array => items.iter().all(|v| scalar_conforms(ty, v)),
         Value::TypedArray(items) if ty.is_array => scalar_conforms(ty, &items.element_kind()),
         _ if ty.is_array => false,
@@ -430,5 +454,75 @@ impl Layer {
     #[must_use]
     pub fn has_spec_at(&self, path: &SpecPath, paths: &PathInterner) -> bool {
         Loc::lookup(path, paths).is_some_and(|loc| spec_at(self, &loc).is_some())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{ArrayEdit, ArrayEditOp};
+    use alloc::vec;
+
+    #[test]
+    fn tagged_tuple_literals_require_canonical_storage() {
+        let ty = PropertyType::new("point3f", true, Value::Vec3f([0.0; 3]));
+        let components = Value::array(vec![
+            Value::Float(1.0),
+            Value::Float(2.0),
+            Value::Float(3.0),
+        ]);
+        for op in [
+            ArrayEditOp::Insert {
+                index: crate::ArrayIndex::Position(0),
+                src: crate::ArrayEditOperand::Literal(components.clone()),
+            },
+            ArrayEditOp::Write {
+                index: crate::ArrayIndex::Position(0),
+                src: crate::ArrayEditOperand::Literal(components.clone()),
+            },
+            ArrayEditOp::ResizeFill {
+                len: 1,
+                fill: components.clone(),
+            },
+            ArrayEditOp::MinSizeFill {
+                len: 1,
+                fill: components,
+            },
+        ] {
+            assert!(!conforms(
+                &ty,
+                &Value::typed_array_edit(ArrayEdit { ops: vec![op] }, ty.clone())
+            ));
+        }
+        let canonical = ArrayEdit {
+            ops: vec![ArrayEditOp::Insert {
+                index: crate::ArrayIndex::Position(0),
+                src: crate::ArrayEditOperand::Literal(Value::Vec3f([1.0, 2.0, 3.0])),
+            }],
+        };
+        assert!(conforms(
+            &ty,
+            &Value::typed_array_edit(canonical, ty.clone())
+        ));
+    }
+
+    #[test]
+    fn tagged_edits_require_the_declared_storage_kind() {
+        let float = PropertyType::new("float", true, Value::Float(0.0));
+        let int = PropertyType::new("int", true, Value::Int(0));
+        let edit = Value::typed_array_edit(
+            ArrayEdit {
+                ops: vec![ArrayEditOp::Resize { len: 3 }],
+            },
+            float.clone(),
+        );
+        assert!(conforms(&float, &edit));
+        assert!(!conforms(&int, &edit));
+        let color = PropertyType::new("color3f", true, Value::Vec3f([0.0; 3]));
+        let point = PropertyType::new("point3f", true, Value::Vec3f([0.0; 3]));
+        assert!(conforms(
+            &point,
+            &Value::typed_array_edit(ArrayEdit::default(), color)
+        ));
     }
 }

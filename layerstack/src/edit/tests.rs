@@ -416,6 +416,52 @@ fn values_must_conform_to_the_declared_type() {
             })
         ));
     }
+    let mut wrong_edit = Transaction::new();
+    wrong_edit.set_default(
+        color.clone(),
+        Value::typed_array_edit(
+            crate::ArrayEdit::default(),
+            PropertyType::new("float", true, Value::Float(0.0)),
+        ),
+    );
+    assert!(matches!(
+        wrong_edit.apply(&mut store),
+        Err(EditError::Rejected {
+            reason: Rejection::TypeMismatch { .. },
+            ..
+        })
+    ));
+    let mut wrong_literal = Transaction::new();
+    wrong_literal.set_default(
+        color.clone(),
+        Value::typed_array_edit(
+            crate::ArrayEdit {
+                ops: vec![crate::ArrayEditOp::ResizeFill {
+                    len: 1,
+                    fill: Value::Int(7),
+                }],
+            },
+            PropertyType::new("point3f", true, Value::Vec3f([0.0; 3])),
+        ),
+    );
+    assert!(matches!(
+        wrong_literal.apply(&mut store),
+        Err(EditError::Rejected {
+            reason: Rejection::TypeMismatch { .. },
+            ..
+        })
+    ));
+    let mut alias_edit = Transaction::new();
+    alias_edit.set_default(
+        color.clone(),
+        Value::typed_array_edit(
+            crate::ArrayEdit::default(),
+            PropertyType::new("point3f", true, Value::Vec3f([0.0; 3])),
+        ),
+    );
+    alias_edit
+        .apply(&mut store)
+        .expect("role aliases share the actual storage kind");
     let mut scalar = Transaction::new();
     scalar.set_default(color, Value::Vec3f([0.5; 3]));
     assert!(

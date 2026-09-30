@@ -1938,7 +1938,7 @@ impl Stage {
                 if matches!(value, Value::Blocked) {
                     break;
                 }
-                if matches!(value, Value::ArrayEdit(_)) {
+                if matches!(value, Value::ArrayEdit(_) | Value::TypedArrayEdit(_)) {
                     let mapped = stage_time::opinions_in_stage_time(&opinions[position..]);
                     let resolved = crate::value_resolution::resolve_sparse_default_matching(
                         &mapped,

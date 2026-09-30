@@ -122,6 +122,9 @@ impl Same for Value {
                         .all(|((ka, va), (kb, vb))| ka == kb && va.same(vb))
             }
             (Self::ArrayEdit(a), Self::ArrayEdit(b)) => a.ops.same(&b.ops),
+            (Self::TypedArrayEdit(a), Self::TypedArrayEdit(b)) => {
+                a.value_type().same(b.value_type()) && a.edit().ops.same(&b.edit().ops)
+            }
             // Halves are stored as raw bits already; the rest hold no float.
             _ => self == other,
         }
@@ -336,6 +339,23 @@ mod tests {
     use alloc::vec;
 
     use super::*;
+
+    #[test]
+    fn tagged_edit_guards_compare_nan_literals_by_bits() {
+        let edit = |bits| {
+            Value::typed_array_edit(
+                crate::ArrayEdit {
+                    ops: vec![ArrayEditOp::ResizeFill {
+                        len: 2,
+                        fill: Value::Double(f64::from_bits(bits)),
+                    }],
+                },
+                PropertyType::new("double", true, Value::Double(0.0)),
+            )
+        };
+        assert!(edit(0x7ff8_0000_0000_0123).same(&edit(0x7ff8_0000_0000_0123)));
+        assert!(!edit(0x7ff8_0000_0000_0123).same(&edit(0x7ff8_0000_0000_0456)));
+    }
 
     #[test]
     fn floats_compare_by_bits_at_any_depth() {

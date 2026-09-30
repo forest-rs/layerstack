@@ -25,6 +25,12 @@ void emit(float value) { std::cout << value; }
 void emit(GfVec3f const &value) {
     std::cout << '[' << value[0] << ',' << value[1] << ',' << value[2] << ']';
 }
+void emit(double value) { std::cout << value; }
+void emit(VtDoubleArray const &value) {
+    std::cout << '[';
+    for (size_t i=0; i<value.size(); ++i) { if (i) std::cout << ','; emit(value[i]); }
+    std::cout << ']';
+}
 void emit(VtFloatArray const &value) {
     std::cout << '[';
     for (size_t i=0; i<value.size(); ++i) {
@@ -66,6 +72,24 @@ void emit(SdfTimeCode const &value) { std::cout << value.GetValue(); }
 void emit(SdfAssetPath const &value) { std::cout << '"' << value.GetAssetPath() << '"'; }
 void emit(SdfPathExpression const &value) { std::cout << '"' << value.GetText() << '"'; }
 
+void emit(VtValue const &value) {
+    if (value.IsHolding<VtFloatArray>()) emit(value.UncheckedGet<VtFloatArray>());
+    else if (value.IsHolding<VtDoubleArray>()) emit(value.UncheckedGet<VtDoubleArray>());
+    else if (value.IsHolding<VtVec3fArray>()) emit(value.UncheckedGet<VtVec3fArray>());
+    else if (value.IsHolding<VtArray<SdfTimeCode>>()) emit(value.UncheckedGet<VtArray<SdfTimeCode>>());
+    else if (value.IsHolding<float>()) emit(value.UncheckedGet<float>());
+    else if (value.IsHolding<double>()) emit(value.UncheckedGet<double>());
+    else std::cout << "null";
+}
+char const *kind(VtValue const &value) {
+    if (value.IsHolding<VtFloatArray>()) return "float[]";
+    if (value.IsHolding<VtDoubleArray>()) return "double[]";
+    if (value.IsHolding<VtVec3fArray>()) return "float3[]";
+    if (value.IsHolding<VtArray<SdfTimeCode>>()) return "timecode[]";
+    if (value.IsHolding<float>()) return "float";
+    if (value.IsHolding<double>()) return "double";
+    return "unsupported";
+}
 template<class T>
 void record(UsdStageRefPtr const &stage, char const *path, bool &first) {
     if (!first) std::cout << ',';
@@ -78,6 +102,17 @@ void record(UsdStageRefPtr const &stage, char const *path, bool &first) {
     std::cout << ",\"numeric\":";
     if (attr.Get(&result, UsdTimeCode(9))) emit(result);
     else std::cout << "null";
+    if (std::string(path).rfind("/Sparse", 0)==0) {
+        VtValue raw;
+        std::cout << ",\"rawDefault\":";
+        if (attr.Get(&raw, UsdTimeCode::Default())) {
+            emit(raw); std::cout << ",\"rawDefaultKind\":\"" << kind(raw) << "\"";
+        } else std::cout << "null";
+        std::cout << ",\"rawNumeric\":";
+        if (attr.Get(&raw, UsdTimeCode(9))) {
+            emit(raw); std::cout << ",\"rawNumericKind\":\"" << kind(raw) << "\"";
+        } else std::cout << "null";
+    }
     std::cout << '}';
 }
 int main(int argc, char **argv) {
@@ -101,6 +136,10 @@ int main(int argc, char **argv) {
     weakLayer->SetField(SdfPath("/MisdeclaredTimeArray.value"), TfToken("default"), VtValue(VtArray<SdfTimeCode>{SdfTimeCode(2)}));
     weakLayer->SetField(SdfPath("/MisdeclaredTimeArray.value"), TfToken("timeSamples"),
         VtValue(SdfTimeSampleMap{{0, VtValue(VtArray<SdfTimeCode>{SdfTimeCode(2)})}, {10, VtValue(VtArray<SdfTimeCode>{SdfTimeCode(4)})}}));
+    stage->GetRootLayer()->SetField(SdfPath("/SparseMisdeclaredEdit.value"), TfToken("typeName"), VtValue(TfToken("double[]")));
+    weakLayer->SetField(SdfPath("/SparseMisdeclaredWeakEdit.value"), TfToken("typeName"), VtValue(TfToken("float[]")));
+    weakLayer->SetField(SdfPath("/SparseWrongEditUpper.value"), TfToken("timeSamples"),
+        VtValue(SdfTimeSampleMap{{0, weakLayer->GetField(SdfPath("/SparseWrongEditUpper.value"), TfToken("default"))}, {10, weakLayer->GetField(SdfPath("/SparseMixedEdits.value"), TfToken("default"))}}));
     bool first=true;
     std::cout << std::showpoint << std::setprecision(17);
     std::cout << '{';
@@ -116,12 +155,22 @@ int main(int argc, char **argv) {
     record<SdfTimeCode>(stage,"/MisdeclaredTime.value",first);
     record<SdfTimeCode>(stage,"/MisdeclaredNumeric.value",first);
     record<VtArray<SdfTimeCode>>(stage,"/MisdeclaredTimeArray.value",first);
+    record<VtArray<SdfTimeCode>>(stage,"/SparseTimeResize.value",first);
+    record<VtArray<SdfTimeCode>>(stage,"/SparseTimeLiteral.value",first);
     for (char const *path : {"/SparseCompatibleBase.value", "/SparseSampledBase.value",
                             "/SparseScalarBase.value", "/SparseWrongDense.value",
-                            "/SparseWrongLower.value", "/SparseWrongUpper.value"})
+                            "/SparseWrongLower.value", "/SparseWrongUpper.value",
+                            "/SparseFillDeclaration.value", "/SparseMixedEdits.value",
+                            "/SparseMisdeclaredEdit.value", "/SparseMisdeclaredWeakEdit.value",
+                            "/SparseDeclaration.value", "/SparseConnection.value", "/SparseContribution.value",
+                            "/SparseWrongEditUpper.value", "/SparseEmptySamples.value",
+                            "/SparseEmptyDeclaration.value"})
         record<VtFloatArray>(stage,path,first);
     record<GfVec3f>(stage,"/Vector.value",first);
+    record<GfVec3f>(stage,"/EmptySamplesXform.xformOp:translate",first);
     record<VtVec3fArray>(stage,"/Array.value",first);
+    record<VtVec3fArray>(stage,"/SparseResizeKind.value",first);
+    record<VtVec3fArray>(stage,"/SparseDeleteKind.value",first);
     record<GfMatrix4d>(stage,"/Matrix.value",first);
     record<SdfTimeCode>(stage,"/Time.value",first);
     record<SdfAssetPath>(stage,"/Asset.value",first);

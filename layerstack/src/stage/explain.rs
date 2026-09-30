@@ -16,13 +16,14 @@
 //! repeated reads; an explanation is a one-off diagnostic and is never cached
 //! or consulted by resolution.
 //!
-//! The folds themselves are [`opinionated`]'s: explanation runs the same
-//! chains through the kernel's reporting entry points
+//! Generic folds use [`opinionated`]: explanation runs the same chains
+//! through the kernel's reporting entry points
 //! ([`opinionated::resolve_family_chain_report`],
 //! [`opinionated::combine_dictionary_chain_report`] and
 //! [`opinionated::resolve_ordered_chain_report`]) and attaches layer, spec
 //! and composition-node provenance to their events. Resolution itself never
-//! reports, so it pays nothing for this.
+//! reports, so it pays nothing for this. USD actual-kind grouping is reported
+//! by the host's default composer and numeric source planner.
 //!
 //! Spec: AOUSD Core §12 (value resolution): §12.2.5 (dictionaries combine),
 //! §12.2.6 (list ops), §12.3.1 (default values), §12.3.2 (time samples and
@@ -597,7 +598,10 @@ impl Stage {
     ) -> ValueExplanation<'s, Value> {
         let mut roles = Roles::new(index, opinions);
         let reads = |opinion: &Opinion| {
-            opinion.value.time_samples().is_some()
+            opinion
+                .value
+                .time_samples()
+                .is_some_and(|samples| !samples.is_empty())
                 || opinion.value.spline().is_some()
                 || opinion.value.default_value().is_some()
         };
@@ -939,7 +943,10 @@ impl<'s> Roles<'s> {
         interp: InterpolationType,
     ) -> Option<(f64, f64)> {
         let opinion = &self.opinions[position];
-        let samples = opinion.value.time_samples()?;
+        let samples = opinion
+            .value
+            .time_samples()
+            .filter(|samples| !samples.is_empty())?;
         let offset = opinion.layer_offset;
         let to_stage = |index: usize| samples[index].0 * offset.scale + offset.offset;
         let (lower, upper) =

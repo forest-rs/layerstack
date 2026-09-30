@@ -1048,6 +1048,27 @@ impl Stage {
             });
         }
 
+        if strongest_default.is_some_and(|opinion| {
+            opinion
+                .value
+                .default_value()
+                .is_some_and(|value| value.array_edit_type().is_some())
+        }) {
+            let (result, source) = crate::value_resolution::resolve_sparse_default_matching_source(
+                opinions,
+                property_type,
+                fallback,
+                |_| true,
+            );
+            return match result {
+                SparseResolveResult::Resolved(value) => Some(Resolved {
+                    value: ResolvedValue::Scalar(value),
+                    provenance: source.and_then(|i| self.provenance_for(field, &opinions[i])),
+                }),
+                _ => None,
+            };
+        }
+
         match resolve_sparse_value(opinions, SparseQuery::Default { fallback }, property_type) {
             SparseResolveResult::Resolved(value) => {
                 return Some(Resolved {
@@ -1188,7 +1209,17 @@ impl Stage {
             SparseResolveResult::Resolved(value) => {
                 return Some(Resolved {
                     value,
-                    provenance: self.provenance_for(field, opinions.first()?),
+                    provenance: opinions
+                        .iter()
+                        .find(|opinion| {
+                            opinion.value.default_value().is_some()
+                                || opinion
+                                    .value
+                                    .time_samples()
+                                    .is_some_and(|samples| !samples.is_empty())
+                                || opinion.value.spline().is_some()
+                        })
+                        .and_then(|opinion| self.provenance_for(field, opinion)),
                 });
             }
             SparseResolveResult::Blocked => return None,
@@ -1940,21 +1971,22 @@ impl Stage {
                 }
                 if matches!(value, Value::ArrayEdit(_) | Value::TypedArrayEdit(_)) {
                     let mapped = stage_time::opinions_in_stage_time(&opinions[position..]);
-                    let resolved = crate::value_resolution::resolve_sparse_default_matching(
-                        &mapped,
-                        index.property_type_for(&field),
-                        fallback,
-                        |value| read(value).is_some(),
-                    );
+                    let (resolved, source) =
+                        crate::value_resolution::resolve_sparse_default_matching_source(
+                            &mapped,
+                            index.property_type_for(&field),
+                            fallback,
+                            |value| read(value).is_some(),
+                        );
                     if let SparseResolveResult::Resolved(value) = resolved
                         && let Some(value) = read(&value)
                     {
                         return Some(Resolved {
                             value,
-                            provenance: self.provenance_for(field, opinion),
+                            provenance: source.and_then(|i| self.provenance_for(field, &mapped[i])),
                         });
                     }
-                    continue;
+                    return None;
                 }
                 // Compositional families must resolve as a family, never by
                 // feeding one uncomposed authored edit to the conversion.
@@ -2392,7 +2424,11 @@ pub(crate) fn value_at_time(
     // Apply the opinion's accumulated layer offset to remap the query time
     // before sampling.
     let mapped_time = opinion.layer_offset.map_time(time);
-    let value = if let Some(samples) = opinion.value.time_samples() {
+    let value = if let Some(samples) = opinion
+        .value
+        .time_samples()
+        .filter(|samples| !samples.is_empty())
+    {
         interpolate_samples(samples, mapped_time, interp)
     } else if let Some(spline) = opinion.value.spline() {
         // A spline that evaluates to nothing (block extrapolation or a

@@ -640,7 +640,10 @@ fn transform_op_source<'a>(prim: &Xformable<'a>, name: &str) -> Option<&'a layer
         .explain_property_path(prim.property_path(name)?)?
         .iter()
         .find(|opinion| {
-            opinion.value.time_samples().is_some()
+            opinion
+                .value
+                .time_samples()
+                .is_some_and(|samples| !samples.is_empty())
                 || opinion.value.spline().is_some()
                 || opinion.value.default_value().is_some()
         })

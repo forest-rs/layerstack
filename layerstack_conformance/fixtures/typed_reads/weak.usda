@@ -130,3 +130,72 @@ def DistantLight "MisdeclaredTimeArray"
     float[] value = [2]
     float[] value.timeSamples = { 0: [2], 10: [4] }
 }
+
+def DistantLight "SparseResizeKind"
+{
+    float3[] value = [(1, 2, 3), (4, 5, 6)]
+}
+def DistantLight "SparseDeleteKind"
+{
+    float3[] value = [(1, 2, 3), (4, 5, 6)]
+}
+
+def DistantLight "SparseFillDeclaration"
+{
+    float[] value = edit [resize 3]
+}
+def DistantLight "SparseMixedEdits"
+{
+    float3[] value = edit [append (9, 8, 7)]
+}
+
+def DistantLight "SparseMisdeclaredEdit"
+{
+    float[] value = [1]
+}
+def DistantLight "SparseMisdeclaredWeakEdit"
+{
+    float3[] value = edit [append (9, 8, 7)]
+}
+def DistantLight "SparseTimeResize"
+{
+    timecode[] value = edit [resize 2]
+}
+def DistantLight "SparseTimeLiteral"
+{
+    timecode[] value = edit [resize 2; append 0]
+}
+
+def DistantLight "SparseDeclaration"
+{
+    float[] value = [1, 2]
+}
+def DistantLight "SparseConnection"
+{
+    float[] value = [1, 2]
+}
+def DistantLight "SparseContribution"
+{
+    float[] value = [1, 2]
+}
+
+def DistantLight "SparseWrongEditUpper"
+{
+    float[] value = edit [append 2]
+    float[] value.timeSamples = { 0: edit [append 2], 10: edit [append 6] }
+}
+
+def Xform "SparseEmptySamples"
+{
+    float[] value = [1, 2]
+}
+def Xform "SparseEmptyDeclaration"
+{
+    float[] value = [1, 2]
+}
+
+def Xform "EmptySamplesXform"
+{
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+    float3 xformOp:translate.timeSamples = { 1: (1, 0, 0), 3: (3, 0, 0) }
+}

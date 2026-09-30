@@ -847,7 +847,10 @@ impl Flattener<'_, '_> {
         // Spec: AOUSD Core §12.3.2 (per opinion, time samples, then a
         // spline, then the default).
         let value_source = opinions.iter().position(|opinion| {
-            opinion.value.time_samples().is_some()
+            opinion
+                .value
+                .time_samples()
+                .is_some_and(|samples| !samples.is_empty())
                 || opinion.value.spline().is_some()
                 || opinion.value.default_value().is_some()
         });
@@ -856,7 +859,12 @@ impl Flattener<'_, '_> {
             let finding_source = self.source(source, true);
             let rescaled = opinions[position..]
                 .iter()
-                .filter(|op| op.value.time_samples().is_some() || op.value.spline().is_some())
+                .filter(|op| {
+                    op.value
+                        .time_samples()
+                        .is_some_and(|samples| !samples.is_empty())
+                        || op.value.spline().is_some()
+                })
                 .find(|op| self.rescaled(op.key.layer_id));
             if let Some(rescaled) = rescaled {
                 // Spec: AOUSD Core §12.3.2.1 (layer time is stage time
@@ -865,7 +873,10 @@ impl Flattener<'_, '_> {
                 // (`PcpLayerStack`), which composition here does not.
                 let source = self.source(rescaled, true);
                 self.lost(path.clone(), Loss::TimeCodesPerSecond, Some(source));
-            } else if source.value.time_samples().is_none()
+            } else if source
+                .value
+                .time_samples()
+                .is_none_or(|samples| samples.is_empty())
                 && let Some(spline) = source.value.spline()
             {
                 let offset = source.layer_offset;
@@ -1206,7 +1217,11 @@ fn composed_samples(
     let mut baked = false;
     let mut retimed_timecodes = false;
     for opinion in opinions {
-        let can_compose = if let Some(samples) = opinion.value.time_samples() {
+        let can_compose = if let Some(samples) = opinion
+            .value
+            .time_samples()
+            .filter(|samples| !samples.is_empty())
+        {
             let offset = opinion.layer_offset;
             let weaker: Vec<(f64, Value)> = samples
                 .iter()
@@ -1274,7 +1289,11 @@ fn composed_samples(
     // What still composes composes over the empty array.
     for (_, sample) in &mut partial {
         if let Some(edit) = sample.array_edit_ref() {
-            *sample = Value::Array(crate::array_edit::apply_to_array(edit, &[], property_type));
+            let ty = sample.array_edit_type().or(property_type);
+            *sample = Value::array_with_element(
+                crate::array_edit::apply_to_array(edit, &[], ty),
+                ty.map(|ty| &ty.default_scalar),
+            );
             baked = true;
         }
     }
@@ -1305,6 +1324,12 @@ fn compose_over(
     property_type: Option<&PropertyType>,
 ) -> Option<Value> {
     let edit = stronger.array_edit_ref()?;
+    if stronger.array_edit_type().is_some()
+        && !crate::value_resolution::edit_matches_value(stronger, weaker)
+    {
+        return None;
+    }
+    let property_type = stronger.array_edit_type().or(property_type);
     match weaker {
         Value::ArrayEdit(_) | Value::TypedArrayEdit(_) => {
             let edit = edit.compose_over(weaker.array_edit_ref()?);

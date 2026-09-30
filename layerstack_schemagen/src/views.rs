@@ -190,8 +190,22 @@ fn rust_type(zero: &Value, is_array: bool) -> Result<Option<RustType>, String> {
         RustType {
             read: format!("::alloc::vec::Vec<{read}>"),
             write: format!("&[{write}]"),
-            read_fn: format!("|v, t| crate::value::read_array(v, t, crate::value::read_{name})"),
-            write_fn: format!("|v, t| crate::value::write_array(v, t, crate::value::write_{name})"),
+            read_fn: if matches!(
+                zero,
+                Value::String(_) | Value::Asset(_) | Value::PathExpression(_) | Value::Token(_)
+            ) {
+                format!("|v, t| crate::value::read_array(v, t, crate::value::read_{name})")
+            } else {
+                format!("crate::value::read_{name}_array")
+            },
+            write_fn: if matches!(
+                zero,
+                Value::String(_) | Value::Asset(_) | Value::PathExpression(_) | Value::Token(_)
+            ) {
+                format!("|v, t| crate::value::write_array(v, t, crate::value::write_{name})")
+            } else {
+                format!("crate::value::write_{name}_array")
+            },
         }
     } else {
         RustType {

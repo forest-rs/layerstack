@@ -45,7 +45,10 @@ pub(crate) fn compute(scene: &Scene<'_>, path: PathId, time: Time) -> Option<(Ra
                     max: point,
                 });
             };
-            if let Some(points) = values.typed().and_then(layerstack::TypedArray::as_vec3f) {
+            if let Some(typed) = values.typed() {
+                // UsdGeomPointBased::ComputeExtent reads VtVec3fArray; an
+                // empty native array still retains its element kind.
+                let points = typed.as_vec3f()?;
                 for point in points {
                     add(*point);
                 }
@@ -104,5 +107,57 @@ fn read<'a, T>(
             code,
             interpolation,
         } => prim.read_value_at(name, code, interpolation, decode),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::sync::Arc;
+    use alloc::vec::Vec;
+    use layerstack::{
+        InMemoryStore, Layer, LayerId, PrimSpec, PropertySpec, Stage, StageOptions, TypedArray,
+    };
+
+    #[test]
+    fn mesh_points_reject_wrong_native_empty_kind() {
+        let mut store = InMemoryStore::default();
+        let path = store.path("/Mesh");
+        let mesh = store.tokens.intern("Mesh");
+        let points = store.tokens.intern("points");
+        for (value, accepted) in [
+            (
+                Value::TypedArray(TypedArray::Vec3f(Arc::new(Vec::new()))),
+                true,
+            ),
+            (
+                Value::TypedArray(TypedArray::Vec3d(Arc::new(Vec::new()))),
+                false,
+            ),
+            (
+                Value::TypedArray(TypedArray::Int(Arc::new(Vec::new()))),
+                false,
+            ),
+        ] {
+            let mut layer = Layer::new(LayerId(1));
+            layer.insert_prim(
+                path,
+                PrimSpec::def()
+                    .with_type_name(mesh)
+                    .with_property(points, PropertySpec::attribute().with_default(value)),
+            );
+            store.insert_layer(layer);
+            let schemas = crate::openusd(&mut store.tokens);
+            let stage = Stage::compose(
+                &mut store,
+                LayerId(1),
+                StageOptions {
+                    schemas: Some(Arc::new(schemas)),
+                    ..StageOptions::default()
+                },
+            );
+            let scene = Scene::new(&stage, &store);
+            assert_eq!(compute(&scene, path, Time::Default).is_some(), accepted);
+        }
     }
 }

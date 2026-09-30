@@ -80,7 +80,7 @@ impl<'a> LODDistanceHeuristic<'a> {
         #[doc = "This defines distance thresholds for LOD transitions in ascending order."]
         #[doc = ""]
         #[doc = "USD attribute `blendThresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
-        blend_thresholds, "blendThresholds", ::alloc::vec::Vec<f32>, |v, t| crate::value::read_array(v, t, crate::value::read_float)
+        blend_thresholds, "blendThresholds", ::alloc::vec::Vec<f32>, crate::value::read_float_array
     }
     /// The USD name of [`Self::bounding_volume`].
     pub const BOUNDING_VOLUME: &'static str = "boundingVolume";
@@ -107,7 +107,7 @@ impl<'a> LODDistanceHeuristic<'a> {
         #[doc = "This defines the distance thresholds for LOD transitions in ascending order."]
         #[doc = ""]
         #[doc = "USD attribute `thresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
-        thresholds, "thresholds", ::alloc::vec::Vec<f32>, |v, t| crate::value::read_array(v, t, crate::value::read_float)
+        thresholds, "thresholds", ::alloc::vec::Vec<f32>, crate::value::read_float_array
     }
 }
 
@@ -144,7 +144,7 @@ impl LODDistanceHeuristicEdit {
         #[doc = "This defines distance thresholds for LOD transitions in ascending order."]
         #[doc = ""]
         #[doc = "USD attribute `blendThresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
-        set_blend_thresholds, "blendThresholds", &[f32], |v, t| crate::value::write_array(v, t, crate::value::write_float)
+        set_blend_thresholds, "blendThresholds", &[f32], crate::value::write_float_array
     }
     set_relationship! {
         #[doc = "Optional relationship to a Boundable prim that defines the bounding volume for this LOD Root, the prim's extent will be used for distance calculation if it is valid (not empty)."]
@@ -162,7 +162,7 @@ impl LODDistanceHeuristicEdit {
         #[doc = "This defines the distance thresholds for LOD transitions in ascending order."]
         #[doc = ""]
         #[doc = "USD attribute `thresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
-        set_thresholds, "thresholds", &[f32], |v, t| crate::value::write_array(v, t, crate::value::write_float)
+        set_thresholds, "thresholds", &[f32], crate::value::write_float_array
     }
 }
 
@@ -570,7 +570,7 @@ impl<'a> LODScreenSizeHeuristic<'a> {
         #[doc = "This defines screen size thresholds for LOD transitions in descending order."]
         #[doc = ""]
         #[doc = "USD attribute `blendThresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
-        blend_thresholds, "blendThresholds", ::alloc::vec::Vec<f32>, |v, t| crate::value::read_array(v, t, crate::value::read_float)
+        blend_thresholds, "blendThresholds", ::alloc::vec::Vec<f32>, crate::value::read_float_array
     }
     /// The USD name of [`Self::bounding_volume`].
     pub const BOUNDING_VOLUME: &'static str = "boundingVolume";
@@ -588,7 +588,7 @@ impl<'a> LODScreenSizeHeuristic<'a> {
         #[doc = "The extent of this LOD Root in local coordinates."]
         #[doc = ""]
         #[doc = "USD attribute `extent` (`float3\\[\\]`; fallback `\\[(-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)\\]`)."]
-        extent, extent_at, "extent", ::alloc::vec::Vec<[f32; 3]>, |v, t| crate::value::read_array(v, t, crate::value::read_float3)
+        extent, extent_at, "extent", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_float3_array
     }
     /// The USD name of [`Self::projection_method`].
     pub const PROJECTION_METHOD: &'static str = "projectionMethod";
@@ -606,7 +606,7 @@ impl<'a> LODScreenSizeHeuristic<'a> {
         #[doc = "The screen size thresholds for LOD transitions in descending order as a fraction of the viewport size."]
         #[doc = ""]
         #[doc = "USD attribute `thresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
-        thresholds, "thresholds", ::alloc::vec::Vec<f32>, |v, t| crate::value::read_array(v, t, crate::value::read_float)
+        thresholds, "thresholds", ::alloc::vec::Vec<f32>, crate::value::read_float_array
     }
 }
 
@@ -643,7 +643,7 @@ impl LODScreenSizeHeuristicEdit {
         #[doc = "This defines screen size thresholds for LOD transitions in descending order."]
         #[doc = ""]
         #[doc = "USD attribute `blendThresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
-        set_blend_thresholds, "blendThresholds", &[f32], |v, t| crate::value::write_array(v, t, crate::value::write_float)
+        set_blend_thresholds, "blendThresholds", &[f32], crate::value::write_float_array
     }
     set_relationship! {
         #[doc = "Optional relationship to a Boundable prim that defines the bounding volume for this LOD Root, used for size calculation if the referenced prim has a valid extent."]
@@ -655,7 +655,7 @@ impl LODScreenSizeHeuristicEdit {
         #[doc = "The extent of this LOD Root in local coordinates."]
         #[doc = ""]
         #[doc = "USD attribute `extent` (`float3\\[\\]`; fallback `\\[(-1.0, -1.0, -1.0), (1.0, 1.0, 1.0)\\]`)."]
-        set_extent, set_extent_at, "extent", &[[f32; 3]], |v, t| crate::value::write_array(v, t, crate::value::write_float3)
+        set_extent, set_extent_at, "extent", &[[f32; 3]], crate::value::write_float3_array
     }
     set_uniform_attribute! {
         #[doc = "Defines how screen size is calculated."]
@@ -667,6 +667,6 @@ impl LODScreenSizeHeuristicEdit {
         #[doc = "The screen size thresholds for LOD transitions in descending order as a fraction of the viewport size."]
         #[doc = ""]
         #[doc = "USD attribute `thresholds` (`float\\[\\]`, uniform; fallback `\\[\\]`)."]
-        set_thresholds, "thresholds", &[f32], |v, t| crate::value::write_array(v, t, crate::value::write_float)
+        set_thresholds, "thresholds", &[f32], crate::value::write_float_array
     }
 }

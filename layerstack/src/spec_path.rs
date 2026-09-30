@@ -11,7 +11,7 @@
 //! edits proposal's discussion of sparse-composed `SdfPathExpression`
 //! provenance.
 
-use alloc::{boxed::Box, string::String, vec::Vec};
+use alloc::{string::String, sync::Arc, vec::Vec};
 
 use crate::{
     interner::{TokenId, TokenInterner},
@@ -54,7 +54,9 @@ pub enum SpecComponent {
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct SpecPath {
     prim_path: PathId,
-    components: Box<[SpecComponent]>,
+    // Opinion keys clone source paths frequently. Components are immutable;
+    // share them while keeping the prim and property identities independent.
+    components: Arc<[SpecComponent]>,
     property: Option<TokenId>,
 }
 
@@ -147,7 +149,7 @@ impl SpecPath {
 
         Self {
             prim_path,
-            components: components.into_boxed_slice(),
+            components: components.into(),
             property: None,
         }
     }
@@ -233,7 +235,7 @@ impl SpecPath {
 
         Ok(Self {
             prim_path,
-            components: components.into_boxed_slice(),
+            components: components.into(),
             property,
         })
     }
@@ -294,7 +296,7 @@ impl SpecPath {
         components.push(SpecComponent::Prim(name));
         Self {
             prim_path: child_prim_path,
-            components: components.into_boxed_slice(),
+            components: components.into(),
             property: None,
         }
     }

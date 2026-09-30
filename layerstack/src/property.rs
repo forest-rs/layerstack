@@ -23,12 +23,56 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use crate::{
-    doc::{FieldEntry, FieldValue, Value, get_field, remove_field, set_field_vec},
+    doc::{
+        FieldEntry, FieldValue, InterpolationType, Value, get_field, remove_field, set_field_vec,
+    },
     interner::TokenId,
     listop::ListOp,
     path::TargetPath,
     spline::SplineData,
 };
+
+/// When a composed property or scene computation is read: the default time, or a time code
+/// with the interpolation between its time samples.
+///
+/// OpenUSD: `UsdTimeCode` with the stage's `UsdInterpolationType`; linear
+/// is OpenUSD's default.
+///
+/// Spec: AOUSD Core §12.3 (default values and time samples), §12.5
+/// (interpolation).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Time {
+    /// The default time: only default values, never time samples.
+    Default,
+    /// A time code, interpolating between time samples as `interpolation`
+    /// says.
+    At {
+        /// The time code.
+        code: f64,
+        /// How values between time samples are interpolated.
+        interpolation: InterpolationType,
+    },
+}
+
+impl Time {
+    /// The time code `code`, interpolating linearly (OpenUSD's default).
+    #[must_use]
+    pub fn at(code: f64) -> Self {
+        Self::At {
+            code,
+            interpolation: InterpolationType::Linear,
+        }
+    }
+
+    /// The time code `code`, holding each time sample until the next.
+    #[must_use]
+    pub fn held(code: f64) -> Self {
+        Self::At {
+            code,
+            interpolation: InterpolationType::Held,
+        }
+    }
+}
 
 /// Declared type information for an authored attribute.
 ///

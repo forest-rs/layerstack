@@ -9,9 +9,11 @@
 //! view of the schema they inherit from, down to [`PrimView`]; views of API
 //! schemas deref to [`PrimView`] directly.
 //!
-//! Getters return the resolved value converted to Rust, or `None` when
-//! there is none (nothing authored and no fallback, a value block, or a
-//! value of another type). For anything a view does not offer, read the
+//! Default-time getters skip incompatible dense opinions and read the first
+//! compatible value or schema fallback, as OpenUSD's typed `Get<T>` does.
+//! Numeric-time getters convert the selected source without retrying weaker
+//! opinions. They return `None` when no compatible value resolves. For
+//! anything a view does not offer, read the
 //! stage directly with [`PrimView::path`] and the property's USD name:
 //! [`Stage::resolve_value_with_schema`] returns the raw
 //! `Resolved<ResolvedValue>` with its provenance.
@@ -22,53 +24,11 @@ use alloc::{string::String, vec::Vec};
 
 use layerstack::{
     InterpolationType, LayerStore, PathId, PropertyKind, PropertyPath, ResolvedValue, Stage,
-    TargetPath, TokenId, TokenInterner, Value,
+    TargetPath, Time, TokenId, TokenInterner, Value,
 };
 
 use crate::edit::SchemaEdit;
 use crate::kind::KindRegistry;
-
-/// When a computation reads the stage: the default time, or a time code
-/// with the interpolation between its time samples.
-///
-/// OpenUSD: `UsdTimeCode` with the stage's `UsdInterpolationType`; linear
-/// is OpenUSD's default.
-///
-/// Spec: AOUSD Core §12.3 (default values and time samples), §12.5
-/// (interpolation).
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Time {
-    /// The default time: only default values, never time samples.
-    Default,
-    /// A time code, interpolating between time samples as `interpolation`
-    /// says.
-    At {
-        /// The time code.
-        code: f64,
-        /// How values between time samples are interpolated.
-        interpolation: InterpolationType,
-    },
-}
-
-impl Time {
-    /// The time code `code`, interpolating linearly (OpenUSD's default).
-    #[must_use]
-    pub fn at(code: f64) -> Self {
-        Self::At {
-            code,
-            interpolation: InterpolationType::Linear,
-        }
-    }
-
-    /// The time code `code`, holding each time sample until the next.
-    #[must_use]
-    pub fn held(code: f64) -> Self {
-        Self::At {
-            code,
-            interpolation: InterpolationType::Held,
-        }
-    }
-}
 
 /// A composed stage and the store it was composed from: what every schema
 /// view reads.
@@ -302,8 +262,11 @@ impl<'a> PrimView<'a> {
         Some(PropertyPath::new(self.path, self.scene.token(name)?))
     }
 
-    /// The resolved value of the property `name`, schema fallback included,
-    /// converted by `read`.
+    /// The first compatible default value of the property `name`, schema
+    /// fallback included, converted by `read`.
+    ///
+    /// OpenUSD: `UsdAttribute::Get<T>` at default time uses the typed
+    /// `MetadataValueComposer`; incompatible dense defaults are skipped.
     ///
     /// Spec: AOUSD Core §12.3 (value resolution), §13.3.2.4 (fallbacks).
     pub(crate) fn read_value<T>(
@@ -312,14 +275,14 @@ impl<'a> PrimView<'a> {
         read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
     ) -> Option<T> {
         let token = self.scene.token(name)?;
-        let resolved =
-            self.scene
-                .stage
-                .resolve_value_with_schema(self.path, token, self.scene.store)?;
-        match resolved.value {
-            ResolvedValue::Scalar(value) => read(&value, self.scene.store.tokens()),
-            _ => None,
-        }
+        self.scene
+            .stage
+            .read_property(
+                PropertyPath::new(self.path, token),
+                Time::Default,
+                |value| read(value, self.scene.store.tokens()),
+            )
+            .map(|resolved| resolved.value)
     }
 
     /// [`PrimView::read_value`] at the time code `time`.
@@ -334,26 +297,51 @@ impl<'a> PrimView<'a> {
         read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
     ) -> Option<T> {
         let token = self.scene.token(name)?;
-        let resolved = self.scene.stage.resolve_value_at_time_with_schema(
-            self.path,
-            token,
-            time,
-            interp,
-            self.scene.store,
-        )?;
-        read(&resolved.value, self.scene.store.tokens())
+        self.scene
+            .stage
+            .read_property(
+                PropertyPath::new(self.path, token),
+                Time::At {
+                    code: time,
+                    interpolation: interp,
+                },
+                |value| read(value, self.scene.store.tokens()),
+            )
+            .map(|resolved| resolved.value)
     }
 
     /// The resolved value of the attribute `name` at `time`, schema
     /// fallback included, as the stage holds it.
     pub(crate) fn raw_value(&self, name: &str, time: Time) -> Option<Value> {
-        let raw = |value: &Value, _: &TokenInterner| Some(value.clone());
         match time {
-            Time::Default => self.read_value(name, raw),
+            Time::Default => {
+                let token = self.scene.token(name)?;
+                let resolved = self.scene.stage.resolve_value_with_schema(
+                    self.path,
+                    token,
+                    self.scene.store,
+                )?;
+                match resolved.value {
+                    ResolvedValue::Scalar(value) => Some(value),
+                    _ => None,
+                }
+            }
             Time::At {
                 code,
                 interpolation,
-            } => self.read_value_at(name, code, interpolation, raw),
+            } => {
+                let token = self.scene.token(name)?;
+                self.scene
+                    .stage
+                    .resolve_value_at_time_with_schema(
+                        self.path,
+                        token,
+                        code,
+                        interpolation,
+                        self.scene.store,
+                    )
+                    .map(|resolved| resolved.value)
+            }
         }
     }
 

@@ -1,0 +1,22 @@
+{
+  "/Skip.inputs:intensity": {"default":3.0000000000000000,"numeric":null},
+  "/Fallback.inputs:intensity": {"default":50000.000000000000,"numeric":null},
+  "/Compatible.inputs:intensity": {"default":7.0000000000000000,"numeric":7.0000000000000000},
+  "/Block.inputs:intensity": {"default":null,"numeric":50000.000000000000},
+  "/BelowBlock.inputs:intensity": {"default":null,"numeric":null},
+  "/Samples.inputs:intensity": {"default":50000.000000000000,"numeric":null},
+  "/NoDefault.inputs:intensity": {"default":3.0000000000000000,"numeric":null},
+  "/NoCompatible.value": {"default":null,"numeric":null},
+  "/WrongExpression.value": {"default":3.0000000000000000,"numeric":null},
+  "/WrongDictionary.value": {"default":3.0000000000000000,"numeric":null},
+  "/WrongEdit.value": {"default":3.0000000000000000,"numeric":null},
+  "/ExpressionBelow.value": {"default":"/World//","numeric":null},
+  "/MisdeclaredTime.value": {"default":9.0000000000000000,"numeric":null},
+  "/SparseCompatibleBase.value": {"default":[1.0000000000000000,4.0000000000000000],"numeric":[4.0000000000000000]},
+  "/Vector.value": {"default":[1.0000000000000000,2.0000000000000000,3.0000000000000000],"numeric":null},
+  "/Array.value": {"default":[[1.0000000000000000,2.0000000000000000,3.0000000000000000],[4.0000000000000000,5.0000000000000000,6.0000000000000000]],"numeric":null},
+  "/Matrix.value": {"default":[[1.0000000000000000,0.0000000000000000,0.0000000000000000,0.0000000000000000],[0.0000000000000000,1.0000000000000000,0.0000000000000000,0.0000000000000000],[0.0000000000000000,0.0000000000000000,1.0000000000000000,0.0000000000000000],[2.0000000000000000,3.0000000000000000,4.0000000000000000,1.0000000000000000]],"numeric":null},
+  "/Time.value": {"default":9.0000000000000000,"numeric":null},
+  "/Asset.value": {"default":"textures/rock.png","numeric":null},
+  "/Expression.value": {"default":"/World//","numeric":null}
+}

@@ -296,6 +296,28 @@ pub(crate) fn resolve_sparse_value(
     family.resolve(opinions, query, property_type, &mut Lean)
 }
 
+/// Default-time typed array folding: incompatible dense bases are skipped
+/// without discarding stronger sparse edits. Numeric queries and untyped
+/// resolution retain their ordinary source-selection rules.
+pub(crate) fn resolve_sparse_default_matching(
+    opinions: &[Opinion],
+    property_type: Option<&PropertyType>,
+    fallback: Option<&Value>,
+    accepts: impl Fn(&Value) -> bool,
+) -> SparseResolveResult {
+    let family = ArrayFamily {
+        property_type,
+        fallback: fallback.filter(|value| accepts(value)),
+    };
+    let opinions = opinions
+        .iter()
+        .filter(|opinion| match opinion.value.default_value() {
+            Some(value @ (Value::Array(_) | Value::TypedArray(_))) => accepts(value),
+            _ => true,
+        });
+    fold_array_chain(&family, opinions, &mut Lean)
+}
+
 /// Resolves exactly as [`resolve_sparse_value`] and reports every fold.
 ///
 /// The folds run through [`resolve_family_chain_report`] instead of

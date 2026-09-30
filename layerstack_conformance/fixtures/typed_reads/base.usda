@@ -1,0 +1,5 @@
+#usda 1.2
+def DistantLight "SparseCompatibleBase"
+{
+    float[] value = [1]
+}

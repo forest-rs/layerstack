@@ -1,0 +1,97 @@
+#usda 1.2
+(subLayers = [@weak.usda@ (offset = 5; scale = 2)])
+over "Skip"
+{
+    double inputs:intensity = 2
+}
+
+over "Fallback"
+{
+    double inputs:intensity = 2
+}
+
+over "Compatible"
+{
+    float inputs:intensity = 7
+}
+
+over "Block"
+{
+    float inputs:intensity = None
+}
+
+over "BelowBlock"
+{
+    double inputs:intensity = 2
+}
+
+over "Samples"
+{
+    double inputs:intensity = 2
+}
+
+over "Vector"
+{
+    double3 value = (8, 9, 10)
+}
+
+over "Array"
+{
+    double3[] value = [(8, 9, 10)]
+}
+
+over "Matrix"
+{
+    float value = 5
+}
+
+over "Time"
+{
+    float value = 5
+}
+
+over "Asset"
+{
+    string value = "wrong"
+}
+
+over "Expression"
+{
+    string value = "wrong"
+}
+over "NoDefault"
+{
+    double inputs:intensity.timeSamples = {1: 20, 3: 30}
+}
+over "NoCompatible"
+{
+    double value = 2
+}
+over "WrongExpression"
+{
+    pathExpression value = "/World//"
+}
+
+over "WrongDictionary"
+{
+    float value = 2
+}
+
+over "WrongEdit"
+{
+    float[] value = edit [append 4]
+}
+
+over "ExpressionBelow"
+{
+    float value = 2
+}
+
+over "MisdeclaredTime"
+{
+    float value = 5
+}
+over "SparseCompatibleBase"
+{
+    float[] value = edit [append 4]
+}

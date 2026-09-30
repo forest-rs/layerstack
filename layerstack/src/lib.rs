@@ -199,7 +199,7 @@ pub use path_expression::PathExpression;
 pub use prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue};
 pub use prim_index_graph::{NodeId, PrimIndexGraph, PrimNode};
 pub use property::{
-    PropertyEntry, PropertyKind, PropertySpec, PropertyType, TimeSample, Variability,
+    PropertyEntry, PropertyKind, PropertySpec, PropertyType, Time, TimeSample, Variability,
 };
 pub use relocates::RelocationTable;
 pub use schema::{

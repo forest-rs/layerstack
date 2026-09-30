@@ -329,9 +329,10 @@ pub use generated::{Domain, OPENUSD_VERSION};
 #[cfg(feature = "usd-geom")]
 pub use imageable::{PurposeInfo, PurposeInputs, Visibility, VisibilityInputs};
 pub use kind::KindRegistry;
+pub use layerstack::Time;
 #[cfg(feature = "usd")]
 pub use predicate::{CollectionPredicate, CollectionPredicates};
-pub use view::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene, Time};
+pub use view::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene};
 #[cfg(feature = "usd-geom")]
 pub use xform::{
     INVERT_PREFIX, LocalTransform, LocalTransformInputs, RESET_XFORM_STACK, RelativeTransform,

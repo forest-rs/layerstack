@@ -12,10 +12,10 @@ mod reduction;
 use reduction::{MIN_CHILDREN, Reduction};
 
 use crate::{
-    gf,
+    Time, gf,
     imageable::{Visibility, VisibilityInputs},
     usd_geom::Imageable,
-    view::{PrimView, Scene, Time},
+    view::{PrimView, Scene},
     xform::XformCache,
 };
 use alloc::{vec, vec::Vec};

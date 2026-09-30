@@ -39,7 +39,7 @@ use crate::{
     path::{PathId, PropertyPath, TargetPath},
     prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue, PrimIndex},
     prim_index_graph::{NodeId, PrimIndexGraph},
-    property::{PropertyKind, PropertySpec, PropertyType, Variability},
+    property::{PropertyKind, PropertySpec, PropertyType, Time, Variability},
     schema::{CannotApply, PrimDefinition, PropertyDefinition, SchemaRegistry},
     spec_path::SpecPath,
     spline::{SplineData, SplineDataType},
@@ -1781,11 +1781,11 @@ impl Stage {
         &self,
         prim: PathId,
         field: TokenId,
-        store: &dyn LayerStore,
+        _store: &dyn LayerStore,
     ) -> Option<Resolved<ResolvedValue>> {
         let index = self.prims.get(&prim);
         let authored = index.and_then(|index| index.property_opinions(field));
-        let fallback = self.schema_fallback(prim, field, store);
+        let fallback = self.schema_fallback(prim, field);
 
         if let (Some(index), Some(opinions)) = (index, authored) {
             let is_value_field = matches!(
@@ -1824,6 +1824,175 @@ impl Stage {
                 }
                 v => ResolvedValue::Scalar(v.clone()),
             },
+            provenance: None,
+        })
+    }
+
+    /// Reads a composed attribute at `time` into the type accepted by `read`,
+    /// including its captured schema fallback and optional source provenance.
+    ///
+    /// At [`Time::Default`], incompatible dense defaults are skipped while
+    /// compatible stronger sparse edits are retained. At numeric times the
+    /// source is selected before conversion: an incompatible selected dense
+    /// value does not expose weaker sources. Untyped queries remain available
+    /// through [`Stage::resolve_property_path`] and
+    /// [`Stage::resolve_property_path_at_time`].
+    ///
+    /// `read` should reject only incompatible storage types. Validate shape
+    /// or range after source selection so malformed authored data cannot
+    /// silently turn into a fallback. Sparse folding can also invoke `read`
+    /// to check candidate bases; shared-buffer conversions avoid temporary
+    /// copies when these buffers are large.
+    ///
+    /// Schema identity and fallbacks belong to the composed stage; token or
+    /// asset interpretation can be supplied by the conversion's own context.
+    /// This method does not need access to the store the stage came from.
+    ///
+    /// OpenUSD: `UsdAttribute::Get<T>`. Spec: AOUSD Core §12.3 (values),
+    /// §12.3.2.1 (layer offsets), §13.3.2.4 (schema fallbacks).
+    #[must_use]
+    pub fn read_property<T>(
+        &self,
+        property: PropertyPath,
+        time: Time,
+        read: impl Fn(&Value) -> Option<T>,
+    ) -> Option<Resolved<T>> {
+        let (prim, field) = (property.prim_path(), property.property());
+        match time {
+            Time::Default => self.read_default(prim, field, read),
+            Time::At {
+                code,
+                interpolation,
+            } => {
+                let fallback = self.schema_fallback(prim, field);
+                let resolved = self.resolve_value_at_time_by(
+                    prim,
+                    field,
+                    code,
+                    interpolation,
+                    Lookup::Property,
+                    fallback,
+                );
+                match resolved {
+                    Some(resolved) => Some(Resolved {
+                        value: read(&resolved.value)?,
+                        provenance: resolved.provenance,
+                    }),
+                    None => self.read_fallback(fallback, &read),
+                }
+            }
+        }
+    }
+
+    /// Reads a default-time attribute into the type accepted by `read`.
+    ///
+    /// Dense opinions whose values `read` cannot accept are skipped in
+    /// strength order; the schema fallback is tried last. This is the typed
+    /// default-time contract of OpenUSD's `UsdAttribute::Get<T>` and
+    /// `MetadataValueComposer`. Numeric-time reads select their source before
+    /// conversion and must not use this method to retry weaker sources.
+    ///
+    /// Values are borrowed for conversion, avoiding an intermediate owned
+    /// copy. Sparse folding also invokes `read` to check candidate dense
+    /// bases; prefer shared-buffer conversions when those buffers are large.
+    /// Layer offsets still map `timecode` values into stage time.
+    /// Dictionaries and path expressions retain the composition rules of
+    /// [`Stage::resolve_value_with_schema`]. Sparse array edits retain stronger
+    /// edits while skipping incompatible dense bases. The documented
+    /// block/fallback behavior of schema resolution applies here too.
+    /// `read` is a conversion, not a filter on the resolved value. Validate the shape or range of a
+    /// compatible value after source selection; returning `None` for malformed
+    /// but correctly typed data would search weaker opinions instead.
+    ///
+    /// Spec: AOUSD Core §12.3 (value resolution), §12.3.2.1 (layer offsets),
+    /// §13.3.2.4 (schema fallbacks). The typed default-time retry is an
+    /// OpenUSD API behavior beyond the untyped value-resolution contract.
+    fn read_default<T>(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        read: impl Fn(&Value) -> Option<T>,
+    ) -> Option<Resolved<T>> {
+        let fallback = self.schema_fallback(prim, field);
+        if let Some((index, opinions)) = self.opinions(prim, field, Lookup::Property) {
+            for (position, opinion) in opinions.iter().enumerate() {
+                let Some(value) = opinion.value.default_value() else {
+                    continue;
+                };
+                if matches!(value, Value::Blocked) {
+                    break;
+                }
+                if matches!(value, Value::ArrayEdit(_)) {
+                    let mapped = stage_time::opinions_in_stage_time(
+                        &opinions[position..],
+                        index.property_type_for(&field),
+                    );
+                    let resolved = crate::value_resolution::resolve_sparse_default_matching(
+                        &mapped,
+                        index.property_type_for(&field),
+                        fallback,
+                        |value| read(value).is_some(),
+                    );
+                    if let SparseResolveResult::Resolved(value) = resolved
+                        && let Some(value) = read(&value)
+                    {
+                        return Some(Resolved {
+                            value,
+                            provenance: self.provenance_for(field, opinion),
+                        });
+                    }
+                    continue;
+                }
+                // Compositional families must resolve as a family, never by
+                // feeding one uncomposed authored edit to the conversion.
+                if matches!(value, Value::Dictionary(_) | Value::PathExpression(_)) {
+                    let Some(resolved) = self.resolve_default(
+                        field,
+                        &opinions[position..],
+                        index.property_type_for(&field),
+                        fallback,
+                    ) else {
+                        break;
+                    };
+                    let value = match resolved.value {
+                        ResolvedValue::Scalar(value) => value,
+                        ResolvedValue::Dictionary(entries) => Value::Dictionary(entries),
+                        _ => return None,
+                    };
+                    if let Some(value) = read(&value) {
+                        return Some(Resolved {
+                            value,
+                            provenance: resolved.provenance,
+                        });
+                    }
+                    continue;
+                }
+                let mapped = stage_time::retime_value(value, opinion.layer_offset);
+                if let Some(value) = read(mapped.as_ref().unwrap_or(value)) {
+                    return Some(Resolved {
+                        value,
+                        provenance: self.provenance_for(field, opinion),
+                    });
+                }
+            }
+        }
+        self.read_fallback(fallback, &read)
+    }
+
+    fn read_fallback<T>(
+        &self,
+        fallback: Option<&Value>,
+        read: &impl Fn(&Value) -> Option<T>,
+    ) -> Option<Resolved<T>> {
+        let fallback = fallback?;
+        let dictionary = match fallback {
+            Value::Dictionary(entries) => Some(Value::Dictionary(combine_dictionary_chain([
+                entries.as_slice(),
+            ]))),
+            _ => None,
+        };
+        Some(Resolved {
+            value: read(dictionary.as_ref().unwrap_or(fallback))?,
             provenance: None,
         })
     }
@@ -1888,9 +2057,9 @@ impl Stage {
         field: TokenId,
         time: f64,
         interp: InterpolationType,
-        store: &dyn LayerStore,
+        _store: &dyn LayerStore,
     ) -> Option<Resolved<Value>> {
-        let fallback = self.schema_fallback(prim, field, store);
+        let fallback = self.schema_fallback(prim, field);
         if let Some(resolved) =
             self.resolve_value_at_time_by(prim, field, time, interp, Lookup::Property, fallback)
         {
@@ -1911,12 +2080,7 @@ impl Stage {
     /// The schema fallback for `field` on `prim`.
     ///
     /// Spec: AOUSD Core §13.3.2.4 (fallback value resolution).
-    fn schema_fallback(
-        &self,
-        prim: PathId,
-        field: TokenId,
-        _store: &dyn LayerStore,
-    ) -> Option<&Value> {
+    fn schema_fallback(&self, prim: PathId, field: TokenId) -> Option<&Value> {
         self.property_definition_ref(prim, field)?.fallback.as_ref()
     }
 
@@ -2807,6 +2971,82 @@ mod tests {
         stage.schemas = Some(Arc::new(registry));
         stage.prepare_type_info(&mut store);
         (stage, store, prim, field)
+    }
+
+    #[test]
+    fn typed_default_read_borrows_the_winning_dense_array() {
+        let (stage, _store, prim, field) = schema_fallback_fixture(vec![
+            FieldValue::Value(Value::Double(2.0)),
+            FieldValue::Value(array_value(&[1, 2])),
+        ]);
+        let opinions = stage.prims[&prim].property_opinions(field).unwrap();
+        let Value::Array(original) = opinions[1].value.default_value().unwrap() else {
+            panic!("array opinion");
+        };
+        let resolved = stage
+            .read_property(
+                PropertyPath::new(prim, field),
+                Time::Default,
+                |value| match value {
+                    Value::Array(items) => Some(items.as_ptr()),
+                    _ => None,
+                },
+            )
+            .unwrap();
+        assert_eq!(resolved.value, original.as_ptr());
+        assert!(resolved.provenance.is_none());
+    }
+
+    #[test]
+    fn typed_default_reads_preserve_compositional_families() {
+        let edit = Value::ArrayEdit(ArrayEdit {
+            ops: vec![ArrayEditOp::Write {
+                src: ArrayEditOperand::Literal(Value::Int(9)),
+                index: ArrayIndex::Position(0),
+            }],
+        });
+        let expression = |text: &str| Value::PathExpression(text.into());
+        let cases = [
+            (
+                vec![edit, array_value(&[1, 2])],
+                array_value(&[5, 6]),
+                int_array_type(),
+                array_value(&[9, 2]),
+            ),
+            (
+                vec![
+                    Value::Dictionary(vec![("a".into(), Value::Int(1))]),
+                    Value::Dictionary(vec![("b".into(), Value::Int(2))]),
+                ],
+                Value::Dictionary(vec![("c".into(), Value::Int(3))]),
+                PropertyType::new("dictionary", false, Value::Dictionary(Vec::new())),
+                Value::Dictionary(vec![
+                    ("a".into(), Value::Int(1)),
+                    ("b".into(), Value::Int(2)),
+                    ("c".into(), Value::Int(3)),
+                ]),
+            ),
+            (
+                vec![expression("/Strong %_")],
+                expression("/Fallback"),
+                PropertyType::new("pathExpression", false, expression("")),
+                expression("/Strong /Fallback"),
+            ),
+        ];
+        for (opinions, fallback, ty, expected) in cases {
+            // An incompatible dense opinion is skipped before the existing
+            // family resolver sees the remaining source stack.
+            let mut chain = vec![FieldValue::Value(Value::Double(2.0))];
+            chain.extend(opinions.into_iter().map(FieldValue::Value));
+            let (stage, _store, prim, field) = schema_fallback_fixture_of(chain, fallback, ty);
+            let resolved = stage
+                .read_property(PropertyPath::new(prim, field), Time::Default, |value| {
+                    (!matches!(value, Value::Double(_))).then(|| value.clone())
+                })
+                .unwrap();
+            assert_eq!(resolved.value, expected);
+            assert!(resolved.provenance.is_none());
+        }
     }
 
     /// A path expression's `%_` composes over the next weaker opinion, and

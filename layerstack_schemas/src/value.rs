@@ -4,8 +4,9 @@
 //! Conversions between layerstack [`Value`]s and the Rust types the views
 //! read and write, one pair per USD value type.
 //!
-//! Each `read_*` returns `None` for a value of another type, so a view
-//! getter reads an attribute authored with the wrong type as no value.
+//! Each `read_*` returns `None` for a value of another type. Default-time
+//! getters use this to skip incompatible dense opinions; numeric-time getters
+//! report no value when the already-selected source has the wrong type.
 //! Quaternions are `[i, j, k, r]`, as layerstack stores them; matrices are
 //! rows, `m[row][column]`, with translations in the last row (AOUSD Core
 //! §6.3). Halves are read and written as `f32`.

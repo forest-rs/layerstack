@@ -17,7 +17,10 @@ use alloc::vec::Vec;
 use layerstack::{PathId, Value};
 
 use crate::usd_geom::{Imageable, ImageablePurpose, VisibilityApi};
-use crate::view::{PrimView, Scene, Time};
+use crate::{
+    Time,
+    view::{PrimView, Scene},
+};
 
 /// A computed visibility.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

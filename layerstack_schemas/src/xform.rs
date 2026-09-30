@@ -25,7 +25,10 @@ use layerstack::{HashMap, Path, PathId, ResolvedValue, TokenId, Value, half};
 
 use crate::gf::{self, Matrix4, Rotation};
 use crate::usd_geom::{Imageable, Xformable};
-use crate::view::{PrimView, Scene, Time};
+use crate::{
+    Time,
+    view::{PrimView, Scene},
+};
 
 /// The `xformOpOrder` entry that makes a prim's transform ignore its
 /// ancestors': the ops before it are ignored too.

@@ -338,11 +338,11 @@ impl Stage {
         &self,
         prim: PathId,
         field: TokenId,
-        store: &dyn LayerStore,
+        _store: &dyn LayerStore,
     ) -> Option<ValueExplanation<'_, ResolvedValue>> {
         let index = self.prims.get(&prim);
         let authored = index.and_then(|index| index.property_opinions(field));
-        let fallback = self.schema_fallback(prim, field, store);
+        let fallback = self.schema_fallback(prim, field);
 
         let mut explained = None;
         if let (Some(index), Some(opinions)) = (index, authored) {
@@ -398,9 +398,9 @@ impl Stage {
         field: TokenId,
         time: f64,
         interp: InterpolationType,
-        store: &dyn LayerStore,
+        _store: &dyn LayerStore,
     ) -> Option<ValueExplanation<'_, Value>> {
-        let fallback = self.schema_fallback(prim, field, store);
+        let fallback = self.schema_fallback(prim, field);
         let seed = fallback;
         let explained = self
             .opinions(prim, field, Lookup::Property)

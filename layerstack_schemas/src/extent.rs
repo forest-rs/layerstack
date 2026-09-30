@@ -19,14 +19,26 @@ pub(crate) fn compute(scene: &Scene<'_>, path: PathId, time: Time) -> Option<(Ra
     if prim.has_authored_value("extent")
         && let Some(range) = read(&prim, "extent", time, |value, tokens| {
             let values = value.array_ref()?;
-            if values.len() != 2 {
+            if let Some(typed) = values.typed() {
+                typed.as_vec3f()?;
+            } else if !values
+                .iter()
+                .all(|value| matches!(&*value, Value::Vec3f(_)))
+            {
                 return None;
             }
-            Some(Range3d {
+            // A float3[] of the wrong length is compatible but malformed.
+            // Accept its type before checking shape, so a default-time read
+            // cannot replace malformed authored data with a schema fallback.
+            if values.len() != 2 {
+                return Some(None);
+            }
+            Some(Some(Range3d {
                 min: crate::value::read_float3(values.get(0)?.as_ref(), tokens)?.map(f64::from),
                 max: crate::value::read_float3(values.get(1)?.as_ref(), tokens)?.map(f64::from),
-            })
+            }))
         })
+        .flatten()
     {
         return Some((range, extent_varying));
     }

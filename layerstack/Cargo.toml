@@ -2,6 +2,7 @@
 name = "layerstack"
 description = "AOUSD-aligned, no_std-friendly composition kernel (layer stacks, variants, references, list ops)."
 readme = "README.md"
+documentation = "https://docs.rs/layerstack"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

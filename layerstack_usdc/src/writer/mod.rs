@@ -49,10 +49,10 @@
 //! (`DEFAULT_NEW_VERSION`, `USD_WRITE_NEW_USDC_FILES_AS_VERSION`), and
 //! upgraded only when a value needs a newer one, as OpenUSD's
 //! `RequestWriteVersionUpgrade` does: `timecode` values require 0.9.0
-//! ([`CrateVersion::TIMECODES`]). No value this writer supports needs
-//! anything newer, so files are readable by every OpenUSD release that
-//! reads crate 0.8.0 (0.9.0 with timecodes), including the ones in Apple's
-//! platforms, and by this crate's reader.
+//! ([`CrateVersion::TIMECODES`]) and splines require 0.12.0
+//! ([`CrateVersion::SPLINES`]). Consumers must support the version required
+//! by the authored values; accepting older crate files does not establish
+//! support for splines.
 //!
 //! Spec: AOUSD Core §16.3 (crate file format).
 

@@ -1,8 +1,11 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! `layerstack` is a small, domain-neutral composition kernel aligned with the
-//! [OpenUSD Core specification][spec].
+//! `layerstack` composes authored layers into a queryable scene description.
+//! A stronger layer can override a field, edit a list, or select a variant while
+//! preserving the weaker source data. Composition follows the
+//! [OpenUSD Core specification][spec]; the value and schema APIs can also serve
+//! applications outside graphics.
 //!
 //! [spec]: https://openusd.org/release/spec_usdcore.html
 //!
@@ -10,9 +13,10 @@
 //!
 //! - **Layer stacks** — recursive sublayers with deterministic strength ordering
 //! - **Stage population** — a composed prim tree from all contributing layers
-//! - **Value resolution** — scalar (strongest-wins) and [`ListOp`] chaining
+//! - **Value resolution** — scalars, [`ListOp`] chaining, recursive dictionaries,
+//!   sparse array edits, time samples and splines
 //! - **Composition arcs** — local, inherits, variants, references, payloads,
-//!   specializes (LIVERPS)
+//!   specializes, and namespace relocates (LIVERPS)
 //! - **Path expressions** — sets of prim and property paths
 //!   ([`PathExpression`]: globs, `//`, predicates, set operators and
 //!   references to other expressions), composed as values and matched
@@ -37,40 +41,84 @@
 //!
 //! # Quick start
 //!
+//! Add `layerstack = "0.1"` to your dependencies. This example authors a base
+//! layer and a stronger local override, then reads their composed value:
+//!
 //! ```
 //! use layerstack::{
-//!     InMemoryStore, Layer, LayerId, PrimSpec, Stage, StageOptions, Value,
+//!     InMemoryStore, Layer, LayerId, PrimSpec, Stage, StageOptions, SublayerEntry, Value,
 //! };
 //!
 //! let mut store = InMemoryStore::default();
 //! let title = store.tokens.intern("title");
 //! let prim = store.path("/Doc");
 //!
-//! let mut layer = Layer::new(LayerId(1));
-//! layer.insert_prim(prim, PrimSpec::def().with_field(title, Value::string("Hello")));
-//! store.insert_layer(layer);
+//! let mut base = Layer::new(LayerId(1));
+//! base.insert_prim(prim, PrimSpec::def().with_field(title, Value::string("Untitled")));
+//! store.insert_layer(base);
 //!
-//! let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+//! let mut local = Layer::new(LayerId(2));
+//! local.sublayers.push(SublayerEntry::new(LayerId(1)));
+//! local.insert_prim(prim, PrimSpec::over().with_field(title, Value::string("Hello")));
+//! store.insert_layer(local);
+//!
+//! let stage = Stage::compose(&mut store, LayerId(2), StageOptions::default());
+//! assert!(stage.composition_errors().is_empty());
 //! let resolved = stage.resolve_field(prim, title).unwrap();
 //! assert_eq!(resolved.value, Value::string("Hello"));
 //! ```
+//!
+//! Composition returns a stage even when some arcs cannot be resolved. Inspect
+//! [`Stage::composition_errors`] before treating the result as complete. Enable
+//! [`StageOptions::with_provenance`] to include the winning source in resolved values.
 //!
 //! # Key types
 //!
 //! | Type | Role |
 //! |------|------|
-//! | [`Stage`] | Immutable composed stage — query values, traverse prims |
-//! | [`LiveStage`] | Mutable stage with incremental recomposition |
-//! | [`InMemoryStore`] | Simple in-memory [`LayerStore`] implementation |
-//! | [`LayerStore`] | Trait for pluggable layer storage |
-//! | [`Value`] / [`FieldValue`] | Scalar values and field containers |
-//! | [`TokenInterner`] / [`PathInterner`] | Interning for strings and paths |
-//! | [`SchemaRegistry`] | Schema definitions and the prim definitions they build |
+//! | [`Layer`] / [`PrimSpec`] | Authored layer and prim opinions |
+//! | [`Stage`] | Read-only composed values and prim hierarchy |
+//! | [`LiveStage`] | Incremental edits, change reports, callbacks and change cursors |
+//! | [`InMemoryStore`] / [`LayerStore`] | Built-in storage and a host storage interface |
+//! | [`Value`] / [`FieldValue`] | Authored values and composition containers |
+//! | [`Path`] / [`PropertyPath`] / [`TargetPath`] / [`SpecPath`] | Distinct prim, property, target, and source-spec paths |
+//! | [`TokenInterner`] / [`PathInterner`] | Store-local token and path handles |
+//! | [`SchemaRegistry`] | Schema definitions, prim definitions and fallback values |
+//! | [`EditTarget`] / [`Transaction`] | Mapped, atomic authoring with preconditions and undo |
 //!
-//! # `no_std` support
+//! [`PathId`] and [`TokenId`] belong to their interners; they are not durable
+//! identities to persist or exchange between unrelated stores.
 //!
-//! This crate is `no_std` by default (uses `alloc`). Enable the **`std`** feature
-//! for `std::error::Error` integration.
+//! # Scope and compatibility
+//!
+//! This crate owns in-memory composition, not file I/O, geometry evaluation, or
+//! material interpretation. Companion crates in the [repository][repo] provide
+//! USDA and USDC readers/writers, USDZ packaging, mesh export, and generated OpenUSD
+//! schema views with transform, bounds and shading queries. Applications supply
+//! asset resolution through [`AssetResolver`] and their own domain behavior.
+//! For composition of already-ordered opinions without USD paths and arcs, see
+//! [`opinionated`](https://docs.rs/opinionated).
+//!
+//! OpenUSD compatibility is bounded by the implemented and tested subset. Value
+//! clips are not evaluated. Feature presence is not a guarantee of full OpenUSD
+//! equivalence. The repository's [conformance harness][conformance] records exact
+//! ordered stack and value checks against upstream fixtures and differential tests
+//! for additional behavior.
+//!
+//! [`LiveStage`] applies transactions or refreshes explicitly reported host edits.
+//! Recomposition can be scoped to affected prims; edits outside the supported local
+//! paths can require a full rebuild. Change reports expose the work performed.
+//! Callbacks and independent change cursors let consumers observe reported edits;
+//! changes to host storage do not notify the stage automatically.
+//!
+//! [repo]: https://github.com/forest-rs/layerstack
+//! [conformance]: https://github.com/forest-rs/layerstack/tree/main/layerstack_conformance
+//!
+//! # Features and Rust version
+//!
+//! Requires **Rust 1.88** or later. The default feature set is empty, and the crate
+//! uses `no_std` with `alloc` (a global allocator is required). The optional `std`
+//! feature currently adds no composition capabilities.
 
 #![no_std]
 

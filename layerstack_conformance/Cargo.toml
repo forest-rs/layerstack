@@ -1,4 +1,5 @@
 [package]
+publish = false
 name = "layerstack_conformance"
 description = "Conformance harness and golden tests for the layerstack crate."
 readme = "README.md"
@@ -14,12 +15,12 @@ categories = ["development-tools::testing"]
 workspace = true
 
 [dependencies]
-layerstack = { path = "../layerstack" }
-layerstack_mesh_export = { path = "../layerstack_mesh_export" }
-layerstack_schemas = { path = "../layerstack_schemas" }
-layerstack_usda = { path = "../layerstack_usda" }
-layerstack_usdc = { path = "../layerstack_usdc" }
-layerstack_usdz = { path = "../layerstack_usdz" }
+layerstack = { workspace = true }
+layerstack_mesh_export = { workspace = true }
+layerstack_schemas = { features = ["all"], workspace = true }
+layerstack_usda = { workspace = true }
+layerstack_usdc = { workspace = true }
+layerstack_usdz = { workspace = true }
 serde = { features = ["derive"], version = "1.0" }
 # `float_roundtrip` parses the bit-exact vectors exactly.
 serde_json = { features = ["float_roundtrip"], version = "1.0" }

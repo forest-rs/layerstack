@@ -12,7 +12,13 @@ env:
   # List of packages that will be checked with the minimum supported Rust version.
   # This should be limited to packages that are intended for publishing.
   RUST_MIN_VER_PKGS: >-
+    -p opinionated
     -p layerstack
+    -p layerstack_schemas
+    -p layerstack_usda
+    -p layerstack_usdc
+    -p layerstack_usdz
+    -p layerstack_mesh_export
   # List of packages that don't support `no_std`.
   RUST_NO_STD_PKGS: >-
     --exclude layerstack_conformance

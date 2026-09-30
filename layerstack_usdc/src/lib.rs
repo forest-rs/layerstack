@@ -13,8 +13,9 @@
 //! does not support.
 //!
 //! The reader operates on a byte slice (`&[u8]`), making it suitable for both
-//! file reads and memory-mapped I/O. The crate is `no_std` by default; enable
-//! the `std` feature for convenience wrappers that accept file paths.
+//! file reads and memory-mapped I/O. The crate uses `no_std` with `alloc` and
+//! requires Rust 1.88 or later. The declared `std` feature currently adds no
+//! APIs; file I/O belongs to the caller.
 //!
 //! For selective access, [`CrateFile`] opens the structural tables and lets
 //! callers inspect specs and decode individual fields on demand. It does not

@@ -6,7 +6,8 @@
 //! Reads USDZ package files per AOUSD Core §16.4 and produces [`Layer`] /
 //! [`PrimSpec`] structures compatible with the layerstack composition engine.
 //! [`write_usdz`] packages already-serialized layers and media into a
-//! conforming archive (see [`writer`]).
+//! archive with the USDZ ZIP layout (see [`writer`]); it does not validate
+//! the serialized contents of its members or collect asset dependencies.
 //!
 //! USDZ is a constrained ZIP archive containing USD layers and associated
 //! media (textures, audio). Constraints (§16.4.1):

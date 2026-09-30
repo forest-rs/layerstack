@@ -10,12 +10,14 @@ rust-version.workspace = true
 license = "(Apache-2.0 OR MIT) AND LicenseRef-TOST-1.0"
 repository.workspace = true
 readme = "README.md"
+documentation = "https://docs.rs/layerstack_schemas"
 keywords = ["usd", "openusd", "schemas", "scene-description"]
 categories = ["graphics"]
 include = [
     "src/**",
     "Cargo.toml",
     "README.md",
+    "CHANGELOG.md",
     "NOTICE",
     "LICENSE-APACHE",
     "LICENSE-MIT",
@@ -48,7 +50,7 @@ usd-mtlx = ["usd-shade"]
 # END GENERATED FEATURES
 
 [dependencies]
-layerstack = { path = "../layerstack" }
+layerstack = { workspace = true }
 # Sines, cosines, arccosines and square roots for transforms in `no_std`;
 # `layerstack` already depends on it.
 libm = { workspace = true }

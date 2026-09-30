@@ -14,6 +14,14 @@ let mut tokens = layerstack::TokenInterner::default();
 let schemas = layerstack_schemas::openusd(&mut tokens);
 ```
 
+[API documentation](https://docs.rs/layerstack_schemas) ·
+[Source](https://github.com/forest-rs/layerstack/tree/main/layerstack_schemas)
+
+Requires Rust **1.88** or later and `no_std + alloc`. Add
+`layerstack_schemas = "0.1"` to your dependencies. To select individual domains,
+disable default features and enable the domain features you need. The optional
+`std` feature currently adds no behavior.
+
 Each domain is a Cargo feature (`usd-geom`, `usd-lux`, …); `all`, the
 default, enables every one.
 
@@ -67,13 +75,6 @@ cargo run -p layerstack_schemagen -- --pxr <site-packages>/pxr --source <OpenUSD
 
 `--check` fails instead when the checked-in files are stale.
 
-## License
-
-The generated tables and views in `src/generated` derive from OpenUSD's schema
-definitions and are under the Tomorrow Open Source Technology License 1.0
-(`LICENSE-TOST-1.0`, `NOTICE`). The rest of the crate is under Apache-2.0 OR
-MIT (`LICENSE-APACHE`, `LICENSE-MIT`).
-
 ### Shading values and port authoring
 
 `Scene::value_sources` follows connections through material and node-graph
@@ -103,5 +104,14 @@ transforms, world bounds and shading providers through edits and time changes.
 Stage callbacks are independently usable; `QuerySession` optionally bundles scene
 ownership and queries. Explicit polling
 reports answer, dependency and provenance changes separately, with bounded causes
-and computation counters. See [the model and limits](../docs/retained-queries.md)
+and computation counters. See [the model and limits](https://github.com/forest-rs/layerstack/blob/main/docs/retained-queries.md)
 and the `retained_queries` example in `layerstack_examples`.
+
+## License
+
+See [CHANGELOG.md](CHANGELOG.md) for release status.
+
+The generated tables and views in `src/generated` derive from OpenUSD's schema
+definitions and are under the Tomorrow Open Source Technology License 1.0
+(`LICENSE-TOST-1.0`, `NOTICE`). The rest of the crate is under Apache-2.0 OR
+MIT (`LICENSE-APACHE`, `LICENSE-MIT`).

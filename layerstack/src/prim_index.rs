@@ -35,7 +35,7 @@ pub enum ArcKind {
     Inherits,
     /// Variants arc.
     Variants,
-    /// Relocates arc (not implemented in v0.1).
+    /// Relocates arc.
     Relocates,
     /// References arc.
     References,

@@ -6,21 +6,22 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-readme = "../README.md"
+readme = "README.md"
+documentation = "https://docs.rs/layerstack_mesh_export"
 keywords = ["usd", "usdz", "mesh", "export", "no-std"]
 categories = ["graphics", "encoding"]
 
 [dependencies]
-layerstack = { path = "../layerstack" }
+layerstack = { workspace = true }
 # The schema, property and token names it authors, so an OpenUSD schema
 # change breaks the build rather than the files.
 layerstack_schemas = { default-features = false, features = [
     "usd-geom",
     "usd-shade",
-], path = "../layerstack_schemas" }
-layerstack_usda = { path = "../layerstack_usda" }
-layerstack_usdc = { path = "../layerstack_usdc" }
-layerstack_usdz = { path = "../layerstack_usdz" }
+], workspace = true }
+layerstack_usda = { workspace = true }
+layerstack_usdc = { workspace = true }
+layerstack_usdz = { workspace = true }
 # Square roots for instance transforms in `no_std`; `layerstack` already
 # depends on it.
 libm = { workspace = true }

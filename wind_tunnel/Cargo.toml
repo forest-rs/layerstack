@@ -14,12 +14,12 @@ publish = false
 workspace = true
 
 [dependencies]
-layerstack = { path = "../layerstack" }
+layerstack = { workspace = true }
 
 [dev-dependencies]
 criterion = { features = ["html_reports"], version = "0.8" }
-layerstack_schemas = { default-features = false, features = ["usd-geom", "usd-shade"], path = "../layerstack_schemas" }
-layerstack_usdc = { path = "../layerstack_usdc" }
+layerstack_schemas = { default-features = false, features = ["usd-geom", "usd-shade"], workspace = true }
+layerstack_usdc = { workspace = true }
 opinionated.workspace = true
 
 [[bench]]

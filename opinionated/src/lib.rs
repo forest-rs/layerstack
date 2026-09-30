@@ -7,6 +7,30 @@
 //! an explicit layer-strength order. It intentionally does not model
 //! namespaces, schemas, references, variants, or storage backends.
 //!
+//! The crate requires Rust **1.88** or later and is always `no_std` with
+//! `alloc`. It has no dependencies or feature flags; callers need an allocator.
+//!
+//! # Choosing an API
+//!
+//! - [`SparseComposer`] stores sparse opinions with a fixed layer order.
+//! - [`resolve_ordered_chain`] resolves the same [`OpinionOp`] operations
+//!   when the caller already owns an ordered stack. Use
+//!   [`resolve_ordered_chain_report`] for explanation events.
+//! - [`OpinionFamily`] and [`resolve_family_chain`] fold host-defined dense
+//!   values and sparse edits. The caller selects the family; the kernel
+//!   applies accumulated edits weakest-first over a dense value or seed.
+//! - [`DictionaryAdapter`] and [`combine_dictionary_chain`] combine nested
+//!   dictionaries in host values. This uses a strongest-first fold;
+//!   [`OpinionOp::Dictionary`] and [`DictionaryFamily`] instead use the
+//!   distinct [`ShallowOverlay`] policy.
+//! - [`ArrayEdit<T>`] executes sparse array edit programs with a host-supplied
+//!   [`ArrayFill`] policy; it can be used independently of opinion storage.
+//!
+//! All chain entry points take opinions **strongest-to-weakest**. Layer order,
+//! family selection, and the meaning of provenance remain the caller's policy.
+//!
+//! # Stored opinions
+//!
 //! Each layer holds at most one opinion per `(address, field)` key; setting an
 //! opinion again in the same layer replaces the previous one. Resolution
 //! distinguishes a key with no opinions ([`Resolution::Absent`]) from a key
@@ -63,6 +87,16 @@
 //!     .unwrap();
 //! assert_eq!(resolved.value.as_scalar(), Some(&"dark"));
 //! assert_eq!(resolved.provenance, "project");
+//!
+//! // Retracting an opinion restores inheritance from weaker layers.
+//! composer
+//!     .remove_opinion(Layer::Project, Address::Workspace, Field::Theme)
+//!     .unwrap();
+//! let inherited = composer
+//!     .resolve(Address::Workspace, Field::Theme)
+//!     .resolved()
+//!     .unwrap();
+//! assert_eq!(inherited.value.as_scalar(), Some(&"light"));
 //! ```
 
 #![no_std]

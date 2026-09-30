@@ -43,6 +43,9 @@ The `usd-geom` feature provides caller-owned transform and bounds caches:
 - `Xformable::transform_time_samples` returns composed sample times in stage
   time. `transform_might_be_time_varying` reports numeric-time variability,
   including splines; a single sample can still differ from the default value.
+- `Scene::compute_motion_blur_scale`, `compute_nonlinear_sample_count` and
+  `compute_velocity_scale` find the nearest readable authored `MotionAPI`
+  setting through any prim type; the API view exposes the same computations.
 - `XformableEdit::set_common_transform` and `set_common_transform_at` author
   `CommonTransform` translation, pivot, Euler rotation and scale values. They
   complete compatible partial stacks, preserve resets and existing precision,

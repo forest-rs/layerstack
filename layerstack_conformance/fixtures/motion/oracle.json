@@ -1,0 +1,869 @@
+{
+  "results": [
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root",
+      "time": null,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root",
+      "time": 0,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root",
+      "time": 1,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root",
+      "time": 2,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root",
+      "time": 3,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root",
+      "time": 4,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Plain",
+      "time": null,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Plain",
+      "time": 0,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Plain",
+      "time": 1,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Plain",
+      "time": 2,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Plain",
+      "time": 3,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Plain",
+      "time": 4,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Plain/Child",
+      "time": null,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Plain/Child",
+      "time": 0,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Plain/Child",
+      "time": 1,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Plain/Child",
+      "time": 2,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Plain/Child",
+      "time": 3,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Plain/Child",
+      "time": 4,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Empty",
+      "time": null,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Empty",
+      "time": 0,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Empty",
+      "time": 1,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Empty",
+      "time": 2,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Empty",
+      "time": 3,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Empty",
+      "time": 4,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Blocked",
+      "time": null,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Blocked",
+      "time": 0,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Blocked",
+      "time": 1,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Blocked",
+      "time": 2,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Blocked",
+      "time": 3,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/Blocked",
+      "time": 4,
+      "velocity": -2.0
+    },
+    {
+      "blur": 1.0,
+      "count": 3,
+      "interpolation": "linear",
+      "path": "/Root/Sampled",
+      "time": null,
+      "velocity": 1.0
+    },
+    {
+      "blur": 0.5,
+      "count": -3,
+      "interpolation": "linear",
+      "path": "/Root/Sampled",
+      "time": 0,
+      "velocity": 0.0
+    },
+    {
+      "blur": 0.5,
+      "count": -3,
+      "interpolation": "linear",
+      "path": "/Root/Sampled",
+      "time": 1,
+      "velocity": 0.0
+    },
+    {
+      "blur": 1.0,
+      "count": -3,
+      "interpolation": "linear",
+      "path": "/Root/Sampled",
+      "time": 2,
+      "velocity": 2.0
+    },
+    {
+      "blur": 1.5,
+      "count": 9,
+      "interpolation": "linear",
+      "path": "/Root/Sampled",
+      "time": 3,
+      "velocity": 4.0
+    },
+    {
+      "blur": 1.5,
+      "count": 9,
+      "interpolation": "linear",
+      "path": "/Root/Sampled",
+      "time": 4,
+      "velocity": 4.0
+    },
+    {
+      "blur": 1.0,
+      "count": 3,
+      "interpolation": "linear",
+      "path": "/Root/SampleBlock",
+      "time": null,
+      "velocity": 1.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/SampleBlock",
+      "time": 0,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/SampleBlock",
+      "time": 1,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/SampleBlock",
+      "time": 2,
+      "velocity": -2.0
+    },
+    {
+      "blur": 1.5,
+      "count": 9,
+      "interpolation": "linear",
+      "path": "/Root/SampleBlock",
+      "time": 3,
+      "velocity": 4.0
+    },
+    {
+      "blur": 1.5,
+      "count": 9,
+      "interpolation": "linear",
+      "path": "/Root/SampleBlock",
+      "time": 4,
+      "velocity": 4.0
+    },
+    {
+      "blur": 1.0,
+      "count": 3,
+      "interpolation": "linear",
+      "path": "/Root/WrongType",
+      "time": null,
+      "velocity": 1.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/WrongType",
+      "time": 0,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/WrongType",
+      "time": 1,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/WrongType",
+      "time": 2,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/WrongType",
+      "time": 3,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "linear",
+      "path": "/Root/WrongType",
+      "time": 4,
+      "velocity": -2.0
+    },
+    {
+      "blur": 1.0,
+      "count": 3,
+      "interpolation": "linear",
+      "path": "/Fallback",
+      "time": null,
+      "velocity": 1.0
+    },
+    {
+      "blur": 1.0,
+      "count": 3,
+      "interpolation": "linear",
+      "path": "/Fallback",
+      "time": 0,
+      "velocity": 1.0
+    },
+    {
+      "blur": 1.0,
+      "count": 3,
+      "interpolation": "linear",
+      "path": "/Fallback",
+      "time": 1,
+      "velocity": 1.0
+    },
+    {
+      "blur": 1.0,
+      "count": 3,
+      "interpolation": "linear",
+      "path": "/Fallback",
+      "time": 2,
+      "velocity": 1.0
+    },
+    {
+      "blur": 1.0,
+      "count": 3,
+      "interpolation": "linear",
+      "path": "/Fallback",
+      "time": 3,
+      "velocity": 1.0
+    },
+    {
+      "blur": 1.0,
+      "count": 3,
+      "interpolation": "linear",
+      "path": "/Fallback",
+      "time": 4,
+      "velocity": 1.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root",
+      "time": null,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root",
+      "time": 0,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root",
+      "time": 1,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root",
+      "time": 2,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root",
+      "time": 3,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root",
+      "time": 4,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Plain",
+      "time": null,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Plain",
+      "time": 0,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Plain",
+      "time": 1,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Plain",
+      "time": 2,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Plain",
+      "time": 3,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Plain",
+      "time": 4,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Plain/Child",
+      "time": null,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Plain/Child",
+      "time": 0,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Plain/Child",
+      "time": 1,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Plain/Child",
+      "time": 2,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Plain/Child",
+      "time": 3,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Plain/Child",
+      "time": 4,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Empty",
+      "time": null,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Empty",
+      "time": 0,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Empty",
+      "time": 1,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Empty",
+      "time": 2,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Empty",
+      "time": 3,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Empty",
+      "time": 4,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Blocked",
+      "time": null,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Blocked",
+      "time": 0,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Blocked",
+      "time": 1,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Blocked",
+      "time": 2,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Blocked",
+      "time": 3,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/Blocked",
+      "time": 4,
+      "velocity": -2.0
+    },
+    {
+      "blur": 1.0,
+      "count": 3,
+      "interpolation": "held",
+      "path": "/Root/Sampled",
+      "time": null,
+      "velocity": 1.0
+    },
+    {
+      "blur": 0.5,
+      "count": -3,
+      "interpolation": "held",
+      "path": "/Root/Sampled",
+      "time": 0,
+      "velocity": 0.0
+    },
+    {
+      "blur": 0.5,
+      "count": -3,
+      "interpolation": "held",
+      "path": "/Root/Sampled",
+      "time": 1,
+      "velocity": 0.0
+    },
+    {
+      "blur": 0.5,
+      "count": -3,
+      "interpolation": "held",
+      "path": "/Root/Sampled",
+      "time": 2,
+      "velocity": 0.0
+    },
+    {
+      "blur": 1.5,
+      "count": 9,
+      "interpolation": "held",
+      "path": "/Root/Sampled",
+      "time": 3,
+      "velocity": 4.0
+    },
+    {
+      "blur": 1.5,
+      "count": 9,
+      "interpolation": "held",
+      "path": "/Root/Sampled",
+      "time": 4,
+      "velocity": 4.0
+    },
+    {
+      "blur": 1.0,
+      "count": 3,
+      "interpolation": "held",
+      "path": "/Root/SampleBlock",
+      "time": null,
+      "velocity": 1.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/SampleBlock",
+      "time": 0,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/SampleBlock",
+      "time": 1,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/SampleBlock",
+      "time": 2,
+      "velocity": -2.0
+    },
+    {
+      "blur": 1.5,
+      "count": 9,
+      "interpolation": "held",
+      "path": "/Root/SampleBlock",
+      "time": 3,
+      "velocity": 4.0
+    },
+    {
+      "blur": 1.5,
+      "count": 9,
+      "interpolation": "held",
+      "path": "/Root/SampleBlock",
+      "time": 4,
+      "velocity": 4.0
+    },
+    {
+      "blur": 1.0,
+      "count": 3,
+      "interpolation": "held",
+      "path": "/Root/WrongType",
+      "time": null,
+      "velocity": 1.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/WrongType",
+      "time": 0,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/WrongType",
+      "time": 1,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/WrongType",
+      "time": 2,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/WrongType",
+      "time": 3,
+      "velocity": -2.0
+    },
+    {
+      "blur": 2.0,
+      "count": 7,
+      "interpolation": "held",
+      "path": "/Root/WrongType",
+      "time": 4,
+      "velocity": -2.0
+    },
+    {
+      "blur": 1.0,
+      "count": 3,
+      "interpolation": "held",
+      "path": "/Fallback",
+      "time": null,
+      "velocity": 1.0
+    },
+    {
+      "blur": 1.0,
+      "count": 3,
+      "interpolation": "held",
+      "path": "/Fallback",
+      "time": 0,
+      "velocity": 1.0
+    },
+    {
+      "blur": 1.0,
+      "count": 3,
+      "interpolation": "held",
+      "path": "/Fallback",
+      "time": 1,
+      "velocity": 1.0
+    },
+    {
+      "blur": 1.0,
+      "count": 3,
+      "interpolation": "held",
+      "path": "/Fallback",
+      "time": 2,
+      "velocity": 1.0
+    },
+    {
+      "blur": 1.0,
+      "count": 3,
+      "interpolation": "held",
+      "path": "/Fallback",
+      "time": 3,
+      "velocity": 1.0
+    },
+    {
+      "blur": 1.0,
+      "count": 3,
+      "interpolation": "held",
+      "path": "/Fallback",
+      "time": 4,
+      "velocity": 1.0
+    }
+  ],
+  "version": "26.8"
+}

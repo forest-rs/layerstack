@@ -1,0 +1,39 @@
+#usda 1.0
+# Copyright 2026 the LayerStack Authors
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+
+def Scope "Root" (
+    prepend apiSchemas = ["MotionAPI"]
+) {
+    float motion:blurScale = 2
+    int motion:nonlinearSampleCount = 7
+    float motion:velocityScale = -2
+    def "Plain" {
+        float motion:blurScale = 9
+        int motion:nonlinearSampleCount = 99
+        float motion:velocityScale = 9
+        def Mesh "Child" {}
+    }
+    def "Empty" (prepend apiSchemas = ["MotionAPI"]) {}
+    def "Blocked" (prepend apiSchemas = ["MotionAPI"]) {
+        float motion:blurScale = None
+        int motion:nonlinearSampleCount = None
+        float motion:velocityScale = None
+    }
+    def "Sampled" (prepend apiSchemas = ["MotionAPI"]) {
+        float motion:blurScale.timeSamples = {1: 0.5, 3: 1.5}
+        int motion:nonlinearSampleCount.timeSamples = {1: -3, 3: 9}
+        float motion:velocityScale.timeSamples = {1: 0, 3: 4}
+    }
+    def "SampleBlock" (prepend apiSchemas = ["MotionAPI"]) {
+        float motion:blurScale.timeSamples = {1: None, 3: 1.5}
+        int motion:nonlinearSampleCount.timeSamples = {1: None, 3: 9}
+        float motion:velocityScale.timeSamples = {1: None, 3: 4}
+    }
+    def "WrongType" (prepend apiSchemas = ["MotionAPI"]) {
+        string motion:blurScale = "wrong"
+        string motion:nonlinearSampleCount = "wrong"
+        string motion:velocityScale = "wrong"
+    }
+}
+def "Fallback" {}

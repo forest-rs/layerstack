@@ -426,6 +426,9 @@ jobs:
       - name: check common transform authoring oracle
         run: python layerstack_conformance/scripts/common_xform_oracle.py --check
 
+      - name: check inherited motion settings oracle
+        run: python layerstack_conformance/scripts/motion_oracle.py --check
+
       # The binding oracle must be what OpenUSD binds and collects.
       - name: check binding oracle
         run: python layerstack_conformance/scripts/binding_oracle.py --check

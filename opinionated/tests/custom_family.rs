@@ -225,3 +225,51 @@ fn fold_stops_pulling_at_dense_member_or_block() {
     assert_eq!(report.resolution.resolved(), Some((1, "strong")));
     assert_eq!(pulled, 2, "no opinion weaker than the block is pulled");
 }
+
+#[test]
+fn reported_base_distinguishes_seed_requests_from_absence_and_blocks() {
+    use opinionated::FamilyBase;
+    struct CountingFamily(std::cell::Cell<usize>);
+    impl OpinionFamily<CounterOp> for CountingFamily {
+        type Value = i64;
+        type Edit<'op> = i64;
+        fn classify(&self, op: &CounterOp) -> FamilyMember<i64, i64> {
+            CounterFamily.classify(op)
+        }
+        fn apply<'op>(&self, edit: Self::Edit<'op>, base: i64) -> i64
+        where
+            CounterOp: 'op,
+        {
+            base + edit
+        }
+        fn seed(&self) -> i64 {
+            self.0.set(self.0.get() + 1);
+            0
+        }
+    }
+    let cases = [
+        (vec![], FamilyBase::Absent),
+        (vec![CounterOp::Label("other")], FamilyBase::Absent),
+        (vec![CounterOp::Reset], FamilyBase::Blocked),
+        (vec![CounterOp::Total(0)], FamilyBase::Dense),
+        (
+            vec![CounterOp::Delta(0), CounterOp::Total(0)],
+            FamilyBase::Dense,
+        ),
+        (vec![CounterOp::Delta(0)], FamilyBase::Seed),
+        (
+            vec![CounterOp::Delta(0), CounterOp::Reset],
+            FamilyBase::Seed,
+        ),
+    ];
+    for (ops, expected) in cases {
+        let family = CountingFamily(std::cell::Cell::new(0));
+        let report = resolve_family_chain_report(&family, ops.iter().map(|op| (op, &())));
+        assert_eq!(report.base, expected, "{ops:?}");
+        assert_eq!(
+            family.0.get(),
+            usize::from(expected == FamilyBase::Seed),
+            "{ops:?}"
+        );
+    }
+}

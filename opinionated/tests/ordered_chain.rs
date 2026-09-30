@@ -169,3 +169,33 @@ fn lean_and_report_resolvers_agree() {
         resolve_ordered_chain_report(opinions).resolution
     );
 }
+
+#[test]
+fn report_marks_every_operation_below_an_explicit_list_as_hidden() {
+    let ops = [
+        OpinionOp::<(), u32, ()>::List(ListOp::appended(vec![2])),
+        OpinionOp::List(ListOp::explicit(vec![1])),
+        OpinionOp::List(ListOp::appended(vec![99])),
+        OpinionOp::Set(()),
+        OpinionOp::Block,
+    ];
+    let positions = [0, 1, 2, 3, 4];
+    let chain = || {
+        ops.iter()
+            .zip(&positions)
+            .map(|(op, provenance)| ChainOpinion { op, provenance })
+    };
+    let report = resolve_ordered_chain_report(chain());
+    assert_eq!(report.resolution, resolve_ordered_chain(chain()));
+    assert_eq!(
+        report.resolution.resolved().unwrap().value.as_list(),
+        Some([1, 2].as_slice())
+    );
+    assert_eq!(
+        report.events[2..],
+        [2, 3, 4].map(|provenance| ResolutionEvent::Ignored {
+            provenance,
+            reason: IgnoreReason::WeakerThanExplicit
+        })
+    );
+}

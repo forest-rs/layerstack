@@ -16,9 +16,9 @@
 use alloc::vec::Vec;
 
 use opinionated::{
-    FamilyEvent, FamilyMember, FamilyResolution, IgnoreReason, OpinionFamily, OpinionKind,
-    SamplePick as Pick, TemporalMode, TemporalPlanner, TemporalSample, TemporalSelection,
-    resolve_family_chain, resolve_family_chain_report,
+    FamilyBase, FamilyEvent, FamilyMember, FamilyResolution, IgnoreReason, OpinionFamily,
+    OpinionKind, SamplePick as Pick, TemporalMode, TemporalPlanner, TemporalSample,
+    TemporalSelection, resolve_family_chain, resolve_family_chain_report,
 };
 
 use crate::{
@@ -109,6 +109,8 @@ pub(crate) struct SampleFold {
     pub(crate) time: f64,
     /// The kernel's events, strongest first, for the members it visited.
     pub(crate) events: Vec<FamilyEvent<ChainPos>>,
+    /// The base the shared fold selected; host fallback policy stays here.
+    pub(crate) base: FamilyBase,
 }
 
 impl SampleFold {
@@ -118,17 +120,7 @@ impl SampleFold {
     /// or a block ended it before any edit: accumulated edits materialize
     /// over the seed, and a fold nothing contributed to is the seed itself.
     pub(crate) fn uses_seed(&self, has_fallback: bool) -> bool {
-        let dense = self
-            .events
-            .iter()
-            .any(|event| matches!(event, FamilyEvent::ContributedDense { .. }));
-        let blocked = matches!(
-            self.events
-                .iter()
-                .find(|event| !matches!(event, FamilyEvent::Ignored { .. })),
-            Some(FamilyEvent::StoppedByBlock { .. })
-        );
-        has_fallback && !dense && !blocked
+        has_fallback && matches!(self.base, FamilyBase::Seed | FamilyBase::Absent)
     }
 }
 
@@ -150,6 +142,7 @@ impl Folder for Recording {
         self.folds.push(SampleFold {
             time: sample,
             events: report.events,
+            base: report.base,
         });
         match report.resolution {
             FamilyResolution::Absent => FamilyResolution::Absent,

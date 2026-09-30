@@ -152,11 +152,31 @@ pub enum FamilyEvent<P> {
     },
 }
 
+/// The base selected by a family fold, before applying stronger sparse edits.
+///
+/// This records a kernel fact. A host may return its own fallback after an
+/// absent or blocked fold; that does not mean the kernel called
+/// [`OpinionFamily::seed`].
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FamilyBase {
+    /// A dense opinion supplied the base and terminated the fold.
+    Dense,
+    /// Sparse edits were applied to [`OpinionFamily::seed`], at chain end or
+    /// after a weaker block. The seed was actually requested.
+    Seed,
+    /// No member contributed; the seed was not requested.
+    Absent,
+    /// A block appeared before any contribution; the seed was not requested.
+    Blocked,
+}
+
 /// A [`FamilyResolution`] paired with the events that explain it.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FamilyReport<T, P> {
     /// The outcome of the fold.
     pub resolution: FamilyResolution<T, P>,
+    /// How the fold obtained its base, independently of diagnostic events.
+    pub base: FamilyBase,
     /// Ordered events explaining how the chain was folded.
     pub events: Vec<FamilyEvent<P>>,
 }
@@ -186,7 +206,7 @@ where
     F: OpinionFamily<Op>,
     P: Clone + 'a,
 {
-    fold_family_chain(family, opinions_strong_to_weak, None)
+    fold_family_chain(family, opinions_strong_to_weak, None).0
 }
 
 /// Folds one family over a chain and records diagnostic events.
@@ -204,8 +224,12 @@ where
     P: Clone + 'a,
 {
     let mut events = Vec::new();
-    let resolution = fold_family_chain(family, opinions_strong_to_weak, Some(&mut events));
-    FamilyReport { resolution, events }
+    let (resolution, base) = fold_family_chain(family, opinions_strong_to_weak, Some(&mut events));
+    FamilyReport {
+        resolution,
+        base,
+        events,
+    }
 }
 
 /// The shared fold used by both the lean and reporting entry points.
@@ -217,7 +241,7 @@ fn fold_family_chain<'a, Op, F, P>(
     family: &F,
     opinions_strong_to_weak: impl IntoIterator<Item = (&'a Op, &'a P)>,
     mut events: Option<&mut Vec<FamilyEvent<P>>>,
-) -> FamilyResolution<F::Value, P>
+) -> (FamilyResolution<F::Value, P>, FamilyBase)
 where
     Op: 'a,
     F: OpinionFamily<Op>,
@@ -236,7 +260,10 @@ where
                 }
                 let provenance = provenance.unwrap_or_else(|| prov.clone());
                 let value = materialize(family, value, edits);
-                return FamilyResolution::Resolved { value, provenance };
+                return (
+                    FamilyResolution::Resolved { value, provenance },
+                    FamilyBase::Dense,
+                );
             }
             FamilyMember::Sparse(edit) => {
                 if let Some(sink) = events.as_mut() {
@@ -260,11 +287,17 @@ where
                     // stronger opinions still materialize over the seed.
                     Some(provenance) => {
                         let value = materialize(family, family.seed(), edits);
-                        FamilyResolution::Resolved { value, provenance }
+                        (
+                            FamilyResolution::Resolved { value, provenance },
+                            FamilyBase::Seed,
+                        )
                     }
-                    None => FamilyResolution::Blocked {
-                        provenance: prov.clone(),
-                    },
+                    None => (
+                        FamilyResolution::Blocked {
+                            provenance: prov.clone(),
+                        },
+                        FamilyBase::Blocked,
+                    ),
                 };
             }
             FamilyMember::Foreign(reason) => {
@@ -281,9 +314,12 @@ where
     match provenance {
         Some(provenance) => {
             let value = materialize(family, family.seed(), edits);
-            FamilyResolution::Resolved { value, provenance }
+            (
+                FamilyResolution::Resolved { value, provenance },
+                FamilyBase::Seed,
+            )
         }
-        None => FamilyResolution::Absent,
+        None => (FamilyResolution::Absent, FamilyBase::Absent),
     }
 }
 

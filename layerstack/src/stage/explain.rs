@@ -31,8 +31,8 @@
 use alloc::{sync::Arc, vec, vec::Vec};
 
 use opinionated::{
-    ChainOpinion, DictionaryEvent, FamilyEvent, IgnoreReason, OpinionOp, Resolution,
-    ResolutionEvent, combine_dictionary_chain_report, resolve_ordered_chain_report,
+    ChainOpinion, DictionaryEvent, FamilyEvent, IgnoreReason, OpinionOp, ResolutionEvent,
+    combine_dictionary_chain_report, resolve_list_chain_report, resolve_ordered_chain_report,
 };
 
 use super::{
@@ -686,7 +686,7 @@ impl Stage {
 /// Explains a composed target (or connection) list.
 ///
 /// Mirrors `Stage::resolve_target_list` and chains through
-/// [`resolve_ordered_chain_report`].
+/// [`resolve_list_chain_report`].
 ///
 /// Spec: AOUSD Core §12.2.6 (list op resolution), §12.4 (relationships and
 /// connections).
@@ -706,9 +706,7 @@ fn explain_targets<'s>(
     if with_targets.is_empty() && !is_relationship {
         return roles.finish(None, ValueSource::None, false);
     }
-    let ops = with_targets
-        .iter()
-        .map(|&i| opinions[i].value.targets().cloned());
+    let ops = with_targets.iter().map(|&i| opinions[i].value.targets());
     let (value, events) = report_list_chain(ops);
     roles.apply_events(&events, &with_targets);
     roles.finish(
@@ -745,31 +743,50 @@ fn explain_field_list<'s>(
     roles.finish(value, source, false)
 }
 
-/// Chains list ops strongest first through [`resolve_ordered_chain_report`].
+/// Chains borrowed list ops through [`resolve_list_chain_report`].
 ///
 /// `None` entries hold another kind of list op; the report names them
 /// incompatible. Event provenance is the position in `ops`.
-fn report_list_chain<T: Clone + Eq>(
-    ops: impl Iterator<Item = Option<ListOp<T>>>,
+fn report_list_chain<'a, T: Clone + Eq + 'a>(
+    ops: impl Iterator<Item = Option<&'a ListOp<T>>>,
 ) -> (Vec<T>, Vec<ResolutionEvent<usize>>) {
-    let ops: Vec<OpinionOp<(), T, ()>> = ops
-        .map(|op| op.map_or(OpinionOp::Set(()), OpinionOp::List))
-        .collect();
-    let positions: Vec<usize> = (0..ops.len()).collect();
-    let chain = ops
+    let ops: Vec<_> = ops.collect();
+    let report = resolve_list_chain_report(
+        &[],
+        ops.iter()
+            .enumerate()
+            .filter_map(|(position, op)| op.map(|op| (op, position))),
+    );
+    let cutoff = ops
         .iter()
-        .zip(&positions)
-        .map(|(op, provenance)| ChainOpinion { op, provenance });
-    let report = resolve_ordered_chain_report(chain);
-    let value = match report.resolution {
-        Resolution::Resolved(resolved) => resolved.value.as_list().map(<[T]>::to_vec),
-        Resolution::Absent | Resolution::Blocked { .. } => None,
-    };
-    (value.unwrap_or_default(), report.events)
+        .position(|op| op.is_some_and(|op| op.explicit.is_some()));
+    let mut list_events = report.events.into_iter();
+    let events = ops
+        .iter()
+        .enumerate()
+        .map(|(position, op)| {
+            if op.is_some() {
+                list_events.next().expect("each list opinion has an event")
+            } else {
+                ResolutionEvent::Ignored {
+                    provenance: position,
+                    reason: if cutoff.is_some_and(|cutoff| position > cutoff) {
+                        IgnoreReason::WeakerThanExplicit
+                    } else {
+                        IgnoreReason::IncompatibleOperation {
+                            resolved: opinionated::OpinionKind::List,
+                            ignored: opinionated::OpinionKind::Set,
+                        }
+                    },
+                }
+            }
+        })
+        .collect();
+    (report.value, events)
 }
 
 /// The explanation [`ListChainer`]: chains through
-/// [`resolve_ordered_chain_report`] and keeps its events.
+/// [`resolve_list_chain_report`] and keeps its events.
 #[derive(Default)]
 struct ReportLists {
     events: Vec<ResolutionEvent<usize>>,
@@ -781,7 +798,7 @@ impl ListChainer for ReportLists {
         values: impl Iterator<Item = &'a FieldValue>,
         pick: impl Fn(&'a FieldValue) -> Option<&'a ListOp<T>>,
     ) -> Vec<T> {
-        let (value, events) = report_list_chain(values.map(|value| pick(value).cloned()));
+        let (value, events) = report_list_chain(values.map(pick));
         self.events = events;
         value
     }
@@ -842,7 +859,9 @@ fn chain_role(event: &ResolutionEvent<usize>) -> (usize, OpinionRole) {
         ResolutionEvent::Ignored { provenance, reason } => (
             *provenance,
             OpinionRole::Ignored(match reason {
-                IgnoreReason::WeakerThanSet => IgnoreCause::Shadowed,
+                IgnoreReason::WeakerThanSet | IgnoreReason::WeakerThanExplicit => {
+                    IgnoreCause::Shadowed
+                }
                 IgnoreReason::WeakerThanBlock => IgnoreCause::CutOffByBlock,
                 IgnoreReason::IncompatibleOperation { .. } => IgnoreCause::Incompatible,
             }),

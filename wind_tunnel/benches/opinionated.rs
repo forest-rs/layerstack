@@ -7,7 +7,8 @@ use std::hint::black_box;
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use opinionated::{
-    ChainOpinion, ListOp, OpinionOp, resolve_list_chain, resolve_ordered_chain_report,
+    ChainOpinion, ListOp, OpinionOp, apply_list_order_by_key, resolve_list_chain,
+    resolve_ordered_chain_report,
 };
 
 fn bench_lists(c: &mut Criterion) {
@@ -57,6 +58,17 @@ fn bench_lists(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::new("reverse", width), &items, |b, items| {
             b.iter(|| black_box(op.apply_to(black_box(items))));
         });
+        group.bench_with_input(
+            BenchmarkId::new("keyed_reverse", width),
+            &items,
+            |b, items| {
+                b.iter(|| {
+                    let mut result = items.clone();
+                    apply_list_order_by_key(&mut result, &op.reorder, |item| *item);
+                    black_box(result)
+                });
+            },
+        );
     }
     group.finish();
 }

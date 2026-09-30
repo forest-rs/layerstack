@@ -75,7 +75,10 @@ use core::borrow::Borrow;
 mod array_edit;
 mod dictionary;
 mod family;
+mod list_order;
 mod temporal;
+
+pub use list_order::{apply_list_order, apply_list_order_by_key};
 
 pub use temporal::{SamplePick, TemporalMode, TemporalPlanner, TemporalSample, TemporalSelection};
 
@@ -418,39 +421,8 @@ impl<T: Clone + Eq> ListOp<T> {
             out.push(item.clone());
         }
 
-        if !self.reorder.is_empty() {
-            *out = reorder(core::mem::take(out), &self.reorder);
-        }
+        apply_list_order(out, &self.reorder);
     }
-}
-
-/// `list` with the items of `order` it holds moved into that order, each
-/// with the items that follow it up to the next item `order` names; the
-/// items before the first of them stay in front (see [`ListOp::apply_to`]).
-fn reorder<T: Clone + Eq>(list: Vec<T>, order: &[T]) -> Vec<T> {
-    let mut named: Vec<&T> = Vec::with_capacity(order.len());
-    for item in order {
-        if !named.contains(&item) {
-            named.push(item);
-        }
-    }
-    if named.is_empty() {
-        return list;
-    }
-    let mut scratch = list;
-    let mut runs = Vec::with_capacity(scratch.len());
-    for item in named {
-        let Some(start) = scratch.iter().position(|existing| existing == item) else {
-            continue;
-        };
-        let end = scratch[start + 1..]
-            .iter()
-            .position(|existing| order.contains(existing))
-            .map_or(scratch.len(), |offset| start + 1 + offset);
-        runs.extend(scratch.drain(start..end));
-    }
-    scratch.extend(runs);
-    scratch
 }
 
 /// Resolves a strongest-to-weakest chain of owned or borrowed list operations.

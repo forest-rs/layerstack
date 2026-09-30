@@ -404,13 +404,18 @@ fn array_edits_read_as_openusd_wrote_them() {
             },
         ],
     };
+    let ints = default_value(&mut layer, "/Edits.ints");
+    assert_eq!(ints.array_edit_ref(), Some(&expected));
     assert_eq!(
-        default_value(&mut layer, "/Edits.ints"),
-        Value::ArrayEdit(expected)
+        ints.array_edit_type().unwrap().default_scalar,
+        Value::Int(0)
     );
-    let Value::ArrayEdit(points) = default_value(&mut layer, "/Edits.points") else {
-        panic!("points is an array edit");
-    };
+    let points = default_value(&mut layer, "/Edits.points");
+    assert_eq!(
+        points.array_edit_type().unwrap().default_scalar,
+        Value::Vec3f([0.0; 3])
+    );
+    let points = points.array_edit_ref().expect("points is an array edit");
     assert_eq!(
         points.ops[1],
         Op::ResizeFill {

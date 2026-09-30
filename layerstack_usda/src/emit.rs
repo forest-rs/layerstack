@@ -1344,7 +1344,8 @@ impl EmitCtx<'_> {
             }
             ast::Value::ArrayEdit(edit) => {
                 let element_hint = type_hint.strip_suffix("[]").unwrap_or(type_hint);
-                Value::ArrayEdit(self.convert_array_edit(edit, element_hint))
+                let value_type = self.declared_property_type(element_hint, true);
+                Value::typed_array_edit(self.convert_array_edit(edit, element_hint), value_type)
             }
         }
     }
@@ -3331,8 +3332,8 @@ def \"A\" {
         let x_tok = tokens.intern("x");
         let entry = prop(&spec.properties, &x_tok);
 
-        match &entry.default {
-            Some(Value::ArrayEdit(edit)) => {
+        match entry.default.as_ref().and_then(Value::array_edit_ref) {
+            Some(edit) => {
                 assert_eq!(edit.ops.len(), 3);
                 assert!(matches!(edit.ops[0], ArrayEditOp::Write { .. }));
                 assert!(matches!(
@@ -3350,6 +3351,43 @@ def \"A\" {
         let property_type = entry.type_name.as_ref().expect("property type");
         assert!(property_type.is_array);
         assert_eq!(property_type.default_scalar, Value::Int(0));
+        assert_eq!(
+            entry.default.as_ref().unwrap().array_edit_type(),
+            Some(property_type)
+        );
+    }
+
+    #[test]
+    fn literal_free_array_edits_retain_authored_type_and_aliases() {
+        let src = "#usda 1.0\ndef \"A\" {\n\
+            point3f[] points = edit []\n\
+            timecode[] clock.timeSamples = {1: edit [resize 2]}\n\
+            float[] scalar = edit [erase [0]]\n\
+        }\n";
+        let (result, mut tokens, paths) = emit_source(src);
+        let a = prim(&result, &mut tokens, &paths, "/A");
+        for (name, expected, prototype) in [
+            ("points", "point3f", Value::Vec3f([0.0; 3])),
+            ("clock", "timecode", Value::TimeCode(0.0)),
+            ("scalar", "float", Value::Float(0.0)),
+        ] {
+            let property = prop(&a.properties, &tokens.intern(name));
+            let value = property
+                .default
+                .as_ref()
+                .or_else(|| {
+                    property
+                        .time_samples
+                        .as_ref()
+                        .and_then(|samples| samples.first().map(|(_, v)| v))
+                })
+                .unwrap();
+            let actual = value.array_edit_type().unwrap();
+            assert_eq!(actual.type_name.as_ref(), expected);
+            assert_eq!(actual.default_scalar, prototype);
+            assert!(actual.is_array);
+            assert!(value.array_edit_ref().is_some());
+        }
     }
 
     /// Returns the prim spec at `path` from an emit result.

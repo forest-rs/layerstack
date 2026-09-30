@@ -66,6 +66,15 @@ pub fn render_value(value: &Value, names: Names<'_>) -> String {
             entries.sort();
             format!("{{{}}}", entries.join(", "))
         }
+        Value::TypedArrayEdit(edit) => {
+            // USDA can retain a role alias such as point3f; USDC stores its
+            // float3 element kind. Compare that kind and the entire program.
+            format!(
+                "ArrayEdit<{}>({:?})",
+                render_value(&edit.value_type().default_scalar, names),
+                edit.edit()
+            )
+        }
         Value::Opaque { type_name, bytes } => {
             format!("Opaque({}, {} bytes)", names.token(*type_name), bytes.len())
         }

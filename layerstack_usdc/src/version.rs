@@ -23,14 +23,14 @@
 //! | 0.11 | relocates in layer metadata | yes |
 //! | 0.12 | splines (Ts binary format 1) | yes |
 //! | 0.13 | spline tangent algorithms (Ts binary format 2) | yes; the algorithms are validated and dropped, and the tangents OpenUSD stored with them are kept |
-//! | 0.14 | native array edits (`VtArrayEdit`) | yes, as [`Value::ArrayEdit`] |
+//! | 0.14 | native array edits (`VtArrayEdit`) | yes, as [`Value::TypedArrayEdit`] |
 //! | 0.15 | spline `loopBoundaryTime` and `GfTimeCode`-valued splines (Ts binary format 3) | the format is read; those two features fail with [`UsdcError::UnsupportedFeature`] |
 //!
 //! Value type 60 (`SdfAnimationBlock`) is not tied to a version: OpenUSD
 //! v26.08 writes it without raising the file version. This reader does not
 //! decode it and fails with [`UsdcError::UnknownValueType`].
 //!
-//! [`Value::ArrayEdit`]: layerstack::doc::Value::ArrayEdit
+//! [`Value::TypedArrayEdit`]: layerstack::doc::Value::TypedArrayEdit
 //! [`UsdcError::UnsupportedVersion`]: crate::UsdcError::UnsupportedVersion
 //! [`UsdcError::FeatureRequiresVersion`]: crate::UsdcError::FeatureRequiresVersion
 //! [`UsdcError::UnsupportedFeature`]: crate::UsdcError::UnsupportedFeature

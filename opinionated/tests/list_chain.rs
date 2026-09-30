@@ -184,3 +184,83 @@ fn add_applies_after_delete_and_before_prepend() {
         .with_prepended(vec!["c"]);
     assert_eq!(op.apply_to(&["a", "b"]), vec!["c", "b", "a"]);
 }
+
+#[test]
+fn explicit_cutoff_does_not_pull_hidden_operations() {
+    let explicit = ListOp::explicit(vec![1]);
+    let ops = core::iter::once(&explicit).chain(core::iter::from_fn(|| {
+        panic!("an explicit list must hide weaker operations")
+    }));
+    assert_eq!(resolve_list_chain(&[0], ops), vec![1]);
+}
+
+#[derive(Debug)]
+struct Counted {
+    value: usize,
+    clones: std::rc::Rc<std::cell::Cell<usize>>,
+}
+
+impl Clone for Counted {
+    fn clone(&self) -> Self {
+        self.clones.set(self.clones.get() + 1);
+        Self {
+            value: self.value,
+            clones: self.clones.clone(),
+        }
+    }
+}
+
+impl PartialEq for Counted {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl Eq for Counted {}
+
+#[test]
+fn borrowed_chain_clones_only_its_seed_and_inserted_items() {
+    let clones = std::rc::Rc::new(std::cell::Cell::new(0));
+    let item = |value| Counted {
+        value,
+        clones: clones.clone(),
+    };
+    let seed: Vec<_> = (0..1_000).map(item).collect();
+    let ops: Vec<_> = (0..20).map(|i| ListOp::appended(vec![item(i)])).collect();
+    let result = resolve_list_chain(&seed, &ops);
+    assert_eq!(clones.get(), 1_020);
+    assert_eq!(result.len(), 1_000);
+    assert_eq!(result.last().unwrap().value, 0);
+}
+
+#[test]
+fn in_place_edits_retain_allocation_without_cloning_untouched_items() {
+    let clones = std::rc::Rc::new(std::cell::Cell::new(0));
+    let item = |value| Counted {
+        value,
+        clones: clones.clone(),
+    };
+    let mut base = Vec::with_capacity(32);
+    base.extend((0..10).map(item));
+    let allocation = base.as_ptr();
+    ListOp::appended(vec![item(10)])
+        .with_deleted(vec![item(0)])
+        .apply_in_place(&mut base);
+    assert_eq!(clones.get(), 1);
+    assert_eq!(base.as_ptr(), allocation);
+    assert_eq!(base.len(), 10);
+}
+
+#[test]
+fn family_explicit_cutoff_is_dense_and_does_not_classify_weaker_edits() {
+    use opinionated::{FamilyEvent, ListFamily, OpinionOp, resolve_family_chain_report};
+    let op = OpinionOp::<(), u32, ()>::List(ListOp::explicit(vec![1]));
+    let chain = core::iter::once((&op, &0)).chain(core::iter::from_fn(|| {
+        panic!("the family must stop at an explicit list")
+    }));
+    let report = resolve_family_chain_report(&ListFamily, chain);
+    assert_eq!(
+        report.events,
+        vec![FamilyEvent::ContributedDense { provenance: 0 }]
+    );
+}

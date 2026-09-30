@@ -355,7 +355,8 @@ where
 
 /// The list family adapter for [`OpinionOp`].
 ///
-/// [`OpinionOp::List`] is a sparse edit composed over weaker lists;
+/// An explicit [`OpinionOp::List`] is a dense value that hides weaker lists;
+/// other list operations are borrowed sparse edits composed over weaker lists;
 /// [`OpinionOp::Block`] blocks; every other operation is foreign. The seed is
 /// the empty list.
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -367,7 +368,7 @@ where
 {
     type Value = Vec<I>;
     type Edit<'op>
-        = ListOp<I>
+        = &'op ListOp<I>
     where
         OpinionOp<V, I, K>: 'op;
 
@@ -376,7 +377,10 @@ where
         op: &'op OpinionOp<V, I, K>,
     ) -> FamilyMember<Self::Value, Self::Edit<'op>> {
         match op {
-            OpinionOp::List(edit) => FamilyMember::Sparse(edit.clone()),
+            OpinionOp::List(edit) => match &edit.explicit {
+                Some(items) => FamilyMember::Dense(items.clone()),
+                None => FamilyMember::Sparse(edit),
+            },
             OpinionOp::Block => FamilyMember::Block,
             OpinionOp::Set(_) | OpinionOp::Dictionary(_) => {
                 FamilyMember::Foreign(IgnoreReason::IncompatibleOperation {
@@ -387,11 +391,12 @@ where
         }
     }
 
-    fn apply<'op>(&self, edit: Self::Edit<'op>, base: Self::Value) -> Self::Value
+    fn apply<'op>(&self, edit: Self::Edit<'op>, mut base: Self::Value) -> Self::Value
     where
         OpinionOp<V, I, K>: 'op,
     {
-        edit.apply_to(&base)
+        edit.apply_in_place(&mut base);
+        base
     }
 
     fn seed(&self) -> Self::Value {
@@ -419,7 +424,7 @@ where
 {
     type Value = Vec<(K, V)>;
     type Edit<'op>
-        = Vec<(K, V)>
+        = &'op [(K, V)]
     where
         OpinionOp<V, I, K>: 'op;
 
@@ -428,7 +433,7 @@ where
         op: &'op OpinionOp<V, I, K>,
     ) -> FamilyMember<Self::Value, Self::Edit<'op>> {
         match op {
-            OpinionOp::Dictionary(entries) => FamilyMember::Sparse(entries.clone()),
+            OpinionOp::Dictionary(entries) => FamilyMember::Sparse(entries),
             OpinionOp::Block => FamilyMember::Block,
             OpinionOp::Set(_) | OpinionOp::List(_) => {
                 FamilyMember::Foreign(IgnoreReason::IncompatibleOperation {
@@ -445,7 +450,7 @@ where
     {
         // `edit` is stronger than `base`; combining strongest-first lets the
         // stronger entries win by key.
-        combine_dictionary_chain(&ShallowOverlay, [edit, base])
+        combine_dictionary_chain(&ShallowOverlay, [edit, base.as_slice()])
     }
 
     fn seed(&self) -> Self::Value {

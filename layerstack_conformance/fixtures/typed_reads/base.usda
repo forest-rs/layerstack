@@ -3,3 +3,25 @@ def DistantLight "SparseCompatibleBase"
 {
     float[] value = [1]
 }
+
+def DistantLight "SparseSampledBase"
+{
+    float[] value = [1]
+}
+def DistantLight "SparseScalarBase"
+{
+    float[] value = [1]
+}
+def DistantLight "SparseWrongDense"
+{
+    float[] value = [1]
+}
+
+def DistantLight "SparseWrongLower"
+{
+    float[] value = [1]
+}
+def DistantLight "SparseWrongUpper"
+{
+    float[] value = [1]
+}

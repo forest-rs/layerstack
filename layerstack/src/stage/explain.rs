@@ -470,7 +470,7 @@ impl Stage {
         let mut explained =
             self.explain_default_as_authored(index, opinions, property_type, fallback);
         if matches!(
-            super::stage_time::opinions_in_stage_time(opinions, property_type),
+            super::stage_time::opinions_in_stage_time(opinions),
             alloc::borrow::Cow::Owned(_)
         ) {
             explained.value = self
@@ -568,7 +568,7 @@ impl Stage {
         let mut explained =
             self.explain_at_time_as_authored(index, field, opinions, time, interp, fallback);
         if matches!(
-            super::stage_time::opinions_in_stage_time(opinions, index.property_type_for(&field)),
+            super::stage_time::opinions_in_stage_time(opinions),
             alloc::borrow::Cow::Owned(_)
         ) {
             explained.value = self
@@ -579,6 +579,7 @@ impl Stage {
                     time,
                     interp,
                     fallback,
+                    None,
                 )
                 .map(|resolved| resolved.value);
         }

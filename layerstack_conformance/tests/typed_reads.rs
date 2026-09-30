@@ -76,6 +76,54 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
         .property_mut(timecode)
         .unwrap()
         .default = Some(Value::TimeCode(2.0));
+    for (path, samples) in [
+        (
+            "/SparseWrongLower.value",
+            vec![
+                (0.0, Value::array(vec![Value::Double(2.0)])),
+                (10.0, Value::array(vec![Value::Float(6.0)])),
+            ],
+        ),
+        (
+            "/SparseWrongUpper.value",
+            vec![
+                (0.0, Value::array(vec![Value::Float(2.0)])),
+                (10.0, Value::array(vec![Value::Double(6.0)])),
+            ],
+        ),
+    ] {
+        let property = loaded.store.property_path(path);
+        loaded
+            .store
+            .layers
+            .get_mut(&weak)
+            .unwrap()
+            .property_mut(property)
+            .unwrap()
+            .time_samples = Some(samples);
+    }
+    for (path, default, samples) in [
+        ("/MisdeclaredNumeric.value", Value::TimeCode(2.0), None),
+        (
+            "/MisdeclaredTimeArray.value",
+            Value::array(vec![Value::TimeCode(2.0)]),
+            Some(vec![
+                (0.0, Value::array(vec![Value::TimeCode(2.0)])),
+                (10.0, Value::array(vec![Value::TimeCode(4.0)])),
+            ]),
+        ),
+    ] {
+        let property = loaded.store.property_path(path);
+        let spec = loaded
+            .store
+            .layers
+            .get_mut(&weak)
+            .unwrap()
+            .property_mut(property)
+            .unwrap();
+        spec.default = Some(default);
+        spec.time_samples = samples;
+    }
     let schemas = layerstack_schemas::openusd(&mut loaded.store.tokens);
     let stage = Stage::compose(
         &mut loaded.store,
@@ -101,9 +149,15 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
         let kind = match prim {
             "/Vector" => "float3",
             "/Array" => "float3[]",
-            "/SparseCompatibleBase" => "float[]",
+            "/SparseCompatibleBase"
+            | "/SparseSampledBase"
+            | "/SparseScalarBase"
+            | "/SparseWrongDense"
+            | "/SparseWrongLower"
+            | "/SparseWrongUpper" => "float[]",
             "/Matrix" => "matrix4d",
-            "/Time" | "/MisdeclaredTime" => "timecode",
+            "/Time" | "/MisdeclaredTime" | "/MisdeclaredNumeric" => "timecode",
+            "/MisdeclaredTimeArray" => "timecode[]",
             "/Asset" => "asset",
             "/Expression" | "/ExpressionBelow" => "pathExpression",
             _ => "float",
@@ -136,17 +190,11 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
             expected_default,
             "{text}: typed default"
         );
-        if prim == "/SparseCompatibleBase" {
-            // C++'s numeric typed result is covered by the separate ignored
-            // regression below. Default-time selection is corrected here.
-            assert_eq!(record["numeric"], json!([4.0]));
-        } else {
-            assert_eq!(
-                numeric.unwrap_or(Json::Null),
-                record["numeric"],
-                "{text}: numeric"
-            );
-        }
+        assert_eq!(
+            numeric.unwrap_or(Json::Null),
+            record["numeric"],
+            "{text}: numeric"
+        );
         if expected_default.is_null() {
             assert!(
                 default.is_none(),
@@ -159,7 +207,15 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
             );
         } else {
             let provenance = default.unwrap().provenance.unwrap();
-            let expected_layer = if matches!(prim, "/Compatible" | "/SparseCompatibleBase") {
+            let expected_layer = if matches!(
+                prim,
+                "/Compatible"
+                    | "/SparseCompatibleBase"
+                    | "/SparseSampledBase"
+                    | "/SparseScalarBase"
+                    | "/SparseWrongLower"
+                    | "/SparseWrongUpper"
+            ) {
                 loaded.root_layer
             } else {
                 weak
@@ -193,7 +249,6 @@ fn typed_defaults_skip_incompatible_opinions_without_numeric_retry() {
 }
 
 #[test]
-#[ignore = "typed numeric sparse composition must finalize retained edits after an incompatible selected base"]
 fn typed_numeric_sparse_composition_matches_cpp_without_weaker_retry() {
     let oracle: Json =
         serde_json::from_str(include_str!("../fixtures/typed_reads/oracle.json")).unwrap();
@@ -209,7 +264,7 @@ fn typed_numeric_sparse_composition_matches_cpp_without_weaker_retry() {
         .map(|resolved| resolved.value);
     // The weaker float[] base contains 1. C++ stops at the incompatible
     // stronger double[] base, then finalizes the retained append over empty:
-    // [4], never [1, 4]. This is a limitation, not an intentional divergence.
+    // [4], never [1, 4].
     assert_eq!(
         actual.unwrap_or(Json::Null),
         oracle["/SparseCompatibleBase.value"]["numeric"]

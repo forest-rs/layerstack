@@ -33,6 +33,14 @@ void emit(VtFloatArray const &value) {
     }
     std::cout << ']';
 }
+void emit(VtArray<SdfTimeCode> const &value) {
+    std::cout << '[';
+    for (size_t i=0; i<value.size(); ++i) {
+        if (i) std::cout << ',';
+        std::cout << value[i].GetValue();
+    }
+    std::cout << ']';
+}
 void emit(VtVec3fArray const &value) {
     std::cout << '[';
     for (size_t i=0; i<value.size(); ++i) {
@@ -84,6 +92,15 @@ int main(int argc, char **argv) {
     std::string weak=stage->GetRootLayer()->GetSubLayerPaths()[0];
     SdfLayer::FindOrOpenRelativeToLayer(stage->GetRootLayer(), weak)->SetField(
         SdfPath("/MisdeclaredTime.value"), TfToken("default"), VtValue(SdfTimeCode(2)));
+    auto weakLayer=SdfLayer::FindOrOpenRelativeToLayer(stage->GetRootLayer(), weak);
+    weakLayer->SetField(SdfPath("/SparseWrongLower.value"), TfToken("timeSamples"),
+        VtValue(SdfTimeSampleMap{{0, VtValue(VtDoubleArray{2})}, {10, VtValue(VtFloatArray{6})}}));
+    weakLayer->SetField(SdfPath("/SparseWrongUpper.value"), TfToken("timeSamples"),
+        VtValue(SdfTimeSampleMap{{0, VtValue(VtFloatArray{2})}, {10, VtValue(VtDoubleArray{6})}}));
+    weakLayer->SetField(SdfPath("/MisdeclaredNumeric.value"), TfToken("default"), VtValue(SdfTimeCode(2)));
+    weakLayer->SetField(SdfPath("/MisdeclaredTimeArray.value"), TfToken("default"), VtValue(VtArray<SdfTimeCode>{SdfTimeCode(2)}));
+    weakLayer->SetField(SdfPath("/MisdeclaredTimeArray.value"), TfToken("timeSamples"),
+        VtValue(SdfTimeSampleMap{{0, VtValue(VtArray<SdfTimeCode>{SdfTimeCode(2)})}, {10, VtValue(VtArray<SdfTimeCode>{SdfTimeCode(4)})}}));
     bool first=true;
     std::cout << std::showpoint << std::setprecision(17);
     std::cout << '{';
@@ -97,7 +114,12 @@ int main(int argc, char **argv) {
     record<float>(stage,"/WrongEdit.value",first);
     record<SdfPathExpression>(stage,"/ExpressionBelow.value",first);
     record<SdfTimeCode>(stage,"/MisdeclaredTime.value",first);
-    record<VtFloatArray>(stage,"/SparseCompatibleBase.value",first);
+    record<SdfTimeCode>(stage,"/MisdeclaredNumeric.value",first);
+    record<VtArray<SdfTimeCode>>(stage,"/MisdeclaredTimeArray.value",first);
+    for (char const *path : {"/SparseCompatibleBase.value", "/SparseSampledBase.value",
+                            "/SparseScalarBase.value", "/SparseWrongDense.value",
+                            "/SparseWrongLower.value", "/SparseWrongUpper.value"})
+        record<VtFloatArray>(stage,path,first);
     record<GfVec3f>(stage,"/Vector.value",first);
     record<VtVec3fArray>(stage,"/Array.value",first);
     record<GfMatrix4d>(stage,"/Matrix.value",first);

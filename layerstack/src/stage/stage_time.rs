@@ -20,7 +20,6 @@ use crate::{
     doc::{FieldEntry, FieldValue, LayerOffset, Value},
     prim_index::{Opinion, OpinionValue},
     property::PropertySpec,
-    property::PropertyType,
 };
 
 /// Maps a layer time to stage time through `offset`: the inverse of
@@ -240,11 +239,11 @@ fn holds_timecode(value: &Value) -> bool {
     }
 }
 
-/// Whether reading `opinion` through its offset changes it: it is read
-/// through an offset and holds a `timecode` value. An attribute's default
-/// and samples are read only when its type is `timecode` (or unknown), so
-/// the samples of any other attribute are never visited.
-fn needs_retiming(opinion: &Opinion, property_type: Option<&PropertyType>) -> bool {
+/// Whether reading `opinion` through its offset changes actual `timecode`
+/// values. Declarations are hints, not proof of the stored kind: low-level
+/// source data can contain time codes under a different declared type.
+/// Native non-timecode arrays answer this check without visiting elements.
+fn needs_retiming(opinion: &Opinion) -> bool {
     if opinion.layer_offset.is_identity() {
         return false;
     }
@@ -252,19 +251,13 @@ fn needs_retiming(opinion: &Opinion, property_type: Option<&PropertyType>) -> bo
     match &opinion.value {
         OpinionValue::Field(value) => field(value),
         OpinionValue::Property(spec) => {
-            let values_may = spec
-                .type_name
-                .as_ref()
-                .or(property_type)
-                .is_none_or(|t| &*t.type_name == "timecode");
             spec.metadata.iter().any(|entry| field(&entry.value))
-                || (values_may
-                    && (spec.default.as_ref().is_some_and(holds_timecode)
-                        || spec
-                            .time_samples
-                            .iter()
-                            .flatten()
-                            .any(|(_, v)| holds_timecode(v))))
+                || spec.default.as_ref().is_some_and(holds_timecode)
+                || spec
+                    .time_samples
+                    .iter()
+                    .flatten()
+                    .any(|(_, v)| holds_timecode(v))
         }
     }
 }
@@ -279,24 +272,17 @@ fn retime_opinion(opinion: &Opinion) -> Option<Opinion> {
 }
 
 /// `opinions` with every `timecode` value in stage time, borrowed, with
-/// nothing copied, when none needs mapping. `property_type` is the
-/// composed type of the property the opinions are of, if any: the values
-/// of an attribute of another type than `timecode` are not visited.
+/// nothing copied, when none needs mapping. Actual storage kinds determine
+/// whether values need mapping; native non-timecode arrays are not traversed.
 ///
 /// Spec: AOUSD Core §12.3.2.1.
-pub(crate) fn opinions_in_stage_time<'o>(
-    opinions: &'o [Opinion],
-    property_type: Option<&PropertyType>,
-) -> Cow<'o, [Opinion]> {
-    let Some(first) = opinions
-        .iter()
-        .position(|opinion| needs_retiming(opinion, property_type))
-    else {
+pub(crate) fn opinions_in_stage_time(opinions: &[Opinion]) -> Cow<'_, [Opinion]> {
+    let Some(first) = opinions.iter().position(needs_retiming) else {
         return Cow::Borrowed(opinions);
     };
     let mut out = opinions[..first].to_vec();
     out.extend(opinions[first..].iter().map(|opinion| {
-        if needs_retiming(opinion, property_type) {
+        if needs_retiming(opinion) {
             retime_opinion(opinion).unwrap_or_else(|| opinion.clone())
         } else {
             opinion.clone()
@@ -347,24 +333,18 @@ mod tests {
         let typed = [opinion(
             PropertySpec::typed_attribute(doubles.clone()).with_time_samples(samples.clone()),
         )];
-        assert!(matches!(
-            opinions_in_stage_time(&typed, None),
-            Cow::Borrowed(_)
-        ));
-        // An untyped over is known to be a double from the composed type.
+        assert!(matches!(opinions_in_stage_time(&typed), Cow::Borrowed(_)));
+        // An untyped over also retains its actual double values.
         let untyped = [opinion(
             PropertySpec::attribute().with_time_samples(samples),
         )];
-        assert!(matches!(
-            opinions_in_stage_time(&untyped, Some(&doubles)),
-            Cow::Borrowed(_)
-        ));
+        assert!(matches!(opinions_in_stage_time(&untyped), Cow::Borrowed(_)));
         // A `timecode` attribute is mapped.
         let timecode = PropertyType::new("timecode", false, Value::TimeCode(0.0));
         let timecodes = [opinion(
             PropertySpec::typed_attribute(timecode).with_default(Value::TimeCode(1.0)),
         )];
-        let Cow::Owned(mapped) = opinions_in_stage_time(&timecodes, None) else {
+        let Cow::Owned(mapped) = opinions_in_stage_time(&timecodes) else {
             panic!("mapped");
         };
         assert_eq!(mapped[0].value.default_value(), Some(&Value::TimeCode(7.0)));

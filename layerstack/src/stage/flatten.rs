@@ -1044,7 +1044,7 @@ impl Flattener<'_, '_> {
         for key in keys {
             let Some(resolved) = self
                 .stage
-                .resolve_property_metadata_over(&anchored, None, name, key)
+                .resolve_property_metadata_over(&anchored, name, key)
             else {
                 continue;
             };

@@ -95,3 +95,38 @@ def DistantLight "SparseCompatibleBase"
 {
     double[] value = [2]
 }
+
+def DistantLight "SparseSampledBase"
+{
+    double[] value = [2]
+    double[] value.timeSamples = { 0: [2], 10: [6] }
+}
+def DistantLight "SparseScalarBase"
+{
+    float value = 3
+}
+def DistantLight "SparseWrongDense"
+{
+    float[] value = edit [append 4]
+}
+
+def DistantLight "SparseWrongLower"
+{
+    float[] value = [2]
+    float[] value.timeSamples = { 0: [2], 10: [6] }
+}
+def DistantLight "SparseWrongUpper"
+{
+    float[] value = [2]
+    float[] value.timeSamples = { 0: [2], 10: [6] }
+}
+
+def DistantLight "MisdeclaredNumeric"
+{
+    float value = 2
+}
+def DistantLight "MisdeclaredTimeArray"
+{
+    float[] value = [2]
+    float[] value.timeSamples = { 0: [2], 10: [4] }
+}

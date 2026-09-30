@@ -64,7 +64,7 @@ pub enum Specifier {
 ///
 /// Spec: AOUSD Core §6.2–§6.3 (scene description data types), §16.3.10
 /// (value type encoding).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub enum Value {
     /// No value.
     Null,
@@ -190,6 +190,11 @@ pub enum Value {
     ///
     /// Spec: AOUSD Core §6.2 (scene description data types).
     Array(Vec<Self>),
+    /// Shared homogeneous numeric array, with native element storage.
+    ///
+    /// Cloning shares the buffer; mutation uses copy-on-write. USD aliases
+    /// remain on the property type. See [`crate::TypedArray`].
+    TypedArray(crate::TypedArray),
     /// A dictionary of string-keyed values, maintaining insertion order.
     ///
     /// Dictionary-valued fields use combining semantics during value
@@ -204,6 +209,70 @@ pub enum Value {
     /// Resolved attribute values never expose this directly; it exists in
     /// authored scene description and during composition.
     ArrayEdit(ArrayEdit),
+}
+
+impl PartialEq for Value {
+    fn eq(&self, other: &Self) -> bool {
+        if let (Some(a), Some(b)) = (self.array_ref(), other.array_ref()) {
+            // No elements carry a logical kind in content equality. Storage
+            // kind still matters for typed reads, writing and authored guards.
+            if a.is_empty() && b.is_empty() {
+                return true;
+            }
+            if let (Some(a), Some(b)) = (a.typed(), b.typed()) {
+                return a == b;
+            }
+            return a.len() == b.len() && a.iter().zip(b.iter()).all(|(a, b)| *a == *b);
+        }
+        match (self, other) {
+            (Self::Null, Self::Null) | (Self::Blocked, Self::Blocked) => true,
+            (Self::Bool(a), Self::Bool(b)) => a == b,
+            (Self::UChar(a), Self::UChar(b)) => a == b,
+            (Self::Int(a), Self::Int(b)) => a == b,
+            (Self::UInt(a), Self::UInt(b)) => a == b,
+            (Self::Int64(a), Self::Int64(b)) => a == b,
+            (Self::UInt64(a), Self::UInt64(b)) => a == b,
+            (Self::Half(a), Self::Half(b)) => a == b,
+            (Self::Float(a), Self::Float(b)) => a == b,
+            (Self::Double(a), Self::Double(b)) => a == b,
+            (Self::String(a), Self::String(b)) => a == b,
+            (Self::Token(a), Self::Token(b)) => a == b,
+            (Self::Asset(a), Self::Asset(b)) => a == b,
+            (Self::PathExpression(a), Self::PathExpression(b)) => a == b,
+            (Self::TimeCode(a), Self::TimeCode(b)) => a == b,
+            (Self::Vec2f(a), Self::Vec2f(b)) => a == b,
+            (Self::Vec3f(a), Self::Vec3f(b)) => a == b,
+            (Self::Vec4f(a), Self::Vec4f(b)) => a == b,
+            (Self::Vec2d(a), Self::Vec2d(b)) => a == b,
+            (Self::Vec3d(a), Self::Vec3d(b)) => a == b,
+            (Self::Vec4d(a), Self::Vec4d(b)) => a == b,
+            (Self::Vec2h(a), Self::Vec2h(b)) => a == b,
+            (Self::Vec3h(a), Self::Vec3h(b)) => a == b,
+            (Self::Vec4h(a), Self::Vec4h(b)) => a == b,
+            (Self::Vec2i(a), Self::Vec2i(b)) => a == b,
+            (Self::Vec3i(a), Self::Vec3i(b)) => a == b,
+            (Self::Vec4i(a), Self::Vec4i(b)) => a == b,
+            (Self::Quatf(a), Self::Quatf(b)) => a == b,
+            (Self::Quatd(a), Self::Quatd(b)) => a == b,
+            (Self::Quath(a), Self::Quath(b)) => a == b,
+            (Self::Matrix2d(a), Self::Matrix2d(b)) => a == b,
+            (Self::Matrix3d(a), Self::Matrix3d(b)) => a == b,
+            (Self::Matrix4d(a), Self::Matrix4d(b)) => a == b,
+            (Self::Dictionary(a), Self::Dictionary(b)) => a == b,
+            (Self::ArrayEdit(a), Self::ArrayEdit(b)) => a == b,
+            (
+                Self::Opaque {
+                    type_name: at,
+                    bytes: ab,
+                },
+                Self::Opaque {
+                    type_name: bt,
+                    bytes: bb,
+                },
+            ) => at == bt && ab == bb,
+            _ => false,
+        }
+    }
 }
 
 impl fmt::Display for Value {
@@ -267,6 +336,16 @@ impl fmt::Display for Value {
                 write!(f, "opaque({type_name:?}, {} bytes)", bytes.len())
             }
             Self::Blocked => write!(f, "blocked"),
+            Self::TypedArray(items) => {
+                write!(f, "[")?;
+                for (i, v) in items.values().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{v}")?;
+                }
+                write!(f, "]")
+            }
             Self::Array(items) => {
                 write!(f, "[")?;
                 for (i, v) in items.iter().enumerate() {
@@ -312,10 +391,77 @@ fn fmt_matrix(f: &mut fmt::Formatter<'_>, m: &[f64], cols: usize) -> fmt::Result
 }
 
 impl Value {
+    /// Packs a homogeneous numeric array into native storage. Heterogeneous,
+    /// string and token arrays keep their general value representation.
+    #[must_use]
+    pub fn array(values: Vec<Self>) -> Self {
+        Self::array_with_element(values, None)
+    }
+
+    /// Packs an array, using `element` to retain the kind of an empty buffer.
+    /// Nonempty arrays keep their actual scalar kind; incompatible elements
+    /// stay heterogeneous rather than being coerced or discarded.
+    #[must_use]
+    pub fn array_with_element(values: Vec<Self>, element: Option<&Self>) -> Self {
+        Self::array_from_iter(values, element)
+    }
+
+    /// Builds an array directly from scalar elements, without retaining an
+    /// intermediate heterogeneous buffer for homogeneous numeric data.
+    /// `element` supplies the kind only when the iterator is empty.
+    #[must_use]
+    pub fn array_from_iter(values: impl IntoIterator<Item = Self>, element: Option<&Self>) -> Self {
+        let mut values = values.into_iter();
+        match values.next() {
+            Some(first) => {
+                let kind = first.clone();
+                crate::TypedArray::pack_iter(&kind, core::iter::once(first).chain(values))
+            }
+            None => element.map_or_else(
+                || Self::Array(Vec::new()),
+                |kind| crate::TypedArray::pack_iter(kind, core::iter::empty()),
+            ),
+        }
+    }
+
+    /// Borrows an array without expanding native buffers into scalar values.
+    ///
+    /// Retain the resolved value, then borrow its native slice. Numeric array
+    /// resolution shares the source buffer; this loop copies no points:
+    ///
+    /// ```
+    /// use layerstack::{InMemoryStore, Layer, LayerId, PrimSpec, PropertyPath,
+    ///     PropertySpec, PropertyType, ResolvedValue, Stage, StageOptions, Value};
+    /// let mut store = InMemoryStore::default();
+    /// let prim = store.path("/Mesh");
+    /// let points = store.tokens.intern("points");
+    /// let mut layer = Layer::new(LayerId(1));
+    /// layer.insert_prim(prim, PrimSpec::def().with_property(points,
+    ///     PropertySpec::typed_attribute(PropertyType::new("point3f", true,
+    ///         Value::Vec3f([0.0; 3])))
+    ///         .with_default(Value::from(vec![[1.0_f32, 2.0, 3.0]]))));
+    /// store.insert_layer(layer);
+    /// let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    /// let retained = stage.resolve_property_path(PropertyPath::new(prim, points)).unwrap();
+    /// let ResolvedValue::Scalar(value) = retained.value else { panic!("points"); };
+    /// let array = value.array_ref().unwrap();
+    /// let points = array.typed().unwrap().as_vec3f().unwrap();
+    /// assert_eq!(points[0], [1.0, 2.0, 3.0]);
+    /// ```
+    #[must_use]
+    pub fn array_ref(&self) -> Option<crate::ArrayRef<'_>> {
+        match self {
+            Self::Array(values) => Some(crate::ArrayRef::Values(values)),
+            Self::TypedArray(values) => Some(crate::ArrayRef::Typed(values)),
+            _ => None,
+        }
+    }
+
     /// Whether two values have identical representations, including float bits.
     ///
     /// Unlike `PartialEq`, unchanged NaNs compare equal and positive and negative
-    /// zero remain distinct. Applies recursively to arrays, dictionaries and
+    /// zero remain distinct. Typed empty arrays retain their element kind here;
+    /// an untyped empty array has a different authored representation. Applies recursively to arrays, dictionaries and
     /// sparse edits. Useful for retained-result comparison and authored guards.
     #[must_use]
     pub fn same_representation(&self, other: &Self) -> bool {

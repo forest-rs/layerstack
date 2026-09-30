@@ -453,6 +453,15 @@ fn expr(value: &Value, tokens: &TokenInterner) -> Result<String, String> {
         Value::Quatd(v) => format!("Value::Quatd({})", list(v, |x| f64_lit(*x))),
         Value::Quatf(v) => format!("Value::Quatf({})", list(v, |x| f32_lit(*x))),
         Value::Quath(v) => format!("Value::Quath({})", list(v, |x| format!("{x:#06x}"))),
+        Value::TypedArray(items) => {
+            let items = items
+                .values()
+                .map(|item| expr(&item, tokens))
+                .collect::<Result<Vec<_>, _>>()?;
+            // Generated fallback constructors keep their existing spelling;
+            // runtime authored values may use either array representation.
+            format!("Value::Array(alloc::vec![{}])", items.join(", "))
+        }
         Value::Array(items) => {
             let items = items
                 .iter()

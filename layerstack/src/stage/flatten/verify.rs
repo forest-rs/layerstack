@@ -649,6 +649,14 @@ impl Verifier<'_> {
                 Value::Token(token) => {
                     let _ = write!(out, "Token({:?})", tokens.resolve(*token));
                 }
+                Value::TypedArray(items) => {
+                    out.push('[');
+                    for item in items.values() {
+                        write(out, &item, tokens);
+                        out.push_str(", ");
+                    }
+                    out.push(']');
+                }
                 Value::Array(items) => {
                     out.push('[');
                     for item in items {

@@ -184,6 +184,9 @@ impl Resolved {
     fn from_value(value: &Value) -> Self {
         match value {
             Value::Array(items) => Self::Array(items.iter().map(Element::from_value).collect()),
+            Value::TypedArray(items) => {
+                Self::Array(items.values().map(|v| Element::from_value(&v)).collect())
+            }
             scalar => Self::Scalar(Element::from_value(scalar)),
         }
     }

@@ -1309,11 +1309,9 @@ fn compose_over(
     };
     match weaker {
         Value::ArrayEdit(weaker) => Some(Value::ArrayEdit(edit.compose_over(weaker))),
-        Value::Array(items) => Some(Value::Array(crate::array_edit::apply_to_array(
-            edit,
-            items,
-            property_type,
-        ))),
+        Value::Array(_) | Value::TypedArray(_) => {
+            crate::array_edit::apply_to_value(edit, weaker, property_type)
+        }
         _ => None,
     }
 }

@@ -216,15 +216,15 @@ fn probe(stage: &Stage, store: &mut InMemoryStore) -> BTreeMap<String, Probe> {
                 .map_or(Probe::Absent, |r| num(&r.value));
             out.insert(format!("{name}.spin@{time}"), value);
         }
-        let color = match scalar(stage, color) {
-            Some(Value::Array(items)) => match items.first() {
+        let color = scalar(stage, color).map_or(Probe::Absent, |value| {
+            let items = value.array_ref().expect("color array");
+            match items.get(0).as_deref() {
                 Some(Value::Vec3f(c)) => {
                     Probe::Color(c.map(|x| (f64::from(x) * 1e6).round() / 1e6))
                 }
                 other => panic!("unexpected color {other:?}"),
-            },
-            _ => Probe::Absent,
-        };
+            }
+        });
         out.insert(format!("{name}.color"), color);
     }
     let authored = |store: &mut InMemoryStore, layer: LayerId, path: &str| {

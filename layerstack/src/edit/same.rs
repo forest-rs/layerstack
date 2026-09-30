@@ -4,7 +4,7 @@
 //! Authored-state identity for edit guards.
 //!
 //! A guard asks whether a slot still holds exactly what was authored
-//! there, not whether two values are numerically equal. The derived
+//! there, not whether two values are numerically equal. The
 //! `PartialEq` of [`Value`] uses IEEE float equality, under which an
 //! unchanged NaN differs from itself and `+0.0` equals `-0.0`; either
 //! would make a guard wrong. [`Same`] compares every float, at any depth
@@ -91,6 +91,15 @@ impl<K: Eq + core::hash::Hash, V: Same> Same for HashMap<K, V> {
 
 impl Same for Value {
     fn same(&self, other: &Self) -> bool {
+        if let (Some(a), Some(b)) = (self.array_ref(), other.array_ref()) {
+            if let (Some(a), Some(b)) = (a.typed(), b.typed()) {
+                return a.same(b);
+            }
+            if a.is_empty() && b.is_empty() && a.typed().is_some() != b.typed().is_some() {
+                return false;
+            }
+            return a.len() == b.len() && a.iter().zip(b.iter()).all(|(a, b)| a.same(&b));
+        }
         match (self, other) {
             (Self::Float(a), Self::Float(b)) => a.same(b),
             (Self::Double(a), Self::Double(b)) | (Self::TimeCode(a), Self::TimeCode(b)) => {

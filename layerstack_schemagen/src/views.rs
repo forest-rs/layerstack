@@ -269,6 +269,16 @@ fn doc_attrs(indent: &str, paragraphs: &[String]) -> String {
 
 /// A fallback value as USD text.
 fn usd_text(value: &Value, tokens: &TokenInterner) -> String {
+    if let Some(array) = value.array_ref() {
+        return format!(
+            "[{}]",
+            array
+                .iter()
+                .map(|item| usd_text(&item, tokens))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
     let list = |items: &mut dyn Iterator<Item = String>| items.collect::<Vec<_>>().join(", ");
     match value {
         Value::Bool(v) => v.to_string(),

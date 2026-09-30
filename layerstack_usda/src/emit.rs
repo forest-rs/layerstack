@@ -1336,11 +1336,11 @@ impl EmitCtx<'_> {
                 // For array types like "float3[]", pass "float3" (not "float")
                 // so inner tuples are recognized as dimensioned types.
                 let arr_elem_hint = type_hint.strip_suffix("[]").unwrap_or(type_hint);
-                let elements: Vec<Value> = items
-                    .iter()
-                    .map(|v| self.convert_value(v, arr_elem_hint))
-                    .collect();
-                Value::Array(elements)
+                let prototype = self
+                    .declared_property_type(arr_elem_hint, true)
+                    .default_scalar;
+                let elements = items.iter().map(|v| self.convert_value(v, arr_elem_hint));
+                Value::array_from_iter(elements, Some(&prototype))
             }
             ast::Value::ArrayEdit(edit) => {
                 let element_hint = type_hint.strip_suffix("[]").unwrap_or(type_hint);
@@ -3176,11 +3176,8 @@ def \"A\" {
                 .clone(),
         );
         match field {
-            FieldValue::Value(Value::Array(items)) => {
-                assert_eq!(items.len(), 3);
-                assert_eq!(items[0], Value::Int(1));
-                assert_eq!(items[1], Value::Int(2));
-                assert_eq!(items[2], Value::Int(3));
+            FieldValue::Value(Value::TypedArray(layerstack::TypedArray::Int(items))) => {
+                assert_eq!(items.as_slice(), &[1, 2, 3]);
             }
             other => panic!("expected Array, got {:?}", other),
         }
@@ -3201,10 +3198,8 @@ def \"A\" {
                 .clone(),
         );
         match field {
-            FieldValue::Value(Value::Array(items)) => {
-                assert_eq!(items.len(), 2);
-                assert_eq!(items[0], Value::Vec3f([1.0, 2.0, 3.0]));
-                assert_eq!(items[1], Value::Vec3f([4.0, 5.0, 6.0]));
+            FieldValue::Value(Value::TypedArray(layerstack::TypedArray::Vec3f(items))) => {
+                assert_eq!(items.as_slice(), &[[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]]);
             }
             other => panic!("expected Array of Vec3f, got {:?}", other),
         }
@@ -3224,7 +3219,7 @@ def \"A\" {
                 .clone(),
         );
         match field {
-            FieldValue::Value(Value::Array(items)) => {
+            FieldValue::Value(Value::TypedArray(layerstack::TypedArray::Int(items))) => {
                 assert!(items.is_empty());
             }
             other => panic!("expected empty Array, got {:?}", other),
@@ -3469,8 +3464,8 @@ def \"A\" {
         assert!(matches!(signed("g"), Value::TimeCode(z) if z == 0.0 && z.is_sign_negative()));
         assert!(matches!(
             signed("j"),
-            Value::Array(items) if matches!(items[..],
-                [Value::Float(a), Value::Float(b), Value::Float(c)]
+            Value::TypedArray(layerstack::TypedArray::Float(items)) if matches!(items[..],
+                [a, b, c]
                     if a == 1.0 && b.is_sign_negative() && c == 1.5)
         ));
         let k = values.iter().find(|v| v.0 == "k").unwrap();

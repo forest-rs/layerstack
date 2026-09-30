@@ -58,6 +58,51 @@ use serde::Deserialize;
 
 const ORACLE: &str = include_str!("../fixtures/expression_variables/oracle.json");
 
+/// Numeric and boolean expression lists keep their behavior after compact
+/// import, including empty lists and unsupported element kinds.
+#[test]
+fn imported_native_expression_lists_keep_supported_types() {
+    let source = r#"#usda 1.0
+(
+    expressionVariables = {
+        int[] ints = [1, 2]
+        int64[] wide = [-9223372036854775808, 9223372036854775807]
+        bool[] flags = [true, false]
+        int[] emptyInts = []
+        int64[] emptyWide = []
+        bool[] emptyFlags = []
+        float[] unsupported = []
+    }
+)
+"#;
+    let imported = layerstack_conformance::save_corpus::Imported::usda(source);
+    let binary = imported.save_usdc().unwrap();
+    for layer in [
+        imported,
+        layerstack_conformance::save_corpus::Imported::usdc(&binary),
+    ] {
+        let variables = layer.layer.expression_variables(&layer.tokens);
+        for (name, expected) in [
+            ("ints", ExpressionValue::IntList(vec![1, 2])),
+            ("wide", ExpressionValue::IntList(vec![i64::MIN, i64::MAX])),
+            ("flags", ExpressionValue::BoolList(vec![true, false])),
+            ("emptyInts", ExpressionValue::EmptyList),
+            ("emptyWide", ExpressionValue::EmptyList),
+            ("emptyFlags", ExpressionValue::EmptyList),
+        ] {
+            assert_eq!(
+                variables.get(name),
+                Some(&VariableValue::Value(expected)),
+                "{name}"
+            );
+        }
+        assert!(matches!(
+            variables.get("unsupported"),
+            Some(VariableValue::Unsupported(_))
+        ));
+    }
+}
+
 #[derive(Deserialize)]
 struct Oracle {
     openusd_version: String,

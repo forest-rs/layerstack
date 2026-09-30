@@ -22,7 +22,7 @@ use opinionated::{
 };
 
 use crate::{
-    array_edit::{ArrayEdit, PropertyTypeFill, apply_to_array},
+    array_edit::{ArrayEdit, apply_in_place, apply_to_array},
     doc::{InterpolationType, Value},
     half::{from_f32 as f32_to_half, to_f32 as half_to_f32},
     prim_index::{Opinion, OpinionValue},
@@ -193,9 +193,9 @@ struct ArrayFamily<'a> {
 }
 
 impl ArrayFamily<'_> {
-    fn classify_value(value: &Value) -> FamilyMember<Vec<Value>, &ArrayEdit> {
+    fn classify_value(value: &Value) -> FamilyMember<Value, &ArrayEdit> {
         match value {
-            Value::Array(items) => FamilyMember::Dense(items.clone()),
+            Value::Array(_) | Value::TypedArray(_) => FamilyMember::Dense(value.clone()),
             Value::ArrayEdit(edit) => FamilyMember::Sparse(edit),
             // A sampled block blocks exactly like an authored default block,
             // wherever it is the held sample. OpenUSD 26.08 lets opinions
@@ -210,7 +210,7 @@ impl ArrayFamily<'_> {
         }
     }
 
-    fn foreign<'op>() -> FamilyMember<Vec<Value>, &'op ArrayEdit> {
+    fn foreign<'op>() -> FamilyMember<Value, &'op ArrayEdit> {
         // `OpinionKind` cannot name domain families, so the reason degrades
         // to a set-over-set mismatch. The reason is never observed: the lean
         // kernel entry point records no events.
@@ -222,7 +222,7 @@ impl ArrayFamily<'_> {
 }
 
 impl OpinionFamily<Opinion> for ArrayFamily<'_> {
-    type Value = Vec<Value>;
+    type Value = Value;
     type Edit<'op> = &'op ArrayEdit;
 
     fn classify<'op>(&self, opinion: &'op Opinion) -> FamilyMember<Self::Value, Self::Edit<'op>> {
@@ -240,7 +240,7 @@ impl OpinionFamily<Opinion> for ArrayFamily<'_> {
         Opinion: 'op,
     {
         let mut value = base;
-        edit.apply_in_place(&mut value, PropertyTypeFill(self.property_type));
+        apply_in_place(edit, &mut value, self.property_type);
         value
     }
 
@@ -253,9 +253,15 @@ impl OpinionFamily<Opinion> for ArrayFamily<'_> {
     /// named divergence `sampled-block-drops-fallback`.
     fn seed(&self) -> Self::Value {
         match self.fallback {
-            Some(Value::Array(items)) => items.clone(),
-            Some(Value::ArrayEdit(edit)) => apply_to_array(edit, &[], self.property_type),
-            _ => Vec::new(),
+            Some(value @ (Value::Array(_) | Value::TypedArray(_))) => value.clone(),
+            Some(Value::ArrayEdit(edit)) => Value::array_with_element(
+                apply_to_array(edit, &[], self.property_type),
+                self.property_type.map(|p| &p.default_scalar),
+            ),
+            _ => self.property_type.filter(|p| p.is_array).map_or_else(
+                || Value::Array(Vec::new()),
+                PropertyType::default_property_value,
+            ),
         }
     }
 }
@@ -323,7 +329,7 @@ pub(crate) fn reads_array_family(opinion: &Opinion, at_time: bool) -> bool {
     let in_family = |value: &Value| {
         matches!(
             value,
-            Value::Array(_) | Value::ArrayEdit(_) | Value::Blocked
+            Value::Array(_) | Value::TypedArray(_) | Value::ArrayEdit(_) | Value::Blocked
         )
     };
     if !at_time {
@@ -363,7 +369,7 @@ impl SparseValueFamily {
 
     fn for_value(value: &Value) -> Option<Self> {
         match value {
-            Value::Array(_) | Value::ArrayEdit(_) => Some(Self::Array),
+            Value::Array(_) | Value::TypedArray(_) | Value::ArrayEdit(_) => Some(Self::Array),
             _ => None,
         }
     }
@@ -417,7 +423,7 @@ fn is_foreign_default(value: &OpinionValue) -> bool {
     value.default_value().is_some_and(|value| {
         !matches!(
             value,
-            Value::Array(_) | Value::ArrayEdit(_) | Value::Blocked
+            Value::Array(_) | Value::TypedArray(_) | Value::ArrayEdit(_) | Value::Blocked
         )
     })
 }
@@ -437,14 +443,12 @@ fn fold_array_chain<'o>(
         (value, ChainPos { opinion, time })
     });
     match folder.fold(family, f64::NEG_INFINITY, chain) {
-        FamilyResolution::Resolved { value, .. } => {
-            SparseResolveResult::Resolved(Value::Array(value))
-        }
+        FamilyResolution::Resolved { value, .. } => SparseResolveResult::Resolved(value),
         FamilyResolution::Blocked { .. } => SparseResolveResult::Blocked,
         // No opinion contributed: an array-family fallback still resolves on
         // its own; otherwise the family does not apply to this chain.
         FamilyResolution::Absent if family.fallback.is_some() => {
-            SparseResolveResult::Resolved(Value::Array(family.seed()))
+            SparseResolveResult::Resolved(family.seed())
         }
         FamilyResolution::Absent => SparseResolveResult::NotApplicable,
     }
@@ -679,7 +683,7 @@ struct PickedArrayFamily<'a> {
 }
 
 impl<'o> OpinionFamily<Bracket<'o>> for PickedArrayFamily<'_> {
-    type Value = Vec<Value>;
+    type Value = Value;
     type Edit<'op>
         = &'op ArrayEdit
     where
@@ -739,23 +743,23 @@ fn resolve_array_at_time(
         };
     };
     let lower = match fold_entry(&plan.brackets, array, lower_entry, folder) {
-        SparseResolveResult::Resolved(Value::Array(lower)) => lower,
+        SparseResolveResult::Resolved(lower) => lower,
         other => return other,
     };
     let (lower_time, upper_time) = (lower_entry.time, upper_entry.time);
     if interp == InterpolationType::Held || upper_time == lower_time || lower_time.is_infinite() {
-        return SparseResolveResult::Resolved(Value::Array(lower));
+        return SparseResolveResult::Resolved(lower);
     }
     let alpha = (time - lower_time) / (upper_time - lower_time);
     let value = match fold_entry(&plan.brackets, array, upper_entry, folder) {
-        SparseResolveResult::Resolved(Value::Array(upper)) => {
-            lerp_arrays(&lower, &upper, alpha).unwrap_or(lower)
+        SparseResolveResult::Resolved(upper) => {
+            lerp_array_values(&lower, &upper, alpha).unwrap_or(lower)
         }
         // A blocked or absent upper sample holds the lower one
         // (`_GetInterpolatingSamplesImpl` in `interpolators.cpp`).
         _ => lower,
     };
-    SparseResolveResult::Resolved(Value::Array(value))
+    SparseResolveResult::Resolved(value)
 }
 
 /// Folds the participating brackets into the value of one composed sample.
@@ -778,7 +782,7 @@ fn fold_entry(
         .take_while(|bracket| {
             matches!(
                 bracket.sample(entry.picks[bracket.index]),
-                Some(Value::Array(_) | Value::ArrayEdit(_) | Value::Blocked)
+                Some(Value::Array(_) | Value::TypedArray(_) | Value::ArrayEdit(_) | Value::Blocked)
             )
         })
         .map(|bracket| {
@@ -788,12 +792,10 @@ fn fold_entry(
             (bracket, ChainPos { opinion, time })
         });
     match folder.fold(&family, entry.time, chain) {
-        FamilyResolution::Resolved { value, .. } => {
-            SparseResolveResult::Resolved(Value::Array(value))
-        }
+        FamilyResolution::Resolved { value, .. } => SparseResolveResult::Resolved(value),
         FamilyResolution::Blocked { .. } => SparseResolveResult::Blocked,
         FamilyResolution::Absent if array.fallback.is_some() => {
-            SparseResolveResult::Resolved(Value::Array(array.seed()))
+            SparseResolveResult::Resolved(array.seed())
         }
         FamilyResolution::Absent => SparseResolveResult::NotApplicable,
     }
@@ -810,6 +812,61 @@ fn fold_entry(
 /// ([`gf_slerp`]).
 ///
 /// Spec: AOUSD Core §12.5.2 (the linearly interpolating types; others hold).
+fn lerp_array_values(lower: &Value, upper: &Value, alpha: f64) -> Option<Value> {
+    if let (Value::TypedArray(a), Value::TypedArray(b)) = (lower, upper) {
+        return lerp_typed(a, b, alpha).map(Value::TypedArray);
+    }
+    let (a, b) = (lower.array_ref()?, upper.array_ref()?);
+    if a.len() != b.len() {
+        return None;
+    }
+    let values = a
+        .iter()
+        .zip(b.iter())
+        .map(|(a, b)| lerp_element(&a, &b, alpha))
+        .collect::<Option<Vec<_>>>()?;
+    Some(Value::array(values))
+}
+
+fn lerp_typed(
+    a: &crate::TypedArray,
+    b: &crate::TypedArray,
+    alpha: f64,
+) -> Option<crate::TypedArray> {
+    use crate::TypedArray as A;
+    use alloc::sync::Arc;
+    macro_rules! lerp {
+        ($($kind:ident => $f:expr),* $(,)?) => {
+            match (a,b) {
+                $((A::$kind(a), A::$kind(b)) if a.len() == b.len() => Some(A::$kind(Arc::new(a.iter().zip(b.iter()).map(|(a,b)| ($f)(a,b)).collect()))),)*
+                _ => None,
+            }
+        };
+    }
+    lerp! {
+        Half => |a: &u16, b: &u16| lerp_half(*a,*b,alpha),
+        Float => |a: &f32, b: &f32| lerp_f32(*a,*b,alpha),
+        Double => |a: &f64, b: &f64| gf_lerp(*a,*b,alpha),
+        TimeCode => |a: &f64, b: &f64| gf_lerp(*a,*b,alpha),
+        Vec2h => |a,b| lerp_halves(a,b,alpha),
+        Vec3h => |a,b| lerp_halves(a,b,alpha),
+        Vec4h => |a,b| lerp_halves(a,b,alpha),
+        Vec2f => |a,b| lerp_f32s(a,b,alpha),
+        Vec3f => |a,b| lerp_f32s(a,b,alpha),
+        Vec4f => |a,b| lerp_f32s(a,b,alpha),
+        Vec2d => |a,b| lerp_f64s(a,b,alpha),
+        Vec3d => |a,b| lerp_f64s(a,b,alpha),
+        Vec4d => |a,b| lerp_f64s(a,b,alpha),
+        Matrix2d => |a,b| lerp_f64s(a,b,alpha),
+        Matrix3d => |a,b| lerp_f64s(a,b,alpha),
+        Matrix4d => |a,b| lerp_f64s(a,b,alpha),
+        Quath => |a,b| slerp_quath(a,b,alpha),
+        Quatf => |a,b| slerp_quatf(a,b,alpha),
+        Quatd => |a: &[f64;4],b: &[f64;4]| gf_slerp(alpha,*a,*b,|x|x,|x|x),
+    }
+}
+
+#[cfg(test)]
 fn lerp_arrays(lower: &[Value], upper: &[Value], alpha: f64) -> Option<Vec<Value>> {
     if lower.len() != upper.len() {
         return None;
@@ -970,6 +1027,9 @@ fn slerp_quatf(a: &[f32; 4], b: &[f32; 4], alpha: f64) -> [f32; 4] {
 ///
 /// Spec: AOUSD Core §12.5.2 (the linearly interpolating types; others hold).
 fn lerp_element(a: &Value, b: &Value, alpha: f64) -> Option<Value> {
+    if a.array_ref().is_some() && b.array_ref().is_some() {
+        return lerp_array_values(a, b, alpha);
+    }
     Some(match (a, b) {
         (Value::Half(a), Value::Half(b)) => Value::Half(lerp_half(*a, *b, alpha)),
         (Value::Vec2h(a), Value::Vec2h(b)) => Value::Vec2h(lerp_halves(a, b, alpha)),
@@ -1652,7 +1712,7 @@ mod tests {
     }
 
     fn float_array(values: &[f32]) -> Value {
-        Value::Array(values.iter().copied().map(Value::Float).collect())
+        Value::array_from_iter(values.iter().copied().map(Value::Float), None)
     }
 
     fn float_array_type() -> PropertyType {
@@ -1660,7 +1720,7 @@ mod tests {
     }
 
     fn float3_array(values: &[[f32; 3]]) -> Value {
-        Value::Array(values.iter().copied().map(Value::Vec3f).collect())
+        Value::array_from_iter(values.iter().copied().map(Value::Vec3f), None)
     }
 
     fn edit(op: ArrayEditOp) -> Value {
@@ -1971,6 +2031,7 @@ mod tests {
         fn sample(value: &Value) -> Sample {
             match value {
                 Value::Array(items) => Sample::Dense(items.clone()),
+                Value::TypedArray(items) => Sample::Dense(items.values().collect()),
                 Value::ArrayEdit(edit) => Sample::Sparse(edit.clone()),
                 Value::Blocked => Sample::Block,
                 other => panic!("unexpected sample {other:?}"),

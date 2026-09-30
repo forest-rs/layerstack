@@ -18,15 +18,13 @@ pub(crate) fn compute(scene: &Scene<'_>, path: PathId, time: Time) -> Option<(Ra
     let extent_varying = prim.property_might_vary("extent");
     if prim.has_authored_value("extent")
         && let Some(range) = read(&prim, "extent", time, |value, tokens| {
-            let Value::Array(values) = value else {
+            let values = value.array_ref()?;
+            if values.len() != 2 {
                 return None;
-            };
-            let [min, max] = values.as_slice() else {
-                return None;
-            };
+            }
             Some(Range3d {
-                min: crate::value::read_float3(min, tokens)?.map(f64::from),
-                max: crate::value::read_float3(max, tokens)?.map(f64::from),
+                min: crate::value::read_float3(values.get(0)?.as_ref(), tokens)?.map(f64::from),
+                max: crate::value::read_float3(values.get(1)?.as_ref(), tokens)?.map(f64::from),
             })
         })
     {
@@ -38,16 +36,23 @@ pub(crate) fn compute(scene: &Scene<'_>, path: PathId, time: Time) -> Option<(Ra
     // and points have width-dependent providers and cannot use the mesh rule.
     if scene.is_a(path, "Mesh") {
         let range = read(&prim, "points", time, |value, tokens| {
-            let Value::Array(values) = value else {
-                return None;
-            };
+            let values = value.array_ref()?;
             let mut range = Range3d::default();
-            for value in values {
-                let point = crate::value::read_float3(value, tokens)?.map(f64::from);
+            let mut add = |point: [f32; 3]| {
+                let point = point.map(f64::from);
                 range.union_with(Range3d {
                     min: point,
                     max: point,
                 });
+            };
+            if let Some(points) = values.typed().and_then(layerstack::TypedArray::as_vec3f) {
+                for point in points {
+                    add(*point);
+                }
+            } else {
+                for value in values.iter() {
+                    add(crate::value::read_float3(&value, tokens)?);
+                }
             }
             Some(range)
         })?;

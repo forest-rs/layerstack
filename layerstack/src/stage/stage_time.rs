@@ -37,6 +37,20 @@ pub(crate) fn map_leaves(
 ) -> Option<Value> {
     match value {
         Value::Array(items) => map_all(items, leaf).map(Value::Array),
+        Value::TypedArray(crate::TypedArray::TimeCode(items)) => {
+            let (index, first) = items.iter().enumerate().find_map(|(index, time)| {
+                leaf(&Value::TimeCode(*time)).map(|value| (index, value))
+            })?;
+            let prefix = items[..index].iter().map(|time| Value::TimeCode(*time));
+            let tail = items[index + 1..]
+                .iter()
+                .map(|time| leaf(&Value::TimeCode(*time)).unwrap_or(Value::TimeCode(*time)));
+            Some(Value::array_from_iter(
+                prefix.chain(core::iter::once(first)).chain(tail),
+                Some(&Value::TimeCode(0.0)),
+            ))
+        }
+        Value::TypedArray(_) => None,
         Value::Dictionary(entries) => {
             let mut changed = false;
             let mapped = entries
@@ -211,6 +225,7 @@ fn holds_timecode(value: &Value) -> bool {
     match value {
         Value::TimeCode(_) => true,
         Value::Array(items) => items.iter().any(holds_timecode),
+        Value::TypedArray(crate::TypedArray::TimeCode(_)) => true,
         Value::Dictionary(entries) => entries.iter().any(|(_, v)| holds_timecode(v)),
         Value::ArrayEdit(edit) => edit.ops.iter().any(|op| match op {
             ArrayEditOp::Write { src, .. } | ArrayEditOp::Insert { src, .. } => {

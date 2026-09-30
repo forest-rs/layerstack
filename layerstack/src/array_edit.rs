@@ -61,20 +61,45 @@ pub fn apply_to_array(
     edit.compose_over_array(weaker, PropertyTypeFill(property_type))
 }
 
-/// Applies `edit` over a dense [`Value::Array`], filling growth from
-/// `property_type`.
+/// Applies `edit` over a dense array, filling growth from `property_type`.
+/// Native buffers retain their element kind and use copy-on-write ownership.
 ///
-/// Returns `None` when `weaker` is not a [`Value::Array`].
+/// Returns `None` when `weaker` is not an array.
 #[must_use]
 pub fn apply_to_value(
     edit: &ArrayEdit,
     weaker: &Value,
     property_type: Option<&PropertyType>,
 ) -> Option<Value> {
-    let Value::Array(items) = weaker else {
-        return None;
-    };
-    Some(Value::Array(apply_to_array(edit, items, property_type)))
+    let mut value = weaker.clone();
+    apply_in_place(edit, &mut value, property_type).then_some(value)
+}
+
+/// Applies a sparse edit to either array representation, retaining unique
+/// native allocations. Shared buffers copy once before mutation. Incompatible
+/// literal kinds preserve the legacy heterogeneous-array behavior.
+pub fn apply_in_place(
+    edit: &ArrayEdit,
+    value: &mut Value,
+    property_type: Option<&PropertyType>,
+) -> bool {
+    let fill = property_type.and_then(PropertyType::default_array_element);
+    match value {
+        Value::TypedArray(items) => {
+            if items.apply_edit(edit, fill.as_ref()) {
+                return true;
+            }
+            let mut values = items.values().collect();
+            edit.apply_in_place(&mut values, PropertyTypeFill(property_type));
+            *value = Value::array(values);
+            true
+        }
+        Value::Array(items) => {
+            edit.apply_in_place(items, PropertyTypeFill(property_type));
+            true
+        }
+        _ => false,
+    }
 }
 
 #[cfg(test)]

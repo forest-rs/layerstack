@@ -435,12 +435,10 @@ fn load_usda(text: &str) -> InMemoryStore {
 }
 
 fn as_u32s(value: &Value) -> Vec<u32> {
-    let Value::Array(items) = value else {
-        panic!("expected an int array, got {value:?}");
-    };
+    let items = value.array_ref().expect("int array");
     items
         .iter()
-        .map(|v| match v {
+        .map(|v| match v.as_ref() {
             Value::Int(i) => u32::try_from(*i).expect("non-negative"),
             other => panic!("expected int, got {other:?}"),
         })
@@ -476,9 +474,8 @@ fn quad_and_triangle_topology_round_trips() {
         "/Root/Panel",
         "faceVertexIndices",
     ));
-    let Value::Array(read_points) = attr(&stage, &mut store, "/Root/Panel", "points") else {
-        panic!("points array");
-    };
+    let read_points = attr(&stage, &mut store, "/Root/Panel", "points");
+    let read_points = read_points.array_ref().expect("points array");
     assert_eq!(read_counts, counts, "faceVertexCounts");
     assert_eq!(read_indices, indices, "faceVertexIndices");
     assert_eq!(

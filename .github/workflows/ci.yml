@@ -429,6 +429,9 @@ jobs:
       - name: check inherited motion settings oracle
         run: python layerstack_conformance/scripts/motion_oracle.py --check
 
+      - name: check semantic label queries oracle
+        run: python layerstack_conformance/scripts/labels_oracle.py --check
+
       # The binding oracle must be what OpenUSD binds and collects.
       - name: check binding oracle
         run: python layerstack_conformance/scripts/binding_oracle.py --check

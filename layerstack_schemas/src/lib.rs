@@ -299,6 +299,8 @@ mod gf;
 #[cfg(feature = "usd-geom")]
 mod imageable;
 pub mod kind;
+#[cfg(feature = "usd-semantics")]
+mod labels;
 #[cfg(feature = "usd-geom")]
 mod motion;
 #[cfg(feature = "usd")]
@@ -334,6 +336,8 @@ pub use generated::{Domain, OPENUSD_VERSION};
 #[cfg(feature = "usd-geom")]
 pub use imageable::{PurposeInfo, PurposeInputs, Visibility, VisibilityInputs};
 pub use kind::KindRegistry;
+#[cfg(feature = "usd-semantics")]
+pub use labels::{LabelInterval, LabelQueryError, LabelsQuery};
 pub use layerstack::Time;
 #[cfg(feature = "usd")]
 pub use predicate::{CollectionPredicate, CollectionPredicates};

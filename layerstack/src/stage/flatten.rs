@@ -1273,7 +1273,7 @@ fn composed_samples(
     }
     // What still composes composes over the empty array.
     for (_, sample) in &mut partial {
-        if let Value::ArrayEdit(edit) = sample {
+        if let Some(edit) = sample.array_edit_ref() {
             *sample = Value::Array(crate::array_edit::apply_to_array(edit, &[], property_type));
             baked = true;
         }
@@ -1289,11 +1289,11 @@ fn composed_samples(
 /// opinions: a sparse array edit.
 fn can_compose_over(partial: &[(f64, Value)], default: Option<&Value>) -> bool {
     if partial.is_empty() {
-        default.is_some_and(|value| matches!(value, Value::ArrayEdit(_)))
+        default.is_some_and(|value| value.array_edit_ref().is_some())
     } else {
         partial
             .iter()
-            .any(|(_, value)| matches!(value, Value::ArrayEdit(_)))
+            .any(|(_, value)| value.array_edit_ref().is_some())
     }
 }
 
@@ -1304,11 +1304,15 @@ fn compose_over(
     weaker: &Value,
     property_type: Option<&PropertyType>,
 ) -> Option<Value> {
-    let Value::ArrayEdit(edit) = stronger else {
-        return None;
-    };
+    let edit = stronger.array_edit_ref()?;
     match weaker {
-        Value::ArrayEdit(weaker) => Some(Value::ArrayEdit(edit.compose_over(weaker))),
+        Value::ArrayEdit(_) | Value::TypedArrayEdit(_) => {
+            let edit = edit.compose_over(weaker.array_edit_ref()?);
+            Some(match stronger.array_edit_type() {
+                Some(ty) => Value::typed_array_edit(edit, ty.clone()),
+                None => Value::ArrayEdit(edit),
+            })
+        }
         Value::Array(_) | Value::TypedArray(_) => {
             crate::array_edit::apply_to_value(edit, weaker, property_type)
         }

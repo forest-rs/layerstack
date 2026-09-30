@@ -64,7 +64,10 @@ pub(crate) fn map_leaves(
                 .collect();
             changed.then_some(Value::Dictionary(mapped))
         }
-        Value::ArrayEdit(edit) => {
+        Value::ArrayEdit(_) | Value::TypedArrayEdit(_) => {
+            let edit = value.array_edit_ref()?;
+            // OpenUSD `Usd_ApplyLayerOffsetToValue`: retime explicit
+            // literals only. An implicit resize fill remains type-default zero.
             let mut changed = false;
             let mut operand = |operand: &ArrayEditOperand| match operand {
                 ArrayEditOperand::Literal(item) => match map_leaves(item, leaf) {
@@ -105,7 +108,13 @@ pub(crate) fn map_leaves(
                     other => other.clone(),
                 })
                 .collect();
-            changed.then_some(Value::ArrayEdit(ArrayEdit { ops }))
+            changed.then(|| {
+                let edit = ArrayEdit { ops };
+                match value.array_edit_type() {
+                    Some(ty) => Value::typed_array_edit(edit, ty.clone()),
+                    None => Value::ArrayEdit(edit),
+                }
+            })
         }
         other => leaf(other),
     }
@@ -226,15 +235,18 @@ fn holds_timecode(value: &Value) -> bool {
         Value::Array(items) => items.iter().any(holds_timecode),
         Value::TypedArray(crate::TypedArray::TimeCode(_)) => true,
         Value::Dictionary(entries) => entries.iter().any(|(_, v)| holds_timecode(v)),
-        Value::ArrayEdit(edit) => edit.ops.iter().any(|op| match op {
-            ArrayEditOp::Write { src, .. } | ArrayEditOp::Insert { src, .. } => {
-                matches!(src, ArrayEditOperand::Literal(v) if holds_timecode(v))
-            }
-            ArrayEditOp::MinSizeFill { fill, .. } | ArrayEditOp::ResizeFill { fill, .. } => {
-                holds_timecode(fill)
-            }
-            _ => false,
-        }),
+        Value::ArrayEdit(_) | Value::TypedArrayEdit(_) => {
+            value.array_edit_ref().is_some_and(|edit| {
+                edit.ops.iter().any(|op| match op {
+                    ArrayEditOp::Write { src, .. } | ArrayEditOp::Insert { src, .. } => {
+                        matches!(src, ArrayEditOperand::Literal(v) if holds_timecode(v))
+                    }
+                    ArrayEditOp::MinSizeFill { fill, .. }
+                    | ArrayEditOp::ResizeFill { fill, .. } => holds_timecode(fill),
+                    _ => false,
+                })
+            })
+        }
         _ => false,
     }
 }
@@ -348,6 +360,48 @@ mod tests {
             panic!("mapped");
         };
         assert_eq!(mapped[0].value.default_value(), Some(&Value::TimeCode(7.0)));
+    }
+
+    #[test]
+    fn sparse_timecode_offsets_map_literals_without_changing_implicit_fills() {
+        let ty = crate::PropertyType::new("timecode", true, Value::TimeCode(0.0));
+        let resize = Value::typed_array_edit(
+            ArrayEdit {
+                ops: vec![ArrayEditOp::Resize { len: 2 }],
+            },
+            ty.clone(),
+        );
+        let offset = LayerOffset {
+            offset: 10.0,
+            scale: 2.0,
+        };
+        assert_eq!(retime_value(&resize, offset), None);
+        let explicit = Value::typed_array_edit(
+            ArrayEdit {
+                ops: vec![
+                    ArrayEditOp::Resize { len: 2 },
+                    ArrayEditOp::Insert {
+                        src: ArrayEditOperand::Literal(Value::TimeCode(0.0)),
+                        index: crate::ArrayIndex::End,
+                    },
+                ],
+            },
+            ty.clone(),
+        );
+        let mapped = retime_value(&explicit, offset).unwrap();
+        assert_eq!(mapped.array_edit_type(), Some(&ty));
+        assert_eq!(
+            crate::array_edit::apply_to_array(
+                mapped.array_edit_ref().unwrap(),
+                &[],
+                mapped.array_edit_type()
+            ),
+            vec![
+                Value::TimeCode(0.0),
+                Value::TimeCode(0.0),
+                Value::TimeCode(10.0)
+            ]
+        );
     }
 
     #[test]

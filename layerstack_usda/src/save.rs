@@ -903,7 +903,9 @@ impl Lowering<'_> {
             ),
             L::Array(items) => self.array(items, site, path)?,
             L::TypedArray(items) => typed_array(items),
-            L::ArrayEdit(_) => return unsupported(path, Unsupported::ArrayEdit),
+            L::ArrayEdit(_) | L::TypedArrayEdit(_) => {
+                return unsupported(path, Unsupported::ArrayEdit);
+            }
             L::PathExpression(_) => return no("pathExpression"),
             L::Opaque { .. } => return no("opaque"),
             L::Null => return no("null"),

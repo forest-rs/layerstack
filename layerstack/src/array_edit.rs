@@ -27,6 +27,42 @@ pub use opinionated::ArrayIndex;
 /// See [`opinionated::ArrayEdit`] for the instruction semantics.
 pub type ArrayEdit = opinionated::ArrayEdit<Value>;
 
+/// A sparse edit with the actual array type carried by its authored value.
+///
+/// The descriptor is independent of the attribute declaration: USDC records
+/// an edit's element type even when the declaration disagrees or the program
+/// contains no literals. The generic program remains in [`opinionated`].
+///
+/// OpenUSD: `VtArrayEdit<T>`. Spec: AOUSD Core §6.2 (value types);
+/// sparse-array-edits proposal, "Array Edit Value Types".
+#[derive(Clone, Debug, PartialEq)]
+pub struct TypedArrayEdit {
+    edit: ArrayEdit,
+    value_type: PropertyType,
+}
+
+impl TypedArrayEdit {
+    /// Retains `edit` and its actual value type, normalizing the descriptor
+    /// to an array. The descriptor's scalar default supplies growth fills.
+    #[must_use]
+    pub fn new(edit: ArrayEdit, mut value_type: PropertyType) -> Self {
+        value_type.is_array = true;
+        Self { edit, value_type }
+    }
+
+    /// Borrows the generic edit program.
+    #[must_use]
+    pub fn edit(&self) -> &ArrayEdit {
+        &self.edit
+    }
+
+    /// The actual array type, independent of an attribute's declaration.
+    #[must_use]
+    pub fn value_type(&self) -> &PropertyType {
+        &self.value_type
+    }
+}
+
 /// One sparse array edit instruction over USD values.
 ///
 /// See [`opinionated::ArrayEditOp`] for each instruction's semantics.

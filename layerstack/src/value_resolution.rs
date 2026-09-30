@@ -10,7 +10,7 @@
 //!
 //! - default-time queries fold authored defaults through [`ArrayFamily`];
 //! - time queries first plan the composed series' bracketing samples
-//!   ([`plan_brackets`]), then fold the chain once per bracketing sample
+//!   ([`plan_brackets_recording`]), then fold the chain once per bracketing sample
 //!   through [`PickedArrayFamily`] and interpolate the composed results.
 
 use alloc::vec::Vec;
@@ -22,8 +22,8 @@ use opinionated::{
 };
 
 use crate::{
-    array_edit::{ArrayEdit, apply_in_place, apply_to_array},
-    doc::{InterpolationType, Value},
+    array_edit::{apply_in_place, apply_to_array},
+    doc::{InterpolationType, Value, combine_dictionary_chain},
     half::{from_f32 as f32_to_half, to_f32 as half_to_f32},
     prim_index::{Opinion, OpinionValue},
     property::PropertyType,
@@ -85,6 +85,9 @@ trait Folder {
         sample: f64,
         chain: impl Iterator<Item = (&'a Op, ChainPos)>,
     ) -> FamilyResolution<F::Value, ()>;
+
+    /// Diagnostic-only incompatible sources excluded during planning.
+    fn incompatible(&mut self, _position: ChainPos) {}
 }
 
 /// The resolution [`Folder`]: records nothing.
@@ -128,9 +131,14 @@ impl SampleFold {
 #[derive(Default)]
 struct Recording {
     folds: Vec<SampleFold>,
+    incompatible: Vec<ChainPos>,
 }
 
 impl Folder for Recording {
+    fn incompatible(&mut self, position: ChainPos) {
+        self.incompatible.push(position);
+    }
+
     fn fold<'a, Op: 'a, F: OpinionFamily<Op>>(
         &mut self,
         family: &F,
@@ -138,7 +146,23 @@ impl Folder for Recording {
         chain: impl Iterator<Item = (&'a Op, ChainPos)>,
     ) -> FamilyResolution<F::Value, ()> {
         let chain: Vec<(&Op, ChainPos)> = chain.collect();
-        let report = resolve_family_chain_report(family, chain.iter().map(|(op, pos)| (*op, pos)));
+        let mut report =
+            resolve_family_chain_report(family, chain.iter().map(|(op, pos)| (*op, pos)));
+        report
+            .events
+            .extend(self.incompatible.iter().map(|pos| FamilyEvent::Ignored {
+                provenance: *pos,
+                reason: IgnoreReason::IncompatibleOperation {
+                    resolved: OpinionKind::Set,
+                    ignored: OpinionKind::Set,
+                },
+            }));
+        report.events.sort_by_key(|event| match event {
+            FamilyEvent::ContributedDense { provenance }
+            | FamilyEvent::ContributedSparse { provenance }
+            | FamilyEvent::Ignored { provenance, .. }
+            | FamilyEvent::StoppedByBlock { provenance } => provenance.opinion,
+        });
         self.folds.push(SampleFold {
             time: sample,
             events: report.events,
@@ -193,11 +217,10 @@ struct ArrayFamily<'a> {
 }
 
 impl ArrayFamily<'_> {
-    fn classify_value(value: &Value) -> FamilyMember<Value, &ArrayEdit> {
+    fn classify_value(value: &Value) -> FamilyMember<Value, &Value> {
         match value {
             Value::Array(_) | Value::TypedArray(_) => FamilyMember::Dense(value.clone()),
-            Value::ArrayEdit(edit) => FamilyMember::Sparse(edit),
-            Value::TypedArrayEdit(edit) => FamilyMember::Sparse(edit.edit()),
+            Value::ArrayEdit(_) | Value::TypedArrayEdit(_) => FamilyMember::Sparse(value),
             // A sampled block blocks exactly like an authored default block,
             // wherever it is the held sample. OpenUSD 26.08 lets opinions
             // weaker than a held sampled block show through when the block's
@@ -211,7 +234,7 @@ impl ArrayFamily<'_> {
         }
     }
 
-    fn foreign<'op>() -> FamilyMember<Value, &'op ArrayEdit> {
+    fn foreign<'op>() -> FamilyMember<Value, &'op Value> {
         // `OpinionKind` cannot name domain families, so the reason degrades
         // to a set-over-set mismatch. The reason is never observed: the lean
         // kernel entry point records no events.
@@ -224,7 +247,7 @@ impl ArrayFamily<'_> {
 
 impl OpinionFamily<Opinion> for ArrayFamily<'_> {
     type Value = Value;
-    type Edit<'op> = &'op ArrayEdit;
+    type Edit<'op> = &'op Value;
 
     fn classify<'op>(&self, opinion: &'op Opinion) -> FamilyMember<Self::Value, Self::Edit<'op>> {
         // A default-time query reads only the default slot.
@@ -241,7 +264,18 @@ impl OpinionFamily<Opinion> for ArrayFamily<'_> {
         Opinion: 'op,
     {
         let mut value = base;
-        apply_in_place(edit, &mut value, self.property_type);
+        let ty = edit.array_edit_type().or(self.property_type);
+        if edit.array_edit_type().is_some() && !edit_matches_value(edit, &value) {
+            value = ty.map_or_else(
+                || Value::Array(Vec::new()),
+                PropertyType::default_property_value,
+            );
+        }
+        apply_in_place(
+            edit.array_edit_ref().expect("classified sparse edit"),
+            &mut value,
+            ty,
+        );
         value
     }
 
@@ -304,23 +338,199 @@ pub(crate) fn resolve_sparse_value(
 /// Default-time typed array folding: incompatible dense bases are skipped
 /// without discarding stronger sparse edits. Numeric queries and untyped
 /// resolution retain their ordinary source-selection rules.
+#[cfg(test)]
 pub(crate) fn resolve_sparse_default_matching(
     opinions: &[Opinion],
     property_type: Option<&PropertyType>,
     fallback: Option<&Value>,
     accepts: impl Fn(&Value) -> bool,
 ) -> SparseResolveResult {
-    let family = ArrayFamily {
-        property_type,
-        fallback: fallback.filter(|value| accepts(value)),
-    };
-    let opinions = opinions
+    resolve_sparse_default_matching_source(opinions, property_type, fallback, accepts).0
+}
+
+/// Default-time USD composition retains a partial edit across incompatible
+/// dense reads, but an incompatible composable opinion replaces that partial.
+/// OpenUSD: `MetadataValueComposer::ConsumeValue`, `VtValue::TryComposeOver`.
+/// The source is the strongest contributor that survives this grouping.
+pub(crate) fn resolve_sparse_default_matching_source(
+    opinions: &[Opinion],
+    property_type: Option<&PropertyType>,
+    fallback: Option<&Value>,
+    accepts: impl Fn(&Value) -> bool,
+) -> (SparseResolveResult, Option<usize>) {
+    resolve_sparse_default_matching_impl(opinions, property_type, fallback, accepts, &mut |_| {})
+}
+
+#[derive(Clone, Copy)]
+enum DefaultTrace {
+    Sparse(usize),
+    Dense(usize),
+    Ignored(usize),
+    Block(usize),
+    Base(FamilyBase),
+}
+
+fn resolve_sparse_default_matching_impl(
+    opinions: &[Opinion],
+    property_type: Option<&PropertyType>,
+    fallback: Option<&Value>,
+    accepts: impl Fn(&Value) -> bool,
+    trace: &mut impl FnMut(DefaultTrace),
+) -> (SparseResolveResult, Option<usize>) {
+    let mut edits: Vec<(usize, &Value)> = Vec::new();
+    for (position, opinion) in opinions.iter().enumerate() {
+        let Some(value) = opinion.value.default_value() else {
+            continue;
+        };
+        if value.array_edit_ref().is_some() {
+            if let (Some(strong), Some(weak)) = (
+                edits.iter().find_map(|(_, value)| value.array_edit_type()),
+                value.array_edit_type(),
+            ) && !same_element_kind(&strong.default_scalar, &weak.default_scalar)
+            {
+                for (position, _) in &edits {
+                    trace(DefaultTrace::Ignored(*position));
+                }
+                edits.clear();
+            }
+            edits.push((position, value));
+            continue;
+        }
+        if matches!(value, Value::Blocked) {
+            trace(DefaultTrace::Block(position));
+            break;
+        }
+        if matches!(value, Value::Dictionary(_) | Value::PathExpression(_)) {
+            // These are composable values too. Failed cross-family
+            // composition replaces the partial, unlike a failed dense read.
+            for (position, _) in &edits {
+                trace(DefaultTrace::Ignored(*position));
+            }
+            edits.clear();
+            let composed = match value {
+                Value::Dictionary(_) => {
+                    let dictionaries = crate::stage::dictionary_chain(&opinions[position..])
+                        .map(|(_, entries)| entries)
+                        .chain(fallback.and_then(|value| match value {
+                            Value::Dictionary(entries) => Some(entries.as_slice()),
+                            _ => None,
+                        }));
+                    Some(Value::Dictionary(combine_dictionary_chain(dictionaries)))
+                }
+                Value::PathExpression(_) => {
+                    crate::path_expression::fold_default(&opinions[position..], fallback)
+                        .and_then(|fold| fold.value)
+                }
+                _ => None,
+            };
+            if let Some(composed) = composed
+                && accepts(&composed)
+            {
+                trace(DefaultTrace::Dense(position));
+                trace(DefaultTrace::Base(FamilyBase::Dense));
+                return (SparseResolveResult::Resolved(composed), Some(position));
+            }
+            continue;
+        }
+        let accepted = accepts(value);
+        if value.array_ref().is_some() && !accepted {
+            trace(DefaultTrace::Ignored(position));
+            continue;
+        }
+        if accepted && let Some(composed) = compose_edits(&edits, value, property_type) {
+            for (position, _) in &edits {
+                trace(DefaultTrace::Sparse(*position));
+            }
+            trace(DefaultTrace::Dense(position));
+            trace(DefaultTrace::Base(FamilyBase::Dense));
+            return (
+                SparseResolveResult::Resolved(composed),
+                edits.first().map(|(i, _)| *i).or(Some(position)),
+            );
+        }
+        if accepted {
+            for (position, _) in &edits {
+                trace(DefaultTrace::Ignored(*position));
+            }
+            trace(DefaultTrace::Dense(position));
+            trace(DefaultTrace::Base(FamilyBase::Dense));
+            return (SparseResolveResult::Resolved(value.clone()), Some(position));
+        }
+    }
+    let seed_type = edits
         .iter()
-        .filter(|opinion| match opinion.value.default_value() {
-            Some(value @ (Value::Array(_) | Value::TypedArray(_))) => accepts(value),
-            _ => true,
-        });
-    fold_array_chain(&family, opinions, &mut Lean)
+        .find_map(|(_, value)| value.array_edit_type())
+        .or(property_type);
+    let empty = seed_type.filter(|ty| ty.is_array).map_or_else(
+        || Value::Array(Vec::new()),
+        PropertyType::default_property_value,
+    );
+    let seed = fallback.filter(|value| accepts(value)).unwrap_or(&empty);
+    if let Some(value) = compose_edits(&edits, seed, property_type)
+        && (!edits.is_empty() || fallback.is_some())
+    {
+        for (position, _) in &edits {
+            trace(DefaultTrace::Sparse(*position));
+        }
+        trace(DefaultTrace::Base(FamilyBase::Seed));
+        return (
+            SparseResolveResult::Resolved(value),
+            edits.first().map(|(i, _)| *i),
+        );
+    }
+    if fallback.is_some() && accepts(seed) {
+        for (position, _) in &edits {
+            trace(DefaultTrace::Ignored(*position));
+        }
+        trace(DefaultTrace::Base(FamilyBase::Seed));
+        return (SparseResolveResult::Resolved(seed.clone()), None);
+    }
+    (SparseResolveResult::NotApplicable, None)
+}
+
+fn same_element_kind(a: &Value, b: &Value) -> bool {
+    core::mem::discriminant(a) == core::mem::discriminant(b)
+}
+
+/// Actual storage kinds, not declaration names: role aliases share a kind.
+pub(crate) fn edit_matches_value(edit: &Value, base: &Value) -> bool {
+    let Some(ty) = edit.array_edit_type() else {
+        return base.array_ref().is_some();
+    };
+    if let Some(other) = base.array_edit_type() {
+        return same_element_kind(&ty.default_scalar, &other.default_scalar);
+    }
+    let Some(array) = base.array_ref() else {
+        return false;
+    };
+    if let Some(native) = array.typed() {
+        return same_element_kind(&ty.default_scalar, &native.element_kind());
+    }
+    array
+        .iter()
+        .all(|element| same_element_kind(&ty.default_scalar, &element))
+}
+
+fn compose_edits(
+    edits: &[(usize, &Value)],
+    base: &Value,
+    property_type: Option<&PropertyType>,
+) -> Option<Value> {
+    if edits.is_empty() {
+        return Some(base.clone());
+    }
+    let mut value = base.clone();
+    for (_, edit) in edits.iter().rev() {
+        if !edit_matches_value(edit, &value) {
+            return None;
+        }
+        apply_in_place(
+            edit.array_edit_ref()?,
+            &mut value,
+            edit.array_edit_type().or(property_type),
+        );
+    }
+    Some(value)
 }
 
 /// Resolves typed numeric sparse values without searching past a selected
@@ -355,7 +565,7 @@ pub(crate) fn resolve_sparse_at_time_matching(
         interp,
         ArrayFamily {
             property_type,
-            fallback: fallback.filter(|value| accepts(value)),
+            fallback,
         },
         Some(accepts),
         &mut Lean,
@@ -372,6 +582,63 @@ pub(crate) fn explain_sparse_value(
     query: SparseQuery<'_>,
     property_type: Option<&PropertyType>,
 ) -> SparseExplanation {
+    if let SparseQuery::Default { fallback } = query
+        && opinions
+            .iter()
+            .find_map(|opinion| opinion.value.default_value())
+            .is_some_and(|value| value.array_edit_type().is_some())
+    {
+        let mut events = Vec::new();
+        let mut base = FamilyBase::Absent;
+        let (result, _) = resolve_sparse_default_matching_impl(
+            opinions,
+            property_type,
+            fallback,
+            |_| true,
+            &mut |event| {
+                let provenance = |opinion| ChainPos {
+                    opinion,
+                    time: f64::NEG_INFINITY,
+                };
+                events.push(match event {
+                    DefaultTrace::Sparse(i) => FamilyEvent::ContributedSparse {
+                        provenance: provenance(i),
+                    },
+                    DefaultTrace::Dense(i) => FamilyEvent::ContributedDense {
+                        provenance: provenance(i),
+                    },
+                    DefaultTrace::Ignored(i) => FamilyEvent::Ignored {
+                        provenance: provenance(i),
+                        reason: IgnoreReason::IncompatibleOperation {
+                            resolved: OpinionKind::Set,
+                            ignored: OpinionKind::Set,
+                        },
+                    },
+                    DefaultTrace::Block(i) => FamilyEvent::StoppedByBlock {
+                        provenance: provenance(i),
+                    },
+                    DefaultTrace::Base(value) => {
+                        base = value;
+                        return;
+                    }
+                });
+            },
+        );
+        events.sort_by_key(|event| match event {
+            FamilyEvent::ContributedSparse { provenance }
+            | FamilyEvent::ContributedDense { provenance }
+            | FamilyEvent::Ignored { provenance, .. }
+            | FamilyEvent::StoppedByBlock { provenance } => provenance.opinion,
+        });
+        return SparseExplanation {
+            result,
+            folds: alloc::vec![SampleFold {
+                time: f64::NEG_INFINITY,
+                events,
+                base
+            }],
+        };
+    }
     let Some(family) = SparseValueFamily::for_query(opinions, query) else {
         return SparseExplanation {
             result: SparseResolveResult::NotApplicable,
@@ -405,7 +672,11 @@ pub(crate) fn reads_array_family(opinion: &Opinion, at_time: bool) -> bool {
     if !at_time {
         return opinion.value.default_value().is_some_and(in_family);
     }
-    if let Some(samples) = opinion.value.time_samples() {
+    if let Some(samples) = opinion
+        .value
+        .time_samples()
+        .filter(|samples| !samples.is_empty())
+    {
         samples.iter().all(|(_, value)| in_family(value))
     } else if opinion.value.spline().is_some() {
         false
@@ -431,7 +702,11 @@ impl SparseValueFamily {
     }
 
     fn for_time_opinion(opinion: &Opinion) -> Option<Self> {
-        match opinion.value.time_samples() {
+        match opinion
+            .value
+            .time_samples()
+            .filter(|samples| !samples.is_empty())
+        {
             Some(samples) => samples.iter().find_map(|(_, value)| Self::for_value(value)),
             None => opinion.value.default_value().and_then(Self::for_value),
         }
@@ -546,7 +821,7 @@ fn fold_array_chain<'o>(
 // (OpenUSD 26.08) and `SdfComposeTimeSampleSeries` in
 // `pxr/usd/sdf/composeTimeSampleSeries.h`.
 //
-// Layerstack splits that walk in two. [`plan_brackets`] runs the series
+// Layerstack splits that walk in two. [`plan_brackets_recording`] runs the series
 // composition without touching values: each composed sample records its time,
 // whether it still composes (it is sparse), and which of every participating
 // opinion's bracketing samples it is made of. The existing time-agnostic
@@ -621,8 +896,13 @@ impl<'o> Bracket<'o> {
             })
         };
         // Per spec: time samples, then a spline, then the default (Core
-        // §12.3.2; OpenUSD `ProcessLayerAtTime`).
-        if let Some(samples) = opinion.value.time_samples() {
+        // §12.3.2; OpenUSD `ProcessLayerAtTime`). An empty sample map
+        // supplies no samples, so a same-layer default still participates.
+        if let Some(samples) = opinion
+            .value
+            .time_samples()
+            .filter(|samples| !samples.is_empty())
+        {
             {
                 let offset = opinion.layer_offset;
                 let to_stage = |index: usize| {
@@ -725,11 +1005,22 @@ struct BracketPlan<'o> {
 /// proposal does: its held sample at that time still does. OpenUSD 26.08
 /// stops there instead; this is the named divergence `override-early-stop`
 /// (`docs/generic-sparse-composition.md`, "Divergences From OpenUSD").
+#[cfg(test)]
 fn plan_brackets<'o>(
     opinions: impl IntoIterator<Item = &'o Opinion>,
     time: f64,
     interp: InterpolationType,
     accepts: Option<&dyn Fn(&Value) -> bool>,
+) -> BracketPlan<'o> {
+    plan_brackets_recording(opinions, time, interp, accepts, &mut |_| {})
+}
+
+fn plan_brackets_recording<'o>(
+    opinions: impl IntoIterator<Item = &'o Opinion>,
+    time: f64,
+    interp: InterpolationType,
+    accepts: Option<&dyn Fn(&Value) -> bool>,
+    incompatible_source: &mut impl FnMut(ChainPos),
 ) -> BracketPlan<'o> {
     let mut brackets: Vec<Bracket<'o>> = Vec::new();
     let mode = match interp {
@@ -739,6 +1030,7 @@ fn plan_brackets<'o>(
     let mut planner = TemporalPlanner::new(time, mode);
     let mut opinions = opinions.into_iter().enumerate();
     let mut incompatible = None;
+    let mut actual_edit: Option<&Value> = None;
     while let Some(query) = planner.query() {
         let Some((position, opinion)) = opinions.next() else {
             break;
@@ -747,6 +1039,20 @@ fn plan_brackets<'o>(
         else {
             continue;
         };
+        if let Some(value) = bracket.sample(Pick::Lower)
+            && value.array_edit_type().is_some()
+        {
+            if actual_edit.is_some_and(|strong| !edit_matches_value(strong, value)) {
+                // Numeric composition retains the stronger partial when a
+                // weaker sparse program carries a different actual type.
+                incompatible_source(ChainPos {
+                    opinion: position,
+                    time: bracket.lower.0,
+                });
+                continue;
+            }
+            actual_edit.get_or_insert(value);
+        }
         // A lone dense source is converted once by the caller. Compatibility
         // checks are needed only when sparse composition depends on it; an
         // owned-array converter need not copy a dense result just to check it.
@@ -765,7 +1071,14 @@ fn plan_brackets<'o>(
                     !matches!(
                         value,
                         Value::ArrayEdit(_) | Value::TypedArrayEdit(_) | Value::Blocked
-                    ) && accepts.is_some_and(|accepts| !accepts(value))
+                    ) && match actual_edit {
+                        // A USD edit's actual kind determines the composed
+                        // numeric result. Only the final value needs typed
+                        // conversion; candidate Vec conversions would copy
+                        // the buffer merely to discard it.
+                        Some(edit) => !edit_matches_value(edit, value),
+                        None => accepts.is_some_and(|accepts| !accepts(value)),
+                    }
                 })
         };
         if rejected(bracket.sample(Pick::Lower)) {
@@ -773,9 +1086,13 @@ fn plan_brackets<'o>(
             // source or fallback may replace it. Failed sample reads supply
             // neither values nor timestamps to stronger composing samples.
             incompatible = bracket.sample(Pick::Lower);
+            incompatible_source(ChainPos {
+                opinion: position,
+                time: bracket.lower.0,
+            });
             break;
         }
-        if rejected(bracket.sample(Pick::Upper)) {
+        if bracket.upper.0 != bracket.lower.0 && rejected(bracket.sample(Pick::Upper)) {
             // OpenUSD `_GetInterpolatingSamplesImpl`: a failed upper sample
             // read holds the lower sample instead of interpolating.
             bracket.upper = bracket.lower;
@@ -806,7 +1123,7 @@ struct PickedArrayFamily<'a> {
 impl<'o> OpinionFamily<Bracket<'o>> for PickedArrayFamily<'_> {
     type Value = Value;
     type Edit<'op>
-        = &'op ArrayEdit
+        = &'op Value
     where
         Bracket<'o>: 'op;
 
@@ -834,7 +1151,7 @@ impl<'o> OpinionFamily<Bracket<'o>> for PickedArrayFamily<'_> {
 /// Resolves an array-family attribute at stage time `time`.
 ///
 /// Composes the bracketing samples of every participating opinion
-/// ([`plan_brackets`]), folds the chain for the composed lower (and, for
+/// ([`plan_brackets_recording`]), folds the chain for the composed lower (and, for
 /// linear interpolation, upper) sample with the time-agnostic kernel, then
 /// interpolates or holds the composed values.
 ///
@@ -855,12 +1172,35 @@ fn resolve_array_at_time(
     accepts: Option<&dyn Fn(&Value) -> bool>,
     folder: &mut impl Folder,
 ) -> SparseResolveResult {
-    let plan = plan_brackets(opinions, time, interp, accepts);
+    let plan = plan_brackets_recording(opinions, time, interp, accepts, &mut |position| {
+        folder.incompatible(position);
+    });
     if plan.composed.is_empty()
         && let Some(value) = plan.incompatible
     {
         return SparseResolveResult::Resolved(value.clone());
     }
+    let array = ArrayFamily {
+        property_type: plan
+            .brackets
+            .iter()
+            .find_map(|bracket| bracket.sample(Pick::Lower).and_then(Value::array_edit_type))
+            .or(array.property_type),
+        ..array
+    };
+    let has_actual_edit = plan.brackets.iter().any(|bracket| {
+        bracket
+            .sample(Pick::Lower)
+            .is_some_and(|value| value.array_edit_type().is_some())
+    });
+    let array = if !has_actual_edit && let Some(accepts) = accepts {
+        ArrayFamily {
+            fallback: array.fallback.filter(|value| accepts(value)),
+            ..array
+        }
+    } else {
+        array
+    };
     let array = if plan.incompatible.is_some() {
         ArrayFamily {
             fallback: None,

@@ -8,7 +8,8 @@ use std::hint::black_box;
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use layerstack::{
     ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex, InMemoryStore, Layer, LayerId, PrimSpec,
-    PropertyPath, PropertySpec, PropertyType, ResolvedValue, Stage, StageOptions, Value,
+    PropertyPath, PropertySpec, PropertyType, ResolvedValue, Stage, StageOptions, SublayerEntry,
+    Value,
 };
 use layerstack_schemas::{Scene, usd_geom::Mesh};
 
@@ -89,6 +90,47 @@ fn arrays(c: &mut Criterion) {
             let mesh = Mesh::new(&scene, prim).unwrap();
             group.bench_function(BenchmarkId::new("schema_points", len), |b| {
                 b.iter(|| black_box(mesh.points().unwrap()));
+            });
+            let point_type = PropertyType::new("point3f", true, Value::Vec3f([0.0; 3]));
+            let mut stronger = Layer::new(LayerId(2));
+            stronger.sublayers.push(SublayerEntry::new(LayerId(1)));
+            stronger.insert_prim(
+                prim,
+                PrimSpec::over().with_property(
+                    name,
+                    PropertySpec::typed_attribute(point_type.clone()).with_default(
+                        Value::typed_array_edit(
+                            ArrayEdit {
+                                ops: vec![ArrayEditOp::Insert {
+                                    src: ArrayEditOperand::Literal(Value::Vec3f([4.0, 5.0, 6.0])),
+                                    index: ArrayIndex::End,
+                                }],
+                            },
+                            point_type,
+                        ),
+                    ),
+                ),
+            );
+            store.insert_layer(stronger);
+            let options = StageOptions {
+                schemas: Some(std::sync::Arc::new(layerstack_schemas::openusd(
+                    &mut store.tokens,
+                ))),
+                ..StageOptions::default()
+            };
+            let sparse = Stage::compose(&mut store, LayerId(2), options);
+            let scene = Scene::new(&sparse, &store);
+            let mesh = Mesh::new(&scene, prim).unwrap();
+            group.bench_function(BenchmarkId::new("schema_sparse_points_default", len), |b| {
+                b.iter(|| black_box(mesh.points().unwrap()));
+            });
+            group.bench_function(BenchmarkId::new("schema_sparse_points_numeric", len), |b| {
+                b.iter(|| {
+                    black_box(
+                        mesh.points_at(9.0, layerstack::InterpolationType::Linear)
+                            .unwrap(),
+                    )
+                });
             });
         }
     }

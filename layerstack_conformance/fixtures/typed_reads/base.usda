@@ -25,3 +25,22 @@ def DistantLight "SparseWrongUpper"
 {
     float[] value = [1]
 }
+
+def DistantLight "SparseFillDeclaration"
+{
+    float[] value = [1]
+}
+def DistantLight "SparseMixedEdits"
+{
+    float[] value = [1]
+}
+
+def DistantLight "SparseMisdeclaredWeakEdit"
+{
+    float[] value = [1]
+}
+
+def DistantLight "SparseWrongEditUpper"
+{
+    float[] value = [1]
+}

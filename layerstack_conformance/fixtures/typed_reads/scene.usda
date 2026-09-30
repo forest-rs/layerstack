@@ -120,3 +120,64 @@ over "SparseWrongUpper"
     float[] value = edit [append 4]
     float[] value.timeSamples = { 0: edit [append 4], 10: edit [append 8] }
 }
+
+over "SparseResizeKind"
+{
+    float[] value = edit [resize 1]
+}
+over "SparseDeleteKind"
+{
+    float[] value = edit [erase [0]]
+}
+
+over "SparseFillDeclaration"
+{
+    double[] value = [2]
+}
+over "SparseMixedEdits"
+{
+    float[] value = edit [resize 2]
+}
+
+over "SparseMisdeclaredEdit"
+{
+    float[] value = edit [resize 2]
+}
+over "SparseMisdeclaredWeakEdit"
+{
+    float[] value = edit [resize 2]
+}
+
+over "SparseDeclaration"
+{
+    float[] value
+}
+over "SparseConnection"
+{
+    float[] value.connect = </Compatible.inputs:intensity>
+}
+over "SparseContribution"
+{
+    float[] value = edit [append 4]
+}
+
+over "SparseWrongEditUpper"
+{
+    float[] value = edit [append 4]
+    float[] value.timeSamples = { 0: edit [append 4], 50: edit [append 8] }
+}
+
+over "SparseEmptySamples"
+{
+    float[] value = [9]
+    float[] value.timeSamples = {}
+}
+over "SparseEmptyDeclaration"
+{
+    float[] value.timeSamples = {}
+}
+
+over "EmptySamplesXform"
+{
+    float3 xformOp:translate.timeSamples = {}
+}

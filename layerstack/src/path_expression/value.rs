@@ -473,7 +473,11 @@ pub(crate) fn fold_at_time(
 /// opinion answers. Looks at the authored values only; nothing is sampled.
 fn answers_with_expression(opinion: &Opinion) -> Option<bool> {
     let is_expression = |value: &Value| matches!(value, Value::PathExpression(_));
-    if let Some(samples) = opinion.value.time_samples() {
+    if let Some(samples) = opinion
+        .value
+        .time_samples()
+        .filter(|samples| !samples.is_empty())
+    {
         return Some(samples.iter().any(|(_, value)| is_expression(value)));
     }
     if opinion.value.spline().is_some() {

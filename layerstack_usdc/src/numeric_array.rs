@@ -198,16 +198,37 @@ fn i32_le(d: &[u8], idx: usize) -> i32 {
 
 #[cfg(test)]
 mod tests {
-    use super::integer_array;
-    use crate::value_rep::IntegerArray;
+    use super::{float_array, integer_array};
     use crate::value_rep::{
         CrateValue, DecodeBudget, DecodedField, RawValueRep, decode_field_within, decode_value,
     };
+    use crate::value_rep::{FloatArray, IntegerArray};
     use crate::value_type::SpecForm;
     use crate::value_type::ValueType;
     use crate::writer::{Spec, Specifier, Value as W, write_crate};
     use crate::{header::parse_header, section::parse_sections, toc::parse_toc};
     use alloc::vec;
+
+    #[test]
+    fn owned_float_decode_retains_bits_and_allocation() {
+        let values = vec![-0.0, f32::from_bits(0x7fc0_1234), 1.0];
+        let pointer = values.as_ptr();
+        let bits = values
+            .iter()
+            .map(|value| value.to_bits())
+            .collect::<vec::Vec<_>>();
+        let layerstack::TypedArray::Float(retained) = float_array(FloatArray::Float(values)) else {
+            panic!("float buffer");
+        };
+        assert_eq!(retained.as_ptr(), pointer);
+        assert_eq!(
+            retained
+                .iter()
+                .map(|value| value.to_bits())
+                .collect::<vec::Vec<_>>(),
+            bits
+        );
+    }
 
     #[test]
     fn owned_int64_decode_retains_its_buffer() {

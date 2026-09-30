@@ -1,0 +1,136 @@
+#usda 1.0
+# Copyright 2026 the LayerStack Authors
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+
+def Camera "Camera" {
+    float horizontalAperture = 24
+    float verticalAperture = 18
+}
+def Camera "OtherCamera" {
+    float horizontalAperture = 40
+    float verticalAperture = 20
+}
+def RenderSettings "Settings" {
+    rel camera = </Camera>
+    int2 resolution = (1920, 1080)
+    float pixelAspectRatio = 1.5
+    bool disableMotionBlur = true
+    bool disableDepthOfField = true
+    token[] includedPurposes = ["default", "render", "proxy"]
+    token[] materialBindingPurposes = ["preview", ""]
+    rel products = [</Expand>, </Crop>, </Width>, </Height>, </Pixel>, </Override>, </EmptyCamera>, </BadCamera>, </BadProduct>, </InvalidResolution>, </Sampled>, </ZeroPixel>, </CycleCamera>, </NonCamera>, </PropertyCamera>, </WrongType>]
+    float ri:quality = 0.5
+    string ri:integrator:name = "path"
+    bool arnold:enabled = true
+    float outputs:ri:shader.connect = </Graph.outputs:result>
+    int unnamespaced = 17
+    rel extra = </Camera>
+}
+def RenderProduct "Expand" {
+    token productName = "expand.exr"
+    token aspectRatioConformPolicy = "expandAperture"
+    rel orderedVars = [</Color>, </Depth>, </Missing>, </BadProduct>]
+    float ri:quality = 0.25
+}
+def RenderProduct "Crop" {
+    token productName = "crop.exr"
+    token aspectRatioConformPolicy = "cropAperture"
+    rel orderedVars = [</Depth>, </Color>]
+}
+def RenderProduct "Width" {
+    token aspectRatioConformPolicy = "adjustApertureWidth"
+}
+def RenderProduct "Height" {
+    token aspectRatioConformPolicy = "adjustApertureHeight"
+}
+def RenderProduct "Pixel" {
+    token aspectRatioConformPolicy = "adjustPixelAspectRatio"
+}
+def RenderProduct "Override" {
+    rel camera = </OtherCamera>
+    int2 resolution = (100, 100)
+    float pixelAspectRatio = 2
+    bool disableMotionBlur = true
+    bool disableDepthOfField = true
+    float4 dataWindowNDC = (-0.1, -0.2, 1.1, 1.2)
+    token productType = "deep"
+    token productName = "override.exr"
+    rel orderedVars = </Forward.vars>
+}
+def RenderProduct "EmptyCamera" {
+    rel camera = []
+    int2 resolution = None
+    float pixelAspectRatio = None
+    bool disableMotionBlur = false
+    bool instantaneousShutter = true
+}
+def RenderProduct "BadCamera" {
+    rel camera = </Missing>
+}
+def "BadProduct" {}
+def RenderProduct "InvalidResolution" {
+    int2 resolution = (0, 100)
+    token aspectRatioConformPolicy = "unknown"
+}
+def "Forward" {
+    rel vars = [</Color>, </Depth>]
+}
+def RenderVar "Color" {
+    token dataType = "color3f"
+    string sourceName = "C"
+    token sourceType = "raw"
+    int ri:precision = 16
+}
+def RenderVar "Depth" {
+    token dataType = "float"
+    string sourceName = "depth"
+    token sourceType = "lpe"
+    bool ri:filter = false
+}
+
+def RenderProduct "Sampled" {
+    int2 resolution.timeSamples = {1: (64, 64)}
+    float pixelAspectRatio.timeSamples = {1: 2}
+    bool disableMotionBlur.timeSamples = {1: true}
+    bool disableDepthOfField.timeSamples = {1: true}
+}
+def RenderProduct "ZeroPixel" {
+    float pixelAspectRatio = 0
+}
+def RenderProduct "CycleCamera" {
+    rel camera = </CameraForward.camera>
+}
+def RenderProduct "NonCamera" {
+    rel camera = </BadProduct>
+}
+def RenderProduct "PropertyCamera" {
+    rel camera = </Camera.horizontalAperture>
+}
+def "CameraForward" {
+    rel camera = [</CameraForward.loop>, </Camera>]
+    rel loop = </CameraForward.camera>
+}
+def NodeGraph "Graph" {
+    float outputs:result.connect = </Shader.outputs:result>
+}
+def Shader "Shader" {
+    float outputs:result
+}
+def Material "SurfaceMaterial" {}
+def Xform "BindingCycle" (prepend apiSchemas = ["MaterialBindingAPI"]) {
+    rel material:binding = [</BindingCycle.loop>, </SurfaceMaterial>]
+    rel loop = </BindingCycle.material:binding>
+}
+def Xform "BindingEmptyCycle" (prepend apiSchemas = ["MaterialBindingAPI"]) {
+    rel material:binding = </BindingEmptyCycle.loop>
+    rel loop = </BindingEmptyCycle.material:binding>
+}
+def Xform "BindingMissing" (prepend apiSchemas = ["MaterialBindingAPI"]) {
+    rel material:binding = </Missing>
+}
+
+def RenderProduct "WrongType" {
+    string pixelAspectRatio = "incompatible"
+    string resolution = "incompatible"
+    string disableMotionBlur = "incompatible"
+}

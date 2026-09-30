@@ -144,8 +144,8 @@ fn mod_file(model: &Model, types: &ValueTypes) -> String {
         );
     }
     out.push_str(
-        "        }\n    }\n\n    /// The other domains whose schemas this domain's schemas inherit from,\n    \
-         /// include or auto-apply to.\n    #[must_use]\n    \
+        "        }\n    }\n\n    /// The other domains this domain's schemas or computations need:\n    \
+         /// inheritance, built-ins, auto-applies and behavioral dependencies.\n    #[must_use]\n    \
          pub fn dependencies(self) -> &'static [Self] {\n        match self {\n",
     );
     for domain in &model.domains {

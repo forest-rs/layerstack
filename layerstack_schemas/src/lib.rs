@@ -307,6 +307,8 @@ mod motion;
 mod predicate;
 #[cfg(feature = "usd")]
 mod regex;
+#[cfg(feature = "usd-render")]
+pub mod render;
 #[cfg(all(feature = "usd-geom", feature = "usd-shade"))]
 pub mod retained;
 #[cfg(feature = "usd-shade")]

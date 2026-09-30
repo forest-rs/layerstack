@@ -20,14 +20,12 @@ use alloc::{
     vec::Vec,
 };
 
-use layerstack::{
-    HashMap, HashSet, PathId, PropertyKind, PropertyPath, ResolvedValue, TargetPath, Value,
-};
+use layerstack::{HashMap, PathId, PropertyPath, ResolvedValue, TargetPath, Value};
 
 use crate::collection::{Membership, MembershipQuery, collection_name};
 use crate::usd::CollectionApi;
 use crate::usd_shade::{Material, MaterialBindingApi};
-use crate::view::{PrimView, Scene};
+use crate::view::{PrimView, Scene, forwarded_targets, is_relationship};
 
 /// `material:binding`.
 const BINDING: &str = "material:binding";
@@ -186,63 +184,6 @@ pub struct BindingInputs {
     pub restricted: Vec<CollectionBinding>,
     /// Its all-purpose collection bindings, in property order.
     pub all_purpose: Vec<CollectionBinding>,
-}
-
-/// Whether the property `path` is a relationship: one an opinion declares
-/// or a schema defines.
-fn is_relationship(scene: &Scene<'_>, path: PropertyPath) -> bool {
-    let stage = scene.stage();
-    if !stage.has_prim(path.prim_path()) {
-        return false;
-    }
-    if let Some(declared) = stage.resolve_property_declaration(path.prim_path(), path.property()) {
-        return declared.kind == PropertyKind::Relationship;
-    }
-    stage
-        .property_definition(path.prim_path(), path.property(), scene.store())
-        .is_some_and(|defined| defined.kind == PropertyKind::Relationship)
-}
-
-/// The targets of the relationship `path`, following each target that is
-/// itself a relationship (each once).
-///
-/// OpenUSD: `UsdRelationship::GetForwardedTargets`.
-fn forwarded_targets(scene: &Scene<'_>, path: PropertyPath) -> Vec<TargetPath> {
-    fn walk(
-        scene: &Scene<'_>,
-        path: PropertyPath,
-        visited: &mut HashSet<PropertyPath>,
-        unique: &mut HashSet<TargetPath>,
-        out: &mut Vec<TargetPath>,
-    ) {
-        let targets = scene
-            .stage()
-            .resolve_target_list_path(path)
-            .map(|resolved| resolved.value)
-            .unwrap_or_default();
-        for target in targets {
-            if let TargetPath::Property(property) = target
-                && is_relationship(scene, property)
-            {
-                if visited.insert(property) {
-                    walk(scene, property, visited, unique, out);
-                }
-                continue;
-            }
-            if unique.insert(target) {
-                out.push(target);
-            }
-        }
-    }
-    let mut out = Vec::new();
-    walk(
-        scene,
-        path,
-        &mut HashSet::new(),
-        &mut HashSet::new(),
-        &mut out,
-    );
-    out
 }
 
 fn strength(scene: &Scene<'_>, relationship: PropertyPath) -> BindingStrength {

@@ -263,8 +263,8 @@ impl Domain {
         }
     }
 
-    /// The other domains whose schemas this domain's schemas inherit from,
-    /// include or auto-apply to.
+    /// The other domains this domain's schemas or computations need:
+    /// inheritance, built-ins, auto-applies and behavioral dependencies.
     #[must_use]
     pub fn dependencies(self) -> &'static [Self] {
         match self {
@@ -283,7 +283,7 @@ impl Domain {
             #[cfg(feature = "usd-vol")]
             Self::UsdVol => &[Self::UsdGeom],
             #[cfg(feature = "usd-render")]
-            Self::UsdRender => &[Self::Usd],
+            Self::UsdRender => &[Self::Usd, Self::UsdGeom, Self::UsdShade],
             #[cfg(feature = "usd-lod")]
             Self::UsdLod => &[Self::Usd],
             #[cfg(feature = "usd-ui")]

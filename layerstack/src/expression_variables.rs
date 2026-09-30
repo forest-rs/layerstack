@@ -101,6 +101,24 @@ fn variable_value(value: &Value) -> VariableValue {
     };
     match value {
         Value::Blocked | Value::Null => VariableValue::None,
+        Value::TypedArray(items) => {
+            // SdfVariableExpression accepts bool/int/int64 arrays and coerces
+            // int to int64. Consume native components directly; unsupported
+            // empty kinds must not become an untyped supported empty list.
+            let list = match items {
+                crate::TypedArray::Int(items) => {
+                    ExpressionValue::IntList(items.iter().copied().map(i64::from).collect())
+                }
+                crate::TypedArray::Int64(items) => ExpressionValue::IntList(items.as_ref().clone()),
+                crate::TypedArray::Bool(items) => ExpressionValue::BoolList(items.as_ref().clone()),
+                _ => return VariableValue::Unsupported(String::from("array")),
+            };
+            VariableValue::Value(if items.is_empty() {
+                ExpressionValue::EmptyList
+            } else {
+                list
+            })
+        }
         Value::Array(items) => {
             let items: Option<Vec<ExpressionValue>> = items.iter().map(scalar).collect();
             match items.as_deref() {

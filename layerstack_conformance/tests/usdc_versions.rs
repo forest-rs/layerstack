@@ -117,6 +117,13 @@ fn value_matches(value: &Value, json: &Json, tokens: &TokenInterner) -> bool {
         Value::Token(v) => json.as_str() == Some(tokens.resolve(*v)),
         Value::Vec3f(v) => floats_match(&v.map(f64::from), json),
         Value::Vec3d(v) => floats_match(v, json),
+        Value::TypedArray(items) => json.as_array().is_some_and(|js| {
+            js.len() == items.len()
+                && items
+                    .values()
+                    .zip(js)
+                    .all(|(v, j)| value_matches(&v, j, tokens))
+        }),
         Value::Array(items) => json.as_array().is_some_and(|js| {
             js.len() == items.len()
                 && items

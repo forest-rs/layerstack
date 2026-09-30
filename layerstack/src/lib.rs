@@ -138,6 +138,8 @@ pub(crate) mod composition_checks;
 pub mod composition_error;
 pub mod dependency_map;
 pub mod doc;
+mod value_array;
+pub use value_array::{ArrayRef, TypedArray};
 pub mod edit;
 pub(crate) mod expression_variables;
 pub mod half;

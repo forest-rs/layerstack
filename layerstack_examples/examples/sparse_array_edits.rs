@@ -82,13 +82,6 @@ fn insert_inline_usda(store: &mut InMemoryStore, layer_id: LayerId, source: &str
     }
 }
 
-fn expect_array(value: Value) -> Vec<Value> {
-    let Value::Array(items) = value else {
-        panic!("expected array value");
-    };
-    items
-}
-
 fn main() {
     let mut store = InMemoryStore::default();
 
@@ -146,8 +139,8 @@ over "Mesh" {
     println!("Sparse override over dense array:");
     println!("  resolved points = {}", resolved_points.value);
     assert_eq!(
-        expect_array(resolved_points.value),
-        vec![Value::Int(9), Value::Int(2), Value::Int(4)],
+        resolved_points.value,
+        Value::from(vec![9_i32, 2, 4]),
         "sparse default edit should patch the dense base array in strength order"
     );
 
@@ -163,13 +156,13 @@ over "Mesh" {
     println!("  t=3.5 -> {}", animated_reset.value);
 
     assert_eq!(
-        expect_array(animated_mid.value),
-        vec![Value::Int(1), Value::Int(8), Value::Int(3)],
+        animated_mid.value,
+        Value::from(vec![1_i32, 8, 3]),
         "held sample at t=2.5 should use the edit authored at sample time 2"
     );
     assert_eq!(
-        expect_array(animated_reset.value),
-        vec![Value::Int(1), Value::Int(2), Value::Int(3)],
+        animated_reset.value,
+        Value::from(vec![1_i32, 2, 3]),
         "held sample at t=3.5 should reset to the dense base via the identity edit"
     );
 }

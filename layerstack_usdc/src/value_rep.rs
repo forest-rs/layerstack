@@ -159,6 +159,9 @@ pub enum CrateValue {
     },
     /// An array of crate values.
     Array(Vec<Self>),
+    /// Native numeric array retained by the bulk-import decoding path.
+    /// The generic [`decode_value`] interface keeps returning `Array`.
+    TypedArray(layerstack::TypedArray),
     /// A dictionary (string key → crate value).
     Dictionary(Vec<(String, Self)>),
     /// A list operation.
@@ -339,7 +342,7 @@ pub fn decode_value_within(
     sections: &CrateSections,
     budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
-    decode_nested(rep, data, sections, budget)
+    decode_nested(rep, data, sections, budget, DecodeMode::Generic)
 }
 
 /// A field decoded for assembly. Array payloads stay compact until assembly
@@ -393,7 +396,7 @@ pub(crate) fn decode_field_within<'a>(
                 }));
             }
         }
-        decode_one(rep, data, sections, budget).map(DecodedField::Value)
+        decode_one(rep, data, sections, budget, DecodeMode::Compact).map(DecodedField::Value)
     })
 }
 
@@ -514,13 +517,36 @@ impl DecodeBudget {
 }
 
 /// Decodes a value nested in another, within `budget`.
+#[derive(Clone, Copy, Debug)]
+enum DecodeMode {
+    Generic,
+    Compact,
+}
+
 fn decode_nested(
     rep: &RawValueRep,
     data: &[u8],
     sections: &CrateSections,
     budget: &mut DecodeBudget,
+    mode: DecodeMode,
 ) -> Result<CrateValue, UsdcError> {
-    within_value_budget(budget, |budget| decode_one(rep, data, sections, budget))
+    if matches!(mode, DecodeMode::Compact) {
+        return Ok(match decode_field_within(rep, data, sections, budget)? {
+            DecodedField::Value(value) => value,
+            DecodedField::FloatArray(array) => {
+                CrateValue::TypedArray(crate::numeric_array::float_array(array))
+            }
+            DecodedField::IntegerArray(array) => {
+                CrateValue::TypedArray(crate::numeric_array::integer_array(array))
+            }
+            DecodedField::MathArray(array) => {
+                CrateValue::TypedArray(crate::numeric_array::math_array(&array))
+            }
+        });
+    }
+    within_value_budget(budget, |budget| {
+        decode_one(rep, data, sections, budget, mode)
+    })
 }
 
 fn within_value_budget<T>(
@@ -544,6 +570,7 @@ fn decode_one(
     data: &[u8],
     sections: &CrateSections,
     budget: &mut DecodeBudget,
+    mode: DecodeMode,
 ) -> Result<CrateValue, UsdcError> {
     let vtype = rep.value_type()?;
     if rep.is_array_edit() {
@@ -584,7 +611,7 @@ fn decode_one(
             let v = decode_inlined_or_offset_u32(rep, data)?;
             Ok(CrateValue::Permission(v))
         }
-        ValueType::Dictionary => decode_dictionary(rep, data, sections, budget),
+        ValueType::Dictionary => decode_dictionary(rep, data, sections, budget, mode),
         ValueType::VariantSelectionMap => decode_variant_selection_map(rep, data, sections, budget),
         ValueType::Relocates => decode_relocates_map(rep, data, sections, budget),
         ValueType::TokenListOp
@@ -597,7 +624,7 @@ fn decode_one(
         | ValueType::UIntListOp
         | ValueType::UInt64ListOp
         | ValueType::UnregisteredValueListOp => decode_list_op(rep, data, sections, budget),
-        ValueType::TimeSamples => decode_time_samples(rep, data, sections, budget),
+        ValueType::TimeSamples => decode_time_samples(rep, data, sections, budget, mode),
         ValueType::PathVector => decode_path_vector(rep, data, sections, budget),
         ValueType::TokenVector => decode_token_vector(rep, data, sections, budget),
         ValueType::DoubleVector => decode_double_vector(rep, data, budget),
@@ -622,8 +649,10 @@ fn decode_one(
         | ValueType::Matrix2d
         | ValueType::Matrix3d
         | ValueType::Matrix4d => decode_math_type(rep, data, vtype, budget),
-        ValueType::Value => decode_value_indirection(rep, data, sections, budget),
-        ValueType::UnregisteredValue => decode_unregistered_value(rep, data, sections, budget),
+        ValueType::Value => decode_value_indirection(rep, data, sections, budget, mode),
+        ValueType::UnregisteredValue => {
+            decode_unregistered_value(rep, data, sections, budget, mode)
+        }
         ValueType::Payload => decode_payload(rep, data, sections, budget),
         ValueType::Spline => decode_spline(rep, data, sections, budget),
     }
@@ -1397,6 +1426,7 @@ fn decode_dictionary(
     data: &[u8],
     sections: &CrateSections,
     budget: &mut DecodeBudget,
+    mode: DecodeMode,
 ) -> Result<CrateValue, UsdcError> {
     // Only the empty dictionary is inlined (`_EncodeInline`,
     // `pxr/usd/sdf/crateValueInliners.h`).
@@ -1404,7 +1434,7 @@ fn decode_dictionary(
         return Ok(CrateValue::Dictionary(vec![]));
     }
     let off = payload_offset_usize(rep, data)?;
-    let (entries, _) = decode_dictionary_at(data, off, sections, budget)?;
+    let (entries, _) = decode_dictionary_at_in(data, off, sections, budget, mode)?;
     Ok(CrateValue::Dictionary(entries))
 }
 
@@ -1417,6 +1447,16 @@ fn decode_dictionary_at(
     off: usize,
     sections: &CrateSections,
     budget: &mut DecodeBudget,
+) -> Result<(Vec<(String, CrateValue)>, usize), UsdcError> {
+    decode_dictionary_at_in(data, off, sections, budget, DecodeMode::Generic)
+}
+
+fn decode_dictionary_at_in(
+    data: &[u8],
+    off: usize,
+    sections: &CrateSections,
+    budget: &mut DecodeBudget,
+    mode: DecodeMode,
 ) -> Result<(Vec<(String, CrateValue)>, usize), UsdcError> {
     // Each entry advances past at least 12 bytes, so the loop ends at the
     // end of the data.
@@ -1433,7 +1473,7 @@ fn decode_dictionary_at(
         let key = lookup_string(sections, key_idx, budget)?;
 
         // Value: a `VtValue` reached through a relative offset.
-        let child_val = read_vt_value(data, &mut pos, sections, budget)?;
+        let child_val = read_vt_value_in(data, &mut pos, sections, budget, mode)?;
         entries.push((key, child_val));
     }
 
@@ -1619,10 +1659,20 @@ fn read_vt_value(
     sections: &CrateSections,
     budget: &mut DecodeBudget,
 ) -> Result<CrateValue, UsdcError> {
+    read_vt_value_in(data, pos, sections, budget, DecodeMode::Generic)
+}
+
+fn read_vt_value_in(
+    data: &[u8],
+    pos: &mut usize,
+    sections: &CrateSections,
+    budget: &mut DecodeBudget,
+    mode: DecodeMode,
+) -> Result<CrateValue, UsdcError> {
     let mut rep_offset = relative_offset(data, *pos)?;
     let child_rep = RawValueRep::new(read_bytes(data, &mut rep_offset)?);
     *pos = rep_offset;
-    decode_nested(&child_rep, data, sections, budget)
+    decode_nested(&child_rep, data, sections, budget, mode)
 }
 
 /// Reads the offset field at `pos`, which OpenUSD's `_RecursiveRead`
@@ -1730,6 +1780,7 @@ fn decode_time_samples(
     data: &[u8],
     sections: &CrateSections,
     budget: &mut DecodeBudget,
+    mode: DecodeMode,
 ) -> Result<CrateValue, UsdcError> {
     let off = payload_offset_usize(rep, data)?;
     if off == 0 {
@@ -1757,7 +1808,7 @@ fn decode_time_samples(
     // 4. Decode timecodes. OpenUSD packs them as a `std::vector<double>`
     //    (`TimeSamples::times`, `pxr/usd/sdf/crateFile.cpp:1596`), which is
     //    the `DoubleVector` type, not a `double[]` array.
-    let tc_value = decode_nested(&tc_rep, data, sections, budget)?;
+    let tc_value = decode_nested(&tc_rep, data, sections, budget, DecodeMode::Generic)?;
     let timecodes: Vec<f64> = match tc_value {
         CrateValue::DoubleVector(times) => times,
         CrateValue::Array(arr) => arr
@@ -1785,7 +1836,7 @@ fn decode_time_samples(
 
     for time in timecodes {
         let vr = RawValueRep::new(read_bytes(data, &mut rep_off)?);
-        let val = decode_nested(&vr, data, sections, budget)?;
+        let val = decode_nested(&vr, data, sections, budget, mode)?;
         samples.push((time, val));
     }
 
@@ -1930,9 +1981,10 @@ fn decode_value_indirection(
     data: &[u8],
     sections: &CrateSections,
     budget: &mut DecodeBudget,
+    mode: DecodeMode,
 ) -> Result<CrateValue, UsdcError> {
     let mut pos = payload_offset_usize(rep, data)?;
-    read_vt_value(data, &mut pos, sections, budget)
+    read_vt_value_in(data, &mut pos, sections, budget, mode)
 }
 
 /// Decodes an `SdfUnregisteredValue`, which OpenUSD stores as a `VtValue`
@@ -1942,9 +1994,10 @@ fn decode_unregistered_value(
     data: &[u8],
     sections: &CrateSections,
     budget: &mut DecodeBudget,
+    mode: DecodeMode,
 ) -> Result<CrateValue, UsdcError> {
     let mut pos = payload_offset_usize(rep, data)?;
-    read_vt_value(data, &mut pos, sections, budget)
+    read_vt_value_in(data, &mut pos, sections, budget, mode)
 }
 
 fn decode_payload(
@@ -2024,12 +2077,16 @@ fn decode_array_edit(
         });
     }
 
-    let CrateValue::Array(literals) = decode_nested(&literals_rep, data, sections, budget)? else {
+    let CrateValue::Array(literals) =
+        decode_nested(&literals_rep, data, sections, budget, DecodeMode::Generic)?
+    else {
         return Err(UsdcError::Inconsistent {
             message: "array edit literals did not decode to an array",
         });
     };
-    let CrateValue::Array(indexes) = decode_nested(&indexes_rep, data, sections, budget)? else {
+    let CrateValue::Array(indexes) =
+        decode_nested(&indexes_rep, data, sections, budget, DecodeMode::Generic)?
+    else {
         return Err(UsdcError::Inconsistent {
             message: "array edit instructions did not decode to an array",
         });
@@ -2868,7 +2925,7 @@ mod tests {
     }
 
     #[test]
-    fn nested_math_arrays_keep_the_public_decode_path() {
+    fn nested_math_arrays_keep_generic_reads_and_use_native_import() {
         let sections = sections_with(CrateVersion::NEWEST_READABLE);
         let mut data = vec![0; 8];
         data.extend_from_slice(&1_u64.to_le_bytes());
@@ -2891,7 +2948,18 @@ mod tests {
         else {
             panic!("nested fallback");
         };
-        assert_eq!(alloc::format!("{ordinary:?}"), alloc::format!("{field:?}"));
+        let CrateValue::Dictionary(ordinary) = ordinary else {
+            panic!("generic dictionary");
+        };
+        let CrateValue::Dictionary(field) = field else {
+            panic!("native dictionary");
+        };
+        assert!(
+            matches!(&ordinary[0].1, CrateValue::Array(items) if matches!(&items[0], CrateValue::Opaque { value_type: ValueType::Vec3f, .. }))
+        );
+        assert!(
+            matches!(&field[0].1, CrateValue::TypedArray(layerstack::TypedArray::Vec3f(items)) if items.len() == 1)
+        );
         assert_eq!(a.used(), b.used());
         a.depth = MAX_VALUE_DEPTH;
         b.depth = MAX_VALUE_DEPTH;

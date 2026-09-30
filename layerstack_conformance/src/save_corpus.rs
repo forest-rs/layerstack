@@ -749,6 +749,10 @@ fn stack_properties<'a>(
 fn spell(value: &Value, tokens: &TokenInterner) -> String {
     match value {
         Value::Token(t) => format!("token {:?}", tokens.resolve(*t)),
+        Value::TypedArray(items) => {
+            let items: Vec<_> = items.values().map(|v| spell(&v, tokens)).collect();
+            format!("[{}]", items.join(", "))
+        }
         Value::Array(items) => {
             let items: Vec<String> = items.iter().map(|v| spell(v, tokens)).collect();
             format!("[{}]", items.join(", "))

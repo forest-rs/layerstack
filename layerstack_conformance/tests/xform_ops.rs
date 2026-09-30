@@ -324,6 +324,9 @@ fn canon(value: &Value, tokens: &layerstack::TokenInterner) -> Json {
         ),
         Value::Token(t) => json!(tokens.resolve(*t)),
         Value::Array(items) => Json::Array(items.iter().map(|v| canon(v, tokens)).collect()),
+        Value::TypedArray(items) => {
+            Json::Array(items.values().map(|v| canon(&v, tokens)).collect())
+        }
         other => json!(format!("{other:?}")),
     }
 }

@@ -381,14 +381,41 @@ fn values_must_conform_to_the_declared_type() {
     create
         .apply(&mut store)
         .expect("an array of the element type");
+    for components in [
+        Value::Array(vec![Value::Float(0.1); 3]),
+        Value::array(vec![Value::Float(0.1); 3]),
+    ] {
+        let mut tuple = Transaction::new();
+        tuple.set_default(color.clone(), Value::Array(vec![components]));
+        tuple
+            .apply(&mut store)
+            .expect("tuples may be spelled as arrays");
+    }
+
+    let tint = Address::spec(ROCK, spec(&mut store, "/Rock.tint"));
     let mut tuple = Transaction::new();
-    tuple.set_default(
-        color.clone(),
-        Value::Array(vec![Value::Array(vec![Value::Float(0.1); 3])]),
+    tuple.create_property(
+        tint.clone(),
+        PropertySpec::typed_attribute(PropertyType::new("color3f", false, Value::Vec3f([0.0; 3])))
+            .with_default(Value::array(vec![Value::Float(0.1); 3])),
     );
     tuple
         .apply(&mut store)
-        .expect("tuples may be spelled as arrays");
+        .expect("native scalar tuple components");
+    for wrong in [
+        Value::array(vec![Value::Float(0.1); 2]),
+        Value::array(vec![Value::Double(0.1); 3]),
+    ] {
+        let mut tuple = Transaction::new();
+        tuple.set_default(tint.clone(), wrong);
+        assert!(matches!(
+            tuple.apply(&mut store),
+            Err(EditError::Rejected {
+                reason: Rejection::TypeMismatch { .. },
+                ..
+            })
+        ));
+    }
     let mut scalar = Transaction::new();
     scalar.set_default(color, Value::Vec3f([0.5; 3]));
     assert!(

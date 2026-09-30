@@ -26,10 +26,13 @@ pub(crate) fn read_array<'a, T>(
     tokens: &'a TokenInterner,
     read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
 ) -> Option<Vec<T>> {
-    match value {
-        Value::Array(items) => items.iter().map(|item| read(item, tokens)).collect(),
-        _ => None,
+    let array = value.array_ref()?;
+    if let Some(typed) = array.typed() {
+        // Empty native buffers retain a kind; an empty buffer of another
+        // element kind must not silently pass a typed read.
+        read(&typed.element_kind(), tokens)?;
     }
+    array.iter().map(|item| read(&item, tokens)).collect()
 }
 
 /// Writes an array of `write`'s type.
@@ -38,7 +41,7 @@ pub(crate) fn write_array<T: Copy>(
     tokens: &mut TokenInterner,
     write: impl Fn(T, &mut TokenInterner) -> Value,
 ) -> Value {
-    Value::Array(items.iter().map(|item| write(*item, tokens)).collect())
+    Value::array_from_iter(items.iter().map(|item| write(*item, tokens)), None)
 }
 
 macro_rules! plain {

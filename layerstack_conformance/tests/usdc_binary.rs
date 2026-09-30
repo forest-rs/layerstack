@@ -176,14 +176,10 @@ fn gen_bool_parses() {
 
     // array = [false, false, true, false, false]
     let array = parsed.expect_value("/root", "array");
-    match array {
-        Value::Array(items) => {
-            assert_eq!(items.len(), 5);
-            assert_eq!(items[0], Value::Bool(false));
-            assert_eq!(items[2], Value::Bool(true));
-        }
-        _ => panic!("expected array, got {array:?}"),
-    }
+    let items = array.array_ref().expect("array");
+    assert_eq!(items.len(), 5);
+    assert_eq!(*items.get(0).expect("first"), Value::Bool(false));
+    assert_eq!(*items.get(2).expect("third"), Value::Bool(true));
 }
 
 #[test]
@@ -195,14 +191,10 @@ fn gen_int_parses() {
     assert_eq!(single, Value::Int(-2_147_483_647));
 
     let array = parsed.expect_value("/root", "array");
-    match array {
-        Value::Array(items) => {
-            assert_eq!(items.len(), 7);
-            assert_eq!(items[0], Value::Int(-2_147_483_647));
-            assert_eq!(items[6], Value::Int(2_147_483_647));
-        }
-        _ => panic!("expected array, got {array:?}"),
-    }
+    let items = array.array_ref().expect("array");
+    assert_eq!(items.len(), 7);
+    assert_eq!(*items.get(0).expect("first"), Value::Int(-2_147_483_647));
+    assert_eq!(*items.get(6).expect("last"), Value::Int(2_147_483_647));
 }
 
 #[test]

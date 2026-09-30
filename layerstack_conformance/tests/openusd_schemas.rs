@@ -151,6 +151,7 @@ fn json(value: &Value, tokens: &TokenInterner) -> Json {
         Value::Quatf([i, j, k, r]) => floats(&[*r, *i, *j, *k]),
         Value::Quath([i, j, k, r]) => Json::Array([r, i, j, k].into_iter().map(half).collect()),
         Value::Array(items) => Json::Array(items.iter().map(|v| json(v, tokens)).collect()),
+        Value::TypedArray(items) => Json::Array(items.values().map(|v| json(&v, tokens)).collect()),
         other => panic!("no JSON form for {other:?}"),
     }
 }

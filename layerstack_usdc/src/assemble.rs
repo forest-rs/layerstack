@@ -37,10 +37,11 @@ use layerstack::{ArrayEdit, ArrayEditOp, ArrayEditOperand, ArrayIndex};
 use layerstack::{AssetResolver, PropertyType, ReferenceTarget, ResolvedAsset};
 
 use crate::error::UsdcError;
+use crate::numeric_array::*;
 use crate::section::CrateSections;
 use crate::value_rep::{
     CrateArrayEdit, CrateArrayEditOp, CrateListOp, CrateValue, DecodeBudget, DecodedField,
-    FloatArray, MathArray, RawValueRep, decode_field_within,
+    FloatArray, RawValueRep, decode_field_within,
 };
 use crate::value_type::{SpecForm, ValueType};
 
@@ -1007,12 +1008,16 @@ impl<'a> AssembleCtx<'a> {
     fn convert_field_value(&mut self, field: &DecodedField<'_>) -> Value {
         match field {
             DecodedField::Value(value) => self.convert_crate_value(value),
-            DecodedField::FloatArray(array) => Value::Array(match array {
-                FloatArray::Half(values) => values.iter().copied().map(Value::Half).collect(),
-                FloatArray::Float(values) => values.iter().copied().map(Value::Float).collect(),
-                FloatArray::Double(values) => values.iter().copied().map(Value::Double).collect(),
+            DecodedField::FloatArray(array) => Value::TypedArray(match array {
+                FloatArray::Half(values) => layerstack::TypedArray::Half(Arc::new(values.clone())),
+                FloatArray::Float(values) => {
+                    layerstack::TypedArray::Float(Arc::new(values.clone()))
+                }
+                FloatArray::Double(values) => {
+                    layerstack::TypedArray::Double(Arc::new(values.clone()))
+                }
                 FloatArray::TimeCode(values) => {
-                    values.iter().copied().map(Value::TimeCode).collect()
+                    layerstack::TypedArray::TimeCode(Arc::new(values.clone()))
                 }
             }),
             DecodedField::IntegerArray(array) => {
@@ -1043,9 +1048,10 @@ impl<'a> AssembleCtx<'a> {
             CrateValue::Specifier(v) => Value::Int(*v as i32),
             CrateValue::Variability(_) | CrateValue::Permission(_) => Value::Null,
             CrateValue::Opaque { value_type, data } => convert_math_value(*value_type, data),
+            CrateValue::TypedArray(array) => Value::TypedArray(array.clone()),
             CrateValue::Array(items) => {
                 let vals: Vec<Value> = items.iter().map(|v| self.convert_crate_value(v)).collect();
-                Value::Array(vals)
+                Value::array(vals)
             }
             CrateValue::Dictionary(entries) => {
                 let dict: Vec<(Arc<str>, Value)> = entries
@@ -1068,32 +1074,32 @@ impl<'a> AssembleCtx<'a> {
                     .iter()
                     .map(|p| Value::String(Arc::from(p.as_str())))
                     .collect();
-                Value::Array(vals)
+                Value::array(vals)
             }
             CrateValue::TokenVector(toks) => {
                 let vals: Vec<Value> = toks
                     .iter()
                     .map(|t| Value::Token(self.tokens.intern(t)))
                     .collect();
-                Value::Array(vals)
+                Value::array(vals)
             }
             CrateValue::DoubleVector(ds) => {
                 let vals: Vec<Value> = ds.iter().map(|d| Value::Double(*d)).collect();
-                Value::Array(vals)
+                Value::array(vals)
             }
             CrateValue::StringVector(ss) => {
                 let vals: Vec<Value> = ss
                     .iter()
                     .map(|s| Value::String(Arc::from(s.as_str())))
                     .collect();
-                Value::Array(vals)
+                Value::array(vals)
             }
             CrateValue::LayerOffsetVector(offsets) => {
                 let vals: Vec<Value> = offsets
                     .iter()
                     .map(|(o, s)| Value::Array(alloc::vec![Value::Double(*o), Value::Double(*s)]))
                     .collect();
-                Value::Array(vals)
+                Value::array(vals)
             }
             CrateValue::RelocatesMap(_) => Value::Null,
             CrateValue::Spline(_) => {
@@ -1298,6 +1304,22 @@ impl<'a> AssembleCtx<'a> {
                 // restates `connectionPaths`.
                 ("typeName" | "connectionChildren", _) => {}
                 _ => self.apply_property_field(spec_path, name, value, &mut spec)?,
+            }
+        }
+        if let Some(property_type) = spec.type_name.as_ref() {
+            let compact = |value: &mut Value| {
+                if let Value::Array(items) = value {
+                    let items = core::mem::take(items);
+                    *value = Value::array_with_element(items, Some(&property_type.default_scalar));
+                }
+            };
+            if let Some(value) = spec.default.as_mut() {
+                compact(value);
+            }
+            if let Some(samples) = spec.time_samples.as_mut() {
+                for (_, value) in samples {
+                    compact(value);
+                }
             }
         }
         Ok(spec)
@@ -1898,7 +1920,7 @@ fn sort_by_children(properties: &mut [PropertyEntry], children: &[TokenId]) {
 
 fn crate_value_is_array(value: &CrateValue) -> bool {
     match value {
-        CrateValue::Array(_) | CrateValue::ArrayEdit(_) => true,
+        CrateValue::Array(_) | CrateValue::TypedArray(_) | CrateValue::ArrayEdit(_) => true,
         CrateValue::TimeSamples(samples) => samples
             .iter()
             .any(|(_, sample)| crate_value_is_array(sample)),
@@ -2023,61 +2045,6 @@ fn parent_prim_path(path: &str) -> Option<&str> {
 // Math type → Value conversion
 // ---------------------------------------------------------------------------
 
-/// Converts integer components without materializing a `CrateValue` per item.
-/// The narrowing casts preserve the public decoder's bitwise signed/unsigned
-/// interpretation (AOUSD Core §16.3.10).
-#[allow(
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "integer element bit patterns"
-)]
-fn convert_integer_array(vtype: ValueType, values: &[i64]) -> Value {
-    Value::Array(match vtype {
-        ValueType::Bool => values.iter().map(|&v| Value::Bool(v != 0)).collect(),
-        ValueType::UChar => values.iter().map(|&v| Value::UChar(v as u8)).collect(),
-        ValueType::Int => values.iter().map(|&v| Value::Int(v as i32)).collect(),
-        ValueType::UInt => values.iter().map(|&v| Value::UInt(v as u32)).collect(),
-        ValueType::Int64 => values.iter().map(|&v| Value::Int64(v)).collect(),
-        ValueType::UInt64 => values.iter().map(|&v| Value::UInt64(v as u64)).collect(),
-        _ => unreachable!("integer array types are selected by decode_field_within"),
-    })
-}
-
-/// Dispatches once per array so each element is constructed directly in its
-/// destination rather than passing through the scalar type switch.
-fn convert_math_array(array: &MathArray<'_>) -> Value {
-    macro_rules! convert {
-        ($($variant:ident => $read:expr),* $(,)?) => {
-            Value::Array(match array.value_type {
-                $(ValueType::$variant => array.elements()
-                    .map(|bytes| Value::$variant(($read)(bytes)))
-                    .collect(),)*
-                _ => unreachable!("math array types are selected by decode_field_within"),
-            })
-        };
-    }
-    convert! {
-        Vec2d => read_f64x2,
-        Vec3d => read_f64x3,
-        Vec4d => read_f64x4,
-        Vec2f => read_f32x2,
-        Vec3f => read_f32x3,
-        Vec4f => read_f32x4,
-        Vec2h => read_u16x2,
-        Vec3h => read_u16x3,
-        Vec4h => read_u16x4,
-        Vec2i => read_i32x2,
-        Vec3i => read_i32x3,
-        Vec4i => read_i32x4,
-        Quatd => read_f64x4,
-        Quatf => read_f32x4,
-        Quath => read_u16x4,
-        Matrix2d => |bytes| Box::new(read_f64_array::<4>(bytes)),
-        Matrix3d => |bytes| Box::new(read_f64_array::<9>(bytes)),
-        Matrix4d => |bytes| Box::new(read_f64_array::<16>(bytes)),
-    }
-}
-
 /// Converts USDC opaque math bytes into a typed [`Value`] variant.
 ///
 /// The byte layout is little-endian and matches the USDC binary format
@@ -2114,101 +2081,6 @@ fn convert_math_value(vtype: ValueType, data: &[u8]) -> Value {
 }
 
 // --- Little-endian readers for math element arrays ---
-
-fn read_f64x2(d: &[u8]) -> [f64; 2] {
-    [f64_le(d, 0), f64_le(d, 1)]
-}
-
-fn read_f64x3(d: &[u8]) -> [f64; 3] {
-    [f64_le(d, 0), f64_le(d, 1), f64_le(d, 2)]
-}
-
-fn read_f64x4(d: &[u8]) -> [f64; 4] {
-    [f64_le(d, 0), f64_le(d, 1), f64_le(d, 2), f64_le(d, 3)]
-}
-
-fn read_f32x2(d: &[u8]) -> [f32; 2] {
-    [f32_le(d, 0), f32_le(d, 1)]
-}
-
-fn read_f32x3(d: &[u8]) -> [f32; 3] {
-    [f32_le(d, 0), f32_le(d, 1), f32_le(d, 2)]
-}
-
-fn read_f32x4(d: &[u8]) -> [f32; 4] {
-    [f32_le(d, 0), f32_le(d, 1), f32_le(d, 2), f32_le(d, 3)]
-}
-
-fn read_u16x2(d: &[u8]) -> [u16; 2] {
-    [u16_le(d, 0), u16_le(d, 1)]
-}
-
-fn read_u16x3(d: &[u8]) -> [u16; 3] {
-    [u16_le(d, 0), u16_le(d, 1), u16_le(d, 2)]
-}
-
-fn read_u16x4(d: &[u8]) -> [u16; 4] {
-    [u16_le(d, 0), u16_le(d, 1), u16_le(d, 2), u16_le(d, 3)]
-}
-
-fn read_i32x2(d: &[u8]) -> [i32; 2] {
-    [i32_le(d, 0), i32_le(d, 1)]
-}
-
-fn read_i32x3(d: &[u8]) -> [i32; 3] {
-    [i32_le(d, 0), i32_le(d, 1), i32_le(d, 2)]
-}
-
-fn read_i32x4(d: &[u8]) -> [i32; 4] {
-    [i32_le(d, 0), i32_le(d, 1), i32_le(d, 2), i32_le(d, 3)]
-}
-
-fn read_f64_array<const N: usize>(d: &[u8]) -> [f64; N] {
-    let mut out = [0.0_f64; N];
-    for (i, val) in out.iter_mut().enumerate() {
-        *val = f64_le(d, i);
-    }
-    out
-}
-
-// In the readers below, `idx` is a component index of a vector, quaternion
-// or matrix (at most 15), so the offsets cannot overflow.
-
-fn f64_le(d: &[u8], idx: usize) -> f64 {
-    let off = idx * 8;
-    f64::from_le_bytes(
-        d.get(off..off + 8)
-            .and_then(|b| b.try_into().ok())
-            .unwrap_or([0; 8]),
-    )
-}
-
-fn f32_le(d: &[u8], idx: usize) -> f32 {
-    let off = idx * 4;
-    f32::from_le_bytes(
-        d.get(off..off + 4)
-            .and_then(|b| b.try_into().ok())
-            .unwrap_or([0; 4]),
-    )
-}
-
-fn u16_le(d: &[u8], idx: usize) -> u16 {
-    let off = idx * 2;
-    u16::from_le_bytes(
-        d.get(off..off + 2)
-            .and_then(|b| b.try_into().ok())
-            .unwrap_or([0; 2]),
-    )
-}
-
-fn i32_le(d: &[u8], idx: usize) -> i32 {
-    let off = idx * 4;
-    i32::from_le_bytes(
-        d.get(off..off + 4)
-            .and_then(|b| b.try_into().ok())
-            .unwrap_or([0; 4]),
-    )
-}
 
 // ---------------------------------------------------------------------------
 // ListOp merge helpers

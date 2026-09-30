@@ -329,6 +329,7 @@ pub(crate) fn conforms(ty: &PropertyType, value: &Value) -> bool {
         Value::Blocked => true,
         Value::ArrayEdit(_) => ty.is_array,
         Value::Array(items) if ty.is_array => items.iter().all(|v| scalar_conforms(ty, v)),
+        Value::TypedArray(items) if ty.is_array => scalar_conforms(ty, &items.element_kind()),
         _ if ty.is_array => false,
         _ => scalar_conforms(ty, value),
     }
@@ -343,7 +344,7 @@ fn scalar_conforms(ty: &PropertyType, value: &Value) -> bool {
         return true;
     }
     // Tuples may also be spelled as arrays of their components.
-    let Value::Array(components) = value else {
+    let Some(components) = value.array_ref() else {
         return false;
     };
     let (count, component) = match expected {
@@ -367,7 +368,7 @@ fn scalar_conforms(ty: &PropertyType, value: &Value) -> bool {
     components.len() == count
         && components
             .iter()
-            .all(|c| core::mem::discriminant(c) == core::mem::discriminant(&component))
+            .all(|c| core::mem::discriminant(c.as_ref()) == core::mem::discriminant(&component))
 }
 
 /// Reading authored specs by spec path.

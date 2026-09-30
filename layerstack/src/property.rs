@@ -63,7 +63,7 @@ impl PropertyType {
     #[must_use]
     pub fn default_property_value(&self) -> Value {
         if self.is_array {
-            Value::Array(Vec::default())
+            Value::array_with_element(Vec::default(), Some(&self.default_scalar))
         } else {
             self.default_scalar.clone()
         }

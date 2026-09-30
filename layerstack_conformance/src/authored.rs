@@ -50,6 +50,10 @@ impl Names<'_> {
 pub fn render_value(value: &Value, names: Names<'_>) -> String {
     match value {
         Value::Token(token) => format!("Token({:?})", names.token(*token)),
+        Value::TypedArray(items) => {
+            let items: Vec<_> = items.values().map(|v| render_value(&v, names)).collect();
+            format!("[{}]", items.join(", "))
+        }
         Value::Array(items) => {
             let items: Vec<_> = items.iter().map(|v| render_value(v, names)).collect();
             format!("[{}]", items.join(", "))

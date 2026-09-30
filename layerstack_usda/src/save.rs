@@ -902,6 +902,7 @@ impl Lowering<'_> {
                     .collect::<Result<_, SaveError>>()?,
             ),
             L::Array(items) => self.array(items, site, path)?,
+            L::TypedArray(items) => typed_array(items),
             L::ArrayEdit(_) => return unsupported(path, Unsupported::ArrayEdit),
             L::PathExpression(_) => return no("pathExpression"),
             L::Opaque { .. } => return no("opaque"),
@@ -929,6 +930,40 @@ impl Lowering<'_> {
             || unsupported(path, Unsupported::Value("untyped empty array")),
             Ok,
         )
+    }
+}
+
+fn typed_array(array: &layerstack::TypedArray) -> Value {
+    use layerstack::TypedArray as A;
+    match array {
+        A::Bool(items) => Value::BoolArray(items.as_ref().clone()),
+        A::UChar(items) => Value::UCharArray(items.as_ref().clone()),
+        A::Int(items) => Value::IntArray(items.as_ref().clone()),
+        A::UInt(items) => Value::UIntArray(items.as_ref().clone()),
+        A::Int64(items) => Value::Int64Array(items.as_ref().clone()),
+        A::UInt64(items) => Value::UInt64Array(items.as_ref().clone()),
+        A::Half(items) => Value::HalfArray(items.as_ref().clone()),
+        A::Float(items) => Value::FloatArray(items.as_ref().clone()),
+        A::Double(items) => Value::DoubleArray(items.as_ref().clone()),
+        A::TimeCode(items) => Value::TimeCodeArray(items.as_ref().clone()),
+        A::Vec2f(items) => Value::Float2Array(items.as_ref().clone()),
+        A::Vec3f(items) => Value::Float3Array(items.as_ref().clone()),
+        A::Vec4f(items) => Value::Float4Array(items.as_ref().clone()),
+        A::Vec2d(items) => Value::Double2Array(items.as_ref().clone()),
+        A::Vec3d(items) => Value::Double3Array(items.as_ref().clone()),
+        A::Vec4d(items) => Value::Double4Array(items.as_ref().clone()),
+        A::Vec2h(items) => Value::Half2Array(items.as_ref().clone()),
+        A::Vec3h(items) => Value::Half3Array(items.as_ref().clone()),
+        A::Vec4h(items) => Value::Half4Array(items.as_ref().clone()),
+        A::Vec2i(items) => Value::Int2Array(items.as_ref().clone()),
+        A::Vec3i(items) => Value::Int3Array(items.as_ref().clone()),
+        A::Vec4i(items) => Value::Int4Array(items.as_ref().clone()),
+        A::Quath(items) => Value::QuathArray(items.as_ref().clone()),
+        A::Quatf(items) => Value::QuatfArray(items.as_ref().clone()),
+        A::Quatd(items) => Value::QuatdArray(items.as_ref().clone()),
+        A::Matrix2d(items) => Value::Matrix2dArray(items.iter().map(rows).collect()),
+        A::Matrix3d(items) => Value::Matrix3dArray(items.iter().map(rows).collect()),
+        A::Matrix4d(items) => Value::Matrix4dArray(items.iter().map(rows).collect()),
     }
 }
 

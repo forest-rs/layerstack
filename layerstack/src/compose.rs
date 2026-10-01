@@ -1035,20 +1035,24 @@ fn prune_unselected_variant_specs(
     prim_paths.sort_unstable();
     for (_, prim_path) in prim_paths {
         for hosts in [BranchHosts::Ancestors, BranchHosts::Own] {
-            // A spec is checked once per expression variable context its
-            // nodes read it in: its selections may differ by context.
+            // Admission depends on the prim spec, not its field suffix.
+            // Keep expression contexts distinct: they can select different
+            // branches of the same source spec (AOUSD Core §10.5).
             let mut rejected: HashSet<(LayerId, SpecPath, ExpressionVariables)> = HashSet::new();
             {
                 let index = &prims[&prim_path];
-                let mut checked: HashSet<(LayerId, &SpecPath, ExpressionVariables)> =
-                    HashSet::new();
+                let mut checked: HashSet<(LayerId, SpecPath, ExpressionVariables)> = HashSet::new();
                 let all_keys = index
                     .sources
                     .iter()
                     .chain(index.opinions_by_field.values().flatten().map(|op| &op.key));
                 for key in all_keys {
+                    if !key.spec_path.has_variant_selections() {
+                        continue;
+                    }
+                    let spec_path = key.spec_path.prim_spec();
                     let variables = node_variables(store, &index.graph, key.node);
-                    if !checked.insert((key.layer_id, &key.spec_path, variables.clone())) {
+                    if !checked.insert((key.layer_id, spec_path.clone(), variables.clone())) {
                         continue;
                     }
                     if !spec_path_branches_selected(
@@ -1063,7 +1067,7 @@ fn prune_unselected_variant_specs(
                         &key.spec_path,
                         hosts,
                     ) {
-                        rejected.insert((key.layer_id, key.spec_path.clone(), variables));
+                        rejected.insert((key.layer_id, spec_path, variables));
                     }
                 }
             }
@@ -1075,8 +1079,11 @@ fn prune_unselected_variant_specs(
                 .get_mut(&prim_path)
                 .expect("prim exists")
                 .retain_keys(|graph, key| {
+                    if !key.spec_path.has_variant_selections() {
+                        return true;
+                    }
                     let variables = node_variables(store, graph, key.node);
-                    !rejected.contains(&(key.layer_id, key.spec_path.clone(), variables))
+                    !rejected.contains(&(key.layer_id, key.spec_path.prim_spec(), variables))
                 });
             // Read this prim's selections again from what remains.
             selection_cache.remove(&prim_path);
@@ -1111,10 +1118,7 @@ fn spec_path_branches_selected(
     use crate::spec_path::SpecComponent;
 
     let components = spec_path.components();
-    if !components
-        .iter()
-        .any(|c| matches!(c, SpecComponent::VariantSelection { .. }))
-    {
+    if !spec_path.has_variant_selections() {
         return true;
     }
     let spec_depth = components

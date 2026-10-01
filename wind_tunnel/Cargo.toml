@@ -85,3 +85,7 @@ harness = false
 [[bench]]
 name = "numeric_arrays"
 harness = false
+
+[[bench]]
+name = "composition_storage"
+harness = false

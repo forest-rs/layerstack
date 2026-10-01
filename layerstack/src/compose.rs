@@ -45,7 +45,7 @@ use crate::{
     layer_stack::LayerStack,
     path::PathId,
     population::populate,
-    prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue, PrimIndex},
+    prim_index::{ArcKind, FieldKey, Opinion, OpinionKey, OpinionValue, PrimIndex},
     prim_index_graph::{NodeArc, NodeId, PrimIndexGraph, PrimNode},
     relocates::{LiftedSet, Relocations, Walk},
     spec_path::{SpecPath, VariantSelectionSite},
@@ -495,16 +495,14 @@ fn drop_skipped_duplicates(store: &dyn LayerStore, prim: &mut PrimIndex) {
     let mut seen = HashSet::new();
     prim.sources
         .retain(|key| !skips(key.node) || (!dropped.contains(key) && seen.insert(key.clone())));
-    for opinions in prim.opinions_by_field.values_mut() {
-        let mut seen = HashSet::new();
-        opinions.retain(|opinion| {
-            !skips(opinion.key.node)
-                || (!dropped.contains(&registration(&opinion.key))
-                    && seen.insert(opinion.key.clone()))
-        });
-    }
-    prim.opinions_by_field
-        .retain(|_, opinions| !opinions.is_empty());
+    let mut seen = HashSet::new();
+    prim.retain_opinions(|graph, opinion| {
+        !graph
+            .node(opinion.key.node)
+            .is_some_and(|node| node.arc.skips_duplicates)
+            || (!dropped.contains(&registration(&opinion.key))
+                && seen.insert((FieldKey::of(opinion), opinion.key.clone())))
+    });
 }
 
 /// The child-order opinions (`reorder nameChildren`, or authored children)
@@ -520,10 +518,7 @@ fn prune_skipped_nodes(prim: &mut PrimIndex, extra: [Option<&mut ChildOrderOpini
     let mut used = alloc::vec![false; prim.graph.len()];
     let mut mark = |key: &OpinionKey| used[key.node.index()] = true;
     prim.sources.iter().for_each(&mut mark);
-    prim.opinions_by_field
-        .values()
-        .flatten()
-        .for_each(|opinion| mark(&opinion.key));
+    prim.opinions.iter().for_each(|opinion| mark(&opinion.key));
     for opinions in extra.iter().flatten() {
         opinions.iter().for_each(|(key, _)| mark(key));
     }
@@ -541,9 +536,8 @@ fn prune_skipped_nodes(prim: &mut PrimIndex, extra: [Option<&mut ChildOrderOpini
         key.node = remap[key.node.index()].expect("a used node is kept");
     };
     prim.sources.iter_mut().for_each(renumber);
-    prim.opinions_by_field
-        .values_mut()
-        .flatten()
+    prim.opinions
+        .iter_mut()
         .for_each(|opinion| renumber(&mut opinion.key));
     for opinions in extra.into_iter().flatten() {
         opinions.iter_mut().for_each(|(key, _)| renumber(key));
@@ -1049,7 +1043,7 @@ fn prune_unselected_variant_specs(
                 let all_keys = index
                     .sources
                     .iter()
-                    .chain(index.opinions_by_field.values().flatten().map(|op| &op.key));
+                    .chain(index.opinions.iter().map(|op| &op.key));
                 for key in all_keys {
                     if !key.spec_path.has_variant_selections() {
                         continue;

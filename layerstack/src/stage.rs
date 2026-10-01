@@ -472,6 +472,14 @@ impl Stage {
         with_provenance: bool,
         deps: Option<CompositionDeps>,
     ) -> Self {
+        #[cfg(test)]
+        let prims = {
+            let mut prims = prims;
+            for index in prims.values_mut() {
+                index.group_fields();
+            }
+            prims
+        };
         Self {
             prims,
             children,
@@ -633,8 +641,7 @@ impl Stage {
                 .prims
                 .get_mut(&prim)
                 .expect("validated prim")
-                .opinions_by_field
-                .get_mut(&crate::prim_index::FieldKey::Property(name))
+                .field_opinions_mut(crate::prim_index::FieldKey::Property(name))
                 .expect("validated field")[position];
             let OpinionValue::Property(spec) = &mut opinion.value else {
                 unreachable!("validated property");
@@ -725,7 +732,7 @@ impl Stage {
         let keys = index
             .sources
             .iter()
-            .chain(index.opinions_by_field.values().flatten().map(|op| &op.key));
+            .chain(index.opinions.iter().map(|op| &op.key));
         let mut sites = HashSet::new();
         for key in keys {
             sites.insert((key.layer_id, key.lookup_path));
@@ -1511,8 +1518,9 @@ impl Stage {
             return Vec::new();
         };
         index
-            .opinions_by_field
-            .keys()
+            .fields
+            .iter()
+            .map(|(field, _)| field)
             .filter_map(|key| match key {
                 FieldKey::Property(name) => Some(*name),
                 FieldKey::Metadata(_) => None,

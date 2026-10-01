@@ -13,7 +13,7 @@
 
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
-use hashbrown::HashMap;
+use core::ops::Range;
 
 use crate::{
     doc::{FieldValue, LayerId, LayerOffset, Value},
@@ -217,7 +217,7 @@ impl From<PropertySpec> for OpinionValue {
 ///
 /// Spec: AOUSD Core §7.3 (property specs are children of the prim spec;
 /// metadata are fields of the spec itself), §7.4.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum FieldKey {
     /// A prim metadata field.
     Metadata(TokenId),
@@ -243,7 +243,10 @@ pub(crate) struct PrimIndex {
     /// The arc expansions contributing to the prim; every key below names
     /// one of its nodes.
     pub(crate) graph: PrimIndexGraph,
-    pub(crate) opinions_by_field: HashMap<FieldKey, Vec<Opinion>>,
+    /// All opinions, built directly here and grouped by field at finalization.
+    pub(crate) opinions: Vec<Opinion>,
+    /// Sorted field identities and their contiguous opinion ranges.
+    pub(crate) fields: Vec<(FieldKey, Range<usize>)>,
     pub(crate) sources: Vec<OpinionKey>,
 }
 
@@ -257,26 +260,129 @@ impl PrimIndex {
     }
 
     pub(crate) fn add_opinion(&mut self, opinion: Opinion) {
-        // Most fields have one source. Avoid reserving four large opinions
-        // on the first push; genuinely layered fields grow as usual.
-        self.opinions_by_field
-            .entry(FieldKey::of(&opinion))
-            .or_insert_with(|| Vec::with_capacity(1))
-            .push(opinion);
+        debug_assert!(self.fields.is_empty(), "append before finalization");
+        // Sparse prims should not reserve four large records on first use.
+        if self.opinions.capacity() == 0 {
+            self.opinions.reserve_exact(1);
+        }
+        self.opinions.push(opinion);
     }
 
     /// The opinions of the property `name`.
     pub(crate) fn property_opinions(&self, name: TokenId) -> Option<&[Opinion]> {
-        self.opinions_by_field
-            .get(&FieldKey::Property(name))
-            .map(Vec::as_slice)
+        self.field_opinions(FieldKey::Property(name))
     }
 
     /// The opinions of the prim metadata field `key`.
     pub(crate) fn metadata_opinions(&self, key: TokenId) -> Option<&[Opinion]> {
-        self.opinions_by_field
-            .get(&FieldKey::Metadata(key))
-            .map(Vec::as_slice)
+        self.field_opinions(FieldKey::Metadata(key))
+    }
+
+    fn field_range(&self, field: FieldKey) -> Option<Range<usize>> {
+        let slot = self
+            .fields
+            .binary_search_by_key(&field, |(key, _)| *key)
+            .ok()?;
+        Some(self.fields[slot].1.clone())
+    }
+
+    fn field_opinions(&self, field: FieldKey) -> Option<&[Opinion]> {
+        Some(&self.opinions[self.field_range(field)?])
+    }
+
+    pub(crate) fn field_opinions_mut(&mut self, field: FieldKey) -> Option<&mut [Opinion]> {
+        let range = self.field_range(field)?;
+        Some(&mut self.opinions[range])
+    }
+
+    /// Rebuilds ranges after grouping or removing opinions. No authored data
+    /// moves into a second representation: fields only index this buffer.
+    fn index_fields(&mut self) {
+        self.fields.clear();
+        if self.fields.capacity() == 0 && !self.opinions.is_empty() {
+            self.fields.reserve_exact(1);
+        }
+        for (position, opinion) in self.opinions.iter().enumerate() {
+            let field = FieldKey::of(opinion);
+            if let Some((last, range)) = self.fields.last_mut()
+                && *last == field
+            {
+                range.end = position + 1;
+            } else {
+                self.fields.push((field, position..position + 1));
+            }
+        }
+    }
+
+    /// Groups fields while preserving insertion order within each stack.
+    fn group_by_field(&mut self) {
+        if self
+            .opinions
+            .is_sorted_by(|a, b| FieldKey::of(a) <= FieldKey::of(b))
+        {
+            self.index_fields();
+            return;
+        }
+        // Count field contributions before moving payloads. Sorting only
+        // field identities avoids comparing graph keys across unrelated fields.
+        let mut keys: Vec<FieldKey> = self.opinions.iter().map(FieldKey::of).collect();
+        keys.sort_unstable();
+        keys.dedup();
+        self.fields.clear();
+        self.fields.reserve(keys.len());
+        self.fields.extend(keys.iter().map(|&key| (key, 0..0)));
+        for opinion in &self.opinions {
+            let field = keys
+                .binary_search(&FieldKey::of(opinion))
+                .expect("counted field");
+            self.fields[field].1.end += 1;
+        }
+        let mut offset = 0;
+        for (_, range) in &mut self.fields {
+            let count = range.end;
+            *range = offset..offset;
+            offset += count;
+        }
+        let mut order = alloc::vec![0; self.opinions.len()];
+        for (source, opinion) in self.opinions.iter().enumerate() {
+            let field = keys
+                .binary_search(&FieldKey::of(opinion))
+                .expect("counted field");
+            let range = &mut self.fields[field].1;
+            order[range.end] = source;
+            range.end += 1;
+        }
+        // Each cycle places records in their destination field once. The
+        // increasing source indices preserve equal-key insertion order.
+        for start in 0..order.len() {
+            let mut current = start;
+            while order[current] != start {
+                let next = order[current];
+                self.opinions.swap(current, next);
+                order[current] = current;
+                current = next;
+            }
+            order[current] = current;
+        }
+    }
+
+    /// Groups hand-built indexes that do not have a ranked composition graph.
+    #[cfg(test)]
+    pub(crate) fn group_fields(&mut self) {
+        if self.fields.is_empty() {
+            self.group_by_field();
+        }
+    }
+
+    pub(crate) fn retain_opinions(
+        &mut self,
+        mut keep: impl FnMut(&PrimIndexGraph, &Opinion) -> bool,
+    ) {
+        let before = self.opinions.len();
+        self.opinions.retain(|opinion| keep(&self.graph, opinion));
+        if self.opinions.len() != before && !self.fields.is_empty() {
+            self.index_fields();
+        }
     }
 
     pub(crate) fn add_source(&mut self, key: OpinionKey) {
@@ -299,23 +405,136 @@ impl PrimIndex {
         &mut self,
         mut keep: impl FnMut(&PrimIndexGraph, &OpinionKey) -> bool,
     ) {
-        let graph = &self.graph;
-        self.sources.retain(|key| keep(graph, key));
-        for opinions in self.opinions_by_field.values_mut() {
-            opinions.retain(|opinion| keep(graph, &opinion.key));
-        }
-        self.opinions_by_field
-            .retain(|_, opinions| !opinions.is_empty());
+        self.sources.retain(|key| keep(&self.graph, key));
+        self.retain_opinions(|graph, opinion| keep(graph, &opinion.key));
     }
 
-    /// Sorts every opinion and source strongest first, by
-    /// [`PrimIndexGraph::cmp_keys`].
+    /// Groups opinions by field, sorting each stack and the sources
+    /// strongest first by [`PrimIndexGraph::cmp_keys`].
     pub(crate) fn finalize(&mut self) {
         self.graph.rank();
+        self.group_by_field();
         let graph = &self.graph;
-        for opinions in self.opinions_by_field.values_mut() {
-            opinions.sort_by(|a, b| graph.cmp_keys(&a.key, &b.key));
+        for (_, range) in &self.fields {
+            self.opinions[range.clone()].sort_by(|a, b| graph.cmp_keys(&a.key, &b.key));
         }
         self.sources.sort_by(|a, b| graph.cmp_keys(a, b));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::InMemoryStore;
+
+    #[test]
+    fn field_identity_strength_and_removal_survive_grouping() {
+        let mut store = InMemoryStore::default();
+        let prim = store.path("/Emitter");
+        let a = store.tokens.intern("a");
+        let b = store.tokens.intern("b");
+        let site = SpecPath::from_prim_path(prim, &store.paths);
+        let mut index = PrimIndex::new(PrimIndexGraph::from_arcs(&site, 1, []));
+        let key = |strength| OpinionKey {
+            node: NodeId::ROOT,
+            layer_strength: strength,
+            layer_id: LayerId(u64::from(strength) + 1),
+            lookup_path: prim,
+            spec_path: site.clone(),
+        };
+        // Interleave fields and author weak before strong. Metadata and a
+        // property may use the same token without sharing an opinion stack.
+        for (field, strength, value) in [
+            (
+                a,
+                1,
+                OpinionValue::from(PropertySpec::attribute().with_default(Value::Int(1))),
+            ),
+            (a, 0, OpinionValue::Field(FieldValue::Value(Value::Int(3)))),
+            (
+                b,
+                0,
+                OpinionValue::from(PropertySpec::attribute().with_default(Value::Int(2))),
+            ),
+            (
+                a,
+                0,
+                OpinionValue::from(PropertySpec::attribute().with_default(Value::Int(4))),
+            ),
+        ] {
+            index.add_opinion(Opinion {
+                key: key(strength),
+                field,
+                value,
+                layer_offset: LayerOffset::IDENTITY,
+            });
+        }
+        // A deep stack also exercises grouping without moving large payloads
+        // at every comparison, including a repeated key whose order matters.
+        for strength in 0..40 {
+            index.add_opinion(Opinion {
+                key: key(strength),
+                field: b,
+                value: PropertySpec::attribute().with_default(Value::Int(9)).into(),
+                layer_offset: LayerOffset::IDENTITY,
+            });
+        }
+        index.finalize();
+        assert_eq!(
+            index.property_opinions(b).unwrap()[0]
+                .value
+                .as_property()
+                .unwrap()
+                .default,
+            Some(Value::Int(2)),
+            "equal keys preserve authored insertion order"
+        );
+        assert_eq!(
+            index.property_opinions(a).unwrap().len(),
+            2,
+            "both layers contribute to a"
+        );
+        assert_eq!(
+            index.property_opinions(a).unwrap()[0].key.layer_strength,
+            0,
+            "strong layer comes first"
+        );
+        assert_eq!(
+            index.metadata_opinions(a).unwrap().len(),
+            1,
+            "metadata stays separate"
+        );
+        index.retain_opinions(|_, opinion| {
+            !(opinion.field == b
+                || FieldKey::of(opinion) == FieldKey::Property(a)
+                    && opinion.key.layer_strength == 0)
+        });
+        assert!(
+            index.property_opinions(b).is_none(),
+            "removed fields disappear"
+        );
+        assert_eq!(
+            index.property_opinions(a).unwrap()[0]
+                .value
+                .as_property()
+                .unwrap()
+                .default,
+            Some(Value::Int(1)),
+            "removing the winner exposes the weaker property"
+        );
+        assert_eq!(
+            index.metadata_opinions(a).unwrap()[0].value,
+            OpinionValue::Field(FieldValue::Value(Value::Int(3))),
+            "a property removal preserves metadata with the same token and key"
+        );
+        index.retain_keys(|_, _| false);
+        assert!(
+            index.property_opinions(a).is_none(),
+            "retiring all sources removes property ranges"
+        );
+        assert!(
+            index.metadata_opinions(a).is_none(),
+            "retiring all sources removes metadata ranges"
+        );
     }
 }

@@ -725,8 +725,9 @@ impl Flattener<'_, '_> {
         }
 
         let mut keys: Vec<TokenId> = index
-            .opinions_by_field
-            .keys()
+            .fields
+            .iter()
+            .map(|(field, _)| field)
             .filter_map(|key| match key {
                 FieldKey::Metadata(key) => Some(*key),
                 FieldKey::Property(_) => None,

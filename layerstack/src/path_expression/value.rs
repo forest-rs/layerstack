@@ -266,38 +266,34 @@ pub(crate) fn anchor_opinions(store: &dyn LayerStore, prims: &mut HashMap<PathId
         let prim_depth = store.paths().resolve(*path).depth();
         let graph = &index.graph;
         let mut maps: HashMap<NodeId, Option<NodeNamespace>> = HashMap::new();
-        for opinions in index.opinions_by_field.values_mut() {
-            for opinion in opinions.iter_mut() {
-                // The default, and each time sample, of a path expression.
-                let (default, samples) = match &mut opinion.value {
-                    OpinionValue::Field(FieldValue::Value(value)) => (Some(value), None),
-                    OpinionValue::Property(spec) => {
-                        (spec.default.as_mut(), spec.time_samples.as_mut())
-                    }
-                    OpinionValue::Field(_) => continue,
-                };
-                let mut authored = default
-                    .into_iter()
-                    .chain(samples.into_iter().flatten().map(|(_, value)| value))
-                    .filter(|value| has_path_expression(value))
-                    .peekable();
-                if authored.peek().is_none() {
-                    continue;
-                }
-                let node = opinion.key.node;
-                let Some((anchor, node_maps)) = maps
-                    .entry(node)
-                    .or_insert_with(|| {
-                        let anchor = prim_names(store, graph.node(node)?.site());
-                        Some((anchor, node_maps(store, graph, node, prim_depth)?))
-                    })
-                    .as_ref()
-                else {
-                    continue;
-                };
-                for value in authored {
-                    anchor_value(value, anchor, node_maps);
-                }
+        for opinion in &mut index.opinions {
+            // The default, and each time sample, of a path expression.
+            let (default, samples) = match &mut opinion.value {
+                OpinionValue::Field(FieldValue::Value(value)) => (Some(value), None),
+                OpinionValue::Property(spec) => (spec.default.as_mut(), spec.time_samples.as_mut()),
+                OpinionValue::Field(_) => continue,
+            };
+            let mut authored = default
+                .into_iter()
+                .chain(samples.into_iter().flatten().map(|(_, value)| value))
+                .filter(|value| has_path_expression(value))
+                .peekable();
+            if authored.peek().is_none() {
+                continue;
+            }
+            let node = opinion.key.node;
+            let Some((anchor, node_maps)) = maps
+                .entry(node)
+                .or_insert_with(|| {
+                    let anchor = prim_names(store, graph.node(node)?.site());
+                    Some((anchor, node_maps(store, graph, node, prim_depth)?))
+                })
+                .as_ref()
+            else {
+                continue;
+            };
+            for value in authored {
+                anchor_value(value, anchor, node_maps);
             }
         }
     }

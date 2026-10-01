@@ -962,11 +962,7 @@ pub(crate) fn elide_blocked(
     }
     let kept = |key: &OpinionKey| !elided[key.node.index()];
     prim.sources.retain(kept);
-    for opinions in prim.opinions_by_field.values_mut() {
-        opinions.retain(|opinion| kept(&opinion.key));
-    }
-    prim.opinions_by_field
-        .retain(|_, opinions| !opinions.is_empty());
+    prim.retain_opinions(|_, opinion| kept(&opinion.key));
     for opinions in extra.into_iter().flatten() {
         opinions.retain(|(key, _)| kept(key));
     }

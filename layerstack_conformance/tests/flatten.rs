@@ -84,11 +84,6 @@ const UNREGISTERED: &[(&str, &str)] = &[("BasicVariantWithConnections_root", "av
 /// Each must still differ, so the table cannot go stale.
 const COMPOSED_DIFFERENTLY: &[(&str, &str)] = &[
     (
-        "BasicRelocateToAnimInterfaceAsNewRootPrim_root",
-        "Layerstack keeps the target `/Model/Rig/PathRig/Path/Anim.track` of \
-         `relationshipToPathAvar`, which OpenUSD drops",
-    ),
-    (
         "ErrorArcCycle_root",
         "OpenUSD populates `/AnotherParent/AnotherChild/AnotherChild`, named through the \
          reference the cycle cuts; `pcp.txt` does not list it and Layerstack does not \

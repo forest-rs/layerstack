@@ -44,7 +44,7 @@ use crate::{
     interner::TokenId,
     layer_stack::LayerStack,
     path::PathId,
-    population::{populate, subtree_paths},
+    population::populate,
     prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue, PrimIndex},
     prim_index_graph::{NodeArc, NodeId, PrimIndexGraph, PrimNode},
     property::PropertyType,
@@ -153,12 +153,16 @@ pub(crate) fn compose_stage_with_paths(
             let children = crate::population::build_children_index(store, paths.iter().copied());
             (paths, children)
         }
-        None => populate(
-            store,
-            &layer_stack,
-            options.mask.as_ref(),
-            cycles.relocations_mut(),
-        ),
+        None => {
+            let (relocations, inventory) = cycles.population_state();
+            populate(
+                store,
+                &layer_stack,
+                options.mask.as_ref(),
+                relocations,
+                inventory,
+            )
+        }
     };
     for error in cycles.relocations_mut().take_errors() {
         cycles.report(error);
@@ -5975,11 +5979,13 @@ fn add_inherit_edge_opinions(
 
     let inherited_path = store.paths().resolve(inherited_root).clone();
 
-    let remote_paths = subtree_paths(store, local_stack, &inherited_path);
+    let remote_paths = cycles
+        .source_inventory()
+        .subtree_paths(store, local_stack, inherited_root);
 
     let mut mapping: Vec<(PathId, PathId)> = Vec::new();
     let walk = parent.class_walk(&stage_relocates, step.relocates.as_deref());
-    for remote_path_id in remote_paths {
+    for remote_path_id in remote_paths.iter().copied() {
         let rel: Vec<_> = {
             let remote_path = store.paths().resolve(remote_path_id);
             let Some(rel) = remote_path.strip_prefix(&inherited_path) else {
@@ -6812,13 +6818,16 @@ fn add_reference_edge_opinions(
         cycles.relocations().stage(),
     );
 
-    let remote_paths = subtree_paths(store, &remote_stack, &target_root);
+    let remote_paths =
+        cycles
+            .source_inventory()
+            .subtree_paths(store, &remote_stack, reference_path);
 
     // The arc maps the target and its namespace descendants; the arcs of
     // the target's ancestors follow (see `AncestralArcs`).
     let mut mapping: Vec<(PathId, PathId)> = Vec::new();
     let walk = arc_walk(&nodes.stage_relocates, &nodes.path);
-    for remote_path_id in remote_paths {
+    for remote_path_id in remote_paths.iter().copied() {
         let rel: Vec<_> = {
             let remote_path = store.paths().resolve(remote_path_id);
             let Some(rel) = remote_path.strip_prefix(&target_root) else {
@@ -7722,13 +7731,16 @@ fn add_payload_edge_opinions(
         cycles.relocations().stage(),
     );
 
-    let remote_paths = subtree_paths(store, &remote_stack, &target_root);
+    let remote_paths =
+        cycles
+            .source_inventory()
+            .subtree_paths(store, &remote_stack, reference_path);
 
     // The arc maps the target and its namespace descendants; the arcs of
     // the target's ancestors follow (see `AncestralArcs`).
     let mut mapping: Vec<(PathId, PathId)> = Vec::new();
     let walk = arc_walk(&nodes.stage_relocates, &nodes.path);
-    for remote_path_id in remote_paths {
+    for remote_path_id in remote_paths.iter().copied() {
         let rel: Vec<_> = {
             let remote_path = store.paths().resolve(remote_path_id);
             let Some(rel) = remote_path.strip_prefix(&target_root) else {
@@ -8197,11 +8209,14 @@ fn add_specializes_edge_opinions(
     let selection_base_path = store.paths().resolve(selection_root).clone();
     let specialized_path = store.paths().resolve(specialized_root).clone();
 
-    let remote_paths = subtree_paths(store, local_stack, &specialized_path);
+    let remote_paths =
+        cycles
+            .source_inventory()
+            .subtree_paths(store, local_stack, specialized_root);
 
     let mut mapping: Vec<(PathId, PathId)> = Vec::new();
     let walk = parent.class_walk(&stage_relocates, relocates.as_deref());
-    for remote_path_id in remote_paths {
+    for remote_path_id in remote_paths.iter().copied() {
         let rel: Vec<_> = {
             let remote_path = store.paths().resolve(remote_path_id);
             let Some(rel) = remote_path.strip_prefix(&specialized_path) else {

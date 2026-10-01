@@ -221,5 +221,58 @@ fn bench_arc_payloads(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_arcs, bench_arc_edits, bench_arc_payloads);
+fn build_subroot_references(instances: usize, unique: bool, unrelated: usize) -> InMemoryStore {
+    let mut store = InMemoryStore::default();
+    let mut asset = Layer::new(LayerId(2));
+    let mut root = Layer::new(LayerId(1));
+    for i in 0..unrelated {
+        let path = store.path(&format!("/Unrelated/P{i}"));
+        asset.insert_prim(path, PrimSpec::def());
+    }
+    for i in 0..instances {
+        let target = store.path(&format!("/Source{}", if unique { i } else { 0 }));
+        if unique || i == 0 {
+            asset.insert_prim(target, PrimSpec::def());
+            for child in ["A", "B"] {
+                let path = store.path(&format!("/Source{}/{child}", if unique { i } else { 0 }));
+                asset.insert_prim(path, PrimSpec::def());
+            }
+        }
+        let dest = store.path(&format!("/Instances/P{i}"));
+        root.insert_prim(
+            dest,
+            PrimSpec::def().with_reference(Reference::new(LayerId(2), target)),
+        );
+    }
+    store.insert_layer(asset);
+    store.insert_layer(root);
+    store
+}
+
+fn bench_subroot_references(c: &mut Criterion) {
+    let mut group = c.benchmark_group("subroot_references");
+    // Repeated roots test namespace sharing; distinct roots expose its overhead.
+    // A large unrelated namespace must not be populated or sorted for each arc.
+    for unique in [false, true] {
+        for unrelated in [0, 16_384] {
+            let name = if unique { "distinct" } else { "shared" };
+            group.bench_function(BenchmarkId::new(name, unrelated), |b| {
+                b.iter_batched(
+                    || build_subroot_references(200, unique, unrelated),
+                    |mut store| Stage::compose(&mut store, LayerId(1), StageOptions::default()),
+                    BatchSize::LargeInput,
+                );
+            });
+        }
+    }
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_arcs,
+    bench_arc_edits,
+    bench_arc_payloads,
+    bench_subroot_references
+);
 criterion_main!(benches);

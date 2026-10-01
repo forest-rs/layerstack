@@ -39,6 +39,7 @@ use crate::{
     interner::TokenId,
     layer_stack::LayerStack,
     path::{Path, PathId, PathInterner, TargetPath},
+    population::SourceInventory,
     prim_index::{ArcKind, PrimIndex},
     prim_index_graph::PrimNode,
     relocates::{LiftedSet, RelocationTable, Relocations, Walk},
@@ -227,6 +228,7 @@ pub(crate) struct CycleDetector {
     /// The relocation tables of the layer stacks reached so far, and the
     /// stage paths relocations prohibit.
     relocations: Relocations,
+    inventory: SourceInventory,
     errors: Vec<CompositionError>,
     seen: HashSet<CompositionError>,
     /// Target paths authored inside the class an inherit maps, as
@@ -250,6 +252,7 @@ impl CycleDetector {
             chain: ArcChain { sites: Vec::new() },
             arcs: Vec::new(),
             relocations: Relocations::default(),
+            inventory: SourceInventory::default(),
             errors: Vec::new(),
             seen: HashSet::new(),
             class_internal_targets: HashSet::new(),
@@ -482,6 +485,16 @@ impl CycleDetector {
     /// The relocation state of the composition, for population to extend.
     pub(crate) fn relocations_mut(&mut self) -> &mut Relocations {
         &mut self.relocations
+    }
+
+    /// Disjoint composition-local state extended by population.
+    pub(crate) fn population_state(&mut self) -> (&mut Relocations, &mut SourceInventory) {
+        (&mut self.relocations, &mut self.inventory)
+    }
+
+    /// Raw authored namespaces reused by composition arcs.
+    pub(crate) fn source_inventory(&mut self) -> &mut SourceInventory {
+        &mut self.inventory
     }
 
     /// The relocations of the layer stack rooted at `layer_stack`, lifted

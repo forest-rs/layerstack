@@ -40,30 +40,50 @@ type VisitedArc = (PathId, LayerId, PathId, ExpressionVariables);
 /// class path and the expression variables of its layer stack.
 type VisitedClass = (PathId, PathId, ExpressionVariables);
 
-/// The authored namespace at and below an arc target, ordered by path.
-/// Filter before allocating and sorting: an arc into a small subtree must
-/// not sort every unrelated prim in its source layers. Mapping and
-/// relocation still happen at the call site (AOUSD Core §10.3.2).
-pub(crate) fn subtree_paths(
-    store: &dyn LayerStore,
-    stack: &LayerStack,
-    root: &Path,
-) -> Vec<PathId> {
-    let paths = store.paths();
-    let mut result: Vec<_> = stack
-        .layers
-        .iter()
-        .filter_map(|id| store.layer(*id))
-        .flat_map(|layer| layer.prims.keys().copied())
-        .filter(|path| paths.resolve(*path).strip_prefix(root).is_some())
-        .collect();
-    result.sort_by(|a, b| {
-        paths
-            .resolve(*a)
-            .cmp_with_tokens(paths.resolve(*b), store.tokens())
-    });
-    result.dedup();
-    result
+/// Raw authored namespaces shared within one composition. Arc mapping,
+/// relocation and variant admission remain the callers' responsibility.
+#[derive(Debug, Default)]
+pub(crate) struct SourceInventory {
+    stacks: HashMap<Vec<LayerId>, HashMap<PathId, Rc<[PathId]>>>,
+}
+
+impl SourceInventory {
+    /// Returns the ordered namespace at and below `root` (AOUSD Core §10.3.2).
+    /// Resolved layer sequences distinguish expression-dependent sublayers.
+    /// Offsets and variable values do not affect this raw namespace.
+    pub(crate) fn subtree_paths(
+        &mut self,
+        store: &dyn LayerStore,
+        stack: &LayerStack,
+        root: PathId,
+    ) -> Rc<[PathId]> {
+        let inventories = match self.stacks.get_mut(stack.layers.as_slice()) {
+            Some(inventories) => inventories,
+            None => self.stacks.entry(stack.layers.clone()).or_default(),
+        };
+        inventories
+            .entry(root)
+            .or_insert_with(|| {
+                // Filter before sorting: a small subtree must not sort unrelated prims.
+                let paths = store.paths();
+                let root = paths.resolve(root);
+                let mut result: Vec<_> = stack
+                    .layers
+                    .iter()
+                    .filter_map(|id| store.layer(*id))
+                    .flat_map(|layer| layer.prims.keys().copied())
+                    .filter(|path| paths.resolve(*path).strip_prefix(root).is_some())
+                    .collect();
+                result.sort_by(|a, b| {
+                    paths
+                        .resolve(*a)
+                        .cmp_with_tokens(paths.resolve(*b), store.tokens())
+                });
+                result.dedup();
+                Rc::from(result)
+            })
+            .clone()
+    }
 }
 
 /// Produces the set of populated prim paths and a parent→children index.
@@ -79,8 +99,9 @@ pub(crate) fn populate(
     local_stack: &LayerStack,
     mask: Option<&PopulationMask>,
     relocations: &mut Relocations,
+    inventory: &mut SourceInventory,
 ) -> (BTreeSet<PathId>, HashMap<PathId, Vec<PathId>>) {
-    let mut paths = gather_populated_paths(store, local_stack, relocations);
+    let mut paths = gather_populated_paths(store, local_stack, relocations, inventory);
     let moved = relocations.take_moved();
     let placed = split_moved_paths(store, &mut paths, &moved);
     add_ancestor_paths(store, &mut paths);
@@ -200,6 +221,7 @@ fn gather_populated_paths(
     store: &mut dyn LayerStore,
     local_stack: &LayerStack,
     relocations: &mut Relocations,
+    inventory: &mut SourceInventory,
 ) -> BTreeSet<PathId> {
     // Population reads no variant fallbacks: a branch whose set has no
     // authored selection counts as selected, so population
@@ -232,7 +254,7 @@ fn gather_populated_paths(
     while idx < queue.len() {
         let path = queue[idx];
         idx += 1;
-        let mut chain = Chain::new(stage_layer_stack, path, relocations);
+        let mut chain = Chain::new(stage_layer_stack, path, relocations, inventory);
         // Discovery evaluates asset path expressions as composition does;
         // composition reports what they find.
         let expressions = chain.expression_scope();
@@ -409,7 +431,7 @@ fn gather_populated_paths(
     while idx < queue.len() {
         let path = queue[idx];
         idx += 1;
-        let mut chain = Chain::new(stage_layer_stack, path, relocations);
+        let mut chain = Chain::new(stage_layer_stack, path, relocations, inventory);
 
         let inherits = arcs_of(resolve_inherits_for_prim(
             store,
@@ -472,9 +494,9 @@ fn expand_inherit_paths(
 
     let src_root = store.paths().resolve(inherited_root).clone();
 
-    let remote_paths = subtree_paths(store, stack, &src_root);
+    let remote_paths = chain.inventory.subtree_paths(store, stack, inherited_root);
 
-    for remote_path_id in remote_paths {
+    for remote_path_id in remote_paths.iter().copied() {
         let rel: Vec<_> = {
             let remote_path = store.paths().resolve(remote_path_id);
             let Some(rel) = remote_path.strip_prefix(&src_root) else {
@@ -607,9 +629,11 @@ fn expand_reference_paths(
     let target = store.paths().resolve(reference_path).clone();
     let base = store.paths().resolve(dest_root).clone();
 
-    let remote_paths = subtree_paths(store, &remote_stack, &target);
+    let remote_paths = chain
+        .inventory
+        .subtree_paths(store, &remote_stack, reference_path);
 
-    for remote_path_id in remote_paths {
+    for remote_path_id in remote_paths.iter().copied() {
         let rel: Vec<_> = {
             let remote_path = store.paths().resolve(remote_path_id);
             let Some(rel) = remote_path.strip_prefix(&target) else {
@@ -1027,6 +1051,7 @@ fn expand_ancestral_paths_from(
 struct Chain<'r> {
     arcs: ArcChain,
     relocations: &'r mut Relocations,
+    inventory: &'r mut SourceInventory,
     stage: Rc<LiftedSet>,
     /// The relocations lifted by each arc on the chain, outermost first.
     lifted: Vec<Option<Rc<LiftedSet>>>,
@@ -1037,11 +1062,17 @@ struct Chain<'r> {
 }
 
 impl<'r> Chain<'r> {
-    fn new(layer_stack: LayerId, prim: PathId, relocations: &'r mut Relocations) -> Self {
+    fn new(
+        layer_stack: LayerId,
+        prim: PathId,
+        relocations: &'r mut Relocations,
+        inventory: &'r mut SourceInventory,
+    ) -> Self {
         let stage = relocations.stage();
         Self {
             arcs: ArcChain::new(layer_stack, prim),
             relocations,
+            inventory,
             stage,
             lifted: Vec::new(),
             implied: Vec::new(),
@@ -1326,7 +1357,13 @@ mod tests {
     fn populated(store: &mut InMemoryStore, root: LayerId) -> Vec<String> {
         let stack = LayerStack::gather(store, root);
         let mut relocations = Relocations::new(store, &stack);
-        let (paths, _) = populate(store, &stack, None, &mut relocations);
+        let (paths, _) = populate(
+            store,
+            &stack,
+            None,
+            &mut relocations,
+            &mut SourceInventory::default(),
+        );
         let mut names: Vec<String> = paths
             .into_iter()
             .map(|id| store.paths.display(id, &store.tokens))
@@ -1356,9 +1393,64 @@ mod tests {
         store.insert_layer(weak);
         let stack = LayerStack::gather(&store, LayerId(1));
         assert_eq!(
-            subtree_paths(&store, &stack, store.paths.resolve(root)),
-            vec![root, a, z]
+            SourceInventory::default()
+                .subtree_paths(&store, &stack, root)
+                .as_ref(),
+            &[root, a, z]
         );
+    }
+
+    #[test]
+    fn inventories_distinguish_resolved_stacks_and_survive_nested_queries() {
+        let mut store = InMemoryStore::default();
+        let root = store.path("/Rock");
+        let a = store.path("/Rock/A");
+        let b = store.path("/Rock/B");
+        let outside = store.path("/Rocks/A");
+        let absent = store.path("/Absent");
+        let pseudo_root = store.path("/");
+        for (id, path) in [(1, outside), (2, a), (3, b)] {
+            let mut layer = Layer::new(LayerId(id));
+            layer.insert_prim(path, PrimSpec::def());
+            store.insert_layer(layer);
+        }
+        // One root layer reached with two different resolved sublayer lists.
+        let mut first = LayerStack::gather(&store, LayerId(1));
+        first.layers.push(LayerId(2));
+        let mut second = first.clone();
+        second.layers[1] = LayerId(3);
+        let mut inventory = SourceInventory::default();
+        let held = inventory.subtree_paths(&store, &first, root);
+        assert_eq!(held.as_ref(), &[a]);
+        assert_eq!(
+            inventory.subtree_paths(&store, &second, root).as_ref(),
+            &[b]
+        );
+        assert!(Rc::ptr_eq(
+            &held,
+            &inventory.subtree_paths(&store, &first, root)
+        ));
+        assert!(inventory.subtree_paths(&store, &first, absent).is_empty());
+        assert_eq!(
+            inventory
+                .subtree_paths(&store, &first, pseudo_root)
+                .as_ref(),
+            &[a, outside]
+        );
+        let mut empty = first.clone();
+        empty.layers = vec![LayerId(99)];
+        assert!(
+            inventory
+                .subtree_paths(&store, &empty, pseudo_root)
+                .is_empty()
+        );
+        empty.layers.clear();
+        assert!(
+            inventory
+                .subtree_paths(&store, &empty, pseudo_root)
+                .is_empty()
+        );
+        assert_eq!(held.as_ref(), &[a]);
     }
 
     #[test]

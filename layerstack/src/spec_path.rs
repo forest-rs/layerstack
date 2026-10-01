@@ -279,6 +279,13 @@ impl SpecPath {
         &self.components
     }
 
+    /// Whether this path names an authored variant branch.
+    pub(crate) fn has_variant_selections(&self) -> bool {
+        self.components
+            .iter()
+            .any(|component| matches!(component, SpecComponent::VariantSelection { .. }))
+    }
+
     /// Returns a copy of this path without its property suffix: the prim
     /// spec that authors the property.
     #[must_use]

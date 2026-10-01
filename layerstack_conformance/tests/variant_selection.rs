@@ -132,12 +132,14 @@ def "Model" (
             def "geom"
             {
                 double x = 10
+                double width = 100
             }
         }
         "b" {
             def "geom"
             {
                 double x = 20
+                double width = 200
             }
         }
     }
@@ -220,13 +222,41 @@ def "SelectsA" (
     let mut store = load(root, &[("model.usda", MODEL)]);
     let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
 
-    let (value, stack) = resolve(&mut store, &stage, "/UsesDefault/geom.x");
-    assert_eq!(value, Value::Double(20.0), "referenced selection `b` wins");
-    assert_eq!(stack, vec![Value::Double(20.0)], "branch `a` leaked");
-
-    let (value, stack) = resolve(&mut store, &stage, "/SelectsA/geom.x");
-    assert_eq!(value, Value::Double(10.0), "referencing selection `a` wins");
-    assert_eq!(stack, vec![Value::Double(10.0)], "branch `b` leaked");
+    // Every field of a source site shares branch admission, while the
+    // opinion stacks of different fields and destinations remain distinct.
+    // Inspect every opinion: equal values must not hide duplicate sources.
+    for (path, source, expected) in [
+        ("/UsesDefault/geom.x", "/Model{y=b}geom.x", 20.0),
+        ("/SelectsA/geom.x", "/Model{y=a}geom.x", 10.0),
+        ("/UsesDefault/geom.width", "/Model{y=b}geom.width", 200.0),
+        ("/SelectsA/geom.width", "/Model{y=a}geom.width", 100.0),
+    ] {
+        let property =
+            PropertyPath::parse(path, &mut store.tokens, &mut store.paths).expect("path");
+        let value = stage.resolve_field_path(property).expect("resolved").value;
+        assert_eq!(value, Value::Double(expected), "{path}");
+        let stack: Vec<_> = stage
+            .explain_property_path(property)
+            .expect("opinions")
+            .iter()
+            .map(|op| {
+                (
+                    op.key.layer_id,
+                    op.key.spec_path.display(&store.tokens),
+                    op.value.default_value().cloned(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            stack,
+            vec![(
+                LayerId(2),
+                source.to_string(),
+                Some(Value::Double(expected))
+            )],
+            "{path} source stack"
+        );
+    }
 }
 
 const ARC_LIB: &str = r#"#usda 1.0

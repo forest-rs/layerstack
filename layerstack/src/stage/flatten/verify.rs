@@ -704,7 +704,7 @@ fn metadata_keys(source: &Stage, flattened: &Stage, prim: PathId) -> Vec<TokenId
     let mut keys: Vec<TokenId> = [source, flattened]
         .iter()
         .filter_map(|stage| stage.prims.get(&prim))
-        .flat_map(|index| index.opinions_by_field.keys())
+        .flat_map(|index| index.fields.iter().map(|(field, _)| field))
         .filter_map(|key| match key {
             FieldKey::Metadata(key) => Some(*key),
             FieldKey::Property(_) => None,

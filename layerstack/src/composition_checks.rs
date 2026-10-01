@@ -106,7 +106,9 @@ pub(crate) fn drop_inconsistent_property_kinds(
     index: &mut PrimIndex,
     cycles: &mut CycleDetector,
 ) {
-    for (field, opinions) in &mut index.opinions_by_field {
+    let mut removed = Vec::new();
+    for (field, range) in &index.fields {
+        let opinions = &index.opinions[range.clone()];
         let FieldKey::Property(property) = *field else {
             continue;
         };
@@ -139,8 +141,13 @@ pub(crate) fn drop_inconsistent_property_kinds(
         if conflicting.is_empty() {
             continue;
         }
-        opinions.retain(|opinion| {
-            opinion.value.as_property().is_none() || !conflicting.contains(&opinion.key)
+        removed.extend(conflicting.into_iter().map(|key| (*field, key)));
+    }
+    if !removed.is_empty() {
+        index.retain_opinions(|_, opinion| {
+            !removed
+                .iter()
+                .any(|(field, key)| *field == FieldKey::of(opinion) && key == &opinion.key)
         });
     }
 }
@@ -361,7 +368,8 @@ pub(crate) fn drop_instance_targets(
     let mut found = Vec::new();
     for (&prim, index) in prims.iter() {
         let prim_path = paths.resolve(prim);
-        for (field, opinions) in &index.opinions_by_field {
+        for (field, range) in &index.fields {
+            let opinions = &index.opinions[range.clone()];
             let FieldKey::Property(property) = *field else {
                 continue;
             };
@@ -419,11 +427,7 @@ pub(crate) fn drop_instance_targets(
     {
         let Some(opinion) = prims
             .get_mut(&prim)
-            .and_then(|index| {
-                index
-                    .opinions_by_field
-                    .get_mut(&FieldKey::Property(property))
-            })
+            .and_then(|index| index.field_opinions_mut(FieldKey::Property(property)))
             .and_then(|opinions| opinions.iter_mut().find(|opinion| opinion.key == key))
         else {
             continue;

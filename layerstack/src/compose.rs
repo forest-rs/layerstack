@@ -293,14 +293,23 @@ pub(crate) fn compose_stage_with_paths(
                 authored_children_opinions.get_mut(path),
             ],
         );
-        drop_skipped_duplicates(store, prim);
-        prune_skipped_nodes(
-            prim,
-            [
-                prim_order_opinions.get_mut(path),
-                authored_children_opinions.get_mut(path),
-            ],
-        );
+        // Only implied class registrations need duplicate cleanup. Ranking
+        // still happens in finalize, including for ordinary local/reference
+        // graphs that never create a duplicate-skipping node.
+        if prim
+            .graph
+            .nodes()
+            .any(|(_, node)| node.arc.skips_duplicates)
+        {
+            drop_skipped_duplicates(store, prim);
+            prune_skipped_nodes(
+                prim,
+                [
+                    prim_order_opinions.get_mut(path),
+                    authored_children_opinions.get_mut(path),
+                ],
+            );
+        }
         prim.finalize();
     }
     cycles.report_relocate_node_opinions(store, &prims);

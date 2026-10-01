@@ -10,7 +10,7 @@
 
 use alloc::{borrow::Cow, collections::BTreeSet, rc::Rc, vec::Vec};
 
-use core::cmp::Ordering;
+use core::{cell::RefCell, cmp::Ordering};
 
 use hashbrown::{HashMap, HashSet};
 
@@ -51,6 +51,58 @@ use crate::{
     spec_path::{SpecPath, VariantSelectionSite},
     stage::{Stage, StageOptions},
 };
+
+/// Composition owns this cache: authored layers stay unchanged while path and
+/// token interning may grow. Graph-dependent selections are deliberately not
+/// cached here (AOUSD Core §10.5).
+type SiteSelections = HashMap<PathId, HashMap<TokenId, TokenId>>;
+
+struct SelectionResolver<'a> {
+    fallbacks: &'a VariantFallbacks,
+    authored: RefCell<HashMap<StackContext, SiteSelections>>,
+}
+
+impl<'a> SelectionResolver<'a> {
+    fn new(fallbacks: &'a VariantFallbacks) -> Self {
+        Self {
+            fallbacks,
+            authored: RefCell::new(HashMap::new()),
+        }
+    }
+}
+
+/// Selections depend on the resolved layers AND each layer's expression chain.
+/// Time offsets do not affect variant selection. Borrowed lookup avoids copying
+/// the stack and its chains on every cache hit.
+#[derive(Hash, PartialEq, Eq)]
+struct StackContext {
+    layers: Vec<LayerId>,
+    chains: Vec<Rc<[LayerId]>>,
+}
+
+struct StackContextRef<'a>(&'a LayerStack);
+
+impl core::hash::Hash for StackContextRef<'_> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        self.0.layers.hash(state);
+        self.0.chains.hash(state);
+    }
+}
+
+impl hashbrown::Equivalent<StackContext> for StackContextRef<'_> {
+    fn equivalent(&self, key: &StackContext) -> bool {
+        self.0.layers == key.layers && self.0.chains == key.chains
+    }
+}
+
+impl From<&StackContextRef<'_>> for StackContext {
+    fn from(key: &StackContextRef<'_>) -> Self {
+        Self {
+            layers: key.0.layers.clone(),
+            chains: key.0.chains.clone(),
+        }
+    }
+}
 
 fn prim_spec_path(
     store: &dyn LayerStore,
@@ -139,7 +191,7 @@ pub(crate) fn compose_stage_with_paths(
 ) -> Stage {
     // The variant fallbacks every selection is resolved with, passed
     // explicitly to each function that resolves selections.
-    let fallbacks = &options.variant_fallbacks;
+    let resolver = &SelectionResolver::new(&options.variant_fallbacks);
     let local_only = populated.is_some();
     let mut cycles = CycleDetector::new(root);
     let layer_stack = cycles.gather_layer_stack(store, root);
@@ -202,7 +254,7 @@ pub(crate) fn compose_stage_with_paths(
 
     add_local_and_variant_opinions(
         store,
-        fallbacks,
+        resolver,
         &layer_stack,
         &paths,
         &mut prims,
@@ -228,7 +280,7 @@ pub(crate) fn compose_stage_with_paths(
         );
         add_inherit_opinions(
             store,
-            fallbacks,
+            resolver,
             &layer_stack,
             &paths,
             &mut prims,
@@ -239,7 +291,7 @@ pub(crate) fn compose_stage_with_paths(
         );
         add_reference_opinions(
             store,
-            fallbacks,
+            resolver,
             &layer_stack,
             &paths,
             &mut prims,
@@ -250,7 +302,7 @@ pub(crate) fn compose_stage_with_paths(
         );
         add_payload_opinions(
             store,
-            fallbacks,
+            resolver,
             &layer_stack,
             &paths,
             &mut prims,
@@ -261,7 +313,7 @@ pub(crate) fn compose_stage_with_paths(
         );
         add_specializes_opinions(
             store,
-            fallbacks,
+            resolver,
             &layer_stack,
             &paths,
             &mut prims,
@@ -272,7 +324,7 @@ pub(crate) fn compose_stage_with_paths(
         );
         add_late_variant_branches(
             store,
-            fallbacks,
+            resolver,
             &layer_stack,
             &mut prims,
             &mut prim_order_opinions,
@@ -315,7 +367,7 @@ pub(crate) fn compose_stage_with_paths(
     cycles.report_relocate_node_opinions(store, &prims);
 
     if !local_only {
-        prune_unselected_variant_specs(store, fallbacks, &layer_stack, &mut prims);
+        prune_unselected_variant_specs(store, resolver, &layer_stack, &mut prims);
     }
 
     relocated_child_names(
@@ -335,7 +387,7 @@ pub(crate) fn compose_stage_with_paths(
     let mut instances = if local_only {
         HashSet::new()
     } else {
-        filter_variant_children(store, fallbacks, &prims, &mut children);
+        filter_variant_children(store, resolver, &prims, &mut children);
         strip_instance_descendants(
             store,
             &mut prims,
@@ -627,7 +679,7 @@ fn remove_relocation_sources(
 /// The authored selections come from
 /// [`authored_strength_ordered_variant_selections`], which evaluates the
 /// variant sets one at a time, as OpenUSD does; sets it leaves without a
-/// selection take the variant fallbacks. A branch counts only once an authored selection
+/// selection take the variant resolver. A branch counts only once an authored selection
 /// selects it: a branch a fallback selected authors selections only for
 /// the sets declared after its own, which the fallback pass decides
 /// ([`apply_variant_fallbacks`]), so pruning keeps every fallback branch
@@ -810,7 +862,7 @@ impl<'a> VariantSite<'a> {
 /// sites, whose selections count for the sets evaluated after it at the
 /// strength of their place among `sites`. A set no composed site selects is
 /// evaluated again once a newly selected branch composes, and otherwise
-/// stays unselected, for the fallbacks. The sets no site declares then take
+/// stays unselected, for the resolver. The sets no site declares then take
 /// the strongest selection left.
 ///
 /// Spec: AOUSD Core §10.3.2.5.1 (computing variant selection), §10.5.
@@ -872,7 +924,7 @@ fn evaluate_variant_sets(sites: &[VariantSite<'_>]) -> HashMap<TokenId, TokenId>
     selections
 }
 
-/// Applies `fallbacks` to `selections`, every authored selection of a
+/// Applies `resolver` to `selections`, every authored selection of a
 /// prim, for the variant sets of its specs: the source specs `sources`,
 /// strongest first, then the specs of each `(stack, prim)` site (see
 /// [`apply_variant_fallbacks`]). Callers gather every authored selection
@@ -1020,7 +1072,7 @@ fn authored_composed_variant_selections(
 /// searches the whole prim index in strength order.
 fn prune_unselected_variant_specs(
     store: &dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     stage_stack: &LayerStack,
     prims: &mut HashMap<PathId, PrimIndex>,
 ) {
@@ -1055,7 +1107,7 @@ fn prune_unselected_variant_specs(
                     }
                     if !spec_path_branches_selected(
                         store,
-                        fallbacks,
+                        resolver,
                         stage_stack,
                         prims,
                         &mut selection_cache,
@@ -1102,7 +1154,7 @@ enum BranchHosts {
 /// `hosts` says, that is not selected for the composed prim `prim_path`.
 fn spec_path_branches_selected(
     store: &dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     stage_stack: &LayerStack,
     prims: &HashMap<PathId, PrimIndex>,
     selection_cache: &mut HashMap<PathId, HashMap<TokenId, TokenId>>,
@@ -1150,7 +1202,7 @@ fn spec_path_branches_selected(
                 selection_cache
                     .entry(id)
                     .or_insert_with(|| {
-                        strength_ordered_variant_selections(store, fallbacks, &prims[&id])
+                        strength_ordered_variant_selections(store, resolver.fallbacks, &prims[&id])
                     })
                     .get(&set)
                     .copied()
@@ -1164,7 +1216,11 @@ fn spec_path_branches_selected(
                 selection_cache
                     .entry(host)
                     .or_insert_with(|| {
-                        strength_ordered_variant_selections(store, fallbacks, &prims[&host])
+                        strength_ordered_variant_selections(
+                            store,
+                            resolver.fallbacks,
+                            &prims[&host],
+                        )
                     })
                     .get(&set)
                     .copied()
@@ -1301,7 +1357,7 @@ fn relocated_path(
 /// (population).
 fn filter_variant_children(
     store: &dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     prims: &HashMap<PathId, PrimIndex>,
     children: &mut HashMap<PathId, Vec<PathId>>,
 ) {
@@ -1320,7 +1376,7 @@ fn filter_variant_children(
         let mut variant_set_order: Vec<TokenId> = Vec::new();
 
         // First, resolve variant selections and variant set order from all opinion sources.
-        let selections = composed_variant_selections(store, fallbacks, prim_index);
+        let selections = composed_variant_selections(store, resolver.fallbacks, prim_index);
         for source in &prim_index.sources {
             let Some(layer) = store.layer(source.layer_id) else {
                 continue;
@@ -1597,7 +1653,7 @@ fn filter_variant_children(
                     .filter(|site| site.host_path != source.lookup_path)
                     .all(|site| {
                         prims.get(&site.host_path).is_none_or(|index| {
-                            composed_variant_selections(store, fallbacks, index)
+                            composed_variant_selections(store, resolver.fallbacks, index)
                                 .get(&site.set)
                                 .is_none_or(|selected| *selected == site.variant)
                         })
@@ -2350,14 +2406,14 @@ fn prune_deactivated(
 /// (`pxr/usd/pcp/primIndex.cpp`, `_ComposeVariantSelection`).
 fn resolve_full_variant_selections(
     store: &dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     local_stack: &LayerStack,
     path: PathId,
 ) -> HashMap<TokenId, TokenId> {
-    let mut selections = authored_full_variant_selections(store, fallbacks, local_stack, path);
+    let mut selections = authored_full_variant_selections(store, resolver, local_stack, path);
     apply_fallbacks_at(
         store,
-        fallbacks,
+        resolver.fallbacks,
         &mut selections,
         &PrimIndexGraph::default(),
         &[],
@@ -2378,15 +2434,24 @@ fn resolve_full_variant_selections(
 /// weaker reference selects still selects the sets evaluated after it.
 fn authored_full_variant_selections(
     store: &dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     local_stack: &LayerStack,
     path: PathId,
 ) -> HashMap<TokenId, TokenId> {
-    let local = selection_host_specs(store, fallbacks, local_stack, path);
-    let child = resolve_variant_child_selections_for_prim(store, fallbacks, local_stack, path);
+    let context = StackContextRef(local_stack);
+    if let Some(selections) = resolver
+        .authored
+        .borrow()
+        .get(&context)
+        .and_then(|sites| sites.get(&path))
+    {
+        return selections.clone();
+    }
+    let local = selection_host_specs(store, resolver.fallbacks, local_stack, path);
+    let child = resolve_variant_child_selections_for_prim(store, resolver, local_stack, path);
     let inherits = arcs_of(resolve_inherits_for_prim(
         store,
-        fallbacks,
+        resolver.fallbacks,
         local_stack,
         path,
         SelectionScope::Stack,
@@ -2405,7 +2470,7 @@ fn authored_full_variant_selections(
         let applied = |spec: &&crate::doc::PrimSpec| {
             spec_arcs_apply(
                 store,
-                fallbacks,
+                resolver.fallbacks,
                 local_stack,
                 path,
                 spec,
@@ -2447,12 +2512,12 @@ fn authored_full_variant_selections(
         .collect();
     sites.push(VariantSite::authored_only(&child));
     for target in inherits.iter().copied() {
-        let specs = selection_host_specs(store, fallbacks, local_stack, target);
+        let specs = selection_host_specs(store, resolver.fallbacks, local_stack, target);
         sites.extend(VariantSite::of_node(store, &specs));
     }
     sites.extend(VariantSite::branches_of_node(store, &local));
     for (stack, target) in &targets {
-        let specs = selection_host_specs(store, fallbacks, stack, *target);
+        let specs = selection_host_specs(store, resolver.fallbacks, stack, *target);
         sites.extend(VariantSite::of_node(store, &specs));
     }
     // Specializes targets are the weakest sites (AOUSD Core §10.4, the S in
@@ -2460,16 +2525,26 @@ fn authored_full_variant_selections(
     // a class a prim specializes selects the prim's own sets.
     let specializes = arcs_of(resolve_specializes_for_prim(
         store,
-        fallbacks,
+        resolver.fallbacks,
         local_stack,
         path,
         SelectionScope::Stack,
     ));
     for target in specializes {
-        let specs = selection_host_specs(store, fallbacks, local_stack, target);
+        let specs = selection_host_specs(store, resolver.fallbacks, local_stack, target);
         sites.extend(VariantSite::of_node(store, &specs));
     }
-    evaluate_variant_sets(&sites)
+    let selections = evaluate_variant_sets(&sites);
+    let mut cache = resolver.authored.borrow_mut();
+    if let Some(sites) = cache.get_mut(&context) {
+        sites.insert(path, selections.clone());
+    } else {
+        cache.insert(
+            StackContext::from(&context),
+            HashMap::from([(path, selections.clone())]),
+        );
+    }
+    selections
 }
 
 /// Resolves the variant selections authored on `prim`'s specs inside the
@@ -2479,7 +2554,7 @@ fn authored_full_variant_selections(
 /// (computing variant selection).
 fn resolve_variant_child_selections_for_prim(
     store: &dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     local_stack: &LayerStack,
     prim: PathId,
 ) -> HashMap<TokenId, TokenId> {
@@ -2510,7 +2585,7 @@ fn resolve_variant_child_selections_for_prim(
     }
 
     let parent_selections =
-        resolve_full_variant_selections(store, fallbacks, local_stack, parent_id);
+        resolve_full_variant_selections(store, resolver, local_stack, parent_id);
     let mut selected = HashMap::new();
     for layer in local_stack.layers.iter().filter_map(|id| store.layer(*id)) {
         let context = SiteContext::Chain(local_stack.chain_of(layer.id));
@@ -2521,7 +2596,7 @@ fn resolve_variant_child_selections_for_prim(
                 .iter()
                 .filter(|site| site.host_path != parent_id)
                 .all(|site| {
-                    resolve_full_variant_selections(store, fallbacks, local_stack, site.host_path)
+                    resolve_full_variant_selections(store, resolver, local_stack, site.host_path)
                         .get(&site.set)
                         .is_none_or(|selected| *selected == site.variant)
                 });
@@ -2560,7 +2635,7 @@ fn resolve_variant_child_selections_for_prim(
 /// (`pxr/usd/pcp/primIndex.cpp`, `_ComposeVariantSelection`).
 fn enclosing_variant_selections(
     store: &dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     out: &HashMap<PathId, PrimIndex>,
     stage_stack: &LayerStack,
     remote_stack: &LayerStack,
@@ -2601,15 +2676,22 @@ fn enclosing_variant_selections(
                     let sites = [(stage_stack, dest_host), (remote_stack, host)];
                     for (stack, path) in sites {
                         for (set, variant) in
-                            authored_full_variant_selections(store, fallbacks, stack, path)
+                            authored_full_variant_selections(store, resolver, stack, path)
                         {
                             selections.entry(set).or_insert(variant);
                         }
                     }
-                    apply_fallbacks_at(store, fallbacks, &mut selections, graph, &sources, &sites);
+                    apply_fallbacks_at(
+                        store,
+                        resolver.fallbacks,
+                        &mut selections,
+                        graph,
+                        &sources,
+                        &sites,
+                    );
                     selections
                 }
-                None => resolve_full_variant_selections(store, fallbacks, ancestor_stack, host),
+                None => resolve_full_variant_selections(store, resolver, ancestor_stack, host),
             })
             .clone();
         enclosing.insert(host, selections);
@@ -2680,7 +2762,7 @@ fn unique<T: PartialEq>(arcs: Vec<Sited<T>>) -> Vec<Sited<T>> {
 /// searching the prim index built so far (`pxr/usd/pcp/primIndex.cpp`).
 fn admitted_arcs(
     store: &dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     out: &HashMap<PathId, PrimIndex>,
     stage_stack: &LayerStack,
     data_stack: &LayerStack,
@@ -2698,7 +2780,7 @@ fn admitted_arcs(
 ) -> AdmittedArcs {
     let enclosing = enclosing_variant_selections(
         store,
-        fallbacks,
+        resolver,
         out,
         stage_stack,
         data_stack,
@@ -2711,7 +2793,7 @@ fn admitted_arcs(
     let scope = cycles.expression_scope();
     let arcs = arcs_admitted_by(
         store,
-        fallbacks,
+        resolver,
         data_stack,
         remote_path,
         &enclosing,
@@ -2726,7 +2808,7 @@ fn admitted_arcs(
 /// [`admitted_arcs`]).
 fn arcs_admitted_by(
     store: &dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     data_stack: &LayerStack,
     remote_path: PathId,
     enclosing: &HashMap<PathId, HashMap<TokenId, TokenId>>,
@@ -2744,7 +2826,7 @@ fn arcs_admitted_by(
 
     let mut references = resolve_direct_references_for_prim(
         store,
-        fallbacks,
+        resolver.fallbacks,
         data_stack,
         remote_path,
         scope,
@@ -2752,7 +2834,7 @@ fn arcs_admitted_by(
     );
     references.extend(resolve_variant_references_in(
         store,
-        fallbacks,
+        resolver.fallbacks,
         data_stack,
         remote_path,
         &selections,
@@ -2762,7 +2844,7 @@ fn arcs_admitted_by(
     ));
     let mut payloads = resolve_payloads_for_prim_in(
         store,
-        fallbacks,
+        resolver.fallbacks,
         data_stack,
         remote_path,
         &parent_selections,
@@ -2771,7 +2853,7 @@ fn arcs_admitted_by(
     );
     payloads.extend(resolve_branch_payloads_in(
         store,
-        fallbacks,
+        resolver.fallbacks,
         data_stack,
         remote_path,
         &selections,
@@ -2780,7 +2862,7 @@ fn arcs_admitted_by(
     ));
     let inherits = resolve_inherits_for_prim_in(
         store,
-        fallbacks,
+        resolver.fallbacks,
         data_stack,
         remote_path,
         &selections,
@@ -2789,7 +2871,7 @@ fn arcs_admitted_by(
     );
     let specializes = resolve_specializes_for_prim_in(
         store,
-        fallbacks,
+        resolver.fallbacks,
         data_stack,
         remote_path,
         &selections,
@@ -2850,7 +2932,7 @@ fn arcs_admitted_by(
 /// Spec: AOUSD Core §10.5 (only the selected variant contributes).
 fn unselected_branch_prims(
     store: &dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     out: &HashMap<PathId, PrimIndex>,
     stage_stack: &LayerStack,
     data_stack: &LayerStack,
@@ -2874,7 +2956,7 @@ fn unselected_branch_prims(
         }
         let enclosing = enclosing_variant_selections(
             store,
-            fallbacks,
+            resolver,
             out,
             stage_stack,
             data_stack,
@@ -2930,22 +3012,22 @@ fn is_at_or_under(store: &dyn LayerStore, path: PathId, roots: &HashSet<PathId>)
 
 fn resolve_forwarded_variant_selections(
     store: &dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     stronger_stack: &LayerStack,
     selection_path: PathId,
     weaker_stack: &LayerStack,
     source_path: PathId,
 ) -> HashMap<TokenId, TokenId> {
     let mut selections =
-        authored_full_variant_selections(store, fallbacks, stronger_stack, selection_path);
+        authored_full_variant_selections(store, resolver, stronger_stack, selection_path);
     for (set, variant) in
-        authored_full_variant_selections(store, fallbacks, weaker_stack, source_path)
+        authored_full_variant_selections(store, resolver, weaker_stack, source_path)
     {
         selections.entry(set).or_insert(variant);
     }
     apply_fallbacks_at(
         store,
-        fallbacks,
+        resolver.fallbacks,
         &mut selections,
         &PrimIndexGraph::default(),
         &[],
@@ -2976,7 +3058,7 @@ fn resolve_forwarded_variant_selections(
 /// arc of the prim is added.
 fn late_variant_selections(
     store: &dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     stage_stack: &LayerStack,
     out: &HashMap<PathId, PrimIndex>,
     dest: PathId,
@@ -2995,7 +3077,7 @@ fn late_variant_selections(
         .filter(|key| {
             spec_path_branches_selected(
                 store,
-                fallbacks,
+                resolver,
                 stage_stack,
                 out,
                 &mut cache,
@@ -3059,7 +3141,7 @@ fn late_variant_selections(
     }
     apply_fallbacks_at(
         store,
-        fallbacks,
+        resolver.fallbacks,
         &mut selections,
         graph,
         &sources,
@@ -3371,7 +3453,7 @@ fn add_relocated_variant_opinions(
 
 fn add_local_and_variant_opinions(
     store: &dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     local_stack: &LayerStack,
     paths: &BTreeSet<PathId>,
     out: &mut HashMap<PathId, PrimIndex>,
@@ -3384,7 +3466,7 @@ fn add_local_and_variant_opinions(
         let selections = if local_only {
             HashMap::new()
         } else {
-            resolve_full_variant_selections(store, fallbacks, local_stack, path)
+            resolve_full_variant_selections(store, resolver, local_stack, path)
         };
 
         for (layer_strength_idx, layer_id) in local_stack.layers.iter().copied().enumerate() {
@@ -3581,7 +3663,7 @@ fn resolve_arc_target(
 
 fn add_reference_opinions(
     store: &mut dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     local_stack: &LayerStack,
     paths: &BTreeSet<PathId>,
     out: &mut HashMap<PathId, PrimIndex>,
@@ -3602,10 +3684,10 @@ fn add_reference_opinions(
         let anchor = ArcAnchor::new(cycles.stage_layer_stack(), Some(&scope));
         // The prim's own branches follow the selections composed for it,
         // which its weaker arcs may author (`authored_full_variant_selections`).
-        let selections = resolve_full_variant_selections(store, fallbacks, local_stack, dest_root);
+        let selections = resolve_full_variant_selections(store, resolver, local_stack, dest_root);
         let refs = resolve_references_for_prim_selected(
             store,
-            fallbacks,
+            resolver.fallbacks,
             local_stack,
             dest_root,
             SelectionScope::Stack,
@@ -3615,7 +3697,7 @@ fn add_reference_opinions(
         // Also resolve variant child references with full selection chaining.
         let variant_child_refs = resolve_variant_child_references(
             store,
-            fallbacks,
+            resolver.fallbacks,
             local_stack,
             local_stack,
             dest_root,
@@ -3653,7 +3735,7 @@ fn add_reference_opinions(
             let branch = local_variant_steps(root_layer_stack(out, dest_root), &sites);
             add_reference_edge_opinions(
                 store,
-                fallbacks,
+                resolver,
                 local_stack,
                 dest_root,
                 reference,
@@ -3676,7 +3758,7 @@ fn add_reference_opinions(
 
 fn add_inherit_opinions(
     store: &mut dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     local_stack: &LayerStack,
     paths: &BTreeSet<PathId>,
     out: &mut HashMap<PathId, PrimIndex>,
@@ -3692,7 +3774,7 @@ fn add_inherit_opinions(
         cycles.begin(dest_root);
         let inherits = resolve_inherits_for_prim(
             store,
-            fallbacks,
+            resolver.fallbacks,
             local_stack,
             dest_root,
             SelectionScope::Stack,
@@ -3712,7 +3794,7 @@ fn add_inherit_opinions(
             let branch = local_variant_steps(root_layer_stack(out, dest_root), &sites);
             add_inherit_edge_opinions(
                 store,
-                fallbacks,
+                resolver,
                 local_stack,
                 local_stack,
                 dest_root,
@@ -4993,8 +5075,8 @@ type PendingOpinion = (PathId, PathId, SpecPath, TokenId, OpinionValue, NodeId);
 /// (`PcpCompareSiblingNodeStrength` in `pxr/usd/pcp/strengthOrdering.cpp`).
 #[derive(Clone, Copy)]
 struct AncestralArcs<'a> {
-    /// The stage's variant fallbacks.
-    fallbacks: &'a VariantFallbacks,
+    /// The stage's variant resolver.
+    resolver: &'a SelectionResolver<'a>,
     /// The layers of the target layer stack, which author the ancestors'
     /// arcs.
     data_stack: &'a LayerStack,
@@ -5112,7 +5194,7 @@ impl AncestralArcs<'_> {
         let scope = cycles.expression_scope();
         let arcs = arcs_admitted_by(
             store,
-            self.fallbacks,
+            self.resolver,
             self.data_stack,
             ancestor,
             &enclosing,
@@ -5151,13 +5233,13 @@ impl AncestralArcs<'_> {
             });
         let mut selections = authored_strength_ordered_variant_selections(store, graph, &sources);
         for (set, variant) in
-            authored_full_variant_selections(store, self.fallbacks, self.ancestor_stack, host)
+            authored_full_variant_selections(store, self.resolver, self.ancestor_stack, host)
         {
             selections.entry(set).or_insert(variant);
         }
         apply_fallbacks_at(
             store,
-            self.fallbacks,
+            self.resolver.fallbacks,
             &mut selections,
             graph,
             &sources,
@@ -5454,7 +5536,7 @@ impl AncestralArcs<'_> {
                 let branch = nodes.branch_path(&sites);
                 add_reference_edge_opinions(
                     store,
-                    self.fallbacks,
+                    self.resolver,
                     self.selection_stack,
                     self.dest_root,
                     reference,
@@ -5489,7 +5571,7 @@ impl AncestralArcs<'_> {
                 let branch = nodes.branch_path(&sites);
                 add_payload_edge_opinions(
                     store,
-                    self.fallbacks,
+                    self.resolver,
                     self.selection_stack,
                     self.dest_root,
                     payload,
@@ -5514,7 +5596,7 @@ impl AncestralArcs<'_> {
                 let branch = nodes.branch_path(&sites);
                 add_inherit_edge_opinions(
                     store,
-                    self.fallbacks,
+                    self.resolver,
                     self.data_stack,
                     self.selection_stack,
                     self.dest_root,
@@ -5543,7 +5625,7 @@ impl AncestralArcs<'_> {
                 let index = u16::try_from(index).unwrap_or(u16::MAX);
                 add_specializes_edge_opinions(
                     store,
-                    self.fallbacks,
+                    self.resolver,
                     self.selection_stack,
                     self.dest_root,
                     self.dest_root,
@@ -5794,7 +5876,7 @@ fn retain_new_class_sites(
 
 fn add_inherit_edge_opinions(
     store: &mut dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     // The layer stack of the class: the layers the arc reads.
     local_stack: &LayerStack,
     // The layers whose variant selections apply to the destination, strongest
@@ -5903,7 +5985,7 @@ fn add_inherit_edge_opinions(
         let implied_stack = cycles.gather_layer_stack(store, implied.step.layer_stack);
         add_inherit_edge_opinions(
             store,
-            fallbacks,
+            resolver,
             &implied_stack,
             selection_stack,
             dest_root,
@@ -5984,7 +6066,7 @@ fn add_inherit_edge_opinions(
         let pairs: Vec<(PathId, PathId)> = mapping.clone();
         unselected_branch_prims(
             store,
-            fallbacks,
+            resolver,
             out,
             selection_stack,
             local_stack,
@@ -6011,7 +6093,7 @@ fn add_inherit_edge_opinions(
         let mut pending_sources = Vec::new();
         let snapshots = snapshot_class_specs(
             store,
-            fallbacks,
+            resolver,
             selection_stack,
             local_stack,
             layer_id,
@@ -6167,7 +6249,7 @@ fn add_inherit_edge_opinions(
             payloads: nested_payloads,
         } = admitted_arcs(
             store,
-            fallbacks,
+            resolver,
             out,
             selection_stack,
             local_stack,
@@ -6190,7 +6272,7 @@ fn add_inherit_edge_opinions(
             // `implied_classes`).
             add_inherit_edge_opinions(
                 store,
-                fallbacks,
+                resolver,
                 local_stack,
                 selection_stack,
                 dest_path_id,
@@ -6224,7 +6306,7 @@ fn add_inherit_edge_opinions(
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
             add_specializes_edge_opinions(
                 store,
-                fallbacks,
+                resolver,
                 selection_stack,
                 dest_path_id,
                 dest_path_id,
@@ -6258,7 +6340,7 @@ fn add_inherit_edge_opinions(
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
             add_reference_edge_opinions(
                 store,
-                fallbacks,
+                resolver,
                 selection_stack,
                 dest_path_id,
                 nested_ref,
@@ -6286,7 +6368,7 @@ fn add_inherit_edge_opinions(
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
             add_payload_edge_opinions(
                 store,
-                fallbacks,
+                resolver,
                 selection_stack,
                 dest_path_id,
                 nested_payload,
@@ -6307,7 +6389,7 @@ fn add_inherit_edge_opinions(
 
     // The arcs the class's ancestors author (see `AncestralArcs`).
     AncestralArcs {
-        fallbacks,
+        resolver,
         data_stack: local_stack,
         selection_stack,
         ancestor_stack: selection_stack,
@@ -6613,7 +6695,7 @@ fn snapshot_selected_branches<'a>(
 
 fn snapshot_class_specs(
     store: &dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     selection_stack: &LayerStack,
     local_stack: &LayerStack,
     layer_id: LayerId,
@@ -6634,7 +6716,7 @@ fn snapshot_class_specs(
                 let selections = selections.get_or_insert_with(|| {
                     resolve_forwarded_variant_selections(
                         store,
-                        fallbacks,
+                        resolver,
                         selection_stack,
                         selection_path(source, dest),
                         local_stack,
@@ -6666,7 +6748,7 @@ fn snapshot_arc_specs(
 
 fn add_reference_edge_opinions(
     store: &mut dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     stage_stack: &LayerStack,
     dest_root: PathId,
     arc: AuthoredReference,
@@ -6954,7 +7036,7 @@ fn add_reference_edge_opinions(
     for &(remote_path_id, dest_path_id) in &mapping {
         let arcs = admitted_arcs(
             store,
-            fallbacks,
+            resolver,
             out,
             stage_stack,
             &remote_stack,
@@ -6970,7 +7052,7 @@ fn add_reference_edge_opinions(
         // `LateBranches`).
         nested.expand(
             store,
-            fallbacks,
+            resolver,
             &nodes,
             remote_path_id,
             dest_path_id,
@@ -6989,7 +7071,7 @@ fn add_reference_edge_opinions(
     // The arcs the target's ancestors author, and those of the relocation
     // sources outside the target (see `AncestralArcs`).
     let ancestral = AncestralArcs {
-        fallbacks,
+        resolver,
         data_stack: &remote_stack,
         selection_stack: &combined_stack,
         ancestor_stack: &remote_stack,
@@ -7090,7 +7172,7 @@ impl NestedArcs<'_> {
     fn expand(
         &self,
         store: &mut dyn LayerStore,
-        fallbacks: &VariantFallbacks,
+        resolver: &SelectionResolver<'_>,
         nodes: &ArcNodes,
         remote_path: PathId,
         dest: PathId,
@@ -7112,7 +7194,7 @@ impl NestedArcs<'_> {
             // expansion (see `implied_classes`).
             add_inherit_edge_opinions(
                 store,
-                fallbacks,
+                resolver,
                 self.remote_stack,
                 self.combined_stack,
                 dest,
@@ -7138,7 +7220,7 @@ impl NestedArcs<'_> {
             let branch = nodes.branch_path(&sites);
             add_reference_edge_opinions(
                 store,
-                fallbacks,
+                resolver,
                 self.combined_stack,
                 dest,
                 reference,
@@ -7159,7 +7241,7 @@ impl NestedArcs<'_> {
             let branch = nodes.branch_path(&sites);
             add_payload_edge_opinions(
                 store,
-                fallbacks,
+                resolver,
                 self.combined_stack,
                 dest,
                 payload,
@@ -7188,7 +7270,7 @@ impl NestedArcs<'_> {
             let branch = nodes.branch_path(&sites);
             add_specializes_edge_opinions(
                 store,
-                fallbacks,
+                resolver,
                 self.combined_stack,
                 dest,
                 remote_path,
@@ -7285,7 +7367,7 @@ impl LateBranches {
     fn add(
         &self,
         store: &mut dyn LayerStore,
-        fallbacks: &VariantFallbacks,
+        resolver: &SelectionResolver<'_>,
         stage_stack: &LayerStack,
         out: &mut HashMap<PathId, PrimIndex>,
         visited_inherits: &mut VisitedClasses,
@@ -7309,7 +7391,7 @@ impl LateBranches {
         out.get_mut(&dest).expect("path exists").graph.rank();
         let selections = late_variant_selections(
             store,
-            fallbacks,
+            resolver,
             stage_stack,
             out,
             dest,
@@ -7384,7 +7466,7 @@ impl LateBranches {
         let mut cache = HashMap::new();
         let mut enclosing = enclosing_variant_selections(
             store,
-            fallbacks,
+            resolver,
             out,
             &arc.stage_stack,
             &arc.remote_stack,
@@ -7398,7 +7480,7 @@ impl LateBranches {
         let scope = cycles.expression_scope();
         let arcs = arcs_admitted_by(
             store,
-            fallbacks,
+            resolver,
             &arc.remote_stack,
             remote_path,
             &enclosing,
@@ -7413,7 +7495,7 @@ impl LateBranches {
         }
         .expand(
             store,
-            fallbacks,
+            resolver,
             &nodes,
             remote_path,
             dest,
@@ -7439,7 +7521,7 @@ impl LateBranches {
 /// adds as they come (`Pcp_PrimIndexer` in `pxr/usd/pcp/primIndex.cpp`).
 fn add_late_variant_branches(
     store: &mut dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     stage_stack: &LayerStack,
     out: &mut HashMap<PathId, PrimIndex>,
     prim_order_out: &mut HashMap<PathId, Vec<(OpinionKey, Vec<TokenId>)>>,
@@ -7457,7 +7539,7 @@ fn add_late_variant_branches(
         for branches in late {
             branches.add(
                 store,
-                fallbacks,
+                resolver,
                 stage_stack,
                 out,
                 &mut visited_inherits,
@@ -7473,7 +7555,7 @@ fn add_late_variant_branches(
 
 fn add_payload_opinions(
     store: &mut dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     local_stack: &LayerStack,
     paths: &BTreeSet<PathId>,
     out: &mut HashMap<PathId, PrimIndex>,
@@ -7495,7 +7577,7 @@ fn add_payload_opinions(
         let anchor = ArcAnchor::new(cycles.stage_layer_stack(), Some(&scope)).payloads();
         let payloads = resolve_payloads_for_prim(
             store,
-            fallbacks,
+            resolver.fallbacks,
             local_stack,
             dest_root,
             SelectionScope::Stack,
@@ -7503,10 +7585,10 @@ fn add_payload_opinions(
         );
         // Also resolve variant branch-level payloads, for the selections
         // composed for the prim (`authored_full_variant_selections`).
-        let selections = resolve_full_variant_selections(store, fallbacks, local_stack, dest_root);
+        let selections = resolve_full_variant_selections(store, resolver, local_stack, dest_root);
         let branch_payloads = resolve_variant_branch_payloads(
             store,
-            fallbacks,
+            resolver.fallbacks,
             local_stack,
             dest_root,
             anchor,
@@ -7542,7 +7624,7 @@ fn add_payload_opinions(
             let branch = local_variant_steps(root_layer_stack(out, dest_root), &sites);
             add_payload_edge_opinions(
                 store,
-                fallbacks,
+                resolver,
                 local_stack,
                 dest_root,
                 payload,
@@ -7565,7 +7647,7 @@ fn add_payload_opinions(
 
 fn add_payload_edge_opinions(
     store: &mut dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     stage_stack: &LayerStack,
     dest_root: PathId,
     arc: AuthoredReference,
@@ -7847,7 +7929,7 @@ fn add_payload_edge_opinions(
     for &(remote_path_id, dest_path_id) in &mapping {
         let arcs = admitted_arcs(
             store,
-            fallbacks,
+            resolver,
             out,
             stage_stack,
             &remote_stack,
@@ -7863,7 +7945,7 @@ fn add_payload_edge_opinions(
         // `LateBranches`).
         nested.expand(
             store,
-            fallbacks,
+            resolver,
             &nodes,
             remote_path_id,
             dest_path_id,
@@ -7881,7 +7963,7 @@ fn add_payload_edge_opinions(
     // The arcs the target's ancestors author, and those of the relocation
     // sources outside the target (see `AncestralArcs`).
     let ancestral = AncestralArcs {
-        fallbacks,
+        resolver,
         data_stack: &remote_stack,
         selection_stack: &combined_stack,
         ancestor_stack: &remote_stack,
@@ -7938,7 +8020,7 @@ fn add_payload_edge_opinions(
 
 fn add_specializes_opinions(
     store: &mut dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     local_stack: &LayerStack,
     paths: &BTreeSet<PathId>,
     out: &mut HashMap<PathId, PrimIndex>,
@@ -7954,7 +8036,7 @@ fn add_specializes_opinions(
         cycles.begin(dest_root);
         let specializes = resolve_specializes_for_prim(
             store,
-            fallbacks,
+            resolver.fallbacks,
             local_stack,
             dest_root,
             SelectionScope::Stack,
@@ -7974,7 +8056,7 @@ fn add_specializes_opinions(
             let branch = local_variant_steps(root_layer_stack(out, dest_root), &sites);
             add_specializes_edge_opinions(
                 store,
-                fallbacks,
+                resolver,
                 local_stack,
                 dest_root,
                 dest_root,
@@ -8009,7 +8091,7 @@ fn add_specializes_opinions(
 /// and `_EvalImpliedClasses` in `pxr/usd/pcp/primIndex.cpp`.
 fn add_specializes_edge_opinions(
     store: &mut dyn LayerStore,
-    fallbacks: &VariantFallbacks,
+    resolver: &SelectionResolver<'_>,
     // The layers whose variant selections apply to the destination, strongest
     // first.
     selection_stack: &LayerStack,
@@ -8115,7 +8197,7 @@ fn add_specializes_edge_opinions(
         };
         add_specializes_edge_opinions(
             store,
-            fallbacks,
+            resolver,
             selection_stack,
             dest_root,
             dest_root,
@@ -8208,7 +8290,7 @@ fn add_specializes_edge_opinions(
             .collect();
         unselected_branch_prims(
             store,
-            fallbacks,
+            resolver,
             out,
             selection_stack,
             local_stack,
@@ -8232,7 +8314,7 @@ fn add_specializes_edge_opinions(
         let mut pending_sources = Vec::new();
         let snapshots = snapshot_class_specs(
             store,
-            fallbacks,
+            resolver,
             selection_stack,
             local_stack,
             layer_id,
@@ -8406,7 +8488,7 @@ fn add_specializes_edge_opinions(
         };
         let arcs = admitted_arcs(
             store,
-            fallbacks,
+            resolver,
             out,
             selection_stack,
             local_stack,
@@ -8428,7 +8510,7 @@ fn add_specializes_edge_opinions(
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
             add_specializes_edge_opinions(
                 store,
-                fallbacks,
+                resolver,
                 selection_stack,
                 dest_path_id,
                 selection_path_id,
@@ -8474,7 +8556,7 @@ fn add_specializes_edge_opinions(
         };
         let arcs = admitted_arcs(
             store,
-            fallbacks,
+            resolver,
             out,
             selection_stack,
             local_stack,
@@ -8498,7 +8580,7 @@ fn add_specializes_edge_opinions(
             // `implied_classes`).
             add_inherit_edge_opinions(
                 store,
-                fallbacks,
+                resolver,
                 local_stack,
                 selection_stack,
                 dest_path_id,
@@ -8543,7 +8625,7 @@ fn add_specializes_edge_opinions(
         };
         let arcs = admitted_arcs(
             store,
-            fallbacks,
+            resolver,
             out,
             selection_stack,
             local_stack,
@@ -8563,7 +8645,7 @@ fn add_specializes_edge_opinions(
 
             add_reference_edge_opinions(
                 store,
-                fallbacks,
+                resolver,
                 selection_stack,
                 dest_path_id,
                 reference,
@@ -8590,7 +8672,7 @@ fn add_specializes_edge_opinions(
                 u16::try_from(store.paths().resolve(dest_path_id).depth()).unwrap_or(u16::MAX);
             add_payload_edge_opinions(
                 store,
-                fallbacks,
+                resolver,
                 selection_stack,
                 dest_path_id,
                 payload,
@@ -8612,7 +8694,7 @@ fn add_specializes_edge_opinions(
     // The arcs the specialized prim's ancestors author (see
     // `AncestralArcs`).
     AncestralArcs {
-        fallbacks,
+        resolver,
         data_stack: local_stack,
         selection_stack,
         ancestor_stack: selection_stack,
@@ -9385,7 +9467,12 @@ mod child_order_tests {
         let mut children = HashMap::new();
         children.insert(parent_path, vec![child_sphere, child_anim_sphere]);
 
-        filter_variant_children(&store, &VariantFallbacks::default(), &prims, &mut children);
+        filter_variant_children(
+            &store,
+            &SelectionResolver::new(&VariantFallbacks::default()),
+            &prims,
+            &mut children,
+        );
 
         let result: Vec<&str> = children[&parent_path]
             .iter()
@@ -9980,5 +10067,77 @@ mod default_prim_tests {
         for error in &expected {
             assert!(errors.contains(error), "missing {error:?} in {errors:?}");
         }
+    }
+}
+
+#[cfg(test)]
+mod selection_cache_tests {
+    use super::*;
+    use crate::{InMemoryStore, Layer, PrimSpec, Value, VariantSetSpec, VariantSpec};
+
+    #[test]
+    fn authored_selections_keep_expression_context_and_cache_lifetime() {
+        let mut store = InMemoryStore::default();
+        let path = store.path("/Emitter");
+        let mode = store.tokens.intern("mode");
+        let red = store.tokens.intern("red");
+        let blue = store.tokens.intern("blue");
+        let expression = store.tokens.intern("`${MODE}`");
+        let variables = store.tokens.intern("expressionVariables");
+        for (id, selection) in [(LayerId(1), "red"), (LayerId(2), "blue")] {
+            let mut layer = Layer::new(id);
+            layer.set_metadata(
+                variables,
+                Value::Dictionary(alloc::vec![(
+                    "MODE".into(),
+                    Value::String(selection.into())
+                )]),
+            );
+            store.insert_layer(layer);
+        }
+        let mut source = Layer::new(LayerId(3));
+        let mut spec = PrimSpec::def();
+        spec.variant_selections.insert(mode, expression);
+        let mut set = VariantSetSpec::default();
+        set.variants.insert(red, VariantSpec::default());
+        set.variants.insert(blue, VariantSpec::default());
+        spec.variant_sets.insert(mode, set);
+        source.insert_prim(path, spec);
+        store.insert_layer(source);
+        let stack =
+            |root| LayerStack::gather_recording(&store, &[root, LayerId(3)], &mut Vec::new(), None);
+        let first = stack(LayerId(1));
+        let second = stack(LayerId(2));
+        assert_eq!(first.layers, second.layers);
+        let fallbacks = VariantFallbacks::default();
+        let resolver = SelectionResolver::new(&fallbacks);
+        for _ in 0..3 {
+            assert_eq!(
+                authored_full_variant_selections(&store, &resolver, &first, path).get(&mode),
+                Some(&red)
+            );
+            assert_eq!(
+                authored_full_variant_selections(&store, &resolver, &second, path).get(&mode),
+                Some(&blue)
+            );
+        }
+        assert_eq!(resolver.authored.borrow().len(), 2);
+        assert!(
+            resolver
+                .authored
+                .borrow()
+                .values()
+                .all(|sites| sites.len() == 1)
+        );
+        drop(resolver);
+        store.layer_mut(LayerId(1)).unwrap().set_metadata(
+            variables,
+            Value::Dictionary(alloc::vec![("MODE".into(), Value::String("blue".into()))]),
+        );
+        let resolver = SelectionResolver::new(&fallbacks);
+        assert_eq!(
+            resolve_full_variant_selections(&store, &resolver, &first, path).get(&mode),
+            Some(&blue)
+        );
     }
 }

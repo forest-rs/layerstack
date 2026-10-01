@@ -81,7 +81,7 @@ fn flattened_layer_holds_the_composed_stage_without_arcs() {
     let attribute = spec.property(height).expect("height");
     assert_eq!(attribute.default, Some(Value::Double(1.0)));
     assert_eq!(
-        attribute.time_samples,
+        attribute.time_samples.as_deref().map(<[_]>::to_vec),
         Some(vec![(5.0, Value::Double(1.0)), (25.0, Value::Double(2.0))])
     );
     let root = store.path("/");
@@ -361,7 +361,7 @@ fn a_spline_through_an_offset_is_retimed() {
             .properties
             .iter_mut()
             .find(|p| p.name == curve)
-            .and_then(|p| p.spec.spline.as_mut())
+            .and_then(|p| Arc::make_mut(&mut p.spec).spline.as_mut())
             .unwrap();
         spline.knots.push(Knot {
             time: 2.0,
@@ -446,7 +446,8 @@ fn sparse_array_edit_samples_are_baked() {
         .property(ids)
         .unwrap()
         .time_samples
-        .clone();
+        .as_deref()
+        .map(<[_]>::to_vec);
     assert_eq!(
         samples,
         Some(vec![
@@ -574,7 +575,7 @@ fn the_flattened_layer_verifies_against_the_stage() {
     let height = store.property_path("/World/Tree.height");
     let mut edited = flat.layer.clone();
     let spec = edited.prims.get_mut(&height.prim_path()).unwrap();
-    spec.properties[0].spec.time_samples = None;
+    Arc::make_mut(&mut spec.properties[0].spec).time_samples = None;
     store.insert_layer(edited);
     let flattened = Stage::compose(&mut store, LayerId(9), StageOptions::default());
     let verification = stage.verify_flattened(&flattened, &store, &flat.report, &[7.5]);

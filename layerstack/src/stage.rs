@@ -586,7 +586,7 @@ impl Stage {
         dependents: &[Vec<PathId>],
     ) -> bool {
         let mut patches = Vec::new();
-        for (edit, prims) in edits.iter().zip(dependents) {
+        for (edit_index, (edit, prims)) in edits.iter().zip(dependents).enumerate() {
             let Some(authored) = edit.property(store) else {
                 return false;
             };
@@ -616,6 +616,16 @@ impl Stage {
                     matched = true;
                     let mut default = edit.default.then(|| authored.default.clone());
                     let mut samples = edit.samples.then(|| authored.time_samples.clone());
+                    let shareable = !default
+                        .iter()
+                        .flatten()
+                        .chain(
+                            samples
+                                .iter()
+                                .flatten()
+                                .flat_map(|samples| samples.iter().map(|(_, value)| value)),
+                        )
+                        .any(crate::path_expression::value::has_path_expression);
                     crate::path_expression::anchor_fresh_values(
                         store,
                         &index.graph,
@@ -625,18 +635,30 @@ impl Stage {
                             samples
                                 .iter_mut()
                                 .flatten()
-                                .flatten()
+                                .filter(|samples| {
+                                    samples.iter().any(|(_, value)| {
+                                        crate::path_expression::value::has_path_expression(value)
+                                    })
+                                })
+                                .flat_map(|samples| samples.make_mut().iter_mut())
                                 .map(|(_, value)| value),
                         ),
                     );
-                    patches.push((prim, edit.name, position, default, samples));
+                    patches.push((
+                        prim, edit.name, position, default, samples, edit_index, shareable,
+                    ));
                 }
                 if !matched {
                     return false;
                 }
             }
         }
-        for (prim, name, position, default, samples) in patches {
+        // Retain the old Arc alongside the replacement so pointer identity
+        // cannot be reused during this refresh. An edit's unmapped slots are
+        // identical across placements sharing the same old snapshot; mapped
+        // expression values deliberately bypass this sharing.
+        let mut refreshed = HashMap::new();
+        for (prim, name, position, default, samples, edit_index, shareable) in patches {
             let opinion = &mut self
                 .prims
                 .get_mut(&prim)
@@ -646,11 +668,21 @@ impl Stage {
             let OpinionValue::Property(spec) = &mut opinion.value else {
                 unreachable!("validated property");
             };
+            let shared_key = (Arc::as_ptr(spec) as usize, edit_index);
+            if shareable && let Some((_, updated)) = refreshed.get(&shared_key) {
+                *spec = Arc::clone(updated);
+                continue;
+            }
+            let original = (shareable && Arc::strong_count(spec) > 1).then(|| Arc::clone(spec));
+            let record = Arc::make_mut(spec);
             if let Some(default) = default {
-                spec.default = default;
+                record.default = default;
             }
             if let Some(samples) = samples {
-                spec.time_samples = samples;
+                record.time_samples = samples;
+            }
+            if let Some(original) = original {
+                refreshed.insert(shared_key, (original, Arc::clone(spec)));
             }
         }
         true
@@ -2796,7 +2828,7 @@ mod tests {
     /// Test-only opinion payload: a property authoring only time samples.
     fn samples(samples: Vec<(f64, Value)>) -> OpinionValue {
         OpinionValue::from(PropertySpec {
-            time_samples: Some(samples),
+            time_samples: Some(samples.into()),
             ..PropertySpec::default()
         })
     }

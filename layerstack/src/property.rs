@@ -23,6 +23,7 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use crate::{
+    SharedVec,
     doc::{
         FieldEntry, FieldValue, InterpolationType, Value, get_field, remove_field, set_field_vec,
     },
@@ -197,13 +198,14 @@ pub struct PropertySpec {
     ///
     /// Spec: AOUSD Core §7.6.4.2.1 (`default`).
     pub default: Option<Value>,
-    /// Authored time samples, sorted by time.
+    /// Authored time samples, sorted by time. Clones share the buffer; use
+    /// [`SharedVec::make_mut`](crate::SharedVec::make_mut) to edit it.
     ///
-    /// `Some(vec![])` records an explicitly authored empty sample map, which
+    /// `Some(SharedVec::new())` records an explicitly authored empty sample map, which
     /// contributes no value.
     ///
     /// Spec: AOUSD Core §7.6.4.2.2 (`timeSamples`).
-    pub time_samples: Option<Vec<TimeSample>>,
+    pub time_samples: Option<SharedVec<TimeSample>>,
     /// Authored spline.
     ///
     /// Spec: AOUSD Core §7.6.4.2.4 (`spline`).
@@ -217,12 +219,14 @@ pub struct PropertySpec {
     /// Spec: AOUSD Core §7.6.4.2.3 (`connectionPaths`), §7.6.5.1.1
     /// (`targetPaths`), §12.4.
     pub targets: Option<ListOp<TargetPath>>,
-    /// All other authored property metadata, in authored order: for example
+    /// Shared authored property metadata, in authored order: for example
     /// `interpolation`, `elementSize`, `customData`, `displayName`, `doc`
     /// (stored as `documentation`), `limits` and `colorSpace`.
+    /// Use [`Self::set_metadata`] or [`Self::remove_metadata`] to edit one
+    /// snapshot without copying its untouched samples.
     ///
     /// Spec: AOUSD Core §7.4 (metadata fields), §7.6.3.2–§7.6.3.3.
-    pub metadata: Vec<FieldEntry>,
+    pub metadata: SharedVec<FieldEntry>,
 }
 
 impl PropertySpec {
@@ -311,7 +315,7 @@ impl PropertySpec {
     /// Samples are sorted by time; for equal times the last one wins.
     #[must_use]
     pub fn with_time_samples(mut self, samples: Vec<TimeSample>) -> Self {
-        self.time_samples = Some(sort_samples(samples));
+        self.time_samples = Some(sort_samples(samples).into());
         self
     }
 
@@ -339,7 +343,7 @@ impl PropertySpec {
 
     /// Inserts or replaces a metadata field.
     pub fn set_metadata(&mut self, key: TokenId, value: impl Into<FieldValue>) -> &mut Self {
-        set_field_vec(&mut self.metadata, key, value.into());
+        set_field_vec(self.metadata.make_mut(), key, value.into());
         self
     }
 
@@ -351,7 +355,8 @@ impl PropertySpec {
 
     /// Removes an authored metadata field, returning its value.
     pub fn remove_metadata(&mut self, key: TokenId) -> Option<FieldValue> {
-        remove_field(&mut self.metadata, key)
+        self.metadata(key)?;
+        remove_field(self.metadata.make_mut(), key)
     }
 
     /// Returns `true` if the spec authors a default, samples or a spline,
@@ -387,14 +392,16 @@ pub(crate) fn sort_samples(mut samples: Vec<TimeSample>) -> Vec<TimeSample> {
 pub struct PropertyEntry {
     /// The interned property name, possibly namespaced (`primvars:st`).
     pub name: TokenId,
-    /// The authored property spec.
-    pub spec: PropertySpec,
+    /// The authored property snapshot, shared with composed opinions. Use
+    /// [`Arc::make_mut`] to edit this record without changing other snapshots.
+    /// Samples and metadata detach independently when those slots are edited.
+    pub spec: Arc<PropertySpec>,
 }
 
 /// Returns the property named `name`, if present.
 #[must_use]
 pub fn get_property(properties: &[PropertyEntry], name: TokenId) -> Option<&PropertySpec> {
-    properties.iter().find(|e| e.name == name).map(|e| &e.spec)
+    properties.iter().find(|e| e.name == name).map(|e| &*e.spec)
 }
 
 /// Returns the property named `name` mutably, if present.
@@ -406,16 +413,19 @@ pub fn get_property_mut(
     properties
         .iter_mut()
         .find(|e| e.name == name)
-        .map(|e| &mut e.spec)
+        .map(|e| Arc::make_mut(&mut e.spec))
 }
 
 /// Inserts or replaces the property named `name`, keeping the position of a
 /// replaced property (authored order).
 pub fn set_property_vec(properties: &mut Vec<PropertyEntry>, name: TokenId, spec: PropertySpec) {
-    if let Some(existing) = get_property_mut(properties, name) {
-        *existing = spec;
+    if let Some(existing) = properties.iter_mut().find(|entry| entry.name == name) {
+        existing.spec = Arc::new(spec);
     } else {
-        properties.push(PropertyEntry { name, spec });
+        properties.push(PropertyEntry {
+            name,
+            spec: Arc::new(spec),
+        });
     }
 }
 
@@ -431,18 +441,18 @@ pub fn property_entry(
         None => {
             properties.push(PropertyEntry {
                 name,
-                spec: PropertySpec::of_kind(kind),
+                spec: Arc::new(PropertySpec::of_kind(kind)),
             });
             properties.len() - 1
         }
     };
-    &mut properties[index].spec
+    Arc::make_mut(&mut properties[index].spec)
 }
 
 /// Removes the property named `name`, returning its spec.
 pub fn remove_property(properties: &mut Vec<PropertyEntry>, name: TokenId) -> Option<PropertySpec> {
     let index = properties.iter().position(|e| e.name == name)?;
-    Some(properties.remove(index).spec)
+    Some(Arc::unwrap_or_clone(properties.remove(index).spec))
 }
 
 #[cfg(test)]

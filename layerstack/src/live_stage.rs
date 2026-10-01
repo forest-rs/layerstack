@@ -1196,6 +1196,7 @@ impl LiveStage {
 
 #[cfg(test)]
 mod tests {
+    use alloc::sync::Arc;
     use alloc::vec;
 
     use super::*;
@@ -1332,7 +1333,8 @@ mod tests {
         assert_eq!(live.notify_changed_layers(&store), [], "reported once");
 
         let layer = store.layers.get_mut(&LayerId(1)).unwrap();
-        layer.prims.get_mut(&a).unwrap().properties[0].spec.default = Some(Value::Int64(3));
+        Arc::make_mut(&mut layer.prims.get_mut(&a).unwrap().properties[0].spec).default =
+            Some(Value::Int64(3));
         assert_eq!(
             live.notify_changed_layers(&store),
             [],

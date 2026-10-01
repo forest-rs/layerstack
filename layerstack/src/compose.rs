@@ -10141,3 +10141,246 @@ mod selection_cache_tests {
         );
     }
 }
+
+#[cfg(test)]
+mod property_snapshot_tests {
+    use crate::edit::{EditTarget, Transaction};
+    use crate::{
+        InMemoryStore, InterpolationType, Layer, LayerId, ListOp, LiveStage, OpinionValue,
+        PrimSpec, PropertyEntry, PropertyPath, PropertySpec, PropertyType, Reference, Stage,
+        StageOptions, TargetPath, Value,
+    };
+    use alloc::{sync::Arc, vec};
+
+    fn payload(stage: &Stage, path: PropertyPath) -> &Arc<PropertySpec> {
+        match &stage.explain_property_path(path).unwrap()[0].value {
+            OpinionValue::Property(spec) => spec,
+            OpinionValue::Field(_) => panic!("property opinion"),
+        }
+    }
+
+    #[test]
+    fn placements_share_authored_slots_but_source_and_value_edits_are_isolated() {
+        let mut store = InMemoryStore::default();
+        let source = store.path("/Emitter");
+        let a = store.path("/A");
+        let b = store.path("/B");
+        let name = store.tokens.intern("rate");
+        let doc = store.tokens.intern("documentation");
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(
+            source,
+            PrimSpec::def().with_property(
+                name,
+                PropertySpec::typed_attribute(PropertyType::new("int64", false, Value::Int64(0)))
+                    .with_default(1_i64)
+                    .with_time_samples(vec![(0.0, Value::Int64(2)), (1.0, Value::Int64(3))])
+                    .with_metadata(doc, Value::string("Shared authored data")),
+            ),
+        );
+        for path in [a, b] {
+            layer.insert_prim(
+                path,
+                PrimSpec::def().with_reference(Reference::new(LayerId(1), source)),
+            );
+        }
+        store.insert_layer(layer);
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        let a_path = PropertyPath::new(a, name);
+        let b_path = PropertyPath::new(b, name);
+        let first = payload(&stage, a_path);
+        let second = payload(&stage, b_path);
+        assert!(Arc::ptr_eq(first, second));
+        assert!(Arc::ptr_eq(
+            first,
+            &store.layers[&LayerId(1)].prims[&source].properties[0].spec
+        ));
+        let samples = first.time_samples.as_ref().unwrap().as_ptr();
+        let metadata = first.metadata.as_ptr();
+        let authored = store
+            .layers
+            .get_mut(&LayerId(1))
+            .unwrap()
+            .property_mut(PropertyPath::new(source, name))
+            .unwrap();
+        authored.default = Some(Value::Int64(4));
+        assert_eq!(authored.time_samples.as_ref().unwrap().as_ptr(), samples);
+        assert_eq!(authored.metadata.as_ptr(), metadata);
+        assert_eq!(
+            stage.resolve_field_path(a_path).unwrap().value,
+            Value::Int64(1)
+        );
+        authored.time_samples.as_mut().unwrap().make_mut()[0].1 = Value::Int64(9);
+        authored.set_metadata(doc, Value::string("Changed source"));
+        assert_eq!(first.time_samples.as_deref().unwrap()[0].1, Value::Int64(2));
+        assert_eq!(
+            second.metadata(doc),
+            Some(&Value::string("Shared authored data").into())
+        );
+        let fresh = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert_eq!(
+            fresh.resolve_field_path(a_path).unwrap().value,
+            Value::Int64(4)
+        );
+        assert_eq!(
+            fresh
+                .resolve_property_path_at_time(b_path, 0.0, InterpolationType::Linear)
+                .unwrap()
+                .value,
+            Value::Int64(9)
+        );
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let before = payload(live.stage(), a_path);
+        let sample_buffer = before.time_samples.as_ref().unwrap().as_ptr();
+        let metadata_buffer = before.metadata.as_ptr();
+        let target = EditTarget::for_layer(LayerId(1)).property(PropertyPath::new(source, name));
+        let mut edit = Transaction::new();
+        edit.set_default(target.clone(), Value::Int64(5));
+        let applied = live.apply(&mut store, &edit).unwrap();
+        let after = payload(live.stage(), a_path);
+        assert!(Arc::ptr_eq(after, payload(live.stage(), b_path)));
+        assert_eq!(after.time_samples.as_ref().unwrap().as_ptr(), sample_buffer);
+        assert_eq!(after.metadata.as_ptr(), metadata_buffer);
+        assert_eq!(after.default, Some(Value::Int64(5)));
+        live.apply(&mut store, &applied.inverse).unwrap();
+        assert_eq!(payload(live.stage(), a_path).default, Some(Value::Int64(4)));
+        let mut sample_edit = Transaction::new();
+        sample_edit.set_time_sample(target, 0.0, Value::Int64(10));
+        let applied = live.apply(&mut store, &sample_edit).unwrap();
+        let after = payload(live.stage(), a_path);
+        assert!(Arc::ptr_eq(after, payload(live.stage(), b_path)));
+        let authored = store.layers[&LayerId(1)]
+            .property(PropertyPath::new(source, name))
+            .unwrap();
+        assert_eq!(
+            after.time_samples.as_ref().unwrap().as_ptr(),
+            authored.time_samples.as_ref().unwrap().as_ptr()
+        );
+        assert_eq!(after.metadata.as_ptr(), metadata_buffer);
+        assert_eq!(
+            payload(&fresh, a_path).time_samples.as_deref().unwrap()[0].1,
+            Value::Int64(9)
+        );
+        live.apply(&mut store, &applied.inverse).unwrap();
+        assert_eq!(
+            payload(live.stage(), a_path)
+                .time_samples
+                .as_deref()
+                .unwrap()[0]
+                .1,
+            Value::Int64(9)
+        );
+    }
+
+    #[test]
+    fn distinct_source_edits_do_not_merge_aliased_property_payloads() {
+        let mut store = InMemoryStore::default();
+        let source = store.path("/Emitter");
+        let instance = store.path("/Copy");
+        let first = store.tokens.intern("first");
+        let second = store.tokens.intern("second");
+        let shared = Arc::new(
+            PropertySpec::typed_attribute(PropertyType::new("int64", false, Value::Int64(0)))
+                .with_default(1_i64),
+        );
+        let mut spec = PrimSpec::def();
+        spec.properties = vec![
+            PropertyEntry {
+                name: first,
+                spec: Arc::clone(&shared),
+            },
+            PropertyEntry {
+                name: second,
+                spec: shared,
+            },
+        ];
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(source, spec);
+        layer.insert_prim(
+            instance,
+            PrimSpec::def().with_reference(Reference::new(LayerId(1), source)),
+        );
+        store.insert_layer(layer);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let target = EditTarget::for_layer(LayerId(1));
+        let mut edit = Transaction::new();
+        edit.set_default(
+            target.property(PropertyPath::new(source, first)),
+            Value::Int64(2),
+        );
+        edit.set_default(
+            target.property(PropertyPath::new(source, second)),
+            Value::Int64(3),
+        );
+        let applied = live.apply(&mut store, &edit).unwrap();
+        for prim in [source, instance] {
+            assert_eq!(
+                payload(live.stage(), PropertyPath::new(prim, first)).default,
+                Some(Value::Int64(2))
+            );
+            assert_eq!(
+                payload(live.stage(), PropertyPath::new(prim, second)).default,
+                Some(Value::Int64(3))
+            );
+        }
+        live.apply(&mut store, &applied.inverse).unwrap();
+        for prim in [source, instance] {
+            for name in [first, second] {
+                assert_eq!(
+                    payload(live.stage(), PropertyPath::new(prim, name)).default,
+                    Some(Value::Int64(1))
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn mapped_targets_detach_without_copying_untouched_metadata() {
+        let mut store = InMemoryStore::default();
+        let source = store.path("/Emitter");
+        let leaf = store.path("/Emitter/Leaf");
+        let a = store.path("/A");
+        let b = store.path("/B");
+        let name = store.tokens.intern("link");
+        let doc = store.tokens.intern("documentation");
+        let target = TargetPath::Prim(leaf);
+        let mut layer = Layer::new(LayerId(1));
+        layer.insert_prim(
+            source,
+            PrimSpec::def().with_property(
+                name,
+                PropertySpec::relationship()
+                    .with_targets(ListOp::explicit(vec![target]))
+                    .with_metadata(doc, Value::string("Keep shared")),
+            ),
+        );
+        layer.insert_prim(leaf, PrimSpec::def());
+        for path in [a, b] {
+            layer.insert_prim(
+                path,
+                PrimSpec::def().with_reference(Reference::new(LayerId(1), source)),
+            );
+        }
+        store.insert_layer(layer);
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        let authored = store.layers[&LayerId(1)]
+            .property(PropertyPath::new(source, name))
+            .unwrap();
+        let a_spec = payload(&stage, PropertyPath::new(a, name));
+        let b_spec = payload(&stage, PropertyPath::new(b, name));
+        assert!(!Arc::ptr_eq(a_spec, b_spec));
+        assert_eq!(a_spec.metadata.as_ptr(), authored.metadata.as_ptr());
+        assert_eq!(b_spec.metadata.as_ptr(), authored.metadata.as_ptr());
+        assert_eq!(authored.targets, Some(ListOp::explicit(vec![target])));
+        let a_leaf = store.path("/A/Leaf");
+        let b_leaf = store.path("/B/Leaf");
+        assert_eq!(
+            a_spec.targets,
+            Some(ListOp::explicit(vec![TargetPath::Prim(a_leaf)]))
+        );
+        assert_eq!(
+            b_spec.targets,
+            Some(ListOp::explicit(vec![TargetPath::Prim(b_leaf)]))
+        );
+    }
+}

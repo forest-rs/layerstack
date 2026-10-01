@@ -1338,7 +1338,7 @@ impl<'a> AssembleCtx<'a> {
                 compact(value);
             }
             if let Some(samples) = spec.time_samples.as_mut() {
-                for (_, value) in samples {
+                for (_, value) in samples.make_mut() {
                     compact(value);
                 }
             }
@@ -1377,7 +1377,7 @@ impl<'a> AssembleCtx<'a> {
             _ => {
                 if let Some(field_value) = self.convert_metadata(spec_path, name, value)? {
                     let key = self.tokens.intern(name);
-                    set_field_vec(&mut spec.metadata, key, field_value);
+                    set_field_vec(spec.metadata.make_mut(), key, field_value);
                 }
             }
         }

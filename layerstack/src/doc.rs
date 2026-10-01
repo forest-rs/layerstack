@@ -1361,7 +1361,7 @@ impl<'a> ComposedEntry<'a> {
     pub(crate) fn value(self) -> OpinionValue {
         match self {
             Self::Field(entry) => OpinionValue::Field(entry.value.clone()),
-            Self::Property(entry) => OpinionValue::Property(Box::new(entry.spec.clone())),
+            Self::Property(entry) => OpinionValue::Property(Arc::clone(&entry.spec)),
         }
     }
 }

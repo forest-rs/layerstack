@@ -138,6 +138,7 @@ pub(crate) mod composition_checks;
 pub mod composition_error;
 pub mod dependency_map;
 pub mod doc;
+mod shared_vec;
 mod value_array;
 pub use value_array::{ArrayRef, TypedArray};
 pub mod edit;
@@ -198,6 +199,8 @@ pub use path::{
 pub use path_expression::PathExpression;
 pub use prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue};
 pub use prim_index_graph::{NodeId, PrimIndexGraph, PrimNode};
+pub use shared_vec::SharedVec;
+
 pub use property::{
     PropertyEntry, PropertyKind, PropertySpec, PropertyType, Time, TimeSample, Variability,
 };

@@ -1322,7 +1322,7 @@ mod tests {
             VariantSpec {
                 properties: vec![crate::PropertyEntry {
                     name: spin,
-                    spec: sampled(6.0),
+                    spec: sampled(6.0).into(),
                 }],
                 ..VariantSpec::default()
             },

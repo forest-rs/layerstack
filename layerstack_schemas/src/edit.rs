@@ -193,7 +193,7 @@ impl<'s> SchemaEdit<'s> {
                     None => spec.default = Some(value),
                     Some(time) => {
                         let time = self.target.map_to_spec_time(time);
-                        spec.time_samples = Some(alloc::vec![(time, value)]);
+                        spec.time_samples = Some(alloc::vec![(time, value)].into());
                     }
                 }
                 if time.is_none() {

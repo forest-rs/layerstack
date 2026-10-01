@@ -233,7 +233,11 @@ fn values_openusd_rejects_are_reported() {
             for entry in &prim.properties {
                 assert!(
                     entry.spec.default.is_none()
-                        && entry.spec.time_samples.as_ref().is_none_or(Vec::is_empty),
+                        && entry
+                            .spec
+                            .time_samples
+                            .as_ref()
+                            .is_none_or(|samples| samples.is_empty()),
                     "{statement}: a value was imported"
                 );
             }

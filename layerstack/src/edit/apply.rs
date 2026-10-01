@@ -11,7 +11,7 @@
 //! Each restoring step is [`Guarded`] by the step it undoes: it applies
 //! only while its slot still holds what that step wrote.
 
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 
 use super::{
     error::{EditError, Rejection, Slot},
@@ -1080,7 +1080,7 @@ fn set_value(
     spec.variability = declared.map_or(Variability::Varying, |(_, variability)| variability);
     match time {
         None => spec.default = Some(value.clone()),
-        Some(time) => spec.time_samples = Some(alloc::vec![(time, value.clone())]),
+        Some(time) => spec.time_samples = Some(alloc::vec![(time, value.clone())].into()),
     }
     let index = properties_at(store, id, &loc)?.len();
     journal.run(
@@ -1591,7 +1591,7 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                 (Some(spec), Some(position)) => (
                     Some(core::mem::replace(
                         &mut properties[position].spec,
-                        spec.clone(),
+                        Arc::new(spec.clone()),
                     )),
                     position,
                 ),
@@ -1601,7 +1601,7 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                         index,
                         PropertyEntry {
                             name: *name,
-                            spec: spec.clone(),
+                            spec: Arc::new(spec.clone()),
                         },
                     );
                     (None, index)
@@ -1613,7 +1613,7 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                 layer: id,
                 loc: loc.clone(),
                 name: *name,
-                spec: old,
+                spec: old.map(Arc::unwrap_or_clone),
                 index: old_index,
             })
         }
@@ -1627,7 +1627,7 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                     let properties = s.properties();
                     let index = properties.iter().position(|e| e.name == *name)?;
                     Some(core::mem::replace(
-                        &mut properties[index].spec.targets,
+                        &mut Arc::make_mut(&mut properties[index].spec).targets,
                         targets.clone(),
                     ))
                 });
@@ -1651,7 +1651,7 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                     let properties = s.properties();
                     let index = properties.iter().position(|e| e.name == *name)?;
                     Some(core::mem::replace(
-                        &mut properties[index].spec.default,
+                        &mut Arc::make_mut(&mut properties[index].spec).default,
                         value.clone(),
                     ))
                 });
@@ -1680,7 +1680,7 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                     let properties = s.properties();
                     let index = properties.iter().position(|e| e.name == *name)?;
                     set_sample(
-                        &mut properties[index].spec.time_samples,
+                        &mut Arc::make_mut(&mut properties[index].spec).time_samples,
                         *time,
                         value.clone(),
                         *keep_empty,
@@ -1714,7 +1714,7 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                         Some(name) => {
                             let properties = s.properties();
                             let at = properties.iter().position(|e| e.name == *name)?;
-                            &mut properties[at].spec.metadata
+                            Arc::make_mut(&mut properties[at].spec).metadata.make_mut()
                         }
                         None => s.fields(),
                     };
@@ -1779,7 +1779,7 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
 /// sample value and the `keep_empty` that undoes it; `None` when removing
 /// a sample that is not there.
 fn set_sample(
-    samples: &mut Option<Vec<(f64, Value)>>,
+    samples: &mut Option<crate::SharedVec<(f64, Value)>>,
     time: f64,
     value: Option<Value>,
     keep_empty: bool,
@@ -1787,7 +1787,7 @@ fn set_sample(
     let had_samples = samples.is_some();
     match value {
         Some(value) => {
-            let list = samples.get_or_insert_with(Vec::new);
+            let list = samples.get_or_insert_with(crate::SharedVec::new).make_mut();
             match list.binary_search_by(|(t, _)| t.total_cmp(&time)) {
                 Ok(index) => Some((Some(core::mem::replace(&mut list[index].1, value)), true)),
                 Err(index) => {
@@ -1799,7 +1799,7 @@ fn set_sample(
         None => {
             let list = samples.as_mut()?;
             let index = list.binary_search_by(|(t, _)| t.total_cmp(&time)).ok()?;
-            let (_, old) = list.remove(index);
+            let (_, old) = list.make_mut().remove(index);
             if list.is_empty() && !keep_empty {
                 *samples = None;
             }

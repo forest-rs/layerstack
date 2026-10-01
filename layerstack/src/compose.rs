@@ -47,7 +47,6 @@ use crate::{
     population::populate,
     prim_index::{ArcKind, Opinion, OpinionKey, OpinionValue, PrimIndex},
     prim_index_graph::{NodeArc, NodeId, PrimIndexGraph, PrimNode},
-    property::PropertyType,
     relocates::{LiftedSet, Relocations, Walk},
     spec_path::{SpecPath, VariantSelectionSite},
     stage::{Stage, StageOptions},
@@ -516,10 +515,6 @@ fn prune_skipped_nodes(prim: &mut PrimIndex, extra: [Option<&mut ChildOrderOpini
         .values()
         .flatten()
         .for_each(|opinion| mark(&opinion.key));
-    prim.property_types_by_field
-        .values()
-        .flatten()
-        .for_each(|(key, _)| mark(key));
     for opinions in extra.iter().flatten() {
         opinions.iter().for_each(|(key, _)| mark(key));
     }
@@ -541,10 +536,6 @@ fn prune_skipped_nodes(prim: &mut PrimIndex, extra: [Option<&mut ChildOrderOpini
         .values_mut()
         .flatten()
         .for_each(|opinion| renumber(&mut opinion.key));
-    prim.property_types_by_field
-        .values_mut()
-        .flatten()
-        .for_each(|(key, _)| renumber(key));
     for opinions in extra.into_iter().flatten() {
         opinions.iter_mut().for_each(|(key, _)| renumber(key));
     }
@@ -3228,10 +3219,6 @@ fn add_source_ancestral_variant_specs(
                 let key = key
                     .clone()
                     .with_spec_path(key.spec_path.with_property(entry.name()));
-                let index = out.get_mut(&dest).expect("path exists");
-                if let Some(property_type) = entry.property_type() {
-                    index.add_property_type(entry.name(), key.clone(), property_type.clone());
-                }
                 pending.push(Opinion {
                     key,
                     field: entry.name(),
@@ -3438,9 +3425,6 @@ fn add_local_and_variant_opinions(
                         spec_path: spec_path.with_property(entry.name()),
                     };
                     let index = out.get_mut(&path).expect("path exists");
-                    if let Some(property_type) = entry.property_type() {
-                        index.add_property_type(entry.name(), key.clone(), property_type.clone());
-                    }
                     index.add_opinion(Opinion {
                         key,
                         field: entry.name(),
@@ -3505,13 +3489,6 @@ fn add_local_and_variant_opinions(
                             spec_path: branch_path.with_property(entry.name()),
                         };
                         let index = out.get_mut(&path).expect("path exists");
-                        if let Some(property_type) = entry.property_type() {
-                            index.add_property_type(
-                                entry.name(),
-                                key.clone(),
-                                property_type.clone(),
-                            );
-                        }
                         index.add_opinion(Opinion {
                             key,
                             field: entry.name(),
@@ -4986,16 +4963,8 @@ type VisitedClasses = HashSet<(PathId, LayerId, PathId, bool, ExpressionVariable
 
 /// An opinion of a class arc's target, held until the sources of its layer
 /// are added: the destination prim, the source prim, the spec path, the
-/// field, the value, the declared property type and the node.
-type PendingOpinion = (
-    PathId,
-    PathId,
-    SpecPath,
-    TokenId,
-    OpinionValue,
-    Option<PropertyType>,
-    NodeId,
-);
+/// field, the value (including its declaration) and the node.
+type PendingOpinion = (PathId, PathId, SpecPath, TokenId, OpinionValue, NodeId);
 
 /// The arcs authored on the namespace ancestors of an arc's subroot target,
 /// expanded beneath the arc's node.
@@ -6096,14 +6065,13 @@ fn add_inherit_edge_opinions(
                     spec_path: spec_path.clone(),
                 },
             ));
-            for (field, value, property_type) in spec.entries {
+            for (field, value) in spec.entries {
                 pending.push((
                     dest_path_id,
                     remote_path_id,
                     spec_path.with_property(field),
                     field,
                     value,
-                    property_type,
                     node,
                 ));
             }
@@ -6129,14 +6097,13 @@ fn add_inherit_edge_opinions(
                         spec_path: branch_path.clone(),
                     },
                 ));
-                for (field, value, property_type) in branch.entries {
+                for (field, value) in branch.entries {
                     pending.push((
                         dest_path_id,
                         remote_path_id,
                         branch_path.with_property(field),
                         field,
                         value,
-                        property_type,
                         variant_node,
                     ));
                 }
@@ -6150,8 +6117,7 @@ fn add_inherit_edge_opinions(
                 .add_source(key);
         }
 
-        for (dest_path_id, remote_path_id, spec_path, field, value, property_type, node) in pending
-        {
+        for (dest_path_id, remote_path_id, spec_path, field, value, node) in pending {
             if redundant.contains(&(dest_path_id, layer_id, spec_path.prim_spec())) {
                 continue;
             }
@@ -6181,9 +6147,6 @@ fn add_inherit_edge_opinions(
                 spec_path,
             };
             let index = out.get_mut(&dest_path_id).expect("path exists");
-            if let Some(property_type) = property_type {
-                index.add_property_type(field, key.clone(), property_type);
-            }
             index.add_opinion(Opinion {
                 key,
                 field,
@@ -6605,7 +6568,7 @@ fn record_offset_layers(
 /// mapped specs, and clone each opinion once into its eventual stage owner.
 struct ArcSpecSnapshot {
     outer_variant_sites: Vec<VariantSelectionSite>,
-    entries: Vec<(TokenId, OpinionValue, Option<PropertyType>)>,
+    entries: Vec<(TokenId, OpinionValue)>,
     prim_order: Option<Vec<TokenId>>,
     authored_children: Vec<TokenId>,
     has_variant_sets: bool,
@@ -6616,7 +6579,7 @@ impl ArcSpecSnapshot {
         Self {
             outer_variant_sites: spec.outer_variant_sites.clone(),
             entries: composed_entries(&spec.fields, &spec.properties)
-                .map(|entry| (entry.name(), entry.value(), entry.property_type().cloned()))
+                .map(|entry| (entry.name(), entry.value()))
                 .collect(),
             prim_order: spec.prim_order.clone(),
             authored_children: spec.authored_children.clone(),
@@ -6628,7 +6591,7 @@ impl ArcSpecSnapshot {
 /// Selected variant opinions copied once across the mutable interner boundary.
 struct ArcVariantSnapshot {
     sites: Vec<VariantSelectionSite>,
-    entries: Vec<(TokenId, OpinionValue, Option<PropertyType>)>,
+    entries: Vec<(TokenId, OpinionValue)>,
 }
 
 fn snapshot_selected_branches<'a>(
@@ -6640,7 +6603,7 @@ fn snapshot_selected_branches<'a>(
         .map(move |branch| ArcVariantSnapshot {
             sites: branch.sites(&spec.outer_variant_sites, source),
             entries: composed_entries(&branch.spec.fields, &branch.spec.properties)
-                .map(|entry| (entry.name(), entry.value(), entry.property_type().cloned()))
+                .map(|entry| (entry.name(), entry.value()))
                 .collect(),
         })
 }
@@ -6868,14 +6831,8 @@ fn add_reference_edge_opinions(
         let snapshots = snapshot_arc_specs(remote_layer, &mapping);
 
         let mut pending_sources = Vec::new();
-        let mut pending_fields: Vec<(
-            PathId,
-            TokenId,
-            OpinionKey,
-            OpinionValue,
-            Option<PropertyType>,
-            LayerOffset,
-        )> = Vec::new();
+        let mut pending_fields: Vec<(PathId, TokenId, OpinionKey, OpinionValue, LayerOffset)> =
+            Vec::new();
         for (remote_path_id, dest_path_id, remote_spec) in snapshots {
             if let Some(d) = deps.as_deref_mut() {
                 d.add_layer_opinion(remote_layer_id, dest_path_id);
@@ -6895,7 +6852,7 @@ fn add_reference_edge_opinions(
             };
             pending_sources.push((dest_path_id, base_key.clone()));
 
-            for (field, value, property_type) in remote_spec.entries {
+            for (field, value) in remote_spec.entries {
                 pending_fields.push((
                     dest_path_id,
                     field,
@@ -6903,7 +6860,6 @@ fn add_reference_edge_opinions(
                         .clone()
                         .with_spec_path(base_key.spec_path.with_property(field)),
                     value,
-                    property_type,
                     ref_offset,
                 ));
             }
@@ -6958,7 +6914,7 @@ fn add_reference_edge_opinions(
                 .add_source(key);
         }
         let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
-        for (dest_path_id, field, key, value, property_type, offset) in pending_fields {
+        for (dest_path_id, field, key, value, offset) in pending_fields {
             let mut value = value;
             map_arc_targets(
                 store,
@@ -6977,9 +6933,6 @@ fn add_reference_edge_opinions(
                 cycles,
             );
             let index = out.get_mut(&dest_path_id).expect("path exists");
-            if let Some(property_type) = property_type {
-                index.add_property_type(field, key.clone(), property_type);
-            }
             index.add_opinion(Opinion {
                 key,
                 field,
@@ -7392,7 +7345,7 @@ impl LateBranches {
                 out.get_mut(&dest)
                     .expect("path exists")
                     .add_source(key.clone());
-                for (field, mut value, property_type) in branch.entries {
+                for (field, mut value) in branch.entries {
                     let key = key
                         .clone()
                         .with_spec_path(key.spec_path.with_property(field));
@@ -7414,9 +7367,6 @@ impl LateBranches {
                         cycles,
                     );
                     let index = out.get_mut(&dest).expect("path exists");
-                    if let Some(property_type) = property_type {
-                        index.add_property_type(field, key.clone(), property_type);
-                    }
                     index.add_opinion(Opinion {
                         key,
                         field,
@@ -7795,7 +7745,7 @@ fn add_payload_edge_opinions(
             };
             pending_sources.push((dest_path_id, base_key.clone()));
 
-            for (field, value, property_type) in remote_spec.entries {
+            for (field, value) in remote_spec.entries {
                 let key = OpinionKey {
                     node,
                     layer_strength,
@@ -7804,9 +7754,6 @@ fn add_payload_edge_opinions(
                     spec_path: base_key.spec_path.with_property(field),
                 };
                 let index = out.get_mut(&dest_path_id).expect("path exists");
-                if let Some(property_type) = property_type {
-                    index.add_property_type(field, key.clone(), property_type);
-                }
                 index.add_opinion(Opinion {
                     key: key.clone(),
                     field,
@@ -8349,14 +8296,13 @@ fn add_specializes_edge_opinions(
                     spec_path: spec_path.clone(),
                 },
             ));
-            for (field, value, property_type) in spec.entries {
+            for (field, value) in spec.entries {
                 pending.push((
                     dest_path_id,
                     remote_path_id,
                     spec_path.with_property(field),
                     field,
                     value,
-                    property_type,
                     node,
                 ));
             }
@@ -8382,14 +8328,13 @@ fn add_specializes_edge_opinions(
                         spec_path: branch_path.clone(),
                     },
                 ));
-                for (field, value, property_type) in branch.entries {
+                for (field, value) in branch.entries {
                     pending.push((
                         dest_path_id,
                         remote_path_id,
                         branch_path.with_property(field),
                         field,
                         value,
-                        property_type,
                         variant_node,
                     ));
                 }
@@ -8403,8 +8348,7 @@ fn add_specializes_edge_opinions(
                 .add_source(key);
         }
 
-        for (dest_path_id, remote_path_id, spec_path, field, value, property_type, node) in pending
-        {
+        for (dest_path_id, remote_path_id, spec_path, field, value, node) in pending {
             if redundant.contains(&(dest_path_id, layer_id, spec_path.prim_spec())) {
                 continue;
             }
@@ -8434,9 +8378,6 @@ fn add_specializes_edge_opinions(
                 spec_path,
             };
             let index = out.get_mut(&dest_path_id).expect("path exists");
-            if let Some(property_type) = property_type {
-                index.add_property_type(field, key.clone(), property_type);
-            }
             index.add_opinion(Opinion {
                 key,
                 field,
@@ -9472,6 +9413,92 @@ mod instancing_tests {
         stage::ResolvedValue,
     };
     use alloc::vec;
+
+    #[test]
+    fn untyped_blocks_keep_weaker_declarations_through_edits() {
+        use crate::{LiveStage, SublayerEntry};
+
+        let mut store = InMemoryStore::default();
+        let prim = store.path("/Rock");
+        let x = store.tokens.intern("x");
+        let mut strong = Layer::new(LayerId(1));
+        strong.sublayers.push(SublayerEntry::new(LayerId(2)));
+        strong.insert_prim(
+            prim,
+            PrimSpec::over()
+                .with_property(x, PropertySpec::attribute().with_default(Value::Blocked)),
+        );
+        let mut middle = Layer::new(LayerId(2));
+        middle.sublayers.push(SublayerEntry::new(LayerId(3)));
+        middle.insert_prim(
+            prim,
+            PrimSpec::over().with_property(
+                x,
+                PropertySpec::typed_attribute(PropertyType::new(
+                    "double",
+                    false,
+                    Value::Double(0.0),
+                )),
+            ),
+        );
+        let mut weak = Layer::new(LayerId(3));
+        weak.insert_prim(
+            prim,
+            PrimSpec::def().with_property(
+                x,
+                PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+                    .with_default(Value::Int(7)),
+            ),
+        );
+        for layer in [strong, middle, weak] {
+            store.insert_layer(layer);
+        }
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert_eq!(
+            live.stage()
+                .resolve_property_declaration(prim, x)
+                .unwrap()
+                .type_name
+                .unwrap()
+                .type_name
+                .as_ref(),
+            "double"
+        );
+        assert!(
+            live.stage()
+                .resolve_property_path(PropertyPath::new(prim, x))
+                .is_none()
+        );
+
+        // Removing just the middle declaration restores the weak declaration,
+        // while the stronger value block remains effective (Core §12.2.2).
+        store
+            .layers
+            .get_mut(&LayerId(2))
+            .unwrap()
+            .prims
+            .get_mut(&prim)
+            .unwrap()
+            .properties
+            .clear();
+        live.notify_layer_prim_edits(LayerId(2), &[prim]);
+        live.recompose(&mut store);
+        let declaration = live.stage().resolve_property_declaration(prim, x).unwrap();
+        assert_eq!(
+            declaration.type_name.as_ref().unwrap().type_name.as_ref(),
+            "int"
+        );
+        assert!(
+            live.stage()
+                .resolve_property_path(PropertyPath::new(prim, x))
+                .is_none()
+        );
+        let clean = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        assert_eq!(
+            clean.resolve_property_declaration(prim, x),
+            Some(declaration)
+        );
+    }
 
     /// An instance descendant drops the site reached through an arc above the
     /// instance together with its declaration, so the composed type comes

@@ -967,11 +967,6 @@ pub(crate) fn elide_blocked(
     }
     prim.opinions_by_field
         .retain(|_, opinions| !opinions.is_empty());
-    for types in prim.property_types_by_field.values_mut() {
-        types.retain(|(key, _)| kept(key));
-    }
-    prim.property_types_by_field
-        .retain(|_, types| !types.is_empty());
     for opinions in extra.into_iter().flatten() {
         opinions.retain(|(key, _)| kept(key));
     }

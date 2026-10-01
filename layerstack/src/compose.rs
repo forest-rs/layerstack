@@ -65,30 +65,12 @@ fn prim_spec_path(
     }
 }
 
-fn property_spec_path(
-    store: &dyn LayerStore,
-    prim_path: PathId,
-    outer_variant_sites: &[VariantSelectionSite],
-    property: TokenId,
-) -> SpecPath {
-    prim_spec_path(store, prim_path, outer_variant_sites).with_property(property)
-}
-
 fn variant_spec_path(
     store: &dyn LayerStore,
     prim_path: PathId,
     selection_sites: &[VariantSelectionSite],
 ) -> SpecPath {
     SpecPath::from_variant_selection_sites(prim_path, selection_sites, store.paths())
-}
-
-fn variant_property_spec_path(
-    store: &dyn LayerStore,
-    prim_path: PathId,
-    selection_sites: &[VariantSelectionSite],
-    property: TokenId,
-) -> SpecPath {
-    variant_spec_path(store, prim_path, selection_sites).with_property(property)
 }
 
 /// Maps a forwarded opinion's source spec path through an optional
@@ -122,17 +104,6 @@ fn normalized_prim_spec_path(
     normalize_forwarded_spec_path(store, &raw, provenance_remap)
 }
 
-fn normalized_property_spec_path(
-    store: &mut dyn LayerStore,
-    prim_path: PathId,
-    outer_variant_sites: &[VariantSelectionSite],
-    property: TokenId,
-    provenance_remap: Option<(PathId, PathId)>,
-) -> SpecPath {
-    let raw = property_spec_path(store, prim_path, outer_variant_sites, property);
-    normalize_forwarded_spec_path(store, &raw, provenance_remap)
-}
-
 fn normalized_variant_spec_path(
     store: &mut dyn LayerStore,
     prim_path: PathId,
@@ -140,17 +111,6 @@ fn normalized_variant_spec_path(
     provenance_remap: Option<(PathId, PathId)>,
 ) -> SpecPath {
     let raw = variant_spec_path(store, prim_path, selection_sites);
-    normalize_forwarded_spec_path(store, &raw, provenance_remap)
-}
-
-fn normalized_variant_property_spec_path(
-    store: &mut dyn LayerStore,
-    prim_path: PathId,
-    selection_sites: &[VariantSelectionSite],
-    property: TokenId,
-    provenance_remap: Option<(PathId, PathId)>,
-) -> SpecPath {
-    let raw = variant_property_spec_path(store, prim_path, selection_sites, property);
     normalize_forwarded_spec_path(store, &raw, provenance_remap)
 }
 
@@ -3257,12 +3217,9 @@ fn add_source_ancestral_variant_specs(
             let index = out.get_mut(&dest).expect("path exists");
             index.add_source(key.clone());
             for entry in composed_entries(&spec.fields, &spec.properties) {
-                let key = key.clone().with_spec_path(property_spec_path(
-                    store,
-                    source_view,
-                    &spec.outer_variant_sites,
-                    entry.name(),
-                ));
+                let key = key
+                    .clone()
+                    .with_spec_path(key.spec_path.with_property(entry.name()));
                 let index = out.get_mut(&dest).expect("path exists");
                 if let Some(property_type) = entry.property_type() {
                     index.add_property_type(entry.name(), key.clone(), property_type.clone());
@@ -3470,12 +3427,7 @@ fn add_local_and_variant_opinions(
                         layer_strength,
                         layer_id,
                         lookup_path: path,
-                        spec_path: property_spec_path(
-                            store,
-                            path,
-                            &spec.outer_variant_sites,
-                            entry.name(),
-                        ),
+                        spec_path: spec_path.with_property(entry.name()),
                     };
                     let index = out.get_mut(&path).expect("path exists");
                     if let Some(property_type) = entry.property_type() {
@@ -3533,7 +3485,7 @@ fn add_local_and_variant_opinions(
                             layer_strength,
                             layer_id,
                             lookup_path: path,
-                            spec_path: branch_path,
+                            spec_path: branch_path.clone(),
                         });
 
                     for entry in composed_entries(&variant_spec.fields, &variant_spec.properties) {
@@ -3542,12 +3494,7 @@ fn add_local_and_variant_opinions(
                             layer_strength,
                             layer_id,
                             lookup_path: path,
-                            spec_path: variant_property_spec_path(
-                                store,
-                                path,
-                                &branch_selections,
-                                entry.name(),
-                            ),
+                            spec_path: branch_path.with_property(entry.name()),
                         };
                         let index = out.get_mut(&path).expect("path exists");
                         if let Some(property_type) = entry.property_type() {
@@ -6094,6 +6041,12 @@ fn add_inherit_edge_opinions(
                 d.add_layer_opinion(layer_id, dest_path_id);
             }
             let node = nodes.spec_node(store, out, dest_path_id, &spec.outer_variant_sites);
+            let spec_path = normalized_prim_spec_path(
+                store,
+                remote_path_id,
+                &spec.outer_variant_sites,
+                provenance_remap,
+            );
             if let Some(order) = spec.prim_order {
                 prim_order_out.entry(dest_path_id).or_default().push((
                     OpinionKey {
@@ -6101,12 +6054,7 @@ fn add_inherit_edge_opinions(
                         layer_strength,
                         layer_id,
                         lookup_path: remote_path_id,
-                        spec_path: normalized_prim_spec_path(
-                            store,
-                            remote_path_id,
-                            &spec.outer_variant_sites,
-                            provenance_remap,
-                        ),
+                        spec_path: spec_path.clone(),
                     },
                     order,
                 ));
@@ -6122,12 +6070,7 @@ fn add_inherit_edge_opinions(
                             layer_strength,
                             layer_id,
                             lookup_path: remote_path_id,
-                            spec_path: normalized_prim_spec_path(
-                                store,
-                                remote_path_id,
-                                &spec.outer_variant_sites,
-                                provenance_remap,
-                            ),
+                            spec_path: spec_path.clone(),
                         },
                         spec.authored_children,
                     ));
@@ -6140,25 +6083,14 @@ fn add_inherit_edge_opinions(
                     layer_strength,
                     layer_id,
                     lookup_path: remote_path_id,
-                    spec_path: normalized_prim_spec_path(
-                        store,
-                        remote_path_id,
-                        &spec.outer_variant_sites,
-                        provenance_remap,
-                    ),
+                    spec_path: spec_path.clone(),
                 },
             ));
             for (field, value, property_type) in spec.entries {
                 pending.push((
                     dest_path_id,
                     remote_path_id,
-                    normalized_property_spec_path(
-                        store,
-                        remote_path_id,
-                        &spec.outer_variant_sites,
-                        field,
-                        provenance_remap,
-                    ),
+                    spec_path.with_property(field),
                     field,
                     value,
                     property_type,
@@ -6184,20 +6116,14 @@ fn add_inherit_edge_opinions(
                         layer_strength,
                         layer_id,
                         lookup_path: remote_path_id,
-                        spec_path: branch_path,
+                        spec_path: branch_path.clone(),
                     },
                 ));
                 for (field, value, property_type) in branch.entries {
                     pending.push((
                         dest_path_id,
                         remote_path_id,
-                        normalized_variant_property_spec_path(
-                            store,
-                            remote_path_id,
-                            &branch_selections,
-                            field,
-                            provenance_remap,
-                        ),
+                        branch_path.with_property(field),
                         field,
                         value,
                         property_type,
@@ -6962,13 +6888,7 @@ fn add_reference_edge_opinions(
                     field,
                     base_key
                         .clone()
-                        .with_spec_path(normalized_property_spec_path(
-                            store,
-                            remote_path_id,
-                            &remote_spec.outer_variant_sites,
-                            field,
-                            provenance_remap,
-                        )),
+                        .with_spec_path(base_key.spec_path.with_property(field)),
                     value,
                     property_type,
                     ref_offset,
@@ -7462,13 +7382,7 @@ impl LateBranches {
                 for (field, mut value, property_type) in branch.entries {
                     let key = key
                         .clone()
-                        .with_spec_path(normalized_variant_property_spec_path(
-                            store,
-                            remote_path,
-                            &sites,
-                            field,
-                            arc.provenance_remap,
-                        ));
+                        .with_spec_path(key.spec_path.with_property(field));
                     let targets = nodes.target_map(cycles.stage_layer_stack(), &[]);
                     map_arc_targets(
                         store,
@@ -7851,21 +7765,19 @@ fn add_payload_edge_opinions(
                 d.add_layer_opinion(remote_layer_id, dest_path_id);
             }
             let node = nodes.spec_node(store, out, dest_path_id, &remote_spec.outer_variant_sites);
-            pending_sources.push((
-                dest_path_id,
-                OpinionKey {
-                    node,
-                    layer_strength,
-                    layer_id: remote_layer_id,
-                    lookup_path: remote_path_id,
-                    spec_path: normalized_prim_spec_path(
-                        store,
-                        remote_path_id,
-                        &remote_spec.outer_variant_sites,
-                        provenance_remap,
-                    ),
-                },
-            ));
+            let base_key = OpinionKey {
+                node,
+                layer_strength,
+                layer_id: remote_layer_id,
+                lookup_path: remote_path_id,
+                spec_path: normalized_prim_spec_path(
+                    store,
+                    remote_path_id,
+                    &remote_spec.outer_variant_sites,
+                    provenance_remap,
+                ),
+            };
+            pending_sources.push((dest_path_id, base_key.clone()));
 
             for (field, value, property_type) in remote_spec.entries {
                 let key = OpinionKey {
@@ -7873,13 +7785,7 @@ fn add_payload_edge_opinions(
                     layer_strength,
                     layer_id: remote_layer_id,
                     lookup_path: remote_path_id,
-                    spec_path: normalized_property_spec_path(
-                        store,
-                        remote_path_id,
-                        &remote_spec.outer_variant_sites,
-                        field,
-                        provenance_remap,
-                    ),
+                    spec_path: base_key.spec_path.with_property(field),
                 };
                 let index = out.get_mut(&dest_path_id).expect("path exists");
                 if let Some(property_type) = property_type {
@@ -8379,6 +8285,12 @@ fn add_specializes_edge_opinions(
                 d.add_layer_opinion(layer_id, dest_path_id);
             }
             let node = nodes.spec_node(store, out, dest_path_id, &spec.outer_variant_sites);
+            let spec_path = normalized_prim_spec_path(
+                store,
+                remote_path_id,
+                &spec.outer_variant_sites,
+                provenance_remap,
+            );
             if let Some(order) = spec.prim_order {
                 prim_order_out.entry(dest_path_id).or_default().push((
                     OpinionKey {
@@ -8386,12 +8298,7 @@ fn add_specializes_edge_opinions(
                         layer_strength,
                         layer_id,
                         lookup_path: remote_path_id,
-                        spec_path: normalized_prim_spec_path(
-                            store,
-                            remote_path_id,
-                            &spec.outer_variant_sites,
-                            provenance_remap,
-                        ),
+                        spec_path: spec_path.clone(),
                     },
                     order,
                 ));
@@ -8407,12 +8314,7 @@ fn add_specializes_edge_opinions(
                             layer_strength,
                             layer_id,
                             lookup_path: remote_path_id,
-                            spec_path: normalized_prim_spec_path(
-                                store,
-                                remote_path_id,
-                                &spec.outer_variant_sites,
-                                provenance_remap,
-                            ),
+                            spec_path: spec_path.clone(),
                         },
                         spec.authored_children,
                     ));
@@ -8425,25 +8327,14 @@ fn add_specializes_edge_opinions(
                     layer_strength,
                     layer_id,
                     lookup_path: remote_path_id,
-                    spec_path: normalized_prim_spec_path(
-                        store,
-                        remote_path_id,
-                        &spec.outer_variant_sites,
-                        provenance_remap,
-                    ),
+                    spec_path: spec_path.clone(),
                 },
             ));
             for (field, value, property_type) in spec.entries {
                 pending.push((
                     dest_path_id,
                     remote_path_id,
-                    normalized_property_spec_path(
-                        store,
-                        remote_path_id,
-                        &spec.outer_variant_sites,
-                        field,
-                        provenance_remap,
-                    ),
+                    spec_path.with_property(field),
                     field,
                     value,
                     property_type,
@@ -8469,20 +8360,14 @@ fn add_specializes_edge_opinions(
                         layer_strength,
                         layer_id,
                         lookup_path: remote_path_id,
-                        spec_path: branch_path,
+                        spec_path: branch_path.clone(),
                     },
                 ));
                 for (field, value, property_type) in branch.entries {
                     pending.push((
                         dest_path_id,
                         remote_path_id,
-                        normalized_variant_property_spec_path(
-                            store,
-                            remote_path_id,
-                            &branch_selections,
-                            field,
-                            provenance_remap,
-                        ),
+                        branch_path.with_property(field),
                         field,
                         value,
                         property_type,

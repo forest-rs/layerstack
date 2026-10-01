@@ -2823,7 +2823,12 @@ mod tests {
 
         let mut index = PrimIndex::default();
         let key = test_key(LayerId(1), prim);
-        index.add_property_type(field, key.clone(), int_array_type());
+        index.add_opinion(Opinion {
+            key: key.clone(),
+            field,
+            value: PropertySpec::typed_attribute(int_array_type()).into(),
+            layer_offset: LayerOffset::IDENTITY,
+        });
         index.add_opinion(Opinion {
             key: key.clone(),
             field,
@@ -2868,7 +2873,12 @@ mod tests {
 
         let mut index = PrimIndex::default();
         let key = test_key(LayerId(1), prim);
-        index.add_property_type(field, key.clone(), int_array_type());
+        index.add_opinion(Opinion {
+            key: key.clone(),
+            field,
+            value: PropertySpec::typed_attribute(int_array_type()).into(),
+            layer_offset: LayerOffset::IDENTITY,
+        });
         index.add_opinion(Opinion {
             key: key.clone(),
             field,
@@ -2925,7 +2935,12 @@ mod tests {
 
         let mut index = PrimIndex::default();
         let key = test_key(LayerId(1), prim);
-        index.add_property_type(field, key.clone(), int_array_type());
+        index.add_opinion(Opinion {
+            key: key.clone(),
+            field,
+            value: PropertySpec::typed_attribute(int_array_type()).into(),
+            layer_offset: LayerOffset::IDENTITY,
+        });
         index.add_opinion(Opinion {
             key: key.clone(),
             field,
@@ -2995,7 +3010,6 @@ mod tests {
         let mut index = PrimIndex::default();
         let key = test_key(LayerId(1), prim);
         index.add_source(key.clone());
-        index.add_property_type(field, key.clone(), property_type);
         for (strength, value) in opinions.into_iter().enumerate() {
             index.add_opinion(Opinion {
                 key: OpinionKey {
@@ -3007,7 +3021,9 @@ mod tests {
                 // attribute default.
                 value: match value {
                     FieldValue::Value(default) => {
-                        PropertySpec::attribute().with_default(default).into()
+                        PropertySpec::typed_attribute(property_type.clone())
+                            .with_default(default)
+                            .into()
                     }
                     other => other.into(),
                 },

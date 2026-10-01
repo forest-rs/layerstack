@@ -1364,14 +1364,6 @@ impl<'a> ComposedEntry<'a> {
             Self::Property(entry) => OpinionValue::Property(Box::new(entry.spec.clone())),
         }
     }
-
-    /// The declared attribute type, for a typed attribute.
-    pub(crate) fn property_type(self) -> Option<&'a PropertyType> {
-        match self {
-            Self::Field(_) => None,
-            Self::Property(entry) => entry.spec.type_name.as_ref(),
-        }
-    }
 }
 
 /// Iterates the metadata fields, then the properties, of one spec.

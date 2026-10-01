@@ -142,13 +142,7 @@ pub(crate) fn drop_inconsistent_property_kinds(
         opinions.retain(|opinion| {
             opinion.value.as_property().is_none() || !conflicting.contains(&opinion.key)
         });
-        if let Some(declarations) = index.property_types_by_field.get_mut(&property) {
-            declarations.retain(|(key, _)| !conflicting.contains(key));
-        }
     }
-    index
-        .property_types_by_field
-        .retain(|_, declarations| !declarations.is_empty());
 }
 
 /// How an arc maps the paths its specs author into the stage namespace:

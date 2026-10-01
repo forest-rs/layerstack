@@ -244,10 +244,6 @@ pub(crate) struct PrimIndex {
     /// one of its nodes.
     pub(crate) graph: PrimIndexGraph,
     pub(crate) opinions_by_field: HashMap<FieldKey, Vec<Opinion>>,
-    /// Every contributing property declaration, keyed by field. The
-    /// composed type is the strongest surviving declaration's, so filtering
-    /// out an opinion's declaration lets a weaker one take over.
-    pub(crate) property_types_by_field: HashMap<TokenId, Vec<(OpinionKey, PropertyType)>>,
     pub(crate) sources: Vec<OpinionKey>,
 }
 
@@ -287,30 +283,18 @@ impl PrimIndex {
         self.sources.push(key);
     }
 
-    pub(crate) fn add_property_type(
-        &mut self,
-        field: TokenId,
-        key: OpinionKey,
-        property_type: PropertyType,
-    ) {
-        self.property_types_by_field
-            .entry(field)
-            .or_insert_with(|| Vec::with_capacity(1))
-            .push((key, property_type));
-    }
-
-    /// Returns the type of the strongest declaration of `field`.
+    /// Returns the type of the strongest surviving property declaration.
+    /// Untyped opinions do not hide weaker declarations (AOUSD Core §12).
+    /// Stage queries read finalized opinions, already strongest first.
     pub(crate) fn property_type_for(&self, field: &TokenId) -> Option<&PropertyType> {
-        self.property_types_by_field
-            .get(field)?
+        self.property_opinions(*field)?
             .iter()
-            .min_by(|(a, _), (b, _)| self.graph.cmp_keys(a, b))
-            .map(|(_, property_type)| property_type)
+            .find_map(|opinion| opinion.value.as_property()?.type_name.as_ref())
     }
 
-    /// Keeps only the sources, opinions and property declarations whose key
-    /// satisfies `keep`, dropping fields left without opinions or
-    /// declarations. `keep` also sees the prim's graph.
+    /// Keeps sources and opinions, including their declarations, whose key
+    /// satisfies `keep`, dropping fields left without opinions. `keep` also
+    /// sees the prim's graph.
     pub(crate) fn retain_keys(
         &mut self,
         mut keep: impl FnMut(&PrimIndexGraph, &OpinionKey) -> bool,
@@ -322,11 +306,6 @@ impl PrimIndex {
         }
         self.opinions_by_field
             .retain(|_, opinions| !opinions.is_empty());
-        for declarations in self.property_types_by_field.values_mut() {
-            declarations.retain(|(key, _)| keep(graph, key));
-        }
-        self.property_types_by_field
-            .retain(|_, declarations| !declarations.is_empty());
     }
 
     /// Sorts every opinion and source strongest first, by

@@ -120,18 +120,18 @@ impl SpecPath {
         paths: &PathInterner,
     ) -> Self {
         let prim = paths.resolve(prim_path);
-        let mut components = Vec::new();
+        let mut components = Vec::with_capacity(prim.depth() + selection_sites.len());
         let mut emitted_sites = 0_usize;
-        let mut prefix_segments = Vec::new();
 
         for depth in 0..prim.depth() {
             let segment = prim.segments()[depth];
-            prefix_segments.push(segment);
-            let prefix_path = Path::root().join(&prefix_segments);
             components.push(SpecComponent::Prim(segment));
 
             while emitted_sites < selection_sites.len()
-                && paths.resolve(selection_sites[emitted_sites].host_path) == &prefix_path
+                && paths
+                    .resolve(selection_sites[emitted_sites].host_path)
+                    .segments()
+                    == &prim.segments()[..=depth]
             {
                 let site = selection_sites[emitted_sites];
                 components.push(SpecComponent::VariantSelection {

@@ -357,7 +357,7 @@ fn gen_timesamples_parses() {
         .map(|frame| (f64::from(frame), Value::Float(f32::from(frame))))
         .collect();
     expected.push((11.0, Value::Blocked));
-    assert_eq!(property.time_samples, Some(expected));
+    assert_eq!(property.time_samples.as_deref(), Some(expected.as_slice()));
 }
 
 // ---------------------------------------------------------------------------

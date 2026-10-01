@@ -70,7 +70,7 @@ fn rocks() -> InMemoryStore {
             VariantSpec {
                 properties: vec![crate::PropertyEntry {
                     name: roughness,
-                    spec: attr(value),
+                    spec: attr(value).into(),
                 }],
                 ..VariantSpec::default()
             },
@@ -262,7 +262,7 @@ fn edits_write_through_targets_and_undo_exactly() {
     let samples = |store: &InMemoryStore| {
         store.layers[&ROCK]
             .property_at(&spin, &store.paths)
-            .and_then(|p| p.time_samples.clone())
+            .and_then(|p| p.time_samples.as_deref().map(<[_]>::to_vec))
     };
     assert_eq!(
         samples(&store),
@@ -313,7 +313,7 @@ fn a_sample_inverse_touches_only_its_key() {
     assert_eq!(
         store.layers[&ROCK]
             .property_at(&path, &store.paths)
-            .and_then(|p| p.time_samples.clone()),
+            .and_then(|p| p.time_samples.as_deref().map(<[_]>::to_vec)),
         Some(vec![
             (0.0, Value::Double(0.0)),
             (5.0, Value::Double(50.0)),
@@ -332,7 +332,7 @@ fn a_sample_inverse_touches_only_its_key() {
     assert_eq!(
         store.layers[&ROCK]
             .property_at(&path, &store.paths)
-            .map(|p| p.time_samples.clone()),
+            .map(|p| p.time_samples.as_deref().map(<[_]>::to_vec)),
         Some(None),
         "removing the last sample removes the field"
     );
@@ -1108,7 +1108,7 @@ fn an_inverse_applies_after_unrelated_edits() {
     assert_eq!(
         store.layers[&ROCK]
             .property_at(&spin_path, &store.paths)
-            .and_then(|p| p.time_samples.clone()),
+            .and_then(|p| p.time_samples.as_deref().map(<[_]>::to_vec)),
         Some(vec![
             (0.0, Value::Double(0.0)),
             (5.0, Value::Double(50.0)),
@@ -1585,11 +1585,11 @@ fn targets_and_connections_undo_and_redo_exactly() {
         .set_targets(at(look), ListOp::appended(vec![target(rock)]));
     let undo_edit = edit.apply(&mut store).expect("sets");
     assert_eq!(
-        property(&store, size).and_then(|p| p.targets),
+        property(&store, size).and_then(|p| p.targets.clone()),
         Some(ListOp::prepended(vec![target(world)]))
     );
     assert_eq!(
-        property(&store, size).and_then(|p| p.default),
+        property(&store, size).and_then(|p| p.default.clone()),
         Some(Value::Double(1.0))
     );
     let after_edit = layers(&store);
@@ -1598,7 +1598,10 @@ fn targets_and_connections_undo_and_redo_exactly() {
     let mut clear = Transaction::new();
     clear.clear_targets(at(look)).clear_targets(at(look));
     let undo_clear = clear.apply(&mut store).expect("clears");
-    assert_eq!(property(&store, look).map(|p| p.targets), Some(None));
+    assert_eq!(
+        property(&store, look).map(|p| p.targets.clone()),
+        Some(None)
+    );
 
     let redo_clear = undo_clear.apply(&mut store).expect("undo clear");
     assert_eq!(layers(&store), after_edit);
@@ -1611,7 +1614,10 @@ fn targets_and_connections_undo_and_redo_exactly() {
     redo_edit.apply(&mut store).expect("redo edit");
     assert_eq!(layers(&store), after_edit);
     redo_clear.apply(&mut store).expect("redo clear");
-    assert_eq!(property(&store, look).map(|p| p.targets), Some(None));
+    assert_eq!(
+        property(&store, look).map(|p| p.targets.clone()),
+        Some(None)
+    );
 }
 
 /// Applying an API schema adds it to the end of the spec's `apiSchemas`

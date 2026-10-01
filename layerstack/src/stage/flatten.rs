@@ -689,7 +689,7 @@ impl Flattener<'_, '_> {
             if let Some(property) = self.copy_property(source, name, remap) {
                 spec.properties.push(PropertyEntry {
                     name,
-                    spec: property,
+                    spec: property.into(),
                 });
                 self.report.preserved.properties += 1;
             }
@@ -798,7 +798,7 @@ impl Flattener<'_, '_> {
         let path = self.property_display(prim, name);
         let mut spec = PropertySpec::of_kind(declaration.kind);
         self.declare(prim, name, &declaration, opinions, &mut spec, &path);
-        spec.metadata = self.property_metadata(name, opinions, remap, &path);
+        spec.metadata = self.property_metadata(name, opinions, remap, &path).into();
 
         let targets = stage
             .resolve_target_list_path(property)
@@ -895,8 +895,10 @@ impl Flattener<'_, '_> {
             } else if let Some(samples) =
                 composed_samples(&opinions[position..], spec.type_name.as_ref())
             {
-                spec.time_samples =
-                    Some(self.stage_samples(&path, source, samples, &finding_source));
+                spec.time_samples = Some(
+                    self.stage_samples(&path, source, samples, &finding_source)
+                        .into(),
+                );
             }
         }
 

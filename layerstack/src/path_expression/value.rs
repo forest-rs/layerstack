@@ -226,7 +226,7 @@ fn parse(text: &str) -> Option<PathExpression> {
 }
 
 /// Whether this value has expressions the anchoring pass can transform.
-fn has_path_expression(value: &Value) -> bool {
+pub(crate) fn has_path_expression(value: &Value) -> bool {
     match value {
         Value::PathExpression(_) => true,
         Value::Array(items) => items
@@ -267,18 +267,17 @@ pub(crate) fn anchor_opinions(store: &dyn LayerStore, prims: &mut HashMap<PathId
         let graph = &index.graph;
         let mut maps: HashMap<NodeId, Option<NodeNamespace>> = HashMap::new();
         for opinion in &mut index.opinions {
-            // The default, and each time sample, of a path expression.
-            let (default, samples) = match &mut opinion.value {
+            // Inspect shared storage before detaching: ordinary authored values
+            // must retain their source payload across all placements.
+            let (default, samples) = match &opinion.value {
                 OpinionValue::Field(FieldValue::Value(value)) => (Some(value), None),
-                OpinionValue::Property(spec) => (spec.default.as_mut(), spec.time_samples.as_mut()),
+                OpinionValue::Property(spec) => (spec.default.as_ref(), spec.time_samples.as_ref()),
                 OpinionValue::Field(_) => continue,
             };
-            let mut authored = default
-                .into_iter()
-                .chain(samples.into_iter().flatten().map(|(_, value)| value))
-                .filter(|value| has_path_expression(value))
-                .peekable();
-            if authored.peek().is_none() {
+            let default_changes = default.is_some_and(has_path_expression);
+            let samples_change = samples
+                .is_some_and(|samples| samples.iter().any(|(_, value)| has_path_expression(value)));
+            if !default_changes && !samples_change {
                 continue;
             }
             let node = opinion.key.node;
@@ -292,8 +291,23 @@ pub(crate) fn anchor_opinions(store: &dyn LayerStore, prims: &mut HashMap<PathId
             else {
                 continue;
             };
-            for value in authored {
+            let (default, samples) = match &mut opinion.value {
+                OpinionValue::Field(FieldValue::Value(value)) => (Some(value), None),
+                OpinionValue::Property(spec) => {
+                    let spec = Arc::make_mut(spec);
+                    (spec.default.as_mut(), spec.time_samples.as_mut())
+                }
+                OpinionValue::Field(_) => unreachable!("inspected value opinion"),
+            };
+            if let Some(value) = default.filter(|_| default_changes) {
                 anchor_value(value, anchor, node_maps);
+            }
+            if let Some(samples) = samples.filter(|_| samples_change) {
+                for (_, value) in samples.make_mut() {
+                    if has_path_expression(value) {
+                        anchor_value(value, anchor, node_maps);
+                    }
+                }
             }
         }
     }

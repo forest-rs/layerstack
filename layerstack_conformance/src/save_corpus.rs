@@ -245,7 +245,7 @@ pub fn cases() -> Vec<SaveCase> {
                 let limits = layer.tokens.intern("limits");
                 let spec = layer.property("/Widget.exedra:size");
                 let Some(FieldValue::Value(Value::Dictionary(entries))) =
-                    layerstack::doc::get_field_mut(&mut spec.metadata, &limits)
+                    layerstack::doc::get_field_mut(spec.metadata.make_mut(), &limits)
                 else {
                     panic!("limits dictionary");
                 };
@@ -451,7 +451,7 @@ pub fn cases() -> Vec<SaveCase> {
                     .time_samples
                     .as_mut()
                     .expect("intensity samples");
-                samples.push((24.0, Value::Float(0.25)));
+                samples.make_mut().push((24.0, Value::Float(0.25)));
             },
             expected: ANIMATED_EDITED,
             weaker: None,

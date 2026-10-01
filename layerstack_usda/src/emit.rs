@@ -631,7 +631,7 @@ impl EmitCtx<'_> {
             spec.variability = Variability::Uniform;
         }
         for entry in metadata {
-            set_field_vec(&mut spec.metadata, entry.name, entry.value);
+            set_field_vec(spec.metadata.make_mut(), entry.name, entry.value);
         }
         if let Some(listop) = connection {
             match spec.targets.as_mut() {
@@ -714,7 +714,7 @@ impl EmitCtx<'_> {
         };
         spec.custom |= rel.custom;
         for entry in metadata {
-            set_field_vec(&mut spec.metadata, entry.name, entry.value);
+            set_field_vec(spec.metadata.make_mut(), entry.name, entry.value);
         }
         if let Some(listop) = listop {
             match spec.targets.as_mut() {
@@ -2441,7 +2441,7 @@ def \"A\" {
             panic!("expected TimeSamples");
         };
         assert_eq!(
-            ts,
+            ts.as_slice(),
             &vec![
                 (1.0, Value::Float(10.0)),
                 (2.0, Value::Blocked),
@@ -3421,7 +3421,7 @@ def \"A\" {
                 (
                     String::from(tokens.resolve(entry.name)),
                     entry.spec.default.clone(),
-                    entry.spec.time_samples.clone(),
+                    entry.spec.time_samples.as_deref().map(<[_]>::to_vec),
                 )
             })
             .collect();

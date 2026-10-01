@@ -1663,7 +1663,7 @@ mod tests {
     /// Test-only opinion payload: a property authoring only time samples.
     fn samples(samples: Vec<(f64, Value)>) -> OpinionValue {
         OpinionValue::from(crate::property::PropertySpec {
-            time_samples: Some(samples),
+            time_samples: Some(samples.into()),
             ..crate::property::PropertySpec::default()
         })
     }

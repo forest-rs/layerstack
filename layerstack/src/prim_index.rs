@@ -11,7 +11,7 @@
 //!
 //! Spec: AOUSD Core §10 (composition arcs and strength ordering) and §12 (value resolution).
 
-use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use alloc::{sync::Arc, vec::Vec};
 
 use core::ops::Range;
 
@@ -121,8 +121,10 @@ pub struct Opinion {
 pub enum OpinionValue {
     /// A prim metadata field value.
     Field(FieldValue),
-    /// A property spec with all of its authored slots.
-    Property(Box<PropertySpec>),
+    /// A shared property snapshot with all of its authored slots.
+    /// Composition detaches only for namespace-dependent changes; default-only
+    /// edits retain the shared sample and metadata buffers.
+    Property(Arc<PropertySpec>),
 }
 
 impl OpinionValue {
@@ -205,7 +207,7 @@ impl From<FieldValue> for OpinionValue {
 
 impl From<PropertySpec> for OpinionValue {
     fn from(spec: PropertySpec) -> Self {
-        Self::Property(Box::new(spec))
+        Self::Property(Arc::new(spec))
     }
 }
 

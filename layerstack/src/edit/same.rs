@@ -334,6 +334,12 @@ impl Same for PrimSpec {
     }
 }
 
+impl<T: Same> Same for crate::SharedVec<T> {
+    fn same(&self, other: &Self) -> bool {
+        self.as_slice().same(other.as_slice())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use alloc::vec;

@@ -11,7 +11,7 @@
 //!
 //! Spec: AOUSD Core §10.6 (composition errors).
 
-use alloc::vec::Vec;
+use alloc::{sync::Arc, vec::Vec};
 
 use hashbrown::HashMap;
 
@@ -221,7 +221,8 @@ pub(crate) fn map_arc_targets(
     cycles: &mut CycleDetector,
 ) {
     let list = match value {
-        OpinionValue::Property(spec) => match spec.targets.as_mut() {
+        OpinionValue::Property(spec) if spec.targets.is_none() => return,
+        OpinionValue::Property(spec) => match Arc::make_mut(spec).targets.as_mut() {
             Some(list) => list,
             None => return,
         },
@@ -435,7 +436,7 @@ pub(crate) fn drop_instance_targets(
         let OpinionValue::Property(spec) = &mut opinion.value else {
             continue;
         };
-        let Some(targets) = spec.targets.as_mut() else {
+        let Some(targets) = Arc::make_mut(spec).targets.as_mut() else {
             continue;
         };
         for items in targets.inserted_lists_mut() {

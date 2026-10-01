@@ -41,10 +41,13 @@ fn build(
             Value::Vec3f([0.0; 3]),
         ));
         if i % 97 == 0 {
-            rotation.time_samples = Some(vec![
-                (0.0, Value::Vec3f([0.0; 3])),
-                (10.0, Value::Vec3f([90.0; 3])),
-            ]);
+            rotation.time_samples = Some(
+                vec![
+                    (0.0, Value::Vec3f([0.0; 3])),
+                    (10.0, Value::Vec3f([90.0; 3])),
+                ]
+                .into(),
+            );
         } else {
             rotation.default = Some(Value::Vec3f([0.0; 3]));
         }

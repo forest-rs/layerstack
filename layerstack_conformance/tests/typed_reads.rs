@@ -100,7 +100,7 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
             .unwrap()
             .property_mut(property)
             .unwrap()
-            .time_samples = Some(samples);
+            .time_samples = Some(samples.into());
     }
     for (path, default, samples) in [
         ("/MisdeclaredNumeric.value", Value::TimeCode(2.0), None),
@@ -122,7 +122,7 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
             .property_mut(property)
             .unwrap();
         spec.default = Some(default);
-        spec.time_samples = samples;
+        spec.time_samples = samples.map(Into::into);
     }
     for (layer, path, name, prototype) in [
         (
@@ -163,7 +163,7 @@ fn fixture() -> (LoadedStage, Stage, LayerId) {
         .unwrap()
         .property_mut(upper)
         .unwrap();
-    spec.time_samples.as_mut().unwrap()[1].1 = wrong;
+    spec.time_samples.as_mut().unwrap().make_mut()[1].1 = wrong;
     let schemas = layerstack_schemas::openusd(&mut loaded.store.tokens);
     let stage = Stage::compose(
         &mut loaded.store,

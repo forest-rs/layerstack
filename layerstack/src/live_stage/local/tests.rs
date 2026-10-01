@@ -370,6 +370,7 @@ fn scoped_variant_change_resyncs_even_when_unqualified_source_sites_are_equal() 
                         Value::Double(0.0)
                     ))
                     .with_default(Value::Double(number))
+                    .into()
                 }],
                 ..crate::VariantSpec::default()
             },

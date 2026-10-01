@@ -205,9 +205,9 @@ fn map_property(
         spec.default = default;
     }
     if samples.is_some() {
-        spec.time_samples = samples;
+        spec.time_samples = samples.map(Into::into);
     }
-    spec.metadata = metadata;
+    spec.metadata = metadata.into();
     Some(spec)
 }
 

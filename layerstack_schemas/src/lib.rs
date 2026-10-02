@@ -371,6 +371,8 @@ pub mod retained;
 pub mod shading;
 #[cfg(feature = "usd-skel")]
 pub mod skel;
+#[cfg(feature = "usd-geom")]
+pub mod subset;
 mod table;
 pub mod value;
 #[cfg(feature = "usd-vol")]

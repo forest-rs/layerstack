@@ -1,0 +1,203 @@
+#usda 1.0
+def Mesh "Partition" {
+ point3f[] points = [(0,0,0),(1,0,0),(1,1,0),(0,1,0)]
+ int[] faceVertexCounts = [3,3]
+ int[] faceVertexIndices = [0,1,2,0,2,3]
+ uniform token subsetFamily:materialBind:familyType = "partition"
+ def GeomSubset "A" {
+ uniform token elementType = "face"
+ uniform token familyName = "materialBind"
+ int[] indices = [0]
+ }
+ def GeomSubset "B" {
+ uniform token elementType = "face"
+ uniform token familyName = "materialBind"
+ int[] indices = [1]
+ }
+}
+def Mesh "Overlap" {
+ point3f[] points = [(0,0,0),(1,0,0),(1,1,0),(0,1,0)]
+ int[] faceVertexCounts = [3,3]
+ int[] faceVertexIndices = [0,1,2,0,2,3]
+ uniform token subsetFamily:materialBind:familyType = "nonOverlapping"
+ def GeomSubset "A" {
+ uniform token elementType = "face"
+ uniform token familyName = "materialBind"
+ int[] indices = [0]
+ }
+ def GeomSubset "B" {
+ uniform token elementType = "face"
+ uniform token familyName = "materialBind"
+ int[] indices = [0, 1]
+ }
+}
+def Mesh "Unrestricted" {
+ point3f[] points = [(0,0,0),(1,0,0),(1,1,0),(0,1,0)]
+ int[] faceVertexCounts = [3,3]
+ int[] faceVertexIndices = [0,1,2,0,2,3]
+ uniform token subsetFamily:materialBind:familyType = "unrestricted"
+ def GeomSubset "A" {
+ uniform token elementType = "face"
+ uniform token familyName = "materialBind"
+ int[] indices = [0]
+ }
+ def GeomSubset "B" {
+ uniform token elementType = "face"
+ uniform token familyName = "materialBind"
+ int[] indices = [0, 1]
+ }
+}
+def Mesh "Gap" {
+ point3f[] points = [(0,0,0),(1,0,0),(1,1,0),(0,1,0)]
+ int[] faceVertexCounts = [3,3]
+ int[] faceVertexIndices = [0,1,2,0,2,3]
+ uniform token subsetFamily:materialBind:familyType = "partition"
+ def GeomSubset "A" {
+ uniform token elementType = "face"
+ uniform token familyName = "materialBind"
+ int[] indices = [0]
+ }
+ def GeomSubset "B" {
+ uniform token elementType = "face"
+ uniform token familyName = "materialBind"
+ int[] indices = []
+ }
+}
+def Mesh "Negative" {
+ point3f[] points = [(0,0,0),(1,0,0),(1,1,0),(0,1,0)]
+ int[] faceVertexCounts = [3,3]
+ int[] faceVertexIndices = [0,1,2,0,2,3]
+ uniform token subsetFamily:materialBind:familyType = "unrestricted"
+ def GeomSubset "A" {
+ uniform token elementType = "face"
+ uniform token familyName = "materialBind"
+ int[] indices = [-1]
+ }
+ def GeomSubset "B" {
+ uniform token elementType = "face"
+ uniform token familyName = "materialBind"
+ int[] indices = [1]
+ }
+}
+def Mesh "Range" {
+ point3f[] points = [(0,0,0),(1,0,0),(1,1,0),(0,1,0)]
+ int[] faceVertexCounts = [3,3]
+ int[] faceVertexIndices = [0,1,2,0,2,3]
+ uniform token subsetFamily:materialBind:familyType = "unrestricted"
+ def GeomSubset "A" {
+ uniform token elementType = "face"
+ uniform token familyName = "materialBind"
+ int[] indices = [2]
+ }
+ def GeomSubset "B" {
+ uniform token elementType = "face"
+ uniform token familyName = "materialBind"
+ int[] indices = []
+ }
+}
+def Mesh "Empty" {
+ point3f[] points = [(0,0,0),(1,0,0),(1,1,0),(0,1,0)]
+ int[] faceVertexCounts = [3,3]
+ int[] faceVertexIndices = [0,1,2,0,2,3]
+ uniform token subsetFamily:materialBind:familyType = "unrestricted"
+ def GeomSubset "A" {
+ uniform token elementType = "face"
+ uniform token familyName = "materialBind"
+ int[] indices = []
+ }
+ def GeomSubset "B" {
+ uniform token elementType = "face"
+ uniform token familyName = "materialBind"
+ int[] indices = []
+ }
+}
+def Mesh "WrongElement" {
+point3f[] points = [(0,0,0),(1,0,0),(1,1,0),(0,1,0)]
+ int[] faceVertexCounts = [3,3]
+ int[] faceVertexIndices = [0,1,2,0,2,3]
+ def GeomSubset "A" {
+ uniform token elementType = "point"
+ uniform token familyName = "materialBind"
+ int[] indices = [0]
+ }
+}
+def Points "Sampled" {
+ point3f[] points.timeSamples = {0:[(0,0,0),(1,0,0)],2:[(0,0,0)]}
+ uniform token subsetFamily:materialBind:familyType = "partition"
+ def GeomSubset "A" {
+ uniform token elementType = "point"
+ uniform token familyName = "materialBind"
+ int[] indices.timeSamples = {0:[0,1],2:[0]}
+ }
+}
+def Mesh "Edge" {
+ point3f[] points = [(0,0,0),(1,0,0),(1,1,0),(0,1,0)]
+ int[] faceVertexCounts = [3,3]
+ int[] faceVertexIndices = [0,1,2,0,2,3]
+ uniform token subsetFamily:materialBind:familyType = "nonOverlapping"
+ def GeomSubset "A" {
+ uniform token elementType = "edge"
+ uniform token familyName = "materialBind"
+ int[] indices = [0, 1, 0, 2]
+ }
+}
+def Mesh "EdgeDuplicate" {
+ point3f[] points = [(0,0,0),(1,0,0),(1,1,0),(0,1,0)]
+ int[] faceVertexCounts = [3,3]
+ int[] faceVertexIndices = [0,1,2,0,2,3]
+ uniform token subsetFamily:materialBind:familyType = "nonOverlapping"
+ def GeomSubset "A" {
+ uniform token elementType = "edge"
+ uniform token familyName = "materialBind"
+ int[] indices = [0, 1, 1, 0]
+ }
+}
+def Mesh "EdgeOdd" {
+ point3f[] points = [(0,0,0),(1,0,0),(1,1,0),(0,1,0)]
+ int[] faceVertexCounts = [3,3]
+ int[] faceVertexIndices = [0,1,2,0,2,3]
+ uniform token subsetFamily:materialBind:familyType = "unrestricted"
+ def GeomSubset "A" {
+ uniform token elementType = "edge"
+ uniform token familyName = "materialBind"
+ int[] indices = [0, 1, 2]
+ }
+}
+def BasisCurves "Segments" {
+ uniform token type = "linear"
+ uniform token wrap = "nonperiodic"
+ int[] curveVertexCounts = [3]
+ def GeomSubset "A" {
+ uniform token elementType = "segment"
+ uniform token familyName = "materialBind"
+ int[] indices = [0, 0, 0, 1]
+ }
+}
+def BasisCurves "SegmentRange" {
+ uniform token type = "linear"
+ uniform token wrap = "nonperiodic"
+ int[] curveVertexCounts = [3]
+ def GeomSubset "A" {
+ uniform token elementType = "segment"
+ uniform token familyName = "materialBind"
+ int[] indices = [0, 4]
+ }
+}
+def BasisCurves "SegmentDuplicate" {
+ uniform token type = "linear"
+ uniform token wrap = "nonperiodic"
+ int[] curveVertexCounts = [3]
+ def GeomSubset "A" {
+ uniform token elementType = "segment"
+ uniform token familyName = "materialBind"
+ int[] indices = [0, 0, 0, 0]
+ }
+}
+def TetMesh "Tet" {
+ int4[] tetVertexIndices = [(0,1,2,3)]
+ def GeomSubset "A" {
+ uniform token elementType = "tetrahedron"
+ uniform token familyName = "materialBind"
+ int[] indices = [0]
+ }
+}

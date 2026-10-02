@@ -282,6 +282,16 @@ impl BlendShapeQuery {
         values: &[[f32; 3]],
         normals: bool,
     ) -> Result<Vec<[f32; 3]>, SkelError> {
+        let mut result = values.to_vec();
+        self.deform_in_place(weights, &mut result, normals)?;
+        Ok(result)
+    }
+    fn deform_in_place(
+        &self,
+        weights: &[f32],
+        values: &mut [[f32; 3]],
+        normals: bool,
+    ) -> Result<(), SkelError> {
         let contributions = self.compute_weights(weights)?;
         // Validate every active offset set before accumulating any output.
         let offsets = |c: &BlendShapeContribution| {
@@ -297,16 +307,10 @@ impl BlendShapeQuery {
                 validate_offsets(offsets(c), &self.shapes[c.shape].indices, values.len())?;
             }
         }
-        let mut result = values.to_vec();
         for c in contributions {
-            apply_offsets(
-                c.weight,
-                offsets(&c),
-                &self.shapes[c.shape].indices,
-                &mut result,
-            );
+            apply_offsets(c.weight, offsets(&c), &self.shapes[c.shape].indices, values);
         }
-        Ok(result)
+        Ok(())
     }
     /// Applies weighted point offsets in geometry space, including inbetweens.
     pub fn deform_points(
@@ -315,6 +319,24 @@ impl BlendShapeQuery {
         points: &[[f32; 3]],
     ) -> Result<Vec<[f32; 3]>, SkelError> {
         self.deform(weights, points, false)
+    }
+    /// Applies point offsets to a reusable buffer. All active offset sets
+    /// validate before mutation; errors leave the buffer unchanged.
+    pub fn deform_points_in_place(
+        &self,
+        weights: &[f32],
+        points: &mut [[f32; 3]],
+    ) -> Result<(), SkelError> {
+        self.deform_in_place(weights, points, false)
+    }
+    /// Applies normal offsets to a reusable buffer, without normalizing or
+    /// joint skinning. All active sets validate before mutation.
+    pub fn deform_normals_in_place(
+        &self,
+        weights: &[f32],
+        normals: &mut [[f32; 3]],
+    ) -> Result<(), SkelError> {
+        self.deform_in_place(weights, normals, true)
     }
     /// Applies weighted normal offsets without normalization or joint skinning.
     pub fn deform_normals(
@@ -333,7 +355,7 @@ impl SkeletonQuery<'_> {
         let Some(animation) = self.animation else {
             return Ok(vec![0.; names.len()]);
         };
-        let order = tokens(&animation, "blendShapes").unwrap_or_default();
+        let order = &self.definition.blend_shapes;
         let Some(weights) = read(
             &animation,
             "blendShapeWeights",
@@ -369,13 +391,13 @@ impl SkinningQuery<'_> {
     /// before skinning. Shape definitions are captured by the binding snapshot.
     pub fn compute_deformed_points(&self, time: Time) -> Result<Vec<[f32; 3]>, SkelError> {
         let points = read(
-            &PrimView::new(self.scene, self.geometry),
+            &PrimView::new(self.scene, self.definition.geometry),
             "points",
             time,
             crate::value::read_float3_array,
         )
-        .ok_or_else(|| invalid(self.geometry, "points"))?;
-        let points = if let Some(shapes) = &self.blend_shapes {
+        .ok_or_else(|| invalid(self.definition.geometry, "points"))?;
+        let points = if let Some(shapes) = &self.definition.blend_shapes {
             shapes.deform_points(
                 &self.skeleton.blend_shape_weights(time, shapes.names())?,
                 &points,
@@ -388,6 +410,6 @@ impl SkinningQuery<'_> {
     /// Local shape definition snapshot retained by this geometry binding.
     #[must_use]
     pub fn blend_shape_query(&self) -> Option<&BlendShapeQuery> {
-        self.blend_shapes.as_ref()
+        self.definition.blend_shapes.as_ref()
     }
 }

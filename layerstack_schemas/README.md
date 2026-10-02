@@ -202,6 +202,26 @@ reference implementation's float-frame rounding. `SkelAnimation` supplies
 standalone TRS evaluation, effective sample-time unions and variability helpers;
 stronger defaults/blocks mask weaker animation and layer offsets map sample times.
 
+`SkelCache` retains definitions, inverse binds, influence arrays and geometry
+buffers for one stage/store pair. Mesh parts share pose and normal palettes.
+Pass every successful edit report to `apply_changes` before querying again;
+this includes undo. Time changes are constant-time and evaluation stays lazy.
+Static outputs survive time changes, while affected pose, weight and geometry
+inputs refresh independently. Clear the cache before switching stage/store pairs.
+Missing bindings and failed definitions retry instead of becoming stale negatives.
+Work counters and array payload occupancy are available through `stats`/`memory`;
+reported bytes exclude definitions, strings and container overhead.
+
+```rust,ignore
+let mut cache = SkelCache::new(Time::at(1.0));
+let points = cache.deformed_points(&scene, geometry)?;
+let work = cache.stats();
+cache.set_time(Time::at(2.0));
+// After applying a transaction (or its inverse) to the live stage:
+cache.apply_changes(&updated_scene, &applied.changes);
+let updated = cache.deformed_points(&updated_scene, geometry)?;
+```
+
 The optional `simd` feature accelerates CPU linear-blend skinning with
 `fearless_simd` 1.0. It preserves separate arithmetic and USD float rounding;
 dense blend shapes retain the compiler-vectorized kernel. With `std`, CPU feature

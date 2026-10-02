@@ -133,6 +133,28 @@ fn blend_buffers_validate_before_mutation_and_snapshots_refresh_after_edits() {
         .unwrap()
         .unwrap();
     let before = snapshot.deform_points(&[1., 0.], &original).unwrap();
+    let mut too_short = [[1., 0., 0.]];
+    let untouched = too_short;
+    assert!(
+        snapshot
+            .deform_points_in_place(&[1., 0.], &mut too_short)
+            .is_err()
+    );
+    assert_eq!(too_short, untouched);
+    let mut points = original;
+    snapshot
+        .deform_points_in_place(&[1., 0.], &mut points)
+        .unwrap();
+    assert_eq!(points.as_slice(), before);
+    let mut normals = original;
+    snapshot
+        .deform_normals_in_place(&[1., 0.], &mut normals)
+        .unwrap();
+    assert_eq!(
+        normals.as_slice(),
+        snapshot.deform_normals(&[1., 0.], &original).unwrap()
+    );
+
     let handle = BlendShape::new(&Scene::new(live.stage(), &store), shape)
         .unwrap()
         .edit();

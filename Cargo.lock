@@ -739,6 +739,7 @@ dependencies = [
  "glam",
  "layerstack",
  "layerstack_schemas",
+ "layerstack_usda",
  "layerstack_usdc",
  "opinionated",
 ]

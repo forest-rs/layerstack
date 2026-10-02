@@ -10,7 +10,7 @@ use crate::{
     primvar::Primvar,
     usd_skel::{SkelRoot, Skeleton},
 };
-use alloc::{vec, vec::Vec};
+use alloc::{sync::Arc, vec, vec::Vec};
 use layerstack::{HashMap, PathId, Specifier};
 
 /// How joint influence blocks apply to geometry points.
@@ -264,17 +264,35 @@ fn inherited_property(
 #[derive(Clone, Debug)]
 pub struct SkinningQuery<'a> {
     pub(super) scene: Scene<'a>,
-    pub(super) geometry: PathId,
     pub(super) skeleton: SkeletonQuery<'a>,
-    indices: PathId,
-    weights: PathId,
-    geom_bind: Option<PathId>,
-    method: Option<PathId>,
-    joint_mapping: Option<Vec<Option<usize>>>,
-    element_size: usize,
-    interpolation: InfluenceInterpolation,
-    dependencies: Vec<PathId>,
+    pub(super) definition: Arc<SkinningDefinition>,
+}
+#[derive(Clone, Debug)]
+pub(super) struct SkinningDefinition {
+    pub(super) geometry: PathId,
+    pub(super) skeleton: PathId,
+    pub(super) indices: PathId,
+    pub(super) weights: PathId,
+    pub(super) geom_bind: Option<PathId>,
+    pub(super) method: Option<PathId>,
+    pub(super) joint_mapping: Option<Vec<Option<usize>>>,
+    pub(super) element_size: usize,
+    pub(super) interpolation: InfluenceInterpolation,
+    pub(super) dependencies: Vec<PathId>,
     pub(super) blend_shapes: Option<BlendShapeQuery>,
+}
+impl SkinningDefinition {
+    pub(super) fn query<'a>(
+        self: &Arc<Self>,
+        scene: &Scene<'a>,
+        skeleton: SkeletonQuery<'a>,
+    ) -> SkinningQuery<'a> {
+        SkinningQuery {
+            scene: *scene,
+            skeleton,
+            definition: Arc::clone(self),
+        }
+    }
 }
 pub(super) struct SkinningInputs {
     pub bind: gf::Matrix4,
@@ -385,23 +403,26 @@ impl<'a> SkinningQuery<'a> {
         dependencies.dedup();
         Ok(Some(Self {
             scene: *scene,
-            geometry,
             skeleton,
-            indices,
-            weights,
-            geom_bind,
-            method,
-            joint_mapping,
-            element_size,
-            interpolation,
-            dependencies,
-            blend_shapes,
+            definition: Arc::new(SkinningDefinition {
+                geometry,
+                skeleton: skeleton_path,
+                indices,
+                weights,
+                geom_bind,
+                method,
+                joint_mapping,
+                element_size,
+                interpolation,
+                dependencies,
+                blend_shapes,
+            }),
         }))
     }
     /// Geometry this binding deforms.
     #[must_use]
     pub fn geometry_path(&self) -> PathId {
-        self.geometry
+        self.definition.geometry
     }
     /// Skeleton definition and animation query used by this binding.
     #[must_use]
@@ -412,17 +433,17 @@ impl<'a> SkinningQuery<'a> {
     /// Rebuild if their properties or binding ancestry change.
     #[must_use]
     pub fn dependencies(&self) -> &[PathId] {
-        &self.dependencies
+        &self.definition.dependencies
     }
     /// Number of influences in each constant or vertex block.
     #[must_use]
     pub fn element_size(&self) -> usize {
-        self.element_size
+        self.definition.element_size
     }
     /// Influence block interpolation.
     #[must_use]
     pub fn interpolation(&self) -> InfluenceInterpolation {
-        self.interpolation
+        self.definition.interpolation
     }
     /// Skins caller-supplied geometry-local points with animated joint matrices.
     /// Blend-shape offsets are not applied by this method.
@@ -436,7 +457,23 @@ impl<'a> SkinningQuery<'a> {
         )
     }
     pub(super) fn inputs(&self, time: Time) -> Result<SkinningInputs, SkelError> {
+        let transforms = self.skeleton.skinning_transforms(time)?;
+        let mut inputs = self.inputs_with_shared_palette(time, &transforms)?;
+        if self.definition.joint_mapping.is_none() {
+            inputs.transforms = transforms;
+        }
+        Ok(inputs)
+    }
+    // An identity joint order borrows the retained rig palette; only custom
+    // orders need a per-binding matrix array. Snapshot queries install their
+    // owned palette in `inputs` above.
+    pub(super) fn inputs_with_shared_palette(
+        &self,
+        time: Time,
+        transforms: &[gf::Matrix4],
+    ) -> Result<SkinningInputs, SkelError> {
         let method = self
+            .definition
             .method
             .and_then(|p| {
                 PrimView::new(self.scene, p)
@@ -445,10 +482,11 @@ impl<'a> SkinningQuery<'a> {
             .unwrap_or("classicLinear");
         if method != "classicLinear" {
             return Err(SkelError::UnsupportedSkinningMethod {
-                prim: self.geometry,
+                prim: self.definition.geometry,
             });
         }
         let geom_bind = self
+            .definition
             .geom_bind
             .and_then(|p| {
                 read(
@@ -459,8 +497,7 @@ impl<'a> SkinningQuery<'a> {
                 )
             })
             .unwrap_or(gf::IDENTITY);
-        let transforms = self.skeleton.skinning_transforms(time)?;
-        let ordered = self.joint_mapping.as_ref().map(|mapping| {
+        let ordered = self.definition.joint_mapping.as_ref().map(|mapping| {
             mapping
                 .iter()
                 .map(|i| i.map_or(gf::IDENTITY, |i| transforms[i]))
@@ -475,29 +512,29 @@ impl<'a> SkinningQuery<'a> {
         };
         let indices = crate::value::read_int_array(
             &flattened(
-                self.indices,
+                self.definition.indices,
                 "skel:jointIndices",
                 "primvars:skel:jointIndices",
             )?,
             self.scene.store().tokens(),
         )
-        .ok_or_else(|| invalid(self.indices, "primvars:skel:jointIndices"))?;
+        .ok_or_else(|| invalid(self.definition.indices, "primvars:skel:jointIndices"))?;
         let weights = crate::value::read_float_array(
             &flattened(
-                self.weights,
+                self.definition.weights,
                 "skel:jointWeights",
                 "primvars:skel:jointWeights",
             )?,
             self.scene.store().tokens(),
         )
-        .ok_or_else(|| invalid(self.weights, "primvars:skel:jointWeights"))?;
+        .ok_or_else(|| invalid(self.definition.weights, "primvars:skel:jointWeights"))?;
         Ok(SkinningInputs {
             bind: geom_bind,
-            transforms: ordered.unwrap_or(transforms),
+            transforms: ordered.unwrap_or_default(),
             indices,
             weights,
-            element_size: self.element_size,
-            interpolation: self.interpolation,
+            element_size: self.definition.element_size,
+            interpolation: self.definition.interpolation,
         })
     }
     /// Skins caller-supplied vertex/varying normals; blend-shape normal offsets
@@ -519,9 +556,9 @@ impl<'a> SkinningQuery<'a> {
     /// face-varying normals; constant normals require constant influences.
     /// Uniform normals are rejected. Blend-shape offsets are not applied.
     pub fn compute_skinned_normals(&self, time: Time) -> Result<Vec<[f32; 3]>, SkelError> {
-        let prim = PrimView::new(self.scene, self.geometry);
+        let prim = PrimView::new(self.scene, self.definition.geometry);
         let normals = read(&prim, "normals", time, crate::value::read_float3_array)
-            .ok_or_else(|| invalid(self.geometry, "normals"))?;
+            .ok_or_else(|| invalid(self.definition.geometry, "normals"))?;
         let interpolation = prim
             .property_metadata("normals")
             .and_then(|m| m.interpolation())
@@ -534,7 +571,7 @@ impl<'a> SkinningQuery<'a> {
                 inputs.influences(),
                 &normals,
             ),
-            "constant" if self.interpolation == InfluenceInterpolation::Constant => {
+            "constant" if self.definition.interpolation == InfluenceInterpolation::Constant => {
                 super::skin_normals(
                     &inputs.bind,
                     &inputs.transforms,
@@ -542,16 +579,16 @@ impl<'a> SkinningQuery<'a> {
                     &normals,
                 )
             }
-            "faceVarying" if self.scene.is_a(self.geometry, "Mesh") => {
+            "faceVarying" if self.scene.is_a(self.definition.geometry, "Mesh") => {
                 let points = read(&prim, "points", time, crate::value::read_float3_array)
-                    .ok_or_else(|| invalid(self.geometry, "points"))?;
+                    .ok_or_else(|| invalid(self.definition.geometry, "points"))?;
                 let corners = read(
                     &prim,
                     "faceVertexIndices",
                     time,
                     crate::value::read_int_array,
                 )
-                .ok_or_else(|| invalid(self.geometry, "faceVertexIndices"))?;
+                .ok_or_else(|| invalid(self.definition.geometry, "faceVertexIndices"))?;
                 super::skin_face_varying_normals(
                     &inputs.bind,
                     &inputs.transforms,
@@ -561,7 +598,7 @@ impl<'a> SkinningQuery<'a> {
                     &normals,
                 )
             }
-            _ => Err(invalid(self.geometry, "normals")),
+            _ => Err(invalid(self.definition.geometry, "normals")),
         }
     }
     /// Computes the rigid binding's skeleton-space matrix at an explicit time.
@@ -573,12 +610,12 @@ impl<'a> SkinningQuery<'a> {
     /// Reads the geometry's sampled `points`, then computes skeleton-space skinning.
     pub fn compute_skinned_points(&self, time: Time) -> Result<Vec<[f32; 3]>, SkelError> {
         let points = read(
-            &PrimView::new(self.scene, self.geometry),
+            &PrimView::new(self.scene, self.definition.geometry),
             "points",
             time,
             crate::value::read_float3_array,
         )
-        .ok_or_else(|| invalid(self.geometry, "points"))?;
+        .ok_or_else(|| invalid(self.definition.geometry, "points"))?;
         self.skin_points(&points, time)
     }
 }

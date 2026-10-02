@@ -6,9 +6,12 @@ use super::{InfluenceInterpolation, JointInfluences, SkelError, skin_points};
 use crate::gf;
 use alloc::vec::Vec;
 type Matrix = [[f64; 4]; 4];
-type NormalMatrix = [[f64; 3]; 3];
+pub(super) type NormalMatrix = [[f64; 3]; 3];
 
-fn inverse_transpose(matrix: &Matrix, joint: Option<usize>) -> Result<NormalMatrix, SkelError> {
+pub(super) fn inverse_transpose(
+    matrix: &Matrix,
+    joint: Option<usize>,
+) -> Result<NormalMatrix, SkelError> {
     // AOUSD Core §6.3 row vectors; OpenUSD SkinningQuery.cpp
     // ComputeSkinnedNormals: inverse transpose of the upper-left 3x3.
     let mut affine = gf::IDENTITY;
@@ -45,7 +48,7 @@ fn normal_matrices(
             .collect::<Result<_, _>>()?,
     ))
 }
-fn deform(
+pub(super) fn deform(
     bind: &NormalMatrix,
     joints: &[NormalMatrix],
     inf: JointInfluences<'_>,

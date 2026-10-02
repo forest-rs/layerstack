@@ -106,7 +106,7 @@ fn unsupported_skinning_methods_and_bad_influence_metadata_are_explicit() {
     let path = store.path("/Rig/Rigid");
     let scene = Scene::new(live.stage(), &store);
     assert!(SkinningQuery::new(&scene, path).is_err());
-    let source = include_str!("../fixtures/skel_skinning.usda").replace("float[] primvars:skel:jointWeights = [1]", "float[] primvars:skel:jointWeights = [1]\n token primvars:skel:skinningMethod = \"dualQuaternion\"");
+    let source = include_str!("../fixtures/skel_skinning.usda").replace("float[] primvars:skel:jointWeights = [1]", "float[] primvars:skel:jointWeights = [1]\n token primvars:skel:skinningMethod = \"customUnsupported\"");
     let (mut store, live) = support::scene(&source);
     let path = store.path("/Rig/Rigid");
     let scene = Scene::new(live.stage(), &store);

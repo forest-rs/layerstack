@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Normal skinning uses inverse transposes, with explicit corner-to-point maps.
-use super::{InfluenceInterpolation, JointInfluences, SkelError, skin_points};
+use super::{
+    InfluenceInterpolation, JointInfluences, SkelError, SkinningMethod, skin_points_with_method,
+};
 use crate::gf;
 use alloc::vec::Vec;
 type Matrix = [[f64; 4]; 4];
@@ -100,9 +102,10 @@ pub fn skin_normals(
     skin_normals_in_place(bind, joints, influences, &mut result)?;
     Ok(result)
 }
-/// Skins normals in a reusable buffer. Influence and matrix validation occurs
+/// Skins normals in a reusable buffer with an explicit method. Validation occurs
 /// before mutation; errors leave the buffer unchanged.
-pub fn skin_normals_in_place(
+pub fn skin_normals_in_place_with_method(
+    method: SkinningMethod,
     bind: &Matrix,
     joints: &[Matrix],
     influences: JointInfluences<'_>,
@@ -110,13 +113,20 @@ pub fn skin_normals_in_place(
 ) -> Result<(), SkelError> {
     influences.validate(normals.len(), joints.len())?;
     let (bind, joints) = normal_matrices(bind, joints)?;
-    deform(&bind, &joints, influences, None, normals);
+    if method == SkinningMethod::ClassicLinear {
+        deform(&bind, &joints, influences, None, normals);
+    } else {
+        super::dual_quaternion::Palette::normals(joints)
+            .view(None)
+            .normals(&bind, influences, None, normals);
+    }
     Ok(())
 }
-/// Skins face-varying normals using one point index per face corner. `point_count`
+/// Skins face-varying normals with an explicit method and one point per corner. `point_count`
 /// is the geometry point count, not the number of normals; influences address
 /// those points. Indices, lengths and inverse transposes validate before output.
-pub fn skin_face_varying_normals(
+pub fn skin_face_varying_normals_with_method(
+    method: SkinningMethod,
     bind: &Matrix,
     joints: &[Matrix],
     influences: JointInfluences<'_>,
@@ -141,16 +151,22 @@ pub fn skin_face_varying_normals(
     }
     let (bind, joints) = normal_matrices(bind, joints)?;
     let mut result = normals.to_vec();
-    deform(
-        &bind,
-        &joints,
-        influences,
-        Some(face_vertex_indices),
-        &mut result,
-    );
+    if method == SkinningMethod::ClassicLinear {
+        deform(
+            &bind,
+            &joints,
+            influences,
+            Some(face_vertex_indices),
+            &mut result,
+        );
+    } else {
+        super::dual_quaternion::Palette::normals(joints)
+            .view(None)
+            .normals(&bind, influences, Some(face_vertex_indices), &mut result);
+    }
     Ok(result)
 }
-/// Computes the skeleton-space transform of a constant influence binding.
+/// Computes a constant binding's skeleton-space transform with an explicit method.
 /// Matches `UsdSkelSkinTransform`: a unit single-joint binding uses matrix
 /// multiplication; other bindings skin a float four-point frame. Weights are
 /// authored, unnormalized values. Vertex interpolation is rejected.
@@ -158,7 +174,8 @@ pub fn skin_face_varying_normals(
     clippy::cast_possible_truncation,
     reason = "OpenUSD rigid transform uses a float frame"
 )]
-pub fn rigid_skinning_transform(
+pub fn rigid_skinning_transform_with_method(
+    method: SkinningMethod,
     bind: &Matrix,
     joints: &[Matrix],
     influences: JointInfluences<'_>,
@@ -184,7 +201,7 @@ pub fn rigid_skinning_transform(
             core::array::from_fn(|j| pivot[j] + bind[i][j] as f32)
         }
     });
-    let frame = skin_points(&gf::IDENTITY, joints, influences, &frame)?;
+    let frame = skin_points_with_method(method, &gf::IDENTITY, joints, influences, &frame)?;
     let mut result = gf::IDENTITY;
     for i in 0..3 {
         for j in 0..3 {
@@ -193,4 +210,64 @@ pub fn rigid_skinning_transform(
     }
     result[3][..3].copy_from_slice(&frame[3].map(f64::from));
     Ok(result)
+}
+
+/// Skins normals with an explicit method. Both methods derive inverse-transpose
+/// matrices before deformation. DQS blends normalized rotations and linear
+/// residual scale, then normalizes the result as `UsdSkelSkinNormals` does.
+pub fn skin_normals_with_method(
+    method: SkinningMethod,
+    bind: &Matrix,
+    joints: &[Matrix],
+    influences: JointInfluences<'_>,
+    normals: &[[f32; 3]],
+) -> Result<Vec<[f32; 3]>, SkelError> {
+    let mut result = normals.to_vec();
+    skin_normals_in_place_with_method(method, bind, joints, influences, &mut result)?;
+    Ok(result)
+}
+/// Skins a reusable normal buffer with classic linear blending. Validation
+/// precedes mutation; errors leave the buffer unchanged.
+pub fn skin_normals_in_place(
+    bind: &Matrix,
+    joints: &[Matrix],
+    influences: JointInfluences<'_>,
+    normals: &mut [[f32; 3]],
+) -> Result<(), SkelError> {
+    skin_normals_in_place_with_method(
+        SkinningMethod::ClassicLinear,
+        bind,
+        joints,
+        influences,
+        normals,
+    )
+}
+/// Skins face-varying normals using classic linear blending and an explicit
+/// corner-to-point map. Inputs validate before deformation.
+pub fn skin_face_varying_normals(
+    bind: &Matrix,
+    joints: &[Matrix],
+    influences: JointInfluences<'_>,
+    point_count: usize,
+    indices: &[i32],
+    normals: &[[f32; 3]],
+) -> Result<Vec<[f32; 3]>, SkelError> {
+    skin_face_varying_normals_with_method(
+        SkinningMethod::ClassicLinear,
+        bind,
+        joints,
+        influences,
+        point_count,
+        indices,
+        normals,
+    )
+}
+/// Computes a constant binding's skeleton-space matrix with classic linear
+/// blending and OpenUSD's float four-point frame rounding.
+pub fn rigid_skinning_transform(
+    bind: &Matrix,
+    joints: &[Matrix],
+    influences: JointInfluences<'_>,
+) -> Result<Matrix, SkelError> {
+    rigid_skinning_transform_with_method(SkinningMethod::ClassicLinear, bind, joints, influences)
 }

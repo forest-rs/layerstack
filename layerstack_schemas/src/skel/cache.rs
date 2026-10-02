@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Explicit retained evaluation for one stage/store pair.
+use super::SkinningMethod;
+use super::dual_quaternion::Palette;
 use super::normals::{NormalMatrix, inverse_transpose};
 use super::skinning::{SkinningDefinition, SkinningInputs};
 use super::{SkelError, SkeletonDefinition, SkinningQuery, invalid, read, skin_points_in_place};
@@ -29,6 +31,8 @@ pub struct SkelCacheStats {
     pub influence_resolutions: u64,
     /// Joint inverse-transpose matrices prepared for normal palettes.
     pub normal_matrices: u64,
+    /// Joint DQS decompositions prepared for shared point/normal palettes.
+    pub dual_quaternion_joints: u64,
     /// Point vertices submitted to the deformation kernel.
     pub point_vertices: u64,
     /// Normal vectors submitted to the normal kernel.
@@ -156,6 +160,8 @@ struct Rig {
     inverse: Option<Result<Vec<gf::Matrix4>, SkelError>>,
     palette: Option<Result<Vec<gf::Matrix4>, SkelError>>,
     normals: Option<Vec<Result<NormalMatrix, SkelError>>>,
+    dual_points: Option<Palette>,
+    dual_normals: Option<Palette>,
     weights: Option<Result<Vec<f32>, SkelError>>,
     pose_epoch: u64,
     weight_epoch: u64,
@@ -313,6 +319,11 @@ impl SkelCache {
             if let Some(v) = &r.normals {
                 add(&mut m, v);
             }
+            for dq in [&r.dual_points, &r.dual_normals].into_iter().flatten() {
+                let (used, capacity) = dq.occupancy();
+                m.used_bytes += used;
+                m.capacity_bytes += capacity;
+            }
             if let Some(Ok(v)) = &r.weights {
                 add(&mut m, v);
             }
@@ -362,6 +373,8 @@ impl SkelCache {
             inverse: None,
             palette: None,
             normals: None,
+            dual_points: None,
+            dual_normals: None,
             weights: None,
             pose_epoch: 0,
             weight_epoch: 0,
@@ -407,6 +420,8 @@ impl SkelCache {
             })();
             rig.palette = Some(computed);
             rig.normals = None;
+            rig.dual_points = None;
+            rig.dual_normals = None;
             rig.pose_epoch = self.epoch;
             rig.pose_version = rig.pose_version.wrapping_add(1);
             self.stats.pose_evaluations += 1;
@@ -579,6 +594,26 @@ impl SkelCache {
         if self.bindings[&geometry].definition.blend_shapes.is_some() {
             self.ensure_weights(scene, skel)?;
         }
+        let dual = self.bindings[&geometry]
+            .inputs
+            .as_ref()
+            .expect("prepared inputs")
+            .method
+            == SkinningMethod::DualQuaternion;
+        if dual {
+            let rig = self.rigs.get_mut(&skel).expect("prepared rig");
+            if rig.dual_points.is_none() {
+                let palette = rig
+                    .palette
+                    .as_ref()
+                    .expect("prepared palette")
+                    .as_ref()
+                    .map_err(Clone::clone)?;
+                self.stats.dual_quaternion_joints +=
+                    u64::try_from(palette.len()).unwrap_or(u64::MAX);
+                rig.dual_points = Some(Palette::points(palette));
+            }
+        }
         let weights = self.rigs[&skel]
             .weights
             .as_ref()
@@ -613,7 +648,17 @@ impl SkelCache {
         } else {
             &palette[..]
         };
-        skin_points_in_place(&i.bind, transforms, i.influences(), &mut b.points)?;
+        if dual {
+            i.influences().validate(b.points.len(), transforms.len())?;
+            self.rigs[&skel]
+                .dual_points
+                .as_ref()
+                .expect("prepared DQS palette")
+                .view(b.definition.joint_mapping.as_deref())
+                .points(&i.bind, i.influences(), &mut b.points);
+        } else {
+            skin_points_in_place(&i.bind, transforms, i.influences(), &mut b.points)?;
+        }
         self.stats.point_vertices += u64::try_from(b.points.len()).unwrap_or(u64::MAX);
         b.point_valid = true;
         b.point_epoch = self.epoch;
@@ -654,6 +699,23 @@ impl SkelCache {
                     .map(|(i, m)| inverse_transpose(m, Some(i)))
                     .collect(),
             );
+        }
+        let dual = self.bindings[&geometry]
+            .inputs
+            .as_ref()
+            .expect("prepared inputs")
+            .method
+            == SkinningMethod::DualQuaternion;
+        if dual && rig.dual_normals.is_none() {
+            let matrices = rig.normals.as_ref().expect("prepared normals");
+            self.stats.dual_quaternion_joints += u64::try_from(matrices.len()).unwrap_or(u64::MAX);
+            // Singular matrices are rejected in the selected binding order
+            // below; their unused shared entries must not poison other subsets.
+            rig.dual_normals = Some(Palette::normals(matrices.iter().map(|m| {
+                m.as_ref()
+                    .copied()
+                    .unwrap_or(super::decomposition::IDENTITY)
+            })));
         }
         let normal_palette = rig.normals.as_ref().expect("prepared normals");
         let prim = PrimView::new(*scene, geometry);
@@ -731,13 +793,21 @@ impl SkelCache {
         }
         b.normals.clear();
         b.normals.extend(normals);
-        super::normals::deform(
-            &bind,
-            &b.normal_transforms,
-            i.influences(),
-            corners.as_deref(),
-            &mut b.normals,
-        );
+        if dual {
+            rig.dual_normals
+                .as_ref()
+                .expect("prepared DQS normal palette")
+                .view(b.definition.joint_mapping.as_deref())
+                .normals(&bind, i.influences(), corners.as_deref(), &mut b.normals);
+        } else {
+            super::normals::deform(
+                &bind,
+                &b.normal_transforms,
+                i.influences(),
+                corners.as_deref(),
+                &mut b.normals,
+            );
+        }
         self.stats.normal_vectors += u64::try_from(b.normals.len()).unwrap_or(u64::MAX);
         b.normal_valid = true;
         b.normal_epoch = self.epoch;
@@ -763,6 +833,8 @@ impl SkelCache {
             if rig.pose_dependencies.changed(scene, changes) {
                 rig.palette = None;
                 rig.normals = None;
+                rig.dual_points = None;
+                rig.dual_normals = None;
                 poses.insert(path);
                 self.stats.invalidations += 1;
             }

@@ -1,0 +1,65 @@
+#usda 1.0
+
+def SkelRoot "Rig" (
+    prepend apiSchemas = ["SkelBindingAPI"]
+) {
+    rel skel:animationSource = </Rig/Animation>
+    rel skel:skeleton = </Rig/Skeleton>
+    def Skeleton "Skeleton" {
+        uniform token[] joints = ["root", "root/child", "other"]
+        uniform matrix4d[] restTransforms = [
+            ((1,0,0,0),(0,1,0,0),(0,0,1,0),(1,0,0,1)),
+            ((1,0,0,0),(0,1,0,0),(0,0,1,0),(0,2,0,1)),
+            ((1,0,0,0),(0,1,0,0),(0,0,1,0),(0,0,3,1))]
+        uniform matrix4d[] bindTransforms = [
+            ((1,0,0,0),(0,1,0,0),(0,0,1,0),(1,0,0,1)),
+            ((1,0,0,0),(0,1,0,0),(0,0,1,0),(1,2,0,1)),
+            ((1,0,0,0),(0,1,0,0),(0,0,1,0),(0,0,3,1))]
+    }
+    def SkelAnimation "Animation" {
+        uniform token[] joints = ["root/child", "root"]
+        float3[] translations = [(0,4,0), (2,0,0)]
+        float3[] translations.timeSamples = {1: [(0,4,0),(2,0,0)], 3: [(0,8,0),(6,0,0)]}
+        quatf[] rotations = [(1,0,0,0), (0.70710677,0,0,0.70710677)]
+        half3[] scales = [(1,2,1), (1,1,1)]
+    }
+    def Xform "Inherited" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    ) {}
+    def Xform "Unbound" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    ) {
+        rel skel:skeleton = []
+        rel skel:animationSource = []
+        def Xform "Child" (
+            prepend apiSchemas = ["SkelBindingAPI"]
+        ) {}
+    }
+
+    def Xform "Geometry" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    ) {
+        uniform token[] skel:joints = ["other", "root", "root/child"]
+        matrix4d primvars:skel:geomBindTransform = ((1,0,0,0),(0,1,0,0),(0,0,1,0),(1,1,0,1))
+        int[] primvars:skel:jointIndices = [1,2,0,2] (
+            elementSize = 2
+            interpolation = "vertex"
+        )
+        int[] primvars:skel:jointIndices:indices = [1,0]
+        float[] primvars:skel:jointWeights = [0.25,0.75,1,0] (
+            elementSize = 2
+            interpolation = "vertex"
+        )
+        int[] primvars:skel:jointWeights:indices = [1,0]
+        def Mesh "Mesh" {
+            point3f[] points = [(1,0,0), (0,2,0)]
+        }
+    }
+    def Mesh "Rigid" (
+        prepend apiSchemas = ["SkelBindingAPI"]
+    ) {
+        point3f[] points = [(1,0,0), (0,2,0)]
+        int[] primvars:skel:jointIndices = [0]
+        float[] primvars:skel:jointWeights = [1]
+    }
+}

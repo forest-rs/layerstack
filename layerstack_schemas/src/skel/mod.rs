@@ -12,6 +12,15 @@ use crate::{
     PrimView, Scene, Time, gf,
     usd_skel::{SkelAnimation, SkelBindingApi, Skeleton},
 };
+mod blend_shapes;
+pub use blend_shapes::{
+    BlendShapeContribution, BlendShapeQuery, apply_blend_shape, apply_blend_shape_in_place,
+};
+mod skinning;
+pub use skinning::{
+    InfluenceInterpolation, JointInfluences, SkinningQuery, skin_points, skin_points_in_place,
+};
+
 use alloc::{
     string::{String, ToString},
     vec::Vec,
@@ -52,6 +61,25 @@ pub enum SkelError {
         relationship: &'static str,
         /// Invalid forwarded target.
         target: TargetPath,
+    },
+    /// Indexed binding data could not be flattened.
+    Primvar {
+        /// Prim owning the influence primvar.
+        prim: PathId,
+        /// The precise flattening failure.
+        source: crate::primvar::PrimvarError,
+    },
+    /// A CPU deformation array is malformed.
+    InvalidDeformation {
+        /// Offending element, if the failure is element-specific.
+        element: Option<usize>,
+        /// Concrete validation failure.
+        reason: &'static str,
+    },
+    /// This implementation supports `classicLinear`; other methods error.
+    UnsupportedSkinningMethod {
+        /// Bound geometry requesting the unsupported method.
+        prim: PathId,
     },
     /// A joint's bind matrix cannot be inverted.
     SingularBind {
@@ -168,9 +196,21 @@ pub(super) fn length(
 // through the ordinary resolver (AOUSD Core §12.4), not a second composition.
 fn inherited_target(
     scene: &Scene<'_>,
+    path: PathId,
+    name: &'static str,
+    schema: &str,
+) -> Result<Option<PathId>, SkelError> {
+    inherited_target_with_root(scene, path, name, schema, None)
+}
+
+// Cache population starts with empty binding state at its traversal root.
+// Standalone inherited relationship queries continue through all ancestors.
+fn inherited_target_with_root(
+    scene: &Scene<'_>,
     mut path: PathId,
     name: &'static str,
     schema: &str,
+    root: Option<PathId>,
 ) -> Result<Option<PathId>, SkelError> {
     loop {
         if scene.has_api(path, "SkelBindingAPI", None)
@@ -199,6 +239,9 @@ fn inherited_target(
                     }),
                 };
             }
+        }
+        if Some(path) == root {
+            return Ok(None);
         }
         let Some(parent) = scene.parent(path) else {
             return Ok(None);

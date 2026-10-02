@@ -70,4 +70,5 @@ pub(crate) static TABLES: DomainTables = DomainTables {
         },
     ],
     auto_applies: &[],
+    metadata: &[],
 };

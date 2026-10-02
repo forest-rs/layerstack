@@ -21,7 +21,7 @@
 
 use layerstack::{PropertyKind, SchemaKind, Value, Variability};
 
-use crate::table::{DomainTables, Property, Schema, fallback};
+use crate::table::{DomainTables, Metadata, Property, Schema, fallback};
 
 pub(crate) static TABLES: DomainTables = DomainTables {
     schemas: &[
@@ -311,4 +311,11 @@ pub(crate) static TABLES: DomainTables = DomainTables {
         },
     ],
     auto_applies: &[],
+    metadata: &[Metadata {
+        name: "weight",
+        type_name: "float",
+        targets: &[layerstack::MetadataTarget::Attribute],
+        default: fallback(|_| Value::Float(0.0)),
+        documentation: "The weight value at which an inbeteen shape is applied.",
+    }],
 };

@@ -21,7 +21,7 @@
 
 use layerstack::{PropertyKind, SchemaKind, Value, Variability};
 
-use crate::table::{DomainTables, Property, Schema, fallback};
+use crate::table::{DomainTables, Metadata, Property, Schema, fallback};
 
 pub(crate) static TABLES: DomainTables = DomainTables {
     schemas: &[
@@ -177,4 +177,20 @@ pub(crate) static TABLES: DomainTables = DomainTables {
         },
     ],
     auto_applies: &[],
+    metadata: &[
+        Metadata {
+            name: "apiSchemas",
+            type_name: "tokenlistop",
+            targets: &[layerstack::MetadataTarget::Prim],
+            default: None,
+            documentation: "",
+        },
+        Metadata {
+            name: "fallbackPrimTypes",
+            type_name: "dictionary",
+            targets: &[layerstack::MetadataTarget::Layer],
+            default: None,
+            documentation: "",
+        },
+    ],
 };

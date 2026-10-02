@@ -71,6 +71,7 @@ use layerstack::Value;
 
 use crate::table::{DomainTables, ValueType};
 
+mod metadata;
 pub(crate) mod views;
 
 #[cfg(feature = "usd")]

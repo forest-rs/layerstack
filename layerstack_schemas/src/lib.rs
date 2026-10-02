@@ -114,6 +114,16 @@
 //! Each domain is a Cargo feature (`usd-geom`, `usd-lux`, …) that enables
 //! the domains it depends on; `all`, the default, enables every one.
 //!
+//! # Plugin metadata
+//!
+//! The registry also retains each enabled plugin's `SdfMetadata` declarations:
+//! field types, applicable spec kinds, registered defaults and documentation.
+//! Typed metadata readers are available on [`PrimView`], [`PropertyMetadata`]
+//! (from [`PrimView::property_metadata`]) and [`StageMetadata`] (from
+//! [`Scene::metadata`]). Property readers compose authored opinions without
+//! synthesizing registered field defaults. Stage readers use the root layer
+//! and registered layer defaults; sublayer metadata does not participate.
+//!
 //! # Transforms, visibility and purpose
 //!
 //! With `usd-geom`, the views compute what `UsdGeom` defines to inherit
@@ -291,6 +301,8 @@ mod collection;
 #[cfg(feature = "usd-geom")]
 mod common_xform;
 mod edit;
+mod metadata;
+pub use metadata::{PropertyMetadata, StageMetadata};
 #[cfg(feature = "usd-geom")]
 mod extent;
 mod generated;
@@ -360,13 +372,18 @@ use layerstack::{SchemaRegistry, SchemaRegistryBuilder, TokenInterner};
 /// with `builder`, interning their names and fallback tokens in `tokens`.
 ///
 /// Use this to build one registry of OpenUSD's schemas and your own.
+/// Returns an error when an already registered metadata declaration conflicts.
+/// Registrations preceding the conflict remain in the builder.
 pub fn register(
     builder: &mut SchemaRegistryBuilder,
     domains: &[Domain],
     tokens: &mut TokenInterner,
-) {
+) -> Result<(), layerstack::MetadataConflict> {
     for domain in with_dependencies(domains) {
         let tables = domain.tables();
+        for metadata in tables.metadata {
+            builder.register_metadata(metadata.definition(tokens))?;
+        }
         for schema in tables.schemas {
             builder.register(schema.definition(tokens));
         }
@@ -374,6 +391,7 @@ pub fn register(
             builder.auto_apply(tokens.intern(schema), tokens.intern(target));
         }
     }
+    Ok(())
 }
 
 /// A registry of the schemas of `domains` and of the domains they depend
@@ -381,7 +399,7 @@ pub fn register(
 #[must_use]
 pub fn registry(domains: &[Domain], tokens: &mut TokenInterner) -> SchemaRegistry {
     let mut builder = SchemaRegistry::builder();
-    register(&mut builder, domains, tokens);
+    register(&mut builder, domains, tokens).expect("generated OpenUSD metadata declarations agree");
     builder.build(tokens)
 }
 

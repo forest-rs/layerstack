@@ -1,0 +1,234 @@
+{
+  "rows": [
+    {
+      "element": "face",
+      "family_type": "partition",
+      "path": "/Partition",
+      "reason": "",
+      "subsets": [
+        "/Partition/A",
+        "/Partition/B"
+      ],
+      "unassigned": [],
+      "valid": true
+    },
+    {
+      "element": "face",
+      "family_type": "nonOverlapping",
+      "path": "/Overlap",
+      "reason": "Found duplicate index 0 in GeomSubset at path </Overlap/B> at time DEFAULT.",
+      "subsets": [
+        "/Overlap/A",
+        "/Overlap/B"
+      ],
+      "unassigned": [],
+      "valid": false
+    },
+    {
+      "element": "face",
+      "family_type": "unrestricted",
+      "path": "/Unrestricted",
+      "reason": "",
+      "subsets": [
+        "/Unrestricted/A",
+        "/Unrestricted/B"
+      ],
+      "unassigned": [],
+      "valid": true
+    },
+    {
+      "element": "face",
+      "family_type": "partition",
+      "path": "/Gap",
+      "reason": "Number of unique indices at time DEFAULT does not match the element count 2.",
+      "subsets": [
+        "/Gap/A",
+        "/Gap/B"
+      ],
+      "unassigned": [
+        1
+      ],
+      "valid": false
+    },
+    {
+      "element": "face",
+      "family_type": "unrestricted",
+      "path": "/Negative",
+      "reason": "Found one or more indices that are less than 0 at time DEFAULT.",
+      "subsets": [
+        "/Negative/A",
+        "/Negative/B"
+      ],
+      "unassigned": [
+        0
+      ],
+      "valid": false
+    },
+    {
+      "element": "face",
+      "family_type": "unrestricted",
+      "path": "/Range",
+      "reason": "Found one or more indices that are greater than the element count 2 at time DEFAULT.",
+      "subsets": [
+        "/Range/A",
+        "/Range/B"
+      ],
+      "unassigned": [
+        0,
+        1
+      ],
+      "valid": false
+    },
+    {
+      "element": "face",
+      "family_type": "unrestricted",
+      "path": "/Empty",
+      "reason": "No indices in family at any time.",
+      "subsets": [
+        "/Empty/A",
+        "/Empty/B"
+      ],
+      "unassigned": [
+        0,
+        1
+      ],
+      "valid": false
+    },
+    {
+      "element": "face",
+      "family_type": "unrestricted",
+      "path": "/WrongElement",
+      "reason": "GeomSubset at path </WrongElement/A> has elementType 'point', which does not match 'face'.",
+      "subsets": [
+        "/WrongElement/A"
+      ],
+      "unassigned": [
+        0,
+        1
+      ],
+      "valid": false
+    },
+    {
+      "element": "point",
+      "family_type": "partition",
+      "path": "/Sampled",
+      "reason": "",
+      "subsets": [
+        "/Sampled/A"
+      ],
+      "unassigned": [],
+      "valid": true
+    },
+    {
+      "element": "edge",
+      "family_type": "nonOverlapping",
+      "path": "/Edge",
+      "reason": "",
+      "subsets": [
+        "/Edge/A"
+      ],
+      "unassigned": [
+        0,
+        3,
+        1,
+        2,
+        2,
+        3
+      ],
+      "valid": true
+    },
+    {
+      "element": "edge",
+      "family_type": "nonOverlapping",
+      "path": "/EdgeDuplicate",
+      "reason": "Found duplicate edge (0, 1) in GeomSubset at path </EdgeDuplicate/A> at time DEFAULT.",
+      "subsets": [
+        "/EdgeDuplicate/A"
+      ],
+      "unassigned": [
+        0,
+        2,
+        0,
+        3,
+        1,
+        2,
+        2,
+        3
+      ],
+      "valid": false
+    },
+    {
+      "element": "edge",
+      "family_type": "unrestricted",
+      "path": "/EdgeOdd",
+      "reason": "Indices attribute has an odd number of elements in GeomSubset at path </EdgeOdd/A> at time DEFAULT with elementType edge.",
+      "subsets": [
+        "/EdgeOdd/A"
+      ],
+      "unassigned": [
+        0,
+        2,
+        0,
+        3,
+        1,
+        2,
+        2,
+        3
+      ],
+      "valid": false
+    },
+    {
+      "element": "segment",
+      "family_type": "unrestricted",
+      "path": "/Segments",
+      "reason": "",
+      "subsets": [
+        "/Segments/A"
+      ],
+      "unassigned": [],
+      "valid": true
+    },
+    {
+      "element": "segment",
+      "family_type": "unrestricted",
+      "path": "/SegmentRange",
+      "reason": "Found one or more indices that are greater than the segment count 2 at time DEFAULT.",
+      "subsets": [
+        "/SegmentRange/A"
+      ],
+      "unassigned": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "valid": false
+    },
+    {
+      "element": "segment",
+      "family_type": "unrestricted",
+      "path": "/SegmentDuplicate",
+      "reason": "",
+      "subsets": [
+        "/SegmentDuplicate/A"
+      ],
+      "unassigned": [
+        0,
+        1
+      ],
+      "valid": true
+    },
+    {
+      "element": "tetrahedron",
+      "family_type": "unrestricted",
+      "path": "/Tet",
+      "reason": "",
+      "subsets": [
+        "/Tet/A"
+      ],
+      "unassigned": [],
+      "valid": true
+    }
+  ],
+  "version": "26.8"
+}

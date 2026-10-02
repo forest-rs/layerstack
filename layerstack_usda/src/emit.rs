@@ -1650,7 +1650,7 @@ fn merge_field_list_ops(existing: &mut FieldValue, value: FieldValue) -> bool {
 /// type. The Sdf fields come from `pxr/usd/sdf/schema.cpp`
 /// (`_RegisterStandardFields`); the plugin fields from the `SdfMetadata`
 /// sections of `pxr/usd/usd/plugInfo.json`, `usdGeom/plugInfo.json`,
-/// `usdPhysics/plugInfo.json` and `usdShade/plugInfo.json`.
+/// `usdPhysics/plugInfo.json`, `usdShade/plugInfo.json` and `usdSkel/plugInfo.json`.
 ///
 /// Spec: AOUSD Core §7.6 (core metadata fields and their types).
 fn metadata_field_type(key: &str) -> MetadataFieldType {
@@ -1671,6 +1671,7 @@ fn metadata_field_type(key: &str) -> MetadataFieldType {
         | "prefix" | "suffix" | "symmetricPeer" => Typed("string"),
         "metersPerUnit" | "kilogramsPerUnit" | "timeCodesPerSecond" | "framesPerSecond"
         | "startTimeCode" | "endTimeCode" | "startFrame" | "endFrame" => Typed("double"),
+        "weight" => Typed("float"),
         "elementSize" | "framePrecision" | "unauthoredValuesIndex" => Typed("int"),
         "arraySizeConstraint" => Typed("int64"),
         "hidden" | "active" | "instanceable" | "noLoadHint" => Typed("bool"),
@@ -3580,6 +3581,7 @@ def \"A\" {
             string source = \"scan\"
         }
         elementSize = 1
+        weight = 0.5
         interpolation = \"constant\"
         limits = {
             dictionary soft = {
@@ -3615,6 +3617,11 @@ def \"A\" {
         );
 
         let color = prop(&spec.properties, &tokens.intern("primvars:displayColor"));
+        assert_eq!(
+            color.metadata(tokens.intern("weight")),
+            Some(&FieldValue::Value(Value::Float(0.5))),
+            "usdSkel weight metadata retains its registered float type"
+        );
         assert!(!color.custom);
         assert_eq!(color.variability, Variability::Varying);
         let interpolation = tokens.intern("constant");

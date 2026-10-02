@@ -35,6 +35,9 @@
 
 mod definition;
 mod generated;
+mod metadata;
+
+pub use metadata::{MetadataConflict, MetadataDefinition, MetadataTarget};
 
 pub use definition::{AppliedSchema, PrimDefinition};
 pub use generated::{GeneratedSchemaError, SchemaDeclaration, read_generated_schema};
@@ -462,9 +465,33 @@ pub enum SchemaIssue {
 pub struct SchemaRegistryBuilder {
     schemas: Vec<SchemaDefinition>,
     auto_applies: Vec<(TokenId, TokenId)>,
+    metadata: HashMap<TokenId, MetadataDefinition>,
 }
 
 impl SchemaRegistryBuilder {
+    /// Registers plugin metadata independently of prim schemas.
+    /// Identical declarations are accepted; a conflicting declaration returns
+    /// an error without replacing the original. Target order is immaterial.
+    pub fn register_metadata(
+        &mut self,
+        mut definition: MetadataDefinition,
+    ) -> Result<&mut Self, MetadataConflict> {
+        definition.targets.sort_unstable();
+        definition.targets.dedup();
+        match self.metadata.entry(definition.name) {
+            hashbrown::hash_map::Entry::Occupied(entry) if entry.get() != &definition => {
+                Err(MetadataConflict {
+                    name: definition.name,
+                })
+            }
+            hashbrown::hash_map::Entry::Occupied(_) => Ok(self),
+            hashbrown::hash_map::Entry::Vacant(entry) => {
+                entry.insert(definition);
+                Ok(self)
+            }
+        }
+    }
+
     /// Registers a schema. A later schema of the same name replaces an
     /// earlier one.
     pub fn register(&mut self, schema: SchemaDefinition) -> &mut Self {
@@ -525,6 +552,7 @@ impl SchemaRegistryBuilder {
         }
         let issues = build.issues;
         SchemaRegistry {
+            metadata: self.metadata,
             schemas,
             definitions,
             issues,
@@ -541,12 +569,24 @@ impl SchemaRegistryBuilder {
 /// Spec: AOUSD Core §13 (schemas), §13.3.2.3 (the prim definition).
 #[derive(Clone, Debug, Default)]
 pub struct SchemaRegistry {
+    metadata: HashMap<TokenId, MetadataDefinition>,
     schemas: HashMap<TokenId, SchemaDefinition>,
     definitions: HashMap<TokenId, Arc<PrimDefinition>>,
     issues: Vec<SchemaIssue>,
 }
 
 impl SchemaRegistry {
+    /// The plugin metadata declaration named `name`.
+    #[must_use]
+    pub fn metadata(&self, name: TokenId) -> Option<&MetadataDefinition> {
+        self.metadata.get(&name)
+    }
+
+    /// Every registered metadata declaration, in no particular order.
+    pub fn metadata_definitions(&self) -> impl Iterator<Item = &MetadataDefinition> {
+        self.metadata.values()
+    }
+
     /// A builder to register schemas with.
     #[must_use]
     pub fn builder() -> SchemaRegistryBuilder {

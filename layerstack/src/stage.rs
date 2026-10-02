@@ -1593,6 +1593,14 @@ impl Stage {
             .collect()
     }
 
+    /// Whether `prim` is a composed native instance root. Default USD
+    /// traversal visits this root but does not descend into instance proxies.
+    /// Spec: AOUSD Core §11.3.3 (scene-graph instancing).
+    #[must_use]
+    pub fn is_instance(&self, prim: PathId) -> bool {
+        self.instances.contains(&prim)
+    }
+
     /// Traverses prims in a deterministic preorder.
     /// Borrows child lists lazily; auxiliary storage grows with depth, not fan-out.
     pub fn traverse(&self, root: PathId) -> Traverse<'_> {

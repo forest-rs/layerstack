@@ -346,6 +346,8 @@ pub mod kind;
 mod labels;
 #[cfg(feature = "usd-geom")]
 mod motion;
+#[cfg(feature = "usd-physics")]
+pub mod physics;
 #[cfg(feature = "usd-geom")]
 pub mod point_instancer;
 #[cfg(feature = "usd")]

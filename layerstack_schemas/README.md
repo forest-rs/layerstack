@@ -104,6 +104,13 @@ inherited labels at one time or over an open/closed interval. It retains only
 labeled prims in a caller-owned cache tied to one scene snapshot; construct a
 new query after edits. Empty interval configurations are rejected explicitly.
 
+With `usd-physics`, `physics::compute_collision_group_table` resolves group
+filtering, inversion and authored merge names into a symmetric snapshot.
+`PhysicsCollisionGroup::colliders_collection` uses the ordinary collection API.
+Unknown group queries collide by default; malformed filter targets return a
+structured error instead of aliasing an unrelated group. Merged groups share
+stored pairs, whose count is inspectable. Recompute the snapshot after edits.
+
 With `usd-render`, `usd_render::RenderSettings::compute_spec` resolves shared
 settings and authored product overrides into camera-conformed output products
 and ordered indices into deduplicated render channels. It retains purposes,

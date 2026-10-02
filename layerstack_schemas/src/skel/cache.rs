@@ -330,8 +330,8 @@ impl SkelCache {
         }
         for b in self.bindings.values() {
             if let Some(i) = &b.inputs {
-                add(&mut m, &i.indices);
-                add(&mut m, &i.weights);
+                add(&mut m, &i.binding.indices);
+                add(&mut m, &i.binding.weights);
                 add(&mut m, &i.transforms);
             }
             add(&mut m, &b.points);
@@ -598,6 +598,7 @@ impl SkelCache {
             .inputs
             .as_ref()
             .expect("prepared inputs")
+            .binding
             .method
             == SkinningMethod::DualQuaternion;
         if dual {
@@ -655,9 +656,9 @@ impl SkelCache {
                 .as_ref()
                 .expect("prepared DQS palette")
                 .view(b.definition.joint_mapping.as_deref())
-                .points(&i.bind, i.influences(), &mut b.points);
+                .points(&i.binding.bind, i.influences(), &mut b.points);
         } else {
-            skin_points_in_place(&i.bind, transforms, i.influences(), &mut b.points)?;
+            skin_points_in_place(&i.binding.bind, transforms, i.influences(), &mut b.points)?;
         }
         self.stats.point_vertices += u64::try_from(b.points.len()).unwrap_or(u64::MAX);
         b.point_valid = true;
@@ -704,6 +705,7 @@ impl SkelCache {
             .inputs
             .as_ref()
             .expect("prepared inputs")
+            .binding
             .method
             == SkinningMethod::DualQuaternion;
         if dual && rig.dual_normals.is_none() {
@@ -771,7 +773,7 @@ impl SkelCache {
         } else {
             return Err(invalid(geometry, "normals"));
         };
-        let bind = inverse_transpose(&i.bind, None)?;
+        let bind = inverse_transpose(&i.binding.bind, None)?;
         b.normal_transforms.clear();
         if let Some(mapping) = &b.definition.joint_mapping {
             let identity = [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]];

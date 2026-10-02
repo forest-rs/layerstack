@@ -88,6 +88,30 @@ struct Shape {
     indices: Vec<i32>,
     samples: Vec<Sample>,
 }
+/// Borrowed dense/sparse definition of one primary, null or inbetween sample.
+/// Values are geometry-local and precede joint skinning. Empty point indices
+/// mean dense offsets; the null knot has empty point and normal offsets.
+#[derive(Clone, Copy, Debug)]
+pub struct BlendShapeSample<'a> {
+    /// Authored interpolation knot, including the implicit null knot at zero.
+    pub knot_weight: f32,
+    /// Sparse affected vertices; empty for dense samples.
+    pub point_indices: &'a [i32],
+    /// Point offsets, paired with sparse indices or dense vertex order.
+    pub offsets: &'a [[f32; 3]],
+    /// Normal offsets in the same order, or empty when absent.
+    pub normal_offsets: &'a [[f32; 3]],
+}
+impl Shape {
+    fn sample<'a>(&'a self, sample: &'a Sample) -> BlendShapeSample<'a> {
+        BlendShapeSample {
+            knot_weight: sample.weight,
+            point_indices: &self.indices,
+            offsets: &sample.offsets,
+            normal_offsets: &sample.normals,
+        }
+    }
+}
 /// One non-null shape sample's contribution after inbetween interpolation.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BlendShapeContribution {
@@ -225,6 +249,38 @@ impl BlendShapeQuery {
     #[must_use]
     pub fn sample_count(&self) -> usize {
         self.shapes.iter().map(|s| s.samples.len()).sum()
+    }
+    /// Samples in ascending knot order for a binding-order shape, including its
+    /// null knot. Indices match [`BlendShapeContribution::sample`]; no arrays copy.
+    #[must_use]
+    pub fn samples(
+        &self,
+        shape: usize,
+    ) -> Option<impl ExactSizeIterator<Item = BlendShapeSample<'_>>> {
+        let data = self.shapes.get(shape)?;
+        Some(data.samples.iter().map(|sample| data.sample(sample)))
+    }
+    /// One captured sample addressed by a computed contribution. Invalid shape
+    /// or sample indices return `None`; null knots return empty offset arrays.
+    #[must_use]
+    pub fn sample(&self, shape: usize, sample: usize) -> Option<BlendShapeSample<'_>> {
+        let data = self.shapes.get(shape)?;
+        Some(data.sample(data.samples.get(sample)?))
+    }
+    /// Validates every nonempty point and normal offset set against the caller's
+    /// vertex count, including inactive inbetweens. Useful before uploading a
+    /// complete definition buffer; evaluation itself validates active sets only.
+    pub fn validate_point_count(&self, point_count: usize) -> Result<(), SkelError> {
+        for data in &self.shapes {
+            for sample in &data.samples {
+                for offsets in [&sample.offsets, &sample.normals] {
+                    if !offsets.is_empty() {
+                        validate_offsets(offsets, &data.indices, point_count)?;
+                    }
+                }
+            }
+        }
+        Ok(())
     }
     /// Computes non-null sample contributions, with piecewise interpolation and
     /// endpoint extrapolation. Matches `UsdSkelBlendShapeQuery`'s `1e-6` epsilon.

@@ -343,22 +343,12 @@ impl SkinningDefinition {
     }
 }
 pub(super) struct SkinningInputs {
-    pub method: SkinningMethod,
-    pub bind: gf::Matrix4,
+    pub binding: super::SkinningBindingInputs,
     pub transforms: Vec<gf::Matrix4>,
-    pub indices: Vec<i32>,
-    pub weights: Vec<f32>,
-    pub element_size: usize,
-    pub interpolation: InfluenceInterpolation,
 }
 impl SkinningInputs {
     pub(super) fn influences(&self) -> JointInfluences<'_> {
-        JointInfluences {
-            indices: &self.indices,
-            weights: &self.weights,
-            element_size: self.element_size,
-            interpolation: self.interpolation,
-        }
+        self.binding.influences()
     }
 }
 impl<'a> SkinningQuery<'a> {
@@ -518,8 +508,8 @@ impl<'a> SkinningQuery<'a> {
     pub fn skin_points(&self, points: &[[f32; 3]], time: Time) -> Result<Vec<[f32; 3]>, SkelError> {
         let inputs = self.inputs(time)?;
         skin_points_with_method(
-            inputs.method,
-            &inputs.bind,
+            inputs.binding.method,
+            &inputs.binding.bind,
             &inputs.transforms,
             inputs.influences(),
             points,
@@ -541,58 +531,16 @@ impl<'a> SkinningQuery<'a> {
         time: Time,
         transforms: &[gf::Matrix4],
     ) -> Result<SkinningInputs, SkelError> {
-        let method = self.skinning_method()?;
-        let geom_bind = self
-            .definition
-            .geom_bind
-            .and_then(|p| {
-                read(
-                    &PrimView::new(self.scene, p),
-                    "primvars:skel:geomBindTransform",
-                    time,
-                    crate::value::read_matrix4d,
-                )
-            })
-            .unwrap_or(gf::IDENTITY);
+        let binding = self.binding_inputs(time)?;
         let ordered = self.definition.joint_mapping.as_ref().map(|mapping| {
             mapping
                 .iter()
                 .map(|i| i.map_or(gf::IDENTITY, |i| transforms[i]))
                 .collect::<Vec<_>>()
         });
-        let flattened = |path, name, property| {
-            Primvar::new(&self.scene, path, name)
-                .ok_or_else(|| invalid(path, property))?
-                .compute_flattened(time)
-                .map_err(|source| SkelError::Primvar { prim: path, source })?
-                .ok_or_else(|| invalid(path, property))
-        };
-        let indices = crate::value::read_int_array(
-            &flattened(
-                self.definition.indices,
-                "skel:jointIndices",
-                "primvars:skel:jointIndices",
-            )?,
-            self.scene.store().tokens(),
-        )
-        .ok_or_else(|| invalid(self.definition.indices, "primvars:skel:jointIndices"))?;
-        let weights = crate::value::read_float_array(
-            &flattened(
-                self.definition.weights,
-                "skel:jointWeights",
-                "primvars:skel:jointWeights",
-            )?,
-            self.scene.store().tokens(),
-        )
-        .ok_or_else(|| invalid(self.definition.weights, "primvars:skel:jointWeights"))?;
         Ok(SkinningInputs {
-            method,
-            bind: geom_bind,
+            binding,
             transforms: ordered.unwrap_or_default(),
-            indices,
-            weights,
-            element_size: self.definition.element_size,
-            interpolation: self.definition.interpolation,
         })
     }
     /// Skins caller-supplied vertex/varying normals; blend-shape normal offsets
@@ -604,8 +552,8 @@ impl<'a> SkinningQuery<'a> {
     ) -> Result<Vec<[f32; 3]>, SkelError> {
         let inputs = self.inputs(time)?;
         super::skin_normals_with_method(
-            inputs.method,
-            &inputs.bind,
+            inputs.binding.method,
+            &inputs.binding.bind,
             &inputs.transforms,
             inputs.influences(),
             normals,
@@ -625,16 +573,16 @@ impl<'a> SkinningQuery<'a> {
         let inputs = self.inputs(time)?;
         match interpolation {
             "vertex" | "varying" => super::skin_normals_with_method(
-                inputs.method,
-                &inputs.bind,
+                inputs.binding.method,
+                &inputs.binding.bind,
                 &inputs.transforms,
                 inputs.influences(),
                 &normals,
             ),
             "constant" if self.definition.interpolation == InfluenceInterpolation::Constant => {
                 super::skin_normals_with_method(
-                    inputs.method,
-                    &inputs.bind,
+                    inputs.binding.method,
+                    &inputs.binding.bind,
                     &inputs.transforms,
                     inputs.influences(),
                     &normals,
@@ -651,8 +599,8 @@ impl<'a> SkinningQuery<'a> {
                 )
                 .ok_or_else(|| invalid(self.definition.geometry, "faceVertexIndices"))?;
                 super::skin_face_varying_normals_with_method(
-                    inputs.method,
-                    &inputs.bind,
+                    inputs.binding.method,
+                    &inputs.binding.bind,
                     &inputs.transforms,
                     inputs.influences(),
                     points.len(),
@@ -668,8 +616,8 @@ impl<'a> SkinningQuery<'a> {
     pub fn compute_rigid_transform(&self, time: Time) -> Result<gf::Matrix4, SkelError> {
         let inputs = self.inputs(time)?;
         super::rigid_skinning_transform_with_method(
-            inputs.method,
-            &inputs.bind,
+            inputs.binding.method,
+            &inputs.binding.bind,
             &inputs.transforms,
             inputs.influences(),
         )

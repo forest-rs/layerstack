@@ -27,10 +27,13 @@ pub use normals::{
 };
 mod blend_shapes;
 pub use blend_shapes::{
-    BlendShapeContribution, BlendShapeQuery, apply_blend_shape, apply_blend_shape_in_place,
+    BlendShapeContribution, BlendShapeQuery, BlendShapeSample, apply_blend_shape,
+    apply_blend_shape_in_place,
 };
+mod inputs;
 #[cfg(feature = "simd")]
 mod simd;
+pub use inputs::SkinningBindingInputs;
 mod skinning;
 pub use skinning::{
     InfluenceInterpolation, JointInfluences, SkinningMethod, SkinningQuery, skin_points,

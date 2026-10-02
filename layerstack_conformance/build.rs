@@ -9,10 +9,17 @@ fn main() {
             .expect("generate custom shaders");
     let module = directory.join("custom_nodes.rs");
     std::fs::write(&module, source).unwrap();
-    std::fs::write(
-        directory.join("custom_modules.rs"),
-        format!("#[path = {:?}] pub mod custom;", module),
+    let materialx = layerstack_schemagen::generate_materialx_library(
+        "fixtures/custom_nodes/nodes.mtlx",
+        &["ND_paint", "ND_rgba"],
     )
-    .unwrap();
+    .expect("generate MaterialX interfaces");
+    let materialx_module = directory.join("materialx_nodes.rs");
+    std::fs::write(&materialx_module, materialx).unwrap();
+    let bridge = format!(
+        "#[path = {:?}] pub mod custom; #[path = {:?}] pub mod materialx;",
+        module, materialx_module
+    );
+    std::fs::write(directory.join("custom_modules.rs"), bridge).unwrap();
     println!("cargo:rerun-if-changed=fixtures/custom_nodes");
 }

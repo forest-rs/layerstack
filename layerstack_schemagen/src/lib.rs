@@ -68,6 +68,8 @@ pub fn run() -> Result<String, String> {
     let mut check = false;
     let mut definitions = None;
     let mut output = None;
+    let mut materialx = None;
+    let mut selected = Vec::new();
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
@@ -77,15 +79,30 @@ pub fn run() -> Result<String, String> {
             "--check" => check = true,
             "--shader-defs" => definitions = args.next().map(PathBuf::from),
             "--out" => output = args.next().map(PathBuf::from),
+            "--materialx" => materialx = args.next().map(PathBuf::from),
+            "--node" => selected.push(args.next().ok_or("--node requires a NodeDef name")?),
             other => return Err(format!("unknown argument {other}; see the crate docs")),
         }
     }
-    if let Some(path) = definitions {
+    if definitions.is_some() && materialx.is_some() {
+        return Err("select either --shader-defs or --materialx".into());
+    }
+    if !selected.is_empty() && materialx.is_none() {
+        return Err("--node requires --materialx".into());
+    }
+    if let Some(path) = definitions.as_ref().or(materialx.as_ref()) {
         if pxr.is_some() || source.is_some() {
             return Err("--shader-defs cannot be combined with --pxr or --source".into());
         }
-        let output = output.ok_or("--out <Rust file> is required for --shader-defs")?;
-        let text = generate_shader_library(path)?;
+        let output = output.ok_or("--out <Rust file> is required for shader libraries")?;
+        let text = if materialx.is_some() {
+            generate_materialx_library(
+                path,
+                &selected.iter().map(String::as_str).collect::<Vec<_>>(),
+            )?
+        } else {
+            generate_shader_library(path)?
+        };
         if check {
             if fs::read_to_string(&output).ok().as_deref() != Some(text.as_str()) {
                 return Err(format!("{} is stale", output.display()));
@@ -100,7 +117,7 @@ pub fn run() -> Result<String, String> {
         ));
     }
     if output.is_some() {
-        return Err("--out requires --shader-defs".into());
+        return Err("--out requires --shader-defs or --materialx".into());
     }
     let pxr = pxr.ok_or("--pxr <site-packages>/pxr is required")?;
     let source = source.ok_or("--source <OpenUSD checkout at the wheel's tag> is required")?;
@@ -251,7 +268,6 @@ pub fn generate_shader_library(path: impl AsRef<Path>) -> Result<String, String>
     render_library(nodes, store.tokens)
 }
 
-#[cfg(test)]
 fn generate_shader_text(text: &str) -> Result<String, String> {
     let mut store = layerstack::InMemoryStore::default();
     let parsed = layerstack_usda::parser::parse(text);
@@ -285,6 +301,34 @@ fn render_library(
         tokens,
     };
     Ok(shader_nodes::render(&model, true)?.remove(0).1)
+}
+
+/// Generates typed USD APIs for explicitly selected `MaterialX` `NodeDefs`.
+///
+/// Uses `python3` and its standard XML reader during generation only. Local
+/// whole-file `XIncludes` and `NodeDef` inheritance are resolved. Numeric, boolean,
+/// string and filename ports with literal defaults are supported. Unsupported
+/// types and nonliteral defaults fail explicitly. This does not import material
+/// graphs, select or compile implementations, or evaluate shaders. `NodeDef` names
+/// become USD identifiers; execution requires a compatible renderer registry.
+pub fn generate_materialx_library(
+    path: impl AsRef<Path>,
+    definitions: &[&str],
+) -> Result<String, String> {
+    let output = Command::new("python3")
+        .arg("-c")
+        .arg(include_str!("materialx.py"))
+        .arg(path.as_ref())
+        .args(definitions)
+        .output()
+        .map_err(|e| format!("`MaterialX` generation needs python3: {e}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "`MaterialX`: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    generate_shader_text(&String::from_utf8(output.stdout).map_err(|e| e.to_string())?)
 }
 
 #[cfg(test)]
@@ -345,6 +389,31 @@ mod tests {
         }"#;
         let generated = generate_shader_text(text).unwrap();
         assert!(generated.contains(r#"ID: &'static str = "crate::literal""#));
+    }
+    #[test]
+    fn materialx_selection_bounds_the_supported_interface() {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../layerstack_conformance/fixtures/custom_nodes/nodes.mtlx");
+        assert!(
+            generate_materialx_library(&path, &[])
+                .unwrap_err()
+                .contains("select at least")
+        );
+        assert!(
+            generate_materialx_library(&path, &["missing"])
+                .unwrap_err()
+                .contains("unknown NodeDef")
+        );
+        assert!(
+            generate_materialx_library(&path, &["ND_unsupported"])
+                .unwrap_err()
+                .contains("unsupported MaterialX type")
+        );
+        assert!(
+            generate_materialx_library(&path, &["ND_paint", "ND_paint"])
+                .unwrap_err()
+                .contains("duplicate")
+        );
     }
     #[test]
     fn missing_assets_fail_instead_of_dropping_ports() {

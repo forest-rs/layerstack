@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<materialx version="1.38" xmlns:xi="http://www.w3.org/2001/XInclude">
+  <xi:include href="base.mtlx"/>
+  <nodedef name="ND_paint" inherit="ND_base" node="paint" type="color3">
+    <input name="gain" type="float" value="0.75"/>
+    <input name="enabled" type="boolean" value="true"/>
+    <input name="file" type="filename" value="paint.exr"/>
+    <input name="label" type="string" value="paint &amp; coat"/>
+    <input name="matrix" type="matrix33" value="1,0,0,0,1,0,0,0,1"/>
+  </nodedef>
+  <nodedef name="ND_rgba" inherit="ND_base" node="rgba" type="color4"/>
+  <nodedef name="ND_unsupported" node="surface" type="surfaceshader"/>
+</materialx>

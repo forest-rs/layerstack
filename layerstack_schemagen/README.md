@@ -27,3 +27,23 @@ Format generated modules before checking them into source control.
 Inputs expose composed values separately from definition defaults. Typed port
 creation, setters and sample setters use the caller's `SchemaEdit`, including
 its edit target and undo transaction. They do not evaluate shaders or connections.
+
+Selected MaterialX interfaces can use the same generator:
+
+```sh
+cargo run -p layerstack_schemagen -- --materialx libraries/nodes.mtlx --node ND_my_node --out src/nodes.rs
+```
+
+Repeat `--node` to select more NodeDefs. `generate_materialx_library` is the
+build-script counterpart. It needs `python3` with its standard XML reader only
+during generation. Local whole-file XIncludes and NodeDef inheritance are
+resolved; inherited defaults and port types are retained. Numeric, boolean,
+string and filename ports are supported. Unsupported types, nonliteral defaults,
+missing definitions, include/inheritance cycles and incompatible redeclarations
+fail generation. Unselected definitions do not expand the generated library.
+
+This is interface generation, not MaterialX graph import/export, shader
+compilation, implementation selection or rendering. `MaterialXConfigAPI` alone
+does not supply those features. Generated identifiers require a renderer that
+recognizes the selected NodeDefs. OSL parameter introspection remains a separate
+adapter; no OSL toolchain is required by this generator.

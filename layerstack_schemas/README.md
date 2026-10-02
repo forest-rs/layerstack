@@ -296,3 +296,11 @@ morph-only hulls are mesh-local. World bounds pair the retained hull with an
 outputs and survive independent transform edits. Counters expose bound reductions
 and visited vertices. Empty meshes have empty bounds; nonfinite points error.
 Width-bearing geometry and renderer displacement need separate bound policies.
+
+
+`SkelCache::for_each_deformation_sample` and `BlendShapeCache::for_each_sample`
+visit meshes across caller-supplied shutter times in sample-major order. Visitors
+copy/pack each borrowed input view before the cache advances. Duplicate times and
+interpolation policies are preserved; callbacks can return adapter errors and
+stop the batch. The cache ends at the last attempted time; empty requests leave
+it unchanged. No history or shader scheduling is implied.

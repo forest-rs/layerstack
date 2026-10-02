@@ -727,6 +727,35 @@ impl SkelCache {
             },
         }))
     }
+    /// Visits retained inputs in the supplied sample order, then geometry order.
+    /// Empty requests leave time unchanged. Duplicate times and paths are kept;
+    /// time/interpolation policies are forwarded exactly. Static definitions and
+    /// rig work are shared through ordinary cache queries. The visitor must copy
+    /// or pack borrowed data before returning; no history or vertices are stored.
+    /// Stops on query/visitor errors and leaves the cache at the last attempted
+    /// time, including on failure. `E` can wrap `SkelError` with adapter context.
+    pub fn for_each_deformation_sample<E>(
+        &mut self,
+        scene: &Scene<'_>,
+        geometries: &[PathId],
+        times: &[Time],
+        mut visit: impl FnMut(Time, PathId, Option<DeformationInputs<'_>>) -> Result<(), E>,
+    ) -> Result<(), E>
+    where
+        E: From<SkelError>,
+    {
+        if geometries.is_empty() {
+            return Ok(());
+        }
+        for &time in times {
+            self.set_time(time);
+            for &path in geometries {
+                let inputs = self.deformation_inputs(scene, path).map_err(E::from)?;
+                visit(time, path, inputs)?;
+            }
+        }
+        Ok(())
+    }
     /// Shared inverse-bind/animated palette, in skeleton joint order. The slice
     /// remains valid until the next mutable cache operation. Errors are retained
     /// until an edit or relevant time change invalidates them.

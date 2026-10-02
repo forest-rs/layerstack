@@ -366,6 +366,35 @@ impl BlendShapeCache {
             time: self.time,
         }))
     }
+    /// Visits retained inputs in the supplied sample order, then geometry order.
+    /// Empty requests leave time unchanged. Duplicate times and paths are kept;
+    /// time/interpolation policies are forwarded exactly. Static definitions and
+    /// rig work are shared through ordinary cache queries. The visitor must copy
+    /// or pack borrowed data before returning; no history or vertices are stored.
+    /// Stops on query/visitor errors and leaves the cache at the last attempted
+    /// time, including on failure. `E` can wrap `SkelError` with adapter context.
+    pub fn for_each_sample<E>(
+        &mut self,
+        scene: &Scene<'_>,
+        geometries: &[PathId],
+        times: &[Time],
+        mut visit: impl FnMut(Time, PathId, Option<BlendShapeInputs<'_>>) -> Result<(), E>,
+    ) -> Result<(), E>
+    where
+        E: From<SkelError>,
+    {
+        if geometries.is_empty() {
+            return Ok(());
+        }
+        for &time in times {
+            self.set_time(time);
+            for &path in geometries {
+                let inputs = self.inputs(scene, path).map_err(E::from)?;
+                visit(time, path, inputs)?;
+            }
+        }
+        Ok(())
+    }
     /// Shape-deformed sampled points in geometry space, without joint skinning.
     pub fn deformed_points(
         &mut self,

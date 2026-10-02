@@ -12,7 +12,7 @@ use layerstack::{
 };
 use layerstack_schemas::{
     Scene, Time,
-    skel::{DeformationInputs, SkelCache, SkinningBindingInputs},
+    skel::{DeformationInputs, SkelCache, SkelError, SkinningBindingInputs},
 };
 use std::{collections::HashMap, sync::Arc};
 
@@ -141,17 +141,22 @@ fn main() {
     let scene = Scene::new(live.stage(), &store);
     let mut cache = SkelCache::new(Time::at(0.));
     let mut renderer = Renderer::default();
-    for time in [0., 1., 1., 2.] {
-        renderer.begin_frame();
-        cache.set_time(Time::at(time));
-        for part in parts {
-            renderer.prepare(cache.deformation_inputs(&scene, part).unwrap().unwrap(), 2);
-        }
-        println!(
-            "time {time}: {} palette uploads, {} binding uploads",
-            renderer.palette_uploads, renderer.binding_uploads
-        );
-    }
+    let shutter_samples = [0., 1., 1., 2.].map(Time::at);
+    cache
+        .for_each_deformation_sample(&scene, &parts, &shutter_samples, |time, part, inputs| {
+            if part == parts[0] {
+                renderer.begin_frame();
+            }
+            renderer.prepare(inputs.expect("the part has a binding"), 2);
+            if part == parts[1] {
+                println!(
+                    "time {time:?}: {} palette uploads, {} binding uploads",
+                    renderer.palette_uploads, renderer.binding_uploads
+                );
+            }
+            Ok::<_, SkelError>(())
+        })
+        .unwrap();
     assert_eq!(
         renderer.palette_uploads, 3,
         "one shared palette upload per distinct time"

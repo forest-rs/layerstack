@@ -1,0 +1,29 @@
+#usda 1.0
+
+def Volume "Volume" {
+    custom rel field:density = </Field>
+    custom rel field:forward = </Links.chain>
+    custom rel field:duplicate = [</Field>, </Links.chain>]
+    custom rel field:multiple = [</Field>, </Other>]
+    custom rel field:empty = []
+    custom rel field:missing = </DoesNotExist>
+    custom rel field:property = </Field.value>
+    custom rel field:cycle = </Links.cycle>
+    custom rel field:cycleWithExit = </Links.cycleWithExit>
+    custom rel field:emptyForward = </Links.empty>
+    custom rel field:a:density = </Other>
+    custom rel field:z:density = </Field>
+    custom float field:attribute = 1
+    custom rel unrelated = </Field>
+}
+def Scope "Links" {
+    custom rel chain = </Links.end>
+    custom rel end = </Field>
+    custom rel empty = []
+    custom rel cycle = </Links.cycle>
+    custom rel cycleWithExit = [</Links.cycleWithExit>, </Field>]
+}
+def OpenVDBAsset "Field" {
+    custom float value = 1
+}
+def Scope "Other" {}

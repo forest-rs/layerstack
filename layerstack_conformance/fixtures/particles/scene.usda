@@ -1,0 +1,146 @@
+#usda 1.0
+
+def ParticleField3DGaussianSplat "Missing" {
+
+}
+
+def ParticleField3DGaussianSplat "Half" {
+    point3h[] positionsh = [(1, 2, 3)]
+    quath[] orientationsh = [(1, 0, 0, 0)]
+    half3[] scalesh = [(1, 2, 3)]
+    half[] opacitiesh = [0.5]
+    half3[] radiance:sphericalHarmonicsCoefficientsh = [(1, 2, 3)]
+}
+
+def ParticleField3DGaussianSplat "Float" {
+    point3f[] positions = [(1, 2, 3)]
+    quatf[] orientations = [(1, 0, 0, 0)]
+    float3[] scales = [(1, 2, 3)]
+    float[] opacities = [0.5]
+    float3[] radiance:sphericalHarmonicsCoefficients = [(1, 2, 3)]
+}
+
+def ParticleField3DGaussianSplat "Both" {
+    point3h[] positionsh = [(1, 2, 3)]
+    point3f[] positions = [(1, 2, 3)]
+    quath[] orientationsh = [(1, 0, 0, 0)]
+    quatf[] orientations = [(1, 0, 0, 0)]
+    half3[] scalesh = [(1, 2, 3)]
+    float3[] scales = [(1, 2, 3)]
+    half[] opacitiesh = [0.5]
+    float[] opacities = [0.5]
+    half3[] radiance:sphericalHarmonicsCoefficientsh = [(1, 2, 3)]
+    float3[] radiance:sphericalHarmonicsCoefficients = [(1, 2, 3)]
+}
+
+def ParticleField3DGaussianSplat "EmptyFloat" {
+    point3h[] positionsh = [(1, 2, 3)]
+    point3f[] positions = []
+    quath[] orientationsh = [(1, 0, 0, 0)]
+    quatf[] orientations = []
+    half3[] scalesh = [(1, 2, 3)]
+    float3[] scales = []
+    half[] opacitiesh = [0.5]
+    float[] opacities = []
+    half3[] radiance:sphericalHarmonicsCoefficientsh = [(1, 2, 3)]
+    float3[] radiance:sphericalHarmonicsCoefficients = []
+}
+
+def ParticleField3DGaussianSplat "EmptyFirst" {
+    point3h[] positionsh = [(1, 2, 3)]
+    point3f[] positions.timeSamples = { -2: [], 3: [(1, 2, 3)] }
+    quath[] orientationsh = [(1, 0, 0, 0)]
+    quatf[] orientations.timeSamples = { -2: [], 3: [(1, 0, 0, 0)] }
+    half3[] scalesh = [(1, 2, 3)]
+    float3[] scales.timeSamples = { -2: [], 3: [(1, 2, 3)] }
+    half[] opacitiesh = [0.5]
+    float[] opacities.timeSamples = { -2: [], 3: [0.5] }
+    half3[] radiance:sphericalHarmonicsCoefficientsh = [(1, 2, 3)]
+    float3[] radiance:sphericalHarmonicsCoefficients.timeSamples = { -2: [], 3: [(1, 2, 3)] }
+}
+
+def ParticleField3DGaussianSplat "FullFirst" {
+    point3f[] positions.timeSamples = { -2: [(1, 2, 3)], 3: [] }
+    quatf[] orientations.timeSamples = { -2: [(1, 0, 0, 0)], 3: [] }
+    float3[] scales.timeSamples = { -2: [(1, 2, 3)], 3: [] }
+    float[] opacities.timeSamples = { -2: [0.5], 3: [] }
+    float3[] radiance:sphericalHarmonicsCoefficients.timeSamples = { -2: [(1, 2, 3)], 3: [] }
+}
+
+def ParticleField3DGaussianSplat "DefaultAndEmptyFirst" {
+    point3f[] positions = [(1, 2, 3)]
+    point3f[] positions.timeSamples = { -2: [], 3: [(1, 2, 3)] }
+    quatf[] orientations = [(1, 0, 0, 0)]
+    quatf[] orientations.timeSamples = { -2: [], 3: [(1, 0, 0, 0)] }
+    float3[] scales = [(1, 2, 3)]
+    float3[] scales.timeSamples = { -2: [], 3: [(1, 2, 3)] }
+    float[] opacities = [0.5]
+    float[] opacities.timeSamples = { -2: [], 3: [0.5] }
+    float3[] radiance:sphericalHarmonicsCoefficients = [(1, 2, 3)]
+    float3[] radiance:sphericalHarmonicsCoefficients.timeSamples = { -2: [], 3: [(1, 2, 3)] }
+}
+
+def ParticleField3DGaussianSplat "BlockedDefault" {
+    point3h[] positionsh = [(1, 2, 3)]
+    point3f[] positions = None
+    quath[] orientationsh = [(1, 0, 0, 0)]
+    quatf[] orientations = None
+    half3[] scalesh = [(1, 2, 3)]
+    float3[] scales = None
+    half[] opacitiesh = [0.5]
+    float[] opacities = None
+    half3[] radiance:sphericalHarmonicsCoefficientsh = [(1, 2, 3)]
+    float3[] radiance:sphericalHarmonicsCoefficients = None
+}
+
+def ParticleField3DGaussianSplat "BlockedFirst" {
+    point3h[] positionsh = [(1, 2, 3)]
+    point3f[] positions.timeSamples = { -2: None, 3: [(1, 2, 3)] }
+    quath[] orientationsh = [(1, 0, 0, 0)]
+    quatf[] orientations.timeSamples = { -2: None, 3: [(1, 0, 0, 0)] }
+    half3[] scalesh = [(1, 2, 3)]
+    float3[] scales.timeSamples = { -2: None, 3: [(1, 2, 3)] }
+    half[] opacitiesh = [0.5]
+    float[] opacities.timeSamples = { -2: None, 3: [0.5] }
+    half3[] radiance:sphericalHarmonicsCoefficientsh = [(1, 2, 3)]
+    float3[] radiance:sphericalHarmonicsCoefficients.timeSamples = { -2: None, 3: [(1, 2, 3)] }
+}
+
+def ParticleField3DGaussianSplat "BlockedLater" {
+    point3f[] positions.timeSamples = { -2: [(1, 2, 3)], 3: None }
+    quatf[] orientations.timeSamples = { -2: [(1, 0, 0, 0)], 3: None }
+    float3[] scales.timeSamples = { -2: [(1, 2, 3)], 3: None }
+    float[] opacities.timeSamples = { -2: [0.5], 3: None }
+    float3[] radiance:sphericalHarmonicsCoefficients.timeSamples = { -2: [(1, 2, 3)], 3: None }
+}
+
+def ParticleField3DGaussianSplat "Mixed" {
+    point3h[] positionsh = [(1, 2, 3)]
+    point3f[] positions = [(1, 2, 3)]
+    quath[] orientationsh = [(1, 0, 0, 0)]
+    half3[] scalesh = [(1, 2, 3)]
+    float3[] scales = [(1, 2, 3)]
+    half[] opacitiesh = [0.5]
+    half3[] radiance:sphericalHarmonicsCoefficientsh = [(1, 2, 3)]
+    float3[] radiance:sphericalHarmonicsCoefficients = [(1, 2, 3)]
+}
+
+def ParticleField3DGaussianSplat "Referenced" (references = </Float>) {}
+
+def ParticleField3DGaussianSplat "StrongEmpty" (references = </Float>) {
+    point3f[] positions = []
+}
+
+def ParticleField3DGaussianSplat "StrongHalf" (references = </Float>) {
+    point3h[] positionsh = [(1, 2, 3)]
+}
+
+def ParticleField3DGaussianSplat "Retimed" (references = </FullFirst> (offset = 10; scale = 2)) {}
+
+def ParticleField3DGaussianSplat "ScalarFloat" {
+    float positions = 1
+    point3h[] positionsh = [(1, 2, 3)]
+}
+def ParticleField3DGaussianSplat "WrongArrayType" {
+    int[] positions = [1]
+}

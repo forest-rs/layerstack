@@ -21,7 +21,7 @@ in-memory or custom layer store, start with [Layerstack's guide](layerstack/READ
 File parsing and serialization belong to the companion crates; the core does
 not load files, render scenes, or supply application-specific design semantics.
 
-All library crates require Rust **1.88** or later and use `alloc`. See each
+All library crates require Rust **1.89** or later and use `alloc`. See each
 crate's documentation for features and supported operations.
 
 ## Status and conformance

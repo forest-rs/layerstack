@@ -16,6 +16,8 @@ mod blend_shapes;
 pub use blend_shapes::{
     BlendShapeContribution, BlendShapeQuery, apply_blend_shape, apply_blend_shape_in_place,
 };
+#[cfg(feature = "simd")]
+mod simd;
 mod skinning;
 pub use skinning::{
     InfluenceInterpolation, JointInfluences, SkinningQuery, skin_points, skin_points_in_place,

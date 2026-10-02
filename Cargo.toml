@@ -19,11 +19,12 @@ version = "0.1.0"
 edition = "2024"
 # Keep in sync with RUST_MIN_VER in .github/workflows/ci.yml, with the relevant README.md files
 # and with the MSRV in the release notes for the affected crates.
-rust-version = "1.88"
+rust-version = "1.89"
 license = "Apache-2.0 OR MIT"
 repository = "https://github.com/forest-rs/layerstack"
 
 [workspace.dependencies]
+fearless_simd = { default-features = false, features = ["libm"], version = "1.0" }
 hashbrown = { default-features = false, features = [
     "alloc",
     "default-hasher",

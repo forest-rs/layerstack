@@ -191,6 +191,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
+name = "fearless_simd"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3772b63c40606beea8fe1f7b06a60de27ceb9bfc2d9dad3427368ca41dc7e62"
+dependencies = [
+ "libm",
+]
+
+[[package]]
 name = "find-msvc-tools"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -201,6 +210,15 @@ name = "foldhash"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
+
+[[package]]
+name = "glam"
+version = "0.33.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "37bfe73dc8ec21f54d181e5a60554327ec3f1c600c455a75ccbfc65d2106a6c4"
+dependencies = [
+ "libm",
+]
 
 [[package]]
 name = "half"
@@ -321,6 +339,7 @@ dependencies = [
 name = "layerstack_schemas"
 version = "0.1.0"
 dependencies = [
+ "fearless_simd",
  "layerstack",
  "libm",
 ]
@@ -716,6 +735,8 @@ name = "wind_tunnel"
 version = "0.1.0"
 dependencies = [
  "criterion",
+ "fearless_simd",
+ "glam",
  "layerstack",
  "layerstack_schemas",
  "layerstack_usdc",

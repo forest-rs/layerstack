@@ -116,7 +116,7 @@
 //!
 //! # Features and Rust version
 //!
-//! Requires **Rust 1.88** or later. The default feature set is empty, and the crate
+//! Requires **Rust 1.89** or later. The default feature set is empty, and the crate
 //! uses `no_std` with `alloc` (a global allocator is required). The optional `std`
 //! feature currently adds no composition capabilities.
 

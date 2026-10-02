@@ -18,7 +18,7 @@ operations, and provenance.
 opinionated = "0.1"
 ```
 
-Requires Rust **1.88** or later. The crate uses `no_std` with `alloc`, has no
+Requires Rust **1.89** or later. The crate uses `no_std` with `alloc`, has no
 dependencies, and has no feature flags. An allocator is required; there is no
 allocation-free mode.
 

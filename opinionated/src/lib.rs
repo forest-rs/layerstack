@@ -7,7 +7,7 @@
 //! an explicit layer-strength order. It intentionally does not model
 //! namespaces, schemas, references, variants, or storage backends.
 //!
-//! The crate requires Rust **1.88** or later and is always `no_std` with
+//! The crate requires Rust **1.89** or later and is always `no_std` with
 //! `alloc`. It has no dependencies or feature flags; callers need an allocator.
 //!
 //! # Choosing an API

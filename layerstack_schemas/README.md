@@ -17,7 +17,7 @@ let schemas = layerstack_schemas::openusd(&mut tokens);
 [API documentation](https://docs.rs/layerstack_schemas) ·
 [Source](https://github.com/forest-rs/layerstack/tree/main/layerstack_schemas)
 
-Requires Rust **1.88** or later and `no_std + alloc`. Add
+Requires Rust **1.89** or later and `no_std + alloc`. Add
 `layerstack_schemas = "0.1"` to your dependencies. To select individual domains,
 disable default features and enable the domain features you need. The optional
 `std` feature currently adds no behavior.
@@ -192,3 +192,10 @@ joint skinning; standalone shape queries also work without joint influences.
 Normal offsets are returned without renormalization or skeletal normal skinning.
 The pure kernels also offer reusable buffers; validation failures leave them
 unchanged. Definition snapshots expose shape targets and refresh explicitly.
+
+The optional `simd` feature accelerates CPU linear-blend skinning with
+`fearless_simd` 1.0. It preserves separate arithmetic and USD float rounding;
+dense blend shapes retain the compiler-vectorized kernel. With `std`, CPU feature
+detection selects a backend; without it, the compiled target baseline is used.
+Scalar fallback remains available, and ordinary schema builds do not pull in the
+SIMD dependency. `wind_tunnel` compares scalar, SIMD and `glam` kernels.

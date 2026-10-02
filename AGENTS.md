@@ -43,7 +43,7 @@ cargo test --workspace --all-features
 
 ## Rust workspace expectations
 
-- MSRV is set in `Cargo.toml` (`rust-version = "1.88"`); keep it compatible.
+- MSRV is set in `Cargo.toml` (`rust-version = "1.89"`); keep it compatible.
 - Follow workspace lint policy (notably: `unsafe_code = "deny"` and `missing_docs = "warn"`).
 
 ## `no_std` policy (core crates)

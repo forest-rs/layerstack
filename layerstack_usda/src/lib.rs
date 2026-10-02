@@ -70,7 +70,7 @@
 //!
 //! # `no_std` support
 //!
-//! This crate uses `no_std` with `alloc` and requires Rust 1.88 or later.
+//! This crate uses `no_std` with `alloc` and requires Rust 1.89 or later.
 //! Parsing consumes `&str` buffers and writing returns owned strings. The
 //! declared `std` feature currently adds no APIs; file I/O belongs to the
 //! caller. Writer and save errors implement `core::error::Error` without it.

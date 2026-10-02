@@ -348,6 +348,8 @@ mod labels;
 mod motion;
 #[cfg(feature = "usd")]
 mod predicate;
+#[cfg(feature = "usd-geom")]
+pub mod primvar;
 #[cfg(feature = "usd")]
 mod regex;
 #[cfg(feature = "usd-render")]

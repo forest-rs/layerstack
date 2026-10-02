@@ -71,6 +71,20 @@ errors. Common transform helpers do not decompose arbitrary
 matrices or rewrite incompatible op stacks. Prepared operation recipes remain
 an internal cache implementation detail.
 
+With `usd-geom`, every prim view exposes `primvars` and
+`find_primvar_with_inheritance`; `primvars_with_inheritance` returns effective
+value-producing primvars. Only authored constant values inherit, and a nearer
+authored nonconstant value stops inheritance. `primvar::Primvar` reads
+interpolation, element size, indices and placeholder metadata. `compute_flattened`
+expands indexed elements at default or numeric time, preserving native array
+kinds and reporting invalid indices without a partial result. String primvars
+with `:idFrom` indirection return an explicit unsupported error.
+
+Edit handles expose `create_primvar` with a declared `PropertyType`.
+`PrimvarEdit` authors values, samples, interpolation, element size and indices
+through `SchemaEdit`; invalid names, metadata and incompatible declarations
+append no edits. Ordinary transaction validation and undo remain in force.
+
 With `usd-semantics`, `Scene::direct_taxonomies` and `inherited_taxonomies`
 discover applied label taxonomies. `LabelsQuery` computes sorted direct and
 inherited labels at one time or over an open/closed interval. It retains only

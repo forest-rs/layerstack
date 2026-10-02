@@ -1,0 +1,56 @@
+{
+  "version": "0.26.8",
+  "packed": {
+    "interpolation": "faceVarying",
+    "elementSize": 2,
+    "indexed": true,
+    "default": [
+      50.0,
+      60.0,
+      10.0,
+      20.0,
+      30.0,
+      40.0
+    ]
+  },
+  "scalar": {
+    "interpolation": "constant",
+    "elementSize": 1,
+    "indexed": true,
+    "default": 3.0
+  },
+  "animated": {
+    "interpolation": "constant",
+    "elementSize": 1,
+    "indexed": true,
+    "default": null,
+    "at1": [
+      2.0,
+      3.0
+    ]
+  },
+  "blockedIndices": {
+    "interpolation": "constant",
+    "elementSize": 1,
+    "indexed": false,
+    "default": [
+      5.0,
+      6.0
+    ]
+  },
+  "empty": {
+    "interpolation": "constant",
+    "elementSize": 1,
+    "indexed": true,
+    "default": []
+  },
+  "inheritedNames": [
+    "animated",
+    "blockedIndices",
+    "empty",
+    "invalid",
+    "packed",
+    "scalar",
+    "tint"
+  ]
+}

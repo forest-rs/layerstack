@@ -1,0 +1,27 @@
+#usda 1.0
+def Xform "Root" {
+    color3f[] primvars:tint = [(0.2, 0.4, 0.6)] (interpolation = "constant")
+    float primvars:barrier = 7 (interpolation = "constant")
+    def Xform "Group" {
+        color3f[] primvars:tint = None
+        float primvars:barrier = 8 (interpolation = "uniform")
+        def Mesh "Mesh" {
+            float[] primvars:packed = [10, 20, 30, 40, 50, 60] (
+                interpolation = "faceVarying"
+                elementSize = 2
+                unauthoredValuesIndex = 1
+            )
+            int[] primvars:packed:indices = [2, 0, 1]
+            float primvars:scalar = 3
+            int[] primvars:scalar:indices = [99]
+            float[] primvars:animated.timeSamples = {0: [1, 2], 2: [3, 4]}
+            int[] primvars:animated:indices.timeSamples = {0: [0, 1], 2: [1, 0]}
+            float[] primvars:blockedIndices = [5, 6]
+            int[] primvars:blockedIndices:indices = None
+            float[] primvars:empty = [1, 2]
+            int[] primvars:empty:indices = []
+            float[] primvars:invalid = [1]
+            int[] primvars:invalid:indices = [-1]
+        }
+    }
+}

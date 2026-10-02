@@ -193,6 +193,15 @@ Normal offsets are returned without renormalization or skeletal normal skinning.
 The pure kernels also offer reusable buffers; validation failures leave them
 unchanged. Definition snapshots expose shape targets and refresh explicitly.
 
+Normal skinning derives inverse-transpose matrices and normalizes results,
+including explicit face-corner to point mapping for face-varying normals.
+`SkinningQuery::compute_skinned_normals` reads geometry normals without applying
+blend-shape offsets; singular normal matrices and unsupported interpolation error.
+Constant bindings also expose their rigid skeleton-space transform, using the
+reference implementation's float-frame rounding. `SkelAnimation` supplies
+standalone TRS evaluation, effective sample-time unions and variability helpers;
+stronger defaults/blocks mask weaker animation and layer offsets map sample times.
+
 The optional `simd` feature accelerates CPU linear-blend skinning with
 `fearless_simd` 1.0. It preserves separate arithmetic and USD float rounding;
 dense blend shapes retain the compiler-vectorized kernel. With `std`, CPU feature

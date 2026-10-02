@@ -12,6 +12,12 @@ use crate::{
     PrimView, Scene, Time, gf,
     usd_skel::{SkelAnimation, SkelBindingApi, Skeleton},
 };
+mod helpers;
+pub use helpers::JointTransformComponents;
+mod normals;
+pub use normals::{
+    rigid_skinning_transform, skin_face_varying_normals, skin_normals, skin_normals_in_place,
+};
 mod blend_shapes;
 pub use blend_shapes::{
     BlendShapeContribution, BlendShapeQuery, apply_blend_shape, apply_blend_shape_in_place,
@@ -82,6 +88,11 @@ pub enum SkelError {
     UnsupportedSkinningMethod {
         /// Bound geometry requesting the unsupported method.
         prim: PathId,
+    },
+    /// A normal transform has a singular or nonfinite linear component.
+    SingularNormalTransform {
+        /// Joint index, or `None` for the geometry bind transform.
+        joint: Option<usize>,
     },
     /// A joint's bind matrix cannot be inverted.
     SingularBind {

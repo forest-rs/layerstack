@@ -276,6 +276,24 @@ pub struct SkinningQuery<'a> {
     dependencies: Vec<PathId>,
     pub(super) blend_shapes: Option<BlendShapeQuery>,
 }
+pub(super) struct SkinningInputs {
+    pub bind: gf::Matrix4,
+    pub transforms: Vec<gf::Matrix4>,
+    pub indices: Vec<i32>,
+    pub weights: Vec<f32>,
+    pub element_size: usize,
+    pub interpolation: InfluenceInterpolation,
+}
+impl SkinningInputs {
+    pub(super) fn influences(&self) -> JointInfluences<'_> {
+        JointInfluences {
+            indices: &self.indices,
+            weights: &self.weights,
+            element_size: self.element_size,
+            interpolation: self.interpolation,
+        }
+    }
+}
 impl<'a> SkinningQuery<'a> {
     /// Prepares inherited bindings and influence metadata. Unbound geometry or
     /// geometry without joint influences returns `None`; partial bindings error.
@@ -409,6 +427,15 @@ impl<'a> SkinningQuery<'a> {
     /// Skins caller-supplied geometry-local points with animated joint matrices.
     /// Blend-shape offsets are not applied by this method.
     pub fn skin_points(&self, points: &[[f32; 3]], time: Time) -> Result<Vec<[f32; 3]>, SkelError> {
+        let inputs = self.inputs(time)?;
+        skin_points(
+            &inputs.bind,
+            &inputs.transforms,
+            inputs.influences(),
+            points,
+        )
+    }
+    pub(super) fn inputs(&self, time: Time) -> Result<SkinningInputs, SkelError> {
         let method = self
             .method
             .and_then(|p| {
@@ -464,17 +491,84 @@ impl<'a> SkinningQuery<'a> {
             self.scene.store().tokens(),
         )
         .ok_or_else(|| invalid(self.weights, "primvars:skel:jointWeights"))?;
-        skin_points(
-            &geom_bind,
-            ordered.as_deref().unwrap_or(&transforms),
-            JointInfluences {
-                indices: &indices,
-                weights: &weights,
-                element_size: self.element_size,
-                interpolation: self.interpolation,
-            },
-            points,
+        Ok(SkinningInputs {
+            bind: geom_bind,
+            transforms: ordered.unwrap_or(transforms),
+            indices,
+            weights,
+            element_size: self.element_size,
+            interpolation: self.interpolation,
+        })
+    }
+    /// Skins caller-supplied vertex/varying normals; blend-shape normal offsets
+    /// are not applied. Uses inverse transposes and normalizes the result.
+    pub fn skin_normals(
+        &self,
+        normals: &[[f32; 3]],
+        time: Time,
+    ) -> Result<Vec<[f32; 3]>, SkelError> {
+        let inputs = self.inputs(time)?;
+        super::skin_normals(
+            &inputs.bind,
+            &inputs.transforms,
+            inputs.influences(),
+            normals,
         )
+    }
+    /// Reads sampled normals and skins them. Supports vertex/varying and mesh
+    /// face-varying normals; constant normals require constant influences.
+    /// Uniform normals are rejected. Blend-shape offsets are not applied.
+    pub fn compute_skinned_normals(&self, time: Time) -> Result<Vec<[f32; 3]>, SkelError> {
+        let prim = PrimView::new(self.scene, self.geometry);
+        let normals = read(&prim, "normals", time, crate::value::read_float3_array)
+            .ok_or_else(|| invalid(self.geometry, "normals"))?;
+        let interpolation = prim
+            .property_metadata("normals")
+            .and_then(|m| m.interpolation())
+            .unwrap_or("vertex");
+        let inputs = self.inputs(time)?;
+        match interpolation {
+            "vertex" | "varying" => super::skin_normals(
+                &inputs.bind,
+                &inputs.transforms,
+                inputs.influences(),
+                &normals,
+            ),
+            "constant" if self.interpolation == InfluenceInterpolation::Constant => {
+                super::skin_normals(
+                    &inputs.bind,
+                    &inputs.transforms,
+                    inputs.influences(),
+                    &normals,
+                )
+            }
+            "faceVarying" if self.scene.is_a(self.geometry, "Mesh") => {
+                let points = read(&prim, "points", time, crate::value::read_float3_array)
+                    .ok_or_else(|| invalid(self.geometry, "points"))?;
+                let corners = read(
+                    &prim,
+                    "faceVertexIndices",
+                    time,
+                    crate::value::read_int_array,
+                )
+                .ok_or_else(|| invalid(self.geometry, "faceVertexIndices"))?;
+                super::skin_face_varying_normals(
+                    &inputs.bind,
+                    &inputs.transforms,
+                    inputs.influences(),
+                    points.len(),
+                    &corners,
+                    &normals,
+                )
+            }
+            _ => Err(invalid(self.geometry, "normals")),
+        }
+    }
+    /// Computes the rigid binding's skeleton-space matrix at an explicit time.
+    /// Requires constant influences; uses OpenUSD's float-frame rounding.
+    pub fn compute_rigid_transform(&self, time: Time) -> Result<gf::Matrix4, SkelError> {
+        let inputs = self.inputs(time)?;
+        super::rigid_skinning_transform(&inputs.bind, &inputs.transforms, inputs.influences())
     }
     /// Reads the geometry's sampled `points`, then computes skeleton-space skinning.
     pub fn compute_skinned_points(&self, time: Time) -> Result<Vec<[f32; 3]>, SkelError> {

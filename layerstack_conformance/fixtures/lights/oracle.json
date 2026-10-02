@@ -1,0 +1,143 @@
+{
+  "behavior": "consumeAndContinue",
+  "invalidated": "ignore",
+  "retained": [
+    "/World/Ignored/Child"
+  ],
+  "rows": [
+    {
+      "mode": "ignore",
+      "root": "/",
+      "targets": [
+        "/Asset/Light",
+        "/World/Cached/Panel",
+        "/World/Cached/Skipped",
+        "/World/Continue",
+        "/World/Continue/Child",
+        "/World/Continue/NonModel",
+        "/World/Filter",
+        "/World/HaltedLight",
+        "/World/Ignored/Child",
+        "/World/Instance/Light",
+        "/World/NonModel"
+      ]
+    },
+    {
+      "mode": "consult",
+      "root": "/",
+      "targets": [
+        "/Ghost.property",
+        "/Missing",
+        "/Outside",
+        "/World/Cached/Panel",
+        "/World/Continue",
+        "/World/Continue/Child",
+        "/World/Filter"
+      ]
+    },
+    {
+      "mode": "ignore",
+      "root": "/World",
+      "targets": [
+        "/World/Cached/Panel",
+        "/World/Cached/Skipped",
+        "/World/Continue",
+        "/World/Continue/Child",
+        "/World/Continue/NonModel",
+        "/World/Filter",
+        "/World/HaltedLight",
+        "/World/Ignored/Child",
+        "/World/Instance/Light",
+        "/World/NonModel"
+      ]
+    },
+    {
+      "mode": "consult",
+      "root": "/World",
+      "targets": [
+        "/Ghost.property",
+        "/Missing",
+        "/Outside",
+        "/World/Cached/Panel",
+        "/World/Continue",
+        "/World/Continue/Child",
+        "/World/Filter"
+      ]
+    },
+    {
+      "mode": "ignore",
+      "root": "/World/Cached",
+      "targets": [
+        "/World/Cached/Panel",
+        "/World/Cached/Skipped"
+      ]
+    },
+    {
+      "mode": "consult",
+      "root": "/World/Cached",
+      "targets": [
+        "/Ghost.property",
+        "/Missing",
+        "/World/Cached/Panel",
+        "/World/Continue/Child"
+      ]
+    },
+    {
+      "mode": "ignore",
+      "root": "/World/Continue",
+      "targets": [
+        "/World/Continue",
+        "/World/Continue/Child",
+        "/World/Continue/NonModel"
+      ]
+    },
+    {
+      "mode": "consult",
+      "root": "/World/Continue",
+      "targets": [
+        "/Outside",
+        "/World/Cached/Panel",
+        "/World/Continue",
+        "/World/Continue/Child"
+      ]
+    },
+    {
+      "mode": "ignore",
+      "root": "/World/HaltedLight",
+      "targets": [
+        "/World/HaltedLight"
+      ]
+    },
+    {
+      "mode": "consult",
+      "root": "/World/HaltedLight",
+      "targets": []
+    },
+    {
+      "mode": "ignore",
+      "root": "/World/Instance",
+      "targets": [
+        "/World/Instance/Light"
+      ]
+    },
+    {
+      "mode": "consult",
+      "root": "/World/Instance",
+      "targets": []
+    },
+    {
+      "mode": "ignore",
+      "root": "/World/Undefining",
+      "targets": []
+    },
+    {
+      "mode": "consult",
+      "root": "/World/Undefining",
+      "targets": []
+    }
+  ],
+  "stored": [
+    "/World/Ignored/Child"
+  ],
+  "version": "26.8"
+}

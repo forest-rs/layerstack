@@ -337,7 +337,7 @@ impl<'s> SchemaEdit<'s> {
     /// declarations keep their custom qualifier and metadata, including across
     /// reference and variant edit targets and repeated calls within this edit.
     /// OpenUSD: `UsdPrim::CreateRelationship`; AOUSD Core §12.2.4.
-    #[cfg(feature = "usd-vol")]
+    #[cfg(any(feature = "usd-vol", feature = "usd-lux"))]
     pub(crate) fn ensure_relationship(&mut self, path: PathId, name: &str, custom: bool) {
         let token = self.store.tokens_mut().intern(name);
         if self
@@ -387,6 +387,28 @@ impl<'s> SchemaEdit<'s> {
             self.transaction.create_property(at, spec);
         }
         self.created.push((path, token, None));
+    }
+
+    #[cfg(feature = "usd-lux")]
+    pub(crate) fn is_pseudo_root(&self, path: PathId) -> bool {
+        self.store.paths().resolve(path).depth() == 0
+    }
+
+    #[cfg(feature = "usd-lux")]
+    pub(crate) fn subtree_targets(&self, root: PathId, targets: &[TargetPath]) -> Vec<TargetPath> {
+        let paths = self.store.paths();
+        let mut targets: Vec<_> = targets
+            .iter()
+            .copied()
+            .filter(|target| {
+                paths
+                    .resolve(root)
+                    .is_prefix_of(paths.resolve(target.prim_path()))
+            })
+            .collect();
+        targets.sort_by_cached_key(|target| target.display(paths, self.store.tokens()));
+        targets.dedup();
+        targets
     }
 
     /// Authors `targets` as the explicit targets of the relationship `name`.

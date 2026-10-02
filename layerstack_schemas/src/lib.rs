@@ -347,6 +347,8 @@ mod imageable;
 pub mod kind;
 #[cfg(feature = "usd-semantics")]
 mod labels;
+#[cfg(feature = "usd-lux")]
+pub mod light;
 #[cfg(feature = "usd-geom")]
 mod motion;
 #[cfg(feature = "usd-geom")]

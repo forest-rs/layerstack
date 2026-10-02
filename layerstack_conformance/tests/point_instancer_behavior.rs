@@ -158,34 +158,42 @@ fn computed_bounds_match_cpp_and_follow_external_prototype_edits() {
 }
 #[test]
 fn retained_bounds_route_prototype_changes_outside_the_query_namespace() {
-    let (mut store, _) = support::scene(SOURCE);
-    let path = store.path("/World/Instances");
-    let prototype = store.path("/World/Prototype");
-    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
-    let mut session = QuerySession::new(
-        store,
-        LayerId(1),
-        StageOptions {
-            schemas: Some(schemas),
-            ..StageOptions::default()
-        },
-        Time::Default,
-        BoundsOptions::default(),
-    );
-    let query = session.observe(Query::WorldBound(path));
-    assert!(matches!(
-        session.poll(query).unwrap().answer,
-        QueryAnswer::WorldBound(Ok(_))
-    ));
-    assert!(!session.poll(query).unwrap().evaluated);
-    let cube = Cube::new(&session.scene(), prototype).unwrap().edit();
-    let mut edit = session.edit(EditTarget::for_layer(LayerId(1)));
-    cube.set_size(&mut edit, 6.);
-    let transaction = edit.finish();
-    session.apply(&transaction).unwrap();
-    let result = session.poll(query).unwrap();
-    assert!(result.evaluated && result.answer_changed);
-    assert!(!result.causes.is_empty());
+    for ignore_visibility in [false, true] {
+        for use_extents_hint in [false, true] {
+            let (mut store, _) = support::scene(SOURCE);
+            let path = store.path("/World/Instances");
+            let prototype = store.path("/World/Prototype");
+            let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+            let mut session = QuerySession::new(
+                store,
+                LayerId(1),
+                StageOptions {
+                    schemas: Some(schemas),
+                    ..StageOptions::default()
+                },
+                Time::Default,
+                BoundsOptions {
+                    ignore_visibility,
+                    use_extents_hint,
+                    ..BoundsOptions::default()
+                },
+            );
+            let query = session.observe(Query::WorldBound(path));
+            assert!(matches!(
+                session.poll(query).unwrap().answer,
+                QueryAnswer::WorldBound(Ok(_))
+            ));
+            assert!(!session.poll(query).unwrap().evaluated);
+            let cube = Cube::new(&session.scene(), prototype).unwrap().edit();
+            let mut edit = session.edit(EditTarget::for_layer(LayerId(1)));
+            cube.set_size(&mut edit, 6.);
+            let transaction = edit.finish();
+            session.apply(&transaction).unwrap();
+            let result = session.poll(query).unwrap();
+            assert!(result.evaluated && result.answer_changed);
+            assert!(!result.causes.is_empty());
+        }
+    }
 }
 #[test]
 fn invalid_topology_and_prototype_cycles_fail_explicitly() {
@@ -316,33 +324,55 @@ def Cube "Cube" {}
 }
 
 #[test]
-fn computed_extents_reject_unsupported_policies_but_authored_extents_work() {
-    let (mut store, live) = support::scene(
-        "#usda 1.0\ndef PointInstancer \"I\" {}\ndef PointInstancer \"Authored\" {\nfloat3[] extent = [(-1,-1,-1), (1,1,1)]\n}",
-    );
-    let path = store.path("/I");
-    let authored = store.path("/Authored");
-    let scene = Scene::new(live.stage(), &store);
-    for (ignore_visibility, use_extents_hint) in [(true, false), (false, true)] {
-        let mut cache = BoundsCache::new(
-            Time::Default,
-            BoundsOptions {
-                ignore_visibility,
-                use_extents_hint,
-                ..BoundsOptions::default()
-            },
-        );
-        assert_eq!(
-            cache.world_bound(&scene, path),
-            Err(layerstack_schemas::bounds::BoundsError::UnsupportedInstancerPolicy(path))
-        );
-        assert_eq!(
-            cache
-                .world_bound(&scene, authored)
+fn prototype_extent_policies_are_independent_of_caller_policies() {
+    let expected: serde_json::Value =
+        serde_json::from_str(include_str!("../fixtures/instancer_bounds_policies.json")).unwrap();
+    for row in expected.as_array().unwrap() {
+        let (mut store, mut live) =
+            support::scene(include_str!("../fixtures/instancer_bounds_policies.usda"));
+        let paths = [store.path("/Query/I"), store.path("/Query")];
+        let prototype = store.path("/Prototype/Visible");
+        let options = BoundsOptions {
+            ignore_visibility: row["ignore"].as_bool().unwrap(),
+            use_extents_hint: row["hints"].as_bool().unwrap(),
+            ..BoundsOptions::default()
+        };
+        let mut cache = BoundsCache::new(Time::Default, options.clone());
+        for (path, expected) in paths.into_iter().zip(row["bounds"].as_array().unwrap()) {
+            let bounds = cache
+                .world_bound(&Scene::new(live.stage(), &store), path)
                 .unwrap()
-                .aligned_range()
-                .min,
-            [-1.; 3]
+                .aligned_range();
+            assert_eq!(serde_json::json!([bounds.min, bounds.max]), *expected);
+        }
+        let cube = Cube::new(&Scene::new(live.stage(), &store), prototype)
+            .unwrap()
+            .edit();
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+        cube.set_size(&mut edit, 8.);
+        let transaction = edit.finish();
+        let applied = live.apply(&mut store, &transaction).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        cache.apply_changes(&scene, &applied.changes);
+        let mut fresh = BoundsCache::new(Time::Default, options);
+        for path in paths {
+            assert_eq!(
+                cache.world_bound(&scene, path),
+                fresh.world_bound(&scene, path)
+            );
+        }
+        assert!(!cache.prototype_dependencies(&scene, paths[1]).is_empty());
+        cache.set_time(Time::at(1.));
+        fresh.set_time(Time::at(1.));
+        assert_eq!(
+            cache.world_bound(&scene, paths[1]),
+            fresh.world_bound(&scene, paths[1])
+        );
+        cache.clear();
+        assert!(cache.is_empty());
+        assert_eq!(
+            cache.stats(),
+            layerstack_schemas::bounds::BoundsStats::default()
         );
     }
 }

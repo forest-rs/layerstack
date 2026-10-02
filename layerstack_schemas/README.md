@@ -66,9 +66,8 @@ computed, reused and invalidated work.
 
 When no valid extent is authored, bounds are computed from mesh points or
 cube, sphere, cylinder, cone and capsule parameters, or point-instancer
-prototypes and instance transforms. Computed instancer extents require
-`ignore_visibility = false` and `use_extents_hint = false`; other policies
-return an explicit error unless an extent is authored. Prototype cycles and
+prototypes and instance transforms. Computed instancer extents evaluate prototypes with ordinary visibility and
+without model hints, independently of the caller’s visibility and hint policies. Prototype cycles and
 nesting beyond 64 instancers are rejected. Other procedural extent providers
 remain unsupported and return explicit errors. Common transform helpers do not decompose arbitrary
 matrices or rewrite incompatible op stacks. Prepared operation recipes remain

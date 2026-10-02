@@ -94,8 +94,9 @@ IDs or array positions. `compute_instance_transforms` retains original indices
 and IDs after masking, includes optional prototype-local transforms and anchors
 velocity, acceleration and angular velocity samples to an explicit base time.
 Invalid topology returns an error. Misaligned motion arrays are ignored;
-ordinary interpolation is used when no usable linear or angular motion remains. Spline and sparse-edit motion sources return an explicit
-unsupported error. Bounds caches and retained queries track external and nested
+ordinary interpolation is used when no usable linear or angular motion remains. Sparse motion edits compose through stage resolution; anchoring uses the
+effective contributing sample grids. Scalar spline motion sources return an
+explicit unsupported error because instance motion attributes are arrays. Bounds caches and retained queries track external and nested
 prototype dependencies; `bound_prototype_dependencies` exposes the roots
 consulted, including missing targets that can recover after later edits.
 
@@ -304,3 +305,10 @@ copy/pack each borrowed input view before the cache advances. Duplicate times an
 interpolation policies are preserved; callbacks can return adapter errors and
 stop the batch. The cache ends at the last attempted time; empty requests leave
 it unchanged. No history or shader scheduling is implied.
+
+
+`PointInstancer::compute_instance_transforms_at_times` evaluates ordered shutter
+samples against a fixed topology/mask base, retaining original indices and IDs.
+Sparse default/sample edits participate in motion anchoring without bypassing
+stage composition; dense sources mask weaker sample grids. Any bad sample
+returns an error without a partial batch.

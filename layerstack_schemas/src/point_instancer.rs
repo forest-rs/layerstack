@@ -8,7 +8,7 @@
 //! time offsets and interpolation follow AOUSD Core §12.3–12.5.
 use crate::{PrimView, Scene, Time, gf, usd_geom::PointInstancer};
 use alloc::vec::Vec;
-use layerstack::{InterpolationType, PathId, TargetPath, TokenInterner, Value};
+use layerstack::{PathId, TargetPath, TokenInterner, Value};
 
 /// Policies for computing per-instance transforms.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -59,7 +59,7 @@ pub enum PointInstancerError {
     /// Numeric times must be finite, both times must have the same kind, and
     /// the stage's time-code rate must be finite and positive.
     InvalidTime,
-    /// Motion anchoring requires discrete samples, not splines or sparse edits.
+    /// Motion anchoring requires array samples; scalar splines are unsupported.
     UnsupportedMotionSource(&'static str),
 }
 impl core::fmt::Display for PointInstancerError {
@@ -102,51 +102,65 @@ fn anchor(
     let Time::At { code, .. } = base else {
         return Ok(result);
     };
-    let source = prim
+    // AOUSD Core §12.3–12.5: dense arrays terminate value-source search;
+    // generic sparse edits compose over weaker values. Only sparse opinions
+    // active at this base time expose weaker sample grids. Value resolution at
+    // the selected stage-time anchor still belongs to Stage, including offsets.
+    let opinions = prim
         .property_path(name)
         .and_then(|p| prim.scene().stage().explain_property_path(p))
-        .and_then(|opinions| {
-            opinions.iter().find(|opinion| {
-                opinion.value.time_samples().is_some_and(|v| !v.is_empty())
-                    || opinion.value.spline().is_some()
-                    || opinion.value.default_value().is_some()
-            })
-        });
-    if let Some(source) = source {
-        if source.value.spline().is_some()
-            || source
-                .value
-                .default_value()
-                .is_some_and(|v| v.array_edit_ref().is_some())
-        {
-            return Err(PointInstancerError::UnsupportedMotionSource(name));
-        }
-        if let Some(samples) = source.value.time_samples().filter(|v| !v.is_empty()) {
-            let mut times: Vec<_> = samples
+        .unwrap_or_default();
+    let mut times = Vec::new();
+    for opinion in opinions {
+        if let Some(samples) = opinion.value.time_samples().filter(|s| !s.is_empty()) {
+            let mut mapped: Vec<_> = samples
                 .iter()
-                .map(|(t, _)| t * source.layer_offset.scale + source.layer_offset.offset)
+                .map(|(t, v)| {
+                    (
+                        t * opinion.layer_offset.scale + opinion.layer_offset.offset,
+                        v,
+                    )
+                })
                 .collect();
-            times.sort_by(f64::total_cmp);
-            let lower = times
+            mapped.sort_by(|a, b| a.0.total_cmp(&b.0));
+            times.extend(mapped.iter().map(|&(t, _)| t));
+            let active = mapped
                 .iter()
-                .copied()
-                .take_while(|&t| t <= code)
-                .last()
-                .unwrap_or(times[0]);
-            let upper = times
-                .iter()
-                .copied()
-                .find(|&t| t > code)
-                .unwrap_or(*times.last().expect("nonempty samples"));
-            result = Anchor {
-                time: Time::At {
-                    code: lower,
-                    interpolation: InterpolationType::Held,
-                },
-                sample: Some(lower),
-                bracket: Some([lower, upper]),
-            };
+                .rfind(|&&(t, _)| t <= code)
+                .unwrap_or(&mapped[0])
+                .1;
+            if active.array_edit_ref().is_none() {
+                break;
+            }
+        } else if opinion.value.spline().is_some() {
+            // USD splines are scalar-valued, so an array motion source cannot
+            // be anchored as discrete point/rotation samples.
+            return Err(PointInstancerError::UnsupportedMotionSource(name));
+        } else if let Some(value) = opinion.value.default_value()
+            && value.array_edit_ref().is_none()
+        {
+            break;
         }
+    }
+    if !times.is_empty() {
+        times.sort_by(f64::total_cmp);
+        times.dedup_by(|a, b| *a == *b);
+        let lower = times
+            .iter()
+            .copied()
+            .take_while(|&t| t <= code)
+            .last()
+            .unwrap_or(times[0]);
+        let upper = times
+            .iter()
+            .copied()
+            .find(|&t| t > code)
+            .unwrap_or(*times.last().expect("nonempty samples"));
+        result = Anchor {
+            time: Time::held(lower),
+            sample: Some(lower),
+            bracket: Some([lower, upper]),
+        };
     }
     Ok(result)
 }
@@ -200,6 +214,22 @@ impl PointInstancer<'_> {
         } else {
             mask
         }
+    }
+    /// Computes ordered shutter samples against one fixed topology/mask base.
+    /// Preserves duplicate times and interpolation policies. Any invalid sample
+    /// returns an error without a partial batch. All times must have the same
+    /// default/numeric kind as `base_time`; empty times return an empty batch.
+    /// Matches `UsdGeomPointInstancer::ComputeInstanceTransformsAtTimes` ordering.
+    pub fn compute_instance_transforms_at_times(
+        &self,
+        times: &[Time],
+        base_time: Time,
+        options: InstanceTransformOptions,
+    ) -> Result<Vec<Vec<InstanceTransform>>, PointInstancerError> {
+        times
+            .iter()
+            .map(|&time| self.compute_instance_transforms(time, base_time, options))
+            .collect()
     }
     /// Computes compacted transforms in instancer space. `base_time` fixes
     /// topology and masks and anchors velocity integration; `time` evaluates

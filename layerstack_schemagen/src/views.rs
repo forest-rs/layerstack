@@ -87,7 +87,7 @@ pub(crate) fn snake(name: &str) -> String {
 
 /// `snake` in upper camel case (`subdivision_scheme` →
 /// `SubdivisionScheme`).
-fn pascal(snake: &str) -> String {
+pub(crate) fn pascal(snake: &str) -> String {
     snake
         .split(['_', ':', '-'])
         .filter(|word| !word.is_empty())
@@ -136,20 +136,20 @@ fn method_name(schema: &str, property: &Property) -> String {
 }
 
 /// How a USD value type reads and writes in Rust.
-struct RustType {
+pub(crate) struct RustType {
     /// The getter's type.
-    read: String,
+    pub(crate) read: String,
     /// The setter's type.
-    write: String,
+    pub(crate) write: String,
     /// The expression reading a `Value`.
-    read_fn: String,
+    pub(crate) read_fn: String,
     /// The expression writing one.
-    write_fn: String,
+    pub(crate) write_fn: String,
 }
 
 /// The Rust type of a property whose element type's zero value is `zero`;
 /// `None` for a value-less type (`opaque`).
-fn rust_type(zero: &Value, is_array: bool) -> Result<Option<RustType>, String> {
+pub(crate) fn rust_type(zero: &Value, is_array: bool) -> Result<Option<RustType>, String> {
     let (read, write, name) = match zero {
         Value::Null => return Ok(None),
         Value::Bool(_) => ("bool", "bool", "bool"),

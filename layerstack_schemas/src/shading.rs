@@ -11,6 +11,12 @@
 //! behavior follows `NodeGraph` inheritance; custom OpenUSD connectability plugins
 //! are not loaded.
 
+/// Typed views and authoring handles for OpenUSD's standard shader nodes.
+/// Node defaults are separate from authored USD attribute values.
+pub mod nodes {
+    pub use crate::generated::shader_nodes::*;
+}
+
 mod ports;
 pub use ports::{Port, PortEdit, PortError, PortKind};
 

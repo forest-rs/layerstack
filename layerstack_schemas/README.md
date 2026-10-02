@@ -28,6 +28,10 @@ default, enables every one.
 The `usd-shade` feature also resolves composed connections and material surface,
 displacement and volume sources through node graphs and ordered render contexts.
 Results retain the selected endpoint, other candidates, diagnostics and dependencies.
+`shading::nodes` adds typed views and transaction edit handles for the standard
+preview surface, UV texture, primvar reader and 2D transform nodes. Input getters
+read composed USD values; associated `_default` functions expose node definition
+defaults explicitly. Typed port creation supports the ordinary connection APIs.
 
 The `usd-geom` feature provides caller-owned transform and bounds caches:
 

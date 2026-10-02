@@ -1,0 +1,383 @@
+{
+  "nodes": {
+    "UsdPreviewSurface": {
+      "inputs:clearcoat": {
+        "default": 0.0,
+        "type": "float"
+      },
+      "inputs:clearcoatRoughness": {
+        "default": 0.009999999776482582,
+        "type": "float"
+      },
+      "inputs:diffuseColor": {
+        "default": [
+          0.18000000715255737,
+          0.18000000715255737,
+          0.18000000715255737
+        ],
+        "type": "color3f"
+      },
+      "inputs:displacement": {
+        "default": 0.0,
+        "type": "float"
+      },
+      "inputs:emissiveColor": {
+        "default": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "color3f"
+      },
+      "inputs:ior": {
+        "default": 1.5,
+        "type": "float"
+      },
+      "inputs:metallic": {
+        "default": 0.0,
+        "type": "float"
+      },
+      "inputs:normal": {
+        "default": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "type": "normal3f"
+      },
+      "inputs:occlusion": {
+        "default": 1.0,
+        "type": "float"
+      },
+      "inputs:opacity": {
+        "default": 1.0,
+        "type": "float"
+      },
+      "inputs:opacityMode": {
+        "default": "transparent",
+        "type": "token"
+      },
+      "inputs:opacityThreshold": {
+        "default": 0.0,
+        "type": "float"
+      },
+      "inputs:roughness": {
+        "default": 0.5,
+        "type": "float"
+      },
+      "inputs:specularColor": {
+        "default": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "color3f"
+      },
+      "inputs:useSpecularWorkflow": {
+        "default": 0,
+        "type": "int"
+      },
+      "outputs:displacement": {
+        "default": null,
+        "type": "token"
+      },
+      "outputs:surface": {
+        "default": null,
+        "type": "token"
+      }
+    },
+    "UsdPrimvarReader_float": {
+      "inputs:fallback": {
+        "default": 0.0,
+        "type": "float"
+      },
+      "inputs:varname": {
+        "default": "",
+        "type": "string"
+      },
+      "outputs:result": {
+        "default": null,
+        "type": "float"
+      }
+    },
+    "UsdPrimvarReader_float2": {
+      "inputs:fallback": {
+        "default": [
+          0.0,
+          0.0
+        ],
+        "type": "float2"
+      },
+      "inputs:varname": {
+        "default": "",
+        "type": "string"
+      },
+      "outputs:result": {
+        "default": null,
+        "type": "float2"
+      }
+    },
+    "UsdPrimvarReader_float3": {
+      "inputs:fallback": {
+        "default": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "float3"
+      },
+      "inputs:varname": {
+        "default": "",
+        "type": "string"
+      },
+      "outputs:result": {
+        "default": null,
+        "type": "float3"
+      }
+    },
+    "UsdPrimvarReader_float4": {
+      "inputs:fallback": {
+        "default": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "float4"
+      },
+      "inputs:varname": {
+        "default": "",
+        "type": "string"
+      },
+      "outputs:result": {
+        "default": null,
+        "type": "float4"
+      }
+    },
+    "UsdPrimvarReader_int": {
+      "inputs:fallback": {
+        "default": 0,
+        "type": "int"
+      },
+      "inputs:varname": {
+        "default": "",
+        "type": "string"
+      },
+      "outputs:result": {
+        "default": null,
+        "type": "int"
+      }
+    },
+    "UsdPrimvarReader_matrix": {
+      "inputs:fallback": {
+        "default": [
+          [
+            1.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            1.0,
+            0.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            1.0,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        ],
+        "type": "matrix4d"
+      },
+      "inputs:varname": {
+        "default": "",
+        "type": "string"
+      },
+      "outputs:result": {
+        "default": null,
+        "type": "matrix4d"
+      }
+    },
+    "UsdPrimvarReader_normal": {
+      "inputs:fallback": {
+        "default": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "normal3f"
+      },
+      "inputs:varname": {
+        "default": "",
+        "type": "string"
+      },
+      "outputs:result": {
+        "default": null,
+        "type": "normal3f"
+      }
+    },
+    "UsdPrimvarReader_point": {
+      "inputs:fallback": {
+        "default": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "point3f"
+      },
+      "inputs:varname": {
+        "default": "",
+        "type": "string"
+      },
+      "outputs:result": {
+        "default": null,
+        "type": "point3f"
+      }
+    },
+    "UsdPrimvarReader_string": {
+      "inputs:fallback": {
+        "default": "",
+        "type": "string"
+      },
+      "inputs:varname": {
+        "default": "",
+        "type": "string"
+      },
+      "outputs:result": {
+        "default": null,
+        "type": "string"
+      }
+    },
+    "UsdPrimvarReader_vector": {
+      "inputs:fallback": {
+        "default": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "vector3f"
+      },
+      "inputs:varname": {
+        "default": "",
+        "type": "string"
+      },
+      "outputs:result": {
+        "default": null,
+        "type": "vector3f"
+      }
+    },
+    "UsdTransform2d": {
+      "inputs:in": {
+        "default": [
+          0.0,
+          0.0
+        ],
+        "type": "float2"
+      },
+      "inputs:rotation": {
+        "default": 0.0,
+        "type": "float"
+      },
+      "inputs:scale": {
+        "default": [
+          1.0,
+          1.0
+        ],
+        "type": "float2"
+      },
+      "inputs:translation": {
+        "default": [
+          0.0,
+          0.0
+        ],
+        "type": "float2"
+      },
+      "outputs:result": {
+        "default": null,
+        "type": "float2"
+      }
+    },
+    "UsdUVTexture": {
+      "inputs:bias": {
+        "default": [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "type": "float4"
+      },
+      "inputs:fallback": {
+        "default": [
+          0.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "type": "float4"
+      },
+      "inputs:file": {
+        "default": "",
+        "type": "asset"
+      },
+      "inputs:scale": {
+        "default": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "type": "float4"
+      },
+      "inputs:sourceColorSpace": {
+        "default": "auto",
+        "type": "token"
+      },
+      "inputs:st": {
+        "default": [
+          0.0,
+          0.0
+        ],
+        "type": "float2"
+      },
+      "inputs:wrapS": {
+        "default": "useMetadata",
+        "type": "token"
+      },
+      "inputs:wrapT": {
+        "default": "useMetadata",
+        "type": "token"
+      },
+      "outputs:a": {
+        "default": null,
+        "type": "float"
+      },
+      "outputs:b": {
+        "default": null,
+        "type": "float"
+      },
+      "outputs:g": {
+        "default": null,
+        "type": "float"
+      },
+      "outputs:r": {
+        "default": null,
+        "type": "float"
+      },
+      "outputs:rgb": {
+        "default": null,
+        "type": "float3"
+      }
+    }
+  },
+  "version": "26.8"
+}

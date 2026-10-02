@@ -749,7 +749,7 @@ macro_rules! set_uniform_attribute {
 }
 
 /// Whether an authored declaration or schema defines a relationship on an existing prim.
-#[cfg(any(feature = "usd-shade", feature = "usd-render"))]
+#[cfg(any(feature = "usd-shade", feature = "usd-render", feature = "usd-skel"))]
 pub(crate) fn is_relationship(scene: &Scene<'_>, path: PropertyPath) -> bool {
     let stage = scene.stage();
     if !stage.has_prim(path.prim_path()) {
@@ -765,7 +765,7 @@ pub(crate) fn is_relationship(scene: &Scene<'_>, path: PropertyPath) -> bool {
 
 /// Ordered relationship targets after recursively forwarding relationship paths.
 /// OpenUSD: `UsdRelationship::GetForwardedTargets`.
-#[cfg(any(feature = "usd-shade", feature = "usd-render"))]
+#[cfg(any(feature = "usd-shade", feature = "usd-render", feature = "usd-skel"))]
 pub(crate) fn forwarded_targets(scene: &Scene<'_>, root: PropertyPath) -> Vec<TargetPath> {
     if !is_relationship(scene, root) {
         return Vec::new();

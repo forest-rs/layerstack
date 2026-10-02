@@ -171,3 +171,10 @@ The generated tables and views in `src/generated` derive from OpenUSD's schema
 definitions and are under the Tomorrow Open Source Technology License 1.0
 (`LICENSE-TOST-1.0`, `NOTICE`). The rest of the crate is under Apache-2.0 OR
 MIT (`LICENSE-APACHE`, `LICENSE-MIT`).
+
+With `usd-skel`, `Skeleton::query` prepares a validated parent-first joint
+forest and sparse animation mapping. Queries compute local, skeleton-space and
+inverse-bind skinning transforms at explicit times, retaining rest defaults for
+unanimated joints. `SkelBindingApi` resolves inherited skeleton and animation
+bindings, including explicit empty relationships. Definition snapshots must be
+rebuilt after scene edits; animation reads use normal stage value resolution.

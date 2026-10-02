@@ -363,6 +363,8 @@ pub mod render;
 pub mod retained;
 #[cfg(feature = "usd-shade")]
 pub mod shading;
+#[cfg(feature = "usd-skel")]
+pub mod skel;
 mod table;
 pub mod value;
 #[cfg(feature = "usd-geom")]

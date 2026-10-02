@@ -6,15 +6,42 @@ use super::{InfluenceInterpolation, JointInfluences, decomposition as math};
 use crate::gf;
 use alloc::vec::Vec;
 use math::Matrix3;
-#[derive(Clone, Copy)]
-struct Joint {
+/// One prepared point-skinning joint: real/dual quaternion and residual scale.
+/// Quaternion components are scalar-first `[w, x, y, z]`; residual matrices use
+/// USD row vectors and contain the point path's `f32`-rounded scale/shear as `f64`.
+/// Singular factorization uses a zero real/dual quaternion and identity residual.
+/// Normal skinning uses a separate inverse-transpose decomposition; these values
+/// are for points. No GPU memory layout or precision conversion is implied.
+#[derive(Clone, Copy, Debug)]
+pub struct DualQuaternionJoint {
     real: [f64; 4],
     dual: [f64; 4],
     scale: Matrix3,
     scaled: bool,
 }
-impl Joint {
-    const IDENTITY: Self = Self {
+impl DualQuaternionJoint {
+    /// Rotation quaternion, scalar-first. A singular factorization yields zero.
+    #[must_use]
+    pub fn real(&self) -> [f64; 4] {
+        self.real
+    }
+    /// Dual quaternion encoding translation, scalar-first.
+    #[must_use]
+    pub fn dual(&self) -> [f64; 4] {
+        self.dual
+    }
+    /// Linear residual scale/shear in row-vector convention.
+    #[must_use]
+    pub fn residual_scale(&self) -> &Matrix3 {
+        &self.scale
+    }
+    /// Whether the residual differs from identity at OpenUSD's `1e-6` threshold.
+    #[must_use]
+    pub fn has_scale(&self) -> bool {
+        self.scaled
+    }
+    /// Identity rotation/translation with identity residual scale.
+    pub const IDENTITY: Self = Self {
         real: [1., 0., 0., 0.],
         dual: [0.; 4],
         scale: math::IDENTITY,
@@ -22,7 +49,7 @@ impl Joint {
     };
 }
 pub(super) struct Palette {
-    joints: Vec<Joint>,
+    joints: Vec<DualQuaternionJoint>,
     float_scales: bool,
 }
 fn dot(a: [f64; 4], b: [f64; 4]) -> f64 {
@@ -53,7 +80,7 @@ fn rotate(q: [f64; 4], v: [f64; 3]) -> [f64; 3] {
 fn normalize(real: &mut [f64; 4], dual: &mut [f64; 4]) {
     let length = libm::sqrt(dot(*real, *real));
     if length < 1e-10 {
-        *real = Joint::IDENTITY.real;
+        *real = DualQuaternionJoint::IDENTITY.real;
         *dual = [0.; 4];
     } else {
         let inverse = 1. / length;
@@ -69,7 +96,12 @@ fn normalize(real: &mut [f64; 4], dual: &mut [f64; 4]) {
     clippy::cast_possible_truncation,
     reason = "OpenUSD point residual scales are GfMatrix3f"
 )]
-fn joint(matrix: Matrix3, rotation: Matrix3, translation: [f64; 3], float_scales: bool) -> Joint {
+fn joint(
+    matrix: Matrix3,
+    rotation: Matrix3,
+    translation: [f64; 3],
+    float_scales: bool,
+) -> DualQuaternionJoint {
     let real = math::quaternion(&rotation);
     let dual = multiply(
         [
@@ -88,7 +120,7 @@ fn joint(matrix: Matrix3, rotation: Matrix3, translation: [f64; 3], float_scales
         (0..3)
             .any(|j| (scale[i][j] - math::IDENTITY[i][j]).abs() >= 1e-6 || !scale[i][j].is_finite())
     });
-    Joint {
+    DualQuaternionJoint {
         real,
         dual,
         scale,
@@ -104,9 +136,9 @@ impl Palette {
             .map(|m| {
                 let matrix = core::array::from_fn(|i| core::array::from_fn(|j| m[i][j]));
                 math::factored_rotation(&matrix).map_or(
-                    Joint {
+                    DualQuaternionJoint {
                         real: [0.; 4],
-                        ..Joint::IDENTITY
+                        ..DualQuaternionJoint::IDENTITY
                     },
                     |rotation| joint(matrix, rotation, [m[3][0], m[3][1], m[3][2]], true),
                 )
@@ -129,10 +161,13 @@ impl Palette {
             float_scales: false,
         }
     }
+    pub(super) fn joints(&self) -> &[DualQuaternionJoint] {
+        &self.joints
+    }
     pub(super) fn occupancy(&self) -> (usize, usize) {
         (
-            self.joints.len() * size_of::<Joint>(),
-            self.joints.capacity() * size_of::<Joint>(),
+            self.joints.len() * size_of::<DualQuaternionJoint>(),
+            self.joints.capacity() * size_of::<DualQuaternionJoint>(),
         )
     }
     pub(super) fn view<'a>(&'a self, mapping: Option<&'a [Option<usize>]>) -> View<'a> {
@@ -155,10 +190,10 @@ impl View<'_> {
         self.mapping
             .map_or(self.palette.joints.len(), <[Option<usize>]>::len)
     }
-    fn joint(&self, index: usize) -> Joint {
+    fn joint(&self, index: usize) -> DualQuaternionJoint {
         self.mapping.map_or_else(
             || self.palette.joints[index],
-            |m| m[index].map_or(Joint::IDENTITY, |i| self.palette.joints[i]),
+            |m| m[index].map_or(DualQuaternionJoint::IDENTITY, |i| self.palette.joints[i]),
         )
     }
     #[allow(

@@ -1,7 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Backend-independent binding inputs, without pose or vertex evaluation.
+//! Backend-independent resolved bindings and retained deformation input views.
 use super::{
     InfluenceInterpolation, JointInfluences, SkelError, SkinningMethod, SkinningQuery, invalid,
     read,
@@ -112,5 +112,120 @@ impl SkinningQuery<'_> {
     #[must_use]
     pub fn joint_mapping(&self) -> Option<&[Option<usize>]> {
         self.definition.joint_mapping.as_deref()
+    }
+}
+
+/// Conservative upload revisions within one [`super::SkelCache`] instance.
+/// Compare revisions only from the same cache. They survive `clear`, are never
+/// reused, and advance when their component is rebuilt/resampled, even if values
+/// happen to compare equal. They are neither content hashes nor scene identities.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct DeformationRevisions {
+    /// Shared rig topology, bind/rest transforms and animation mappings.
+    pub skeleton_definition: u64,
+    /// Geometry binding, joint mapping and captured shape definitions.
+    pub binding_definition: u64,
+    /// Flattened influences, geometry bind and method; independent of pose.
+    pub inputs: u64,
+    /// Shared inverse-bind/animated palette, also covering point DQS components.
+    pub pose: u64,
+    /// Mapped shape weights and inbetween contributions; zero if no shape binding.
+    pub blend_weights: u64,
+}
+
+/// Borrowed retained deformation inputs at the cache's explicit time.
+/// No points/normals are read or deformed. Mesh parts share rig-order palettes;
+/// custom binding orders also expose mapped matrices and their joint remapping.
+/// Copy or pack required data before mutating the cache. Consumers own GPU
+/// formats, uploads, execution and any previous-frame or shutter-sample history.
+/// AOUSD Core §6.3, §12.3; OpenUSD `UsdSkel` palette sharing and blend-before-skin.
+#[derive(Clone, Copy, Debug)]
+pub struct DeformationInputs<'a> {
+    pub(super) time: Time,
+    pub(super) definition: &'a super::skinning::SkinningDefinition,
+    pub(super) binding: &'a SkinningBindingInputs,
+    pub(super) shared_transforms: &'a [gf::Matrix4],
+    pub(super) transforms: &'a [gf::Matrix4],
+    pub(super) dual_quaternions: Option<&'a [super::DualQuaternionJoint]>,
+    pub(super) shape_weights: &'a [f32],
+    pub(super) contributions: &'a [super::BlendShapeContribution],
+    pub(super) revisions: DeformationRevisions,
+}
+impl DeformationInputs<'_> {
+    /// Geometry whose binding supplies these inputs.
+    #[must_use]
+    pub fn geometry_path(&self) -> layerstack::PathId {
+        self.definition.geometry
+    }
+    /// Skeleton identity in this scene's composed namespace.
+    #[must_use]
+    pub fn skeleton_path(&self) -> layerstack::PathId {
+        self.definition.skeleton
+    }
+    /// Time and interpolation policy used for sampled values.
+    #[must_use]
+    pub fn time(&self) -> Time {
+        self.time
+    }
+    /// Resolved influences, geometry-bind transform and method.
+    #[must_use]
+    pub fn binding(&self) -> &SkinningBindingInputs {
+        self.binding
+    }
+    /// Inverse-bind/animated matrices in the binding order used by influences.
+    #[must_use]
+    pub fn skinning_transforms(&self) -> &[gf::Matrix4] {
+        self.transforms
+    }
+    /// The same palette in Skeleton order, shared across geometry bindings.
+    /// Pair it with `joint_mapping` when influence indices use a custom order.
+    #[must_use]
+    pub fn shared_skinning_transforms(&self) -> &[gf::Matrix4] {
+        self.shared_transforms
+    }
+    /// Binding-to-Skeleton order; absent means identity order, unmapped means an
+    /// identity transform. Matches [`SkinningQuery::joint_mapping`].
+    #[must_use]
+    pub fn joint_mapping(&self) -> Option<&[Option<usize>]> {
+        self.definition.joint_mapping.as_deref()
+    }
+    /// Prepared point DQS components in Skeleton order, or `None` for LBS.
+    /// Apply the binding's joint mapping, including identity for unmapped joints.
+    /// Determine residual-scale use from mapped joints, excluding unused rig
+    /// joints; `DualQuaternionJoint::has_scale` supplies each joint's flag.
+    /// Normal skinning requires its own inverse-transpose decomposition.
+    #[must_use]
+    pub fn shared_dual_quaternions(&self) -> Option<&[super::DualQuaternionJoint]> {
+        self.dual_quaternions
+    }
+    /// Captured shape arrays, local to this geometry binding.
+    #[must_use]
+    pub fn blend_shapes(&self) -> Option<&super::BlendShapeQuery> {
+        self.definition.blend_shapes.as_ref()
+    }
+    /// Mapped animation weights in the local shape-name order; empty if unbound.
+    #[must_use]
+    pub fn blend_shape_weights(&self) -> &[f32] {
+        self.shape_weights
+    }
+    /// Non-null inbetween sample contributions, indexed into `blend_shapes`.
+    #[must_use]
+    pub fn blend_shape_contributions(&self) -> &[super::BlendShapeContribution] {
+        self.contributions
+    }
+    /// Independent stamps for deciding which retained buffers need an upload.
+    #[must_use]
+    pub fn revisions(&self) -> DeformationRevisions {
+        self.revisions
+    }
+    /// Validates influences and all shape offset/index cardinalities against an
+    /// adapter-owned vertex buffer. This does not inspect or deform that buffer.
+    /// Matrix/offset precision conversion and normal topology remain caller policy.
+    pub fn validate_point_count(&self, point_count: usize) -> Result<(), SkelError> {
+        self.binding.validate(point_count, self.transforms.len())?;
+        if let Some(shapes) = self.blend_shapes() {
+            shapes.validate_point_count(point_count)?;
+        }
+        Ok(())
     }
 }

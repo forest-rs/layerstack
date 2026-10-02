@@ -249,3 +249,22 @@ unmapped joints use identity transforms. `BlendShapeQuery::samples` and `sample`
 expose sparse/dense point and normal offsets in contribution order, including
 inbetweens. `validate_point_count` checks all samples before a complete buffer
 upload, while CPU evaluation continues to validate only active samples.
+
+
+`SkelCache::deformation_inputs` borrows retained binding values, shared rig-order
+matrices, mapped binding-order matrices, shape samples and evaluated inbetween
+contributions without reading or deforming vertex buffers. DQS bindings also
+expose prepared point quaternion components and residual scale/shear; their
+scalar-first component order and row-vector convention are documented on
+`DualQuaternionJoint`. Normal DQS uses a separate inverse-transpose decomposition.
+Validate the view against the adapter's vertex count before uploading.
+
+`DeformationRevisions` separates skeleton and binding definitions, flattened
+inputs, shared poses and local shape weights/contributions. Revisions are
+conservative cache-local stamps, survive `clear`, and must only be compared within
+one cache instance. A resync can rebuild several components; precise pose/weight
+edits and time changes preserve independent inputs. Share a palette upload by
+skeleton path and pose revision. Consumers choose GPU packing, precision and
+execution, and retain their own previous-frame or shutter-sample history. The
+`deformation_inputs` example demonstrates selective uploads and motion history
+with renderer-owned buffers.

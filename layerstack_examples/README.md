@@ -26,6 +26,10 @@ Small runnable programs that demonstrate how to use the `layerstack` API, and th
   (authors a small animated orrery through the transform op API, then prints the world
   transform, visibility and purpose of every `Gprim` at two time codes, through one `XformCache`
   per time code)
+- `cargo run -p layerstack_examples --example deformation_inputs`
+  (prepares renderer-owned binding buffers and a shared rig palette without reading or
+  deforming CPU vertices; revisions skip repeat uploads and the renderer keeps previous-frame
+  palettes for motion history)
 - `cargo run -p layerstack_examples --example light_rig_slots`
   (sparse edits to a typed `Vec` of light rig slots with `opinionated` alone: insert a light,
   duplicate the last slot, and resize with an unlit light as the host-supplied fill)

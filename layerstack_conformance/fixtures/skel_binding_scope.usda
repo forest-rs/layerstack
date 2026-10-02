@@ -1,0 +1,42 @@
+#usda 1.0
+def Xform "Outside" (prepend apiSchemas = ["SkelBindingAPI"]) {
+    rel skel:skeleton = </Outside/Skeleton>
+    int[] primvars:skel:jointIndices = [0]
+    float[] primvars:skel:jointWeights = [1]
+    matrix4d primvars:skel:geomBindTransform = ((1,0,0,0),(0,1,0,0),(0,0,1,0),(10,0,0,1))
+    token primvars:skel:skinningMethod = "unsupportedOutsideRoot"
+    uniform token[] skel:joints = ["missing"]
+    def Skeleton "Skeleton" {
+        uniform token[] joints = ["root"]
+        uniform matrix4d[] restTransforms = [((1,0,0,0),(0,1,0,0),(0,0,1,0),(1,0,0,1))]
+        uniform matrix4d[] bindTransforms = [((1,0,0,0),(0,1,0,0),(0,0,1,0),(0,0,0,1))]
+    }
+    def SkelRoot "AboveOnly" {
+        def Mesh "Mesh" {
+            point3f[] points = [(0,0,0)]
+        }
+    }
+    def SkelRoot "SkeletonOnly" (prepend apiSchemas = ["SkelBindingAPI"]) {
+        rel skel:skeleton = </Outside/Skeleton>
+        def Mesh "Mesh" {
+            point3f[] points = [(0,0,0)]
+        }
+    }
+    def SkelRoot "InfluencesOnly" (prepend apiSchemas = ["SkelBindingAPI"]) {
+        int[] primvars:skel:jointIndices = [0]
+        float[] primvars:skel:jointWeights = [1]
+        def Mesh "Mesh" {
+            point3f[] points = [(0,0,0)]
+        }
+    }
+    def SkelRoot "Local" (prepend apiSchemas = ["SkelBindingAPI"]) {
+        rel skel:skeleton = </Outside/Skeleton>
+        int[] primvars:skel:jointIndices = [0]
+        float[] primvars:skel:jointWeights = [1]
+        def Xform "Geometry" {
+            def Mesh "Mesh" {
+            point3f[] points = [(0,0,0)]
+        }
+        }
+    }
+}

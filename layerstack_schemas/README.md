@@ -178,3 +178,17 @@ inverse-bind skinning transforms at explicit times, retaining rest defaults for
 unanimated joints. `SkelBindingApi` resolves inherited skeleton and animation
 bindings, including explicit empty relationships. Definition snapshots must be
 rebuilt after scene edits; animation reads use normal stage value resolution.
+`SkelRoot::skinning_queries` discovers geometry bindings. `SkinningQuery` handles
+independently inherited, indexed constant/vertex influence primvars, custom
+joint order and geometry bind transforms. CPU points are returned in skeleton
+space using authored weights without normalization. `dualQuaternion` returns
+an explicit unsupported-method error. Queries expose their source prim roots;
+rebuild them when bindings, definition arrays or influence metadata change.
+
+`BlendShapeQuery` captures local dense/sparse point and normal offsets, including
+weighted inbetweens, interpolation and endpoint extrapolation. Animation weights
+map by name. `SkinningQuery::compute_deformed_points` applies blend shapes before
+joint skinning; standalone shape queries also work without joint influences.
+Normal offsets are returned without renormalization or skeletal normal skinning.
+The pure kernels also offer reusable buffers; validation failures leave them
+unchanged. Definition snapshots expose shape targets and refresh explicitly.

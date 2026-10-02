@@ -1,0 +1,29 @@
+[
+  {
+    "root": "/Outside/AboveOnly",
+    "geometries": []
+  },
+  {
+    "root": "/Outside/SkeletonOnly",
+    "geometries": []
+  },
+  {
+    "root": "/Outside/InfluencesOnly",
+    "geometries": []
+  },
+  {
+    "root": "/Outside/Local",
+    "geometries": [
+      {
+        "path": "/Outside/Local/Geometry/Mesh",
+        "points": [
+          [
+            1.0,
+            0.0,
+            0.0
+          ]
+        ]
+      }
+    ]
+  }
+]

@@ -6,7 +6,7 @@ OpenUSD 26.8 (the `generatedSchema.usda`, `plugInfo.json` and standard
 usd-core 26.8 wheel), which are distributed under the Tomorrow Open Source
 Technology License 1.0; see `LICENSE-TOST-1.0`.
 
-`src/skel/decomposition.rs` adapts OpenUSD's Gf matrix factorization,
+`src/gf/decomposition.rs` adapts OpenUSD's Gf matrix factorization,
 orthogonalization and quaternion extraction under the same license.
 OpenUSD's notice follows.
 

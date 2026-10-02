@@ -26,6 +26,9 @@ Small runnable programs that demonstrate how to use the `layerstack` API, and th
   (authors a small animated orrery through the transform op API, then prints the world
   transform, visibility and purpose of every `Gprim` at two time codes, through one `XformCache`
   per time code)
+- `cargo run -p layerstack_examples --example camera_frustum`
+  (computes sampled camera projection, view and primary frustum, then culls ordered
+  shutter samples of moving point instances without a graphics backend)
 - `cargo run -p layerstack_examples --example morph_animation`
   (retains animated morph targets without a skeleton, with independent definition/weight
   revisions and cached geometry-space point outputs)

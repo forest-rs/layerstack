@@ -12,6 +12,8 @@
 //! OpenUSD's to within the rounding of the platform's `sin`, `cos` and
 //! `acos` and of fused multiply-adds.
 
+pub(crate) mod decomposition;
+
 use core::f64::consts::PI;
 
 /// A 4×4 double matrix, rows first.

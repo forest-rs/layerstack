@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! OpenUSD DQS: linear residual scale plus hemisphere-aligned rotation/translation.
-use super::{InfluenceInterpolation, JointInfluences, decomposition as math};
+use super::{InfluenceInterpolation, JointInfluences};
 use crate::gf;
+use crate::gf::decomposition as math;
 use alloc::vec::Vec;
 use math::Matrix3;
 /// One prepared skinning joint: real/dual quaternion and residual scale.

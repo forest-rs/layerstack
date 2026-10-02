@@ -155,6 +155,18 @@ Those policies are separate from composed connection inspection.
 Run `cargo run -p layerstack_examples --bin shading_values` for a complete
 interface-input authoring and value-source inspection example.
 
+`usd_geom::Camera::compute_camera` resolves a sampled camera through a caller-owned
+`XformCache`. The owned `camera::ComputedCamera` exposes authored lens parameters,
+view/projection matrices, world frustum corners and inward planes, conservative
+oriented-bound culling, and frame-relative shutter intervals. Camera rotation
+conforms scale, shear and reflection as OpenUSD's `GfFrustum`; the authored world
+matrix is retained separately. Matrices use USD row vectors and OpenGL `[-1,1]`
+depth. Consumers choose aspect conforming, backend clip-space conversion and shutter
+sampling, and execute any additional authored camera-space clipping planes.
+Recompute snapshots after edits and pass ancestor changes to `XformCache`. Unknown
+projection tokens and invalid geometric parameters return `CameraError`. See the
+`camera_frustum` example for moving point instances sampled across a shutter.
+
 Retained computed queries are available in `retained` with `usd-geom` and
 `usd-shade`. Caller-owned `RetainedQueries` observe a host-owned `LiveStage`, retaining world
 transforms, world bounds and shading providers through edits and time changes.

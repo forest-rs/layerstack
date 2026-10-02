@@ -1,0 +1,49 @@
+#usda 1.0
+# Copyright 2026 the LayerStack Authors
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+
+def Camera "Defaults" {}
+def Xform "Rig" {
+    double3 xformOp:translate.timeSamples = {0: (1,2,10), 2: (5,-2,14)}
+    float3 xformOp:rotateXYZ = (12,30,-7)
+    uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:rotateXYZ"]
+    def Camera "Perspective" {
+        float horizontalAperture = 36
+        float verticalAperture = 24
+        float horizontalApertureOffset = 3
+        float verticalApertureOffset = -2
+        float focalLength.timeSamples = {0: 35, 2: 70}
+        float2 clippingRange = (0.5,100)
+        float4[] clippingPlanes = [(1,0,0,0)]
+        float fStop = 2.8
+        float focusDistance = 12
+        double shutter:open = -0.25
+        double shutter:close = 0.25
+        double3 xformOp:translate = (0,3,0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+    def Camera "Orthographic" {
+        token projection = "orthographic"
+        float horizontalAperture = 40
+        float verticalAperture = 20
+        float horizontalApertureOffset = 4
+        float verticalApertureOffset = 2
+        float2 clippingRange = (-2,30)
+        double shutter:open = 0.5
+        double shutter:close = -0.5
+        matrix4d xformOp:transform = ((1,0.2,0,0),(0,2,0.1,0),(0.05,0,3,0),(1,0,0,1))
+        uniform token[] xformOpOrder = ["xformOp:transform"]
+    }
+    def Camera "Mirrored" {
+        matrix4d xformOp:transform = ((-2,0.1,0,0),(0,3,0.2,0),(0.1,0,4,0),(2,-1,3,1))
+        uniform token[] xformOpOrder = ["!resetXformStack!", "xformOp:transform"]
+    }
+}
+def Camera "ZeroFocal" {
+    float focalLength = 0
+    float2 clippingRange = (1,5)
+}
+def Camera "BlockedLens" {
+    token projection = None
+    float focalLength = None
+}

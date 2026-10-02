@@ -15,7 +15,6 @@ use crate::{
 };
 mod bounds;
 mod cache;
-mod decomposition;
 mod dual_quaternion;
 pub use cache::{SkelCache, SkelCacheMemory, SkelCacheStats};
 pub use dual_quaternion::DualQuaternionJoint;

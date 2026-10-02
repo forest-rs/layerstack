@@ -1,7 +1,7 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! CPU linear-blend skinning with explicit joint and geometry spaces.
+//! CPU skinning with explicit methods, joint order and geometry spaces.
 use super::{
     BlendShapeQuery, SkelError, SkeletonQuery, inherited_target_with_root, invalid, read, tokens,
 };
@@ -12,6 +12,54 @@ use crate::{
 };
 use alloc::{sync::Arc, vec, vec::Vec};
 use layerstack::{HashMap, PathId, Specifier};
+
+/// CPU deformation method authored by `primvars:skel:skinningMethod`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SkinningMethod {
+    /// Weighted transformed points, with unnormalized authored weights.
+    #[default]
+    ClassicLinear,
+    /// Hemisphere-aligned normalized dual quaternions, with linear residual
+    /// scale/shear. Joint matrices are affine, as required by `UsdSkel`.
+    DualQuaternion,
+}
+
+/// Computes skeleton-space points with an explicit skinning method. DQS follows
+/// `UsdSkelSkinPoints`: normalized rotation/translation plus unnormalized linear
+/// residual scale. Singular joint factorization uses OpenUSD's zero-DQ fallback.
+pub fn skin_points_with_method(
+    method: SkinningMethod,
+    geom_bind: &gf::Matrix4,
+    joint_transforms: &[gf::Matrix4],
+    influences: JointInfluences<'_>,
+    points: &[[f32; 3]],
+) -> Result<Vec<[f32; 3]>, SkelError> {
+    if method == SkinningMethod::ClassicLinear {
+        return skin_points(geom_bind, joint_transforms, influences, points);
+    }
+    let mut points = points.to_vec();
+    skin_points_in_place_with_method(method, geom_bind, joint_transforms, influences, &mut points)?;
+    Ok(points)
+}
+/// Deforms a reusable buffer with an explicit method. Influence validation
+/// precedes mutation; errors leave points unchanged. DQS prepares a temporary
+/// joint palette; use `SkelCache` to share retained palettes across geometry.
+pub fn skin_points_in_place_with_method(
+    method: SkinningMethod,
+    geom_bind: &gf::Matrix4,
+    joint_transforms: &[gf::Matrix4],
+    influences: JointInfluences<'_>,
+    points: &mut [[f32; 3]],
+) -> Result<(), SkelError> {
+    if method == SkinningMethod::ClassicLinear {
+        return skin_points_in_place(geom_bind, joint_transforms, influences, points);
+    }
+    influences.validate(points.len(), joint_transforms.len())?;
+    super::dual_quaternion::Palette::points(joint_transforms)
+        .view(None)
+        .points(geom_bind, influences, points);
+    Ok(())
+}
 
 /// How joint influence blocks apply to geometry points.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -223,7 +271,7 @@ fn skin_point<const PROJECT_BIND: bool>(
     clippy::cast_possible_truncation,
     reason = "UsdSkelSkinPoints rounds transformed points to GfVec3f"
 )]
-fn transform_point(point: [f32; 3], matrix: &gf::Matrix4, project: bool) -> [f32; 3] {
+pub(super) fn transform_point(point: [f32; 3], matrix: &gf::Matrix4, project: bool) -> [f32; 3] {
     let component = |j| {
         f64::from(point[0]) * matrix[0][j]
             + f64::from(point[1]) * matrix[1][j]
@@ -295,6 +343,7 @@ impl SkinningDefinition {
     }
 }
 pub(super) struct SkinningInputs {
+    pub method: SkinningMethod,
     pub bind: gf::Matrix4,
     pub transforms: Vec<gf::Matrix4>,
     pub indices: Vec<i32>,
@@ -445,11 +494,31 @@ impl<'a> SkinningQuery<'a> {
     pub fn interpolation(&self) -> InfluenceInterpolation {
         self.definition.interpolation
     }
+    /// Reads the inherited uniform skinning method, defaulting to classic linear.
+    /// Unknown tokens return an explicit unsupported-method error.
+    pub fn skinning_method(&self) -> Result<SkinningMethod, SkelError> {
+        let method = self
+            .definition
+            .method
+            .and_then(|p| {
+                PrimView::new(self.scene, p)
+                    .read_value("primvars:skel:skinningMethod", crate::value::read_token)
+            })
+            .unwrap_or("classicLinear");
+        match method {
+            "classicLinear" => Ok(SkinningMethod::ClassicLinear),
+            "dualQuaternion" => Ok(SkinningMethod::DualQuaternion),
+            _ => Err(SkelError::UnsupportedSkinningMethod {
+                prim: self.definition.geometry,
+            }),
+        }
+    }
     /// Skins caller-supplied geometry-local points with animated joint matrices.
     /// Blend-shape offsets are not applied by this method.
     pub fn skin_points(&self, points: &[[f32; 3]], time: Time) -> Result<Vec<[f32; 3]>, SkelError> {
         let inputs = self.inputs(time)?;
-        skin_points(
+        skin_points_with_method(
+            inputs.method,
             &inputs.bind,
             &inputs.transforms,
             inputs.influences(),
@@ -472,19 +541,7 @@ impl<'a> SkinningQuery<'a> {
         time: Time,
         transforms: &[gf::Matrix4],
     ) -> Result<SkinningInputs, SkelError> {
-        let method = self
-            .definition
-            .method
-            .and_then(|p| {
-                PrimView::new(self.scene, p)
-                    .read_value("primvars:skel:skinningMethod", crate::value::read_token)
-            })
-            .unwrap_or("classicLinear");
-        if method != "classicLinear" {
-            return Err(SkelError::UnsupportedSkinningMethod {
-                prim: self.definition.geometry,
-            });
-        }
+        let method = self.skinning_method()?;
         let geom_bind = self
             .definition
             .geom_bind
@@ -529,6 +586,7 @@ impl<'a> SkinningQuery<'a> {
         )
         .ok_or_else(|| invalid(self.definition.weights, "primvars:skel:jointWeights"))?;
         Ok(SkinningInputs {
+            method,
             bind: geom_bind,
             transforms: ordered.unwrap_or_default(),
             indices,
@@ -545,7 +603,8 @@ impl<'a> SkinningQuery<'a> {
         time: Time,
     ) -> Result<Vec<[f32; 3]>, SkelError> {
         let inputs = self.inputs(time)?;
-        super::skin_normals(
+        super::skin_normals_with_method(
+            inputs.method,
             &inputs.bind,
             &inputs.transforms,
             inputs.influences(),
@@ -565,14 +624,16 @@ impl<'a> SkinningQuery<'a> {
             .unwrap_or("vertex");
         let inputs = self.inputs(time)?;
         match interpolation {
-            "vertex" | "varying" => super::skin_normals(
+            "vertex" | "varying" => super::skin_normals_with_method(
+                inputs.method,
                 &inputs.bind,
                 &inputs.transforms,
                 inputs.influences(),
                 &normals,
             ),
             "constant" if self.definition.interpolation == InfluenceInterpolation::Constant => {
-                super::skin_normals(
+                super::skin_normals_with_method(
+                    inputs.method,
                     &inputs.bind,
                     &inputs.transforms,
                     inputs.influences(),
@@ -589,7 +650,8 @@ impl<'a> SkinningQuery<'a> {
                     crate::value::read_int_array,
                 )
                 .ok_or_else(|| invalid(self.definition.geometry, "faceVertexIndices"))?;
-                super::skin_face_varying_normals(
+                super::skin_face_varying_normals_with_method(
+                    inputs.method,
                     &inputs.bind,
                     &inputs.transforms,
                     inputs.influences(),
@@ -605,7 +667,12 @@ impl<'a> SkinningQuery<'a> {
     /// Requires constant influences; uses OpenUSD's float-frame rounding.
     pub fn compute_rigid_transform(&self, time: Time) -> Result<gf::Matrix4, SkelError> {
         let inputs = self.inputs(time)?;
-        super::rigid_skinning_transform(&inputs.bind, &inputs.transforms, inputs.influences())
+        super::rigid_skinning_transform_with_method(
+            inputs.method,
+            &inputs.bind,
+            &inputs.transforms,
+            inputs.influences(),
+        )
     }
     /// Reads the geometry's sampled `points`, then computes skeleton-space skinning.
     pub fn compute_skinned_points(&self, time: Time) -> Result<Vec<[f32; 3]>, SkelError> {

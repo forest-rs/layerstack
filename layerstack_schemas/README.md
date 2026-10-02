@@ -169,7 +169,8 @@ See [CHANGELOG.md](CHANGELOG.md) for release status.
 
 The generated tables and views in `src/generated` derive from OpenUSD's schema
 definitions and are under the Tomorrow Open Source Technology License 1.0
-(`LICENSE-TOST-1.0`, `NOTICE`). The rest of the crate is under Apache-2.0 OR
+(`LICENSE-TOST-1.0`, `NOTICE`). The private matrix decomposition code adapts
+OpenUSD Gf under the same license. The rest of the crate is under Apache-2.0 OR
 MIT (`LICENSE-APACHE`, `LICENSE-MIT`).
 
 With `usd-skel`, `Skeleton::query` prepares a validated parent-first joint
@@ -182,8 +183,8 @@ rebuilt after scene edits; animation reads use normal stage value resolution.
 `skinning_queries_with_instance_proxies` also visits native instanced rigs. `SkinningQuery` handles
 independently inherited, indexed constant/vertex influence primvars, custom
 joint order and geometry bind transforms. CPU points are returned in skeleton
-space using authored weights without normalization. `dualQuaternion` returns
-an explicit unsupported-method error. Queries expose their source prim roots;
+space. Bindings honor both `classicLinear` and `dualQuaternion`; unknown tokens
+return an explicit unsupported-method error. Queries expose their source prim roots;
 rebuild them when bindings, definition arrays or influence metadata change.
 
 `BlendShapeQuery` captures local dense/sparse point and normal offsets, including
@@ -222,6 +223,17 @@ cache.set_time(Time::at(2.0));
 cache.apply_changes(&updated_scene, &applied.changes);
 let updated = cache.deformed_points(&updated_scene, geometry)?;
 ```
+
+Dual-quaternion skinning blends hemisphere-aligned rotation/translation and
+linear residual scale/shear, matching OpenUSD's affine joint-matrix convention.
+Authored weights remain unnormalized for linear accumulation; quaternion blends
+are normalized. Singular point factorization uses the reference zero-DQ fallback,
+while singular normal inverse transposes return an error. The explicit
+`*_with_method` kernels accept `SkinningMethod`; existing short kernel names use
+classic linear blending. `SkinningQuery::skinning_method` exposes the inherited
+method, and `SkelCache` shares DQS point/normal decompositions per skeleton pose.
+Reference fixtures cover twist, maximum-weight pivots and ties, scale, shear,
+reflections, zero/nonunit/negative weights and singular factorization.
 
 The optional `simd` feature accelerates CPU linear-blend skinning with
 `fearless_simd` 1.0. It preserves separate arithmetic and USD float rounding;

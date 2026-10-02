@@ -14,12 +14,16 @@ use crate::{
     usd_skel::{SkelAnimation, SkelBindingApi, Skeleton},
 };
 mod cache;
+mod decomposition;
+mod dual_quaternion;
 pub use cache::{SkelCache, SkelCacheMemory, SkelCacheStats};
 mod helpers;
 pub use helpers::JointTransformComponents;
 mod normals;
 pub use normals::{
-    rigid_skinning_transform, skin_face_varying_normals, skin_normals, skin_normals_in_place,
+    rigid_skinning_transform, rigid_skinning_transform_with_method, skin_face_varying_normals,
+    skin_face_varying_normals_with_method, skin_normals, skin_normals_in_place,
+    skin_normals_in_place_with_method, skin_normals_with_method,
 };
 mod blend_shapes;
 pub use blend_shapes::{
@@ -29,7 +33,8 @@ pub use blend_shapes::{
 mod simd;
 mod skinning;
 pub use skinning::{
-    InfluenceInterpolation, JointInfluences, SkinningQuery, skin_points, skin_points_in_place,
+    InfluenceInterpolation, JointInfluences, SkinningMethod, SkinningQuery, skin_points,
+    skin_points_in_place, skin_points_in_place_with_method, skin_points_with_method,
 };
 
 use alloc::{
@@ -88,7 +93,7 @@ pub enum SkelError {
         /// Concrete validation failure.
         reason: &'static str,
     },
-    /// This implementation supports `classicLinear`; other methods error.
+    /// The authored token is neither `classicLinear` nor `dualQuaternion`.
     UnsupportedSkinningMethod {
         /// Bound geometry requesting the unsupported method.
         prim: PathId,

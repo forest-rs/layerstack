@@ -11,9 +11,11 @@
 # below.
 generated="layerstack_schemas/src/generated"
 generated_tests="layerstack_conformance/tests/generated"
+# Private Gf math adapted from OpenUSD carries its upstream license.
+licensed_math="layerstack_schemas/src/skel/decomposition.rs"
 
 # Check all the standard Rust source files
-output=$(rg "^// Copyright (19|20)[\d]{2} (.+ and )?the LayerStack Authors( and .+)?$\n^// SPDX-License-Identifier: Apache-2\.0 OR MIT$\n\n" --files-without-match --multiline -g "*.rs" -g "!$generated/**" -g "!$generated_tests/**" .)
+output=$(rg "^// Copyright (19|20)[\d]{2} (.+ and )?the LayerStack Authors( and .+)?$\n^// SPDX-License-Identifier: Apache-2\.0 OR MIT$\n\n" --files-without-match --multiline -g "*.rs" -g "!$generated/**" -g "!$generated_tests/**" -g "!$licensed_math" .)
 
 if [ -n "$output" ]; then
 	echo -e "The following files lack the correct copyright header:\n"
@@ -25,12 +27,12 @@ if [ -n "$output" ]; then
 	exit 1
 fi
 
-# Check the generated tables: OpenUSD's copyright, then ours, under the
+# Check generated tables and adapted math: OpenUSD's copyright, then ours, under the
 # Tomorrow Open Source Technology License 1.0.
-output=$(rg "^// Copyright 2016 Pixar$\n^// Copyright (19|20)[\d]{2} the LayerStack Authors$\n^// SPDX-License-Identifier: LicenseRef-TOST-1\.0$\n" --files-without-match --multiline -g "*.rs" "$generated" "$generated_tests")
+output=$(rg "^// Copyright 2016 Pixar$\n^// Copyright (19|20)[\d]{2} the LayerStack Authors$\n^// SPDX-License-Identifier: LicenseRef-TOST-1\.0$\n" --files-without-match --multiline -g "*.rs" "$generated" "$generated_tests" "$licensed_math")
 
 if [ -n "$output" ]; then
-	echo -e "The following generated files lack the generated header:\n"
+	echo -e "The following OpenUSD-derived files lack the upstream header:\n"
 	echo $output
 	echo -e "\n\nRegenerate them with layerstack_schemagen.\n"
 	exit 1

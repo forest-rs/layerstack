@@ -4,7 +4,8 @@
 //! Skeleton topology, pose evaluation and CPU deformation, without a renderer.
 //!
 //! Queries retain definition snapshots and read animation at explicit times.
-//! Rebuild them after scene edits; no global cache or implicit edit observation.
+//! Rebuild snapshots after scene edits, or retain evaluation through [`SkelCache`]
+//! and pass explicit edit reports. No global cache or implicit edit observation.
 //! Matrices use USD row vectors. OpenUSD: `UsdSkelSkeletonQuery` and
 //! `UsdSkelBindingAPI`; composition follows AOUSD Core §12.3–12.4.
 
@@ -12,6 +13,8 @@ use crate::{
     PrimView, Scene, Time, gf,
     usd_skel::{SkelAnimation, SkelBindingApi, Skeleton},
 };
+mod cache;
+pub use cache::{SkelCache, SkelCacheMemory, SkelCacheStats};
 mod helpers;
 pub use helpers::JointTransformComponents;
 mod normals;
@@ -31,6 +34,7 @@ pub use skinning::{
 
 use alloc::{
     string::{String, ToString},
+    sync::Arc,
     vec::Vec,
 };
 use layerstack::{HashMap, PathId, PropertyPath, TargetPath, TokenInterner, Value};
@@ -286,13 +290,55 @@ impl<'a> SkelBindingApi<'a> {
 #[derive(Clone, Debug)]
 pub struct SkeletonQuery<'a> {
     skeleton: Skeleton<'a>,
+    definition: Arc<SkeletonDefinition>,
+    animation: Option<SkelAnimation<'a>>,
+}
+#[derive(Clone, Debug)]
+struct SkeletonDefinition {
+    path: PathId,
     joints: Vec<String>,
     topology: JointTopology,
     rest: Option<Vec<gf::Matrix4>>,
     bind: Option<Vec<gf::Matrix4>>,
-    animation: Option<SkelAnimation<'a>>,
+    animation_path: Option<PathId>,
     animation_joints: Vec<String>,
+    blend_shapes: Vec<String>,
     mapping: Vec<Option<usize>>,
+}
+impl SkeletonDefinition {
+    fn query<'a>(self: &Arc<Self>, scene: &Scene<'a>) -> Result<SkeletonQuery<'a>, SkelError> {
+        let skeleton =
+            Skeleton::new(scene, self.path).ok_or_else(|| invalid(self.path, "joints"))?;
+        Ok(SkeletonQuery {
+            skeleton,
+            definition: Arc::clone(self),
+            animation: self
+                .animation_path
+                .and_then(|p| SkelAnimation::new(scene, p)),
+        })
+    }
+    fn validated_bind_transforms(&self) -> Result<&[gf::Matrix4], SkelError> {
+        let bind = self
+            .bind
+            .as_ref()
+            .ok_or_else(|| invalid(self.path, "bindTransforms"))?;
+        length(self.path, "bindTransforms", self.joints.len(), bind.len())?;
+        Ok(bind)
+    }
+    fn inverse_bind_transforms(&self) -> Result<Vec<gf::Matrix4>, SkelError> {
+        let bind = self.validated_bind_transforms()?;
+        bind.iter()
+            .enumerate()
+            .map(|(joint, m)| {
+                let (inverse, determinant) = gf::inverse(m);
+                if determinant == 0. {
+                    Err(SkelError::SingularBind { joint })
+                } else {
+                    Ok(inverse)
+                }
+            })
+            .collect()
+    }
 }
 impl<'a> Skeleton<'a> {
     /// Prepares validated topology and a sparse animation-to-skeleton mapping.
@@ -329,24 +375,32 @@ impl<'a> SkeletonQuery<'a> {
         drop(indices);
         Ok(Self {
             skeleton,
-            topology,
-            joints,
-            rest: skeleton.rest_transforms(),
-            bind: skeleton.bind_transforms(),
             animation,
-            animation_joints,
-            mapping,
+            definition: Arc::new(SkeletonDefinition {
+                path: skeleton.path(),
+                topology,
+                joints,
+                rest: skeleton.rest_transforms(),
+                bind: skeleton.bind_transforms(),
+                animation_path: animation.map(|a| a.path()),
+                animation_joints,
+                blend_shapes: animation
+                    .as_ref()
+                    .and_then(|a| tokens(a, "blendShapes"))
+                    .unwrap_or_default(),
+                mapping,
+            }),
         })
     }
     /// Skeleton joint names in stable definition order.
     #[must_use]
     pub fn joints(&self) -> &[String] {
-        &self.joints
+        &self.definition.joints
     }
     /// Validated joint hierarchy.
     #[must_use]
     pub fn topology(&self) -> &JointTopology {
-        &self.topology
+        &self.definition.topology
     }
     /// Skeleton path represented by this query.
     #[must_use]
@@ -361,13 +415,14 @@ impl<'a> SkeletonQuery<'a> {
     /// Joint-local rest transforms, validating the required array length.
     pub fn rest_transforms(&self) -> Result<Vec<gf::Matrix4>, SkelError> {
         let rest = self
+            .definition
             .rest
             .as_ref()
             .ok_or_else(|| invalid(self.skeleton.path(), "restTransforms"))?;
         length(
             self.skeleton.path(),
             "restTransforms",
-            self.joints.len(),
+            self.definition.joints.len(),
             rest.len(),
         )?;
         Ok(rest.clone())
@@ -378,7 +433,7 @@ impl<'a> SkeletonQuery<'a> {
     pub fn local_transforms(&self, time: Time) -> Result<Vec<gf::Matrix4>, SkelError> {
         let Some(animation) = self
             .animation
-            .filter(|_| self.mapping.iter().any(Option::is_some))
+            .filter(|_| self.definition.mapping.iter().any(Option::is_some))
         else {
             return self.rest_transforms();
         };
@@ -406,16 +461,16 @@ impl<'a> SkeletonQuery<'a> {
             length(
                 animation.path(),
                 property,
-                self.animation_joints.len(),
+                self.definition.animation_joints.len(),
                 actual,
             )?;
         }
-        let mut result = if self.mapping.iter().any(Option::is_none) {
+        let mut result = if self.definition.mapping.iter().any(Option::is_none) {
             self.rest_transforms()?
         } else {
-            alloc::vec![gf::IDENTITY; self.joints.len()]
+            alloc::vec![gf::IDENTITY; self.definition.joints.len()]
         };
-        for (out, mapped) in result.iter_mut().zip(&self.mapping) {
+        for (out, mapped) in result.iter_mut().zip(&self.definition.mapping) {
             if let Some(i) = *mapped {
                 *out = compose(t[i], r[i], s[i]);
             }
@@ -425,6 +480,7 @@ impl<'a> SkeletonQuery<'a> {
     /// Animated joint transforms in skeleton space, excluding skeleton Xforms.
     pub fn skeleton_transforms(&self, time: Time) -> Result<Vec<gf::Matrix4>, SkelError> {
         Ok(self
+            .definition
             .topology
             .concatenate(&self.local_transforms(time)?)
             .expect("validated joint count"))
@@ -433,13 +489,14 @@ impl<'a> SkeletonQuery<'a> {
     /// order. Singular bind matrices return an error before producing output.
     pub fn skinning_transforms(&self, time: Time) -> Result<Vec<gf::Matrix4>, SkelError> {
         let bind = self
+            .definition
             .bind
             .as_ref()
             .ok_or_else(|| invalid(self.skeleton.path(), "bindTransforms"))?;
         length(
             self.skeleton.path(),
             "bindTransforms",
-            self.joints.len(),
+            self.definition.joints.len(),
             bind.len(),
         )?;
         let animated = self.skeleton_transforms(time)?;

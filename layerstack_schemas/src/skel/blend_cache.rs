@@ -74,6 +74,10 @@ pub struct BlendShapeCacheStats {
     pub point_vertices: u64,
     /// Normal vectors submitted to shape accumulation.
     pub normal_vectors: u64,
+    /// Morph-deformed mesh point hulls reduced, excluding retained-bound hits.
+    pub bound_evaluations: u64,
+    /// Deformed points submitted to bound reduction.
+    pub bound_vertices: u64,
     /// Retained bindings invalidated by edits.
     pub invalidations: u64,
 }
@@ -111,6 +115,7 @@ struct Binding {
     weights_varying: bool,
     points_varying: bool,
     normals_varying: bool,
+    bounds: Option<crate::bounds::Range3d>,
 }
 impl Binding {
     fn temporal(&mut self, scene: &Scene<'_>) {
@@ -292,6 +297,7 @@ impl BlendShapeCache {
             weights_varying: false,
             points_varying: false,
             normals_varying: false,
+            bounds: None,
         };
         b.temporal(scene);
         self.bindings.insert(path, b);
@@ -412,6 +418,7 @@ impl BlendShapeCache {
             b.normal_valid = false;
         } else {
             b.point_valid = false;
+            b.bounds = None;
         }
         let output = if normals {
             &mut b.normals
@@ -457,6 +464,44 @@ impl BlendShapeCache {
             b.point_epoch = self.epoch;
         }
         Ok(Some(output))
+    }
+    /// Retained point hull after morph deformation, in mesh-local space.
+    /// Ignores authored extents/hints; only Mesh prims are supported. Empty
+    /// points yield an empty range. Renderer displacement is caller policy.
+    pub fn deformed_mesh_bounds(
+        &mut self,
+        scene: &Scene<'_>,
+        path: PathId,
+    ) -> Result<Option<crate::bounds::Range3d>, SkelError> {
+        if !scene.is_a(path, "Mesh") {
+            return Err(invalid(path, "points"));
+        }
+        if self.deformed_points(scene, path)?.is_none() {
+            return Ok(None);
+        }
+        let b = self
+            .bindings
+            .get_mut(&path)
+            .expect("prepared shape binding");
+        if b.bounds.is_none() {
+            self.stats.bound_evaluations += 1;
+            self.stats.bound_vertices += u64::try_from(b.points.len()).unwrap_or(u64::MAX);
+            b.bounds = Some(super::bounds::range(&b.points)?);
+        }
+        Ok(b.bounds)
+    }
+    /// Oriented world bound from the mesh-local deformed hull and its world
+    /// transform. Both caches must share scene/time and receive edit reports.
+    pub fn deformed_world_mesh_bounds(
+        &mut self,
+        scene: &Scene<'_>,
+        path: PathId,
+        xforms: &mut crate::XformCache,
+    ) -> Result<Option<crate::bounds::BoundingBox>, SkelError> {
+        let Some(range) = self.deformed_mesh_bounds(scene, path)? else {
+            return Ok(None);
+        };
+        super::bounds::world(range, scene, path, self.time, xforms).map(Some)
     }
     /// Applies precise edit invalidation, including forwarded sources, shape
     /// definition changes, removals and undo. Weight-only edits preserve definitions.

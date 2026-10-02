@@ -286,3 +286,13 @@ view works without vertex buffers and has independent definition/weight revision
 Results remain in geometry space; normal offsets are not normalized. Explicit
 time changes, edit reports, undo, counters and memory occupancy follow the same
 caller-owned cache pattern as `SkelCache`.
+
+
+Both deformation caches expose `deformed_mesh_bounds` and
+`deformed_world_mesh_bounds`. These explicitly bound all deformed mesh points,
+ignoring authored extents and hints. Skeletal hulls are in skeleton space;
+morph-only hulls are mesh-local. World bounds pair the retained hull with an
+`XformCache` at the same time; apply edits to both caches. Reductions reuse point
+outputs and survive independent transform edits. Counters expose bound reductions
+and visited vertices. Empty meshes have empty bounds; nonfinite points error.
+Width-bearing geometry and renderer displacement need separate bound policies.

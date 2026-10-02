@@ -13,6 +13,7 @@ use crate::{
     PrimView, Scene, Time, gf,
     usd_skel::{SkelAnimation, SkelBindingApi, Skeleton},
 };
+mod bounds;
 mod cache;
 mod decomposition;
 mod dual_quaternion;

@@ -41,6 +41,10 @@ pub struct SkelCacheStats {
     pub point_vertices: u64,
     /// Normal vectors submitted to the normal kernel.
     pub normal_vectors: u64,
+    /// Deformed mesh point hulls reduced, excluding retained-bound hits.
+    pub bound_evaluations: u64,
+    /// Deformed points submitted to bound reduction.
+    pub bound_vertices: u64,
     /// Retained entries affected by explicit edit invalidation.
     pub invalidations: u64,
 }
@@ -218,6 +222,7 @@ struct Binding {
     deformed_normals: Vec<[f32; 3]>,
     deformed_normal_valid: bool,
     deformed_normal_epoch: u64,
+    deformed_bounds: Option<crate::bounds::Range3d>,
     shape_mapping: Vec<Option<usize>>,
     shape_weights: Vec<f32>,
 }
@@ -568,6 +573,7 @@ impl SkelCache {
             deformed_normals: Vec::new(),
             deformed_normal_valid: false,
             deformed_normal_epoch: 0,
+            deformed_bounds: None,
             shape_mapping,
             shape_weights: Vec::new(),
         };
@@ -780,6 +786,7 @@ impl SkelCache {
         self.ensure_shape_weights(scene, geometry)?;
         let b = self.bindings.get_mut(&geometry).expect("prepared binding");
         b.point_valid = false;
+        b.deformed_bounds = None;
         b.points.clear();
         b.points.extend(points);
         if let Some(shapes) = &b.definition.blend_shapes {
@@ -812,6 +819,43 @@ impl SkelCache {
         b.point_valid = true;
         b.point_epoch = self.epoch;
         Ok(Some(&b.points))
+    }
+    /// Retained hull of all deformed mesh points in skeleton space. Ignores
+    /// authored extents/hints and reuses CPU point results. This query does not
+    /// represent width-bearing curves/points or renderer displacement bounds.
+    pub fn deformed_mesh_bounds(
+        &mut self,
+        scene: &Scene<'_>,
+        geometry: PathId,
+    ) -> Result<Option<crate::bounds::Range3d>, SkelError> {
+        if !scene.is_a(geometry, "Mesh") {
+            return Err(invalid(geometry, "points"));
+        }
+        if self.deformed_points(scene, geometry)?.is_none() {
+            return Ok(None);
+        }
+        let b = self.bindings.get_mut(&geometry).expect("prepared binding");
+        if b.deformed_bounds.is_none() {
+            self.stats.bound_evaluations += 1;
+            self.stats.bound_vertices += u64::try_from(b.points.len()).unwrap_or(u64::MAX);
+            b.deformed_bounds = Some(super::bounds::range(&b.points)?);
+        }
+        Ok(b.deformed_bounds)
+    }
+    /// Oriented world bound: retained skeleton-space point hull paired with the
+    /// Skeleton's world transform. `xforms` must use the same time and scene;
+    /// pass edit reports to both caches. Call `aligned_range` for a world AABB.
+    pub fn deformed_world_mesh_bounds(
+        &mut self,
+        scene: &Scene<'_>,
+        geometry: PathId,
+        xforms: &mut crate::XformCache,
+    ) -> Result<Option<crate::bounds::BoundingBox>, SkelError> {
+        let Some(range) = self.deformed_mesh_bounds(scene, geometry)? else {
+            return Ok(None);
+        };
+        let skeleton = self.bindings[&geometry].definition.skeleton;
+        super::bounds::world(range, scene, skeleton, self.time, xforms).map(Some)
     }
     fn ensure_normal_inputs(
         &mut self,

@@ -70,6 +70,10 @@ fn main() {
         );
         previous = Some(revision);
         println!(
+            "local animated hull {:?}",
+            cache.deformed_mesh_bounds(&scene, mesh).unwrap().unwrap()
+        );
+        println!(
             "points {:?}",
             cache.deformed_points(&scene, mesh).unwrap().unwrap()
         );

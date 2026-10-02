@@ -437,3 +437,58 @@ fn point_only_bindings_do_not_require_valid_blend_weights() {
     let mut cache = SkelCache::new(Time::Default);
     compare(&mut cache, &store, &live, &[path], false);
 }
+
+#[test]
+fn instanced_rigs_discover_remapped_bindings_and_refresh_shared_source_edits() {
+    use layerstack_schemas::usd_skel::SkelRoot;
+    let source = include_str!("../fixtures/skel_skinning.usda")
+        .replace("\"Rig\"", "\"Template\"")
+        .replace("/Rig/", "/Template/");
+    let source = format!(
+        "{source}\ndef SkelRoot \"World\" {{\n def SkelRoot \"A\" (references = </Template>; instanceable = true) {{}}\n def SkelRoot \"B\" (references = </Template>; instanceable = true) {{}}\n}}\n"
+    );
+    let (mut store, mut live) = support::scene(&source);
+    let root = store.path("/World");
+    let paths: Vec<_> = [
+        "/World/A/Geometry/Mesh",
+        "/World/A/Rigid",
+        "/World/B/Geometry/Mesh",
+        "/World/B/Rigid",
+    ]
+    .iter()
+    .map(|p| store.path(p))
+    .collect();
+    let a = store.path("/World/A");
+    let b = store.path("/World/B");
+    let anim = store.path("/Template/Animation");
+    assert!(live.stage().is_instance(a) && live.stage().is_instance(b));
+    let scene = Scene::new(live.stage(), &store);
+    let root = SkelRoot::new(&scene, root).unwrap();
+    assert!(root.skinning_queries().unwrap().is_empty());
+    let discovered = root.skinning_queries_with_instance_proxies().unwrap();
+    assert_eq!(
+        discovered
+            .iter()
+            .map(SkinningQuery::geometry_path)
+            .collect::<Vec<_>>(),
+        paths
+    );
+    assert_ne!(
+        discovered[0].skeleton_query().skeleton_path(),
+        discovered[2].skeleton_query().skeleton_path()
+    );
+    let mut cache = SkelCache::new(Time::Default);
+    compare(&mut cache, &store, &live, &paths, false);
+    let transaction = default_edit(
+        &mut store,
+        anim,
+        "translations",
+        Value::Array(vec![Value::Vec3f([0., 9., 0.]), Value::Vec3f([8., 0., 0.])]),
+    );
+    let changed = live.apply(&mut store, &transaction).unwrap();
+    cache.apply_changes(&Scene::new(live.stage(), &store), &changed.changes);
+    compare(&mut cache, &store, &live, &paths, false);
+    let undone = live.apply(&mut store, &changed.inverse).unwrap();
+    cache.apply_changes(&Scene::new(live.stage(), &store), &undone.changes);
+    compare(&mut cache, &store, &live, &paths, false);
+}

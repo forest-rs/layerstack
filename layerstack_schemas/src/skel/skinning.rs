@@ -625,6 +625,21 @@ impl<'a> SkelRoot<'a> {
     /// Binding inputs inherit only within this root, including the root itself.
     /// Each returned query exposes its geometry, skeleton and dependency roots.
     pub fn skinning_queries(&self) -> Result<Vec<SkinningQuery<'a>>, SkelError> {
+        self.discover_skinning_queries(false)
+    }
+    /// Discovers bindings inside native instances as well as ordinary geometry.
+    /// Equivalent to applying `UsdTraverseInstanceProxies` to default traversal;
+    /// geometry and relationship targets use each instance's composed namespace.
+    /// AOUSD Core §11.3.3; OpenUSD `UsdSkelCache::ComputeSkelBindings` predicate.
+    pub fn skinning_queries_with_instance_proxies(
+        &self,
+    ) -> Result<Vec<SkinningQuery<'a>>, SkelError> {
+        self.discover_skinning_queries(true)
+    }
+    fn discover_skinning_queries(
+        &self,
+        instance_proxies: bool,
+    ) -> Result<Vec<SkinningQuery<'a>>, SkelError> {
         let scene = self.scene();
         let mut pending = vec![self.path()];
         let mut result = Vec::new();
@@ -648,7 +663,7 @@ impl<'a> SkelRoot<'a> {
                 {
                     result.push(query);
                 }
-            } else if !scene.stage().is_instance(path) {
+            } else if instance_proxies || !scene.stage().is_instance(path) {
                 pending.extend(
                     scene
                         .stage()

@@ -44,34 +44,50 @@ pub(crate) fn compute(scene: &Scene<'_>, path: PathId, time: Time) -> Option<(Ra
     }
     let varying =
         |names: &[&str]| extent_varying || names.iter().any(|name| prim.property_might_vary(name));
-    // UsdGeomPointBased::ComputeExtent. Restrict this fallback to Mesh: curves
-    // and points have width-dependent providers and cannot use the mesh rule.
-    if scene.is_a(path, "Mesh") {
-        let range = read(&prim, "points", time, |value, tokens| {
-            let values = value.array_ref()?;
-            let mut range = Range3d::default();
-            let mut add = |point: [f32; 3]| {
-                let point = point.map(f64::from);
-                range.union_with(Range3d {
-                    min: point,
-                    max: point,
-                });
-            };
-            if let Some(typed) = values.typed() {
-                // UsdGeomPointBased::ComputeExtent reads VtVec3fArray; an
-                // empty native array still retains its element kind.
-                let points = typed.as_vec3f()?;
-                for point in points {
-                    add(*point);
-                }
+    let points_schema = scene.is_a(path, "Points");
+    let curves = scene.is_a(path, "Curves");
+    if scene.is_a(path, "Mesh") || points_schema || curves {
+        let points = read(&prim, "points", time, crate::value::read_float3_array)?;
+        let widths = if points_schema || curves {
+            read(&prim, "widths", time, crate::value::read_float_array)
+        } else {
+            None
+        };
+        // UsdGeomPoints::_ComputeExtent requires one readable width per point.
+        // Unreadable widths fall back to point-based bounds (AOUSD Core §12.3).
+        if points_schema && widths.as_ref().is_some_and(|w| w.len() != points.len()) {
+            return None;
+        }
+        let mut range = Range3d::default();
+        for (index, point) in points.iter().enumerate() {
+            let half_width = if points_schema {
+                widths.as_ref().map_or(0., |w| w[index] * 0.5)
             } else {
-                for value in values.iter() {
-                    add(crate::value::read_float3(&value, tokens)?);
-                }
+                0.
+            };
+            // GfVec3f rounds before the double-precision union. Union both
+            // corners, including signed widths, as the C++ point provider does.
+            for sign in [-1., 1.] {
+                let corner = point.map(|v| f64::from(v + sign * half_width));
+                range.union_with(Range3d {
+                    min: corner,
+                    max: corner,
+                });
             }
-            Some(range)
-        })?;
-        return Some((range, varying(&["points"])));
+        }
+        if curves {
+            // UsdGeomCurves::ComputeExtent uses the control hull plus maximum
+            // width. Catmull-Rom and Hermite keep the same approximation as C++,
+            // which can miss overshoot; this is not an analytic spline bound.
+            let half_width = widths
+                .as_ref()
+                .and_then(|w| w.iter().copied().reduce(f32::max))
+                .unwrap_or(0.)
+                * 0.5;
+            range.min = range.min.map(|v| f64::from(v as f32 - half_width));
+            range.max = range.max.map(|v| f64::from(v as f32 + half_width));
+        }
+        return Some((range, varying(&["points", "widths"])));
     }
     let number = |name| read(&prim, name, time, crate::value::read_double);
     let (max, inputs): ([f32; 3], &[&str]) = if scene.is_a(path, "Cube") {

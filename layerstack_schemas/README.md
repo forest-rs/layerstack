@@ -64,11 +64,13 @@ only changed contributions and their reduction paths. Small or animated parents
 use the ordinary child fold, and structural changes rebuild affected reductions. Cache stats expose
 computed, reused and invalidated work.
 
-When no valid extent is authored, bounds are computed from mesh points or
+When no valid extent is authored, bounds are computed from mesh points, point widths, curve control hulls and
+maximum widths, or
 cube, sphere, cylinder, cone and capsule parameters, or point-instancer
 prototypes and instance transforms. Computed instancer extents evaluate prototypes with ordinary visibility and
 without model hints, independently of the caller’s visibility and hint policies. Prototype cycles and
-nesting beyond 64 instancers are rejected. Other procedural extent providers
+nesting beyond 64 instancers are rejected. Curve bounds match OpenUSD’s control-hull
+approximation, including its possible Catmull-Rom and Hermite overshoot. Other procedural extent providers
 remain unsupported and return explicit errors. Common transform helpers do not decompose arbitrary
 matrices or rewrite incompatible op stacks. Prepared operation recipes remain
 an internal cache implementation detail.

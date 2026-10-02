@@ -1,0 +1,39 @@
+#usda 1.0
+
+def Points "Points" {
+    point3f[] points = [(-2,0,1), (4,2,-1)]
+    float[] widths = [2,6]
+    float[] widths.timeSamples = {1: [2,6], 3: [4,10]}
+}
+def Points "NoWidths" {
+    point3f[] points = [(-2,0,1), (4,2,-1)]
+}
+def Points "NegativeWidths" {
+    point3f[] points = [(-2,0,1), (4,2,-1)]
+    float[] widths = [-2,-6]
+}
+def Points "BadWidths" {
+    point3f[] points = [(-2,0,1), (4,2,-1)]
+    float[] widths = [2]
+}
+def BasisCurves "Linear" {
+    uniform token type = "linear"
+    int[] curveVertexCounts = [2]
+    point3f[] points = [(-2,0,1), (4,2,-1)]
+    float[] widths = [2]
+}
+def BasisCurves "Catmull" {
+    uniform token basis = "catmullRom"
+    int[] curveVertexCounts = [4]
+    point3f[] points = [(-2,0,1), (4,2,-1), (5,8,1), (7,-2,0)]
+    float[] widths = [2,4,6,8]
+}
+def NurbsCurves "Nurbs" {
+    int[] curveVertexCounts = [2]
+    point3f[] points = [(-2,0,1), (4,2,-1)]
+    float[] widths = [4]
+}
+def BasisCurves "BlockedWidths" {
+    point3f[] points = [(-2,0,1), (4,2,-1)]
+    float[] widths = None
+}

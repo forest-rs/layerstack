@@ -183,8 +183,8 @@ impl<T> Entry<T> {
 /// dirty by indexed dependencies. After an edit, wide static parents retain
 /// range reductions so later leaf edits update only their contribution paths.
 /// It does not observe edits automatically. Clear between unrelated scenes.
-/// Intrinsic extents are computed for meshes, cubes, spheres, cylinders, cones
-/// and capsules when a valid authored extent is unavailable. Other extent
+/// Intrinsic extents are computed for meshes, points, curves, cubes, spheres,
+/// cylinders, cones and capsules when a valid authored extent is unavailable. Other extent
 /// providers are not implemented; missing geometry is an
 /// error, never a silently incomplete bound. Computed point-instancer extents
 /// retain prototype dependencies, including prototypes outside their namespace.
@@ -1030,6 +1030,7 @@ pub(crate) fn bounds_property(name: &str) -> bool {
             "extent"
                 | "extentsHint"
                 | "points"
+                | "widths"
                 | "size"
                 | "radius"
                 | "height"

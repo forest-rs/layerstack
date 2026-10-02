@@ -1,0 +1,42 @@
+#usda 1.0
+
+def Xform "World" (kind = "assembly") {
+ def Xform "Cached" (kind = "component") {
+  token lightList:cacheBehavior = "consumeAndHalt"
+  rel lightList = [</World/Cached/Panel>, </Missing>, </Links.chain>]
+  def RectLight "Panel" {}
+  def SphereLight "Skipped" {}
+ }
+ def Xform "Continue" (kind = "assembly"; prepend apiSchemas = ["LightAPI"]) {
+  token lightList:cacheBehavior = "consumeAndContinue"
+  rel lightList = [</World/Cached/Panel>, </Outside>]
+  def SphereLight "Child" (kind = "component") {}
+  def SphereLight "NonModel" {}
+ }
+ def DomeLight "NonModel" {}
+ def LightFilter "Filter" (kind = "component") {}
+ def Xform "Instance" (kind = "component"; instanceable = true; prepend references = </Asset>) {}
+ def Xform "HaltedLight" (kind = "component"; prepend apiSchemas = ["LightAPI"]) {
+  token lightList:cacheBehavior = "consumeAndHalt"
+  rel lightList = []
+ }
+ def Xform "Ignored" (kind = "component"; prepend apiSchemas = ["LightListAPI"]) {
+  token lightList:cacheBehavior = "ignore"
+  rel lightList = [</IgnoredGhost>]
+  def SphereLight "Child" {}
+ }
+ def RectLight "Inactive" (active = false; kind = "component") {}
+ class RectLight "Abstract" (kind = "component") {}
+ over "Undefining" {
+ def SphereLight "UnderOver" (kind = "component") {}
+ }
+}
+def Xform "Asset" (kind = "component") {
+ def SphereLight "Light" {}
+}
+def Xform "Links" {
+ rel chain = [</World/Continue/Child>, </Ghost.property>, </Links.cycleA>]
+ rel cycleA = </Links.cycleB>
+ rel cycleB = </Links.cycleA>
+}
+def Xform "Outside" {}

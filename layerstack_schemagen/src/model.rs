@@ -109,6 +109,8 @@ pub(crate) struct Property {
 /// What the generator read, and from where.
 #[derive(Debug)]
 pub(crate) struct Model {
+    /// Composed shader-node definitions from the matching wheel.
+    pub(crate) nodes: Vec<crate::shader_nodes::Node>,
     /// The usd-core release (`26.8`).
     pub(crate) version: String,
     /// The files read, relative to `site-packages`.
@@ -495,7 +497,9 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
         domain.dependencies = dependencies;
     }
 
+    let nodes = crate::shader_nodes::read(pxr, &mut store, &mut files)?;
     Ok(Model {
+        nodes,
         version,
         files,
         domains,
@@ -685,7 +689,7 @@ fn wheel_version(site_packages: &Path) -> Result<String, String> {
 }
 
 /// Rejects every asset path: generated schema layers have none.
-struct NoAssets;
+pub(crate) struct NoAssets;
 
 impl AssetResolver for NoAssets {
     fn resolve(

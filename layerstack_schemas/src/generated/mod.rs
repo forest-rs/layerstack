@@ -62,6 +62,7 @@
 // - `pxr/usd/usdProfiles/schema.usda`
 // - `pxr/usd/usdMtlx/generatedSchema.usda`
 // - `pxr/usd/usdMtlx/schema.usda`
+// - `pxr/pluginfo/usdShaders/resources/shaders/shaderDefs.usda`
 
 //! The generated tables.
 
@@ -72,6 +73,8 @@ use layerstack::Value;
 use crate::table::{DomainTables, ValueType};
 
 mod metadata;
+#[cfg(feature = "usd-shade")]
+pub(crate) mod shader_nodes;
 pub(crate) mod views;
 
 #[cfg(feature = "usd")]

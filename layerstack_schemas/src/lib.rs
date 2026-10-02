@@ -114,6 +114,37 @@
 //! Each domain is a Cargo feature (`usd-geom`, `usd-lux`, …) that enables
 //! the domains it depends on; `all`, the default, enables every one.
 //!
+//! # Standard shader nodes
+//!
+//! With `usd-shade`, [`shading::nodes`] provides typed views and edit handles
+//! for the standard preview surface, UV texture, primvar readers and 2D
+//! transform nodes. Views check both `Shader` inheritance and the composed
+//! identifier-based `info:id`. Input getters read USD values; associated
+//! `_default` functions return the node definition's defaults explicitly.
+//! Typed input/output creation returns ordinary shading ports for connections.
+//!
+//! ```
+//! use std::sync::Arc;
+//! use layerstack::{InMemoryStore, Layer, LayerId, LiveStage, StageOptions, edit::EditTarget};
+//! use layerstack_schemas::{Scene, SchemaEdit, shading::nodes::PreviewSurface};
+//!
+//! let mut store = InMemoryStore::default();
+//! store.insert_layer(Layer::new(LayerId(1)));
+//! let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+//! let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions {
+//!     schemas: Some(schemas), ..StageOptions::default()
+//! });
+//! let path = store.path("/Material/Surface");
+//! let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+//! let surface = PreviewSurface::define(&mut edit, path);
+//! surface.set_roughness(&mut edit, 0.25).expect("typed input");
+//! let transaction = edit.finish();
+//! live.apply(&mut store, &transaction).expect("applies");
+//! let scene = Scene::new(live.stage(), &store);
+//! assert_eq!(PreviewSurface::new(&scene, path).unwrap().roughness(), Some(0.25));
+//! assert_eq!(PreviewSurface::roughness_default(), 0.5);
+//! ```
+//!
 //! # Plugin metadata
 //!
 //! The registry also retains each enabled plugin's `SdfMetadata` declarations:

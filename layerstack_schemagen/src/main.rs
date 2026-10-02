@@ -14,7 +14,11 @@
 //! domains [`model::DOMAINS`] lists, parses each `generatedSchema.usda` with
 //! `layerstack_usda`, reads its schemas with
 //! `layerstack::schema::read_generated_schema`, and takes each schema's
-//! kind, base and auto-applies from `plugInfo.json`.
+//! kind, base and auto-applies from `plugInfo.json`. Its `SdfMetadata`
+//! declarations generate registry fields and typed metadata readers. Standard
+//! shader nodes come from the wheel's `usdShaders/shaders/shaderDefs.usda`;
+//! the generator composes it before reading ports and defaults so inherited
+//! inputs are included.
 //!
 //! `--source` names a checkout of OpenUSD's sources at the release the wheel
 //! is (the generator refuses any other version, from
@@ -37,6 +41,7 @@
 mod emit;
 mod metadata;
 mod model;
+mod shader_nodes;
 mod views;
 
 use std::fs;
@@ -91,8 +96,11 @@ fn run() -> Result<String, String> {
         .into_iter()
         .chain(views::files(&model)?)
         .chain(metadata::files(&model)?)
+        .chain(shader_nodes::files(&model)?)
     {
-        let path = if name == "test_table" {
+        let path = if name == "shader_node_test_table" {
+            "layerstack_conformance/tests/generated/shader_nodes.rs".to_string()
+        } else if name == "test_table" {
             "layerstack_conformance/tests/generated/schema_views.rs".to_string()
         } else {
             format!("layerstack_schemas/src/generated/{name}")

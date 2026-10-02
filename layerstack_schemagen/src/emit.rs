@@ -89,7 +89,7 @@ fn mod_file(model: &Model, types: &ValueTypes) -> String {
         let _ = writeln!(out, "// - `{file}`");
     }
     out.push_str("\n//! The generated tables.\n\n@IMPORTS@\n");
-    out.push_str("pub(crate) mod views;\nmod metadata;\n\n");
+    out.push_str("pub(crate) mod views;\nmod metadata;\n#[cfg(feature = \"usd-shade\")]\npub(crate) mod shader_nodes;\n\n");
     for domain in &model.domains {
         let _ = writeln!(out, "{}\nmod {};", cfg(domain), module(domain.plugin));
     }

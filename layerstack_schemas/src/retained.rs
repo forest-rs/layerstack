@@ -100,7 +100,8 @@ pub enum QueryDependencies<'a> {
     /// Ancestors consulted up to the transform reset boundary, query prim first.
     TransformAncestors(&'a [PathId]),
     /// Bounds retain their detailed reductions inside `BoundsCache`. Routing
-    /// conservatively watches this subtree and inherited ancestor inputs.
+    /// conservatively watches this subtree, inherited ancestor inputs and
+    /// retained point-instancer prototype dependencies.
     BoundsNamespace(PathId),
     /// Properties inspected by provider discovery, including missing targets.
     ShadingProperties(&'a [crate::shading::ShadingDependency]),
@@ -332,6 +333,20 @@ impl RetainedQueries {
             Recipe::Shading => QueryDependencies::ShadingProperties(held.shading_dependencies()),
         })
     }
+    /// Prototype roots retained by a bounds query's last computation. Includes
+    /// missing targets so callers can inspect failures and their recovery inputs.
+    /// Returns `None` for unknown IDs and queries other than world bounds.
+    pub fn bound_prototype_dependencies(
+        &self,
+        scene: &Scene<'_>,
+        id: QueryId,
+    ) -> Option<Vec<PathId>> {
+        let Recipe::Bound(path) = self.held.get(&id)?.recipe else {
+            return None;
+        };
+        Some(self.bounds.prototype_dependencies(scene, path))
+    }
+
     fn work(&self) -> QueryWork {
         let bounds = self.bounds.transform_stats();
         QueryWork {
@@ -367,21 +382,21 @@ impl RetainedQueries {
         for held in self.held.values_mut() {
             self.stats.routed += 1;
             for &root in &changes.resynced {
-                if structural_overlap(scene, held, root) {
+                if structural_overlap(scene, held, root, &self.bounds) {
                     held.mark(QueryCause::Resync(root));
                 }
             }
             for &prim in &changes.changed_info_only {
                 if let Some(fields) = changes.properties_for(prim) {
                     for field in fields {
-                        if property_overlap(scene, held, prim, Some(field.name)) {
+                        if property_overlap(scene, held, prim, Some(field.name), &self.bounds) {
                             held.mark(QueryCause::Property {
                                 path: PropertyPath::new(prim, field.name),
                                 field: field.field,
                             });
                         }
                     }
-                } else if property_overlap(scene, held, prim, None) {
+                } else if property_overlap(scene, held, prim, None, &self.bounds) {
                     held.mark(QueryCause::Prim(prim));
                 }
             }
@@ -517,6 +532,13 @@ impl<S: LayerStore> QuerySession<S> {
         let path = layerstack::Path::parse_absolute(text, self.store.tokens_mut())?;
         Ok(self.store.paths_mut().intern(path))
     }
+    /// Prototype roots retained by a bounds query, including missing targets.
+    pub fn bound_prototype_dependencies(&mut self, id: QueryId) -> Option<Vec<PathId>> {
+        self.refresh_external();
+        self.queries
+            .bound_prototype_dependencies(&Scene::new(self.live.stage(), &self.store), id)
+    }
+
     /// Current scene, completing an interrupted external refresh if necessary.
     pub fn scene(&mut self) -> Scene<'_> {
         self.refresh_external();
@@ -609,10 +631,14 @@ fn prefix(scene: &Scene<'_>, a: PathId, b: PathId) -> bool {
         .resolve(a)
         .is_prefix_of(scene.store().paths().resolve(b))
 }
-fn structural_overlap(scene: &Scene<'_>, held: &Held, root: PathId) -> bool {
+fn structural_overlap(scene: &Scene<'_>, held: &Held, root: PathId, bounds: &BoundsCache) -> bool {
     match &held.recipe {
         Recipe::Transform(paths) => paths.iter().any(|&p| prefix(scene, root, p)),
-        Recipe::Bound(path) => prefix(scene, root, *path) || prefix(scene, *path, root),
+        Recipe::Bound(path) => {
+            prefix(scene, root, *path)
+                || prefix(scene, *path, root)
+                || bounds.prototype_overlap(scene, *path, root)
+        }
         Recipe::Shading => {
             let deps = held.shading_dependencies();
             deps.iter().any(|d| prefix(scene, root, d.prim))
@@ -625,6 +651,7 @@ fn property_overlap(
     held: &Held,
     prim: PathId,
     name: Option<layerstack::TokenId>,
+    bounds: &BoundsCache,
 ) -> bool {
     let name = name.map(|n| scene.store().tokens().resolve(n));
     match &held.recipe {
@@ -632,6 +659,11 @@ fn property_overlap(
             paths.contains(&prim) && name.is_none_or(crate::xform::transform_property)
         }
         Recipe::Bound(root) => {
+            if bounds.prototype_overlap(scene, *root, prim)
+                && name.is_none_or(crate::bounds::bounds_property)
+            {
+                return true;
+            }
             if prefix(scene, *root, prim) {
                 name.is_none_or(crate::bounds::bounds_property)
             } else {

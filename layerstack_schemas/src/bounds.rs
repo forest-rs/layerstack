@@ -106,8 +106,18 @@ pub enum BoundsError {
     MissingPrim(PathId),
     /// This boundable needs an extent computation plugin, or has an invalid extent.
     ExtentUnavailable(PathId),
-    /// Point instancers require prototype and per-instance computations.
-    PointInstancerUnsupported(PathId),
+    /// Point-instancer arrays or prototype transforms are invalid.
+    InvalidPointInstancer {
+        /// The instancer path.
+        prim: PathId,
+        /// The underlying transform error.
+        source: crate::point_instancer::PointInstancerError,
+    },
+    /// Prototype bounds revisit an active instancer or exceed 64 nested instancers.
+    PointInstancerCycle(PathId),
+    /// Computed instancer extents currently require ordinary visibility and
+    /// no prototype model hints; authored extents still support all policies.
+    UnsupportedInstancerPolicy(PathId),
     /// Component-space conversion requires an invertible world transform.
     SingularTransform(PathId),
 }
@@ -178,8 +188,12 @@ impl<T> Entry<T> {
 /// It does not observe edits automatically. Clear between unrelated scenes.
 /// Intrinsic extents are computed for meshes, cubes, spheres, cylinders, cones
 /// and capsules when a valid authored extent is unavailable. Other extent
-/// providers and point instancers are not implemented; missing geometry is an
-/// error, never a silently incomplete bound.
+/// providers are not implemented; missing geometry is an
+/// error, never a silently incomplete bound. Computed point-instancer extents
+/// retain prototype dependencies, including prototypes outside their namespace.
+/// Their provider supports ordinary visibility with no model hints; authored
+/// extents support all policies. Nested prototype graphs are limited to 64
+/// instancers and cycles return an explicit error.
 ///
 /// Child inclusion follows OpenUSD's defined, non-abstract, imageable/unknown
 /// type traversal and local visibility. A query includes its root even when
@@ -197,6 +211,8 @@ pub struct BoundsCache {
     transforms: XformCache,
     reductions: HashMap<PathId, Reduction>,
     promote: HashSet<PathId>,
+    instancer_prototypes: HashMap<PathId, Vec<PathId>>,
+    active_instancers: HashSet<PathId>,
     stats: BoundsStats,
     epoch: u64,
 }
@@ -214,6 +230,8 @@ impl BoundsCache {
             transforms: XformCache::new(time),
             reductions: HashMap::new(),
             promote: HashSet::new(),
+            instancer_prototypes: HashMap::new(),
+            active_instancers: HashSet::new(),
             stats: BoundsStats::default(),
             epoch: 1,
         }
@@ -241,6 +259,8 @@ impl BoundsCache {
     }
     /// Drop every result and reset counters.
     pub fn clear(&mut self) {
+        self.instancer_prototypes.clear();
+        self.active_instancers.clear();
         self.entries.clear();
         self.inclusions.clear();
         self.children.clear();
@@ -276,6 +296,7 @@ impl BoundsCache {
     /// parents continue to fold their children when recomputed.
     pub fn invalidate(&mut self, scene: &Scene<'_>, path: PathId) {
         self.transforms.invalidate(scene, path);
+        self.invalidate_prototypes(scene, path);
         self.invalidate_bounds(scene, path);
     }
 
@@ -289,6 +310,7 @@ impl BoundsCache {
         // reach deleted and excluded descendants without revisiting ancestors
         // once for every entry in the exact removal inventory.
         for &path in &changes.resynced {
+            self.invalidate_prototypes(scene, path);
             self.invalidate_bounds(scene, path);
         }
         for &path in &changes.changed_info_only {
@@ -297,9 +319,87 @@ impl BoundsCache {
                     .iter()
                     .any(|field| bounds_property(scene.store().tokens().resolve(field.name)))
             }) {
+                self.invalidate_prototypes(scene, path);
                 self.invalidate_bounds(scene, path);
             }
         }
+    }
+
+    fn affected_instancers(&self, scene: &Scene<'_>, path: PathId) -> Vec<PathId> {
+        let mut affected = Vec::new();
+        let mut pending = vec![path];
+        let mut visited = HashSet::new();
+        while let Some(changed) = pending.pop() {
+            if !visited.insert(changed) {
+                continue;
+            }
+            for (&instancer, prototypes) in &self.instancer_prototypes {
+                let changed_path = scene.store().paths().resolve(changed);
+                if prototypes.iter().any(|&prototype| {
+                    let prototype = scene.store().paths().resolve(prototype);
+                    changed_path.is_prefix_of(prototype) || prototype.is_prefix_of(changed_path)
+                }) && !visited.contains(&instancer)
+                {
+                    affected.push(instancer);
+                    pending.push(instancer);
+                }
+            }
+        }
+        affected
+    }
+    fn invalidate_prototypes(&mut self, scene: &Scene<'_>, path: PathId) {
+        for instancer in self.affected_instancers(scene, path) {
+            self.invalidate_bounds(scene, instancer);
+        }
+    }
+    /// Prototype roots consulted by the last bounds computations under `path`,
+    /// including nested, masked and missing prototypes. Results are unique.
+    /// Dependencies remain conservative after edits until recomputation, so a
+    /// failed retained query can recover when a missing prototype is created.
+    #[must_use]
+    pub fn prototype_dependencies(&self, scene: &Scene<'_>, path: PathId) -> Vec<PathId> {
+        let mut pending = vec![path];
+        let mut visited = HashSet::new();
+        let mut result = HashSet::new();
+        while let Some(root) = pending.pop() {
+            if !visited.insert(root) {
+                continue;
+            }
+            for (&instancer, prototypes) in &self.instancer_prototypes {
+                if scene
+                    .store()
+                    .paths()
+                    .resolve(root)
+                    .is_prefix_of(scene.store().paths().resolve(instancer))
+                {
+                    for &prototype in prototypes {
+                        if result.insert(prototype) {
+                            pending.push(prototype);
+                        }
+                    }
+                }
+            }
+        }
+        let mut result: Vec<_> = result.into_iter().collect();
+        result.sort_unstable();
+        result
+    }
+
+    pub(crate) fn prototype_overlap(
+        &self,
+        scene: &Scene<'_>,
+        root: PathId,
+        changed: PathId,
+    ) -> bool {
+        self.affected_instancers(scene, changed)
+            .iter()
+            .any(|&instancer| {
+                scene
+                    .store()
+                    .paths()
+                    .resolve(root)
+                    .is_prefix_of(scene.store().paths().resolve(instancer))
+            })
     }
 
     fn invalidate_bounds(&mut self, scene: &Scene<'_>, path: PathId) {
@@ -629,8 +729,18 @@ impl BoundsCache {
                 prim.property_might_vary("extentsHint"),
             )));
         }
-        if scene.is_a(path, "PointInstancer") {
-            return Err(BoundsError::PointInstancerUnsupported(path));
+        if scene.is_a(path, "PointInstancer")
+            && crate::extent::compute(scene, path, self.time).is_none()
+        {
+            if self.options.ignore_visibility || self.options.use_extents_hint {
+                return Err(BoundsError::UnsupportedInstancerPolicy(path));
+            }
+            if self.active_instancers.len() >= 64 || !self.active_instancers.insert(path) {
+                return Err(BoundsError::PointInstancerCycle(path));
+            }
+            let result = self.instancer_bounds(scene, path);
+            self.active_instancers.remove(&path);
+            return result.map(Some);
         }
         if scene.is_a(path, "Boundable") {
             let (range, varying) = crate::extent::compute(scene, path, self.time)
@@ -649,6 +759,93 @@ impl BoundsCache {
         }
         Ok(None)
     }
+    // UsdGeomPointInstancer extent provider unions default/proxy/render
+    // prototype bounds, then publishes one float3 extent under its own purpose.
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "USD extent providers publish float3[]"
+    )]
+    fn instancer_bounds(
+        &mut self,
+        scene: &Scene<'_>,
+        path: PathId,
+    ) -> Result<(PurposeBounds, bool), BoundsError> {
+        let instancer = crate::usd_geom::PointInstancer::new(scene, path)
+            .ok_or(BoundsError::MissingPrim(path))?;
+        let prototypes: Vec<_> = instancer
+            .prototypes()
+            .into_iter()
+            .filter_map(|target| {
+                if let layerstack::TargetPath::Prim(path) = target {
+                    Some(path)
+                } else {
+                    None
+                }
+            })
+            .collect();
+        self.instancer_prototypes.insert(path, prototypes.clone());
+        let transforms = instancer
+            .compute_instance_transforms(
+                self.time,
+                self.time,
+                crate::point_instancer::InstanceTransformOptions::default(),
+            )
+            .map_err(|source| BoundsError::InvalidPointInstancer { prim: path, source })?;
+        let mut varying = [
+            "positions",
+            "protoIndices",
+            "ids",
+            "invisibleIds",
+            "scales",
+            "orientations",
+            "orientationsf",
+            "velocities",
+            "accelerations",
+            "angularVelocities",
+        ]
+        .iter()
+        .any(|name| instancer.property_might_vary(name));
+        // Retain every prototype dependency, including currently masked ones.
+        for &prototype in &prototypes {
+            self.resolve(scene, prototype)?;
+            varying |= self.entries[&prototype].varying;
+            let prim = PrimView::new(*scene, prototype);
+            varying |= scene
+                .stage()
+                .property_names(prototype, scene.store())
+                .iter()
+                .any(|&name| {
+                    let name = scene.store().tokens().resolve(name);
+                    crate::xform::transform_property(name) && prim.property_might_vary(name)
+                });
+        }
+        let mut range = Range3d::default();
+        for instance in transforms {
+            for (purpose, bounds) in &self.entries[&prototypes[instance.prototype_index]].value {
+                if matches!(
+                    purpose,
+                    ImageablePurpose::Default | ImageablePurpose::Proxy | ImageablePurpose::Render
+                ) {
+                    range.union_with(bounds.transformed(&instance.matrix).aligned_range());
+                }
+            }
+        }
+        if !range.is_empty() {
+            range.min = range.min.map(|value| f64::from(value as f32));
+            range.max = range.max.map(|value| f64::from(value as f32));
+        }
+        Ok((
+            Box::new([(
+                self.purpose(scene, path),
+                BoundingBox {
+                    range,
+                    matrix: gf::IDENTITY,
+                },
+            )]),
+            varying,
+        ))
+    }
+
     fn compute(
         &mut self,
         scene: &Scene<'_>,
@@ -788,6 +985,20 @@ pub(crate) fn bounds_property(name: &str) -> bool {
                 | "axis"
                 | "purpose"
                 | "visibility"
+                | "positions"
+                | "protoIndices"
+                | "prototypes"
+                | "ids"
+                | "invisibleIds"
+                | "inactiveIds"
+                | "scales"
+                | "orientations"
+                | "orientationsf"
+                | "velocities"
+                | "accelerations"
+                | "angularVelocities"
+                | "timeCodesPerSecond"
+                | "framesPerSecond"
         )
 }
 

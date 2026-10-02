@@ -12,7 +12,7 @@
 generated="layerstack_schemas/src/generated"
 generated_tests="layerstack_conformance/tests/generated"
 # Private Gf math adapted from OpenUSD carries its upstream license.
-licensed_math="layerstack_schemas/src/skel/decomposition.rs"
+licensed_math="layerstack_schemas/src/gf/decomposition.rs"
 
 # Check all the standard Rust source files
 output=$(rg "^// Copyright (19|20)[\d]{2} (.+ and )?the LayerStack Authors( and .+)?$\n^// SPDX-License-Identifier: Apache-2\.0 OR MIT$\n\n" --files-without-match --multiline -g "*.rs" -g "!$generated/**" -g "!$generated_tests/**" -g "!$licensed_math" .)

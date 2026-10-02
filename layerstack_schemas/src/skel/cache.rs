@@ -922,11 +922,10 @@ impl SkelCache {
             self.stats.dual_quaternion_joints += u64::try_from(matrices.len()).unwrap_or(u64::MAX);
             // Singular matrices are rejected in the selected binding order
             // below; their unused shared entries must not poison other subsets.
-            rig.dual_normals = Some(Palette::normals(matrices.iter().map(|m| {
-                m.as_ref()
-                    .copied()
-                    .unwrap_or(super::decomposition::IDENTITY)
-            })));
+            rig.dual_normals =
+                Some(Palette::normals(matrices.iter().map(|m| {
+                    m.as_ref().copied().unwrap_or(gf::decomposition::IDENTITY)
+                })));
         }
         let normal_palette = rig.normals.as_ref().expect("prepared normals");
         let b = self.bindings.get_mut(&geometry).expect("prepared binding");

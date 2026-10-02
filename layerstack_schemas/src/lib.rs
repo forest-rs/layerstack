@@ -328,6 +328,8 @@ mod view;
 mod binding;
 #[cfg(feature = "usd-geom")]
 pub mod bounds;
+#[cfg(feature = "usd-geom")]
+pub mod camera;
 #[cfg(feature = "usd")]
 mod collection;
 #[cfg(feature = "usd-geom")]

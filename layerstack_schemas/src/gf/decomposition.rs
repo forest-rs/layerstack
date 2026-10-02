@@ -6,19 +6,19 @@
 // GfOrthogonalizeBasis and GfMatrix3d::ExtractRotationQuaternion.
 // See LICENSE-TOST-1.0 and NOTICE.
 
-//! Small, private decomposition operations needed by USD dual-quaternion skinning.
+//! Private affine and rotation decomposition shared by USD skinning and cameras.
 use crate::gf;
-pub(super) type Matrix3 = [[f64; 3]; 3];
-pub(super) const IDENTITY: Matrix3 = [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]];
+pub(crate) type Matrix3 = [[f64; 3]; 3];
+pub(crate) const IDENTITY: Matrix3 = [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]];
 fn transpose(m: &Matrix3) -> Matrix3 {
     core::array::from_fn(|i| core::array::from_fn(|j| m[j][i]))
 }
-pub(super) fn mul(a: &Matrix3, b: &Matrix3) -> Matrix3 {
+pub(crate) fn mul(a: &Matrix3, b: &Matrix3) -> Matrix3 {
     core::array::from_fn(|i| {
         core::array::from_fn(|j| a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j])
     })
 }
-pub(super) fn inverse(m: &Matrix3) -> Matrix3 {
+pub(crate) fn inverse(m: &Matrix3) -> Matrix3 {
     let mut full = gf::IDENTITY;
     for i in 0..3 {
         full[i][..3].copy_from_slice(&m[i]);
@@ -103,7 +103,7 @@ fn normalized(v: [f64; 3]) -> [f64; 3] {
     let n = libm::sqrt(dot(v, v)).max(1e-10);
     v.map(|x| x / n)
 }
-pub(super) fn orthonormalize(mut rows: Matrix3) -> Matrix3 {
+pub(crate) fn orthonormalize(mut rows: Matrix3) -> Matrix3 {
     rows = rows.map(normalized);
     let close = |a: [f64; 3], b: [f64; 3]| {
         let d = core::array::from_fn(|i| a[i] - b[i]);
@@ -138,7 +138,7 @@ pub(super) fn orthonormalize(mut rows: Matrix3) -> Matrix3 {
     }
     rows
 }
-pub(super) fn factored_rotation(matrix: &Matrix3) -> Option<Matrix3> {
+pub(crate) fn factored_rotation(matrix: &Matrix3) -> Option<Matrix3> {
     let determinant = matrix[0][0] * (matrix[1][1] * matrix[2][2] - matrix[1][2] * matrix[2][1])
         - matrix[0][1] * (matrix[1][0] * matrix[2][2] - matrix[1][2] * matrix[2][0])
         + matrix[0][2] * (matrix[1][0] * matrix[2][1] - matrix[1][1] * matrix[2][0]);
@@ -165,7 +165,7 @@ pub(super) fn factored_rotation(matrix: &Matrix3) -> Option<Matrix3> {
     )))
 }
 /// Quaternion in `[real, x, y, z]` order, as `GfQuatd`.
-pub(super) fn quaternion(m: &Matrix3) -> [f64; 4] {
+pub(crate) fn quaternion(m: &Matrix3) -> [f64; 4] {
     let i = if m[0][0] > m[1][1] {
         if m[0][0] > m[2][2] { 0 } else { 2 }
     } else if m[1][1] > m[2][2] {

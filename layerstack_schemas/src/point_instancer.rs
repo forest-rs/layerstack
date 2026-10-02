@@ -6,9 +6,13 @@
 //! OpenUSD: `UsdGeomPointInstancer::ComputeInstanceTransformsAtTime`,
 //! `ComputeMaskAtTime`, and `usdGeom/samplingUtils.cpp`. Attribute sources,
 //! time offsets and interpolation follow AOUSD Core §12.3–12.5.
-use crate::{PrimView, Scene, Time, gf, usd_geom::PointInstancer};
+use crate::{
+    Time, gf,
+    motion_sampling::{aligned, anchor, rate, read, vectors},
+    usd_geom::PointInstancer,
+};
 use alloc::vec::Vec;
-use layerstack::{PathId, TargetPath, TokenInterner, Value};
+use layerstack::{PathId, TargetPath};
 
 /// Policies for computing per-instance transforms.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -68,121 +72,6 @@ impl core::fmt::Display for PointInstancerError {
     }
 }
 impl core::error::Error for PointInstancerError {}
-
-fn read<'a, T>(
-    prim: &PrimView<'a>,
-    name: &str,
-    time: Time,
-    decode: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
-) -> Option<T> {
-    match time {
-        Time::Default => prim.read_value(name, decode),
-        Time::At {
-            code,
-            interpolation,
-        } => prim.read_value_at(name, code, interpolation, decode),
-    }
-}
-#[derive(Clone, Copy, Debug)]
-struct Anchor {
-    time: Time,
-    sample: Option<f64>,
-    bracket: Option<[f64; 2]>,
-}
-fn anchor(
-    prim: &PrimView<'_>,
-    name: &'static str,
-    base: Time,
-) -> Result<Anchor, PointInstancerError> {
-    let mut result = Anchor {
-        time: Time::Default,
-        sample: None,
-        bracket: None,
-    };
-    let Time::At { code, .. } = base else {
-        return Ok(result);
-    };
-    // AOUSD Core §12.3–12.5: dense arrays terminate value-source search;
-    // generic sparse edits compose over weaker values. Only sparse opinions
-    // active at this base time expose weaker sample grids. Value resolution at
-    // the selected stage-time anchor still belongs to Stage, including offsets.
-    let opinions = prim
-        .property_path(name)
-        .and_then(|p| prim.scene().stage().explain_property_path(p))
-        .unwrap_or_default();
-    let mut times = Vec::new();
-    for opinion in opinions {
-        if let Some(samples) = opinion.value.time_samples().filter(|s| !s.is_empty()) {
-            let mut mapped: Vec<_> = samples
-                .iter()
-                .map(|(t, v)| {
-                    (
-                        t * opinion.layer_offset.scale + opinion.layer_offset.offset,
-                        v,
-                    )
-                })
-                .collect();
-            mapped.sort_by(|a, b| a.0.total_cmp(&b.0));
-            times.extend(mapped.iter().map(|&(t, _)| t));
-            let active = mapped
-                .iter()
-                .rfind(|&&(t, _)| t <= code)
-                .unwrap_or(&mapped[0])
-                .1;
-            if active.array_edit_ref().is_none() {
-                break;
-            }
-        } else if opinion.value.spline().is_some() {
-            // USD splines are scalar-valued, so an array motion source cannot
-            // be anchored as discrete point/rotation samples.
-            return Err(PointInstancerError::UnsupportedMotionSource(name));
-        } else if let Some(value) = opinion.value.default_value()
-            && value.array_edit_ref().is_none()
-        {
-            break;
-        }
-    }
-    if !times.is_empty() {
-        times.sort_by(f64::total_cmp);
-        times.dedup_by(|a, b| *a == *b);
-        let lower = times
-            .iter()
-            .copied()
-            .take_while(|&t| t <= code)
-            .last()
-            .unwrap_or(times[0]);
-        let upper = times
-            .iter()
-            .copied()
-            .find(|&t| t > code)
-            .unwrap_or(*times.last().expect("nonempty samples"));
-        result = Anchor {
-            time: Time::held(lower),
-            sample: Some(lower),
-            bracket: Some([lower, upper]),
-        };
-    }
-    Ok(result)
-}
-fn aligned(a: Anchor, b: Anchor) -> bool {
-    a.sample.is_some() && a.sample == b.sample && a.bracket == b.bracket
-}
-fn vectors(prim: &PrimView<'_>, name: &str, time: Time) -> Option<Vec<[f32; 3]>> {
-    read(prim, name, time, crate::value::read_float3_array)
-}
-fn rate(scene: &Scene<'_>) -> f64 {
-    ["timeCodesPerSecond", "framesPerSecond"]
-        .into_iter()
-        .find_map(|name| {
-            let key = scene.store().tokens().lookup(name)?;
-            match scene.stage().layer_metadata(key, scene.store())? {
-                Value::Double(v) => Some(v),
-                Value::Float(v) => Some(f64::from(v)),
-                _ => None,
-            }
-        })
-        .unwrap_or(24.0)
-}
 
 impl PointInstancer<'_> {
     /// Visibility mask in original array order. Empty means every instance
@@ -257,7 +146,8 @@ impl PointInstancer<'_> {
             }
             _ => return Err(PointInstancerError::InvalidTime),
         };
-        let indices_anchor = anchor(self, "protoIndices", base_time)?;
+        let indices_anchor = anchor(self, "protoIndices", base_time)
+            .map_err(PointInstancerError::UnsupportedMotionSource)?;
         let indices = read(
             self,
             "protoIndices",
@@ -266,7 +156,8 @@ impl PointInstancer<'_> {
         )
         .ok_or(PointInstancerError::MissingAttribute("protoIndices"))?;
         let count = indices.len();
-        let position_anchor = anchor(self, "positions", base_time)?;
+        let position_anchor = anchor(self, "positions", base_time)
+            .map_err(PointInstancerError::UnsupportedMotionSource)?;
         let mut positions = vectors(self, "positions", position_anchor.time)
             .ok_or(PointInstancerError::MissingAttribute("positions"))?;
         if positions.len() != count {
@@ -277,7 +168,8 @@ impl PointInstancer<'_> {
         } else {
             "orientations"
         };
-        let orientation_anchor = anchor(self, orientation_name, base_time)?;
+        let orientation_anchor = anchor(self, orientation_name, base_time)
+            .map_err(PointInstancerError::UnsupportedMotionSource)?;
         let orientations = |at| {
             if orientation_name == "orientationsf" {
                 read(self, orientation_name, at, crate::value::read_quatf_array)
@@ -288,16 +180,19 @@ impl PointInstancer<'_> {
         let mut rotations = orientations(orientation_anchor.time)
             .filter(|v| v.len() == count)
             .unwrap_or_default();
-        let scale_anchor = anchor(self, "scales", base_time)?;
+        let scale_anchor = anchor(self, "scales", base_time)
+            .map_err(PointInstancerError::UnsupportedMotionSource)?;
         let mut scales = vectors(self, "scales", scale_anchor.time).unwrap_or_default();
         if !scales.is_empty() && scales.len() != count {
             return Err(PointInstancerError::LengthMismatch("scales"));
         }
-        let velocity_anchor = anchor(self, "velocities", base_time)?;
+        let velocity_anchor = anchor(self, "velocities", base_time)
+            .map_err(PointInstancerError::UnsupportedMotionSource)?;
         let velocities = vectors(self, "velocities", velocity_anchor.time)
             .filter(|v| v.len() == count && aligned(position_anchor, velocity_anchor))
             .unwrap_or_default();
-        let acceleration_anchor = anchor(self, "accelerations", base_time)?;
+        let acceleration_anchor = anchor(self, "accelerations", base_time)
+            .map_err(PointInstancerError::UnsupportedMotionSource)?;
         let accelerations = vectors(self, "accelerations", acceleration_anchor.time)
             .filter(|v| {
                 v.len() == count
@@ -305,7 +200,8 @@ impl PointInstancer<'_> {
                     && aligned(velocity_anchor, acceleration_anchor)
             })
             .unwrap_or_default();
-        let angular_anchor = anchor(self, "angularVelocities", base_time)?;
+        let angular_anchor = anchor(self, "angularVelocities", base_time)
+            .map_err(PointInstancerError::UnsupportedMotionSource)?;
         let angular = vectors(self, "angularVelocities", angular_anchor.time)
             .filter(|v| {
                 v.len() == count

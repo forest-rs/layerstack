@@ -1,0 +1,65 @@
+#usda 1.0
+(timeCodesPerSecond = 4)
+def Xform "World" {
+    double3 xformOp:translate = (100, 0, 0)
+    uniform token[] xformOpOrder = ["xformOp:translate"]
+    def Cube "Prototype" {
+        double size = 2
+        double3 xformOp:translate = (1, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+    def PointInstancer "Instances" (inactiveIds = [101]) {
+        rel prototypes = </World/Prototype>
+        int[] protoIndices = [0, 0, 0]
+        int64[] ids = [100, 101, 102]
+        int64[] invisibleIds = [102]
+        point3f[] positions = [(0, 0, 0), (10, 0, 0), (20, 0, 0)]
+        point3f[] positions.timeSamples = {
+            0: [(0,0,0), (10,0,0), (20,0,0)],
+            4: [(4,0,0), (14,0,0), (24,0,0)]
+        }
+        vector3f[] velocities.timeSamples = {
+            0: [(2,0,0), (2,0,0), (2,0,0)],
+            4: [(2,0,0), (2,0,0), (2,0,0)]
+        }
+        vector3f[] accelerations.timeSamples = {
+            0: [(1,0,0), (1,0,0), (1,0,0)],
+            4: [(1,0,0), (1,0,0), (1,0,0)]
+        }
+        float3[] scales = [(1,1,1), (2,1,1), (3,1,1)]
+        quatf[] orientationsf = [(1,0,0,0), (1,0,0,0), (0.5,0,0,0.5)]
+        quatf[] orientationsf.timeSamples = {
+            0: [(1,0,0,0), (1,0,0,0), (0.5,0,0,0.5)],
+            4: [(1,0,0,0), (1,0,0,0), (0.5,0,0,0.5)]
+        }
+        vector3f[] angularVelocities.timeSamples = {
+            0: [(0,0,90), (0,0,90), (13.25,41.75,90.125)],
+            4: [(0,0,90), (0,0,90), (13.25,41.75,90.125)]
+        }
+        double3 xformOp:translate = (5, 0, 0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+    def PointInstancer "ImplicitIds" (inactiveIds = [1]) {
+        rel prototypes = </World/Prototype>
+        int[] protoIndices = [0,0]
+        point3f[] positions = [(0,0,0), (2,0,0)]
+    }
+    def PointInstancer "Interpolated" {
+        rel prototypes = </World/Prototype>
+        int[] protoIndices = [0]
+        point3f[] positions.timeSamples = {0: [(0,0,0)], 4: [(8,0,0)]}
+    }
+    def PointInstancer "Compacted" (inactiveIds = [100]) {
+        rel prototypes = </World/Prototype>
+        int[] protoIndices = [0,0,0]
+        int64[] ids = [100,101,102]
+        int64[] invisibleIds = [101]
+        point3f[] positions = [(0,0,0), (2,0,0), (4,0,0)]
+    }
+    def PointInstancer "Misaligned" {
+        rel prototypes = </World/Prototype>
+        int[] protoIndices = [0]
+        point3f[] positions.timeSamples = {0: [(0,0,0)], 4: [(8,0,0)]}
+        vector3f[] velocities.timeSamples = {1: [(100,0,0)], 4: [(100,0,0)]}
+    }
+}

@@ -70,6 +70,32 @@ pub(crate) fn scale(s: [f64; 3]) -> Matrix4 {
     m
 }
 
+/// Direct `GfMatrix4d::SetRotate(GfQuatd)`; authored quaternions are not
+/// normalized or round-tripped through an axis/angle rotation.
+pub(crate) fn quaternion(q: [f64; 4]) -> Matrix4 {
+    embed(&quaternion3(q))
+}
+
+fn quaternion3([x, y, z, r]: [f64; 4]) -> Matrix3 {
+    [
+        [
+            1.0 - 2.0 * (y * y + z * z),
+            2.0 * (x * y + z * r),
+            2.0 * (z * x - y * r),
+        ],
+        [
+            2.0 * (x * y - z * r),
+            1.0 - 2.0 * (z * z + x * x),
+            2.0 * (y * z + x * r),
+        ],
+        [
+            2.0 * (z * x + y * r),
+            2.0 * (y * z - x * r),
+            1.0 - 2.0 * (y * y + x * x),
+        ],
+    ]
+}
+
 /// A 3×3 rotation embedded with no translation, as
 /// `GfMatrix4d(GfMatrix3d, GfVec3d(0))`.
 fn embed(r: &Matrix3) -> Matrix4 {
@@ -144,24 +170,7 @@ impl Rotation {
 
     /// `GfMatrix3d(GfRotation)` (`_SetRotateFromQuat`).
     fn matrix3(self) -> Matrix3 {
-        let [x, y, z, r] = self.quat();
-        [
-            [
-                1.0 - 2.0 * (y * y + z * z),
-                2.0 * (x * y + z * r),
-                2.0 * (z * x - y * r),
-            ],
-            [
-                2.0 * (x * y - z * r),
-                1.0 - 2.0 * (z * z + x * x),
-                2.0 * (y * z + x * r),
-            ],
-            [
-                2.0 * (z * x + y * r),
-                2.0 * (y * z - x * r),
-                1.0 - 2.0 * (y * y + x * x),
-            ],
-        ]
+        quaternion3(self.quat())
     }
 
     /// `GfMatrix4d(GfRotation, GfVec3d(0))`.

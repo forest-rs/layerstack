@@ -252,7 +252,12 @@ fn unsupported_geometry_reports_an_error_instead_of_an_incomplete_bound() {
     );
     assert_eq!(
         cache.world_bound(&scene, instancer),
-        Err(BoundsError::PointInstancerUnsupported(instancer))
+        Err(BoundsError::InvalidPointInstancer {
+            prim: instancer,
+            source: layerstack_schemas::point_instancer::PointInstancerError::MissingAttribute(
+                "protoIndices"
+            )
+        })
     );
 }
 

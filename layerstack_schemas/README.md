@@ -65,9 +65,12 @@ use the ordinary child fold, and structural changes rebuild affected reductions.
 computed, reused and invalidated work.
 
 When no valid extent is authored, bounds are computed from mesh points or
-cube, sphere, cylinder, cone and capsule parameters. Other procedural extent
-providers and point-instancer bounds remain unsupported and return explicit
-errors. Common transform helpers do not decompose arbitrary
+cube, sphere, cylinder, cone and capsule parameters, or point-instancer
+prototypes and instance transforms. Computed instancer extents require
+`ignore_visibility = false` and `use_extents_hint = false`; other policies
+return an explicit error unless an extent is authored. Prototype cycles and
+nesting beyond 64 instancers are rejected. Other procedural extent providers
+remain unsupported and return explicit errors. Common transform helpers do not decompose arbitrary
 matrices or rewrite incompatible op stacks. Prepared operation recipes remain
 an internal cache implementation detail.
 
@@ -84,6 +87,16 @@ Edit handles expose `create_primvar` with a declared `PropertyType`.
 `PrimvarEdit` authors values, samples, interpolation, element size and indices
 through `SchemaEdit`; invalid names, metadata and incompatible declarations
 append no edits. Ordinary transaction validation and undo remain in force.
+
+`PointInstancer::compute_mask` matches inactive and invisible IDs against stable
+IDs or array positions. `compute_instance_transforms` retains original indices
+and IDs after masking, includes optional prototype-local transforms and anchors
+velocity, acceleration and angular velocity samples to an explicit base time.
+Invalid topology returns an error. Misaligned motion arrays are ignored;
+ordinary interpolation is used when no usable linear or angular motion remains. Spline and sparse-edit motion sources return an explicit
+unsupported error. Bounds caches and retained queries track external and nested
+prototype dependencies; `bound_prototype_dependencies` exposes the roots
+consulted, including missing targets that can recover after later edits.
 
 With `usd-semantics`, `Scene::direct_taxonomies` and `inherited_taxonomies`
 discover applied label taxonomies. `LabelsQuery` computes sorted direct and

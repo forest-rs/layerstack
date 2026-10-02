@@ -89,7 +89,7 @@ fn mod_file(model: &Model, types: &ValueTypes) -> String {
         let _ = writeln!(out, "// - `{file}`");
     }
     out.push_str("\n//! The generated tables.\n\n@IMPORTS@\n");
-    out.push_str("pub(crate) mod views;\n\n");
+    out.push_str("pub(crate) mod views;\nmod metadata;\n\n");
     for domain in &model.domains {
         let _ = writeln!(out, "{}\nmod {};", cfg(domain), module(domain.plugin));
     }
@@ -315,6 +315,33 @@ fn domain_file(
     for (schema, target) in &domain.auto_applies {
         let _ = writeln!(out, "        ({schema:?}, {target:?}),");
     }
+    out.push_str("    ],\n    metadata: &[\n");
+    for metadata in &domain.metadata {
+        let name = model.tokens.resolve(metadata.name);
+        let targets = metadata
+            .targets
+            .iter()
+            .map(|target| format!("layerstack::MetadataTarget::{target:?}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let default = metadata
+            .default
+            .as_ref()
+            .map(|value| {
+                expr(value, &model.tokens).map(|value| format!("fallback({})", closure(&value)))
+            })
+            .transpose()
+            .unwrap_or_else(|why| {
+                failures.push(format!("{name}: {why}"));
+                None
+            })
+            .unwrap_or_else(|| "None".into());
+        let _ = writeln!(
+            out,
+            "        Metadata {{ name: {name:?}, type_name: {:?}, targets: &[{targets}], default: {default}, documentation: {:?} }},",
+            metadata.type_name, metadata.documentation
+        );
+    }
     out.push_str("    ],\n};\n");
     let mut imports = String::new();
     if out.contains("Arc::from(") {
@@ -341,6 +368,7 @@ fn domain_file(
     let table = used(&[
         ("DomainTables {", "DomainTables"),
         ("Property {", "Property"),
+        ("Metadata {", "Metadata"),
         ("Schema {", "Schema"),
         ("fallback(|", "fallback"),
     ]);
@@ -405,7 +433,7 @@ fn closure(expr: &str) -> String {
 }
 
 /// A Rust expression constructing `value`, whose tokens intern into `t`.
-fn expr(value: &Value, tokens: &TokenInterner) -> Result<String, String> {
+pub(crate) fn expr(value: &Value, tokens: &TokenInterner) -> Result<String, String> {
     fn list<T>(items: &[T], each: impl Fn(&T) -> String) -> String {
         let items: Vec<String> = items.iter().map(each).collect();
         format!("[{}]", items.join(", "))

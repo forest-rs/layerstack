@@ -1,0 +1,30 @@
+{
+  "authored_stage": 0.5,
+  "dictionary": {
+    "nested": {
+      "left": 1,
+      "right": 2
+    },
+    "strong": "yes",
+    "weak": "yes"
+  },
+  "inactive_ids": [
+    2,
+    3
+  ],
+  "interpolation": "vertex",
+  "property_defaults": {
+    "elementSize": null,
+    "interpolation": null,
+    "unauthoredValuesIndex": null
+  },
+  "relationship_render_type": "terminal",
+  "stage_defaults": {
+    "kilogramsPerUnit": 1.0,
+    "metersPerUnit": 0.01,
+    "renderSettingsPrimPath": "",
+    "upAxis": "Y"
+  },
+  "sublayer_does_not_override": 0.01,
+  "version": "26.8"
+}

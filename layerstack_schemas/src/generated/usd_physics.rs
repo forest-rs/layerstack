@@ -21,7 +21,7 @@
 
 use layerstack::{PropertyKind, SchemaKind, Value, Variability};
 
-use crate::table::{DomainTables, Property, Schema, fallback};
+use crate::table::{DomainTables, Metadata, Property, Schema, fallback};
 
 pub(crate) static TABLES: DomainTables = DomainTables {
     schemas: &[
@@ -1117,4 +1117,11 @@ pub(crate) static TABLES: DomainTables = DomainTables {
         },
     ],
     auto_applies: &[],
+    metadata: &[Metadata {
+        name: "kilogramsPerUnit",
+        type_name: "double",
+        targets: &[layerstack::MetadataTarget::Layer],
+        default: fallback(|_| Value::Double(1.0)),
+        documentation: "",
+    }],
 };

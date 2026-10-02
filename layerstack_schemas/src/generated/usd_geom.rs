@@ -23,7 +23,7 @@ use alloc::sync::Arc;
 
 use layerstack::{PropertyKind, SchemaKind, Value, Variability};
 
-use crate::table::{DomainTables, Property, Schema, fallback};
+use crate::table::{DomainTables, Metadata, Property, Schema, fallback};
 
 pub(crate) static TABLES: DomainTables = DomainTables {
     schemas: &[
@@ -2942,4 +2942,55 @@ pub(crate) static TABLES: DomainTables = DomainTables {
         },
     ],
     auto_applies: &[],
+    metadata: &[
+        Metadata {
+            name: "constraintTargetIdentifier",
+            type_name: "token",
+            targets: &[layerstack::MetadataTarget::Attribute],
+            default: fallback(|t| Value::Token(t.intern(""))),
+            documentation: "Unique identifier within a model's namespace for an matrix-valued attribute representing a constraint target",
+        },
+        Metadata {
+            name: "elementSize",
+            type_name: "int",
+            targets: &[layerstack::MetadataTarget::Attribute],
+            default: fallback(|_| Value::Int(1)),
+            documentation: "The number of values in a primvar's value array that must be aggregated for each element on the primitive.",
+        },
+        Metadata {
+            name: "inactiveIds",
+            type_name: "int64listop",
+            targets: &[layerstack::MetadataTarget::Prim],
+            default: None,
+            documentation: "",
+        },
+        Metadata {
+            name: "interpolation",
+            type_name: "token",
+            targets: &[layerstack::MetadataTarget::Attribute],
+            default: fallback(|t| Value::Token(t.intern("constant"))),
+            documentation: "How a primvar interpolates across a primitive; equivalent to RenderMan's 'class specifier'",
+        },
+        Metadata {
+            name: "metersPerUnit",
+            type_name: "double",
+            targets: &[layerstack::MetadataTarget::Layer],
+            default: fallback(|_| Value::Double(0.01)),
+            documentation: "",
+        },
+        Metadata {
+            name: "unauthoredValuesIndex",
+            type_name: "int",
+            targets: &[layerstack::MetadataTarget::Attribute],
+            default: fallback(|_| Value::Int(-1)),
+            documentation: "The index that represents unauthored values in the indices array of an indexed primvar.",
+        },
+        Metadata {
+            name: "upAxis",
+            type_name: "token",
+            targets: &[layerstack::MetadataTarget::Layer],
+            default: fallback(|t| Value::Token(t.intern("Y"))),
+            documentation: "",
+        },
+    ],
 };

@@ -52,9 +52,30 @@ pub(crate) struct Schema {
 
 /// One domain's schemas and auto-applies.
 pub(crate) struct DomainTables {
+    pub(crate) metadata: &'static [Metadata],
     pub(crate) schemas: &'static [Schema],
     /// `(applied schema, target)` pairs.
     pub(crate) auto_applies: &'static [(&'static str, &'static str)],
+}
+
+/// A plugin-defined metadata field.
+pub(crate) struct Metadata {
+    pub(crate) name: &'static str,
+    pub(crate) type_name: &'static str,
+    pub(crate) targets: &'static [layerstack::MetadataTarget],
+    pub(crate) default: Option<Construct>,
+    pub(crate) documentation: &'static str,
+}
+impl Metadata {
+    pub(crate) fn definition(&self, tokens: &mut TokenInterner) -> layerstack::MetadataDefinition {
+        layerstack::MetadataDefinition {
+            name: tokens.intern(self.name),
+            type_name: self.type_name.into(),
+            targets: self.targets.into(),
+            default: self.default.map(|construct| construct(tokens)),
+            documentation: self.documentation.into(),
+        }
+    }
 }
 
 impl Property {

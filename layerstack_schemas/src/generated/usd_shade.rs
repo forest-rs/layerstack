@@ -21,7 +21,7 @@
 
 use layerstack::{PropertyKind, SchemaKind, Value, Variability};
 
-use crate::table::{DomainTables, Property, Schema, fallback};
+use crate::table::{DomainTables, Metadata, Property, Schema, fallback};
 
 pub(crate) static TABLES: DomainTables = DomainTables {
     schemas: &[
@@ -136,4 +136,47 @@ pub(crate) static TABLES: DomainTables = DomainTables {
         },
     ],
     auto_applies: &[],
+    metadata: &[
+        Metadata {
+            name: "bindMaterialAs",
+            type_name: "token",
+            targets: &[layerstack::MetadataTarget::Relationship],
+            default: None,
+            documentation: "Metadata authored on collection-based material binding relationship to indicate the strength of the binding relative to bindings authored on descendant prims.",
+        },
+        Metadata {
+            name: "connectability",
+            type_name: "token",
+            targets: &[layerstack::MetadataTarget::Attribute],
+            default: fallback(|t| Value::Token(t.intern("full"))),
+            documentation: "Metadata authored on UsdShadeInput's to specify what they can be connected to. Can be either \"full\" or \"interfaceOnly\". \"full\" implies that  the input can be connected to any other input or output.  \"interfaceOnly\" implies that the input can only connect to a NodeGraph Input (which represents an interface override, not a render-time dataflow connection), or another Input whose connectability is also \"interfaceOnly\".",
+        },
+        Metadata {
+            name: "outputName",
+            type_name: "token",
+            targets: &[layerstack::MetadataTarget::Relationship],
+            default: None,
+            documentation: "",
+        },
+        Metadata {
+            name: "renderType",
+            type_name: "token",
+            targets: &[
+                layerstack::MetadataTarget::Attribute,
+                layerstack::MetadataTarget::Relationship,
+            ],
+            default: None,
+            documentation: "",
+        },
+        Metadata {
+            name: "sdrMetadata",
+            type_name: "dictionary",
+            targets: &[
+                layerstack::MetadataTarget::Prim,
+                layerstack::MetadataTarget::Attribute,
+            ],
+            default: None,
+            documentation: "",
+        },
+    ],
 };

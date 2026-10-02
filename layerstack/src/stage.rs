@@ -309,6 +309,7 @@ pub struct StageOptions {
 /// ```
 #[derive(Debug)]
 pub struct Stage {
+    root_layer: Option<LayerId>,
     prims: HashMap<PathId, PrimIndex>,
     children: HashMap<PathId, Vec<PathId>>,
     with_provenance: bool,
@@ -337,6 +338,7 @@ impl Stage {
     pub fn compose(store: &mut dyn LayerStore, root: LayerId, options: StageOptions) -> Self {
         let schemas = options.schemas.clone();
         let mut stage = crate::compose::compose_stage(store, root, options);
+        stage.root_layer = Some(root);
         stage.schemas = schemas;
         stage.prepare_type_info(store);
         stage
@@ -350,6 +352,7 @@ impl Stage {
     ) -> Self {
         let schemas = options.schemas.clone();
         let mut stage = crate::compose::compose_stage_with_paths(store, root, options, Some(paths));
+        stage.root_layer = Some(root);
         stage.schemas = schemas;
         stage.prepare_type_info(store);
         stage
@@ -460,6 +463,35 @@ impl Stage {
         }
     }
 
+    /// The root layer this stage was composed from, when it has one.
+    #[must_use]
+    pub fn root_layer(&self) -> Option<LayerId> {
+        self.root_layer
+    }
+
+    /// Reads root-layer metadata, using a registered layer default when absent.
+    /// Sublayer metadata does not participate. Blocks and incompatible field
+    /// representations do not resolve to a registered default.
+    ///
+    /// Spec: AOUSD Core §12.2.7 (layer metadata resolution).
+    /// OpenUSD: `UsdStage::GetMetadata`, `SdfSchema::GetFallback`.
+    #[must_use]
+    pub fn layer_metadata(&self, key: TokenId, store: &dyn LayerStore) -> Option<Value> {
+        let root = store.layer(self.root_layer?)?;
+        if let Some(field) = root.metadata(key) {
+            return match field {
+                FieldValue::Value(Value::Blocked) => None,
+                FieldValue::Value(value) => Some(value.clone()),
+                _ => None,
+            };
+        }
+        let definition = self.schemas()?.metadata(key)?;
+        definition
+            .applies_to(crate::MetadataTarget::Layer)
+            .then(|| definition.default.clone())
+            .flatten()
+    }
+
     /// The schemas the stage was composed with ([`StageOptions::schemas`]).
     #[must_use]
     pub fn schemas(&self) -> Option<&SchemaRegistry> {
@@ -481,6 +513,7 @@ impl Stage {
             prims
         };
         Self {
+            root_layer: None,
             prims,
             children,
             with_provenance,

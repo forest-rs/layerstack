@@ -40,6 +40,8 @@ pub(crate) enum Origin {
 pub(crate) struct Domain {
     /// The plugin's directory under `pxr/pluginfo` (`usdGeom`).
     pub(crate) plugin: &'static str,
+    /// Plugin-defined fields independent of prim schemas.
+    pub(crate) metadata: Vec<layerstack::MetadataDefinition>,
     /// Where its definitions were read from.
     pub(crate) origin: Origin,
     /// The plugin's name, as its `plugInfo.json` gives it (`usdGeom`,
@@ -164,6 +166,8 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
         ));
     }
     let mut files = Vec::new();
+    let mut store = InMemoryStore::default();
+    let mut plugin_metadata = BTreeMap::new();
     let relative = |path: &Path| {
         path.strip_prefix(site_packages)
             .or_else(|_| path.strip_prefix(source))
@@ -187,6 +191,13 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
                 plugin_names.insert(plugin, name.into());
             }
             let info = &plugin_info["Info"];
+            plugin_metadata
+                .entry(plugin)
+                .or_insert_with(Vec::new)
+                .extend(crate::metadata::read(
+                    &info["SdfMetadata"],
+                    &mut store.tokens,
+                )?);
             if let Some(types_json) = info["Types"].as_object() {
                 for (name, entry) in types_json {
                     types.insert(
@@ -239,7 +250,6 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
         }
     }
 
-    let mut store = InMemoryStore::default();
     let custom_data = store.tokens.intern("customData");
     let allowed_tokens = store.tokens.intern("allowedTokens");
     let mut domains = Vec::new();
@@ -423,6 +433,7 @@ pub(crate) fn read(pxr: &Path, source: &Path) -> Result<Model, String> {
         schemas.sort_by(|a, b| a.name.cmp(&b.name));
         left_out.sort();
         domains.push(Domain {
+            metadata: plugin_metadata.remove(plugin).unwrap_or_default(),
             plugin,
             origin,
             name: plugin_names

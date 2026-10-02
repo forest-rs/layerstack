@@ -21,7 +21,7 @@
 
 use layerstack::{PropertyKind, SchemaKind, Value, Variability};
 
-use crate::table::{DomainTables, Property, Schema, fallback};
+use crate::table::{DomainTables, Metadata, Property, Schema, fallback};
 
 pub(crate) static TABLES: DomainTables = DomainTables {
     schemas: &[
@@ -164,4 +164,15 @@ pub(crate) static TABLES: DomainTables = DomainTables {
         },
     ],
     auto_applies: &[],
+    metadata: &[Metadata {
+        name: "uiHints",
+        type_name: "dictionary",
+        targets: &[
+            layerstack::MetadataTarget::Prim,
+            layerstack::MetadataTarget::Attribute,
+            layerstack::MetadataTarget::Relationship,
+        ],
+        default: None,
+        documentation: "Presentation hints",
+    }],
 };

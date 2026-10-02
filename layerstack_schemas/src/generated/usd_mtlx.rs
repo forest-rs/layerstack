@@ -44,4 +44,5 @@ pub(crate) static TABLES: DomainTables = DomainTables {
         instance_can_only_apply_to: &[],
     }],
     auto_applies: &[],
+    metadata: &[],
 };

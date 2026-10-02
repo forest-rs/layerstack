@@ -35,6 +35,7 @@
 //! differ from what it would write.
 
 mod emit;
+mod metadata;
 mod model;
 mod views;
 
@@ -89,6 +90,7 @@ fn run() -> Result<String, String> {
     for (name, text) in emit::files(&model)?
         .into_iter()
         .chain(views::files(&model)?)
+        .chain(metadata::files(&model)?)
     {
         let path = if name == "test_table" {
             "layerstack_conformance/tests/generated/schema_views.rs".to_string()

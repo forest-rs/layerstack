@@ -1,0 +1,40 @@
+#usda 1.0
+def Scope "World" {
+    def PhysicsCollisionGroup "A" {
+        rel physics:filteredGroups = </World/B>
+        rel collection:colliders:includes = </World/Collider>
+    }
+    def PhysicsCollisionGroup "B" {}
+    def PhysicsCollisionGroup "Inverted" {
+        bool physics:invertFilteredGroups = true
+        rel physics:filteredGroups = [</World/A>, </World/MergedA>]
+    }
+    def PhysicsCollisionGroup "MergedA" {
+        string physics:mergeGroup = "merged"
+        rel physics:filteredGroups = </World/B>
+    }
+    def PhysicsCollisionGroup "MergedB" {
+        string physics:mergeGroup = "merged"
+    }
+    def PhysicsCollisionGroup "EmptyA" {
+        string physics:mergeGroup = ""
+        rel physics:filteredGroups = </World/EmptyA>
+    }
+    def PhysicsCollisionGroup "EmptyB" {
+        string physics:mergeGroup = ""
+    }
+    def Cube "Collider" {}
+    over "Undefined" {
+        def PhysicsCollisionGroup "Skip" {}
+    }
+    def Scope "Inactive" (active = false) {
+        def PhysicsCollisionGroup "Skip" {}
+    }
+}
+class Xform "Template" {
+    def PhysicsCollisionGroup "Hidden" {}
+}
+def Xform "Instance" (
+    instanceable = true
+    prepend references = </Template>
+) {}

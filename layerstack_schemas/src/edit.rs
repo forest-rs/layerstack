@@ -111,7 +111,8 @@ impl<'s> SchemaEdit<'s> {
         self.transaction
     }
 
-    pub(crate) fn tokens(&mut self) -> &mut TokenInterner {
+    /// The scene interner used to encode values collected by this edit.
+    pub fn tokens(&mut self) -> &mut TokenInterner {
         self.store.tokens_mut()
     }
 

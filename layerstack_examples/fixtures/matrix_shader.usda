@@ -1,0 +1,19 @@
+#usda 1.0
+# Copyright 2026 the LayerStack Authors
+# SPDX-License-Identifier: Apache-2.0 OR MIT
+
+def Shader "Matrices" {
+    uniform token info:id = "MatrixNode"
+    matrix2d inputs:matrix2 = ((1,0),(0,1))
+    matrix3d inputs:matrix3 = ((1,0,0),(0,1,0),(0,0,1))
+    matrix4d inputs:matrix4 = ((1,0,0,0),(0,1,0,0),(0,0,1,0),(0,0,0,1))
+    matrix2d[] inputs:matrices2
+    matrix3d[] inputs:matrices3
+    matrix4d[] inputs:matrices4
+    matrix2d outputs:matrix2
+    matrix3d outputs:matrix3
+    matrix4d outputs:matrix4
+    matrix2d[] outputs:matrices2
+    matrix3d[] outputs:matrices3
+    matrix4d[] outputs:matrices4
+}

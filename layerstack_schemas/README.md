@@ -241,3 +241,11 @@ dense blend shapes retain the compiler-vectorized kernel. With `std`, CPU featur
 detection selects a backend; without it, the compiled target baseline is used.
 Scalar fallback remains available, and ordinary schema builds do not pull in the
 SIMD dependency. `wind_tunnel` compares scalar, SIMD and `glam` kernels.
+
+`SkinningQuery::binding_inputs(time)` resolves flattened influences and the
+geometry-bind transform without reading vertices or computing a pose.
+`joint_mapping()` relates binding-order indices to the shared Skeleton palette;
+unmapped joints use identity transforms. `BlendShapeQuery::samples` and `sample`
+expose sparse/dense point and normal offsets in contribution order, including
+inbetweens. `validate_point_count` checks all samples before a complete buffer
+upload, while CPU evaluation continues to validate only active samples.

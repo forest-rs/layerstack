@@ -12,6 +12,8 @@
 # Match Inside a Word - Case Insensitive
 [default.extend-words]
 lod = "lod"
+# MaterialX NodeDef identifiers use the ND prefix.
+nd = "nd"
 
 [files]
 # Include .github, .cargo, etc.

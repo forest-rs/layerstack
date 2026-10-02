@@ -137,16 +137,9 @@ fn default_literal(
         Value::Vec2f(vector) => format!("{vector:?}"),
         Value::Vec3f(vector) => format!("{vector:?}"),
         Value::Vec4f(vector) => format!("{vector:?}"),
-        Value::Matrix4d(matrix) => format!(
-            "[{}]",
-            matrix
-                .as_chunks::<4>()
-                .0
-                .iter()
-                .map(|row| format!("{row:?}"))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
+        Value::Matrix2d(matrix) => matrix_literal(matrix.as_slice(), 2),
+        Value::Matrix3d(matrix) => matrix_literal(matrix.as_slice(), 3),
+        Value::Matrix4d(matrix) => matrix_literal(matrix.as_slice(), 4),
         Value::String(text) | Value::Asset(text) => {
             let arc = if external {
                 "Arc"
@@ -524,4 +517,15 @@ mod tests {
         };
         assert!(render(&model, true).unwrap()[0].1.contains(doc));
     }
+}
+
+fn matrix_literal(matrix: &[f64], width: usize) -> String {
+    format!(
+        "[{}]",
+        matrix
+            .chunks_exact(width)
+            .map(|row| format!("{row:?}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
 }

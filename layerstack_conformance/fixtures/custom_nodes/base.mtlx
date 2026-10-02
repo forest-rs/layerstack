@@ -1,0 +1,7 @@
+<?xml version="1.0"?>
+<materialx version="1.38">
+  <nodedef name="ND_base" node="base" type="color3">
+    <input name="gain" type="float" value="0.5"/>
+    <input name="tint" type="color3" value="1, 0.5, 0.25"/>
+  </nodedef>
+</materialx>

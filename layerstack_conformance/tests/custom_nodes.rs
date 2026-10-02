@@ -48,6 +48,57 @@ fn inherited_ports_compile_and_author_through_the_public_api() {
 }
 
 #[test]
+fn selected_materialx_interfaces_author_usd_without_loading_implementations() {
+    let mut store = InMemoryStore::default();
+    store.insert_layer(Layer::new(LayerId(1)));
+    let schemas = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let mut live = LiveStage::compose(
+        &mut store,
+        LayerId(1),
+        StageOptions {
+            schemas: Some(schemas),
+            ..StageOptions::default()
+        },
+    );
+    let path = store.path("/MaterialX");
+    let rgba = store.path("/Rgba");
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    materialx::NdRgba::define(&mut edit, rgba)
+        .create_out_output(&mut edit)
+        .unwrap();
+    let node = materialx::NdPaint::define(&mut edit, path);
+    node.set_gain(&mut edit, materialx::NdPaint::gain_default())
+        .unwrap();
+    node.set_file(&mut edit, &materialx::NdPaint::file_default())
+        .unwrap();
+    node.set_matrix(&mut edit, materialx::NdPaint::matrix_default())
+        .unwrap();
+    node.create_out_output(&mut edit).unwrap();
+    let transaction = edit.finish();
+    live.apply(&mut store, &transaction).unwrap();
+    let scene = Scene::new(live.stage(), &store);
+    let node = materialx::NdPaint::new(&scene, path).unwrap();
+    assert_eq!(node.gain(), Some(0.75));
+    assert_eq!(node.file().as_deref(), Some("paint.exr"));
+    assert_eq!(
+        node.matrix(),
+        Some([[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]])
+    );
+    assert_eq!(materialx::NdPaint::label_default().as_ref(), "paint & coat");
+    assert_eq!(materialx::NdPaint::tint_default(), [1., 0.5, 0.25]);
+    assert_eq!(node.tint(), None);
+    assert!(node.out_output().is_some());
+    let output = materialx::NdRgba::new(&scene, rgba)
+        .unwrap()
+        .out_output()
+        .unwrap();
+    assert_eq!(
+        output.property_type().unwrap().type_name.as_ref(),
+        "color4f"
+    );
+}
+
+#[test]
 fn user_literals_compile_and_round_trip_without_rust_path_rewriting() {
     const LABEL: &str =
         "crate::example alloc::sync::Arc:: alloc::vec::Vec< alloc::boxed::Box:: ::alloc::";

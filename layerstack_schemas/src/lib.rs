@@ -178,7 +178,8 @@
 //!   bounds from authored extents or model extents hints, with purpose and
 //!   visibility filtering. Relative bounds convert world coordinate frames,
 //!   including across transform resets. Time changes preserve static results;
-//!   point-instancer bounds and procedural extent providers remain unsupported;
+//!   built-in intrinsic extents and point-instancer prototype bounds are supported;
+//!   other procedural extent providers return explicit errors;
 //! - `Imageable::compute_visibility`, `compute_effective_visibility` for a
 //!   purpose (`VisibilityAPI`), and `compute_purpose_info`, which says
 //!   which prim authors the inherited purpose.
@@ -267,8 +268,8 @@
 //! With `usd-geom`, [`bounds::BoundsCache`] computes oriented local and world
 //! bounds from authored extents and model extent hints, partitioned by purpose.
 //! It indexes cached namespace dependencies so edits evict the affected subtree
-//! and its ancestors. Procedural extents and point-instancer bounds are explicit
-//! unsupported results in this first slice; see [`bounds`].
+//! and its ancestors, including external point-instancer prototypes. Built-in
+//! extents are computed when unauthored; other plugins return errors; see [`bounds`].
 //!
 //! With `usd-shade`, [`Scene::connected_sources`] reads composed shading
 //! connections and [`Scene::shader_sources`] traces node-graph passthroughs.

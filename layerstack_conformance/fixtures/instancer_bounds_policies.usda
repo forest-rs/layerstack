@@ -1,0 +1,25 @@
+#usda 1.0
+
+def Xform "Prototype" (
+    kind = "component"
+) {
+    float3[] extentsHint = [(-200,-200,-200), (200,200,200)]
+    def Cube "Visible" { }
+    def Cube "Hidden" {
+        token visibility = "invisible"
+        double3 xformOp:translate = (100,0,0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+}
+def Xform "Query" {
+    def PointInstancer "I" {
+        rel prototypes = </Prototype>
+        int[] protoIndices = [0]
+        point3f[] positions = [(5,0,0)]
+    }
+    def Cube "Hidden" {
+        token visibility = "invisible"
+        double3 xformOp:translate = (50,0,0)
+        uniform token[] xformOpOrder = ["xformOp:translate"]
+    }
+}

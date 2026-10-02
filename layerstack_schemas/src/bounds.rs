@@ -115,9 +115,6 @@ pub enum BoundsError {
     },
     /// Prototype bounds revisit an active instancer or exceed 64 nested instancers.
     PointInstancerCycle(PathId),
-    /// Computed instancer extents currently require ordinary visibility and
-    /// no prototype model hints; authored extents still support all policies.
-    UnsupportedInstancerPolicy(PathId),
     /// Component-space conversion requires an invertible world transform.
     SingularTransform(PathId),
 }
@@ -191,8 +188,8 @@ impl<T> Entry<T> {
 /// providers are not implemented; missing geometry is an
 /// error, never a silently incomplete bound. Computed point-instancer extents
 /// retain prototype dependencies, including prototypes outside their namespace.
-/// Their provider supports ordinary visibility with no model hints; authored
-/// extents support all policies. Nested prototype graphs are limited to 64
+/// Prototype extent evaluation always uses ordinary visibility and no model
+/// hints, independently of the querying cache. Nested graphs are limited to 64
 /// instancers and cycles return an explicit error.
 ///
 /// Child inclusion follows OpenUSD's defined, non-abstract, imageable/unknown
@@ -213,6 +210,8 @@ pub struct BoundsCache {
     promote: HashSet<PathId>,
     instancer_prototypes: HashMap<PathId, Vec<PathId>>,
     active_instancers: HashSet<PathId>,
+    // The intrinsic provider has fixed policies, independent of its caller.
+    prototype_cache: Option<Box<Self>>,
     stats: BoundsStats,
     epoch: u64,
 }
@@ -232,6 +231,7 @@ impl BoundsCache {
             promote: HashSet::new(),
             instancer_prototypes: HashMap::new(),
             active_instancers: HashSet::new(),
+            prototype_cache: None,
             stats: BoundsStats::default(),
             epoch: 1,
         }
@@ -239,26 +239,41 @@ impl BoundsCache {
     /// Work counters since construction or clearing.
     #[must_use]
     pub fn stats(&self) -> BoundsStats {
-        self.stats
+        let mut stats = self.stats;
+        if let Some(cache) = &self.prototype_cache {
+            let inner = cache.stats();
+            stats.computed += inner.computed;
+            stats.hits += inner.hits;
+            stats.invalidated += inner.invalidated;
+        }
+        stats
     }
     pub(crate) fn transforms_mut(&mut self) -> &mut XformCache {
         &mut self.transforms
     }
     pub(crate) fn transform_stats(&self) -> crate::XformCacheStats {
-        self.transforms.stats()
+        let mut stats = self.transforms.stats();
+        if let Some(cache) = &self.prototype_cache {
+            let inner = cache.transform_stats();
+            stats.local_computed += inner.local_computed;
+            stats.world_computed += inner.world_computed;
+            stats.hits += inner.hits;
+        }
+        stats
     }
     /// Number of cached prim bounds.
     #[must_use]
     pub fn len(&self) -> usize {
-        self.entries.len()
+        self.entries.len() + self.prototype_cache.as_ref().map_or(0, |cache| cache.len())
     }
     /// Whether no prim bounds are cached.
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
+        self.len() == 0
     }
     /// Drop every result and reset counters.
     pub fn clear(&mut self) {
+        self.prototype_cache = None;
         self.instancer_prototypes.clear();
         self.active_instancers.clear();
         self.entries.clear();
@@ -284,6 +299,9 @@ impl BoundsCache {
             }
             self.time = time;
             self.transforms.set_time(time);
+            if let Some(cache) = &mut self.prototype_cache {
+                cache.set_time(time);
+            }
         }
     }
     /// Invalidate `path`, cached descendants, and ancestors whose bounds include it.
@@ -295,6 +313,9 @@ impl BoundsCache {
     /// Structural changes retire affected reductions. Animated and small
     /// parents continue to fold their children when recomputed.
     pub fn invalidate(&mut self, scene: &Scene<'_>, path: PathId) {
+        if let Some(cache) = &mut self.prototype_cache {
+            cache.invalidate(scene, path);
+        }
         self.transforms.invalidate(scene, path);
         self.invalidate_prototypes(scene, path);
         self.invalidate_bounds(scene, path);
@@ -305,6 +326,9 @@ impl BoundsCache {
     /// own reduction dependencies, including excluded children and ancestors.
     /// Pass every report before querying results affected by edits.
     pub fn apply_changes(&mut self, scene: &Scene<'_>, changes: &layerstack::Changes) {
+        if let Some(cache) = &mut self.prototype_cache {
+            cache.apply_changes(scene, changes);
+        }
         self.transforms.apply_changes(scene, changes);
         // Resync roots cover removals too. Retained reduction dependencies
         // reach deleted and excluded descendants without revisiting ancestors
@@ -325,6 +349,14 @@ impl BoundsCache {
         }
     }
 
+    fn prototype_edges(&self) -> impl Iterator<Item = (&PathId, &Vec<PathId>)> {
+        self.instancer_prototypes.iter().chain(
+            self.prototype_cache
+                .iter()
+                .flat_map(|cache| cache.instancer_prototypes.iter()),
+        )
+    }
+
     fn affected_instancers(&self, scene: &Scene<'_>, path: PathId) -> Vec<PathId> {
         let mut affected = Vec::new();
         let mut pending = vec![path];
@@ -333,7 +365,7 @@ impl BoundsCache {
             if !visited.insert(changed) {
                 continue;
             }
-            for (&instancer, prototypes) in &self.instancer_prototypes {
+            for (&instancer, prototypes) in self.prototype_edges() {
                 let changed_path = scene.store().paths().resolve(changed);
                 if prototypes.iter().any(|&prototype| {
                     let prototype = scene.store().paths().resolve(prototype);
@@ -365,7 +397,7 @@ impl BoundsCache {
             if !visited.insert(root) {
                 continue;
             }
-            for (&instancer, prototypes) in &self.instancer_prototypes {
+            for (&instancer, prototypes) in self.prototype_edges() {
                 if scene
                     .store()
                     .paths()
@@ -733,7 +765,26 @@ impl BoundsCache {
             && crate::extent::compute(scene, path, self.time).is_none()
         {
             if self.options.ignore_visibility || self.options.use_extents_hint {
-                return Err(BoundsError::UnsupportedInstancerPolicy(path));
+                // UsdGeomPointInstancer::_ComputeExtent uses a separate
+                // BBoxCache with fixed policies; caller hints and visibility
+                // must not alter intrinsic prototype geometry (AOUSD Core §12.3).
+                let time = self.time;
+                return self
+                    .prototype_cache
+                    .get_or_insert_with(|| {
+                        Box::new(Self::new(
+                            time,
+                            BoundsOptions {
+                                included_purposes: vec![
+                                    ImageablePurpose::Default,
+                                    ImageablePurpose::Proxy,
+                                    ImageablePurpose::Render,
+                                ],
+                                ..BoundsOptions::default()
+                            },
+                        ))
+                    })
+                    .direct_bounds(scene, path);
             }
             if self.active_instancers.len() >= 64 || !self.active_instancers.insert(path) {
                 return Err(BoundsError::PointInstancerCycle(path));

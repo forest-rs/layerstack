@@ -22,3 +22,6 @@ layerstack_schemas = { features = ["all"], workspace = true }
 layerstack_usda = { workspace = true }
 layerstack_usdz = { workspace = true }
 opinionated = { workspace = true }
+
+[build-dependencies]
+layerstack_schemagen = { path = "../layerstack_schemagen" }

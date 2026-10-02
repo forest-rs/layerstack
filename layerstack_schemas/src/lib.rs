@@ -357,7 +357,7 @@ pub mod retained;
 #[cfg(feature = "usd-shade")]
 pub mod shading;
 mod table;
-mod value;
+pub mod value;
 #[cfg(feature = "usd-geom")]
 mod xform;
 #[cfg(feature = "usd-geom")]

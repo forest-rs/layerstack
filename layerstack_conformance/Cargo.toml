@@ -24,3 +24,6 @@ layerstack_usdz = { workspace = true }
 serde = { features = ["derive"], version = "1.0" }
 # `float_roundtrip` parses the bit-exact vectors exactly.
 serde_json = { features = ["float_roundtrip"], version = "1.0" }
+
+[build-dependencies]
+layerstack_schemagen = { path = "../layerstack_schemagen" }

@@ -268,7 +268,7 @@ impl<'a> PrimView<'a> {
     /// `MetadataValueComposer`; incompatible dense defaults are skipped.
     ///
     /// Spec: AOUSD Core §12.3 (value resolution), §13.3.2.4 (fallbacks).
-    pub(crate) fn read_value<T>(
+    pub fn read_value<T>(
         &self,
         name: &str,
         read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
@@ -288,7 +288,7 @@ impl<'a> PrimView<'a> {
     ///
     /// Spec: AOUSD Core §12.3.2 (time-based resolution), §12.5
     /// (interpolation).
-    pub(crate) fn read_value_at<T>(
+    pub fn read_value_at<T>(
         &self,
         name: &str,
         time: f64,

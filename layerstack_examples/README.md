@@ -44,3 +44,6 @@ Small runnable programs that demonstrate how to use the `layerstack` API, and th
 
 `cargo run -p layerstack_examples --bin shading_values` authors a material interface
 input and traces the value supplying a shader input.
+
+The library target compiles a generated `shaderDefs.usda` matrix interface with
+`#![no_std]`, covering scalar/array inputs and outputs without the standard prelude.

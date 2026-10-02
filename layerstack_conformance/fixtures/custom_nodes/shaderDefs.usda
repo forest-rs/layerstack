@@ -1,0 +1,15 @@
+#usda 1.0
+(subLayers = [@base.usda@])
+def Shader "WetPaint" (inherits = </PaintInputs>) {
+    uniform token info:id = "StudioWetPaint"
+    float inputs:coat = 0.8
+    bool inputs:enabled = true
+    token outputs:surface
+}
+
+def Shader "LiteralDefaults" {
+    uniform token info:id = "crate::literal"
+    string inputs:label = "crate::example alloc::sync::Arc:: alloc::vec::Vec< alloc::boxed::Box:: ::alloc::"
+    token inputs:mode = "crate::mode"
+    asset inputs:file = @crate::asset@
+}

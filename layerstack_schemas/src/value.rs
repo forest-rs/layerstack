@@ -22,7 +22,7 @@ use alloc::{sync::Arc, vec::Vec};
 use layerstack::{TokenInterner, Value, half};
 
 /// Reads an array of `read`'s type.
-pub(crate) fn read_array<'a, T>(
+pub fn read_array<'a, T>(
     value: &Value,
     tokens: &'a TokenInterner,
     read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
@@ -37,7 +37,7 @@ pub(crate) fn read_array<'a, T>(
 }
 
 /// Writes an array of `write`'s type.
-pub(crate) fn write_array<T: Copy>(
+pub fn write_array<T: Copy>(
     items: &[T],
     tokens: &mut TokenInterner,
     write: impl Fn(T, &mut TokenInterner) -> Value,
@@ -47,18 +47,21 @@ pub(crate) fn write_array<T: Copy>(
 
 macro_rules! plain {
     ($read:ident, $write:ident, $ty:ty, $variant:ident, $read_array:ident, $write_array:ident) => {
-        pub(crate) fn $read(value: &Value, _: &TokenInterner) -> Option<$ty> {
+        /// Decodes the USD value without coercing incompatible types.
+        pub fn $read(value: &Value, _: &TokenInterner) -> Option<$ty> {
             match value {
                 Value::$variant(v) => Some(*v),
                 _ => None,
             }
         }
 
-        pub(crate) fn $write(value: $ty, _: &mut TokenInterner) -> Value {
+        /// Encodes the USD value without coercing incompatible types.
+        pub fn $write(value: $ty, _: &mut TokenInterner) -> Value {
             Value::$variant(value)
         }
 
-        pub(crate) fn $read_array(value: &Value, tokens: &TokenInterner) -> Option<Vec<$ty>> {
+        /// Decodes the USD value without coercing incompatible types.
+        pub fn $read_array(value: &Value, tokens: &TokenInterner) -> Option<Vec<$ty>> {
             match value {
                 Value::TypedArray(layerstack::TypedArray::$variant(items)) => {
                     Some(items.as_ref().clone())
@@ -68,7 +71,8 @@ macro_rules! plain {
             }
         }
 
-        pub(crate) fn $write_array(items: &[$ty], _: &mut TokenInterner) -> Value {
+        /// Encodes the USD value without coercing incompatible types.
+        pub fn $write_array(items: &[$ty], _: &mut TokenInterner) -> Value {
             Value::TypedArray(layerstack::TypedArray::$variant(Arc::new(items.to_vec())))
         }
     };
@@ -237,14 +241,16 @@ plain!(
 
 macro_rules! text {
     ($read:ident, $write:ident, $variant:ident) => {
-        pub(crate) fn $read(value: &Value, _: &TokenInterner) -> Option<Arc<str>> {
+        /// Decodes the USD value without coercing incompatible types.
+        pub fn $read(value: &Value, _: &TokenInterner) -> Option<Arc<str>> {
             match value {
                 Value::$variant(v) => Some(v.clone()),
                 _ => None,
             }
         }
 
-        pub(crate) fn $write(value: &str, _: &mut TokenInterner) -> Value {
+        /// Encodes the USD value without coercing incompatible types.
+        pub fn $write(value: &str, _: &mut TokenInterner) -> Value {
             Value::$variant(Arc::from(value))
         }
     };
@@ -254,29 +260,34 @@ text!(read_string, write_string, String);
 text!(read_asset, write_asset, Asset);
 text!(read_path_expression, write_path_expression, PathExpression);
 
-pub(crate) fn read_token<'a>(value: &Value, tokens: &'a TokenInterner) -> Option<&'a str> {
+/// Decodes the USD value without coercing incompatible types.
+pub fn read_token<'a>(value: &Value, tokens: &'a TokenInterner) -> Option<&'a str> {
     match value {
         Value::Token(token) => Some(tokens.resolve(*token)),
         _ => None,
     }
 }
 
-pub(crate) fn write_token(value: &str, tokens: &mut TokenInterner) -> Value {
+/// Encodes the USD value without coercing incompatible types.
+pub fn write_token(value: &str, tokens: &mut TokenInterner) -> Value {
     Value::Token(tokens.intern(value))
 }
 
-pub(crate) fn read_half(value: &Value, _: &TokenInterner) -> Option<f32> {
+/// Decodes the USD value without coercing incompatible types.
+pub fn read_half(value: &Value, _: &TokenInterner) -> Option<f32> {
     match value {
         Value::Half(bits) => Some(half::to_f32(*bits)),
         _ => None,
     }
 }
 
-pub(crate) fn write_half(value: f32, _: &mut TokenInterner) -> Value {
+/// Encodes the USD value without coercing incompatible types.
+pub fn write_half(value: f32, _: &mut TokenInterner) -> Value {
     Value::Half(half::from_f32(value))
 }
 
-pub(crate) fn read_half_array(value: &Value, tokens: &TokenInterner) -> Option<Vec<f32>> {
+/// Decodes the USD value without coercing incompatible types.
+pub fn read_half_array(value: &Value, tokens: &TokenInterner) -> Option<Vec<f32>> {
     match value {
         Value::TypedArray(layerstack::TypedArray::Half(items)) => {
             Some(items.iter().copied().map(half::to_f32).collect())
@@ -286,7 +297,8 @@ pub(crate) fn read_half_array(value: &Value, tokens: &TokenInterner) -> Option<V
     }
 }
 
-pub(crate) fn write_half_array(items: &[f32], _: &mut TokenInterner) -> Value {
+/// Encodes the USD value without coercing incompatible types.
+pub fn write_half_array(items: &[f32], _: &mut TokenInterner) -> Value {
     Value::TypedArray(layerstack::TypedArray::Half(Arc::new(
         items.iter().copied().map(half::from_f32).collect(),
     )))
@@ -294,18 +306,21 @@ pub(crate) fn write_half_array(items: &[f32], _: &mut TokenInterner) -> Value {
 
 macro_rules! halves {
     ($read:ident, $write:ident, $n:literal, $variant:ident, $read_array:ident, $write_array:ident) => {
-        pub(crate) fn $read(value: &Value, _: &TokenInterner) -> Option<[f32; $n]> {
+        /// Decodes the USD value without coercing incompatible types.
+        pub fn $read(value: &Value, _: &TokenInterner) -> Option<[f32; $n]> {
             match value {
                 Value::$variant(bits) => Some(bits.map(half::to_f32)),
                 _ => None,
             }
         }
 
-        pub(crate) fn $write(value: [f32; $n], _: &mut TokenInterner) -> Value {
+        /// Encodes the USD value without coercing incompatible types.
+        pub fn $write(value: [f32; $n], _: &mut TokenInterner) -> Value {
             Value::$variant(value.map(half::from_f32))
         }
 
-        pub(crate) fn $read_array(value: &Value, tokens: &TokenInterner) -> Option<Vec<[f32; $n]>> {
+        /// Decodes the USD value without coercing incompatible types.
+        pub fn $read_array(value: &Value, tokens: &TokenInterner) -> Option<Vec<[f32; $n]>> {
             match value {
                 Value::TypedArray(layerstack::TypedArray::$variant(items)) => {
                     Some(items.iter().map(|bits| bits.map(half::to_f32)).collect())
@@ -315,7 +330,8 @@ macro_rules! halves {
             }
         }
 
-        pub(crate) fn $write_array(items: &[[f32; $n]], _: &mut TokenInterner) -> Value {
+        /// Encodes the USD value without coercing incompatible types.
+        pub fn $write_array(items: &[[f32; $n]], _: &mut TokenInterner) -> Value {
             Value::TypedArray(layerstack::TypedArray::$variant(Arc::new(
                 items
                     .iter()
@@ -361,7 +377,8 @@ halves!(
 
 macro_rules! matrix {
     ($read:ident, $write:ident, $n:literal, $variant:ident, $read_array:ident, $write_array:ident) => {
-        pub(crate) fn $read(value: &Value, _: &TokenInterner) -> Option<[[f64; $n]; $n]> {
+        /// Decodes the USD value without coercing incompatible types.
+        pub fn $read(value: &Value, _: &TokenInterner) -> Option<[[f64; $n]; $n]> {
             match value {
                 Value::$variant(m) => {
                     let mut rows = [[0.0; $n]; $n];
@@ -374,7 +391,8 @@ macro_rules! matrix {
             }
         }
 
-        pub(crate) fn $write(value: [[f64; $n]; $n], _: &mut TokenInterner) -> Value {
+        /// Encodes the USD value without coercing incompatible types.
+        pub fn $write(value: [[f64; $n]; $n], _: &mut TokenInterner) -> Value {
             let mut flat = [0.0; $n * $n];
             for (i, row) in value.iter().enumerate() {
                 flat[i * $n..(i + 1) * $n].copy_from_slice(row);
@@ -382,10 +400,8 @@ macro_rules! matrix {
             Value::$variant(alloc::boxed::Box::new(flat))
         }
 
-        pub(crate) fn $read_array(
-            value: &Value,
-            tokens: &TokenInterner,
-        ) -> Option<Vec<[[f64; $n]; $n]>> {
+        /// Decodes the USD value without coercing incompatible types.
+        pub fn $read_array(value: &Value, tokens: &TokenInterner) -> Option<Vec<[[f64; $n]; $n]>> {
             match value {
                 Value::TypedArray(layerstack::TypedArray::$variant(items)) => Some(
                     items
@@ -402,7 +418,8 @@ macro_rules! matrix {
             }
         }
 
-        pub(crate) fn $write_array(items: &[[[f64; $n]; $n]], _: &mut TokenInterner) -> Value {
+        /// Encodes the USD value without coercing incompatible types.
+        pub fn $write_array(items: &[[[f64; $n]; $n]], _: &mut TokenInterner) -> Value {
             Value::TypedArray(layerstack::TypedArray::$variant(Arc::new(
                 items
                     .iter()

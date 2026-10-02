@@ -349,6 +349,14 @@ impl BlendShapeQuery {
         normals: bool,
     ) -> Result<(), SkelError> {
         let contributions = self.compute_weights(weights)?;
+        self.deform_contributions(&contributions, values, normals)
+    }
+    pub(super) fn deform_contributions(
+        &self,
+        contributions: &[BlendShapeContribution],
+        values: &mut [[f32; 3]],
+        normals: bool,
+    ) -> Result<(), SkelError> {
         // Validate every active offset set before accumulating any output.
         let offsets = |c: &BlendShapeContribution| {
             let sample = &self.shapes[c.shape].samples[c.sample];
@@ -358,13 +366,13 @@ impl BlendShapeQuery {
                 &sample.offsets
             }
         };
-        for c in &contributions {
+        for c in contributions {
             if c.weight.abs() > 1e-6 && !offsets(c).is_empty() {
                 validate_offsets(offsets(c), &self.shapes[c.shape].indices, values.len())?;
             }
         }
         for c in contributions {
-            apply_offsets(c.weight, offsets(&c), &self.shapes[c.shape].indices, values);
+            apply_offsets(c.weight, offsets(c), &self.shapes[c.shape].indices, values);
         }
         Ok(())
     }

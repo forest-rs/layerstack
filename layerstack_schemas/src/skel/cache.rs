@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
 //! Explicit retained evaluation for one stage/store pair.
-use super::SkinningMethod;
 use super::dual_quaternion::Palette;
 use super::normals::{NormalMatrix, inverse_transpose};
 use super::skinning::{SkinningDefinition, SkinningInputs};
+use super::{BlendShapeContribution, DeformationInputs, DeformationRevisions, SkinningMethod};
 use super::{SkelError, SkeletonDefinition, SkinningQuery, invalid, read, skin_points_in_place};
 use crate::{PrimView, Scene, Time, gf, usd_skel::Skeleton};
 use alloc::{sync::Arc, vec::Vec};
@@ -29,6 +29,10 @@ pub struct SkelCacheStats {
     pub inverse_bind_matrices: u64,
     /// Influence array pairs resolved/flattened.
     pub influence_resolutions: u64,
+    /// Shared animation weight arrays evaluated, including failed evaluations.
+    pub blend_weight_evaluations: u64,
+    /// Binding-order weight/contribution arrays evaluated, including failures.
+    pub blend_shape_evaluations: u64,
     /// Joint inverse-transpose matrices prepared for normal palettes.
     pub normal_matrices: u64,
     /// Joint DQS decompositions prepared for shared point/normal palettes.
@@ -153,6 +157,9 @@ impl Dependencies {
     }
 }
 struct Rig {
+    definition_revision: u64,
+    pose_revision: u64,
+    weight_revision: u64,
     definition: Arc<SkeletonDefinition>,
     definitions: Dependencies,
     pose_dependencies: Dependencies,
@@ -183,6 +190,11 @@ impl Rig {
     }
 }
 struct Binding {
+    definition_revision: u64,
+    input_revision: u64,
+    shape_revision: u64,
+    shape_weight_revision: u64,
+    shape_contributions: Vec<BlendShapeContribution>,
     definition: Arc<SkinningDefinition>,
     definitions: Dependencies,
     point_dependencies: Dependencies,
@@ -240,6 +252,7 @@ impl Binding {
 pub struct SkelCache {
     time: Time,
     epoch: u64,
+    next_revision: u64,
     rigs: HashMap<PathId, Rig>,
     bindings: HashMap<PathId, Binding>,
     stats: SkelCacheStats,
@@ -260,6 +273,7 @@ impl SkelCache {
         Self {
             time,
             epoch: 1,
+            next_revision: 1,
             rigs: HashMap::new(),
             bindings: HashMap::new(),
             stats: SkelCacheStats::default(),
@@ -283,7 +297,8 @@ impl SkelCache {
             }
         }
     }
-    /// Drops retained definitions and buffers; preserves time and counters.
+    /// Drops retained definitions and buffers; preserves time, counters and revision
+    /// allocation, so previously issued upload revisions are never reused.
     pub fn clear(&mut self) {
         self.rigs.clear();
         self.bindings.clear();
@@ -339,8 +354,16 @@ impl SkelCache {
             add(&mut m, &b.normal_transforms);
             add(&mut m, &b.shape_mapping);
             add(&mut m, &b.shape_weights);
+            add(&mut m, &b.shape_contributions);
         }
         m
+    }
+    fn revision(&mut self) -> u64 {
+        let revision = self.next_revision;
+        self.next_revision = revision
+            .checked_add(1)
+            .expect("skeletal revision space exhausted");
+        revision
     }
     fn ensure_rig(&mut self, scene: &Scene<'_>, path: PathId) -> Result<(), SkelError> {
         if self.rigs.contains_key(&path) {
@@ -366,6 +389,9 @@ impl SkelCache {
             weight_dependencies.add(animation, &["blendShapeWeights"]);
         }
         let mut rig = Rig {
+            definition_revision: self.revision(),
+            pose_revision: 0,
+            weight_revision: 0,
             definition,
             definitions,
             pose_dependencies,
@@ -389,8 +415,11 @@ impl SkelCache {
     }
     fn ensure_palette(&mut self, scene: &Scene<'_>, path: PathId) -> Result<(), SkelError> {
         self.ensure_rig(scene, path)?;
+        let rig = &self.rigs[&path];
+        let stale = rig.palette.is_none() || (rig.pose_varying && rig.pose_epoch != self.epoch);
+        let revision = if stale { self.revision() } else { 0 };
         let rig = self.rigs.get_mut(&path).expect("prepared rig");
-        if rig.palette.is_none() || (rig.pose_varying && rig.pose_epoch != self.epoch) {
+        if stale {
             let computed = (|| {
                 // Preserve snapshot validation order: bind availability/count,
                 // pose inputs, then bind invertibility.
@@ -423,6 +452,7 @@ impl SkelCache {
             rig.dual_points = None;
             rig.dual_normals = None;
             rig.pose_epoch = self.epoch;
+            rig.pose_revision = revision;
             rig.pose_version = rig.pose_version.wrapping_add(1);
             self.stats.pose_evaluations += 1;
         }
@@ -434,14 +464,20 @@ impl SkelCache {
             .map_err(Clone::clone)
     }
     fn ensure_weights(&mut self, scene: &Scene<'_>, path: PathId) -> Result<(), SkelError> {
+        let rig = &self.rigs[&path];
+        let stale =
+            rig.weights.is_none() || (rig.weights_varying && rig.weight_epoch != self.epoch);
+        let revision = if stale { self.revision() } else { 0 };
         let rig = self.rigs.get_mut(&path).expect("prepared rig");
-        if rig.weights.is_none() || (rig.weights_varying && rig.weight_epoch != self.epoch) {
+        if stale {
+            self.stats.blend_weight_evaluations += 1;
             rig.weights = Some(
                 rig.definition
                     .query(scene)?
                     .blend_shape_weights(self.time, &rig.definition.blend_shapes),
             );
             rig.weight_epoch = self.epoch;
+            rig.weight_revision = revision;
         }
         rig.weights
             .as_ref()
@@ -462,6 +498,7 @@ impl SkelCache {
             return Ok(false);
         };
         let definition = q.definition;
+        let definition_revision = self.revision();
         let rig = &self.rigs[&definition.skeleton];
         let mut definitions = Dependencies::default();
         definitions.bindings(scene, path);
@@ -495,6 +532,11 @@ impl SkelCache {
                     .collect()
             });
         let mut binding = Binding {
+            definition_revision,
+            input_revision: 0,
+            shape_revision: 0,
+            shape_weight_revision: 0,
+            shape_contributions: Vec::new(),
             definition,
             definitions,
             point_dependencies,
@@ -523,6 +565,9 @@ impl SkelCache {
     fn ensure_inputs(&mut self, scene: &Scene<'_>, path: PathId) -> Result<(), SkelError> {
         let skel = self.bindings[&path].definition.skeleton;
         self.ensure_palette(scene, skel)?;
+        let b = &self.bindings[&path];
+        let stale = b.inputs.is_none() || (b.inputs_varying && b.input_epoch != self.epoch);
+        let revision = if stale { self.revision() } else { 0 };
         let rig = &self.rigs[&skel];
         let binding = self.bindings.get_mut(&path).expect("prepared binding");
         let palette = rig
@@ -531,13 +576,13 @@ impl SkelCache {
             .expect("prepared palette")
             .as_ref()
             .map_err(Clone::clone)?;
-        if binding.inputs.is_none() || (binding.inputs_varying && binding.input_epoch != self.epoch)
-        {
+        if stale {
             let query = binding
                 .definition
                 .query(scene, rig.definition.query(scene)?);
             binding.inputs = Some(query.inputs_with_shared_palette(self.time, palette)?);
             binding.input_epoch = self.epoch;
+            binding.input_revision = revision;
             self.stats.influence_resolutions += 1;
         } else if binding.pose_version != rig.pose_version
             && let Some(inputs) = &mut binding.inputs
@@ -554,6 +599,113 @@ impl SkelCache {
         }
         binding.pose_version = rig.pose_version;
         Ok(())
+    }
+    fn ensure_shape_weights(&mut self, scene: &Scene<'_>, path: PathId) -> Result<(), SkelError> {
+        if self.bindings[&path].definition.blend_shapes.is_none() {
+            return Ok(());
+        }
+        let skel = self.bindings[&path].definition.skeleton;
+        self.ensure_weights(scene, skel)?;
+        let b = &self.bindings[&path];
+        let weight_revision = self.rigs[&skel].weight_revision;
+        if b.shape_revision != 0 && b.shape_weight_revision == weight_revision {
+            return Ok(());
+        }
+        let revision = self.revision();
+        let weights = self.rigs[&skel]
+            .weights
+            .as_ref()
+            .expect("prepared weights")
+            .as_ref()
+            .map_err(Clone::clone)?;
+        let b = self.bindings.get_mut(&path).expect("prepared binding");
+        b.shape_weights.clear();
+        b.shape_weights
+            .extend(b.shape_mapping.iter().map(|i| i.map_or(0., |i| weights[i])));
+        self.stats.blend_shape_evaluations += 1;
+        let contributions = b
+            .definition
+            .blend_shapes
+            .as_ref()
+            .expect("bound shapes")
+            .compute_weights(&b.shape_weights)?;
+        b.shape_contributions.clear();
+        b.shape_contributions.extend(contributions);
+        b.shape_weight_revision = weight_revision;
+        b.shape_revision = revision;
+        Ok(())
+    }
+    fn ensure_dual_points(&mut self, skeleton: PathId) -> Result<(), SkelError> {
+        let rig = self.rigs.get_mut(&skeleton).expect("prepared rig");
+        if rig.dual_points.is_none() {
+            let palette = rig
+                .palette
+                .as_ref()
+                .expect("prepared palette")
+                .as_ref()
+                .map_err(Clone::clone)?;
+            self.stats.dual_quaternion_joints += u64::try_from(palette.len()).unwrap_or(u64::MAX);
+            rig.dual_points = Some(Palette::points(palette));
+        }
+        Ok(())
+    }
+    /// Resolves borrowed palettes, influences and shape contributions without
+    /// reading or deforming points/normals. Validate against adapter-owned vertex
+    /// counts before upload. Repeated queries retain all input arrays; revisions
+    /// identify components rebuilt/resampled by time changes or explicit edits.
+    /// Uses standalone inherited-binding semantics; scoped discovery queries can
+    /// instead use `SkinningQuery::binding_inputs` with their captured mapping.
+    pub fn deformation_inputs(
+        &mut self,
+        scene: &Scene<'_>,
+        geometry: PathId,
+    ) -> Result<Option<DeformationInputs<'_>>, SkelError> {
+        if !self.ensure_binding(scene, geometry)? {
+            return Ok(None);
+        }
+        self.ensure_inputs(scene, geometry)?;
+        self.ensure_shape_weights(scene, geometry)?;
+        let b = &self.bindings[&geometry];
+        let skel = b.definition.skeleton;
+        let dual = b.inputs.as_ref().expect("prepared inputs").binding.method
+            == SkinningMethod::DualQuaternion;
+        if dual {
+            self.ensure_dual_points(skel)?;
+        }
+        let b = &self.bindings[&geometry];
+        let rig = &self.rigs[&skel];
+        let inputs = b.inputs.as_ref().expect("prepared inputs");
+        let palette = rig
+            .palette
+            .as_ref()
+            .expect("prepared palette")
+            .as_ref()
+            .map_err(Clone::clone)?;
+        Ok(Some(DeformationInputs {
+            time: self.time,
+            definition: &b.definition,
+            binding: &inputs.binding,
+            shared_transforms: palette,
+            transforms: if b.definition.joint_mapping.is_some() {
+                &inputs.transforms
+            } else {
+                palette
+            },
+            dual_quaternions: if dual {
+                Some(rig.dual_points.as_ref().expect("prepared DQS").joints())
+            } else {
+                None
+            },
+            shape_weights: &b.shape_weights,
+            contributions: &b.shape_contributions,
+            revisions: DeformationRevisions {
+                skeleton_definition: rig.definition_revision,
+                binding_definition: b.definition_revision,
+                inputs: b.input_revision,
+                pose: rig.pose_revision,
+                blend_weights: b.shape_revision,
+            },
+        }))
     }
     /// Shared inverse-bind/animated palette, in skeleton joint order. The slice
     /// remains valid until the next mutable cache operation. Errors are retained
@@ -602,24 +754,8 @@ impl SkelCache {
             .method
             == SkinningMethod::DualQuaternion;
         if dual {
-            let rig = self.rigs.get_mut(&skel).expect("prepared rig");
-            if rig.dual_points.is_none() {
-                let palette = rig
-                    .palette
-                    .as_ref()
-                    .expect("prepared palette")
-                    .as_ref()
-                    .map_err(Clone::clone)?;
-                self.stats.dual_quaternion_joints +=
-                    u64::try_from(palette.len()).unwrap_or(u64::MAX);
-                rig.dual_points = Some(Palette::points(palette));
-            }
+            self.ensure_dual_points(skel)?;
         }
-        let weights = self.rigs[&skel]
-            .weights
-            .as_ref()
-            .and_then(|w| w.as_ref().ok())
-            .map_or(&[][..], Vec::as_slice);
         let points = read(
             &PrimView::new(*scene, geometry),
             "points",
@@ -627,15 +763,13 @@ impl SkelCache {
             crate::value::read_float3_array,
         )
         .ok_or_else(|| invalid(geometry, "points"))?;
+        self.ensure_shape_weights(scene, geometry)?;
         let b = self.bindings.get_mut(&geometry).expect("prepared binding");
         b.point_valid = false;
         b.points.clear();
         b.points.extend(points);
         if let Some(shapes) = &b.definition.blend_shapes {
-            b.shape_weights.clear();
-            b.shape_weights
-                .extend(b.shape_mapping.iter().map(|i| i.map_or(0., |i| weights[i])));
-            shapes.deform_points_in_place(&b.shape_weights, &mut b.points)?;
+            shapes.deform_contributions(&b.shape_contributions, &mut b.points, false)?;
         }
         let i = b.inputs.as_ref().expect("prepared inputs");
         let palette = self.rigs[&skel]

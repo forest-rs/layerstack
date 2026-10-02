@@ -17,6 +17,7 @@ mod cache;
 mod decomposition;
 mod dual_quaternion;
 pub use cache::{SkelCache, SkelCacheMemory, SkelCacheStats};
+pub use dual_quaternion::DualQuaternionJoint;
 mod helpers;
 pub use helpers::JointTransformComponents;
 mod normals;
@@ -33,7 +34,7 @@ pub use blend_shapes::{
 mod inputs;
 #[cfg(feature = "simd")]
 mod simd;
-pub use inputs::SkinningBindingInputs;
+pub use inputs::{DeformationInputs, DeformationRevisions, SkinningBindingInputs};
 mod skinning;
 pub use skinning::{
     InfluenceInterpolation, JointInfluences, SkinningMethod, SkinningQuery, skin_points,

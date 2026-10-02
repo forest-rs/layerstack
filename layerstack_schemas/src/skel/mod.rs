@@ -26,6 +26,10 @@ pub use normals::{
     skin_face_varying_normals_with_method, skin_normals, skin_normals_in_place,
     skin_normals_in_place_with_method, skin_normals_with_method,
 };
+mod blend_cache;
+pub use blend_cache::{
+    BlendShapeCache, BlendShapeCacheMemory, BlendShapeCacheStats, BlendShapeInputs,
+};
 mod blend_shapes;
 pub use blend_shapes::{
     BlendShapeContribution, BlendShapeQuery, BlendShapeSample, apply_blend_shape,

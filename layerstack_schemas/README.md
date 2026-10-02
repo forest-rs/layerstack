@@ -277,3 +277,12 @@ Constant normals reject active per-point shape normal offsets. Skin-only normal
 outputs remain independent of blend-weight changes. `SkelCache::normal_inputs`
 borrows binding-order inverse transposes and normal DQS components without
 reading vertex buffers; pose/input revisions support selective adapter uploads.
+
+
+`skel::BlendShapeCache` retains morph-only definitions, mapped animation weights,
+inbetween contributions and point/normal outputs. It inherits the geometry's
+`skel:animationSource` and needs no skeleton or joint influences. Its `inputs`
+view works without vertex buffers and has independent definition/weight revisions.
+Results remain in geometry space; normal offsets are not normalized. Explicit
+time changes, edit reports, undo, counters and memory occupancy follow the same
+caller-owned cache pattern as `SkelCache`.

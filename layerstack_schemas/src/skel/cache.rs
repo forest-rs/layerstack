@@ -63,19 +63,19 @@ enum Field {
     Forwarded(PropertyPath),
 }
 #[derive(Clone, Debug, Default)]
-struct Dependencies {
+pub(super) struct Dependencies {
     roots: Vec<PathId>,
     fields: Vec<Field>,
 }
 impl Dependencies {
-    fn add(&mut self, path: PathId, names: &[&'static str]) {
+    pub(super) fn add(&mut self, path: PathId, names: &[&'static str]) {
         if !self.roots.contains(&path) {
             self.roots.push(path);
         }
         self.fields
             .extend(names.iter().map(|&name| Field::Named(path, name)));
     }
-    fn ancestry(&mut self, scene: &Scene<'_>, mut path: PathId, names: &[&'static str]) {
+    pub(super) fn ancestry(&mut self, scene: &Scene<'_>, mut path: PathId, names: &[&'static str]) {
         loop {
             self.add(path, names);
             let Some(parent) = scene.parent(path) else {
@@ -84,7 +84,7 @@ impl Dependencies {
             path = parent;
         }
     }
-    fn relationship(&mut self, scene: &Scene<'_>, start: PropertyPath) {
+    pub(super) fn relationship(&mut self, scene: &Scene<'_>, start: PropertyPath) {
         let mut pending = alloc::vec![start];
         let mut visited = HashSet::new();
         while let Some(property) = pending.pop() {
@@ -136,7 +136,7 @@ impl Dependencies {
                 .any(|&p| changed.is_prefix_of(scene.store().paths().resolve(p)))
         })
     }
-    fn changed(&self, scene: &Scene<'_>, changes: &Changes) -> bool {
+    pub(super) fn changed(&self, scene: &Scene<'_>, changes: &Changes) -> bool {
         self.resynced(scene, changes)
             || changes.changed_info_only.iter().any(|&path| {
                 self.roots.contains(&path)

@@ -229,3 +229,48 @@ impl DeformationInputs<'_> {
         Ok(())
     }
 }
+
+/// Borrowed binding-order normal palettes, independently of CPU normal buffers.
+/// Matrices use USD row vectors; DQS components come from inverse-transpose
+/// matrices, not from the point decomposition. Revisions belong to one cache.
+#[derive(Clone, Copy, Debug)]
+pub struct NormalSkinningInputs<'a> {
+    pub(super) binding: &'a SkinningBindingInputs,
+    pub(super) bind: [[f64; 3]; 3],
+    pub(super) transforms: &'a [[[f64; 3]; 3]],
+    pub(super) dual_quaternions: Option<&'a [super::DualQuaternionJoint]>,
+    pub(super) pose_revision: u64,
+    pub(super) input_revision: u64,
+}
+impl NormalSkinningInputs<'_> {
+    /// Flattened influences and method shared with point deformation.
+    #[must_use]
+    pub fn binding(&self) -> &SkinningBindingInputs {
+        self.binding
+    }
+    /// Geometry-bind inverse transpose, without translation.
+    #[must_use]
+    pub fn geom_bind_normal_transform(&self) -> &[[f64; 3]; 3] {
+        &self.bind
+    }
+    /// Joint inverse transposes in binding order; unmapped entries are identity.
+    #[must_use]
+    pub fn skinning_transforms(&self) -> &[[[f64; 3]; 3]] {
+        self.transforms
+    }
+    /// Prepared normal DQS components in binding order, or `None` for LBS.
+    #[must_use]
+    pub fn dual_quaternions(&self) -> Option<&[super::DualQuaternionJoint]> {
+        self.dual_quaternions
+    }
+    /// Shared pose stamp, also covering joint inverse transposes and normal DQS.
+    #[must_use]
+    pub fn pose_revision(&self) -> u64 {
+        self.pose_revision
+    }
+    /// Binding input stamp, also covering the geometry-bind inverse transpose.
+    #[must_use]
+    pub fn input_revision(&self) -> u64 {
+        self.input_revision
+    }
+}

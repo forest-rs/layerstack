@@ -212,6 +212,12 @@ struct Binding {
     point_epoch: u64,
     normal_epoch: u64,
     normal_transforms: Vec<NormalMatrix>,
+    normal_bind: Option<NormalMatrix>,
+    normal_palette_revision: (u64, u64),
+    normal_dual_quaternions: Vec<super::DualQuaternionJoint>,
+    deformed_normals: Vec<[f32; 3]>,
+    deformed_normal_valid: bool,
+    deformed_normal_epoch: u64,
     shape_mapping: Vec<Option<usize>>,
     shape_weights: Vec<f32>,
 }
@@ -352,6 +358,8 @@ impl SkelCache {
             add(&mut m, &b.points);
             add(&mut m, &b.normals);
             add(&mut m, &b.normal_transforms);
+            add(&mut m, &b.normal_dual_quaternions);
+            add(&mut m, &b.deformed_normals);
             add(&mut m, &b.shape_mapping);
             add(&mut m, &b.shape_weights);
             add(&mut m, &b.shape_contributions);
@@ -554,6 +562,12 @@ impl SkelCache {
             point_epoch: 0,
             normal_epoch: 0,
             normal_transforms: Vec::new(),
+            normal_bind: None,
+            normal_palette_revision: (0, 0),
+            normal_dual_quaternions: Vec::new(),
+            deformed_normals: Vec::new(),
+            deformed_normal_valid: false,
+            deformed_normal_epoch: 0,
             shape_mapping,
             shape_weights: Vec::new(),
         };
@@ -799,23 +813,11 @@ impl SkelCache {
         b.point_epoch = self.epoch;
         Ok(Some(&b.points))
     }
-    /// Skinned sampled normals, without blend-shape normal offsets. Supports the
-    /// same interpolation as `SkinningQuery::compute_skinned_normals`; shared
-    /// joint normal palettes are prepared once per skeleton pose.
-    pub fn skinned_normals(
+    fn ensure_normal_inputs(
         &mut self,
         scene: &Scene<'_>,
         geometry: PathId,
-    ) -> Result<Option<&[[f32; 3]]>, SkelError> {
-        if !self.ensure_binding(scene, geometry)? {
-            return Ok(None);
-        }
-        let b = &self.bindings[&geometry];
-        if b.normal_valid && (!b.normals_varying || b.normal_epoch == self.epoch) {
-            self.stats.hits += 1;
-            return Ok(Some(&self.bindings[&geometry].normals));
-        }
-        self.stats.misses += 1;
+    ) -> Result<(), SkelError> {
         self.ensure_inputs(scene, geometry)?;
         let skel = self.bindings[&geometry].definition.skeleton;
         let rig = self.rigs.get_mut(&skel).expect("prepared rig");
@@ -854,59 +856,12 @@ impl SkelCache {
             })));
         }
         let normal_palette = rig.normals.as_ref().expect("prepared normals");
-        let prim = PrimView::new(*scene, geometry);
-        let normals = read(&prim, "normals", self.time, crate::value::read_float3_array)
-            .ok_or_else(|| invalid(geometry, "normals"))?;
-        let interpolation = prim
-            .property_metadata("normals")
-            .and_then(|m| m.interpolation())
-            .unwrap_or("vertex");
         let b = self.bindings.get_mut(&geometry).expect("prepared binding");
-        b.normal_valid = false;
+        let revision = (rig.pose_revision, b.input_revision);
+        if b.normal_palette_revision == revision {
+            return Ok(());
+        }
         let i = b.inputs.as_ref().expect("prepared inputs");
-        let joint_count = b
-            .definition
-            .joint_mapping
-            .as_ref()
-            .map_or(normal_palette.len(), Vec::len);
-        let corners = if interpolation == "faceVarying" && scene.is_a(geometry, "Mesh") {
-            let points = read(&prim, "points", self.time, crate::value::read_float3_array)
-                .ok_or_else(|| invalid(geometry, "points"))?;
-            let corners = read(
-                &prim,
-                "faceVertexIndices",
-                self.time,
-                crate::value::read_int_array,
-            )
-            .ok_or_else(|| invalid(geometry, "faceVertexIndices"))?;
-            i.influences().validate(points.len(), joint_count)?;
-            if corners.len() != normals.len() {
-                return Err(SkelError::InvalidDeformation {
-                    element: None,
-                    reason: "face-varying normal count",
-                });
-            }
-            for (element, &corner) in corners.iter().enumerate() {
-                if usize::try_from(corner)
-                    .ok()
-                    .is_none_or(|p| p >= points.len())
-                {
-                    return Err(SkelError::InvalidDeformation {
-                        element: Some(element),
-                        reason: "face corner point index",
-                    });
-                }
-            }
-            Some(corners)
-        } else if matches!(interpolation, "vertex" | "varying")
-            || (interpolation == "constant"
-                && b.definition.interpolation == super::InfluenceInterpolation::Constant)
-        {
-            i.influences().validate(normals.len(), joint_count)?;
-            None
-        } else {
-            return Err(invalid(geometry, "normals"));
-        };
         let bind = inverse_transpose(&i.binding.bind, None)?;
         b.normal_transforms.clear();
         if let Some(mapping) = &b.definition.joint_mapping {
@@ -927,27 +882,189 @@ impl SkelCache {
                     .push(*matrix.as_ref().map_err(Clone::clone)?);
             }
         }
-        b.normals.clear();
-        b.normals.extend(normals);
+        b.normal_dual_quaternions.clear();
         if dual {
-            rig.dual_normals
+            let joints = rig
+                .dual_normals
+                .as_ref()
+                .expect("prepared DQS normal palette")
+                .joints();
+            if let Some(mapping) = &b.definition.joint_mapping {
+                b.normal_dual_quaternions.extend(
+                    mapping
+                        .iter()
+                        .map(|i| i.map_or(super::DualQuaternionJoint::IDENTITY, |i| joints[i])),
+                );
+            } else {
+                b.normal_dual_quaternions.extend_from_slice(joints);
+            }
+        }
+        b.normal_bind = Some(bind);
+        b.normal_palette_revision = revision;
+        Ok(())
+    }
+    /// Borrowed inverse-transpose matrices and prepared normal DQS components,
+    /// in binding order, without reading vertex/normal buffers or shape weights.
+    /// Unused singular rig joints do not invalidate custom binding subsets.
+    pub fn normal_inputs(
+        &mut self,
+        scene: &Scene<'_>,
+        geometry: PathId,
+    ) -> Result<Option<super::NormalSkinningInputs<'_>>, SkelError> {
+        if !self.ensure_binding(scene, geometry)? {
+            return Ok(None);
+        }
+        self.ensure_normal_inputs(scene, geometry)?;
+        let b = &self.bindings[&geometry];
+        let i = b.inputs.as_ref().expect("prepared inputs");
+        Ok(Some(super::NormalSkinningInputs {
+            binding: &i.binding,
+            bind: b.normal_bind.expect("prepared normal bind"),
+            transforms: &b.normal_transforms,
+            dual_quaternions: (i.binding.method == SkinningMethod::DualQuaternion)
+                .then_some(b.normal_dual_quaternions.as_slice()),
+            pose_revision: b.normal_palette_revision.0,
+            input_revision: b.normal_palette_revision.1,
+        }))
+    }
+    /// Skinned sampled normals without shape offsets. Retains results separately
+    /// from `deformed_normals` and shares normal palettes across both operations.
+    pub fn skinned_normals(
+        &mut self,
+        scene: &Scene<'_>,
+        geometry: PathId,
+    ) -> Result<Option<&[[f32; 3]]>, SkelError> {
+        self.evaluate_normals(scene, geometry, false)
+    }
+    /// Applies animated normal offsets before skinning and normalization.
+    /// Point-indexed shape offsets expand to mesh face-varying corners. Results
+    /// refresh on shape-weight edits independently of skin-only normal outputs.
+    pub fn deformed_normals(
+        &mut self,
+        scene: &Scene<'_>,
+        geometry: PathId,
+    ) -> Result<Option<&[[f32; 3]]>, SkelError> {
+        self.evaluate_normals(scene, geometry, true)
+    }
+    fn evaluate_normals(
+        &mut self,
+        scene: &Scene<'_>,
+        geometry: PathId,
+        shapes: bool,
+    ) -> Result<Option<&[[f32; 3]]>, SkelError> {
+        if !self.ensure_binding(scene, geometry)? {
+            return Ok(None);
+        }
+        let b = &self.bindings[&geometry];
+        let varying = b.normals_varying
+            || (shapes
+                && b.definition.blend_shapes.is_some()
+                && self.rigs[&b.definition.skeleton].weights_varying);
+        let (valid, epoch) = if shapes {
+            (b.deformed_normal_valid, b.deformed_normal_epoch)
+        } else {
+            (b.normal_valid, b.normal_epoch)
+        };
+        if valid && (!varying || epoch == self.epoch) {
+            self.stats.hits += 1;
+            let b = &self.bindings[&geometry];
+            return Ok(Some(if shapes {
+                &b.deformed_normals
+            } else {
+                &b.normals
+            }));
+        }
+        self.stats.misses += 1;
+        self.ensure_normal_inputs(scene, geometry)?;
+        if shapes {
+            self.ensure_shape_weights(scene, geometry)?;
+        }
+        let prim = PrimView::new(*scene, geometry);
+        let normals = read(&prim, "normals", self.time, crate::value::read_float3_array)
+            .ok_or_else(|| invalid(geometry, "normals"))?;
+        let interpolation = prim
+            .property_metadata("normals")
+            .and_then(|m| m.interpolation())
+            .unwrap_or("vertex");
+        let b = self.bindings.get_mut(&geometry).expect("prepared binding");
+        if shapes {
+            b.deformed_normal_valid = false;
+        } else {
+            b.normal_valid = false;
+        }
+        let i = b.inputs.as_ref().expect("prepared inputs");
+        let (point_count, corners) =
+            if interpolation == "faceVarying" && scene.is_a(geometry, "Mesh") {
+                let points = read(&prim, "points", self.time, crate::value::read_float3_array)
+                    .ok_or_else(|| invalid(geometry, "points"))?;
+                let corners = read(
+                    &prim,
+                    "faceVertexIndices",
+                    self.time,
+                    crate::value::read_int_array,
+                )
+                .ok_or_else(|| invalid(geometry, "faceVertexIndices"))?;
+                super::normals::validate_corners(points.len(), &corners, normals.len())?;
+                (points.len(), Some(corners))
+            } else if matches!(interpolation, "vertex" | "varying")
+                || (interpolation == "constant"
+                    && b.definition.interpolation == super::InfluenceInterpolation::Constant)
+            {
+                (normals.len(), None)
+            } else {
+                return Err(invalid(geometry, "normals"));
+            };
+        i.influences()
+            .validate(point_count, b.normal_transforms.len())?;
+        let output = if shapes {
+            &mut b.deformed_normals
+        } else {
+            &mut b.normals
+        };
+        output.clear();
+        output.extend(normals);
+        if shapes && let Some(query) = &b.definition.blend_shapes {
+            if interpolation == "constant" && query.has_normal_contributions(&b.shape_contributions)
+            {
+                return Err(invalid(geometry, "normals"));
+            }
+            if let Some(corners) = &corners {
+                query.deform_corner_normals(
+                    &b.shape_contributions,
+                    point_count,
+                    corners,
+                    output,
+                )?;
+            } else {
+                query.deform_contributions(&b.shape_contributions, output, true)?;
+            }
+        }
+        let bind = b.normal_bind.as_ref().expect("prepared normal bind");
+        if i.binding.method == SkinningMethod::DualQuaternion {
+            self.rigs[&b.definition.skeleton]
+                .dual_normals
                 .as_ref()
                 .expect("prepared DQS normal palette")
                 .view(b.definition.joint_mapping.as_deref())
-                .normals(&bind, i.influences(), corners.as_deref(), &mut b.normals);
+                .normals(bind, i.influences(), corners.as_deref(), output);
         } else {
             super::normals::deform(
-                &bind,
+                bind,
                 &b.normal_transforms,
                 i.influences(),
                 corners.as_deref(),
-                &mut b.normals,
+                output,
             );
         }
-        self.stats.normal_vectors += u64::try_from(b.normals.len()).unwrap_or(u64::MAX);
-        b.normal_valid = true;
-        b.normal_epoch = self.epoch;
-        Ok(Some(&b.normals))
+        self.stats.normal_vectors += u64::try_from(output.len()).unwrap_or(u64::MAX);
+        if shapes {
+            b.deformed_normal_valid = true;
+            b.deformed_normal_epoch = self.epoch;
+        } else {
+            b.normal_valid = true;
+            b.normal_epoch = self.epoch;
+        }
+        Ok(Some(output))
     }
     /// Invalidates retained inputs affected by a successful live edit report.
     /// Definition changes rebuild affected snapshots; pose/weight edits preserve
@@ -1008,6 +1125,10 @@ impl SkelCache {
             }
             if normal {
                 b.normal_valid = false;
+                b.deformed_normal_valid = false;
+            }
+            if weights.contains(&skel) && b.definition.blend_shapes.is_some() {
+                b.deformed_normal_valid = false;
             }
             if let Some(rig) = self.rigs.get(&skel) {
                 b.temporal(scene, rig);

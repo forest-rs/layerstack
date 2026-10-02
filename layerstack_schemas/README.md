@@ -268,3 +268,12 @@ skeleton path and pose revision. Consumers choose GPU packing, precision and
 execution, and retain their own previous-frame or shutter-sample history. The
 `deformation_inputs` example demonstrates selective uploads and motion history
 with renderer-owned buffers.
+
+
+`SkinningQuery::compute_deformed_normals` and `SkelCache::deformed_normals` apply
+animated blend-shape normal offsets before skinning and normalization. Mesh
+face-varying normals expand point-indexed offsets to every corresponding corner.
+Constant normals reject active per-point shape normal offsets. Skin-only normal
+outputs remain independent of blend-weight changes. `SkelCache::normal_inputs`
+borrows binding-order inverse transposes and normal DQS components without
+reading vertex buffers; pose/input revisions support selective adapter uploads.

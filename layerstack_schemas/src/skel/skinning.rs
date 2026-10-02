@@ -563,14 +563,51 @@ impl<'a> SkinningQuery<'a> {
     /// face-varying normals; constant normals require constant influences.
     /// Uniform normals are rejected. Blend-shape offsets are not applied.
     pub fn compute_skinned_normals(&self, time: Time) -> Result<Vec<[f32; 3]>, SkelError> {
+        self.compute_normals(time, false)
+    }
+    /// Applies animated point-indexed normal offsets before skeletal normal
+    /// skinning and normalization. Mesh face-varying normals expand each point's
+    /// offset to its corners; other supported interpolation follows
+    /// `compute_skinned_normals`. Constant normals reject active point-indexed
+    /// shape normal offsets because they cannot represent per-point changes.
+    pub fn compute_deformed_normals(&self, time: Time) -> Result<Vec<[f32; 3]>, SkelError> {
+        self.compute_normals(time, true)
+    }
+    fn compute_normals(&self, time: Time, shapes: bool) -> Result<Vec<[f32; 3]>, SkelError> {
         let prim = PrimView::new(self.scene, self.definition.geometry);
-        let normals = read(&prim, "normals", time, crate::value::read_float3_array)
+        let mut normals = read(&prim, "normals", time, crate::value::read_float3_array)
             .ok_or_else(|| invalid(self.definition.geometry, "normals"))?;
         let interpolation = prim
             .property_metadata("normals")
             .and_then(|m| m.interpolation())
             .unwrap_or("vertex");
         let inputs = self.inputs(time)?;
+        if shapes && let Some(query) = &self.definition.blend_shapes {
+            let contributions =
+                query.compute_weights(&self.skeleton.blend_shape_weights(time, query.names())?)?;
+            if interpolation == "constant" && query.has_normal_contributions(&contributions) {
+                return Err(invalid(self.definition.geometry, "normals"));
+            }
+            if interpolation == "faceVarying" && self.scene.is_a(self.definition.geometry, "Mesh") {
+                let points = read(&prim, "points", time, crate::value::read_float3_array)
+                    .ok_or_else(|| invalid(self.definition.geometry, "points"))?;
+                let corners = read(
+                    &prim,
+                    "faceVertexIndices",
+                    time,
+                    crate::value::read_int_array,
+                )
+                .ok_or_else(|| invalid(self.definition.geometry, "faceVertexIndices"))?;
+                query.deform_corner_normals(
+                    &contributions,
+                    points.len(),
+                    &corners,
+                    &mut normals,
+                )?;
+            } else {
+                query.deform_contributions(&contributions, &mut normals, true)?;
+            }
+        }
         match interpolation {
             "vertex" | "varying" => super::skin_normals_with_method(
                 inputs.binding.method,

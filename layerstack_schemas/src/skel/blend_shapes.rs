@@ -376,6 +376,65 @@ impl BlendShapeQuery {
         }
         Ok(())
     }
+    pub(super) fn has_normal_contributions(
+        &self,
+        contributions: &[BlendShapeContribution],
+    ) -> bool {
+        contributions.iter().any(|c| {
+            c.weight.abs() > 1e-6 && !self.shapes[c.shape].samples[c.sample].normals.is_empty()
+        })
+    }
+    // AOUSD Core §6.3: point-indexed offsets expand to mesh corners. Preserve
+    // contribution order and float rounding; do not sum deltas before addition.
+    pub(super) fn deform_corner_normals(
+        &self,
+        contributions: &[BlendShapeContribution],
+        point_count: usize,
+        corners: &[i32],
+        normals: &mut [[f32; 3]],
+    ) -> Result<(), SkelError> {
+        super::normals::validate_corners(point_count, corners, normals.len())?;
+        for c in contributions {
+            let shape = &self.shapes[c.shape];
+            let offsets = &shape.samples[c.sample].normals;
+            if c.weight.abs() > 1e-6 && !offsets.is_empty() {
+                validate_offsets(offsets, &shape.indices, point_count)?;
+            }
+        }
+        let mut point_corners: Vec<_> = corners.iter().enumerate().map(|(i, &p)| (p, i)).collect();
+        point_corners.sort_unstable_by_key(|&(p, _)| p);
+        for c in contributions {
+            let shape = &self.shapes[c.shape];
+            let offsets = &shape.samples[c.sample].normals;
+            if c.weight.abs() <= 1e-6 || offsets.is_empty() {
+                continue;
+            }
+            let add = |normal: &mut [f32; 3], offset: &[f32; 3]| {
+                for (v, &delta) in normal.iter_mut().zip(offset) {
+                    *v += delta * c.weight;
+                }
+            };
+            if shape.indices.is_empty() {
+                for (normal, &p) in normals.iter_mut().zip(corners) {
+                    add(
+                        normal,
+                        &offsets[usize::try_from(p).expect("validated corner")],
+                    );
+                }
+            } else {
+                for (&p, offset) in shape.indices.iter().zip(offsets) {
+                    let start = point_corners.partition_point(|&(point, _)| point < p);
+                    for &(_, corner) in point_corners[start..]
+                        .iter()
+                        .take_while(|&&(point, _)| point == p)
+                    {
+                        add(&mut normals[corner], offset);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
     /// Applies weighted point offsets in geometry space, including inbetweens.
     pub fn deform_points(
         &self,

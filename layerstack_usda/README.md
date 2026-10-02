@@ -13,7 +13,7 @@ AST, import authored layers into Layerstack, and write deterministic USDA text.
 layerstack_usda = "0.1"
 ```
 
-Requires Rust **1.88** or later. Uses `no_std` with `alloc`; an allocator is
+Requires Rust **1.89** or later. Uses `no_std` with `alloc`; an allocator is
 required. Default features are empty. The declared `std` feature currently
 adds no APIs; file I/O and asset loading belong to the caller.
 

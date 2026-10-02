@@ -54,7 +54,7 @@ supported subsets; packaging does not expand their format coverage.
 
 ## Features and limits
 
-- Rust **1.88** or later; `no_std` with `alloc` and a global allocator.
+- Rust **1.89** or later; `no_std` with `alloc` and a global allocator.
 - No default features. The optional `std` feature currently adds no behavior.
 - Uncompressed, unencrypted 32-bit ZIP only; no Zip64.
 - The writer accepts USD layers and supported image/audio extensions, not nested

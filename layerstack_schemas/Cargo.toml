@@ -27,7 +27,6 @@ include = [
 # BEGIN GENERATED FEATURES (layerstack_schemagen)
 [features]
 default = ["all"]
-std = []
 # Every domain.
 all = ["usd", "usd-geom", "usd-shade", "usd-lux", "usd-skel", "usd-physics", "usd-vol", "usd-render", "usd-lod", "usd-ui", "usd-ri", "usd-hydra", "usd-media", "usd-proc", "usd-semantics", "usd-profiles", "usd-mtlx"]
 usd = []
@@ -49,10 +48,15 @@ usd-profiles = []
 usd-mtlx = ["usd-shade"]
 # END GENERATED FEATURES
 
+std = ["fearless_simd?/std"]
+# Optional CPU skinning acceleration; scalar kernels remain dependency-free.
+simd = ["usd-skel", "dep:fearless_simd"]
+
 [dependencies]
 layerstack = { workspace = true }
 # Sines, cosines, arccosines and square roots for transforms in `no_std`;
 # `layerstack` already depends on it.
+fearless_simd = { optional = true, workspace = true }
 libm = { workspace = true }
 
 [lints]

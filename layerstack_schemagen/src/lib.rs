@@ -191,7 +191,8 @@ pub fn run() -> Result<String, String> {
 }
 
 /// The Cargo features of `layerstack_schemas`: one per domain, enabling
-/// the domains it depends on, and `all`, the default.
+/// the domains it depends on, and `all`, the default. Runtime features such as
+/// `std` and `simd` remain owned by the handwritten manifest.
 fn features(model: &model::Model) -> String {
     let quoted = |names: &mut dyn Iterator<Item = String>| {
         names
@@ -200,7 +201,7 @@ fn features(model: &model::Model) -> String {
             .join(", ")
     };
     let mut out = format!(
-        "{FEATURES_BEGIN}\n[features]\ndefault = [\"all\"]\nstd = []\n# Every domain.\nall = [{}]\n",
+        "{FEATURES_BEGIN}\n[features]\ndefault = [\"all\"]\n# Every domain.\nall = [{}]\n",
         quoted(&mut model.domains.iter().map(|d| views::feature(d.plugin)))
     );
     for domain in &model.domains {

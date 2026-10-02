@@ -13,12 +13,17 @@ publish = false
 [lints]
 workspace = true
 
+[features]
+simd = ["layerstack_schemas/simd"]
+
 [dependencies]
 layerstack = { workspace = true }
 
 [dev-dependencies]
 criterion = { features = ["html_reports"], version = "0.8" }
-layerstack_schemas = { default-features = false, features = ["usd-geom", "usd-shade"], workspace = true }
+fearless_simd = { features = ["std"], workspace = true }
+glam = { default-features = false, features = ["f64", "libm"], version = "0.33" }
+layerstack_schemas = { default-features = false, features = ["usd-geom", "usd-shade", "usd-skel"], workspace = true }
 layerstack_usdc = { workspace = true }
 opinionated.workspace = true
 
@@ -88,4 +93,8 @@ harness = false
 
 [[bench]]
 name = "composition_storage"
+harness = false
+
+[[bench]]
+name = "skel_deformation"
 harness = false

@@ -10,7 +10,7 @@ packages. The exporter writes authored data; it does not flatten a composed stag
 layerstack_mesh_export = "0.1"
 ```
 
-Requires Rust **1.88** or later. The crate uses `no_std + alloc`, has no
+Requires Rust **1.89** or later. The crate uses `no_std + alloc`, has no
 feature flags, and returns strings or byte buffers. The caller owns filesystem
 I/O, mesh generation, and rendering.
 

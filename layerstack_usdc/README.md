@@ -14,7 +14,7 @@ layerstack_usdc = "0.1"
 layerstack_usda = "0.1" # Shared authored-document API used below.
 ```
 
-Requires Rust **1.88** or later. Uses `no_std` with `alloc`; an allocator is
+Requires Rust **1.89** or later. Uses `no_std` with `alloc`; an allocator is
 required. Default features are empty. The declared `std` feature currently
 adds no APIs. Callers read and write files themselves; APIs consume byte
 slices and return owned data.

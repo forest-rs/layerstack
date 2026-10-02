@@ -84,6 +84,16 @@ pub fn skin_points(
     points: &[[f32; 3]],
 ) -> Result<Vec<[f32; 3]>, SkelError> {
     influences.validate(points.len(), joint_transforms.len())?;
+    #[cfg(feature = "simd")]
+    {
+        let level =
+            fearless_simd::Level::try_detect().unwrap_or_else(fearless_simd::Level::baseline);
+        if !level.is_fallback() {
+            return Ok(
+                fearless_simd::dispatch!(level, simd => super::simd::skin_points(simd, geom_bind, joint_transforms, influences, points)),
+            );
+        }
+    }
     if is_affine(geom_bind) {
         Ok(skin_points_validated::<false>(
             geom_bind,
@@ -143,6 +153,15 @@ pub fn skin_points_in_place(
     points: &mut [[f32; 3]],
 ) -> Result<(), SkelError> {
     influences.validate(points.len(), joint_transforms.len())?;
+    #[cfg(feature = "simd")]
+    {
+        let level =
+            fearless_simd::Level::try_detect().unwrap_or_else(fearless_simd::Level::baseline);
+        if !level.is_fallback() {
+            fearless_simd::dispatch!(level, simd => super::simd::skin_points_in_place(simd, geom_bind, joint_transforms, influences, points));
+            return Ok(());
+        }
+    }
     if is_affine(geom_bind) {
         skin_points_in_place_validated::<false>(geom_bind, joint_transforms, influences, points);
     } else {
@@ -511,5 +530,63 @@ impl<'a> SkelRoot<'a> {
             }
         }
         Ok(result)
+    }
+}
+
+#[cfg(all(test, feature = "simd"))]
+mod tests {
+    use super::*;
+    #[test]
+    fn simd_matches_scalar_for_sizes_interpolations_and_projected_binds() {
+        let level =
+            fearless_simd::Level::try_detect().unwrap_or_else(fearless_simd::Level::baseline);
+        let mut joints = [gf::IDENTITY; 3];
+        joints[0][0][1] = 0.125;
+        joints[1][3] = [0.3, -1.7, 2.9, 1.];
+        joints[2][1][2] = -0.875;
+        for count in [0, 1, 3, 7, 31] {
+            let points = alloc::vec![[0.3, -1.7, 2.9]; count];
+            for interpolation in [
+                InfluenceInterpolation::Constant,
+                InfluenceInterpolation::Vertex,
+            ] {
+                let blocks = if interpolation == InfluenceInterpolation::Constant {
+                    1
+                } else {
+                    count
+                };
+                let indices: Vec<_> = (0..blocks * 4)
+                    .map(|i| i32::try_from(i % 3).unwrap())
+                    .collect();
+                let weights: Vec<_> = (0..blocks * 4)
+                    .map(|i| [0., 0.125, 0.375, 0.5][i % 4])
+                    .collect();
+                let influences = JointInfluences {
+                    indices: &indices,
+                    weights: &weights,
+                    element_size: 4,
+                    interpolation,
+                };
+                for project in [false, true] {
+                    let mut bind = gf::IDENTITY;
+                    bind[3][0] = -3.25;
+                    if project {
+                        bind[0][3] = 0.125;
+                        bind[3][3] = 0.5;
+                    }
+                    influences.validate(count, joints.len()).unwrap();
+                    let scalar = if project {
+                        skin_points_validated::<true>(&bind, &joints, influences, &points)
+                    } else {
+                        skin_points_validated::<false>(&bind, &joints, influences, &points)
+                    };
+                    let simd = fearless_simd::dispatch!(level, simd => crate::skel::simd::skin_points(simd, &bind, &joints, influences, &points));
+                    assert_eq!(scalar, simd);
+                    let mut reused = points.clone();
+                    fearless_simd::dispatch!(level, simd => crate::skel::simd::skin_points_in_place(simd, &bind, &joints, influences, &mut reused));
+                    assert_eq!(scalar, reused);
+                }
+            }
+        }
     }
 }

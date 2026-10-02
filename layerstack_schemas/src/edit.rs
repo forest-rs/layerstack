@@ -261,7 +261,7 @@ impl<'s> SchemaEdit<'s> {
             .and_then(|d| d.type_name)
     }
 
-    #[cfg(feature = "usd-shade")]
+    #[cfg(any(feature = "usd-shade", feature = "usd-geom"))]
     pub(crate) fn property_kind(&mut self, path: PathId, name: &str) -> Option<PropertyKind> {
         let token = self.store.tokens_mut().intern(name);
         if let Some((_, _, ty)) = self
@@ -308,6 +308,20 @@ impl<'s> SchemaEdit<'s> {
         spec.custom = false;
         self.transaction.create_property(at, spec);
         self.created.push((path, token, Some(ty)));
+    }
+
+    #[cfg(feature = "usd-geom")]
+    pub(crate) fn set_property_metadata(
+        &mut self,
+        path: PathId,
+        name: &str,
+        key: &str,
+        value: Value,
+    ) {
+        let token = self.tokens().intern(name);
+        let key = self.tokens().intern(key);
+        let at = self.target.property(PropertyPath::new(path, token));
+        self.transaction.set_metadata(at, key, value.into());
     }
 
     /// Authors `targets` as the explicit targets of the relationship `name`.

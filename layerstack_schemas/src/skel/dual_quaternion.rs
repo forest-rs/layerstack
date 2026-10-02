@@ -6,12 +6,13 @@ use super::{InfluenceInterpolation, JointInfluences, decomposition as math};
 use crate::gf;
 use alloc::vec::Vec;
 use math::Matrix3;
-/// One prepared point-skinning joint: real/dual quaternion and residual scale.
+/// One prepared skinning joint: real/dual quaternion and residual scale.
 /// Quaternion components are scalar-first `[w, x, y, z]`; residual matrices use
-/// USD row vectors and contain the point path's `f32`-rounded scale/shear as `f64`.
+/// USD row vectors; point palettes store `f32`-rounded scale/shear as `f64`.
 /// Singular factorization uses a zero real/dual quaternion and identity residual.
-/// Normal skinning uses a separate inverse-transpose decomposition; these values
-/// are for points. No GPU memory layout or precision conversion is implied.
+/// Normal palettes use a separate inverse-transpose decomposition. The input
+/// view identifies which palette supplied these values. No GPU memory layout or
+/// precision conversion is implied.
 #[derive(Clone, Copy, Debug)]
 pub struct DualQuaternionJoint {
     real: [f64; 4],

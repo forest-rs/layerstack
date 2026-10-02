@@ -42,7 +42,14 @@ for code in (None, 1, 2, 3):
     points, normals = deform(weights)
     local = [list(p) for p in points]
     assert skin.ComputeSkinnedPoints(skel.ComputeSkinningTransforms(time), points, time)
-    rows.append({"time": code, "weights": list(weights), "local": local, "normals": [list(n) for n in normals], "skinned": [list(p) for p in points]})
+    skinned_normals = Vt.Vec3fArray(normals)
+    # Python exposes the C++ kernel, not SkinningQuery::ComputeSkinnedNormals.
+    mapped = skin.GetJointMapper().Remap(skel.ComputeSkinningTransforms(time))
+    normal_xforms = Vt.Matrix3dArray([m.ExtractRotationMatrix().GetInverse().GetTranspose() for m in mapped])
+    bind = skin.GetGeomBindTransform(time).ExtractRotationMatrix().GetInverse().GetTranspose()
+    ids, joint_weights = skin.ComputeVaryingJointInfluences(2, time)
+    assert UsdSkel.SkinNormals("classicLinear", bind, normal_xforms, ids, joint_weights, 2, skinned_normals)
+    rows.append({"time": code, "weights": list(weights), "local": local, "normals": [list(n) for n in normals], "skinned": [list(p) for p in points], "skinned_normals": [list(n) for n in skinned_normals]})
 extrapolation = []
 for weight in (-0.25, 0, 0.5, 1, 1.25):
     points, normals = deform([weight,0])

@@ -34,7 +34,9 @@ pub use blend_shapes::{
 mod inputs;
 #[cfg(feature = "simd")]
 mod simd;
-pub use inputs::{DeformationInputs, DeformationRevisions, SkinningBindingInputs};
+pub use inputs::{
+    DeformationInputs, DeformationRevisions, NormalSkinningInputs, SkinningBindingInputs,
+};
 mod skinning;
 pub use skinning::{
     InfluenceInterpolation, JointInfluences, SkinningMethod, SkinningQuery, skin_points,

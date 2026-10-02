@@ -89,6 +89,27 @@ pub(super) fn deform(
         *n = result.map(|v| v / divisor);
     }
 }
+pub(super) fn validate_corners(
+    point_count: usize,
+    corners: &[i32],
+    normal_count: usize,
+) -> Result<(), SkelError> {
+    if corners.len() != normal_count {
+        return Err(SkelError::InvalidDeformation {
+            element: None,
+            reason: "face-varying normal count",
+        });
+    }
+    for (element, &index) in corners.iter().enumerate() {
+        if usize::try_from(index).ok().is_none_or(|i| i >= point_count) {
+            return Err(SkelError::InvalidDeformation {
+                element: Some(element),
+                reason: "face corner point index",
+            });
+        }
+    }
+    Ok(())
+}
 /// Skins vertex/varying normals with inverse-transpose matrices, then normalizes
 /// each result as `UsdSkelSkinNormals`. Inputs are point skinning matrices;
 /// this function derives normal matrices itself. Singular matrices error.
@@ -135,20 +156,7 @@ pub fn skin_face_varying_normals_with_method(
     normals: &[[f32; 3]],
 ) -> Result<Vec<[f32; 3]>, SkelError> {
     influences.validate(point_count, joints.len())?;
-    if normals.len() != face_vertex_indices.len() {
-        return Err(SkelError::InvalidDeformation {
-            element: None,
-            reason: "face-varying normal count",
-        });
-    }
-    for (element, &index) in face_vertex_indices.iter().enumerate() {
-        if usize::try_from(index).ok().is_none_or(|i| i >= point_count) {
-            return Err(SkelError::InvalidDeformation {
-                element: Some(element),
-                reason: "face corner point index",
-            });
-        }
-    }
+    validate_corners(point_count, face_vertex_indices, normals.len())?;
     let (bind, joints) = normal_matrices(bind, joints)?;
     let mut result = normals.to_vec();
     if method == SkinningMethod::ClassicLinear {

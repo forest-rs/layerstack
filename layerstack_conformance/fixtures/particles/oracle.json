@@ -1,0 +1,635 @@
+{
+  "rows": [
+    {
+      "channels": [
+        {
+          "channel": "positions",
+          "name": "positionsh",
+          "property": "/Missing.positionsh",
+          "uses_float": false
+        },
+        {
+          "channel": "orientations",
+          "name": "orientationsh",
+          "property": "/Missing.orientationsh",
+          "uses_float": false
+        },
+        {
+          "channel": "scales",
+          "name": "scalesh",
+          "property": "/Missing.scalesh",
+          "uses_float": false
+        },
+        {
+          "channel": "opacities",
+          "name": "opacitiesh",
+          "property": "/Missing.opacitiesh",
+          "uses_float": false
+        },
+        {
+          "channel": "radiance_coefficients",
+          "name": "radiance:sphericalHarmonicsCoefficientsh",
+          "property": "/Missing.radiance:sphericalHarmonicsCoefficientsh",
+          "uses_float": false
+        }
+      ],
+      "path": "/Missing"
+    },
+    {
+      "channels": [
+        {
+          "channel": "positions",
+          "name": "positionsh",
+          "property": "/Half.positionsh",
+          "uses_float": false
+        },
+        {
+          "channel": "orientations",
+          "name": "orientationsh",
+          "property": "/Half.orientationsh",
+          "uses_float": false
+        },
+        {
+          "channel": "scales",
+          "name": "scalesh",
+          "property": "/Half.scalesh",
+          "uses_float": false
+        },
+        {
+          "channel": "opacities",
+          "name": "opacitiesh",
+          "property": "/Half.opacitiesh",
+          "uses_float": false
+        },
+        {
+          "channel": "radiance_coefficients",
+          "name": "radiance:sphericalHarmonicsCoefficientsh",
+          "property": "/Half.radiance:sphericalHarmonicsCoefficientsh",
+          "uses_float": false
+        }
+      ],
+      "path": "/Half"
+    },
+    {
+      "channels": [
+        {
+          "channel": "positions",
+          "name": "positions",
+          "property": "/Float.positions",
+          "uses_float": true
+        },
+        {
+          "channel": "orientations",
+          "name": "orientations",
+          "property": "/Float.orientations",
+          "uses_float": true
+        },
+        {
+          "channel": "scales",
+          "name": "scales",
+          "property": "/Float.scales",
+          "uses_float": true
+        },
+        {
+          "channel": "opacities",
+          "name": "opacities",
+          "property": "/Float.opacities",
+          "uses_float": true
+        },
+        {
+          "channel": "radiance_coefficients",
+          "name": "radiance:sphericalHarmonicsCoefficients",
+          "property": "/Float.radiance:sphericalHarmonicsCoefficients",
+          "uses_float": true
+        }
+      ],
+      "path": "/Float"
+    },
+    {
+      "channels": [
+        {
+          "channel": "positions",
+          "name": "positions",
+          "property": "/Both.positions",
+          "uses_float": true
+        },
+        {
+          "channel": "orientations",
+          "name": "orientations",
+          "property": "/Both.orientations",
+          "uses_float": true
+        },
+        {
+          "channel": "scales",
+          "name": "scales",
+          "property": "/Both.scales",
+          "uses_float": true
+        },
+        {
+          "channel": "opacities",
+          "name": "opacities",
+          "property": "/Both.opacities",
+          "uses_float": true
+        },
+        {
+          "channel": "radiance_coefficients",
+          "name": "radiance:sphericalHarmonicsCoefficients",
+          "property": "/Both.radiance:sphericalHarmonicsCoefficients",
+          "uses_float": true
+        }
+      ],
+      "path": "/Both"
+    },
+    {
+      "channels": [
+        {
+          "channel": "positions",
+          "name": "positionsh",
+          "property": "/EmptyFloat.positionsh",
+          "uses_float": false
+        },
+        {
+          "channel": "orientations",
+          "name": "orientationsh",
+          "property": "/EmptyFloat.orientationsh",
+          "uses_float": false
+        },
+        {
+          "channel": "scales",
+          "name": "scalesh",
+          "property": "/EmptyFloat.scalesh",
+          "uses_float": false
+        },
+        {
+          "channel": "opacities",
+          "name": "opacitiesh",
+          "property": "/EmptyFloat.opacitiesh",
+          "uses_float": false
+        },
+        {
+          "channel": "radiance_coefficients",
+          "name": "radiance:sphericalHarmonicsCoefficientsh",
+          "property": "/EmptyFloat.radiance:sphericalHarmonicsCoefficientsh",
+          "uses_float": false
+        }
+      ],
+      "path": "/EmptyFloat"
+    },
+    {
+      "channels": [
+        {
+          "channel": "positions",
+          "name": "positionsh",
+          "property": "/EmptyFirst.positionsh",
+          "uses_float": false
+        },
+        {
+          "channel": "orientations",
+          "name": "orientationsh",
+          "property": "/EmptyFirst.orientationsh",
+          "uses_float": false
+        },
+        {
+          "channel": "scales",
+          "name": "scalesh",
+          "property": "/EmptyFirst.scalesh",
+          "uses_float": false
+        },
+        {
+          "channel": "opacities",
+          "name": "opacitiesh",
+          "property": "/EmptyFirst.opacitiesh",
+          "uses_float": false
+        },
+        {
+          "channel": "radiance_coefficients",
+          "name": "radiance:sphericalHarmonicsCoefficientsh",
+          "property": "/EmptyFirst.radiance:sphericalHarmonicsCoefficientsh",
+          "uses_float": false
+        }
+      ],
+      "path": "/EmptyFirst"
+    },
+    {
+      "channels": [
+        {
+          "channel": "positions",
+          "name": "positions",
+          "property": "/FullFirst.positions",
+          "uses_float": true
+        },
+        {
+          "channel": "orientations",
+          "name": "orientations",
+          "property": "/FullFirst.orientations",
+          "uses_float": true
+        },
+        {
+          "channel": "scales",
+          "name": "scales",
+          "property": "/FullFirst.scales",
+          "uses_float": true
+        },
+        {
+          "channel": "opacities",
+          "name": "opacities",
+          "property": "/FullFirst.opacities",
+          "uses_float": true
+        },
+        {
+          "channel": "radiance_coefficients",
+          "name": "radiance:sphericalHarmonicsCoefficients",
+          "property": "/FullFirst.radiance:sphericalHarmonicsCoefficients",
+          "uses_float": true
+        }
+      ],
+      "path": "/FullFirst"
+    },
+    {
+      "channels": [
+        {
+          "channel": "positions",
+          "name": "positionsh",
+          "property": "/DefaultAndEmptyFirst.positionsh",
+          "uses_float": false
+        },
+        {
+          "channel": "orientations",
+          "name": "orientationsh",
+          "property": "/DefaultAndEmptyFirst.orientationsh",
+          "uses_float": false
+        },
+        {
+          "channel": "scales",
+          "name": "scalesh",
+          "property": "/DefaultAndEmptyFirst.scalesh",
+          "uses_float": false
+        },
+        {
+          "channel": "opacities",
+          "name": "opacitiesh",
+          "property": "/DefaultAndEmptyFirst.opacitiesh",
+          "uses_float": false
+        },
+        {
+          "channel": "radiance_coefficients",
+          "name": "radiance:sphericalHarmonicsCoefficientsh",
+          "property": "/DefaultAndEmptyFirst.radiance:sphericalHarmonicsCoefficientsh",
+          "uses_float": false
+        }
+      ],
+      "path": "/DefaultAndEmptyFirst"
+    },
+    {
+      "channels": [
+        {
+          "channel": "positions",
+          "name": "positionsh",
+          "property": "/BlockedDefault.positionsh",
+          "uses_float": false
+        },
+        {
+          "channel": "orientations",
+          "name": "orientationsh",
+          "property": "/BlockedDefault.orientationsh",
+          "uses_float": false
+        },
+        {
+          "channel": "scales",
+          "name": "scalesh",
+          "property": "/BlockedDefault.scalesh",
+          "uses_float": false
+        },
+        {
+          "channel": "opacities",
+          "name": "opacitiesh",
+          "property": "/BlockedDefault.opacitiesh",
+          "uses_float": false
+        },
+        {
+          "channel": "radiance_coefficients",
+          "name": "radiance:sphericalHarmonicsCoefficientsh",
+          "property": "/BlockedDefault.radiance:sphericalHarmonicsCoefficientsh",
+          "uses_float": false
+        }
+      ],
+      "path": "/BlockedDefault"
+    },
+    {
+      "channels": [
+        {
+          "channel": "positions",
+          "name": "positionsh",
+          "property": "/BlockedFirst.positionsh",
+          "uses_float": false
+        },
+        {
+          "channel": "orientations",
+          "name": "orientationsh",
+          "property": "/BlockedFirst.orientationsh",
+          "uses_float": false
+        },
+        {
+          "channel": "scales",
+          "name": "scalesh",
+          "property": "/BlockedFirst.scalesh",
+          "uses_float": false
+        },
+        {
+          "channel": "opacities",
+          "name": "opacitiesh",
+          "property": "/BlockedFirst.opacitiesh",
+          "uses_float": false
+        },
+        {
+          "channel": "radiance_coefficients",
+          "name": "radiance:sphericalHarmonicsCoefficientsh",
+          "property": "/BlockedFirst.radiance:sphericalHarmonicsCoefficientsh",
+          "uses_float": false
+        }
+      ],
+      "path": "/BlockedFirst"
+    },
+    {
+      "channels": [
+        {
+          "channel": "positions",
+          "name": "positions",
+          "property": "/BlockedLater.positions",
+          "uses_float": true
+        },
+        {
+          "channel": "orientations",
+          "name": "orientations",
+          "property": "/BlockedLater.orientations",
+          "uses_float": true
+        },
+        {
+          "channel": "scales",
+          "name": "scales",
+          "property": "/BlockedLater.scales",
+          "uses_float": true
+        },
+        {
+          "channel": "opacities",
+          "name": "opacities",
+          "property": "/BlockedLater.opacities",
+          "uses_float": true
+        },
+        {
+          "channel": "radiance_coefficients",
+          "name": "radiance:sphericalHarmonicsCoefficients",
+          "property": "/BlockedLater.radiance:sphericalHarmonicsCoefficients",
+          "uses_float": true
+        }
+      ],
+      "path": "/BlockedLater"
+    },
+    {
+      "channels": [
+        {
+          "channel": "positions",
+          "name": "positions",
+          "property": "/Mixed.positions",
+          "uses_float": true
+        },
+        {
+          "channel": "orientations",
+          "name": "orientationsh",
+          "property": "/Mixed.orientationsh",
+          "uses_float": false
+        },
+        {
+          "channel": "scales",
+          "name": "scales",
+          "property": "/Mixed.scales",
+          "uses_float": true
+        },
+        {
+          "channel": "opacities",
+          "name": "opacitiesh",
+          "property": "/Mixed.opacitiesh",
+          "uses_float": false
+        },
+        {
+          "channel": "radiance_coefficients",
+          "name": "radiance:sphericalHarmonicsCoefficients",
+          "property": "/Mixed.radiance:sphericalHarmonicsCoefficients",
+          "uses_float": true
+        }
+      ],
+      "path": "/Mixed"
+    },
+    {
+      "channels": [
+        {
+          "channel": "positions",
+          "name": "positions",
+          "property": "/Referenced.positions",
+          "uses_float": true
+        },
+        {
+          "channel": "orientations",
+          "name": "orientations",
+          "property": "/Referenced.orientations",
+          "uses_float": true
+        },
+        {
+          "channel": "scales",
+          "name": "scales",
+          "property": "/Referenced.scales",
+          "uses_float": true
+        },
+        {
+          "channel": "opacities",
+          "name": "opacities",
+          "property": "/Referenced.opacities",
+          "uses_float": true
+        },
+        {
+          "channel": "radiance_coefficients",
+          "name": "radiance:sphericalHarmonicsCoefficients",
+          "property": "/Referenced.radiance:sphericalHarmonicsCoefficients",
+          "uses_float": true
+        }
+      ],
+      "path": "/Referenced"
+    },
+    {
+      "channels": [
+        {
+          "channel": "positions",
+          "name": "positionsh",
+          "property": "/StrongEmpty.positionsh",
+          "uses_float": false
+        },
+        {
+          "channel": "orientations",
+          "name": "orientations",
+          "property": "/StrongEmpty.orientations",
+          "uses_float": true
+        },
+        {
+          "channel": "scales",
+          "name": "scales",
+          "property": "/StrongEmpty.scales",
+          "uses_float": true
+        },
+        {
+          "channel": "opacities",
+          "name": "opacities",
+          "property": "/StrongEmpty.opacities",
+          "uses_float": true
+        },
+        {
+          "channel": "radiance_coefficients",
+          "name": "radiance:sphericalHarmonicsCoefficients",
+          "property": "/StrongEmpty.radiance:sphericalHarmonicsCoefficients",
+          "uses_float": true
+        }
+      ],
+      "path": "/StrongEmpty"
+    },
+    {
+      "channels": [
+        {
+          "channel": "positions",
+          "name": "positions",
+          "property": "/StrongHalf.positions",
+          "uses_float": true
+        },
+        {
+          "channel": "orientations",
+          "name": "orientations",
+          "property": "/StrongHalf.orientations",
+          "uses_float": true
+        },
+        {
+          "channel": "scales",
+          "name": "scales",
+          "property": "/StrongHalf.scales",
+          "uses_float": true
+        },
+        {
+          "channel": "opacities",
+          "name": "opacities",
+          "property": "/StrongHalf.opacities",
+          "uses_float": true
+        },
+        {
+          "channel": "radiance_coefficients",
+          "name": "radiance:sphericalHarmonicsCoefficients",
+          "property": "/StrongHalf.radiance:sphericalHarmonicsCoefficients",
+          "uses_float": true
+        }
+      ],
+      "path": "/StrongHalf"
+    },
+    {
+      "channels": [
+        {
+          "channel": "positions",
+          "name": "positions",
+          "property": "/Retimed.positions",
+          "uses_float": true
+        },
+        {
+          "channel": "orientations",
+          "name": "orientations",
+          "property": "/Retimed.orientations",
+          "uses_float": true
+        },
+        {
+          "channel": "scales",
+          "name": "scales",
+          "property": "/Retimed.scales",
+          "uses_float": true
+        },
+        {
+          "channel": "opacities",
+          "name": "opacities",
+          "property": "/Retimed.opacities",
+          "uses_float": true
+        },
+        {
+          "channel": "radiance_coefficients",
+          "name": "radiance:sphericalHarmonicsCoefficients",
+          "property": "/Retimed.radiance:sphericalHarmonicsCoefficients",
+          "uses_float": true
+        }
+      ],
+      "path": "/Retimed"
+    },
+    {
+      "channels": [
+        {
+          "channel": "positions",
+          "name": "positionsh",
+          "property": "/ScalarFloat.positionsh",
+          "uses_float": false
+        },
+        {
+          "channel": "orientations",
+          "name": "orientationsh",
+          "property": "/ScalarFloat.orientationsh",
+          "uses_float": false
+        },
+        {
+          "channel": "scales",
+          "name": "scalesh",
+          "property": "/ScalarFloat.scalesh",
+          "uses_float": false
+        },
+        {
+          "channel": "opacities",
+          "name": "opacitiesh",
+          "property": "/ScalarFloat.opacitiesh",
+          "uses_float": false
+        },
+        {
+          "channel": "radiance_coefficients",
+          "name": "radiance:sphericalHarmonicsCoefficientsh",
+          "property": "/ScalarFloat.radiance:sphericalHarmonicsCoefficientsh",
+          "uses_float": false
+        }
+      ],
+      "path": "/ScalarFloat"
+    },
+    {
+      "channels": [
+        {
+          "channel": "positions",
+          "name": "positions",
+          "property": "/WrongArrayType.positions",
+          "uses_float": true
+        },
+        {
+          "channel": "orientations",
+          "name": "orientationsh",
+          "property": "/WrongArrayType.orientationsh",
+          "uses_float": false
+        },
+        {
+          "channel": "scales",
+          "name": "scalesh",
+          "property": "/WrongArrayType.scalesh",
+          "uses_float": false
+        },
+        {
+          "channel": "opacities",
+          "name": "opacitiesh",
+          "property": "/WrongArrayType.opacitiesh",
+          "uses_float": false
+        },
+        {
+          "channel": "radiance_coefficients",
+          "name": "radiance:sphericalHarmonicsCoefficientsh",
+          "property": "/WrongArrayType.radiance:sphericalHarmonicsCoefficientsh",
+          "uses_float": false
+        }
+      ],
+      "path": "/WrongArrayType"
+    }
+  ],
+  "version": "26.8"
+}

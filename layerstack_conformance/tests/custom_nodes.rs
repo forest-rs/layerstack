@@ -28,6 +28,10 @@ fn inherited_ports_compile_and_author_through_the_public_api() {
     let node = custom::StudioWetPaint::define(&mut edit, path);
     node.set_tint(&mut edit, custom::StudioWetPaint::tint_default())
         .unwrap();
+    node.set_weights(&mut edit, &custom::StudioWetPaint::weights_default())
+        .unwrap();
+    node.set_precision(&mut edit, custom::StudioWetPaint::precision_default())
+        .unwrap();
     node.set_enabled(&mut edit, false).unwrap();
     node.set_roughness_at(&mut edit, 0.0, 0.2).unwrap();
     node.set_roughness_at(&mut edit, 2.0, 0.6).unwrap();
@@ -36,6 +40,8 @@ fn inherited_ports_compile_and_author_through_the_public_api() {
     let applied = live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
     let node = custom::StudioWetPaint::new(&scene, path).unwrap();
+    assert_eq!(node.weights(), Some(vec![0.25, 0.75]));
+    assert_eq!(node.precision(), Some(0.5));
     assert_eq!(node.enabled(), Some(false));
     assert_eq!(node.tint(), Some([1.0, 0.5, 0.25]));
     assert_eq!(node.roughness_at(1.0, InterpolationType::Linear), Some(0.4));

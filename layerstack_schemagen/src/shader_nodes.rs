@@ -129,18 +129,49 @@ fn default_literal(
     tokens: &TokenInterner,
     external: bool,
 ) -> Result<String, String> {
+    if let Some(array) = value.array_ref() {
+        let alloc = if external { "alloc" } else { "::alloc" };
+        return Ok(format!(
+            "{alloc}::vec![{}]",
+            array
+                .iter()
+                .map(|v| default_literal(&v, tokens, external))
+                .collect::<Result<Vec<_>, _>>()?
+                .join(", ")
+        ));
+    }
+    if !finite_default(value) {
+        return Err("shader defaults must contain finite numbers".into());
+    }
     Ok(match value {
         Value::Bool(value) => value.to_string(),
         Value::Float(number) => format!("{number:?}_f32"),
         Value::Double(number) => format!("{number:?}_f64"),
         Value::Int(number) => format!("{number}_i32"),
+        Value::UChar(number) => format!("{number}_u8"),
+        Value::UInt(number) => format!("{number}_u32"),
+        Value::Int64(number) => format!("{number}_i64"),
+        Value::UInt64(number) => format!("{number}_u64"),
+        Value::TimeCode(number) => format!("{number:?}_f64"),
+        Value::Half(bits) => format!("{:?}_f32", layerstack::half::to_f32(*bits)),
         Value::Vec2f(vector) => format!("{vector:?}"),
         Value::Vec3f(vector) => format!("{vector:?}"),
-        Value::Vec4f(vector) => format!("{vector:?}"),
+        Value::Vec4f(vector) | Value::Quatf(vector) => format!("{vector:?}"),
+        Value::Vec2d(vector) => format!("{vector:?}"),
+        Value::Vec3d(vector) => format!("{vector:?}"),
+        Value::Vec4d(vector) | Value::Quatd(vector) => format!("{vector:?}"),
+        Value::Vec2i(vector) => format!("{vector:?}"),
+        Value::Vec3i(vector) => format!("{vector:?}"),
+        Value::Vec4i(vector) => format!("{vector:?}"),
+        Value::Vec2h(vector) => format!("{:?}", vector.map(layerstack::half::to_f32)),
+        Value::Vec3h(vector) => format!("{:?}", vector.map(layerstack::half::to_f32)),
+        Value::Vec4h(vector) | Value::Quath(vector) => {
+            format!("{:?}", vector.map(layerstack::half::to_f32))
+        }
         Value::Matrix2d(matrix) => matrix_literal(matrix.as_slice(), 2),
         Value::Matrix3d(matrix) => matrix_literal(matrix.as_slice(), 3),
         Value::Matrix4d(matrix) => matrix_literal(matrix.as_slice(), 4),
-        Value::String(text) | Value::Asset(text) => {
+        Value::String(text) | Value::Asset(text) | Value::PathExpression(text) => {
             let arc = if external {
                 "Arc"
             } else {
@@ -493,6 +524,40 @@ fn validate_identifier(name: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn matrix_literal(matrix: &[f64], width: usize) -> String {
+    format!(
+        "[{}]",
+        matrix
+            .chunks_exact(width)
+            .map(|row| format!("{row:?}"))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+}
+
+fn finite_default(value: &Value) -> bool {
+    match value {
+        Value::Float(v) => v.is_finite(),
+        Value::Double(v) | Value::TimeCode(v) => v.is_finite(),
+        Value::Half(v) => layerstack::half::to_f32(*v).is_finite(),
+        Value::Vec2f(v) => v.iter().all(|v| v.is_finite()),
+        Value::Vec3f(v) => v.iter().all(|v| v.is_finite()),
+        Value::Vec4f(v) | Value::Quatf(v) => v.iter().all(|v| v.is_finite()),
+        Value::Vec2d(v) => v.iter().all(|v| v.is_finite()),
+        Value::Vec3d(v) => v.iter().all(|v| v.is_finite()),
+        Value::Vec4d(v) | Value::Quatd(v) => v.iter().all(|v| v.is_finite()),
+        Value::Vec2h(v) => v.iter().all(|v| layerstack::half::to_f32(*v).is_finite()),
+        Value::Vec3h(v) => v.iter().all(|v| layerstack::half::to_f32(*v).is_finite()),
+        Value::Vec4h(v) | Value::Quath(v) => {
+            v.iter().all(|v| layerstack::half::to_f32(*v).is_finite())
+        }
+        Value::Matrix2d(v) => v.iter().all(|v| v.is_finite()),
+        Value::Matrix3d(v) => v.iter().all(|v| v.is_finite()),
+        Value::Matrix4d(v) => v.iter().all(|v| v.is_finite()),
+        _ => true,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -517,15 +582,17 @@ mod tests {
         };
         assert!(render(&model, true).unwrap()[0].1.contains(doc));
     }
-}
-
-fn matrix_literal(matrix: &[f64], width: usize) -> String {
-    format!(
-        "[{}]",
-        matrix
-            .chunks_exact(width)
-            .map(|row| format!("{row:?}"))
-            .collect::<Vec<_>>()
-            .join(", ")
-    )
+    #[test]
+    fn nonfinite_defaults_fail_instead_of_emitting_uncompilable_identifiers() {
+        for value in [
+            Value::Float(f32::NAN),
+            Value::Vec3f([0., f32::INFINITY, 0.]),
+            Value::array(vec![Value::Double(f64::INFINITY)]),
+        ] {
+            assert!(
+                default_literal(&value, &TokenInterner::default(), false).is_err(),
+                "{value:?}"
+            );
+        }
+    }
 }

@@ -324,6 +324,71 @@ impl<'s> SchemaEdit<'s> {
         self.transaction.set_metadata(at, key, value.into());
     }
 
+    #[cfg(feature = "usd-vol")]
+    pub(crate) fn valid_field_target(&self, target: TargetPath) -> bool {
+        let path = match target {
+            TargetPath::Prim(path) => path,
+            TargetPath::Property(path) => path.prim_path(),
+        };
+        !self.store.paths().resolve(path).segments().is_empty()
+    }
+
+    /// Creates a local relationship declaration only when needed. Existing
+    /// declarations keep their custom qualifier and metadata, including across
+    /// reference and variant edit targets and repeated calls within this edit.
+    /// OpenUSD: `UsdPrim::CreateRelationship`; AOUSD Core §12.2.4.
+    #[cfg(feature = "usd-vol")]
+    pub(crate) fn ensure_relationship(&mut self, path: PathId, name: &str, custom: bool) {
+        let token = self.store.tokens_mut().intern(name);
+        if self
+            .created
+            .iter()
+            .any(|(p, n, _)| (*p, *n) == (path, token))
+        {
+            return;
+        }
+        let mapped = self.target.map_to_spec_path(path, self.store.paths_mut());
+        let local = mapped
+            .as_ref()
+            .and_then(|mapped| {
+                let layer = self.store.layer(self.target.layer())?;
+                if matches!(
+                    mapped.components().last(),
+                    Some(layerstack::SpecComponent::VariantSelection { .. })
+                ) {
+                    layer
+                        .variant_spec_at(mapped, self.store.paths())?
+                        .properties
+                        .iter()
+                        .find(|entry| entry.name == token)
+                } else {
+                    layer
+                        .prim_specs(mapped.prim_path())
+                        .find(|spec| {
+                            layerstack::SpecPath::from_variant_selection_sites(
+                                mapped.prim_path(),
+                                &spec.outer_variant_sites,
+                                self.store.paths(),
+                            ) == *mapped
+                        })?
+                        .properties
+                        .iter()
+                        .find(|entry| entry.name == token)
+                }
+            })
+            .is_some();
+        if !local {
+            let mut spec = PropertySpec::relationship();
+            spec.custom = self
+                .stage
+                .resolve_property_declaration(path, token)
+                .map_or(custom, |declaration| declaration.custom);
+            let at = self.target.property(PropertyPath::new(path, token));
+            self.transaction.create_property(at, spec);
+        }
+        self.created.push((path, token, None));
+    }
+
     /// Authors `targets` as the explicit targets of the relationship `name`.
     pub(crate) fn set_targets(&mut self, path: PathId, name: &str, targets: &[TargetPath]) {
         let at = self.property(path, name);

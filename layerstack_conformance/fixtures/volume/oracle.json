@@ -1,0 +1,146 @@
+{
+  "edits": [
+    {
+      "custom": true,
+      "exists": true,
+      "name": "new",
+      "result": true,
+      "targets": [
+        "/Field"
+      ]
+    },
+    {
+      "custom": true,
+      "exists": true,
+      "name": "new",
+      "result": true,
+      "targets": [
+        "/Other"
+      ]
+    },
+    {
+      "custom": true,
+      "exists": true,
+      "name": "new",
+      "result": true,
+      "targets": []
+    },
+    {
+      "custom": false,
+      "exists": false,
+      "name": "absent",
+      "result": false,
+      "targets": []
+    },
+    {
+      "custom": false,
+      "exists": true,
+      "name": "noncustom",
+      "result": true,
+      "targets": [
+        "/Field"
+      ]
+    },
+    {
+      "custom": true,
+      "exists": true,
+      "name": "forwarded",
+      "result": true,
+      "targets": [
+        "/Links.chain"
+      ]
+    },
+    {
+      "custom": false,
+      "exists": false,
+      "name": "root",
+      "result": false,
+      "targets": []
+    }
+  ],
+  "fields": {
+    "cycleWithExit": "/Field",
+    "density": "/Other",
+    "duplicate": "/Field",
+    "forward": "/Field",
+    "missing": "/DoesNotExist"
+  },
+  "queries": [
+    {
+      "exists": true,
+      "name": "density",
+      "path": "/Field"
+    },
+    {
+      "exists": true,
+      "name": "field:density",
+      "path": "/Field"
+    },
+    {
+      "exists": true,
+      "name": "forward",
+      "path": "/Field"
+    },
+    {
+      "exists": true,
+      "name": "duplicate",
+      "path": "/Field"
+    },
+    {
+      "exists": true,
+      "name": "multiple",
+      "path": ""
+    },
+    {
+      "exists": true,
+      "name": "empty",
+      "path": ""
+    },
+    {
+      "exists": true,
+      "name": "missing",
+      "path": "/DoesNotExist"
+    },
+    {
+      "exists": true,
+      "name": "property",
+      "path": ""
+    },
+    {
+      "exists": true,
+      "name": "cycle",
+      "path": ""
+    },
+    {
+      "exists": true,
+      "name": "cycleWithExit",
+      "path": "/Field"
+    },
+    {
+      "exists": true,
+      "name": "emptyForward",
+      "path": ""
+    },
+    {
+      "exists": true,
+      "name": "a:density",
+      "path": "/Other"
+    },
+    {
+      "exists": true,
+      "name": "z:density",
+      "path": "/Field"
+    },
+    {
+      "exists": false,
+      "name": "attribute",
+      "path": ""
+    },
+    {
+      "exists": false,
+      "name": "absent",
+      "path": ""
+    }
+  ],
+  "version": "26.8"
+}

@@ -369,6 +369,8 @@ pub mod shading;
 pub mod skel;
 mod table;
 pub mod value;
+#[cfg(feature = "usd-vol")]
+pub mod volume;
 #[cfg(feature = "usd-geom")]
 mod xform;
 #[cfg(feature = "usd-geom")]

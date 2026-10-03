@@ -204,6 +204,17 @@ impl Stage {
             skips: skips(report),
             anchors: anchors(report),
             declarations: declarations(report),
+            baked_clip_schedules: report
+                .findings
+                .iter()
+                .filter(|f| {
+                    matches!(
+                        f.kind,
+                        FindingKind::Transformed(Transformation::ClipScheduleBaked)
+                    )
+                })
+                .map(|f| f.path.to_string())
+                .collect(),
             retimed_splines: report
                 .findings
                 .iter()
@@ -296,6 +307,7 @@ struct Verifier<'a> {
     declarations: Vec<(String, bool, Option<Variability>)>,
     /// The properties whose spline the flatten retimed.
     retimed_splines: Vec<String>,
+    baked_clip_schedules: Vec<String>,
     out: FlattenVerification,
     sample_times: Vec<f64>,
 }
@@ -481,6 +493,11 @@ impl Verifier<'_> {
             });
         } else {
             for key in metadata_keys(source, flattened, prim) {
+                if self.baked_clip_schedules.contains(&path)
+                    && super::CLIP_FIELDS.contains(&self.tokens.resolve(key))
+                {
+                    continue;
+                }
                 self.out.scope.metadata_fields += 1;
                 let want = self.resolved(
                     self.expected(&path, source.resolve_value(prim, key).map(|r| r.value)),
@@ -491,7 +508,12 @@ impl Verifier<'_> {
             }
         }
 
-        let names = source.authored_property_names(prim, store);
+        let mut names = source.authored_property_names(prim, store);
+        for name in source.clips.property_names(prim) {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        }
         for &name in &names {
             self.property(prim, name, times);
         }

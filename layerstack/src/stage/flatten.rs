@@ -71,7 +71,7 @@
 //!   (AOUSD Core §12.2.7).
 //!
 //! What a flattened layer cannot hold is a [`Loss`], never dropped
-//! silently: value clips, whose external schedules are not baked by flattening;
+//! silently: value clips with unavailable assets or unsupported spline schedules;
 //! and an attribute no opinion gives a type, which OpenUSD's flatten omits too.
 //!
 //! Where it differs from OpenUSD:
@@ -642,7 +642,13 @@ impl Flattener<'_, '_> {
             }
         }
 
-        for name in self.stage.authored_property_names(source, &*self.store) {
+        let mut names = self.stage.authored_property_names(source, &*self.store);
+        for name in self.stage.clips.property_names(source) {
+            if !names.contains(&name) {
+                names.push(name);
+            }
+        }
+        for name in names {
             if let Some(property) = self.copy_property(source, name, remap) {
                 spec.properties.push(PropertyEntry {
                     name,
@@ -701,9 +707,22 @@ impl Flattener<'_, '_> {
             let strongest = opinions.first();
             let source = strongest.map(|opinion| self.source(opinion, false));
             if CLIP_FIELDS.contains(&self.store.tokens().resolve(key)) {
-                // Spec: AOUSD Core §12.3.4 (value clips) is not composed.
+                // Core §12.3.4: a flattened layer no longer needs the clip
+                // schedule. Refuse unavailable inputs rather than save a gap.
                 if !clips_noted {
-                    self.lost(path.clone(), Loss::ValueClips, source);
+                    let incomplete = stage.clip_issues().iter().any(|issue| issue.owner == prim)
+                        || stage.clip_asset_requests().iter().any(|request| {
+                            request.owner == prim
+                                && !matches!(
+                                    request.status,
+                                    crate::value_clips::ClipAssetStatus::Loaded(_)
+                                )
+                        });
+                    if incomplete {
+                        self.lost(path.clone(), Loss::ValueClips, source);
+                    } else {
+                        self.transformed(path.clone(), Transformation::ClipScheduleBaked, source);
+                    }
                     clips_noted = true;
                 }
                 continue;
@@ -750,7 +769,11 @@ impl Flattener<'_, '_> {
     ) -> Option<PropertySpec> {
         let stage = self.stage;
         let declaration = stage.resolve_property_declaration(prim, name)?;
-        let opinions = stage.prims.get(&prim)?.property_opinions(name)?;
+        let opinions = stage
+            .prims
+            .get(&prim)?
+            .property_opinions(name)
+            .unwrap_or(&[]);
         let property = PropertyPath::new(prim, name);
         let path = self.property_display(prim, name);
         let mut spec = PropertySpec::of_kind(declaration.kind);
@@ -800,7 +823,61 @@ impl Flattener<'_, '_> {
         };
         spec.type_name = Some(property_type);
         let anchored = self.anchor_opinions(opinions);
-        let opinions: &[Opinion] = &anchored;
+        let default_opinions: &[Opinion] = &anchored;
+        let mut animation = anchored.to_vec();
+        let grid = stage.property_sample_times(prim, name);
+        let mut selected = Vec::new();
+        for time in core::iter::once(0.).chain(grid.iter().copied()) {
+            for clip in stage.clip_opinions_after_authored(
+                prim,
+                name,
+                &anchored,
+                time,
+                crate::InterpolationType::Linear,
+            ) {
+                if clip.contributes && !selected.contains(&clip.entry) {
+                    selected.push(clip.entry);
+                }
+            }
+        }
+        if !selected.is_empty() {
+            // AOUSD Core §12.3: select sources before baking them, using
+            // the same authored masks and sparse prefix plan as runtime.
+            match stage.clips.flatten_samples(prim, name, &selected) {
+                Ok(clips) => {
+                    for crate::value_clips::FlattenClip {
+                        mut opinion,
+                        anchors,
+                    } in clips
+                    {
+                        if let crate::OpinionValue::Property(spec) = &mut opinion.value {
+                            let spec = Arc::make_mut(spec);
+                            let mut samples = spec.time_samples.as_deref().unwrap_or(&[]).to_vec();
+                            for ((_, value), anchor) in samples.iter_mut().zip(anchors) {
+                                if let Some(layer) = anchor
+                                    && let Some(anchored) = self.anchor_value(value, layer)
+                                {
+                                    *value = anchored;
+                                }
+                            }
+                            spec.time_samples = Some(samples.into());
+                        }
+                        animation.push(opinion);
+                    }
+                    let graph = &stage.prims.get(&prim)?.graph;
+                    // Stable sorting preserves clip-set order and puts an
+                    // authored opinion before clips introduced at its site.
+                    animation.sort_by(|a, b| {
+                        graph
+                            .cmp_nodes(a.key.node, b.key.node)
+                            .then_with(|| a.key.layer_strength.cmp(&b.key.layer_strength))
+                    });
+                    self.transformed(path.clone(), Transformation::ClipSamplesBaked, None);
+                }
+                Err(_) => self.lost(path.clone(), Loss::ValueClips, None),
+            }
+        }
+        let opinions = animation.as_slice();
 
         // Spec: AOUSD Core §12.3.2 (per opinion, time samples, then a
         // spline, then the default).
@@ -845,13 +922,13 @@ impl Flattener<'_, '_> {
 
         // Spec: AOUSD Core §12.3.1 (the default), §12.3.6 (a block).
         // OpenUSD writes the default whenever one is authored.
-        if let Some(authored) = opinions
+        if let Some(authored) = default_opinions
             .iter()
             .find(|opinion| opinion.value.default_value().is_some())
         {
             let index = stage.prims.get(&prim)?;
             let resolved =
-                stage.resolve_default(name, opinions, index.property_type_for(&name), None);
+                stage.resolve_default(name, default_opinions, index.property_type_for(&name), None);
             let value = match resolved {
                 Some(resolved) => match resolved.value {
                     ResolvedValue::Scalar(value) => value,

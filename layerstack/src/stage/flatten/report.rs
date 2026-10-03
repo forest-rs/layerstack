@@ -419,6 +419,11 @@ impl fmt::Display for FindingKind {
 /// differently, and composes it the same.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Transformation {
+    /// Resident discrete clip values written into composed time samples.
+    /// OpenUSD `UsdStage::_TimeSampleMapResolver::ProcessClips`.
+    ClipSamplesBaked,
+    /// Clip metadata removed after its resident schedules were evaluated.
+    ClipScheduleBaked,
     /// A list op (a metadata field, relationship targets or attribute
     /// connections) written as the explicit list it composes to.
     ///
@@ -505,6 +510,8 @@ pub enum Transformation {
 impl fmt::Display for Transformation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::ClipSamplesBaked => f.write_str("value clips baked into samples"),
+            Self::ClipScheduleBaked => f.write_str("clip schedule removed after evaluation"),
             Self::ListOpMadeExplicit { field } => write!(f, "{field} made explicit"),
             Self::SamplesRetimed { offset } => write!(
                 f,
@@ -550,8 +557,8 @@ pub enum Loss {
     /// A spline read through a layer offset whose scale is not positive,
     /// which would reverse it.
     RetimedSpline,
-    /// Value clips (`clips`, `clipSets` and the legacy `clip*` fields),
-    /// which composition does not read, so their values cannot be baked.
+    /// A clip schedule with unavailable inputs, preparation errors, or
+    /// native clip splines which cannot be baked exactly into discrete samples.
     ValueClips,
     /// An attribute that no opinion gives a type, which a layer cannot
     /// declare: it is omitted, as OpenUSD's flatten omits it

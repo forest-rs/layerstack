@@ -95,6 +95,11 @@ pub struct ClipIssue {
     /// Machine-readable limitation or violated invariant.
     pub kind: ClipIssueKind,
 }
+/// One fully projected discrete clip source and its per-sample asset anchors.
+pub(crate) struct FlattenClip {
+    pub(crate) opinion: Opinion,
+    pub(crate) anchors: Vec<Option<LayerId>>,
+}
 /// Actual source of one bracketing clip sample.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ClipSampleSource {
@@ -762,6 +767,63 @@ impl Catalog {
                     .map(|&time| (time, entry.evaluator.sample_is_sparse(time)))
                     .collect()
             })
+    }
+    /// Full discrete clip maps for explicit flattening, with each raw asset
+    /// anchor. Runtime queries continue to project only requested endpoints.
+    pub(crate) fn flatten_samples(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        selected: &[usize],
+    ) -> Result<Vec<FlattenClip>, ClipEvalError> {
+        let mut out = Vec::new();
+        for (index, entry) in self
+            .properties
+            .get(&(prim, field))
+            .into_iter()
+            .flatten()
+            .enumerate()
+        {
+            if !selected.contains(&index) {
+                continue;
+            }
+            if entry.evaluator.is_spline() {
+                return Err(ClipEvalError::UnsupportedSpline);
+            }
+            let mut samples = Vec::new();
+            let mut anchors = Vec::new();
+            for &time in entry.evaluator.sample_times() {
+                let value = entry.evaluator.evaluate(time, InterpolationType::Linear)?;
+                let anchor = if value.lower_from_manifest {
+                    entry.manifest_layer
+                } else {
+                    entry.clip_layers.get(value.lower_clip).copied().flatten()
+                };
+                anchors.push(anchor);
+                samples.push((time, value.value.unwrap_or(Value::Blocked)));
+            }
+            let mut spec = PropertySpec::attribute();
+            spec.type_name = entry.property_type.clone();
+            spec.time_samples = Some(samples.into());
+            out.push(FlattenClip {
+                opinion: Opinion {
+                    key: entry.key.clone(),
+                    field,
+                    value: OpinionValue::Property(Arc::new(spec)),
+                    layer_offset: LayerOffset::IDENTITY,
+                },
+                anchors,
+            });
+        }
+        Ok(out)
+    }
+    /// Prepared clip properties, including schema attributes absent from
+    /// static authored topology (`UsdStage::_CopyPrim`).
+    pub(crate) fn property_names(&self, prim: PathId) -> Vec<TokenId> {
+        self.properties
+            .keys()
+            .filter_map(|&(path, name)| (path == prim).then_some(name))
+            .collect()
     }
     pub(crate) fn source_sites(&self, prim: PathId) -> Vec<(LayerId, PathId)> {
         let mut sites: Vec<_> = self

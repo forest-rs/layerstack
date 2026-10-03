@@ -395,6 +395,8 @@ mod regex;
 pub mod render;
 #[cfg(all(feature = "usd-geom", feature = "usd-shade"))]
 pub mod retained;
+#[cfg(feature = "usd-ri")]
+pub mod ri_spline;
 #[cfg(feature = "usd-shade")]
 pub mod shading;
 #[cfg(feature = "usd-skel")]

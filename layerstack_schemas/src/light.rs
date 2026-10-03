@@ -3,6 +3,9 @@
 
 //! Light discovery with authored model caches and caller-owned snapshot queries.
 //! OpenUSD: `UsdLuxLightListAPI` (AOUSD Core §11.4–11.5, §12.5 relationships).
+mod helpers;
+pub use helpers::*;
+
 use crate::{
     PrimView, Scene, SchemaEdit,
     usd_lux::{LightListApi, LightListApiEdit, LightListApiLightListCacheBehavior as Behavior},

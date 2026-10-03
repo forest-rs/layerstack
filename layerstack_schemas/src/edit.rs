@@ -310,6 +310,23 @@ impl<'s> SchemaEdit<'s> {
         self.created.push((path, token, Some(ty)));
     }
 
+    #[cfg(feature = "usd-lux")]
+    pub(crate) fn stage_up_axis(&self) -> &str {
+        let scene = crate::Scene::new(self.stage, self.store);
+        scene.metadata().up_axis().unwrap_or("Y")
+    }
+
+    #[cfg(feature = "usd-lux")]
+    pub(crate) fn create_uniform_attribute(&mut self, path: PathId, name: &str, ty: PropertyType) {
+        let token = self.store.tokens_mut().intern(name);
+        let at = self.target.property(PropertyPath::new(path, token));
+        let mut spec = PropertySpec::typed_attribute(ty.clone());
+        spec.custom = false;
+        spec.variability = layerstack::Variability::Uniform;
+        self.transaction.create_property(at, spec);
+        self.created.push((path, token, Some(ty)));
+    }
+
     #[cfg(feature = "usd-geom")]
     pub(crate) fn set_property_metadata(
         &mut self,

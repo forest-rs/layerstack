@@ -1,0 +1,387 @@
+{
+  "blackbody": [
+    {
+      "kelvin": -1000,
+      "rgb": [
+        4.305504322052002,
+        0.1183583065867424,
+        0.0
+      ]
+    },
+    {
+      "kelvin": 0,
+      "rgb": [
+        4.305504322052002,
+        0.1183583065867424,
+        0.0
+      ]
+    },
+    {
+      "kelvin": 1000,
+      "rgb": [
+        4.305504322052002,
+        0.1183583065867424,
+        0.0
+      ]
+    },
+    {
+      "kelvin": 1100,
+      "rgb": [
+        4.093179225921631,
+        0.18152745068073273,
+        0.0
+      ]
+    },
+    {
+      "kelvin": 1300,
+      "rgb": [
+        3.5557541847229004,
+        0.34143778681755066,
+        0.0
+      ]
+    },
+    {
+      "kelvin": 1499.75,
+      "rgb": [
+        3.128925323486328,
+        0.4681081473827362,
+        0.0
+      ]
+    },
+    {
+      "kelvin": 1500,
+      "rgb": [
+        3.1285226345062256,
+        0.46822720766067505,
+        0.0
+      ]
+    },
+    {
+      "kelvin": 2000,
+      "rgb": [
+        2.52056622505188,
+        0.646888256072998,
+        0.020403984934091568
+      ]
+    },
+    {
+      "kelvin": 2500,
+      "rgb": [
+        2.068047523498535,
+        0.7693819403648376,
+        0.1394898146390915
+      ]
+    },
+    {
+      "kelvin": 4000,
+      "rgb": [
+        1.4140281677246094,
+        0.9240390658378601,
+        0.5333077907562256
+      ]
+    },
+    {
+      "kelvin": 6500,
+      "rgb": [
+        1.0433334112167358,
+        0.9836244583129883,
+        1.0346132516860962
+      ]
+    },
+    {
+      "kelvin": 6750.25,
+      "rgb": [
+        1.0240250825881958,
+        0.9856029748916626,
+        1.071869969367981
+      ]
+    },
+    {
+      "kelvin": 7000,
+      "rgb": [
+        1.005628228187561,
+        0.987342894077301,
+        1.1088058948516846
+      ]
+    },
+    {
+      "kelvin": 9000,
+      "rgb": [
+        0.9043021202087402,
+        0.9938889741897583,
+        1.3423259258270264
+      ]
+    },
+    {
+      "kelvin": 9999,
+      "rgb": [
+        0.8718570470809937,
+        0.994687557220459,
+        1.4299527406692505
+      ]
+    },
+    {
+      "kelvin": 10000,
+      "rgb": [
+        0.871841311454773,
+        0.9946879148483276,
+        1.4299958944320679
+      ]
+    },
+    {
+      "kelvin": 12000,
+      "rgb": [
+        0.871841311454773,
+        0.9946879148483276,
+        1.4299958944320679
+      ]
+    },
+    {
+      "kelvin": 1e+30,
+      "rgb": [
+        0.871841311454773,
+        0.9946879148483276,
+        1.4299958944320679
+      ]
+    }
+  ],
+  "blocked_selections": [
+    {
+      "contexts": [],
+      "filter": false,
+      "id": "",
+      "path": "/Blocked"
+    },
+    {
+      "contexts": [
+        "gpu"
+      ],
+      "filter": false,
+      "id": "",
+      "path": "/Blocked"
+    },
+    {
+      "contexts": [
+        "gpu",
+        "ray"
+      ],
+      "filter": false,
+      "id": "RayAfterBlock",
+      "path": "/Blocked"
+    },
+    {
+      "contexts": [
+        "",
+        "ray"
+      ],
+      "filter": false,
+      "id": "RayAfterBlock",
+      "path": "/Blocked"
+    },
+    {
+      "contexts": [],
+      "filter": false,
+      "id": "ContextDefault",
+      "path": "/ContextBlocked"
+    },
+    {
+      "contexts": [
+        "gpu"
+      ],
+      "filter": false,
+      "id": "ContextDefault",
+      "path": "/ContextBlocked"
+    },
+    {
+      "contexts": [
+        "gpu",
+        "ray"
+      ],
+      "filter": false,
+      "id": "ContextRay",
+      "path": "/ContextBlocked"
+    },
+    {
+      "contexts": [
+        "",
+        "ray"
+      ],
+      "filter": false,
+      "id": "ContextDefault",
+      "path": "/ContextBlocked"
+    },
+    {
+      "contexts": [],
+      "filter": true,
+      "id": "",
+      "path": "/BlockedFilter"
+    },
+    {
+      "contexts": [
+        "gpu"
+      ],
+      "filter": true,
+      "id": "",
+      "path": "/BlockedFilter"
+    },
+    {
+      "contexts": [
+        "gpu",
+        "ray"
+      ],
+      "filter": true,
+      "id": "FilterRay",
+      "path": "/BlockedFilter"
+    },
+    {
+      "contexts": [
+        "",
+        "ray"
+      ],
+      "filter": true,
+      "id": "FilterRay",
+      "path": "/BlockedFilter"
+    },
+    {
+      "contexts": [],
+      "filter": false,
+      "id": "",
+      "path": "/IncompatibleOverBlock"
+    },
+    {
+      "contexts": [
+        "gpu"
+      ],
+      "filter": false,
+      "id": "",
+      "path": "/IncompatibleOverBlock"
+    },
+    {
+      "contexts": [
+        "gpu",
+        "ray"
+      ],
+      "filter": false,
+      "id": "",
+      "path": "/IncompatibleOverBlock"
+    },
+    {
+      "contexts": [
+        "",
+        "ray"
+      ],
+      "filter": false,
+      "id": "",
+      "path": "/IncompatibleOverBlock"
+    },
+    {
+      "contexts": [],
+      "filter": false,
+      "id": "WeakToken",
+      "path": "/IncompatibleOverToken"
+    },
+    {
+      "contexts": [
+        "gpu"
+      ],
+      "filter": false,
+      "id": "WeakToken",
+      "path": "/IncompatibleOverToken"
+    },
+    {
+      "contexts": [
+        "gpu",
+        "ray"
+      ],
+      "filter": false,
+      "id": "WeakToken",
+      "path": "/IncompatibleOverToken"
+    },
+    {
+      "contexts": [
+        "",
+        "ray"
+      ],
+      "filter": false,
+      "id": "WeakToken",
+      "path": "/IncompatibleOverToken"
+    }
+  ],
+  "dome_angle": 90.0,
+  "dome_order": [
+    "!resetXformStack!",
+    "xformOp:translate",
+    "xformOp:rotateX:orientToStageUpAxis"
+  ],
+  "links": [
+    {
+      "included": [
+        "/Included",
+        "/Unshadowed"
+      ],
+      "kind": "light"
+    },
+    {
+      "included": [
+        "/Included",
+        "/Excluded"
+      ],
+      "kind": "shadow"
+    },
+    {
+      "included": [
+        "/Included",
+        "/Unshadowed"
+      ],
+      "kind": "filter"
+    }
+  ],
+  "selections": [
+    {
+      "contexts": [],
+      "filter": "DefaultFilter",
+      "light": "DefaultLight"
+    },
+    {
+      "contexts": [
+        "gpu"
+      ],
+      "filter": "GpuFilter",
+      "light": "GpuLight"
+    },
+    {
+      "contexts": [
+        "absent",
+        "empty",
+        "gpu",
+        "ray"
+      ],
+      "filter": "GpuFilter",
+      "light": "GpuLight"
+    },
+    {
+      "contexts": [
+        "ray",
+        "gpu"
+      ],
+      "filter": "GpuFilter",
+      "light": "RayLight"
+    },
+    {
+      "contexts": [
+        "absent"
+      ],
+      "filter": "DefaultFilter",
+      "light": "DefaultLight"
+    },
+    {
+      "contexts": [
+        "",
+        "gpu"
+      ],
+      "filter": "DefaultFilter",
+      "light": "DefaultLight"
+    }
+  ],
+  "version": "26.8"
+}

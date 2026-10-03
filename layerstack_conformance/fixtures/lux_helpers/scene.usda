@@ -1,0 +1,53 @@
+#usda 1.0
+(
+    upAxis = "Z"
+)
+def SphereLight "Light" {
+    uniform token light:shaderId = "DefaultLight"
+    uniform token empty:light:shaderId = ""
+    uniform token gpu:light:shaderId = "GpuLight"
+    uniform token ray:light:shaderId = "RayLight"
+    rel collection:lightLink:excludes = </Excluded>
+    rel collection:shadowLink:excludes = </Unshadowed>
+}
+def LightFilter "Filter" {
+    uniform token lightFilter:shaderId = "DefaultFilter"
+    uniform token empty:lightFilter:shaderId = ""
+    uniform token gpu:lightFilter:shaderId = "GpuFilter"
+    rel collection:filterLink:excludes = </Excluded>
+}
+def DomeLight "Dome" {
+    uniform token[] xformOpOrder = ["!resetXformStack!", "xformOp:translate"]
+    double3 xformOp:translate = (1, 2, 3)
+}
+def Xform "Included" {}
+def Xform "Excluded" {}
+def Xform "Unshadowed" {}
+
+def SphereLight "Blocked" {
+    uniform token light:shaderId = None
+    uniform token gpu:light:shaderId = None
+    uniform token ray:light:shaderId = "RayAfterBlock"
+}
+def SphereLight "ContextBlocked" {
+    uniform token light:shaderId = "ContextDefault"
+    uniform token gpu:light:shaderId = None
+    uniform token ray:light:shaderId = "ContextRay"
+}
+def LightFilter "BlockedFilter" {
+    uniform token lightFilter:shaderId = None
+    uniform token gpu:lightFilter:shaderId = None
+    uniform token ray:lightFilter:shaderId = "FilterRay"
+}
+class "BlockedBase" {
+    uniform token light:shaderId = None
+}
+class "TokenBase" {
+    uniform token light:shaderId = "WeakToken"
+}
+def SphereLight "IncompatibleOverBlock" (inherits = </BlockedBase>) {
+    string light:shaderId = "WrongType"
+}
+def SphereLight "IncompatibleOverToken" (inherits = </TokenBase>) {
+    string light:shaderId = "WrongType"
+}

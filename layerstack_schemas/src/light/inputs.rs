@@ -95,9 +95,19 @@ pub struct LightValue {
     /// Resolved token, string or asset spelling; usable without the token interner.
     /// Asset spelling is not a resolved file path.
     pub text: Option<String>,
-    /// Winning authored source, when stage provenance is enabled. Schema fallbacks
-    /// have no source layer. Relative asset anchoring requires this evidence.
+    /// Winning authored source. Assets retain it independently of stage-wide
+    /// provenance; other values follow the stage policy. Schema fallbacks have
+    /// no source layer. Relative asset anchoring requires this evidence.
     pub provenance: Option<Provenance>,
+}
+impl LightValue {
+    /// Owned asset spelling and authoring anchor, if this value is an asset.
+    /// The capture includes asset source evidence even when stage-wide
+    /// provenance is disabled. Host identifier creation and loading are explicit.
+    #[must_use]
+    pub fn asset_reference(&self) -> Option<crate::assets::AssetReference> {
+        crate::assets::AssetReference::from_value(self.value.as_ref()?, self.provenance.as_ref())
+    }
 }
 fn default_is_blocked(scene: &Scene<'_>, path: PropertyPath) -> bool {
     scene
@@ -143,7 +153,18 @@ fn capture_value(scene: &Scene<'_>, path: PropertyPath, time: Time) -> LightValu
                 .map(|r| (r.value, r.provenance)),
         }
     };
-    let (value, provenance) = resolved.map_or((None, None), |(v, p)| (Some(v), p));
+    let (value, mut provenance) = resolved.map_or((None, None), |(v, p)| (Some(v), p));
+    // Asset anchors are semantic inputs, not optional inspector decoration.
+    // Ask the ordinary typed resolver for this source without enabling
+    // provenance stage-wide. Keep malformed untyped storage inspectable.
+    if matches!(value, Some(Value::Asset(_))) {
+        provenance = scene
+            .stage()
+            .read_property_with_provenance(path, time, |v| {
+                matches!(v, Value::Asset(_)).then_some(())
+            })
+            .and_then(|r| r.provenance);
+    }
     let text = match &value {
         Some(Value::Token(t)) => Some(scene.store().tokens().resolve(*t).into()),
         Some(Value::String(s) | Value::Asset(s)) => Some(s.to_string()),

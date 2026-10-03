@@ -1103,6 +1103,23 @@ impl Stage {
         property_type: Option<&PropertyType>,
         fallback: Option<&Value>,
     ) -> Option<Resolved<ResolvedValue>> {
+        self.resolve_default_with_source(
+            field,
+            opinions,
+            property_type,
+            fallback,
+            self.with_provenance,
+        )
+    }
+
+    fn resolve_default_with_source(
+        &self,
+        field: TokenId,
+        opinions: &[Opinion],
+        property_type: Option<&PropertyType>,
+        fallback: Option<&Value>,
+        with_source: bool,
+    ) -> Option<Resolved<ResolvedValue>> {
         // Spec: AOUSD Core §12.3.2.1 (`timecode` values are read in stage
         // time, through each opinion's layer offset).
         let opinions = stage_time::opinions_in_stage_time(opinions);
@@ -1116,7 +1133,8 @@ impl Stage {
         if let Some(fold) = crate::path_expression::fold_default(opinions, fallback) {
             return Some(Resolved {
                 value: ResolvedValue::Scalar(fold.value?),
-                provenance: strongest_default.and_then(|op| self.provenance_for(field, op)),
+                provenance: strongest_default
+                    .and_then(|op| self.provenance_for_if(field, op, with_source)),
             });
         }
 
@@ -1135,7 +1153,8 @@ impl Stage {
             return match result {
                 SparseResolveResult::Resolved(value) => Some(Resolved {
                     value: ResolvedValue::Scalar(value),
-                    provenance: source.and_then(|i| self.provenance_for(field, &opinions[i])),
+                    provenance: source
+                        .and_then(|i| self.provenance_for_if(field, &opinions[i], with_source)),
                 }),
                 _ => None,
             };
@@ -1145,7 +1164,8 @@ impl Stage {
             SparseResolveResult::Resolved(value) => {
                 return Some(Resolved {
                     value: ResolvedValue::Scalar(value),
-                    provenance: strongest_default.and_then(|op| self.provenance_for(field, op)),
+                    provenance: strongest_default
+                        .and_then(|op| self.provenance_for_if(field, op, with_source)),
                 });
             }
             SparseResolveResult::Blocked => return None,
@@ -1165,11 +1185,11 @@ impl Stage {
                         _ => None,
                     }),
                 )),
-                provenance: self.provenance_for(field, strongest_default),
+                provenance: self.provenance_for_if(field, strongest_default, with_source),
             }),
             value => Some(Resolved {
                 value: ResolvedValue::Scalar(value.clone()),
-                provenance: self.provenance_for(field, strongest_default),
+                provenance: self.provenance_for_if(field, strongest_default, with_source),
             }),
         }
     }
@@ -1243,6 +1263,29 @@ impl Stage {
         fallback: Option<&Value>,
         accepts: Option<&dyn Fn(&Value) -> bool>,
     ) -> Option<Resolved<Value>> {
+        self.resolve_at_time_with_source(
+            field,
+            opinions,
+            property_type,
+            time,
+            interp,
+            fallback,
+            accepts,
+            self.with_provenance,
+        )
+    }
+
+    fn resolve_at_time_with_source(
+        &self,
+        field: TokenId,
+        opinions: &[Opinion],
+        property_type: Option<&PropertyType>,
+        time: f64,
+        interp: InterpolationType,
+        fallback: Option<&Value>,
+        accepts: Option<&dyn Fn(&Value) -> bool>,
+        with_source: bool,
+    ) -> Option<Resolved<Value>> {
         // Spec: AOUSD Core §12.3.2.1 (`timecode` values are read in stage
         // time, through each opinion's layer offset).
         let opinions = stage_time::opinions_in_stage_time(opinions);
@@ -1254,7 +1297,8 @@ impl Stage {
             let strongest = fold.contributors.first().copied().flatten();
             return Some(Resolved {
                 value: fold.value?,
-                provenance: strongest.and_then(|i| self.provenance_for(field, &opinions[i])),
+                provenance: strongest
+                    .and_then(|i| self.provenance_for_if(field, &opinions[i], with_source)),
             });
         }
 
@@ -1291,7 +1335,7 @@ impl Stage {
                                     .is_some_and(|samples| !samples.is_empty())
                                 || opinion.value.spline().is_some()
                         })
-                        .and_then(|opinion| self.provenance_for(field, opinion)),
+                        .and_then(|opinion| self.provenance_for_if(field, opinion, with_source)),
                 });
             }
             SparseResolveResult::Blocked => return None,
@@ -1303,7 +1347,7 @@ impl Stage {
             .find_map(|opinion| Some((opinion, value_at_time(opinion, time, interp)?)))?;
         Some(Resolved {
             value: value?,
-            provenance: self.provenance_for(field, opinion),
+            provenance: self.provenance_for_if(field, opinion, with_source),
         })
     }
 
@@ -1980,9 +2024,36 @@ impl Stage {
         time: Time,
         read: impl Fn(&Value) -> Option<T>,
     ) -> Option<Resolved<T>> {
+        self.read_property_by(property, time, read, self.with_provenance)
+    }
+
+    /// Reads the same typed composed value as `read_property`, always including
+    /// the winning authored source. This opt-in query does not change the stage's
+    /// provenance policy; schema fallbacks still have no authoring source.
+    ///
+    /// Useful for assets whose relative paths must be anchored to their authoring
+    /// layer. Layer offsets, sparse composition and typed source selection use
+    /// the ordinary resolver. AOUSD Core §9.4, §12.3, §13.3.2.4.
+    #[must_use]
+    pub fn read_property_with_provenance<T>(
+        &self,
+        property: PropertyPath,
+        time: Time,
+        read: impl Fn(&Value) -> Option<T>,
+    ) -> Option<Resolved<T>> {
+        self.read_property_by(property, time, read, true)
+    }
+
+    fn read_property_by<T>(
+        &self,
+        property: PropertyPath,
+        time: Time,
+        read: impl Fn(&Value) -> Option<T>,
+        with_source: bool,
+    ) -> Option<Resolved<T>> {
         let (prim, field) = (property.prim_path(), property.property());
         match time {
-            Time::Default => self.read_default(prim, field, read),
+            Time::Default => self.read_default(prim, field, read, with_source),
             Time::At {
                 code,
                 interpolation,
@@ -1991,7 +2062,7 @@ impl Stage {
                 let resolved =
                     self.opinions(prim, field, Lookup::Property)
                         .and_then(|(index, opinions)| {
-                            self.resolve_at_time_over(
+                            self.resolve_at_time_with_source(
                                 field,
                                 opinions,
                                 index.property_type_for(&field),
@@ -1999,6 +2070,7 @@ impl Stage {
                                 interpolation,
                                 fallback,
                                 Some(&|value| read(value).is_some()),
+                                with_source,
                             )
                         });
                 match resolved {
@@ -2040,6 +2112,7 @@ impl Stage {
         prim: PathId,
         field: TokenId,
         read: impl Fn(&Value) -> Option<T>,
+        with_source: bool,
     ) -> Option<Resolved<T>> {
         let fallback = self.schema_fallback(prim, field);
         if let Some((index, opinions)) = self.opinions(prim, field, Lookup::Property) {
@@ -2064,7 +2137,9 @@ impl Stage {
                     {
                         return Some(Resolved {
                             value,
-                            provenance: source.and_then(|i| self.provenance_for(field, &mapped[i])),
+                            provenance: source.and_then(|i| {
+                                self.provenance_for_if(field, &mapped[i], with_source)
+                            }),
                         });
                     }
                     return None;
@@ -2072,11 +2147,12 @@ impl Stage {
                 // Compositional families must resolve as a family, never by
                 // feeding one uncomposed authored edit to the conversion.
                 if matches!(value, Value::Dictionary(_) | Value::PathExpression(_)) {
-                    let Some(resolved) = self.resolve_default(
+                    let Some(resolved) = self.resolve_default_with_source(
                         field,
                         &opinions[position..],
                         index.property_type_for(&field),
                         fallback,
+                        with_source,
                     ) else {
                         break;
                     };
@@ -2097,7 +2173,7 @@ impl Stage {
                 if let Some(value) = read(mapped.as_ref().unwrap_or(value)) {
                     return Some(Resolved {
                         value,
-                        provenance: self.provenance_for(field, opinion),
+                        provenance: self.provenance_for_if(field, opinion, with_source),
                     });
                 }
             }
@@ -2361,7 +2437,16 @@ impl Stage {
     }
 
     fn provenance_for(&self, field: TokenId, strongest: &Opinion) -> Option<Provenance> {
-        self.with_provenance.then_some(Provenance {
+        self.provenance_for_if(field, strongest, self.with_provenance)
+    }
+
+    fn provenance_for_if(
+        &self,
+        field: TokenId,
+        strongest: &Opinion,
+        enabled: bool,
+    ) -> Option<Provenance> {
+        enabled.then_some(Provenance {
             layer: strongest.key.layer_id,
             spec_path: strongest.key.spec_path.clone(),
             field,

@@ -131,7 +131,9 @@ pub mod lower;
 )]
 pub mod emit;
 
+mod numeric;
 mod read;
+mod token_source;
 pub use read::{ReadResult, ReadStats, read_usda};
 
 pub mod save;

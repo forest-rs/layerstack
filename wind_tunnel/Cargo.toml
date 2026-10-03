@@ -26,6 +26,7 @@ glam = { default-features = false, features = ["f64", "libm"], version = "0.33" 
 layerstack_schemas = { default-features = false, features = ["usd-geom", "usd-shade", "usd-skel"], workspace = true }
 layerstack_usda = { workspace = true }
 layerstack_usdc = { workspace = true }
+layerstack_usdz = { workspace = true }
 opinionated.workspace = true
 
 [[bench]]
@@ -102,4 +103,8 @@ harness = false
 
 [[bench]]
 name = "skel_evaluation"
+harness = false
+
+[[bench]]
+name = "package_loading"
 harness = false

@@ -71,9 +71,8 @@
 //!   (AOUSD Core §12.2.7).
 //!
 //! What a flattened layer cannot hold is a [`Loss`], never dropped
-//! silently: value clips, whose external schedules are not baked by flattening; times authored
-//! at another `timeCodesPerSecond`, which composition does not rescale; and
-//! an attribute no opinion gives a type, which OpenUSD's flatten omits too.
+//! silently: value clips, whose external schedules are not baked by flattening;
+//! and an attribute no opinion gives a type, which OpenUSD's flatten omits too.
 //!
 //! Where it differs from OpenUSD:
 //!
@@ -228,11 +227,8 @@ impl Stage {
             prototype_of: HashMap::new(),
             anchored: HashMap::new(),
             unanchored: HashSet::new(),
-            rates: HashMap::new(),
-            root_rate: 24.0,
             report: FlattenReport::default(),
         };
-        flattener.root_rate = flattener.time_codes_per_second(root);
         // The layer metadata's asset paths are anchored to the root layer.
         let mut metadata = core::mem::take(&mut flattener.out.metadata);
         for entry in &mut metadata {
@@ -280,10 +276,6 @@ struct Flattener<'a, 'r> {
     anchored: HashMap<Arc<str>, Arc<str>>,
     /// The authored asset paths that could not be anchored.
     unanchored: HashSet<Arc<str>>,
-    /// Each layer's time codes per second, as read.
-    rates: HashMap<LayerId, f64>,
-    /// The root layer's time codes per second.
-    root_rate: f64,
     report: FlattenReport,
 }
 
@@ -364,41 +356,6 @@ impl Flattener<'_, '_> {
 
     fn lost(&mut self, path: String, loss: Loss, source: Option<FindingSource>) {
         self.note(path, FindingKind::Lost(loss), source);
-    }
-
-    /// A layer's time codes per second: its `timeCodesPerSecond`, else its
-    /// `framesPerSecond`, else 24 (OpenUSD's `SdfLayer::GetTimeCodesPerSecond`).
-    ///
-    /// Spec: AOUSD Core §7.6.1 (layer metadata).
-    fn time_codes_per_second(&mut self, layer: LayerId) -> f64 {
-        if let Some(&rate) = self.rates.get(&layer) {
-            return rate;
-        }
-        let tcps = self.store.tokens_mut().intern("timeCodesPerSecond");
-        let fps = self.store.tokens_mut().intern("framesPerSecond");
-        let read = |key| {
-            let entry = self
-                .store
-                .layer(layer)?
-                .metadata
-                .iter()
-                .find(|e| e.name == key)?;
-            match &entry.value {
-                FieldValue::Value(Value::Double(v)) => Some(*v),
-                FieldValue::Value(Value::Float(v)) => Some(f64::from(*v)),
-                FieldValue::Value(Value::Int(v)) => Some(f64::from(*v)),
-                _ => None,
-            }
-        };
-        let rate = read(tcps).or_else(|| read(fps)).unwrap_or(24.0);
-        self.rates.insert(layer, rate);
-        rate
-    }
-
-    /// Whether OpenUSD would rescale the times `layer` authors: its time
-    /// codes per second differ from the root layer's.
-    fn rescaled(&mut self, layer: LayerId) -> bool {
-        self.time_codes_per_second(layer) != self.root_rate
     }
 
     /// Records that `opinion`'s default or metadata value holds `timecode`
@@ -858,23 +815,7 @@ impl Flattener<'_, '_> {
         if let Some(position) = value_source {
             let source = &opinions[position];
             let finding_source = self.source(source, true);
-            let rescaled = opinions[position..]
-                .iter()
-                .filter(|op| {
-                    op.value
-                        .time_samples()
-                        .is_some_and(|samples| !samples.is_empty())
-                        || op.value.spline().is_some()
-                })
-                .find(|op| self.rescaled(op.key.layer_id));
-            if let Some(rescaled) = rescaled {
-                // Spec: AOUSD Core §12.3.2.1 (layer time is stage time
-                // through each layer's offset); OpenUSD also scales by
-                // the ratio of the layers' `timeCodesPerSecond`
-                // (`PcpLayerStack`), which composition here does not.
-                let source = self.source(rescaled, true);
-                self.lost(path.clone(), Loss::TimeCodesPerSecond, Some(source));
-            } else if source
+            if source
                 .value
                 .time_samples()
                 .is_none_or(|samples| samples.is_empty())

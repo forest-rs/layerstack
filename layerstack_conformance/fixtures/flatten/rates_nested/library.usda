@@ -1,0 +1,11 @@
+#usda 1.0
+(
+    framesPerSecond = 12
+    subLayers = [@./inner.usda@ (offset = 5; scale = 3)]
+)
+def "Asset" {
+    double rootAnim.timeSamples = {0: 0, 12: 1}
+    timecode rootClock = 6
+    def "Nested" (references = @./leaf.usda@</Leaf> (offset = 2; scale = 3)) {
+    }
+}

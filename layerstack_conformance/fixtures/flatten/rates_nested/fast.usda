@@ -1,0 +1,8 @@
+#usda 1.0
+(
+    timeCodesPerSecond = 48
+)
+def "Referenced" (references = @./library.usda@</Asset> (offset = 3; scale = 0.5)) {
+}
+def "Payload" (payload = @./library.usda@</Asset> (offset = 3; scale = 0.5)) {
+}

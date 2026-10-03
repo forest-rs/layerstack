@@ -368,7 +368,7 @@ mod extent;
 mod generated;
 #[cfg(feature = "usd-geom")]
 pub mod geometry;
-#[cfg(feature = "usd-geom")]
+#[cfg(any(feature = "usd-geom", feature = "usd-lod"))]
 mod gf;
 #[cfg(feature = "usd-geom")]
 mod imageable;
@@ -377,6 +377,8 @@ pub mod kind;
 mod labels;
 #[cfg(feature = "usd-lux")]
 pub mod light;
+#[cfg(feature = "usd-lod")]
+pub mod lod;
 #[cfg(feature = "usd-physics")]
 pub mod mass;
 #[cfg(feature = "usd-geom")]

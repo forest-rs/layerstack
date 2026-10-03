@@ -753,7 +753,8 @@ macro_rules! set_uniform_attribute {
     feature = "usd-shade",
     feature = "usd-render",
     feature = "usd-skel",
-    feature = "usd-vol"
+    feature = "usd-vol",
+    feature = "usd-lod"
 ))]
 pub(crate) fn is_relationship(scene: &Scene<'_>, path: PropertyPath) -> bool {
     let stage = scene.stage();
@@ -774,7 +775,8 @@ pub(crate) fn is_relationship(scene: &Scene<'_>, path: PropertyPath) -> bool {
     feature = "usd-shade",
     feature = "usd-render",
     feature = "usd-skel",
-    feature = "usd-vol"
+    feature = "usd-vol",
+    feature = "usd-lod"
 ))]
 pub(crate) fn forwarded_targets(scene: &Scene<'_>, root: PropertyPath) -> Vec<TargetPath> {
     if !is_relationship(scene, root) {

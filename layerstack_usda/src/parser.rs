@@ -49,12 +49,10 @@ fn parse_tree<const LOSSLESS: bool>(source: &str) -> CstParseResult {
     }
 }
 
-pub(crate) fn parse_for_read(source: &str) -> (CstParseResult, crate::read::RawArrays, usize) {
-    let (tokens, compacted) = crate::read::compact_tokens(source);
-    let token_count = tokens.len();
-    let mut parser = Parser::<false>::new(source, tokens);
-    parser.direct_arrays = Some(crate::read::RawArrays::new());
-    parser.compacted_arrays = compacted;
+pub(crate) fn parse_for_read(source: &str) -> (CstParseResult, crate::read::PreparedArrays, usize) {
+    let mut parser = Parser::<false>::new(source, Vec::new());
+    parser.tokens = crate::token_source::TokenSource::streaming(source);
+    parser.direct_arrays = Some(crate::read::PreparedArrays::new());
     parser.parse_source_file();
     let arrays = parser
         .direct_arrays
@@ -66,7 +64,7 @@ pub(crate) fn parse_for_read(source: &str) -> (CstParseResult, crate::read::RawA
             diagnostics: parser.diagnostics,
         },
         arrays,
-        token_count,
+        parser.tokens.retained(),
     )
 }
 
@@ -74,31 +72,29 @@ pub(crate) fn parse_for_read(source: &str) -> (CstParseResult, crate::read::RawA
 
 struct Parser<'a, const LOSSLESS: bool> {
     source: &'a str,
-    tokens: Vec<Token>,
+    tokens: crate::token_source::TokenSource<'a>,
     pos: usize,
     diagnostics: Vec<Diagnostic>,
     builder: TreeBuilder,
-    direct_arrays: Option<crate::read::RawArrays>,
-    compacted_arrays: alloc::collections::BTreeMap<u32, crate::read::RawArray>,
+    direct_arrays: Option<crate::read::PreparedArrays>,
 }
 
 impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
     fn new(source: &'a str, tokens: Vec<Token>) -> Self {
         Self {
             source,
-            tokens,
+            tokens: crate::token_source::TokenSource::eager(tokens),
             pos: 0,
             diagnostics: Vec::new(),
             builder: TreeBuilder::new(source.len() as u32),
             direct_arrays: None,
-            compacted_arrays: alloc::collections::BTreeMap::new(),
         }
     }
 
     // ── Token navigation ───────────────────────────────────────────
 
     /// Returns the current token without advancing.
-    fn current(&self) -> Option<&Token> {
+    fn current(&self) -> Option<Token> {
         self.tokens.get(self.pos)
     }
 
@@ -132,23 +128,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
     // Some grammar tokens carry no information needed by AST lowering.
     // Consume them identically in both modes, storing them only for editing.
     fn bump_stored<const STORE: bool>(&mut self) -> Option<Token> {
-        // A compact array is safe only for a supported typed property. Every
-        // other grammar consumer expands it before consuming its opening
-        // bracket, preserving the shared grammar rather than guessing types
-        // during lexing (metadata and array-edit operands included).
-        if let Some(token) = self.current().copied()
-            && let Some(array) = self.compacted_arrays.remove(&token.span.start)
-        {
-            let offset = array.span.start;
-            let expanded =
-                crate::lexer::Lexer::new(array.span.text(self.source)).map(|mut token| {
-                    token.span.start += offset;
-                    token.span.end += offset;
-                    token
-                });
-            self.tokens.splice(self.pos..self.pos + 2, expanded);
-        }
-        let tok = self.tokens.get(self.pos).copied();
+        let tok = self.tokens.get(self.pos);
         if let Some(t) = tok {
             if STORE {
                 self.builder.token(SyntaxKind::from(t.kind), t.span);
@@ -257,22 +237,16 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
     /// Peeks at the next non-trivia token after the current one (without emitting).
     fn peek_next_non_trivia(&self) -> Option<TokenKind> {
-        let mut i = self.pos + 1;
-        while i < self.tokens.len() {
-            if !is_trivia(self.tokens[i].kind) {
-                return Some(self.tokens[i].kind);
-            }
-            i += 1;
-        }
-        None
+        self.peek_past_trivia_from(self.pos + 1)
+            .map(|(_, kind)| kind)
     }
 
     /// Peek ahead past trivia from a given position, return (position, kind).
     fn peek_past_trivia_from(&self, start: usize) -> Option<(usize, TokenKind)> {
         let mut i = start;
-        while i < self.tokens.len() {
-            if !is_trivia(self.tokens[i].kind) {
-                return Some((i, self.tokens[i].kind));
+        while let Some(token) = self.tokens.get(i) {
+            if !is_trivia(token.kind) {
+                return Some((i, token.kind));
             }
             i += 1;
         }
@@ -928,45 +902,35 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
     /// Check if current position is a listop-prefixed relationship.
     fn is_listop_rel(&self) -> bool {
-        if self.peek() != Some(TokenKind::Ident) {
+        if self.peek() != Some(TokenKind::Ident) || !is_list_op_keyword(self.current_text()) {
             return false;
         }
-        if !is_list_op_keyword(self.current_text()) {
+        let Some((i, TokenKind::Ident)) = self.peek_past_trivia_from(self.pos + 1) else {
             return false;
-        }
-        let mut i = self.pos + 1;
-        while i < self.tokens.len() && is_trivia(self.tokens[i].kind) {
-            i += 1;
-        }
-        // Check for `custom` then `rel` or directly `rel`.
-        if i < self.tokens.len() && self.tokens[i].kind == TokenKind::Ident {
-            let text = self.tokens[i].text(self.source);
-            if text == "rel" {
-                return true;
-            }
-            if text == "custom" {
-                // Look one more ahead for `rel`.
-                i += 1;
-                while i < self.tokens.len() && is_trivia(self.tokens[i].kind) {
-                    i += 1;
-                }
-                return i < self.tokens.len()
-                    && self.tokens[i].kind == TokenKind::Ident
-                    && self.tokens[i].text(self.source) == "rel";
-            }
-        }
-        false
+        };
+        let text = self
+            .tokens
+            .get(i)
+            .expect("lookahead checked")
+            .text(self.source);
+        text == "rel" || (text == "custom" && self.rel_after(i + 1))
     }
 
     /// Check if `custom` keyword is followed (eventually) by `rel`.
     fn is_custom_rel(&self) -> bool {
-        let mut i = self.pos + 1;
-        while i < self.tokens.len() && is_trivia(self.tokens[i].kind) {
-            i += 1;
-        }
-        i < self.tokens.len()
-            && self.tokens[i].kind == TokenKind::Ident
-            && self.tokens[i].text(self.source) == "rel"
+        self.rel_after(self.pos + 1)
+    }
+
+    fn rel_after(&self, start: usize) -> bool {
+        self.peek_past_trivia_from(start).is_some_and(|(i, kind)| {
+            kind == TokenKind::Ident
+                && self
+                    .tokens
+                    .get(i)
+                    .expect("lookahead checked")
+                    .text(self.source)
+                    == "rel"
+        })
     }
 
     /// Check if current position looks like an attribute start.
@@ -992,40 +956,30 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
 
     /// Check if current position is a listop-prefixed connect attribute.
     fn is_listop_connect(&self) -> bool {
-        if self.peek() != Some(TokenKind::Ident) {
+        if self.peek() != Some(TokenKind::Ident) || !is_list_op_keyword(self.current_text()) {
             return false;
         }
-        if !is_list_op_keyword(self.current_text()) {
+        let Some((i, TokenKind::Ident)) = self.peek_past_trivia_from(self.pos + 1) else {
             return false;
-        }
-        let mut i = self.pos + 1;
-        while i < self.tokens.len() && is_trivia(self.tokens[i].kind) {
-            i += 1;
-        }
-        // If next is `rel`, it's a relationship.
-        if i < self.tokens.len()
-            && self.tokens[i].kind == TokenKind::Ident
-            && self.tokens[i].text(self.source) == "rel"
+        };
+        match self
+            .tokens
+            .get(i)
+            .expect("lookahead checked")
+            .text(self.source)
         {
-            return false;
+            "rel" => false,
+            "custom" => self.peek_past_trivia_from(i + 1).is_some_and(|(i, kind)| {
+                kind == TokenKind::Ident
+                    && self
+                        .tokens
+                        .get(i)
+                        .expect("lookahead checked")
+                        .text(self.source)
+                        != "rel"
+            }),
+            _ => true,
         }
-        // If next is `custom`, look further.
-        if i < self.tokens.len()
-            && self.tokens[i].kind == TokenKind::Ident
-            && self.tokens[i].text(self.source) == "custom"
-        {
-            i += 1;
-            while i < self.tokens.len() && is_trivia(self.tokens[i].kind) {
-                i += 1;
-            }
-            if i < self.tokens.len()
-                && self.tokens[i].kind == TokenKind::Ident
-                && self.tokens[i].text(self.source) == "rel"
-            {
-                return false;
-            }
-        }
-        i < self.tokens.len() && self.tokens[i].kind == TokenKind::Ident
     }
 
     // ── Attributes ─────────────────────────────────────────────────
@@ -1099,24 +1053,26 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         }
 
         // Peek to determine suffix type.
-        let next = self.peek_next_non_trivia();
-        if next == Some(TokenKind::Ident) {
-            let mut i = self.pos + 1;
-            while i < self.tokens.len() && is_trivia(self.tokens[i].kind) {
-                i += 1;
-            }
-            if i < self.tokens.len() {
-                let text = self.tokens[i].text(self.source);
-                if text == "timeSamples" {
+        if let Some((i, TokenKind::Ident)) = self.peek_past_trivia_from(self.pos + 1) {
+            match self
+                .tokens
+                .get(i)
+                .expect("lookahead checked")
+                .text(self.source)
+            {
+                "timeSamples" => {
                     self.parse_time_samples_suffix(attribute, type_name, is_array);
                     return;
-                } else if text == "connect" {
+                }
+                "connect" => {
                     self.parse_connection_suffix();
                     return;
-                } else if text == "spline" {
+                }
+                "spline" => {
                     self.parse_spline_suffix();
                     return;
                 }
+                _ => {}
             }
         }
         // Another attribute field: keep the declaration, report the field
@@ -1381,16 +1337,17 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         if self.peek() != Some(TokenKind::Ident) || self.current_text() != "reorder" {
             return false;
         }
-        let mut i = self.pos + 1;
-        while i < self.tokens.len() && is_trivia(self.tokens[i].kind) {
-            i += 1;
-        }
-        i < self.tokens.len()
-            && self.tokens[i].kind == TokenKind::Ident
-            && matches!(
-                self.tokens[i].text(self.source),
-                "nameChildren" | "properties" | "rootPrims"
-            )
+        self.peek_past_trivia_from(self.pos + 1)
+            .is_some_and(|(i, kind)| {
+                kind == TokenKind::Ident
+                    && matches!(
+                        self.tokens
+                            .get(i)
+                            .expect("lookahead checked")
+                            .text(self.source),
+                        "nameChildren" | "properties" | "rootPrims"
+                    )
+            })
     }
 
     fn parse_reorder_statement(&mut self) {
@@ -1425,13 +1382,8 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             && let Some(width) = crate::read::numeric_width(type_name)
         {
             let start = self.current_span().start;
-            let candidate = self
-                .compacted_arrays
-                .get(&start)
-                .filter(|array| array.width == width)
-                .map(|array| (self.pos + 2, *array));
-            if let Some((end, array)) = candidate {
-                self.compacted_arrays.remove(&start);
+            if let Some(array) = self.tokens.numeric_array(self.pos, type_name, width) {
+                let end = self.pos + 2;
                 self.builder.start_node(SyntaxKind::ValueExpr, start);
                 self.builder.start_node(SyntaxKind::ArrayValue, start);
                 self.pos = end;
@@ -1656,7 +1608,13 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
                 let fill = self
                     .peek_past_trivia_from(self.pos)
                     .is_some_and(|(i, kind)| {
-                        kind == TokenKind::Ident && self.tokens[i].text(self.source) == "fill"
+                        kind == TokenKind::Ident
+                            && self
+                                .tokens
+                                .get(i)
+                                .expect("lookahead checked")
+                                .text(self.source)
+                                == "fill"
                     });
                 if keyword != "maxsize" && fill {
                     self.eat_keyword("fill");
@@ -1910,7 +1868,10 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         // Look ahead to see if there are colons.
         let i = self.pos + 1;
         // No trivia between ident and colon in a namespaced name.
-        let has_colon = i < self.tokens.len() && self.tokens[i].kind == TokenKind::Colon;
+        let has_colon = self
+            .tokens
+            .get(i)
+            .is_some_and(|token| token.kind == TokenKind::Colon);
 
         if has_colon {
             self.builder

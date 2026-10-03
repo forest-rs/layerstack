@@ -157,6 +157,14 @@ impl<'a> Lexer<'a> {
         self.pos += n;
     }
 
+    pub(crate) fn at_offset(source: &'a str, offset: u32) -> Self {
+        Self {
+            source,
+            bytes: source.as_bytes(),
+            pos: offset,
+        }
+    }
+
     /// Produces a token from `start` to the current position.
     #[inline]
     fn token(&self, kind: TokenKind, start: u32) -> Token {

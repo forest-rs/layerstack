@@ -45,12 +45,15 @@ as well. The resolver supplies external layers; the parser does not open files.
 
 For scene loading, use `read_usda` with the same interners and resolver. It
 imports numeric scalar, vector and quaternion property arrays directly into
-native buffers, including samples and variant branches. This avoids retaining
+native buffers in one numeric pass, including samples and variant branches.
+Grammar tokens arrive on demand, and emission takes ownership of the prepared
+buffers without scanning the numbers again. This avoids retaining
 per-element tokens, syntax nodes and generic AST tuples. Unsupported shapes use
 the shared grammar and ordinary emitter. Inspect `parse_diagnostics`,
 `lower_diagnostics`, and `emitted.diagnostics`; `stats` reports retained syntax
 and recognized numeric arrays. Use the parser APIs when you need an inspectable
-AST or lossless editing.
+AST or lossless editing. The importer still retains structural syntax for
+declarations and metadata; the caller supplies the complete source string.
 
 ## Saving layers
 

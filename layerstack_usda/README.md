@@ -65,8 +65,9 @@ not flatten a composed stage, copy referenced assets, or retain source formattin
 Saving supports sublayers, references, payloads, inherits, specializes,
 variant sets and nested branches, attributes, relationships, time samples,
 splines, and typed scalar/array values. The parser and layer model cover more
-than the save API: saving currently rejects layer relocates, sparse array
-edits, path-expression values, and some metadata/value forms.
+than the save API: saving currently rejects sparse array
+edits and some metadata/value forms. Layer relocates and path expressions are
+preserved, including removed destinations and expression arrays.
 It also requires `defaultPrim`, when present, to name a locally authored prim.
 See the [save support and rejection list](https://docs.rs/layerstack_usda/latest/layerstack_usda/save/index.html)
 for the precise boundary. Unsupported data returns an error before output.

@@ -124,6 +124,9 @@ pub fn document_specs(doc: &Document) -> Result<Vec<Spec>, UsdcWriteError> {
     for entry in &doc.metadata {
         root.fields.push(metadatum(Owner::Layer, "/", entry)?);
     }
+    if !doc.relocates.is_empty() {
+        root = root.with_field("layerRelocates", Value::Relocates(doc.relocates.clone()));
+    }
     if !doc.sublayers.is_empty() {
         let assets = doc.sublayers.iter().map(|s| s.asset.clone()).collect();
         let offsets = doc
@@ -373,6 +376,8 @@ fn natural(value: &UsdaValue) -> Value {
         U::String(v) => Value::String(v.clone()),
         U::Token(v) => Value::Token(v.clone()),
         U::Asset(v) => Value::Asset(v.clone()),
+        U::PathExpression(v) => Value::PathExpression(v.clone()),
+        U::PathExpressionArray(v) => Value::PathExpressionArray(v.clone()),
         U::Float2(v) => Value::Vec2f(*v),
         U::Float3(v) => Value::Vec3f(*v),
         U::Float4(v) => Value::Vec4f(*v),

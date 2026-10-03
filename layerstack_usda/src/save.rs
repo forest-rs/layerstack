@@ -64,10 +64,10 @@
 //! [`layer_document`] checks the whole layer before a writer runs and
 //! returns the first problem it finds, naming its source path:
 //!
-//! - [`SaveError::Unsupported`]: layer relocates; sparse array edits (as a
+//! - [`SaveError::Unsupported`]: sparse array edits (as a
 //!   default or a time sample); list ops mixing an explicit list with
 //!   edits; `varying` relationships; path list-op metadata; and values the
-//!   writers have no representation for (`pathExpression`, `opaque`, and
+//!   writers have no representation for (`opaque`, and
 //!   arrays whose element type is not recorded, such as an empty array in
 //!   a dictionary);
 //! - [`SaveError::Invalid`]: a layer the file formats cannot hold as it
@@ -306,14 +306,18 @@ impl Lowering<'_> {
 
     /// Spec: AOUSD Core §7.6.1 (layer spec fields).
     fn layer(&self, layer: &Layer) -> Result<Document, SaveError> {
-        // Spec: AOUSD Core §7.6.1.2.4. The writers have no relocates
-        // syntax yet, and dropping them would change the composed namespace.
-        if !layer.relocates.is_empty() {
-            return unsupported("/", Unsupported::Relocates);
-        }
-
         let mut doc = Document::new();
         doc.default_prim = layer.default_prim.map(|t| self.name(t));
+        doc.relocates = layer
+            .relocates
+            .iter()
+            .map(|r| {
+                (
+                    self.display(r.source),
+                    r.target.map_or_else(String::new, |p| self.display(p)),
+                )
+            })
+            .collect();
         doc.metadata = self.metadata(&layer.metadata, "/")?;
         // Spec: AOUSD Core §10.3.1 (sublayers), written by their authored
         // asset paths; an unresolved sublayer keeps its own.
@@ -906,7 +910,7 @@ impl Lowering<'_> {
             L::ArrayEdit(_) | L::TypedArrayEdit(_) => {
                 return unsupported(path, Unsupported::ArrayEdit);
             }
-            L::PathExpression(_) => return no("pathExpression"),
+            L::PathExpression(text) => Value::PathExpression(String::from(&**text)),
             L::Opaque { .. } => return no("opaque"),
             L::Null => return no("null"),
         })
@@ -1072,6 +1076,7 @@ fn push_element(array: &mut Value, element: Value) -> bool {
         (Value::StringArray(a), Value::String(v)) => a.push(v),
         (Value::TokenArray(a), Value::Token(v)) => a.push(v),
         (Value::AssetArray(a), Value::Asset(v)) => a.push(v),
+        (Value::PathExpressionArray(a), Value::PathExpression(v)) => a.push(v),
         (Value::Float2Array(a), Value::Float2(v)) => a.push(v),
         (Value::Float3Array(a), Value::Float3(v)) => a.push(v),
         (Value::Float4Array(a), Value::Float4(v)) => a.push(v),

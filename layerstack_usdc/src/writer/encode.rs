@@ -367,6 +367,33 @@ impl<'a> Packer<'a> {
                 site.check_text(v)?;
                 inlined(T::AssetPath, self.token(v)?)
             }
+            Value::PathExpression(v) => {
+                site.check_text(v)?;
+                // OpenUSD writes expression text through Write(string), unlike
+                // the specialized token-index inliner for SdfAssetPath.
+                let index = self.string(v)?;
+                self.blob(T::PathExpression, 0, index.to_le_bytes(), false)?
+            }
+            Value::PathExpressionArray(v) => {
+                let indexes = self.text_indexes(v, site, Self::string)?;
+                self.plain_array(T::PathExpression, v.len(), |out| {
+                    out.extend_from_slice(&indexes);
+                })?
+            }
+            Value::Relocates(entries) => {
+                let mut bytes = (entries.len() as u64).to_le_bytes().to_vec();
+                for (source, target) in entries {
+                    for path in [source, target] {
+                        let index = if path.is_empty() {
+                            self.empty_path()?
+                        } else {
+                            self.path_text(path)?
+                        };
+                        bytes.extend_from_slice(&index.to_le_bytes());
+                    }
+                }
+                self.blob(T::Relocates, 0, bytes, false)?
+            }
             Value::Specifier(v) => inlined(
                 T::Specifier,
                 match v {
@@ -1341,10 +1368,24 @@ pub(super) fn required_version(specs: &[Spec]) -> CrateVersion {
     let fields = || specs.iter().flat_map(|s| &s.fields);
     if fields().any(|f| matches!(f.value, Value::Spline(_))) {
         CrateVersion::SPLINES
+    } else if fields().any(|f| matches!(f.value, Value::Relocates(_))) {
+        CrateVersion::new(0, 11, 0)
+    } else if fields().any(|f| has_path_expression(&f.value)) {
+        CrateVersion::new(0, 10, 0)
     } else if fields().any(|f| has_timecode(&f.value)) {
         CrateVersion::TIMECODES
     } else {
         CrateVersion::NEW_FILE_DEFAULT
+    }
+}
+
+fn has_path_expression(value: &Value) -> bool {
+    match value {
+        Value::PathExpression(_) | Value::PathExpressionArray(_) => true,
+        Value::Dictionary(entries) => entries.iter().any(|(_, value)| has_path_expression(value)),
+        Value::TimeSamples(samples) => samples.iter().any(|(_, value)| has_path_expression(value)),
+        Value::UnregisteredValue(value) => has_path_expression(value),
+        _ => false,
     }
 }
 

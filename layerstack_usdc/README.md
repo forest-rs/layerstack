@@ -38,8 +38,8 @@ assert_eq!(&bytes[..8], b"PXR-USDC");
 
 `writer::save_layer` saves an existing `layerstack::Layer` using its interners.
 It shares USDA's [layer-save lowering and limitations](https://docs.rs/layerstack_usda/latest/layerstack_usda/save/index.html):
-variants and splines are supported; layer relocates, sparse array edits,
-path-expression values, and some metadata/value forms are rejected. The binary
+variants, splines, layer relocates and path expressions are supported; sparse
+array edits and some metadata/value forms are rejected. The binary
 document writer additionally rejects unregistered list-op metadata and metadata
 of the wrong type; it preserves other unregistered metadata as text or
 dictionaries, following the USDA parser's representation. Saving preserves

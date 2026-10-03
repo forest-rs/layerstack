@@ -128,6 +128,7 @@ pub(crate) fn document(scene: &Scene<'_>, target: Target) -> Result<Document, Ex
         ],
         prim_order: None,
         sublayers: Vec::new(),
+        relocates: Vec::new(),
         prims: vec![root],
     })
 }

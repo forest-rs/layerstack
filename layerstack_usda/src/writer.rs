@@ -102,6 +102,9 @@ pub struct Document {
     ///
     /// Spec: AOUSD Core §10.3.1 (sublayers), §7.6.1 (layer spec fields).
     pub sublayers: Vec<SubLayer>,
+    /// Ordered layer relocates, as absolute prim paths. An empty target removes
+    /// the source prim. Spec: AOUSD Core §7.6.1.2.4, §16.2.18.5.
+    pub relocates: Vec<(String, String)>,
     /// Root prims, in order.
     pub prims: Vec<Prim>,
 }
@@ -190,6 +193,22 @@ impl Document {
         for sublayer in &self.sublayers {
             validate_asset_path(&sublayer.asset, "/")?;
             validate_layer_offset(sublayer.offset, "/")?;
+        }
+        for (source, target) in &self.relocates {
+            for path in [source, target].into_iter().filter(|p| !p.is_empty()) {
+                if validate_prim_path(path, "/#relocates").is_err() || path == "/" {
+                    return Err(WriteError::InvalidArcPath {
+                        path: "/#relocates".into(),
+                        target: path.clone(),
+                    });
+                }
+            }
+            if source.is_empty() {
+                return Err(WriteError::InvalidArcPath {
+                    path: "/#relocates".into(),
+                    target: source.clone(),
+                });
+            }
         }
         validate_order(self.prim_order.as_deref(), "/", is_identifier)?;
         if let Some(name) = &self.default_prim
@@ -927,6 +946,10 @@ pub enum Value {
     Token(String),
     /// `asset`; the path may not contain `@` or line breaks.
     Asset(String),
+    /// Authored `SdfPathExpression` text, preserved without resolving references.
+    PathExpression(String),
+    /// Array of authored `SdfPathExpression` texts.
+    PathExpressionArray(Vec<String>),
     /// `float2` and its semantic aliases (e.g. `texCoord2f`).
     Float2([f32; 2]),
     /// `float3` and its semantic aliases (e.g. `point3f`, `color3f`).
@@ -1660,10 +1683,12 @@ fn validate_value(value: &Value, path: &str) -> Result<(), WriteError> {
             .then(|| WriteError::NulInString { path: path.into() })
     };
     match value {
-        Value::String(text) | Value::Token(text) => bad_text(text).map_or(Ok(()), Err),
-        Value::StringArray(texts) | Value::TokenArray(texts) => {
-            texts.iter().find_map(bad_text).map_or(Ok(()), Err)
+        Value::String(text) | Value::Token(text) | Value::PathExpression(text) => {
+            bad_text(text).map_or(Ok(()), Err)
         }
+        Value::StringArray(texts)
+        | Value::TokenArray(texts)
+        | Value::PathExpressionArray(texts) => texts.iter().find_map(bad_text).map_or(Ok(()), Err),
         Value::Asset(asset) => bad_asset(asset).map_or(Ok(()), Err),
         Value::AssetArray(assets) => assets.iter().find_map(bad_asset).map_or(Ok(()), Err),
         Value::Dictionary(entries) => {
@@ -1709,6 +1734,7 @@ enum Elem {
     String,
     Token,
     Asset,
+    PathExpression,
     /// A half-precision quaternion (`quath`).
     Quath,
     /// A single-precision quaternion (`quatf`).
@@ -1734,7 +1760,7 @@ struct Shape {
 /// (`pxr/usd/sdf/schema.cpp`, `_RegisterStandardTypes`; `pxr/usd/sdf/types.h`,
 /// `SDF_VALUE_TYPES` plus the role aliases), each optionally with `[]`.
 /// Deliberately excluded: `dictionary` (metadata only, never an attribute
-/// type), `opaque`/`group`/`pathExpression`, and the legacy capitalized
+/// type), `opaque`/`group`, and the legacy capitalized
 /// aliases (`Vec3f`, `PointFloat`, ...).
 ///
 /// Spec: AOUSD Core §6.2 (scalar types), §6.3 (dimensioned types), §6.5
@@ -1757,6 +1783,7 @@ fn parse_type_name(type_name: &str) -> Option<Shape> {
         "string" => (Elem::String, 1),
         "token" => (Elem::Token, 1),
         "asset" => (Elem::Asset, 1),
+        "pathExpression" => (Elem::PathExpression, 1),
         "int2" => (Elem::Int, 2),
         "int3" => (Elem::Int, 3),
         "int4" => (Elem::Int, 4),
@@ -1821,6 +1848,7 @@ impl Value {
             (Elem::String, 1) => Self::StringArray(Vec::new()),
             (Elem::Token, 1) => Self::TokenArray(Vec::new()),
             (Elem::Asset, 1) => Self::AssetArray(Vec::new()),
+            (Elem::PathExpression, 1) => Self::PathExpressionArray(Vec::new()),
             (Elem::Float, 2) => Self::Float2Array(Vec::new()),
             (Elem::Float, 3) => Self::Float3Array(Vec::new()),
             (Elem::Float, 4) => Self::Float4Array(Vec::new()),
@@ -1861,6 +1889,8 @@ impl Value {
             Self::String(_) => (Elem::String, 1, false),
             Self::Token(_) => (Elem::Token, 1, false),
             Self::Asset(_) => (Elem::Asset, 1, false),
+            Self::PathExpression(_) => (Elem::PathExpression, 1, false),
+            Self::PathExpressionArray(_) => (Elem::PathExpression, 1, true),
             Self::Float2(_) => (Elem::Float, 2, false),
             Self::Float3(_) => (Elem::Float, 3, false),
             Self::Float4(_) => (Elem::Float, 4, false),
@@ -1940,6 +1970,8 @@ impl Value {
             Self::String(_) => "string",
             Self::Token(_) => "token",
             Self::Asset(_) => "asset",
+            Self::PathExpression(_) => "pathExpression",
+            Self::PathExpressionArray(_) => "pathExpression[]",
             Self::Float2(_) => "float2",
             Self::Float3(_) => "float3",
             Self::Float4(_) => "float4",
@@ -2013,7 +2045,11 @@ impl Writer<'_> {
     fn document(&mut self, doc: &Document) {
         // §16.2.18.1: the layer header.
         self.out.push_str("#usda 1.0\n");
-        if doc.default_prim.is_some() || !doc.metadata.is_empty() || !doc.sublayers.is_empty() {
+        if doc.default_prim.is_some()
+            || !doc.metadata.is_empty()
+            || !doc.sublayers.is_empty()
+            || !doc.relocates.is_empty()
+        {
             self.out.push_str("(\n");
             if let Some(name) = &doc.default_prim {
                 self.out.push_str(INDENT);
@@ -2022,6 +2058,20 @@ impl Writer<'_> {
                 self.out.push('\n');
             }
             self.metadata_entries(&doc.metadata, 1);
+            if !doc.relocates.is_empty() {
+                self.out.push_str("    relocates = {\n");
+                for (i, (source, target)) in doc.relocates.iter().enumerate() {
+                    self.indent(2);
+                    self.path(source);
+                    self.out.push_str(": ");
+                    self.path(target);
+                    if i + 1 < doc.relocates.len() {
+                        self.out.push(',');
+                    }
+                    self.out.push('\n');
+                }
+                self.out.push_str("    }\n");
+            }
             if !doc.sublayers.is_empty() {
                 // §16.2.18.3: `subLayers = [ @asset@ (offset = ...), ... ]`.
                 self.out.push_str(INDENT);
@@ -2500,7 +2550,7 @@ impl Writer<'_> {
             Value::Half(v) => self.half(*v),
             Value::Float(v) => self.f32(*v),
             Value::Double(v) | Value::TimeCode(v) => self.f64(*v),
-            Value::String(v) | Value::Token(v) => self.string(v),
+            Value::String(v) | Value::Token(v) | Value::PathExpression(v) => self.string(v),
             Value::Asset(v) => self.asset(v),
             Value::Float2(v) => self.tuple(v, Self::f32),
             Value::Float3(v) => self.tuple(v, Self::f32),
@@ -2531,7 +2581,9 @@ impl Writer<'_> {
             Value::HalfArray(v) => self.array(v, |w, x| w.half(*x)),
             Value::FloatArray(v) => self.array(v, |w, x| w.f32(*x)),
             Value::DoubleArray(v) | Value::TimeCodeArray(v) => self.array(v, |w, x| w.f64(*x)),
-            Value::StringArray(v) | Value::TokenArray(v) => self.array(v, |w, s| w.string(s)),
+            Value::StringArray(v) | Value::TokenArray(v) | Value::PathExpressionArray(v) => {
+                self.array(v, |w, s| w.string(s));
+            }
             Value::AssetArray(v) => self.array(v, |w, s| w.asset(s)),
             Value::Float2Array(v) => self.array(v, |w, t| w.tuple(t, Self::f32)),
             Value::Float3Array(v) => self.array(v, |w, t| w.tuple(t, Self::f32)),
@@ -3042,13 +3094,7 @@ over "P" (
         );
         // Legacy capitalized aliases and non-attribute registry entries are
         // not admitted either.
-        for type_name in [
-            "Vec3f",
-            "PointFloat",
-            "opaque",
-            "pathExpression",
-            "dictionary[]",
-        ] {
+        for type_name in ["Vec3f", "PointFloat", "opaque", "dictionary[]"] {
             let declaration = Attribute {
                 value: None,
                 ..Attribute::new("x", type_name, Value::Int(0))

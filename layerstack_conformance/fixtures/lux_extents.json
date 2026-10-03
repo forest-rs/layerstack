@@ -1,0 +1,509 @@
+{
+  "rows": [
+    {
+      "extent": [
+        [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        [
+          0.5,
+          0.5,
+          0.5
+        ]
+      ],
+      "schema": "SphereLight",
+      "time": null
+    },
+    {
+      "extent": [
+        [
+          -1.2345670461654663,
+          -1.2345670461654663,
+          -1.2345670461654663
+        ],
+        [
+          1.2345670461654663,
+          1.2345670461654663,
+          1.2345670461654663
+        ]
+      ],
+      "schema": "SphereLight",
+      "time": 1
+    },
+    {
+      "extent": [
+        [
+          -2.3456780910491943,
+          -2.3456780910491943,
+          -2.3456780910491943
+        ],
+        [
+          2.3456780910491943,
+          2.3456780910491943,
+          2.3456780910491943
+        ]
+      ],
+      "schema": "SphereLight",
+      "time": 2
+    },
+    {
+      "extent": [
+        [
+          -3.456789016723633,
+          -3.456789016723633,
+          -3.456789016723633
+        ],
+        [
+          3.456789016723633,
+          3.456789016723633,
+          3.456789016723633
+        ]
+      ],
+      "schema": "SphereLight",
+      "time": 3
+    },
+    {
+      "extent": [
+        [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        [
+          0.5,
+          0.5,
+          0.5
+        ]
+      ],
+      "schema": "CylinderLight",
+      "time": null
+    },
+    {
+      "extent": [
+        [
+          -0.6172835230827332,
+          -1.2345670461654663,
+          -1.2345670461654663
+        ],
+        [
+          0.6172835230827332,
+          1.2345670461654663,
+          1.2345670461654663
+        ]
+      ],
+      "schema": "CylinderLight",
+      "time": 1
+    },
+    {
+      "extent": [
+        [
+          -1.1728390455245972,
+          -2.3456780910491943,
+          -2.3456780910491943
+        ],
+        [
+          1.1728390455245972,
+          2.3456780910491943,
+          2.3456780910491943
+        ]
+      ],
+      "schema": "CylinderLight",
+      "time": 2
+    },
+    {
+      "extent": [
+        [
+          -1.7283945083618164,
+          -3.456789016723633,
+          -3.456789016723633
+        ],
+        [
+          1.7283945083618164,
+          3.456789016723633,
+          3.456789016723633
+        ]
+      ],
+      "schema": "CylinderLight",
+      "time": 3
+    },
+    {
+      "extent": [
+        [
+          -0.5,
+          -0.5,
+          -0.0
+        ],
+        [
+          0.5,
+          0.5,
+          0.0
+        ]
+      ],
+      "schema": "DiskLight",
+      "time": null
+    },
+    {
+      "extent": [
+        [
+          -1.2345670461654663,
+          -1.2345670461654663,
+          -0.0
+        ],
+        [
+          1.2345670461654663,
+          1.2345670461654663,
+          0.0
+        ]
+      ],
+      "schema": "DiskLight",
+      "time": 1
+    },
+    {
+      "extent": [
+        [
+          -2.3456780910491943,
+          -2.3456780910491943,
+          -0.0
+        ],
+        [
+          2.3456780910491943,
+          2.3456780910491943,
+          0.0
+        ]
+      ],
+      "schema": "DiskLight",
+      "time": 2
+    },
+    {
+      "extent": [
+        [
+          -3.456789016723633,
+          -3.456789016723633,
+          -0.0
+        ],
+        [
+          3.456789016723633,
+          3.456789016723633,
+          0.0
+        ]
+      ],
+      "schema": "DiskLight",
+      "time": 3
+    },
+    {
+      "extent": [
+        [
+          -0.5,
+          -0.5,
+          -0.0
+        ],
+        [
+          0.5,
+          0.5,
+          0.0
+        ]
+      ],
+      "schema": "RectLight",
+      "time": null
+    },
+    {
+      "extent": [
+        [
+          -0.6172835230827332,
+          -0.6172835230827332,
+          -0.0
+        ],
+        [
+          0.6172835230827332,
+          0.6172835230827332,
+          0.0
+        ]
+      ],
+      "schema": "RectLight",
+      "time": 1
+    },
+    {
+      "extent": [
+        [
+          -1.1728390455245972,
+          -1.1728390455245972,
+          -0.0
+        ],
+        [
+          1.1728390455245972,
+          1.1728390455245972,
+          0.0
+        ]
+      ],
+      "schema": "RectLight",
+      "time": 2
+    },
+    {
+      "extent": [
+        [
+          -1.7283945083618164,
+          -1.7283945083618164,
+          -0.0
+        ],
+        [
+          1.7283945083618164,
+          1.7283945083618164,
+          0.0
+        ]
+      ],
+      "schema": "RectLight",
+      "time": 3
+    },
+    {
+      "extent": [
+        [
+          -0.5,
+          -0.5,
+          -0.0
+        ],
+        [
+          0.5,
+          0.5,
+          0.0
+        ]
+      ],
+      "schema": "PortalLight",
+      "time": null
+    },
+    {
+      "extent": [
+        [
+          -0.6172835230827332,
+          -0.6172835230827332,
+          -0.0
+        ],
+        [
+          0.6172835230827332,
+          0.6172835230827332,
+          0.0
+        ]
+      ],
+      "schema": "PortalLight",
+      "time": 1
+    },
+    {
+      "extent": [
+        [
+          -1.1728390455245972,
+          -1.1728390455245972,
+          -0.0
+        ],
+        [
+          1.1728390455245972,
+          1.1728390455245972,
+          0.0
+        ]
+      ],
+      "schema": "PortalLight",
+      "time": 2
+    },
+    {
+      "extent": [
+        [
+          -1.7283945083618164,
+          -1.7283945083618164,
+          -0.0
+        ],
+        [
+          1.7283945083618164,
+          1.7283945083618164,
+          0.0
+        ]
+      ],
+      "schema": "PortalLight",
+      "time": 3
+    },
+    {
+      "blocked_dimension": "radius",
+      "extent": null,
+      "schema": "SphereLight",
+      "time": null
+    },
+    {
+      "blocked_dimension": "radius",
+      "extent": [
+        [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        [
+          0.5,
+          0.5,
+          0.5
+        ]
+      ],
+      "schema": "SphereLight",
+      "time": 1
+    },
+    {
+      "blocked_dimension": "radius",
+      "extent": null,
+      "schema": "DiskLight",
+      "time": null
+    },
+    {
+      "blocked_dimension": "radius",
+      "extent": [
+        [
+          -0.5,
+          -0.5,
+          -0.0
+        ],
+        [
+          0.5,
+          0.5,
+          0.0
+        ]
+      ],
+      "schema": "DiskLight",
+      "time": 1
+    },
+    {
+      "blocked_dimension": "radius",
+      "extent": null,
+      "schema": "CylinderLight",
+      "time": null
+    },
+    {
+      "blocked_dimension": "radius",
+      "extent": [
+        [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        [
+          0.5,
+          0.5,
+          0.5
+        ]
+      ],
+      "schema": "CylinderLight",
+      "time": 1
+    },
+    {
+      "blocked_dimension": "length",
+      "extent": null,
+      "schema": "CylinderLight",
+      "time": null
+    },
+    {
+      "blocked_dimension": "length",
+      "extent": [
+        [
+          -0.5,
+          -0.5,
+          -0.5
+        ],
+        [
+          0.5,
+          0.5,
+          0.5
+        ]
+      ],
+      "schema": "CylinderLight",
+      "time": 1
+    },
+    {
+      "blocked_dimension": "width",
+      "extent": null,
+      "schema": "RectLight",
+      "time": null
+    },
+    {
+      "blocked_dimension": "width",
+      "extent": [
+        [
+          -0.5,
+          -0.5,
+          -0.0
+        ],
+        [
+          0.5,
+          0.5,
+          0.0
+        ]
+      ],
+      "schema": "RectLight",
+      "time": 1
+    },
+    {
+      "blocked_dimension": "height",
+      "extent": null,
+      "schema": "RectLight",
+      "time": null
+    },
+    {
+      "blocked_dimension": "height",
+      "extent": [
+        [
+          -0.5,
+          -0.5,
+          -0.0
+        ],
+        [
+          0.5,
+          0.5,
+          0.0
+        ]
+      ],
+      "schema": "RectLight",
+      "time": 1
+    },
+    {
+      "blocked_dimension": "width",
+      "extent": null,
+      "schema": "PortalLight",
+      "time": null
+    },
+    {
+      "blocked_dimension": "width",
+      "extent": [
+        [
+          -0.5,
+          -0.5,
+          -0.0
+        ],
+        [
+          0.5,
+          0.5,
+          0.0
+        ]
+      ],
+      "schema": "PortalLight",
+      "time": 1
+    },
+    {
+      "blocked_dimension": "height",
+      "extent": null,
+      "schema": "PortalLight",
+      "time": null
+    },
+    {
+      "blocked_dimension": "height",
+      "extent": [
+        [
+          -0.5,
+          -0.5,
+          -0.0
+        ],
+        [
+          0.5,
+          0.5,
+          0.0
+        ]
+      ],
+      "schema": "PortalLight",
+      "time": 1
+    }
+  ],
+  "version": "26.8"
+}

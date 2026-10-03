@@ -89,6 +89,50 @@ pub(crate) fn compute(scene: &Scene<'_>, path: PathId, time: Time) -> Option<(Ra
         }
         return Some((range, varying(&["points", "widths"])));
     }
+    // UsdLux shape providers use float parameters and float3 extents, including
+    // signed dimensions. AOUSD Core §12.3 (attribute value resolution).
+    #[cfg(feature = "usd-lux")]
+    {
+        let number = |name| {
+            if time == Time::Default && lux_dimension_blocked(&prim, name) {
+                None
+            } else {
+                read(&prim, name, time, crate::value::read_float)
+            }
+        };
+        let shape: Option<([f32; 3], &[&str])> = if scene.is_a(path, "SphereLight") {
+            Some(([number("inputs:radius")?; 3], &["inputs:radius"]))
+        } else if scene.is_a(path, "CylinderLight") {
+            let radius = number("inputs:radius")?;
+            Some((
+                [number("inputs:length")? * 0.5, radius, radius],
+                &["inputs:length", "inputs:radius"],
+            ))
+        } else if scene.is_a(path, "DiskLight") {
+            let radius = number("inputs:radius")?;
+            Some(([radius, radius, 0.], &["inputs:radius"]))
+        } else if scene.is_a(path, "RectLight") || scene.is_a(path, "PortalLight") {
+            Some((
+                [
+                    number("inputs:width")? * 0.5,
+                    number("inputs:height")? * 0.5,
+                    0.,
+                ],
+                &["inputs:width", "inputs:height"],
+            ))
+        } else {
+            None
+        };
+        if let Some((max, inputs)) = shape {
+            return Some((
+                Range3d {
+                    min: max.map(|v| f64::from(-v)),
+                    max: max.map(f64::from),
+                },
+                varying(inputs) || inputs.iter().any(|name| lux_dimension_blocked(&prim, name)),
+            ));
+        }
+    }
     let number = |name| read(&prim, name, time, crate::value::read_double);
     let (max, inputs): ([f32; 3], &[&str]) = if scene.is_a(path, "Cube") {
         ([(number("size")? * 0.5) as f32; 3], &["size"])
@@ -121,6 +165,28 @@ pub(crate) fn compute(scene: &Scene<'_>, path: PathId, time: Time) -> Option<(Ra
         },
         varying(inputs),
     ))
+}
+
+// UsdLux extent providers call UsdAttribute::Get<float>. At default time an
+// authored block suppresses schema fallback (AOUSD Core §12.3.6); numeric Get
+// may still use it. That difference must remain a retained-cache dependency.
+#[cfg(feature = "usd-lux")]
+fn lux_dimension_blocked(prim: &PrimView<'_>, name: &str) -> bool {
+    let Some(opinions) = prim
+        .property_path(name)
+        .and_then(|path| prim.scene().stage().explain_property_path(path))
+    else {
+        return false;
+    };
+    for value in opinions.iter().filter_map(|o| o.value.default_value()) {
+        if matches!(value, Value::Blocked) {
+            return true;
+        }
+        if crate::value::read_float(value, prim.scene().store().tokens()).is_some() {
+            return false;
+        }
+    }
+    false
 }
 
 fn read<'a, T>(

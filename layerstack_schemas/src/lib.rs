@@ -402,6 +402,8 @@ pub mod skel;
 #[cfg(feature = "usd-geom")]
 pub mod subset;
 mod table;
+#[cfg(feature = "usd-ui")]
+pub mod ui_hints;
 pub mod value;
 #[cfg(feature = "usd-vol")]
 pub mod volume;

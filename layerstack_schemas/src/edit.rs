@@ -66,6 +66,8 @@ pub struct SchemaEdit<'s> {
     created: Vec<(PathId, TokenId, Option<PropertyType>)>,
     /// The defaults this edit sets, latest last.
     defaults: Vec<(PathId, TokenId, Value)>,
+    #[cfg(feature = "usd-ui")]
+    ui_hints: Vec<(TargetPath, Value)>,
 }
 
 impl fmt::Debug for SchemaEdit<'_> {
@@ -90,6 +92,8 @@ impl<'s> SchemaEdit<'s> {
             applied: Vec::new(),
             created: Vec::new(),
             defaults: Vec::new(),
+            #[cfg(feature = "usd-ui")]
+            ui_hints: Vec::new(),
         }
     }
 
@@ -261,7 +265,7 @@ impl<'s> SchemaEdit<'s> {
             .and_then(|d| d.type_name)
     }
 
-    #[cfg(any(feature = "usd-shade", feature = "usd-geom"))]
+    #[cfg(any(feature = "usd-shade", feature = "usd-geom", feature = "usd-ui"))]
     pub(crate) fn property_kind(&mut self, path: PathId, name: &str) -> Option<PropertyKind> {
         let token = self.store.tokens_mut().intern(name);
         if let Some((_, _, ty)) = self
@@ -338,6 +342,208 @@ impl<'s> SchemaEdit<'s> {
         let token = self.tokens().intern(name);
         let key = self.tokens().intern(key);
         let at = self.target.property(PropertyPath::new(path, token));
+        self.transaction.set_metadata(at, key, value.into());
+    }
+
+    // AOUSD Core §12.2.5: update only the mapped target layer's dictionary;
+    // copying a composed dictionary would freeze weaker opinions into this layer.
+    #[cfg(feature = "usd-ui")]
+    pub(crate) fn update_ui_hint(&mut self, target: TargetPath, keys: &[&str], value: Value) {
+        let mut dictionary = self
+            .ui_hints
+            .iter()
+            .rev()
+            .find(|(at, _)| *at == target)
+            .map(|(_, value)| value.clone())
+            .unwrap_or_else(|| self.local_ui_hints(target));
+        crate::ui_hints::set_dictionary_path(&mut dictionary, keys, value);
+        if let Some((_, previous)) = self.ui_hints.iter_mut().find(|(at, _)| *at == target) {
+            *previous = dictionary.clone();
+        } else {
+            self.ui_hints.push((target, dictionary.clone()));
+        }
+        self.set_ui_metadata(target, "uiHints", dictionary);
+    }
+
+    #[cfg(feature = "usd-ui")]
+    fn local_ui_hints(&mut self, target: TargetPath) -> Value {
+        let key = self.tokens().intern("uiHints");
+        let mapped = match target {
+            TargetPath::Prim(path) => self.target.map_to_spec_path(path, self.store.paths_mut()),
+            TargetPath::Property(path) => self
+                .target
+                .map_property_to_spec_path(path, self.store.paths_mut()),
+        };
+        let value = mapped.and_then(|mapped| {
+            let layer = self.store.layer(self.target.layer())?;
+            let fields: &[layerstack::FieldEntry] = if !mapped.variant_chain().is_empty() {
+                let variant = layer.variant_spec_at(&mapped, self.store.paths())?;
+                match mapped.property() {
+                    Some(name) => variant
+                        .properties
+                        .iter()
+                        .find(|p| p.name == name)?
+                        .spec
+                        .metadata
+                        .as_slice(),
+                    None => variant.fields.as_slice(),
+                }
+            } else {
+                let last_prim = mapped
+                    .components()
+                    .iter()
+                    .rposition(|c| matches!(c, layerstack::spec_path::SpecComponent::Prim(_)))?;
+                let mut segments = Vec::new();
+                let mut sites = Vec::new();
+                for component in &mapped.components()[..last_prim] {
+                    match *component {
+                        layerstack::spec_path::SpecComponent::Prim(name) => segments.push(name),
+                        layerstack::spec_path::SpecComponent::VariantSelection { set, variant } => {
+                            let host_path = self
+                                .store
+                                .paths()
+                                .lookup(&layerstack::Path::root().join(&segments))?;
+                            sites.push(layerstack::spec_path::VariantSelectionSite {
+                                host_path,
+                                set,
+                                variant,
+                            });
+                        }
+                    }
+                }
+                let prim = layer.prim_spec_in(mapped.prim_path(), &sites)?;
+                match mapped.property() {
+                    Some(name) => prim.property(name)?.metadata.as_slice(),
+                    None => prim.fields.as_slice(),
+                }
+            };
+            match layerstack::get_field(fields, &key)? {
+                layerstack::FieldValue::Value(value @ Value::Dictionary(_)) => Some(value.clone()),
+                _ => None,
+            }
+        });
+        value.unwrap_or_else(|| Value::Dictionary(Vec::new()))
+    }
+
+    #[cfg(feature = "usd-ui")]
+    pub(crate) fn ui_hint(&self, target: TargetPath, keys: &[&str]) -> Option<Value> {
+        let key = self.store.tokens().lookup("uiHints")?;
+        let resolved = match target {
+            TargetPath::Prim(path) => self.stage.resolve_value(path, key),
+            TargetPath::Property(path) => {
+                self.stage
+                    .resolve_property_metadata(path.prim_path(), path.property(), key)
+            }
+        };
+        let mut dictionary = match resolved.map(|r| r.value) {
+            Some(ResolvedValue::Dictionary(entries)) => entries,
+            Some(ResolvedValue::Scalar(Value::Dictionary(entries))) => entries,
+            _ => Vec::new(),
+        };
+        if let Some((_, Value::Dictionary(local))) =
+            self.ui_hints.iter().rev().find(|(at, _)| *at == target)
+        {
+            dictionary = layerstack::combine_dictionaries(local, &dictionary);
+        }
+        crate::ui_hints::entry(&Value::Dictionary(dictionary), keys).cloned()
+    }
+
+    // A composed property may have no spec in the current target layer.
+    // Metadata edits need that local declaration, preserving the composed type.
+    #[cfg(feature = "usd-ui")]
+    fn ensure_ui_property(&mut self, path: PropertyPath) {
+        if self
+            .created
+            .iter()
+            .any(|(p, n, _)| *p == path.prim_path() && *n == path.property())
+        {
+            return;
+        }
+        let mapped = self
+            .target
+            .map_property_to_spec_path(path, self.store.paths_mut());
+        let local = mapped.as_ref().is_some_and(|mapped| {
+            self.store.layer(self.target.layer()).is_some_and(|layer| {
+                if !mapped.variant_chain().is_empty() {
+                    layer
+                        .variant_spec_at(mapped, self.store.paths())
+                        .is_some_and(|v| v.properties.iter().any(|p| p.name == path.property()))
+                } else {
+                    let mut segments = Vec::new();
+                    let mut sites = Vec::new();
+                    for component in mapped.components() {
+                        match *component {
+                            layerstack::spec_path::SpecComponent::Prim(name) => segments.push(name),
+                            layerstack::spec_path::SpecComponent::VariantSelection {
+                                set,
+                                variant,
+                            } => {
+                                if let Some(host_path) = self
+                                    .store
+                                    .paths()
+                                    .lookup(&layerstack::Path::root().join(&segments))
+                                {
+                                    sites.push(layerstack::spec_path::VariantSelectionSite {
+                                        host_path,
+                                        set,
+                                        variant,
+                                    });
+                                }
+                            }
+                        }
+                    }
+                    layer
+                        .prim_spec_in(mapped.prim_path(), &sites)
+                        .is_some_and(|p| p.property(path.property()).is_some())
+                }
+            })
+        });
+        if local {
+            return;
+        }
+        let declared = self
+            .stage
+            .resolve_property_declaration(path.prim_path(), path.property());
+        let definition = self
+            .stage
+            .property_definition_ref(path.prim_path(), path.property());
+        let kind = declared
+            .as_ref()
+            .map(|d| d.kind)
+            .or_else(|| definition.map(|d| d.kind));
+        let ty = declared
+            .as_ref()
+            .and_then(|d| d.type_name.clone())
+            .or_else(|| definition.and_then(|d| d.type_name.clone()));
+        let mut spec = match kind {
+            Some(PropertyKind::Attribute) => match ty.clone() {
+                Some(ty) => PropertySpec::typed_attribute(ty),
+                None => return,
+            },
+            Some(PropertyKind::Relationship) => PropertySpec::relationship(),
+            None => return,
+        };
+        spec.variability = declared
+            .as_ref()
+            .map(|d| d.variability)
+            .or_else(|| definition.map(|d| d.variability))
+            .unwrap_or(layerstack::Variability::Varying);
+        spec.custom = declared.as_ref().is_some_and(|d| d.custom);
+        self.transaction
+            .create_property(self.target.property(path), spec);
+        self.created.push((path.prim_path(), path.property(), ty));
+    }
+
+    #[cfg(feature = "usd-ui")]
+    pub(crate) fn set_ui_metadata(&mut self, target: TargetPath, key: &str, value: Value) {
+        if let TargetPath::Property(path) = target {
+            self.ensure_ui_property(path);
+        }
+        let key = self.tokens().intern(key);
+        let at = match target {
+            TargetPath::Prim(path) => self.target.prim(path),
+            TargetPath::Property(path) => self.target.property(path),
+        };
         self.transaction.set_metadata(at, key, value.into());
     }
 

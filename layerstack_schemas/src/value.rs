@@ -257,6 +257,21 @@ macro_rules! text {
 }
 
 text!(read_string, write_string, String);
+
+/// Reads a primvar reader's name as a modern string or a legacy token.
+///
+/// OpenUSD changed `inputs:varname` to `string` in 20.11. Its imaging
+/// `_GetPrimvarNameAttributeValue` still accepts both encodings. This is a
+/// consumer conversion, not a change to the authored USD type or validation.
+#[must_use]
+pub fn read_primvar_name(value: &Value, tokens: &TokenInterner) -> Option<Arc<str>> {
+    match value {
+        Value::String(name) => Some(name.clone()),
+        Value::Token(name) => Some(Arc::from(tokens.resolve(*name))),
+        _ => None,
+    }
+}
+
 text!(read_asset, write_asset, Asset);
 text!(read_path_expression, write_path_expression, PathExpression);
 

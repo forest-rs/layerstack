@@ -107,6 +107,34 @@ pub struct ValueSource {
     pub chain: Vec<PropertyPath>,
 }
 
+impl ValueSource {
+    /// Reads this authored provider as a primvar name, accepting `string`
+    /// and legacy `token` values while retaining value provenance.
+    ///
+    /// Call `Scene::value_sources` on a primvar reader's `inputs:varname`
+    /// first to follow node graph interfaces. Shader outputs require shader
+    /// evaluation and return `None` here, as do blocks and other value types.
+    /// The strongest authored default is read; an incompatible opinion does
+    /// not retry weaker values. No node default is substituted. OpenUSD's imaging primvar-name
+    /// consumer accepts both encodings (`_GetPrimvarNameAttributeValue`);
+    /// the current Sdr declaration and strict validation remain `string`.
+    #[must_use]
+    pub fn primvar_name(
+        &self,
+        scene: &Scene<'_>,
+    ) -> Option<layerstack::Resolved<alloc::sync::Arc<str>>> {
+        if self.kind != ValueSourceKind::AuthoredValue {
+            return None;
+        }
+        let resolved = scene.stage().resolve_field_path(self.attribute)?;
+        let value = crate::value::read_primvar_name(&resolved.value, scene.store().tokens())?;
+        Some(layerstack::Resolved {
+            value,
+            provenance: resolved.provenance,
+        })
+    }
+}
+
 /// Ordered value providers, branch diagnostics and inspected properties.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ValueSources {

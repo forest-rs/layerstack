@@ -212,7 +212,16 @@ fn add_spline(store: &mut InMemoryStore, spec: &mut PrimSpec) {
 
 fn add_clips(store: &mut InMemoryStore, spec: &mut PrimSpec) {
     let name = store.tokens.intern("clips");
-    spec.set_field(name, Value::Dictionary(Vec::new()));
+    spec.set_field(
+        name,
+        Value::Dictionary(vec![(
+            Arc::from("default"),
+            Value::Dictionary(vec![(
+                Arc::from("assetPaths"),
+                Value::Array(vec![Value::Asset(Arc::from("missing.usda"))]),
+            )]),
+        )]),
+    );
 }
 
 fn add_untyped(store: &mut InMemoryStore, spec: &mut PrimSpec) {

@@ -63,6 +63,41 @@ pub fn load_entry_usda(entry: &Path) -> LoadedStage {
         resolved.ok()
     });
 
+    // Runtime clip assets are host-owned, like expression-driven arcs.
+    // Resolve each explicit request once, then rebuild preparation until no
+    // new requests appear. No stage query performs filesystem I/O.
+    let mut attempted = BTreeSet::new();
+    loop {
+        let stage =
+            layerstack::Stage::compose(&mut store, root_layer, layerstack::StageOptions::default());
+        let requests = stage.clip_asset_requests().to_vec();
+        let mut changed = false;
+        for request in requests {
+            if !attempted.insert((request.anchor, request.identifier.clone())) {
+                continue;
+            }
+            let result = resolver.resolve(
+                &request.identifier,
+                Some(request.anchor),
+                &mut store.tokens,
+                &mut store.paths,
+            );
+            while let Some(layer) = resolver.pending_layers.pop() {
+                store.insert_layer(layer);
+            }
+            if let Ok(asset) = result {
+                if let Some(layer) = asset.layer {
+                    store.insert_layer(layer);
+                }
+                store.insert_asset_layer(request.anchor, &request.identifier, asset.layer_id);
+                changed = true;
+            }
+        }
+        if !changed {
+            break;
+        }
+    }
+
     LoadedStage {
         store,
         root_layer,

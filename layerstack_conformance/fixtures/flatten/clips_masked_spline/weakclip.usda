@@ -1,0 +1,7 @@
+#usda 1.0
+def "P" {
+    double x.spline = {
+        0: 100; post linear,
+        10: 200; post held
+    }
+}

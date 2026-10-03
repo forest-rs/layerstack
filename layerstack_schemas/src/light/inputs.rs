@@ -356,6 +356,10 @@ pub struct LightInputs {
     pub time: Time,
     /// Concrete schema spelling, even for Custom emitters.
     pub type_name: String,
+    /// Whether the composed schema identity includes `ShapingAPI`.
+    pub has_shaping_api: bool,
+    /// Whether the composed schema identity includes `ShadowAPI`.
+    pub has_shadow_api: bool,
     /// Built-in emitter classification.
     pub kind: LightKind,
     /// Selected default-time renderer shader ID and fallback evidence.
@@ -539,6 +543,8 @@ impl LightInputs {
             time,
             type_name,
             kind: LightKind::read(scene, light),
+            has_shaping_api: scene.has_api(light, "ShapingAPI", None),
+            has_shadow_api: scene.has_api(light, "ShadowAPI", None),
             shader,
             world_transform: transforms
                 .local_to_world(scene, light)
@@ -568,7 +574,7 @@ impl LightInputs {
     pub fn input(&self, name: &str) -> Option<&LightInput> {
         self.inputs.iter().find(|p| p.name == name)
     }
-    fn parameter<T>(
+    pub(super) fn parameter<T>(
         &self,
         name: &str,
         read: impl FnOnce(&Value) -> Option<T>,

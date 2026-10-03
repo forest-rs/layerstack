@@ -274,6 +274,8 @@ pub enum Value<'a> {
     ArrayEdit(ArrayEdit<'a>),
     /// A dictionary: `{ "key": "value", ... }`.
     Dictionary(Vec<DictionaryEntry<'a>>),
+    /// An animation block, which preserves weaker defaults.
+    AnimationBlock,
     /// Blocked value (`None` keyword).
     Blocked,
 }

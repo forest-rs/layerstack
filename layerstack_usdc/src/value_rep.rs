@@ -116,6 +116,8 @@ impl RawValueRep {
 pub enum CrateValue {
     /// No value (e.g. `ValueBlock`).
     None,
+    /// Native default-time animation block.
+    AnimationBlock,
     /// Boolean.
     Bool(bool),
     /// Unsigned 8-bit integer.
@@ -582,6 +584,7 @@ fn decode_one(
             message: "encountered Unknown value type",
         }),
         ValueType::ValueBlock => Ok(CrateValue::None),
+        ValueType::AnimationBlock => Ok(CrateValue::AnimationBlock),
         ValueType::Bool => decode_bool(rep, data, budget),
         ValueType::UChar => decode_integer_u8(rep, data, budget),
         ValueType::Int => decode_integer_i32(rep, data, budget),

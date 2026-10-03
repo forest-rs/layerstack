@@ -877,7 +877,8 @@ impl Flattener<'_, '_> {
                 Err(_) => self.lost(path.clone(), Loss::ValueClips, None),
             }
         }
-        let opinions = animation.as_slice();
+        let animation = super::stage_time::animation_opinions(&animation);
+        let opinions = animation.as_ref();
 
         // Spec: AOUSD Core §12.3.2 (per opinion, time samples, then a
         // spline, then the default).
@@ -922,10 +923,12 @@ impl Flattener<'_, '_> {
 
         // Spec: AOUSD Core §12.3.1 (the default), §12.3.6 (a block).
         // OpenUSD writes the default whenever one is authored.
-        if let Some(authored) = default_opinions
-            .iter()
-            .find(|opinion| opinion.value.default_value().is_some())
-        {
+        if let Some(authored) = default_opinions.iter().find(|opinion| {
+            opinion
+                .value
+                .as_property()
+                .is_some_and(|spec| spec.default.is_some())
+        }) {
             let index = stage.prims.get(&prim)?;
             let resolved =
                 stage.resolve_default(name, default_opinions, index.property_type_for(&name), None);
@@ -1233,6 +1236,8 @@ fn composed_samples(
     opinions: &[Opinion],
     property_type: Option<&PropertyType>,
 ) -> Option<ComposedSamples> {
+    let animation = super::stage_time::animation_opinions(opinions);
+    let opinions = animation.as_ref();
     let mut partial: Vec<(f64, Value)> = Vec::new();
     let mut partial_default: Option<Value> = None;
     let mut baked = false;

@@ -231,6 +231,8 @@ pub struct Reference {
 pub enum Value {
     /// `SdfValueBlock` (`None` in USDA).
     Block,
+    /// Native default-time animation block.
+    AnimationBlock,
     Bool(bool),
     UChar(u8),
     Int(i32),

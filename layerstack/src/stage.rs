@@ -643,11 +643,17 @@ impl Stage {
             // OpenUSD stage.cpp::_GetResolveInfoWithClipsImpl: an authored
             // source and a clip source cannot both occupy the same site.
             let masked = ordinary.iter().any(|op| {
-                op.key.node == clip.key.node
-                    && op.key.layer_strength == clip.key.layer_strength
-                    && (op.value.time_samples().is_some()
-                        || op.value.spline().is_some()
-                        || op.value.default_value().is_some())
+                (op.value.blocks_animation()
+                    && index
+                        .graph
+                        .cmp_nodes(op.key.node, clip.key.node)
+                        .then_with(|| op.key.layer_strength.cmp(&clip.key.layer_strength))
+                        .is_le())
+                    || op.key.node == clip.key.node
+                        && op.key.layer_strength == clip.key.layer_strength
+                        && (op.value.time_samples().is_some()
+                            || op.value.spline().is_some()
+                            || op.value.default_value().is_some())
             });
             (!masked).then_some((clip, Some(entry)))
         }));
@@ -874,7 +880,9 @@ impl Stage {
         let Some(index) = self.prims.get(&prim) else {
             return (Vec::new(), false);
         };
-        let ordinary = index.property_opinions(field).unwrap_or(&[]);
+        let animation =
+            stage_time::animation_opinions(index.property_opinions(field).unwrap_or(&[]));
+        let ordinary = animation.as_ref();
         if ordinary.is_empty() && self.property_definition_ref(prim, field).is_none() {
             return (Vec::new(), false);
         }
@@ -1772,7 +1780,8 @@ impl Stage {
     ) -> Option<Resolved<Value>> {
         // Spec: AOUSD Core §12.3.2.1 (`timecode` values are read in stage
         // time, through each opinion's layer offset).
-        let opinions = stage_time::opinions_in_stage_time(opinions);
+        let animation = stage_time::animation_opinions(opinions);
+        let opinions = stage_time::opinions_in_stage_time(&animation);
         let opinions: &[Opinion] = &opinions;
 
         // Spec: AOUSD Core §12.3 (a path expression's `%_` composes over

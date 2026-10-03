@@ -717,7 +717,7 @@ impl Attribute {
             });
         };
         if let Some(value) = &self.value
-            && !matches!(value, Value::Block)
+            && !matches!(value, Value::Block | Value::AnimationBlock)
         {
             if value.shape() != Some(declared) {
                 return Err(WriteError::TypeMismatch {
@@ -1099,6 +1099,8 @@ pub enum Value {
     ///
     /// Spec: AOUSD Core §12.3 (value blocking).
     Block,
+    /// A default-time animation block (`SdfAnimationBlock`).
+    AnimationBlock,
 }
 
 /// A list operation: either an explicit list, or edits (`delete`, `add`,
@@ -1656,7 +1658,7 @@ fn validate_metadata<'a>(
     list_ops: bool,
 ) -> Result<(), WriteError> {
     for entry in entries {
-        if matches!(entry.value, Value::Block) {
+        if matches!(entry.value, Value::Block | Value::AnimationBlock) {
             return Err(WriteError::MisplacedBlock {
                 path: alloc::format!("{path}#{}", entry.key),
             });
@@ -1771,7 +1773,7 @@ fn validate_value(value: &Value, path: &str) -> Result<(), WriteError> {
                         path: alloc::format!("{path}#{key}"),
                     });
                 }
-                if matches!(v, Value::Block) {
+                if matches!(v, Value::Block | Value::AnimationBlock) {
                     return Err(WriteError::MisplacedBlock {
                         path: alloc::format!("{path}#{key}"),
                     });
@@ -2041,7 +2043,7 @@ impl Value {
             | Self::UIntListOp(_)
             | Self::Int64ListOp(_)
             | Self::UInt64ListOp(_) => (Elem::ListOp, 1, false),
-            Self::Block | Self::ArrayEdit { .. } => return None,
+            Self::Block | Self::AnimationBlock | Self::ArrayEdit { .. } => return None,
         };
         Some(Shape { elem, arity, array })
     }
@@ -2128,6 +2130,7 @@ impl Value {
                     .map_or("opaque", |array| array.canonical_type_name())
             }
             Self::Block => "SdfValueBlock",
+            Self::AnimationBlock => "SdfAnimationBlock",
         }
     }
 }
@@ -2771,6 +2774,7 @@ impl Writer<'_> {
             | Value::Int64ListOp(_)
             | Value::UInt64ListOp(_) => unreachable!("list ops are written as statements"),
             Value::Block => self.out.push_str("None"),
+            Value::AnimationBlock => self.out.push_str("AnimationBlock"),
             Value::Dictionary(entries) => {
                 // §6.6.2, §16.2.15: typed entries with quoted keys.
                 self.out.push_str("{\n");

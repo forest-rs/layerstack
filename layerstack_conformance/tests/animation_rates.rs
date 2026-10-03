@@ -202,3 +202,43 @@ print(json.dumps([before, root, snapshot()]))
         close(actual, expected);
     }
 }
+
+#[test]
+fn animation_block_distinguishes_weaker_defaults_and_same_site_samples() {
+    let path =
+        workspace_root().join("layerstack_conformance/fixtures/flatten/animation_block/root.usda");
+    let mut loaded = load_entry_usda(&path);
+    assert!(
+        loaded.invalid.is_empty(),
+        "the fixture must import faithfully"
+    );
+    let stage = Stage::compose(
+        &mut loaded.store,
+        loaded.root_layer,
+        StageOptions::default(),
+    );
+    let prim = loaded.store.path("/P");
+    for (name, expected, grid) in [
+        ("x", Some(Value::Double(5.)), vec![]),
+        ("empty", None, vec![]),
+        ("same", Some(Value::Double(150.)), vec![0., 10.]),
+    ] {
+        let token = loaded.store.tokens.intern(name);
+        assert_eq!(
+            stage.property_sample_times(prim, token),
+            grid,
+            "{name} sample inventory"
+        );
+        assert_eq!(
+            stage
+                .resolve_property_path_at_time(
+                    layerstack::PropertyPath::new(prim, token),
+                    5.,
+                    InterpolationType::Linear
+                )
+                .map(|r| r.value),
+            expected,
+            "{name} numeric value"
+        );
+    }
+}

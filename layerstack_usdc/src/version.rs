@@ -27,8 +27,8 @@
 //! | 0.15 | spline `loopBoundaryTime` and `GfTimeCode`-valued splines (Ts binary format 3) | the format is read; those two features fail with [`UsdcError::UnsupportedFeature`] |
 //!
 //! Value type 60 (`SdfAnimationBlock`) is not tied to a version: OpenUSD
-//! v26.08 writes it without raising the file version. This reader does not
-//! decode it and fails with [`UsdcError::UnknownValueType`].
+//! v26.08 writes it without raising the file version. It is read
+//! and written as [`layerstack::Value::AnimationBlock`].
 //!
 //! [`Value::TypedArrayEdit`]: layerstack::doc::Value::TypedArrayEdit
 //! [`UsdcError::UnsupportedVersion`]: crate::UsdcError::UnsupportedVersion

@@ -66,6 +66,9 @@ pub enum Specifier {
 /// (value type encoding).
 #[derive(Clone, Debug)]
 pub enum Value {
+    /// Blocks weaker time samples, splines and clips while allowing weaker
+    /// defaults. OpenUSD `SdfAnimationBlock`, `UsdAttribute::BlockAnimation`.
+    AnimationBlock,
     /// No value.
     Null,
     /// A boolean (`bool`). Spec: §6.2.
@@ -230,7 +233,9 @@ impl PartialEq for Value {
             return a.len() == b.len() && a.iter().zip(b.iter()).all(|(a, b)| *a == *b);
         }
         match (self, other) {
-            (Self::Null, Self::Null) | (Self::Blocked, Self::Blocked) => true,
+            (Self::Null, Self::Null)
+            | (Self::Blocked, Self::Blocked)
+            | (Self::AnimationBlock, Self::AnimationBlock) => true,
             (Self::Bool(a), Self::Bool(b)) => a == b,
             (Self::UChar(a), Self::UChar(b)) => a == b,
             (Self::Int(a), Self::Int(b)) => a == b,
@@ -341,6 +346,7 @@ impl fmt::Display for Value {
             Self::Opaque { type_name, bytes } => {
                 write!(f, "opaque({type_name:?}, {} bytes)", bytes.len())
             }
+            Self::AnimationBlock => f.write_str("AnimationBlock"),
             Self::Blocked => write!(f, "blocked"),
             Self::TypedArray(items) => {
                 write!(f, "[")?;

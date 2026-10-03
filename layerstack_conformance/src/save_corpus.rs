@@ -310,9 +310,38 @@ def Scope "World" (
 }
 "#;
 
+const ANIMATION_BLOCKS: &str = r#"#usda 1.0
+def "P" {
+    double changed = 1
+    double blocked = AnimationBlock
+    float[] array = AnimationBlock
+    double blocked.timeSamples = {0:10, 10:20}
+}
+"#;
+const ANIMATION_BLOCKS_EDITED: &str = r#"#usda 1.0
+def "P" {
+    double changed = AnimationBlock
+    double blocked = AnimationBlock
+    float[] array = AnimationBlock
+    double blocked.timeSamples = {0:10, 10:20}
+}
+"#;
+
 /// The preservation corpus.
 pub fn cases() -> Vec<SaveCase> {
     vec![
+        SaveCase {
+            name: "animation_blocks",
+            covers: "native animation blocks on scalar and array defaults, alongside time samples",
+            source: ANIMATION_BLOCKS,
+            edit: |layer| {
+                layer.property("/P.changed").default = Some(Value::AnimationBlock);
+            },
+            expected: ANIMATION_BLOCKS_EDITED,
+            weaker: None,
+            composition: None,
+            minimum_openusd: Some(((26, 8), "animation blocks")),
+        },
         SaveCase {
             name: "sparse_edits",
             covers: "every native edit opcode, literal-free and empty programs, dimensioned and string literals, timecodes, expressions and time samples",

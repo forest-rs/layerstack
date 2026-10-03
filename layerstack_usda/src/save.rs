@@ -896,6 +896,7 @@ impl Lowering<'_> {
             // Outside an attribute default the writers' validation rejects
             // a block, naming the owner.
             L::Blocked => Value::Block,
+            L::AnimationBlock => Value::AnimationBlock,
             L::Dictionary(entries) => Value::Dictionary(
                 entries
                     .iter()

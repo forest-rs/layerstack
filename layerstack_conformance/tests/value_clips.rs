@@ -1742,3 +1742,32 @@ def "P" (
         false,
     );
 }
+
+#[test]
+fn animation_blocks_stop_clips_but_keep_weaker_defaults() {
+    let mut layers = basic(
+        &clips(""),
+        "double x = AnimationBlock",
+        "double x.timeSamples = {0:0, 10:100}",
+        "double x.timeSamples = {0:200, 10:300}",
+        "double x",
+    );
+    layers[0].1 = layers[0]
+        .1
+        .replacen("#usda 1.0", "#usda 1.0\n(subLayers = [@weak.usda@])", 1);
+    layers.push((
+        "weak.usda".into(),
+        text("def \"P\" {\n double x = 55\n double x.timeSamples = {0:1, 10:2}\n}"),
+    ));
+    check(
+        "animation-block",
+        layers,
+        "/P.x",
+        &[0., 5., 10., 15.],
+        &[Some(55.); 4],
+        Some(55.),
+        &[],
+        false,
+        false,
+    );
+}

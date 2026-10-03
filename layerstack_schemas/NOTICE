@@ -8,7 +8,8 @@ Technology License 1.0; see `LICENSE-TOST-1.0`.
 
 `src/gf/decomposition.rs` adapts OpenUSD's Gf matrix factorization,
 orthogonalization and quaternion extraction under the same license.
-OpenUSD's notice follows.
+`src/mass/diagonalize.rs` adapts OpenUSD's physics inertia diagonalization
+and float matrix rotation extraction under the same license. OpenUSD's notice follows.
 
 Universal Scene Description
 Copyright 2016 Pixar

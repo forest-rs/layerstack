@@ -1,0 +1,338 @@
+#usda 1.0
+(
+ metersPerUnit = 0.01
+ kilogramsPerUnit = 0.5
+)
+def Xform "Default" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ 
+ def Cube "Shape" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+}
+def Xform "BodyDensity" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:density = 5
+ def Cube "A" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (-1,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+def Cube "B" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (1,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+}
+def Xform "ShapeDensity" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:density = 5
+ def Cube "A" (prepend apiSchemas = ["PhysicsCollisionAPI", "PhysicsMassAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ float physics:density = 7
+}
+def Cube "B" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (1,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+}
+def Xform "MaterialDensity" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "MaterialBindingAPI"]) {
+ rel material:binding:physics = </Material>
+ def Cube "Shape" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+}
+def Xform "BodyBeatsMaterial" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "MaterialBindingAPI"]) {
+ float physics:density = 4
+ rel material:binding:physics = </Material>
+ def Cube "Shape" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+}
+def Xform "MassOverride" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:mass = 20
+ float physics:density = 5
+ def Cube "A" (prepend apiSchemas = ["PhysicsCollisionAPI", "PhysicsMassAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (-1,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ float physics:mass = 3
+}
+def Cube "B" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (1,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+}
+def Xform "CenterOverride" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:density = 5
+ point3f physics:centerOfMass = (1,0,0)
+ def Cube "A" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (-1,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+def Cube "B" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (1,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+}
+def Xform "InertiaOverride" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:density = 5
+ float3 physics:diagonalInertia = (4,5,6)
+ def Cube "Shape" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (1,2,0)
+ custom quatf test:orientation = (0.9238795325,0,0,0.3826834324)
+ 
+}
+}
+def Xform "AxesOverride" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:density = 5
+ quatf physics:principalAxes = (1,0,0,0)
+ def Cube "Shape" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (0.9238795325,0,0,0.3826834324)
+ 
+}
+}
+def Xform "AllAuthored" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:mass = 10
+ float3 physics:diagonalInertia = (4,5,6)
+ point3f physics:centerOfMass = (1,2,3)
+ quatf physics:principalAxes = (1,0,0,0)
+ def Cube "Shape" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+}
+def Xform "ShapeOverride" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:density = 5
+ def Cube "Shape" (prepend apiSchemas = ["PhysicsCollisionAPI", "PhysicsMassAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ float physics:mass = 8
+ float3 physics:diagonalInertia = (2,4,8)
+ point3f physics:centerOfMass = (1,0,0)
+ quatf physics:principalAxes = (0.9238795325,0,0,0.3826834324)
+}
+}
+def Xform "ScaledCenter" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:density = 5
+ point3f physics:centerOfMass = (1,2,3)
+ double3 xformOp:scale = (2,3,4)
+ uniform token[] xformOpOrder = ["xformOp:scale"]
+ def Cube "Shape" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+}
+def Xform "ReflectedCenter" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:density = 5
+ point3f physics:centerOfMass = (1,2,3)
+ double3 xformOp:scale = (-2,-3,-4)
+ uniform token[] xformOpOrder = ["xformOp:scale"]
+ def Cube "Shape" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+}
+def Xform "ShapeCenter" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:density = 5
+ def Cube "Shape" (prepend apiSchemas = ["PhysicsCollisionAPI", "PhysicsMassAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0.25,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ point3f physics:centerOfMass = (1,0,0)
+}
+}
+def Xform "RotatedCenters" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:density = 3
+ def Cube "A" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (1,0,0)
+ custom float3 test:position = (2,0,0)
+ custom quatf test:orientation = (0.7071067812,0,0,0.7071067812)
+ 
+}
+def Cube "B" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,1,0)
+ custom float3 test:position = (-1,1,0)
+ custom quatf test:orientation = (0.9238795325,0.3826834324,0,0)
+ 
+}
+}
+def Xform "NestedBodies" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:density = 5
+ def Cube "Own" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+def Xform "Nested" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:density = 100
+ def Cube "Other" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+}
+
+}
+def Xform "DisabledCollider" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:density = 5
+ def Cube "Shape" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ bool physics:collisionEnabled = false
+}
+}
+def Xform "SphereFallback" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:mass = 3
+ 
+}
+def Xform "NoMassButInertia" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:mass = 3
+ float3 physics:diagonalInertia = (1,2,3)
+ 
+}
+def Material "Material" (prepend apiSchemas = ["PhysicsMaterialAPI"]) {
+ float physics:density = 9
+}
+def Xform "TinyScaleCenter" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:density = 5
+ point3f physics:centerOfMass = (1,2,3)
+ double3 xformOp:scale = (0.000001,1,1)
+ uniform token[] xformOpOrder = ["xformOp:scale"]
+ def Cube "Shape" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+}
+def Xform "SingularScaleCenter" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:density = 5
+ point3f physics:centerOfMass = (1,2,3)
+ double3 xformOp:scale = (0,1,1)
+ uniform token[] xformOpOrder = ["xformOp:scale"]
+ def Cube "Shape" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+}
+def Xform "AllAuthoredWithoutAxes" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI"]) {
+ float physics:mass = 10
+ float3 physics:diagonalInertia = (4,5,6)
+ point3f physics:centerOfMass = (1,2,3)
+ def Cube "Shape" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+}
+def Xform "MissingPhysicsMaterial" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "MaterialBindingAPI"]) {
+ rel material:binding:physics = </NoPhysicsMaterial>
+ def Cube "Shape" (prepend apiSchemas = ["PhysicsCollisionAPI"]) {
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}
+}
+def Material "NoPhysicsMaterial" {
+ float physics:density = 9
+}
+def Xform "InstanceBody" (prepend apiSchemas = ["PhysicsRigidBodyAPI"]; prepend references = </BodyDensity>; instanceable = true) {}
+def Xform "CollisionBody" (prepend apiSchemas = ["PhysicsRigidBodyAPI", "PhysicsMassAPI", "PhysicsCollisionAPI"]) {
+ float physics:density = 5
+ custom float test:volume = 2
+ custom float3 test:inertia = (1,2,3)
+ custom float3 test:center = (0,0,0)
+ custom float3 test:position = (0,0,0)
+ custom quatf test:orientation = (1,0,0,0)
+ 
+}

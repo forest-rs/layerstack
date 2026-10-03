@@ -138,10 +138,13 @@ pub(crate) fn orthonormalize(mut rows: Matrix3) -> Matrix3 {
     }
     rows
 }
-pub(crate) fn factored_rotation(matrix: &Matrix3) -> Option<Matrix3> {
-    let determinant = matrix[0][0] * (matrix[1][1] * matrix[2][2] - matrix[1][2] * matrix[2][1])
+fn determinant(matrix: &Matrix3) -> f64 {
+    matrix[0][0] * (matrix[1][1] * matrix[2][2] - matrix[1][2] * matrix[2][1])
         - matrix[0][1] * (matrix[1][0] * matrix[2][2] - matrix[1][2] * matrix[2][0])
-        + matrix[0][2] * (matrix[1][0] * matrix[2][1] - matrix[1][1] * matrix[2][0]);
+        + matrix[0][2] * (matrix[1][0] * matrix[2][1] - matrix[1][1] * matrix[2][0])
+}
+pub(crate) fn factored_rotation(matrix: &Matrix3) -> Option<Matrix3> {
+    let determinant = determinant(matrix);
     if determinant.abs() < 1e-10 {
         return None;
     }
@@ -163,6 +166,19 @@ pub(crate) fn factored_rotation(matrix: &Matrix3) -> Option<Matrix3> {
         ),
         matrix,
     )))
+}
+/// `GfTransform`'s principal stretch scales, including the reflection sign.
+#[cfg(all(feature = "usd-physics", feature = "usd-shade"))]
+pub(crate) fn factored_scale(matrix: &Matrix3) -> Option<[f64; 3]> {
+    if !matrix.iter().flatten().all(|v| v.is_finite()) {
+        return None;
+    }
+    let sign = if determinant(matrix) < 0. { -1. } else { 1. };
+    let (eigenvalues, _) = jacobi(mul(matrix, &transpose(matrix)));
+    // GfTransform consumes Factor's outputs even when it reports singularity.
+    // Factor clamps a tiny eigenvalue's scale to epsilon, not sqrt(epsilon).
+    let scale = eigenvalues.map(|v| sign * if v < 1e-10 { 1e-10 } else { libm::sqrt(v) });
+    scale.iter().all(|v| v.is_finite()).then_some(scale)
 }
 /// Quaternion in `[real, x, y, z]` order, as `GfQuatd`.
 pub(crate) fn quaternion(m: &Matrix3) -> [f64; 4] {

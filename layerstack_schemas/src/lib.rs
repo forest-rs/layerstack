@@ -349,6 +349,8 @@ pub mod kind;
 mod labels;
 #[cfg(feature = "usd-lux")]
 pub mod light;
+#[cfg(feature = "usd-physics")]
+pub mod mass;
 #[cfg(feature = "usd-geom")]
 mod motion;
 #[cfg(feature = "usd-geom")]

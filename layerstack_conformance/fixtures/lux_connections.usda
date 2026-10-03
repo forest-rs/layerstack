@@ -1,0 +1,99 @@
+#usda 1.0
+
+def SphereLight "Light"
+{
+    float inputs:a = 2
+    float inputs:a.connect = </Light.inputs:intensity>
+    float inputs:interface (
+        connectability = "interfaceOnly"
+    )
+    float outputs:out
+}
+
+def LightFilter "Filter"
+{
+    float inputs:a = 2
+    float inputs:interface (
+        connectability = "interfaceOnly"
+    )
+    float outputs:out
+
+    def Shader "Child"
+    {
+        float inputs:a = 2
+        float inputs:interface (
+            connectability = "interfaceOnly"
+        )
+        float outputs:out
+    }
+}
+
+def Material "Material"
+{
+    float inputs:a = 2
+    float inputs:interface (
+        connectability = "interfaceOnly"
+    )
+    float outputs:out
+
+    def Shader "Child"
+    {
+        float inputs:a = 2
+        float inputs:interface (
+            connectability = "interfaceOnly"
+        )
+        float outputs:out
+    }
+}
+
+def NodeGraph "Graph"
+{
+    float inputs:a = 2
+    float inputs:interface (
+        connectability = "interfaceOnly"
+    )
+    float outputs:out
+
+    def Shader "Child"
+    {
+        float inputs:a = 2
+        float inputs:interface (
+            connectability = "interfaceOnly"
+        )
+        float outputs:out
+    }
+}
+
+def Shader "Shader"
+{
+    float inputs:a = 2
+    float inputs:interface (
+        connectability = "interfaceOnly"
+    )
+    float outputs:out
+}
+
+def Shader "ShaderLight" (
+    prepend apiSchemas = ["LightAPI"]
+)
+{
+    float inputs:a = 2
+    float outputs:out
+}
+
+def LightFilter "FilterLight" (
+    prepend apiSchemas = ["LightAPI"]
+)
+{
+    float inputs:a = 2
+    float outputs:out
+}
+
+def NodeGraph "GraphLight" (
+    prepend apiSchemas = ["MeshLightAPI"]
+)
+{
+    float inputs:a = 2
+    float outputs:out
+}
+

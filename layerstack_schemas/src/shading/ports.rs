@@ -106,6 +106,11 @@ impl<'a> Port<'a> {
     pub fn value_sources(&self) -> ValueSources {
         self.scene.value_sources(self.path)
     }
+    /// Validates a proposed source using built-in connectability policies.
+    /// Does not author the connection or check renderer/type support.
+    pub fn can_connect(&self, source: PropertyPath) -> Result<(), super::ConnectionError> {
+        self.scene.validate_shading_connection(self.path, source)
+    }
     /// An edit handle for this attribute.
     #[must_use]
     pub fn edit(&self) -> PortEdit {

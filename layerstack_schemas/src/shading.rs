@@ -8,8 +8,8 @@
 //! and `UsdShadeMaterial::ComputeSurfaceSource`: node graphs pass connections
 //! through; outputs on non-container prims terminate them. This module neither
 //! evaluates shaders nor validates whether a renderer supports them. Container
-//! behavior follows `NodeGraph` inheritance; custom OpenUSD connectability plugins
-//! are not loaded.
+//! behavior covers the built-in `UsdShade` and `UsdLux` policies; custom OpenUSD
+//! connectability plugins are not loaded.
 
 /// Typed views and authoring handles for OpenUSD's standard shader nodes.
 /// Node defaults are separate from authored USD attribute values.
@@ -17,6 +17,8 @@ pub mod nodes {
     pub use crate::generated::shader_nodes::*;
 }
 
+mod behavior;
+pub use behavior::{ConnectableBehavior, ConnectionError, ConnectionIssue};
 mod ports;
 pub use ports::{Port, PortEdit, PortError, PortKind};
 
@@ -209,8 +211,8 @@ impl Scene<'_> {
         result
     }
 
-    /// Traces connections to non-container outputs through NodeGraph-derived
-    /// containers (including Materials). Constants are intentionally excluded.
+    /// Traces connections to non-container outputs through built-in
+    /// containers (`NodeGraphs`, Materials, lights and light filters). Constants are intentionally excluded.
     /// Traversal uses an explicit stack and branch-local cycle detection.
     #[must_use]
     pub fn shader_sources(&self, attribute: PropertyPath) -> ShaderSources {
@@ -296,7 +298,11 @@ impl Scene<'_> {
             if !self.shading_attribute(path) || kind.is_none() {
                 continue;
             }
-            if !initial && !self.is_a(path.prim_path(), "NodeGraph") {
+            if !initial
+                && !self
+                    .connectable_behavior(path.prim_path())
+                    .is_some_and(|b| b.is_container)
+            {
                 if kind == Some(false) {
                     let mut branch = chain.clone();
                     branch.push(path);

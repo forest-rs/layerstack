@@ -1,0 +1,4508 @@
+{
+  "providers": [
+    "/Light.inputs:a"
+  ],
+  "rows": [
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:a",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:interface",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:interface",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:interface",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:interface",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:interface",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:interface",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:interface",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.inputs:interface",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.inputs:interface",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.outputs:out",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.outputs:out",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.outputs:out",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.outputs:out",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.outputs:out",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.outputs:out",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.outputs:out",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.outputs:out",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.outputs:out",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.outputs:out",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Light.outputs:out",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Light.outputs:out",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Filter.inputs:a",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:a",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.inputs:interface",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter.outputs:out",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:a",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.inputs:interface",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Filter/Child.outputs:out",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Material.inputs:a",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:a",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.inputs:interface",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Material.outputs:out",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material.outputs:out",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:a",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.inputs:interface",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Material/Child.outputs:out",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:a",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.inputs:interface",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/Graph.outputs:out",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Graph.outputs:out",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Graph.outputs:out",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph.outputs:out",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:a",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.inputs:interface",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Graph/Child.outputs:out",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:a",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.inputs:interface",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/Shader.outputs:out",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.inputs:a",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/ShaderLight.outputs:out",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.inputs:a",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": true,
+      "destination": "/FilterLight.outputs:out",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.inputs:a",
+      "source": "/GraphLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Light.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Light.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Light.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Filter.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Filter.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Filter.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Filter/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Filter/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Filter/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Material.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Material.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Material.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Material/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Material/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Material/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Graph.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Graph.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Graph.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Graph/Child.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Graph/Child.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Graph/Child.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Shader.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Shader.inputs:interface"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/Shader.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/ShaderLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/ShaderLight.outputs:out"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/FilterLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/FilterLight.outputs:out"
+    },
+    {
+      "allowed": true,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/GraphLight.inputs:a"
+    },
+    {
+      "allowed": false,
+      "destination": "/GraphLight.outputs:out",
+      "source": "/GraphLight.outputs:out"
+    }
+  ],
+  "version": "26.8"
+}

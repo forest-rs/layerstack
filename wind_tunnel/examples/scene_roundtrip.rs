@@ -67,15 +67,24 @@ fn main() -> Result<(), Box<dyn Error>> {
         result.layer
     } else {
         let source = std::str::from_utf8(&data)?;
-        let parsed = layerstack_usda::parser::parse(source);
-        assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
-        let emitted = layerstack_usda::emit::emit(
-            &parsed.layer,
+        let imported = layerstack_usda::read_usda(
+            source,
             LayerId(1),
             &mut store.tokens,
             &mut store.paths,
             &mut NoAssets,
         );
+        assert!(
+            imported.parse_diagnostics.is_empty(),
+            "{:?}",
+            imported.parse_diagnostics
+        );
+        assert!(
+            imported.lower_diagnostics.is_empty(),
+            "{:?}",
+            imported.lower_diagnostics
+        );
+        let emitted = imported.emitted;
         assert!(emitted.diagnostics.is_empty(), "{:?}", emitted.diagnostics);
         assert!(
             emitted.resolved_layers.is_empty(),

@@ -35,6 +35,11 @@
 //! The parser supports error recovery: malformed input produces partial
 //! trees with diagnostics rather than hard failures.
 //!
+//! For scene loading, [`read_usda`] uses the shared grammar while converting
+//! numeric property arrays directly from source ranges into native buffers.
+//! It avoids per-element syntax nodes and generic AST tuples. Use the parser
+//! APIs when the syntax or inspectable AST is needed.
+//!
 //! # Quick start
 //!
 //! ```
@@ -42,7 +47,7 @@
 //!     AssetResolveError, AssetResolver, InMemoryStore, LayerId, ResolvedAsset,
 //!     TokenInterner, PathInterner,
 //! };
-//! use layerstack_usda::{parser, emit};
+//! use layerstack_usda::read_usda;
 //!
 //! // Minimal resolver that rejects all asset paths (no external files).
 //! struct NoAssets;
@@ -57,15 +62,17 @@
 //! let source = "#usda 1.0\ndef Xform \"Root\" {\n    custom string greeting = \"hello\"\n}\n";
 //!
 //! let mut store = InMemoryStore::default();
-//! let ast = parser::parse(source);
-//! let result = emit::emit(
-//!     &ast.layer,
+//! let result = read_usda(
+//!     source,
 //!     LayerId(1),
 //!     &mut store.tokens,
 //!     &mut store.paths,
 //!     &mut NoAssets,
 //! );
-//! assert!(!result.layer.prims.is_empty());
+//! assert!(result.parse_diagnostics.is_empty());
+//! assert!(result.lower_diagnostics.is_empty());
+//! assert!(result.emitted.diagnostics.is_empty());
+//! assert!(!result.emitted.layer.prims.is_empty());
 //! ```
 //!
 //! # `no_std` support
@@ -123,6 +130,9 @@ pub mod lower;
     reason = "USDA value conversions intentionally narrow numeric types"
 )]
 pub mod emit;
+
+mod read;
+pub use read::{ReadResult, ReadStats, read_usda};
 
 pub mod save;
 mod spline_text;

@@ -197,3 +197,115 @@ fn defining_a_node_overrides_a_weaker_source_asset_implementation() {
         "node definition selects its identifier implementation over weaker opinions"
     );
 }
+
+#[test]
+fn legacy_primvar_names_are_consumable_without_retyping_authored_ports() {
+    use layerstack::{
+        AssetResolveError, AssetResolver, PathInterner, PropertyPath, ResolvedAsset, Stage,
+        TokenInterner,
+    };
+    struct NoAssets;
+    impl AssetResolver for NoAssets {
+        fn resolve(
+            &mut self,
+            _: &str,
+            _: Option<LayerId>,
+            _: &mut TokenInterner,
+            _: &mut PathInterner,
+        ) -> Result<ResolvedAsset, AssetResolveError> {
+            Err(AssetResolveError::NotFound)
+        }
+        fn resolved_path(&self, _: LayerId) -> Option<&str> {
+            None
+        }
+    }
+    use layerstack_schemas::shading::nodes::{PrimvarReaderFloat2, PrimvarReaderString};
+    let mut store = InMemoryStore::default();
+    let source = r#"#usda 1.0
+def NodeGraph "Graph" {
+    token inputs:frame:st = "st"
+    def Shader "Connected" {
+        uniform token info:id = "UsdPrimvarReader_float2"
+        string inputs:varname.connect = </Graph.inputs:frame:st>
+    }
+    def Shader "Legacy" {
+        uniform token info:id = "UsdPrimvarReader_float2"
+        token inputs:varname = "uv"
+    }
+    def Shader "Modern" {
+        uniform token info:id = "UsdPrimvarReader_string"
+        string inputs:varname = "label"
+        token inputs:fallback = "not-a-string"
+    }
+    def Shader "Bad" {
+        uniform token info:id = "UsdPrimvarReader_float2"
+        int inputs:varname = 42
+    }
+}
+"#;
+    let parsed = layerstack_usda::parser::parse(source);
+    assert!(parsed.diagnostics.is_empty());
+    let emitted = layerstack_usda::emit::emit(
+        &parsed.layer,
+        LayerId(1),
+        &mut store.tokens,
+        &mut store.paths,
+        &mut NoAssets,
+    );
+    assert!(emitted.diagnostics.is_empty());
+    store.insert_layer(emitted.layer);
+    let options = StageOptions {
+        with_provenance: true,
+        schemas: Some(Arc::new(layerstack_schemas::openusd(&mut store.tokens))),
+        ..StageOptions::default()
+    };
+    let legacy = store.path("/Graph/Legacy");
+    let connected = store.path("/Graph/Connected");
+    let modern = store.path("/Graph/Modern");
+    let bad = store.path("/Graph/Bad");
+    let input = store.tokens.intern("inputs:varname");
+    let stage = Stage::compose(&mut store, LayerId(1), options);
+    let scene = Scene::new(&stage, &store);
+    let legacy = PrimvarReaderFloat2::new(&scene, legacy).unwrap();
+    assert_eq!(legacy.varname().as_deref(), Some("uv"));
+    assert_eq!(
+        legacy
+            .varname_input()
+            .unwrap()
+            .property_type()
+            .unwrap()
+            .type_name
+            .as_ref(),
+        "token"
+    );
+    let modern = PrimvarReaderString::new(&scene, modern).unwrap();
+    assert_eq!(modern.varname().as_deref(), Some("label"));
+    assert_eq!(modern.fallback(), None, "general strings remain strict");
+    assert_eq!(
+        PrimvarReaderFloat2::new(&scene, bad).unwrap().varname(),
+        None
+    );
+    assert_eq!(
+        PrimvarReaderFloat2::new(&scene, connected)
+            .unwrap()
+            .varname(),
+        None,
+        "direct accessors do not evaluate connections"
+    );
+    let sources = scene.value_sources(PropertyPath::new(connected, input));
+    assert!(sources.issues.is_empty());
+    assert_eq!(sources.sources.len(), 1);
+    let name = sources.sources[0].primvar_name(&scene).unwrap();
+    assert_eq!(&*name.value, "st");
+    assert!(name.provenance.is_some());
+    assert_eq!(sources.sources[0].chain.len(), 2);
+    let invalid = scene.value_sources(PropertyPath::new(bad, input));
+    assert!(invalid.sources[0].primvar_name(&scene).is_none());
+    assert!(matches!(
+        stage
+            .resolve_field_path(sources.sources[0].attribute)
+            .unwrap()
+            .value,
+        Value::Token(_)
+    ));
+}

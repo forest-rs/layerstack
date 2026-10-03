@@ -115,6 +115,23 @@ pub(crate) fn read_store(
     Ok(nodes)
 }
 
+fn full_name_is_legacy_primvar_name(id: &str, port: &str) -> bool {
+    port == "inputs:varname"
+        && matches!(
+            id,
+            "UsdPrimvarReader_float"
+                | "UsdPrimvarReader_float2"
+                | "UsdPrimvarReader_float3"
+                | "UsdPrimvarReader_float4"
+                | "UsdPrimvarReader_int"
+                | "UsdPrimvarReader_string"
+                | "UsdPrimvarReader_normal"
+                | "UsdPrimvarReader_point"
+                | "UsdPrimvarReader_vector"
+                | "UsdPrimvarReader_matrix"
+        )
+}
+
 fn method(name: &str) -> String {
     // OpenUSD's Transform2d `inputs:in` needs an explicit Rust spelling.
     if name == "in" {
@@ -327,6 +344,15 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
             }
             let mut ty = crate::views::rust_type(&port.ty.default_scalar, port.ty.is_array)?
                 .ok_or("opaque shader port")?;
+            // Only the standard primvar reader name has this legacy consumer
+            // compatibility. General string ports remain strict, including
+            // pipeline-owned libraries whose identifiers do not match.
+            if full_name_is_legacy_primvar_name(id, &port.name)
+                && port.ty.type_name.as_ref() == "string"
+                && !port.ty.is_array
+            {
+                ty.read_fn = "crate::value::read_primvar_name".into();
+            }
             if external {
                 // These fragments contain generator-owned Rust syntax only.
                 ty.read = ty
@@ -336,6 +362,11 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
                 ty.read_fn = ty.read_fn.replace("crate::", "layerstack_schemas::");
                 ty.write_fn = ty.write_fn.replace("crate::", "layerstack_schemas::");
             }
+            let compatibility = if ty.read_fn.ends_with("read_primvar_name") {
+                " Accepts modern string and legacy token names without changing the authored USD type."
+            } else {
+                ""
+            };
             let full = &port.name;
             let kind = if input { "input" } else { "output" };
             let _ = writeln!(
@@ -349,7 +380,7 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
                         out,
                         "    #[doc = {:?}]\n    #[must_use]\n    pub fn {m}(&self) -> Option<{}> {{ self.read_value({full:?}, {}) }}",
                         format!(
-                            "The composed `{full}`, without node defaults or connection evaluation. {}",
+                            "The composed `{full}`, without node defaults or connection evaluation. {}{compatibility}",
                             port.doc
                         ),
                         ty.read,
@@ -360,7 +391,7 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
                         out,
                         "    uniform_attribute! {{ #[doc = {:?}] {m}, {full:?}, {}, {} }}",
                         format!(
-                            "The composed value of `{full}`, without following connections or applying the node default. {}",
+                            "The composed value of `{full}`, without following connections or applying the node default. {}{compatibility}",
                             port.doc
                         ),
                         ty.read,

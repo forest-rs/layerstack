@@ -1023,7 +1023,7 @@ impl<'a> PrimvarReaderFloat<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default. "] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_string }
+    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -1035,7 +1035,7 @@ impl<'a> PrimvarReaderFloat<'a> {
             "inputs:varname",
             time,
             interpolation,
-            crate::value::read_string,
+            crate::value::read_primvar_name,
         )
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
@@ -1192,7 +1192,7 @@ impl<'a> PrimvarReaderFloat2<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default. "] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_string }
+    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -1204,7 +1204,7 @@ impl<'a> PrimvarReaderFloat2<'a> {
             "inputs:varname",
             time,
             interpolation,
-            crate::value::read_string,
+            crate::value::read_primvar_name,
         )
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
@@ -1365,7 +1365,7 @@ impl<'a> PrimvarReaderFloat3<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default. "] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_string }
+    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -1377,7 +1377,7 @@ impl<'a> PrimvarReaderFloat3<'a> {
             "inputs:varname",
             time,
             interpolation,
-            crate::value::read_string,
+            crate::value::read_primvar_name,
         )
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
@@ -1538,7 +1538,7 @@ impl<'a> PrimvarReaderFloat4<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default. "] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_string }
+    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -1550,7 +1550,7 @@ impl<'a> PrimvarReaderFloat4<'a> {
             "inputs:varname",
             time,
             interpolation,
-            crate::value::read_string,
+            crate::value::read_primvar_name,
         )
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
@@ -1711,7 +1711,7 @@ impl<'a> PrimvarReaderInt<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default. "] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_string }
+    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -1723,7 +1723,7 @@ impl<'a> PrimvarReaderInt<'a> {
             "inputs:varname",
             time,
             interpolation,
-            crate::value::read_string,
+            crate::value::read_primvar_name,
         )
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
@@ -1885,7 +1885,7 @@ impl<'a> PrimvarReaderMatrix<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default. "] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_string }
+    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -1897,7 +1897,7 @@ impl<'a> PrimvarReaderMatrix<'a> {
             "inputs:varname",
             time,
             interpolation,
-            crate::value::read_string,
+            crate::value::read_primvar_name,
         )
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
@@ -2062,7 +2062,7 @@ impl<'a> PrimvarReaderNormal<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default. "] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_string }
+    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -2074,7 +2074,7 @@ impl<'a> PrimvarReaderNormal<'a> {
             "inputs:varname",
             time,
             interpolation,
-            crate::value::read_string,
+            crate::value::read_primvar_name,
         )
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
@@ -2235,7 +2235,7 @@ impl<'a> PrimvarReaderPoint<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default. "] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_string }
+    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -2247,7 +2247,7 @@ impl<'a> PrimvarReaderPoint<'a> {
             "inputs:varname",
             time,
             interpolation,
-            crate::value::read_string,
+            crate::value::read_primvar_name,
         )
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
@@ -2408,7 +2408,7 @@ impl<'a> PrimvarReaderString<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default. "] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_string }
+    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -2420,7 +2420,7 @@ impl<'a> PrimvarReaderString<'a> {
             "inputs:varname",
             time,
             interpolation,
-            crate::value::read_string,
+            crate::value::read_primvar_name,
         )
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.
@@ -2577,7 +2577,7 @@ impl<'a> PrimvarReaderVector<'a> {
     pub fn varname_input(&self) -> Option<Port<'a>> {
         self.shader.input("varname")
     }
-    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default. "] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_string }
+    uniform_attribute! { #[doc = "The composed value of `inputs:varname`, without following connections or applying the node default.  Accepts modern string and legacy token names without changing the authored USD type."] varname, "inputs:varname", ::alloc::sync::Arc<str>, crate::value::read_primvar_name }
     /// The composed `inputs:varname` at a numeric time.
     #[must_use]
     pub fn varname_at(
@@ -2589,7 +2589,7 @@ impl<'a> PrimvarReaderVector<'a> {
             "inputs:varname",
             time,
             interpolation,
-            crate::value::read_string,
+            crate::value::read_primvar_name,
         )
     }
     /// The `inputs:varname` default in the node definition, separate from authored values.

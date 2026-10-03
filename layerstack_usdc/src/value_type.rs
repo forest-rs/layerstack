@@ -133,6 +133,8 @@ pub enum ValueType {
     Relocates = 58,
     /// Spline.
     Spline = 59,
+    /// Blocks animation while permitting weaker defaults.
+    AnimationBlock = 60,
 }
 
 impl ValueType {
@@ -210,6 +212,7 @@ impl TryFrom<u8> for ValueType {
             57 => Ok(Self::PathExpression),
             58 => Ok(Self::Relocates),
             59 => Ok(Self::Spline),
+            60 => Ok(Self::AnimationBlock),
             _ => Err(UsdcError::UnknownValueType { type_byte: value }),
         }
     }

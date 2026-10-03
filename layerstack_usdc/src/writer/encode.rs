@@ -51,6 +51,7 @@ fn same_metadata_value(a: &Value, b: &Value) -> bool {
             if matches!(
                 a,
                 Value::Block
+                    | Value::AnimationBlock
                     | Value::Bool(_)
                     | Value::UChar(_)
                     | Value::Int(_)
@@ -328,6 +329,7 @@ impl<'a> Packer<'a> {
             // specifier/variability/permission enums, `SdfValueBlock`), as
             // are the string, token and asset path indexes.
             Value::Block => inlined(T::ValueBlock, 0),
+            Value::AnimationBlock => inlined(T::AnimationBlock, 0),
             Value::Bool(v) => inlined(T::Bool, u32::from(*v)),
             Value::UChar(v) => inlined(T::UChar, u32::from(*v)),
             #[allow(clippy::cast_sign_loss, reason = "bit pattern")]

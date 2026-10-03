@@ -1067,6 +1067,7 @@ impl<'a> LowerCtx<'a> {
                     "true" | "True" => Value::Bool(true),
                     "false" | "False" => Value::Bool(false),
                     "None" => Value::Blocked,
+                    "AnimationBlock" => Value::AnimationBlock,
                     "inf" => Value::Number(f64::INFINITY),
                     "nan" => Value::Number(f64::NAN),
                     _ => Value::Identifier(text),

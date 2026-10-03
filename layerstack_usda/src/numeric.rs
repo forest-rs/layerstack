@@ -211,7 +211,10 @@ pub(crate) fn convert_scalar(value: &ast::Value<'_>, ty: &str) -> Option<Result<
             | "timecode"
     ) || matches!(
         value,
-        ast::Value::Blocked | ast::Value::Array(_) | ast::Value::ArrayEdit(_)
+        ast::Value::Blocked
+            | ast::Value::AnimationBlock
+            | ast::Value::Array(_)
+            | ast::Value::ArrayEdit(_)
     ) {
         return None;
     }

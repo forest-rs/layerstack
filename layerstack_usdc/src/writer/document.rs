@@ -438,6 +438,7 @@ fn natural(value: &UsdaValue) -> Value {
             instructions,
         } => native_edit(element, instructions),
         U::Block => Value::Block,
+        U::AnimationBlock => Value::AnimationBlock,
         U::Dictionary(entries) => Value::Dictionary(
             entries
                 .iter()

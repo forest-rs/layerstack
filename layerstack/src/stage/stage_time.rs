@@ -303,6 +303,24 @@ pub(crate) fn opinions_in_stage_time(opinions: &[Opinion]) -> Cow<'_, [Opinion]>
     Cow::Owned(out)
 }
 
+/// Animation blocks suppress only weaker animation. Keep opinion positions
+/// and authored defaults, preserving provenance and sparse composition.
+/// OpenUSD `UsdStage::_GetResolveInfoWithClipsImpl`; Core §12.3.
+pub(crate) fn animation_opinions(opinions: &[Opinion]) -> Cow<'_, [Opinion]> {
+    let Some(block) = opinions.iter().position(|op| op.value.blocks_animation()) else {
+        return Cow::Borrowed(opinions);
+    };
+    let mut out = opinions.to_vec();
+    for opinion in &mut out[block + 1..] {
+        if let OpinionValue::Property(spec) = &mut opinion.value {
+            let spec = alloc::sync::Arc::make_mut(spec);
+            spec.time_samples = None;
+            spec.spline = None;
+        }
+    }
+    Cow::Owned(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

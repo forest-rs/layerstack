@@ -1044,6 +1044,7 @@ impl<'a> AssembleCtx<'a> {
     fn convert_crate_value(&mut self, cv: &CrateValue) -> Value {
         match cv {
             CrateValue::None => Value::Blocked,
+            CrateValue::AnimationBlock => Value::AnimationBlock,
             CrateValue::Bool(b) => Value::Bool(*b),
             CrateValue::UChar(v) => Value::UChar(*v),
             CrateValue::Int(v) => Value::Int(*v),

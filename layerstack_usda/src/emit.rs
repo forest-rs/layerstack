@@ -1351,6 +1351,7 @@ impl EmitCtx<'_> {
             ast::Value::Asset(s) => Value::Asset(Arc::from(*s)),
             ast::Value::Path(s) => Value::String(Arc::from(*s)),
             ast::Value::Blocked => Value::Blocked,
+            ast::Value::AnimationBlock => Value::AnimationBlock,
             ast::Value::Dictionary(entries) => {
                 let dict_entries: Vec<(Arc<str>, Value)> = entries
                     .iter()

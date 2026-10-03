@@ -138,8 +138,23 @@ impl OpinionValue {
         match self {
             Self::Field(FieldValue::Value(value)) => Some(value),
             Self::Field(_) => None,
-            Self::Property(spec) => spec.default.as_ref(),
+            Self::Property(spec) => spec
+                .default
+                .as_ref()
+                .filter(|value| **value != Value::AnimationBlock),
         }
+    }
+
+    /// Whether numeric resolution switches to weaker defaults at this site.
+    /// Same-site samples or a spline take precedence over its default marker.
+    /// OpenUSD `_GetResolveInfoWithClipsImpl`; AOUSD Core §12.3.
+    #[must_use]
+    pub fn blocks_animation(&self) -> bool {
+        self.as_property().is_some_and(|spec| {
+            spec.default == Some(Value::AnimationBlock)
+                && self.time_samples().is_none()
+                && spec.spline.is_none()
+        })
     }
 
     /// Returns the authored, non-empty time samples of a property opinion.

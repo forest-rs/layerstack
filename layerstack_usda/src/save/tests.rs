@@ -210,18 +210,11 @@ over "Other"
 /// is written.
 #[test]
 fn rejects_unsupported_features_with_their_source_paths() {
-    let cases: &[(&str, &str, Unsupported)] = &[
-        (
-            "#usda 1.0\ndef \"A\" (\n    customData = {\n        string[] e = []\n    }\n)\n{\n}\n",
-            "/A#customData/e",
-            Unsupported::Value("untyped empty array"),
-        ),
-        (
-            "#usda 1.0\ndef \"A\"\n{\n    int[] a = edit [append 4]\n}\n",
-            "/A.a",
-            Unsupported::ArrayEdit,
-        ),
-    ];
+    let cases: &[(&str, &str, Unsupported)] = &[(
+        "#usda 1.0\ndef \"A\" (\n    customData = {\n        string[] e = []\n    }\n)\n{\n}\n",
+        "/A#customData/e",
+        Unsupported::Value("untyped empty array"),
+    )];
     for (source, path, feature) in cases {
         assert_eq!(
             Imported::new(source).save(),

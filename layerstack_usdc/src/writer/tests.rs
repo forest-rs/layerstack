@@ -1488,3 +1488,41 @@ fn text_arrays_keep_their_types_when_interleaved() {
         assert_eq!(first.payload(), second.payload());
     }
 }
+
+#[test]
+fn invalid_native_array_edit_programs_are_rejected() {
+    use crate::value_rep::CrateArrayEditOp as Op;
+    for (literals, instructions, size_error) in [
+        (Value::Int(0), vec![], false),
+        (
+            Value::IntArray(vec![7]),
+            vec![Op::WriteLiteral {
+                literal: 1,
+                index: 0,
+            }],
+            false,
+        ),
+        (
+            Value::IntArray(vec![]),
+            vec![Op::SetSize { len: u64::MAX }],
+            true,
+        ),
+    ] {
+        let specs = [Spec::new("/", SpecForm::PseudoRoot).with_field(
+            "custom",
+            Value::ArrayEdit {
+                literals: Box::new(literals),
+                instructions,
+            },
+        )];
+        let result = write_crate(&specs);
+        if size_error {
+            assert!(matches!(result, Err(UsdcWriteError::TooLarge)));
+        } else {
+            assert!(matches!(
+                result,
+                Err(UsdcWriteError::InvalidArrayEdit { .. })
+            ));
+        }
+    }
+}

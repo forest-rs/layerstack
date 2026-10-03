@@ -64,8 +64,8 @@
 //! [`layer_document`] checks the whole layer before a writer runs and
 //! returns the first problem it finds, naming its source path:
 //!
-//! - [`SaveError::Unsupported`]: sparse array edits (as a
-//!   default or a time sample); list ops mixing an explicit list with
+//! - [`SaveError::Unsupported`]: untyped sparse array edits outside attributes;
+//!   list ops mixing an explicit list with
 //!   edits; `varying` relationships; path list-op metadata; and values the
 //!   writers have no representation for (`opaque`, and
 //!   arrays whose element type is not recorded, such as an empty array in
@@ -284,11 +284,11 @@ fn is_authored<T>(op: &LayerListOp<T>) -> bool {
 }
 
 /// Where a value is authored, which decides the types it may have.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy)]
 enum Site<'t> {
     /// An attribute default or time sample, declared with this type name
     /// (`[]` included).
-    Value(&'t str),
+    Value(&'t str, &'t LayerValue),
     /// A metadata field or dictionary entry.
     Metadata,
 }
@@ -680,7 +680,7 @@ impl Lowering<'_> {
                 } else {
                     String::from(base)
                 };
-                let site = Site::Value(&type_name);
+                let site = Site::Value(&type_name, &declared.default_scalar);
                 let value = match &spec.default {
                     Some(value) => Some(self.value(value, site, &path)?),
                     None => None,
@@ -867,7 +867,7 @@ impl Lowering<'_> {
             L::Double(v) => Value::Double(*v),
             // The writers hold a `timecode` default as a double and store
             // it as `SdfTimeCode` from the declared type.
-            L::TimeCode(v) if matches!(site, Site::Value(_)) => Value::Double(*v),
+            L::TimeCode(v) if matches!(site, Site::Value(_, _)) => Value::Double(*v),
             // Elsewhere (a metadata value or a dictionary entry) the value
             // carries the type.
             L::TimeCode(v) => Value::TimeCode(*v),
@@ -907,12 +907,75 @@ impl Lowering<'_> {
             ),
             L::Array(items) => self.array(items, site, path)?,
             L::TypedArray(items) => typed_array(items),
-            L::ArrayEdit(_) | L::TypedArrayEdit(_) => {
-                return unsupported(path, Unsupported::ArrayEdit);
-            }
+            L::ArrayEdit(edit) => self.array_edit(edit, None, site, path)?,
+            L::TypedArrayEdit(edit) => self.array_edit(
+                edit.edit(),
+                Some(&edit.value_type().default_scalar),
+                site,
+                path,
+            )?,
             L::PathExpression(text) => Value::PathExpression(String::from(&**text)),
             L::Opaque { .. } => return no("opaque"),
             L::Null => return no("null"),
+        })
+    }
+
+    fn array_edit(
+        &self,
+        edit: &layerstack::ArrayEdit,
+        descriptor: Option<&LayerValue>,
+        site: Site<'_>,
+        path: &str,
+    ) -> Result<Value, SaveError> {
+        use layerstack::array_edit::{Instruction as I, Operand as O};
+        let descriptor = descriptor
+            .map(|v| self.value(v, Site::Metadata, path))
+            .transpose()?;
+        let element = match descriptor {
+            Some(element) => element,
+            None => {
+                let Site::Value(_, default) = site else {
+                    return unsupported(path, Unsupported::ArrayEdit);
+                };
+                self.value(default, Site::Metadata, path)?
+            }
+        };
+        let literal = |value: &LayerValue| self.value(value, Site::Metadata, path);
+        let operand = |src: &layerstack::ArrayEditOperand| match src {
+            O::Literal(v) => literal(v).map(O::Literal),
+            O::CopyFrom(index) => Ok(O::CopyFrom(*index)),
+        };
+        let instructions = edit
+            .ops
+            .iter()
+            .map(|op| {
+                Ok(match op {
+                    I::Write { src, index } => I::Write {
+                        src: operand(src)?,
+                        index: *index,
+                    },
+                    I::Insert { src, index } => I::Insert {
+                        src: operand(src)?,
+                        index: *index,
+                    },
+                    I::Erase { index } => I::Erase { index: *index },
+                    I::MinSize { len } => I::MinSize { len: *len },
+                    I::MaxSize { len } => I::MaxSize { len: *len },
+                    I::Resize { len } => I::Resize { len: *len },
+                    I::MinSizeFill { len, fill } => I::MinSizeFill {
+                        len: *len,
+                        fill: literal(fill)?,
+                    },
+                    I::ResizeFill { len, fill } => I::ResizeFill {
+                        len: *len,
+                        fill: literal(fill)?,
+                    },
+                })
+            })
+            .collect::<Result<_, SaveError>>()?;
+        Ok(Value::ArrayEdit {
+            element: Box::new(element),
+            instructions,
         })
     }
 
@@ -921,7 +984,7 @@ impl Lowering<'_> {
     /// must all have the first one's type.
     fn array(&self, items: &[LayerValue], site: Site<'_>, path: &str) -> Result<Value, SaveError> {
         let mut out = match site {
-            Site::Value(type_name) => Value::empty_array_of(type_name),
+            Site::Value(type_name, _) => Value::empty_array_of(type_name),
             Site::Metadata => None,
         };
         for item in items {
@@ -1052,7 +1115,7 @@ fn rows<const N: usize, const M: usize>(m: &[f64; M]) -> [[f64; N]; N] {
 }
 
 /// Appends `element` to `array` when it has the array's element type.
-fn push_element(array: &mut Value, element: Value) -> bool {
+pub(crate) fn push_element(array: &mut Value, element: Value) -> bool {
     match (array, element) {
         (Value::BoolArray(a), Value::Bool(v)) => a.push(v),
         (Value::UCharArray(a), Value::UChar(v)) => a.push(v),

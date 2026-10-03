@@ -46,6 +46,13 @@ pub enum UsdcWriteError {
         /// The spec form.
         form: SpecForm,
     },
+    /// A sparse edit has an unsupported descriptor or mismatched literal.
+    InvalidArrayEdit {
+        /// Owning spec path.
+        path: String,
+        /// Owning field.
+        field: String,
+    },
     /// Two specs share a path.
     DuplicateSpec {
         /// The repeated path.
@@ -140,6 +147,10 @@ pub enum UsdcWriteError {
 impl fmt::Display for UsdcWriteError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::InvalidArrayEdit { path, field } => write!(
+                f,
+                "{path}#{field}: invalid array edit descriptor or literal"
+            ),
             Self::InvalidPath { path, reason } => write!(f, "invalid path {path:?}: {reason}"),
             Self::SpecPathMismatch { path, form } => {
                 write!(f, "{path}: a {form:?} spec cannot have this path")

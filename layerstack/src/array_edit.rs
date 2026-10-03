@@ -21,6 +21,8 @@ use opinionated::ArrayFill;
 use crate::{doc::Value, property::PropertyType};
 
 pub use opinionated::ArrayIndex;
+// Portable instruction types for format adapters with their own literal model.
+pub use opinionated::{ArrayEditOp as Instruction, ArrayEditOperand as Operand};
 
 /// A sparse array edit over USD values.
 ///
@@ -43,10 +45,35 @@ pub struct TypedArrayEdit {
 
 impl TypedArrayEdit {
     /// Retains `edit` and its actual value type, normalizing the descriptor
-    /// to an array. The descriptor's scalar default supplies growth fills.
+    /// to an array with the canonical storage name. Semantic roles remain on
+    /// the attribute declaration, as with native `VtArrayEdit<T>`. The
+    /// descriptor's scalar default supplies growth fills.
     #[must_use]
     pub fn new(edit: ArrayEdit, mut value_type: PropertyType) -> Self {
         value_type.is_array = true;
+        // A Vt edit's native element tag has no role aliases. USDA and USDC
+        // must agree on this descriptor while preserving the property role.
+        // OpenUSD: SDF_VALUE_TYPES, `_ValueHandler::PackArrayEdit`.
+        let authored = value_type
+            .type_name
+            .strip_suffix("[]")
+            .unwrap_or(&value_type.type_name);
+        let canonical = match authored {
+            "texCoord2f" => "float2",
+            "texCoord2d" => "double2",
+            "texCoord2h" => "half2",
+            "point3f" | "normal3f" | "vector3f" | "color3f" | "texCoord3f" => "float3",
+            "point3d" | "normal3d" | "vector3d" | "color3d" | "texCoord3d" => "double3",
+            "point3h" | "normal3h" | "vector3h" | "color3h" | "texCoord3h" => "half3",
+            "color4f" => "float4",
+            "color4d" => "double4",
+            "color4h" => "half4",
+            "frame4d" => "matrix4d",
+            name => name,
+        };
+        if canonical != &*value_type.type_name {
+            value_type.type_name = alloc::sync::Arc::from(canonical);
+        }
         Self { edit, value_type }
     }
 

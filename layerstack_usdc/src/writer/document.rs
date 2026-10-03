@@ -433,6 +433,10 @@ fn natural(value: &UsdaValue) -> Value {
         U::UIntListOp(op) => Value::UIntListOp(map_list_op(op, |x| *x)),
         U::Int64ListOp(op) => Value::Int64ListOp(map_list_op(op, |x| *x)),
         U::UInt64ListOp(op) => Value::UInt64ListOp(map_list_op(op, |x| *x)),
+        U::ArrayEdit {
+            element,
+            instructions,
+        } => native_edit(element, instructions),
         U::Block => Value::Block,
         U::Dictionary(entries) => Value::Dictionary(
             entries
@@ -440,6 +444,77 @@ fn natural(value: &UsdaValue) -> Value {
                 .map(|(k, v)| (k.clone(), natural(v)))
                 .collect(),
         ),
+    }
+}
+
+fn native_edit(
+    element: &UsdaValue,
+    instructions: &[layerstack::array_edit::Instruction<UsdaValue>],
+) -> Value {
+    use crate::value_rep::CrateArrayEditOp as C;
+    use layerstack::array_edit::{ArrayIndex, Instruction as I, Operand as O};
+    let mut values = Vec::new();
+    let mut literal = |value: &UsdaValue| {
+        let i = values.len();
+        values.push(value.clone());
+        i
+    };
+    let index = |i: ArrayIndex| match i {
+        ArrayIndex::Position(i) => i,
+        ArrayIndex::End => i64::MIN,
+    };
+    let instructions = instructions
+        .iter()
+        .map(|op| match op {
+            I::Write {
+                src: O::Literal(value),
+                index: i,
+            } => C::WriteLiteral {
+                literal: literal(value),
+                index: index(*i),
+            },
+            I::Write {
+                src: O::CopyFrom(src),
+                index: i,
+            } => C::WriteRef {
+                src: index(*src),
+                index: index(*i),
+            },
+            I::Insert {
+                src: O::Literal(value),
+                index: i,
+            } => C::InsertLiteral {
+                literal: literal(value),
+                index: index(*i),
+            },
+            I::Insert {
+                src: O::CopyFrom(src),
+                index: i,
+            } => C::InsertRef {
+                src: index(*src),
+                index: index(*i),
+            },
+            I::Erase { index: i } => C::Erase { index: index(*i) },
+            I::MinSize { len } => C::MinSize { len: *len as u64 },
+            I::MinSizeFill { len, fill } => C::MinSizeFill {
+                len: *len as u64,
+                literal: literal(fill),
+            },
+            I::Resize { len } => C::SetSize { len: *len as u64 },
+            I::ResizeFill { len, fill } => C::SetSizeFill {
+                len: *len as u64,
+                literal: literal(fill),
+            },
+            I::MaxSize { len } => C::MaxSize { len: *len as u64 },
+        })
+        .collect();
+    // Document validation rejects incompatible descriptors and literals before
+    // lowering. A sentinel here also makes an invalid raw program fail preflight
+    // if this routine ever gains an unchecked caller.
+    let literals = UsdaValue::array_of(element, values).map_or(Value::Block, |v| natural(&v));
+    Value::ArrayEdit {
+        literals: Box::new(literals),
+        instructions,
     }
 }
 
@@ -1583,15 +1658,14 @@ def Xform "A" (
 
     #[test]
     fn save_layer_rejects_before_writing() {
-        let (layer, tokens, paths) =
-            import_usda("#usda 1.0\ndef \"A\"\n{\n    int[] a = edit [append 4]\n}\n");
+        let (layer, tokens, paths) = import_usda("#usda 1.0\ndef \"A\"\n{\n    opaque a\n}\n");
         assert_eq!(
             save_layer(&layer, &tokens, &paths),
             Err(UsdcWriteError::Save(
-                layerstack_usda::save::SaveError::Unsupported {
+                layerstack_usda::save::SaveError::Document(WriteError::UnknownType {
                     path: "/A.a".into(),
-                    feature: layerstack_usda::save::Unsupported::ArrayEdit,
-                }
+                    type_name: "opaque".into(),
+                })
             )),
             "the USDA save's error, before any output"
         );

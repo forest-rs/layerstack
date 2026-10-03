@@ -353,6 +353,8 @@ pub mod bounds;
 pub mod camera;
 #[cfg(feature = "usd")]
 mod collection;
+#[cfg(feature = "usd")]
+pub mod color;
 #[cfg(feature = "usd-geom")]
 mod common_xform;
 mod edit;

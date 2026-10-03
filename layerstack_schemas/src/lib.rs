@@ -387,6 +387,8 @@ mod motion;
 mod motion_sampling;
 #[cfg(feature = "usd-physics")]
 pub mod physics;
+#[cfg(feature = "usd-physics")]
+pub mod physics_scene;
 #[cfg(feature = "usd-geom")]
 pub mod point_instancer;
 #[cfg(feature = "usd-geom")]

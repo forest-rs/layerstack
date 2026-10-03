@@ -4,7 +4,7 @@
 //! Explicit scene-to-engine link membership capture; GPU adapters consume the decisions.
 use super::LightCaptureError;
 use crate::{
-    Scene,
+    CollectionIdentity, MembershipCache, MembershipSample, Scene,
     collection::{MembershipProblem, MembershipQuery},
     usd_lux::{LightApi, LightFilter},
 };
@@ -90,5 +90,62 @@ impl LightFilter<'_> {
             self.filter_link_collection().membership_query(),
             targets,
         )
+    }
+}
+
+/// Retained illumination and shadow decisions with independent query and
+/// decision revisions. Consumers choose their own masks or index buffers.
+#[derive(Clone, Copy, Debug)]
+pub struct LightLinkSample<'a> {
+    /// Targets receiving illumination.
+    pub illumination: MembershipSample<'a>,
+    /// Targets casting shadows for the light.
+    pub shadows: MembershipSample<'a>,
+}
+impl MembershipCache {
+    /// Retains both USD light-link collections, including schema fallbacks.
+    /// Feed edit reports to `MembershipCache::apply_changes` before recapturing.
+    /// Query problems remain available through each sample's `query`.
+    /// AOUSD Core §15; OpenUSD `UsdLuxLightAPI` linking collections.
+    pub fn capture_light_links<'a>(
+        &'a mut self,
+        scene: &Scene<'_>,
+        light: PathId,
+        targets: &[TargetPath],
+    ) -> Result<LightLinkSample<'a>, LightCaptureError> {
+        if !scene.stage().has_prim(light) {
+            return Err(LightCaptureError::MissingPrim(light));
+        }
+        if LightApi::get(scene, light).is_none() {
+            return Err(LightCaptureError::NotLight(light));
+        }
+        let illumination = CollectionIdentity {
+            owner: light,
+            name: "lightLink".into(),
+        };
+        let shadows = CollectionIdentity {
+            owner: light,
+            name: "shadowLink".into(),
+        };
+        let light_evaluated = self
+            .prepare(scene, &illumination, targets)
+            .expect("existing light and valid builtin collection name");
+        let shadow_evaluated = self
+            .prepare(scene, &shadows, targets)
+            .expect("existing light and valid builtin collection name");
+        Ok(LightLinkSample {
+            illumination: self.sample(&illumination, light_evaluated),
+            shadows: self.sample(&shadows, shadow_evaluated),
+        })
+    }
+    /// Retains the filter's `filterLink` collection. As with fresh filter
+    /// captures, an unapplied collection uses its schema defaults.
+    /// AOUSD Core §15; OpenUSD `UsdLuxLightFilter` linking collection.
+    pub fn capture_filter_links<'a>(
+        &'a mut self,
+        filter: &LightFilter<'_>,
+        targets: &[TargetPath],
+    ) -> Result<MembershipSample<'a>, crate::MembershipCacheError> {
+        self.capture(&filter.scene(), filter.path(), "filterLink", targets)
     }
 }

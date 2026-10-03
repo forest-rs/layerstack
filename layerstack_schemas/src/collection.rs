@@ -18,6 +18,9 @@
 //! Spec: AOUSD Core §15 (collections). The `membershipExpression`, its
 //! `mode` and path expressions are OpenUSD's, as of 26.08.
 
+mod cache;
+pub use cache::*;
+
 use alloc::{
     format,
     string::{String, ToString},

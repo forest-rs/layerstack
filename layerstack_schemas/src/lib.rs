@@ -264,6 +264,9 @@
 //! `variant`, `specifier`, `abstract`, `defined`), with kinds from the
 //! scene's [`KindRegistry`]. [`MembershipQuery::included_paths`] lists every
 //! member, and [`ExpressionEvaluator`] matches any expression.
+//! [`MembershipCache`] retains compiled queries and ordered candidate decisions.
+//! Pass complete edit reports to `apply_changes`; separate query and decision
+//! revisions, dependency scopes and work counters make reuse inspectable.
 //!
 //! With `usd-geom`, [`bounds::BoundsCache`] computes oriented local and world
 //! bounds from authored extents and model extent hints, partitioned by purpose.
@@ -287,8 +290,16 @@
 //! shader readiness, source evidence, stage units and typed shape/photometric
 //! accessors. [`light::LightCache`] retains discovery and inputs across explicit
 //! edits, with component revisions for engine uploads. [`light::LightLinkMembership`]
-//! captures ordered CPU link decisions for engine masks. GPU layouts, shader
-//! execution, asset loading and color management remain engine responsibilities.
+//! captures ordered CPU link decisions for engine masks. `MembershipCache`'s
+//! `capture_light_links` and `capture_filter_links` retain those decisions.
+//! `LightInputs::shaping`, `shadow` and `environment` expose checked USD groups,
+//! preserving units, sentinels and unresolved asset inputs. [`assets::AssetReference`]
+//! captures an asset's winning source even when general provenance is disabled,
+//! then asks the host resolver to anchor its identifier explicitly.
+//! [`affine::AffineFactors`] preserves full affine stretch, shear and reflection;
+//! optional `to_trs` conversion checks a caller-specified reconstruction tolerance.
+//! GPU layouts, shader execution, asset loading and color management remain
+//! engine responsibilities.
 //! See `layerstack_examples`' `lighting_inputs` binary for the complete flow.
 //!
 //! With `usd-shade`, `PrimView::compute_bound_material` (every view derefs
@@ -406,8 +417,10 @@ pub use binding::{
 };
 #[cfg(feature = "usd")]
 pub use collection::{
-    ExpansionRule, ExpressionEvaluator, ExpressionSearch, Membership, MembershipProblem,
-    MembershipQuery, MembershipRule,
+    CollectionIdentity, ExpansionRule, ExpressionEvaluator, ExpressionSearch, Membership,
+    MembershipCache, MembershipCacheError, MembershipCacheMemory, MembershipCacheStats,
+    MembershipDependencies, MembershipProblem, MembershipQuery, MembershipRevisions,
+    MembershipRule, MembershipSample,
 };
 pub use edit::SchemaEdit;
 pub use generated::views::*;

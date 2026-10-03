@@ -33,6 +33,26 @@ preview surface, UV texture, primvar reader and 2D transform nodes. Input getter
 read composed USD values; associated `_default` functions expose node definition
 defaults explicitly. Typed port creation supports the ordinary connection APIs.
 
+The `usd-lux` feature captures owned lighting inputs through `light::LightInputs`
+and retains them through `light::LightCache`. Checked `shaping`, `shadow` and
+`environment` groups preserve USD units, negative sentinels, texture layouts and
+asset readiness. `assets::AssetReference` captures winning authoring-layer evidence
+without enabling global provenance, and anchors identifiers through an explicit
+host resolver. Loading and decoding assets remain host operations.
+
+With `usd-geom`, `affine::AffineFactors` exposes the full row-vector factorization,
+including principal stretch orientation and reflection. `to_trs` is an optional
+conversion with a caller-specified reconstruction tolerance; shear is preserved
+in full factors and rejected when it exceeds that tolerance.
+
+With `usd`, `MembershipCache` retains compiled collection queries and ordered
+candidate decisions, including duplicates. With `usd-lux`, `capture_light_links`
+and `capture_filter_links` use the same cache. Feed every complete edit report
+to `apply_changes`; clear after losing history or changing scenes/registries.
+Dependency scopes, query and decision revisions, work counters and query problems
+remain inspectable. Engines own their masks, buffer layouts and GPU resource
+lifetimes. See the `layerstack_examples` `lighting_inputs` binary for a full flow.
+
 The `usd-geom` feature provides caller-owned transform and bounds caches:
 
 - `XformCache` shares ancestor work through parent slots, validates edited

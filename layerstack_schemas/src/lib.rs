@@ -357,6 +357,8 @@ mod collection;
 mod common_xform;
 mod edit;
 mod metadata;
+#[cfg(feature = "usd")]
+pub mod validation;
 pub use metadata::{PropertyMetadata, StageMetadata};
 pub mod assets;
 #[cfg(feature = "usd-geom")]

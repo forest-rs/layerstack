@@ -160,6 +160,7 @@ pub mod sparse_writer;
 pub mod spec_path;
 pub mod spline;
 pub mod stage;
+pub mod stitch;
 mod value_resolution;
 pub mod variable_expression;
 pub mod variant_fallbacks;

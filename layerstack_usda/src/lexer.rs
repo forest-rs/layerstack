@@ -122,7 +122,7 @@ impl Token {
 /// Iterates over a source string, yielding [`Token`]s. All bytes are
 /// covered — the concatenation of every token's text reproduces the
 /// original input.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Lexer<'a> {
     source: &'a str,
     bytes: &'a [u8],

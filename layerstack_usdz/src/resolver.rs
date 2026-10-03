@@ -344,10 +344,8 @@ fn parse_usda(
         cause: LayerReadError::InvalidUtf8(error),
     })?;
 
-    let cst = layerstack_usda::parser::parse_cst(source);
-    let ast_result = layerstack_usda::lower::lower(&cst.tree, source);
-    let emit_result =
-        layerstack_usda::emit::emit(&ast_result.layer, layer_id, tokens, paths, resolver);
+    let result = layerstack_usda::read_usda(source, layer_id, tokens, paths, resolver);
+    let emit_result = result.emitted;
     Ok(ParsedLayer {
         layer: emit_result.layer,
         resolved_layers: emit_result.resolved_layers,
@@ -356,12 +354,13 @@ fn parse_usda(
         diagnostics: member_diagnostics(
             name,
             layer_id,
-            cst.diagnostics
+            result
+                .parse_diagnostics
                 .into_iter()
                 .map(ImportDiagnostic::UsdaParse)
                 .chain(
-                    ast_result
-                        .diagnostics
+                    result
+                        .lower_diagnostics
                         .into_iter()
                         .map(ImportDiagnostic::UsdaLower),
                 )

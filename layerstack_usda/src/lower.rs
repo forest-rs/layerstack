@@ -1775,7 +1775,7 @@ fn parse_f64(s: &str) -> f64 {
 /// (`_GetNumericValueFromString`, `pxr/usd/sdf/textParserHelpers.cpp`): with
 /// `.`, `e` or `E` a double, otherwise an integer, which is unsigned 64-bit
 /// when it does not fit `i64`, and a double when it fits neither.
-fn parse_number_value(text: &str) -> Value<'_> {
+pub(crate) fn parse_number_value(text: &str) -> Value<'_> {
     if !text.contains(['.', 'e', 'E']) {
         if let Ok(n) = text.parse::<i64>() {
             return Value::Int(n);

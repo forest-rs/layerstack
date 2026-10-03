@@ -43,6 +43,15 @@ authored data, use [`emit::emit`](https://docs.rs/layerstack_usda/latest/layerst
 with Layerstack interners and an `AssetResolver`, and inspect emission diagnostics
 as well. The resolver supplies external layers; the parser does not open files.
 
+For scene loading, use `read_usda` with the same interners and resolver. It
+imports numeric scalar, vector and quaternion property arrays directly into
+native buffers, including samples and variant branches. This avoids retaining
+per-element tokens, syntax nodes and generic AST tuples. Unsupported shapes use
+the shared grammar and ordinary emitter. Inspect `parse_diagnostics`,
+`lower_diagnostics`, and `emitted.diagnostics`; `stats` reports retained syntax
+and recognized numeric arrays. Use the parser APIs when you need an inspectable
+AST or lossless editing.
+
 ## Saving layers
 
 `writer::Document` is an explicit authoring model. To save an existing

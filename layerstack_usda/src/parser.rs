@@ -49,6 +49,27 @@ fn parse_tree<const LOSSLESS: bool>(source: &str) -> CstParseResult {
     }
 }
 
+pub(crate) fn parse_for_read(source: &str) -> (CstParseResult, crate::read::RawArrays, usize) {
+    let (tokens, compacted) = crate::read::compact_tokens(source);
+    let token_count = tokens.len();
+    let mut parser = Parser::<false>::new(source, tokens);
+    parser.direct_arrays = Some(crate::read::RawArrays::new());
+    parser.compacted_arrays = compacted;
+    parser.parse_source_file();
+    let arrays = parser
+        .direct_arrays
+        .take()
+        .expect("read mode owns its arrays");
+    (
+        CstParseResult {
+            tree: parser.builder.finish(),
+            diagnostics: parser.diagnostics,
+        },
+        arrays,
+        token_count,
+    )
+}
+
 // ── Parser ─────────────────────────────────────────────────────────────
 
 struct Parser<'a, const LOSSLESS: bool> {
@@ -57,6 +78,8 @@ struct Parser<'a, const LOSSLESS: bool> {
     pos: usize,
     diagnostics: Vec<Diagnostic>,
     builder: TreeBuilder,
+    direct_arrays: Option<crate::read::RawArrays>,
+    compacted_arrays: alloc::collections::BTreeMap<u32, crate::read::RawArray>,
 }
 
 impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
@@ -67,6 +90,8 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             pos: 0,
             diagnostics: Vec::new(),
             builder: TreeBuilder::new(source.len() as u32),
+            direct_arrays: None,
+            compacted_arrays: alloc::collections::BTreeMap::new(),
         }
     }
 
@@ -107,6 +132,22 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
     // Some grammar tokens carry no information needed by AST lowering.
     // Consume them identically in both modes, storing them only for editing.
     fn bump_stored<const STORE: bool>(&mut self) -> Option<Token> {
+        // A compact array is safe only for a supported typed property. Every
+        // other grammar consumer expands it before consuming its opening
+        // bracket, preserving the shared grammar rather than guessing types
+        // during lexing (metadata and array-edit operands included).
+        if let Some(token) = self.current().copied()
+            && let Some(array) = self.compacted_arrays.remove(&token.span.start)
+        {
+            let offset = array.span.start;
+            let expanded =
+                crate::lexer::Lexer::new(array.span.text(self.source)).map(|mut token| {
+                    token.span.start += offset;
+                    token.span.end += offset;
+                    token
+                });
+            self.tokens.splice(self.pos..self.pos + 2, expanded);
+        }
         let tok = self.tokens.get(self.pos).copied();
         if let Some(t) = tok {
             if STORE {
@@ -1011,15 +1052,20 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             self.bump();
         }
 
+        let mut type_name = "";
+        let mut is_array = false;
+
         // Type name.
         self.eat_trivia();
         if self.peek() == Some(TokenKind::Ident) {
+            type_name = self.current_text();
             self.bump();
         }
 
         // Array suffix `[]`.
         self.eat_trivia();
         if self.peek() == Some(TokenKind::LeftBracket) {
+            is_array = true;
             self.bump();
             self.expect(TokenKind::RightBracket);
         }
@@ -1030,10 +1076,10 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         // What follows: .timeSamples, .connect, =, or metadata (
         self.eat_trivia();
         if self.peek() == Some(TokenKind::Dot) {
-            self.parse_attribute_suffix();
+            self.parse_attribute_suffix(start, type_name, is_array);
         } else if self.peek() == Some(TokenKind::Equals) {
             self.bump(); // =
-            self.parse_value_expr();
+            self.parse_attribute_value(start, None, type_name, is_array);
         }
 
         // Optional metadata block.
@@ -1046,7 +1092,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.builder.finish_node(end);
     }
 
-    fn parse_attribute_suffix(&mut self) {
+    fn parse_attribute_suffix(&mut self, attribute: u32, type_name: &str, is_array: bool) {
         self.eat_trivia();
         if self.peek() != Some(TokenKind::Dot) {
             return;
@@ -1062,7 +1108,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
             if i < self.tokens.len() {
                 let text = self.tokens[i].text(self.source);
                 if text == "timeSamples" {
-                    self.parse_time_samples_suffix();
+                    self.parse_time_samples_suffix(attribute, type_name, is_array);
                     return;
                 } else if text == "connect" {
                     self.parse_connection_suffix();
@@ -1116,14 +1162,14 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         }
     }
 
-    fn parse_time_samples_suffix(&mut self) {
+    fn parse_time_samples_suffix(&mut self, attribute: u32, type_name: &str, is_array: bool) {
         let start = self.current_span().start;
         self.builder
             .start_node(SyntaxKind::TimeSamplesSuffix, start);
         self.bump(); // `.`
         self.bump(); // `timeSamples`
         self.expect(TokenKind::Equals);
-        self.parse_time_sample_map();
+        self.parse_time_sample_map(attribute, type_name, is_array);
         let end = self.current_span().start;
         self.builder.finish_node(end);
     }
@@ -1365,6 +1411,43 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
     }
 
     // ── Values ─────────────────────────────────────────────────────
+
+    fn parse_attribute_value(
+        &mut self,
+        attribute: u32,
+        sample: Option<usize>,
+        type_name: &str,
+        is_array: bool,
+    ) {
+        self.eat_trivia();
+        if is_array
+            && self.direct_arrays.is_some()
+            && let Some(width) = crate::read::numeric_width(type_name)
+        {
+            let start = self.current_span().start;
+            let candidate = self
+                .compacted_arrays
+                .get(&start)
+                .filter(|array| array.width == width)
+                .map(|array| (self.pos + 2, *array));
+            if let Some((end, array)) = candidate {
+                self.compacted_arrays.remove(&start);
+                self.builder.start_node(SyntaxKind::ValueExpr, start);
+                self.builder.start_node(SyntaxKind::ArrayValue, start);
+                self.pos = end;
+                // Private placeholders: emission consumes the matching source
+                // range by declaration offset and sample ordinal.
+                self.builder.finish_node(array.span.end);
+                self.builder.finish_node(self.current_span().start);
+                self.direct_arrays
+                    .as_mut()
+                    .expect("read mode")
+                    .insert((attribute, sample), array);
+                return;
+            }
+        }
+        self.parse_value_expr();
+    }
 
     fn parse_value_expr(&mut self) {
         let start = self.current_span().start;
@@ -1693,17 +1776,19 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.builder.finish_node(end);
     }
 
-    fn parse_time_sample_map(&mut self) {
+    fn parse_time_sample_map(&mut self, attribute: u32, type_name: &str, is_array: bool) {
         let start = self.current_span().start;
         self.builder.start_node(SyntaxKind::TimeSampleMap, start);
         self.expect(TokenKind::LeftBrace);
 
+        let mut sample = 0;
         loop {
             self.eat_trivia();
             if self.peek() == Some(TokenKind::RightBrace) || self.current().is_none() {
                 break;
             }
-            self.parse_time_sample_entry();
+            self.parse_time_sample_entry(attribute, sample, type_name, is_array);
+            sample += 1;
             self.eat(TokenKind::Comma);
         }
 
@@ -1712,7 +1797,13 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         self.builder.finish_node(end);
     }
 
-    fn parse_time_sample_entry(&mut self) {
+    fn parse_time_sample_entry(
+        &mut self,
+        attribute: u32,
+        sample: usize,
+        type_name: &str,
+        is_array: bool,
+    ) {
         let start = self.current_span().start;
         self.builder.start_node(SyntaxKind::TimeSampleEntry, start);
 
@@ -1725,7 +1816,7 @@ impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
         if self.peek() == Some(TokenKind::Ident) && self.current_text() == "None" {
             self.bump();
         } else {
-            self.parse_value_expr();
+            self.parse_attribute_value(attribute, Some(sample), type_name, is_array);
         }
 
         let end = self.current_span().start;

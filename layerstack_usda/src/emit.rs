@@ -97,6 +97,26 @@ pub fn emit(
     paths: &mut PathInterner,
     resolver: &mut dyn AssetResolver,
 ) -> EmitResult {
+    emit_with_arrays(
+        ast,
+        layer_id,
+        tokens,
+        paths,
+        resolver,
+        "",
+        crate::read::RawArrays::new(),
+    )
+}
+
+pub(crate) fn emit_with_arrays(
+    ast: &ast::Layer<'_>,
+    layer_id: LayerId,
+    tokens: &mut TokenInterner,
+    paths: &mut PathInterner,
+    resolver: &mut dyn AssetResolver,
+    source: &str,
+    arrays: crate::read::RawArrays,
+) -> EmitResult {
     let mut ctx = EmitCtx {
         tokens,
         paths,
@@ -106,6 +126,8 @@ pub fn emit(
         diagnostics: Vec::new(),
         rejections: Vec::new(),
         rejected: false,
+        source,
+        arrays,
     };
     let layer = ctx.emit_layer(ast);
     EmitResult {
@@ -119,6 +141,8 @@ pub fn emit(
 // ── Internal context ────────────────────────────────────────────────────
 
 struct EmitCtx<'a> {
+    source: &'a str,
+    arrays: crate::read::RawArrays,
     tokens: &'a mut TokenInterner,
     paths: &'a mut PathInterner,
     resolver: &'a mut dyn AssetResolver,
@@ -607,7 +631,9 @@ impl EmitCtx<'_> {
             .as_ref()
             .map(|samples| self.convert_time_samples(samples, attr.type_name, attr.span));
         let default = attr.default.as_ref().and_then(|value| {
-            self.checked(attr.span, |ctx| ctx.convert_value(value, attr.type_name))
+            self.checked(attr.span, |ctx| {
+                ctx.convert_attribute_value(value, attr.type_name, (attr.span.start, None))
+            })
         });
         let mut metadata = Vec::new();
         for entry in &attr.metadata {
@@ -1259,9 +1285,12 @@ impl EmitCtx<'_> {
     ) -> Vec<(f64, Value)> {
         samples
             .iter()
-            .filter_map(|s| {
+            .enumerate()
+            .filter_map(|(index, s)| {
                 let value = match &s.value {
-                    Some(v) => self.checked(span, |ctx| ctx.convert_value(v, type_hint))?,
+                    Some(v) => self.checked(span, |ctx| {
+                        ctx.convert_attribute_value(v, type_hint, (span.start, Some(index)))
+                    })?,
                     None => Value::Blocked,
                 };
                 Some((s.time, value))
@@ -1283,6 +1312,39 @@ impl EmitCtx<'_> {
             self.diagnostics.push(Diagnostic::error(span, message));
         }
         None
+    }
+
+    fn convert_attribute_value(
+        &mut self,
+        value: &ast::Value<'_>,
+        type_hint: &str,
+        key: (u32, Option<usize>),
+    ) -> Value {
+        let Some(array) = self.arrays.remove(&key) else {
+            return self.convert_value(value, type_hint);
+        };
+        let prototype = self.declared_property_type(type_hint, true).default_scalar;
+        let mut literals = crate::read::NumericLiterals::new(array.span.text(self.source));
+        // Stack storage is reused for every tuple. Packing reserves the final
+        // native buffer once from the exact element count; there is no Vec of
+        // generic array values or per-point heap allocation.
+        let mut components = core::array::from_fn::<_, 4, _>(|_| ast::Value::Blocked);
+        let elements = (0..array.count).map(|_| {
+            for component in &mut components[..array.width.max(1)] {
+                *component = literals.next_value();
+            }
+            if array.width == 0 {
+                self.convert_value(&components[0], type_hint)
+            } else {
+                self.try_convert_dimensioned(
+                    &components[..array.width],
+                    type_hint,
+                    element_type_hint(type_hint),
+                )
+                .expect("scanner supports known numeric vector types only")
+            }
+        });
+        Value::array_from_iter(elements, Some(&prototype))
     }
 
     fn convert_value(&mut self, val: &ast::Value<'_>, type_hint: &str) -> Value {

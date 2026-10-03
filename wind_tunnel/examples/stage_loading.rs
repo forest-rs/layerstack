@@ -78,11 +78,14 @@ impl Files {
             result.layer
         } else {
             let source = std::str::from_utf8(&data).map_err(|e| fail(e.to_string()))?;
-            let parsed = layerstack_usda::parser::parse(source);
-            if !parsed.diagnostics.is_empty() {
-                return Err(fail(format!("{:?}", parsed.diagnostics)));
+            let imported = layerstack_usda::read_usda(source, id, tokens, paths, self);
+            if !imported.parse_diagnostics.is_empty() || !imported.lower_diagnostics.is_empty() {
+                return Err(fail(format!(
+                    "{:?} {:?}",
+                    imported.parse_diagnostics, imported.lower_diagnostics
+                )));
             }
-            let result = layerstack_usda::emit::emit(&parsed.layer, id, tokens, paths, self);
+            let result = imported.emitted;
             if !result.diagnostics.is_empty() {
                 return Err(fail(format!("{:?}", result.diagnostics)));
             }

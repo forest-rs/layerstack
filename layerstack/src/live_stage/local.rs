@@ -213,10 +213,12 @@ fn supported(store: &dyn LayerStore, spec: &PrimSpec) -> bool {
         && spec.variant_set_order.is_empty()
         && spec.deleted_variant_sets.is_empty()
         && spec.instanceable.is_none()
-        && !spec
-            .fields
-            .iter()
-            .any(|f| store.tokens().resolve(f.name) == "instanceable")
+        && !spec.fields.iter().any(|f| {
+            matches!(
+                store.tokens().resolve(f.name),
+                "instanceable" | "clips" | "clipSets"
+            )
+        })
 }
 
 impl crate::edit::SourceNamespace for LocalNamespace {

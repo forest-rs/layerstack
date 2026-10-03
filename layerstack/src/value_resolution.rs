@@ -29,6 +29,12 @@ use crate::{
     property::PropertyType,
 };
 
+/// Metadata-only override for a source's sample composability.
+///
+/// AOUSD Core §12.5; OpenUSD clips query exact sample type metadata before
+/// interpolating payloads. Returning `None` keeps ordinary payload classification.
+pub(crate) type SampleComposability<'a> = dyn Fn(&Opinion, f64) -> Option<bool> + 'a;
+
 /// Internal query modes for sparse value resolution.
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum SparseQuery<'a> {
@@ -329,10 +335,20 @@ pub(crate) fn resolve_sparse_value(
     query: SparseQuery<'_>,
     property_type: Option<&PropertyType>,
 ) -> SparseResolveResult {
+    resolve_sparse_value_with_composability(opinions, query, property_type, None)
+}
+
+/// The ordinary entry point with exact source sample metadata overrides.
+pub(crate) fn resolve_sparse_value_with_composability(
+    opinions: &[Opinion],
+    query: SparseQuery<'_>,
+    property_type: Option<&PropertyType>,
+    composability: Option<&SampleComposability<'_>>,
+) -> SparseResolveResult {
     let Some(family) = SparseValueFamily::for_query(opinions, query) else {
         return SparseResolveResult::NotApplicable;
     };
-    family.resolve(opinions, query, property_type, &mut Lean)
+    family.resolve(opinions, query, property_type, composability, &mut Lean)
 }
 
 /// Default-time typed array folding: incompatible dense bases are skipped
@@ -539,6 +555,7 @@ fn compose_edits(
 ///
 /// OpenUSD: `UsdAttribute::Get<T>` and `_GetValueFromResolveInfoImpl`; sparse-array-edits
 /// proposal, "Composing and Evaluating Time-Varying Sparse Opinions".
+#[cfg(test)]
 pub(crate) fn resolve_sparse_at_time_matching(
     opinions: &[Opinion],
     property_type: Option<&PropertyType>,
@@ -546,6 +563,27 @@ pub(crate) fn resolve_sparse_at_time_matching(
     interp: InterpolationType,
     fallback: Option<&Value>,
     accepts: &dyn Fn(&Value) -> bool,
+) -> SparseResolveResult {
+    resolve_sparse_at_time_matching_with_composability(
+        opinions,
+        property_type,
+        time,
+        interp,
+        fallback,
+        accepts,
+        None,
+    )
+}
+
+/// The ordinary entry point with exact source sample metadata overrides.
+pub(crate) fn resolve_sparse_at_time_matching_with_composability(
+    opinions: &[Opinion],
+    property_type: Option<&PropertyType>,
+    time: f64,
+    interp: InterpolationType,
+    fallback: Option<&Value>,
+    accepts: &dyn Fn(&Value) -> bool,
+    composability: Option<&SampleComposability<'_>>,
 ) -> SparseResolveResult {
     if SparseValueFamily::for_query(
         opinions,
@@ -568,6 +606,7 @@ pub(crate) fn resolve_sparse_at_time_matching(
             fallback,
         },
         Some(accepts),
+        composability,
         &mut Lean,
     )
 }
@@ -581,6 +620,16 @@ pub(crate) fn explain_sparse_value(
     opinions: &[Opinion],
     query: SparseQuery<'_>,
     property_type: Option<&PropertyType>,
+) -> SparseExplanation {
+    explain_sparse_value_with_composability(opinions, query, property_type, None)
+}
+
+/// The ordinary entry point with exact source sample metadata overrides.
+pub(crate) fn explain_sparse_value_with_composability(
+    opinions: &[Opinion],
+    query: SparseQuery<'_>,
+    property_type: Option<&PropertyType>,
+    composability: Option<&SampleComposability<'_>>,
 ) -> SparseExplanation {
     if let SparseQuery::Default { fallback } = query
         && opinions
@@ -646,7 +695,13 @@ pub(crate) fn explain_sparse_value(
         };
     };
     let mut recording = Recording::default();
-    let result = family.resolve(opinions, query, property_type, &mut recording);
+    let result = family.resolve(
+        opinions,
+        query,
+        property_type,
+        composability,
+        &mut recording,
+    );
     SparseExplanation {
         result,
         folds: recording.folds,
@@ -727,6 +782,7 @@ impl SparseValueFamily {
         opinions: &[Opinion],
         query: SparseQuery<'_>,
         property_type: Option<&PropertyType>,
+        composability: Option<&SampleComposability<'_>>,
         folder: &mut impl Folder,
     ) -> SparseResolveResult {
         match self {
@@ -760,6 +816,7 @@ impl SparseValueFamily {
                         fallback,
                     },
                     None,
+                    composability,
                     folder,
                 ),
             },
@@ -962,13 +1019,23 @@ impl<'o> Bracket<'o> {
     }
 
     /// Value classification stays in the host; the planner sees no USD values.
-    fn planning_sample(&self, pick: Pick) -> TemporalSample<f64> {
+    fn planning_sample(
+        &self,
+        pick: Pick,
+        opinion: &Opinion,
+        composability: Option<&SampleComposability<'_>>,
+    ) -> TemporalSample<f64> {
+        let time = self.time(pick);
         TemporalSample {
-            time: self.time(pick),
-            composes: matches!(
-                self.sample(pick),
-                Some(Value::ArrayEdit(_) | Value::TypedArrayEdit(_))
-            ),
+            time,
+            composes: composability
+                .and_then(|classify| classify(opinion, time))
+                .unwrap_or_else(|| {
+                    matches!(
+                        self.sample(pick),
+                        Some(Value::ArrayEdit(_) | Value::TypedArrayEdit(_))
+                    )
+                }),
         }
     }
 }
@@ -977,6 +1044,8 @@ impl<'o> Bracket<'o> {
 /// bracketing samples.
 #[derive(Debug)]
 struct BracketPlan<'o> {
+    /// The next source's query time after stronger numeric series compose.
+    pending_query: Option<f64>,
     /// Participating opinions' brackets, strongest first.
     brackets: Vec<Bracket<'o>>,
     /// The composed series' samples bracketing the query time. Empty when no
@@ -1012,7 +1081,7 @@ fn plan_brackets<'o>(
     interp: InterpolationType,
     accepts: Option<&dyn Fn(&Value) -> bool>,
 ) -> BracketPlan<'o> {
-    plan_brackets_recording(opinions, time, interp, accepts, &mut |_| {})
+    plan_brackets_recording(opinions, time, interp, accepts, None, &mut |_| {})
 }
 
 fn plan_brackets_recording<'o>(
@@ -1020,6 +1089,7 @@ fn plan_brackets_recording<'o>(
     time: f64,
     interp: InterpolationType,
     accepts: Option<&dyn Fn(&Value) -> bool>,
+    composability: Option<&SampleComposability<'_>>,
     incompatible_source: &mut impl FnMut(ChainPos),
 ) -> BracketPlan<'o> {
     let mut brackets: Vec<Bracket<'o>> = Vec::new();
@@ -1027,7 +1097,22 @@ fn plan_brackets_recording<'o>(
         InterpolationType::Held => TemporalMode::Held,
         InterpolationType::Linear => TemporalMode::Bracketing,
     };
-    let mut planner = TemporalPlanner::new(time, mode);
+    // Native clip source selection uses exact metadata on both brackets,
+    // independent of output interpolation (stage.cpp::_GetResolveInfoWithClipsImpl).
+    // Payload composition retains every actual sparse knot fetched from that
+    // source chain. Their kinds can differ at synthetic clip activation times.
+    let mut payload_planner = composability.map(|_| TemporalPlanner::new(time, mode));
+    let source_mode = if composability.is_some() {
+        TemporalMode::Bracketing
+    } else {
+        mode
+    };
+    let source_interp = if composability.is_some() {
+        InterpolationType::Linear
+    } else {
+        interp
+    };
+    let mut planner = TemporalPlanner::new(time, source_mode);
     let mut opinions = opinions.into_iter().enumerate();
     let mut incompatible = None;
     let mut actual_edit: Option<&Value> = None;
@@ -1035,7 +1120,8 @@ fn plan_brackets_recording<'o>(
         let Some((position, opinion)) = opinions.next() else {
             break;
         };
-        let Some(mut bracket) = Bracket::of(opinion, (brackets.len(), position), query, interp)
+        let Some(mut bracket) =
+            Bracket::of(opinion, (brackets.len(), position), query, source_interp)
         else {
             continue;
         };
@@ -1097,18 +1183,50 @@ fn plan_brackets_recording<'o>(
             // read holds the lower sample instead of interpolating.
             bracket.upper = bracket.lower;
         }
+        if let Some(payload) = &mut payload_planner {
+            payload.push(
+                bracket.planning_sample(Pick::Lower, opinion, None),
+                bracket.planning_sample(Pick::Upper, opinion, None),
+                times_close,
+            );
+        }
         planner.push(
-            bracket.planning_sample(Pick::Lower),
-            bracket.planning_sample(Pick::Upper),
+            bracket.planning_sample(Pick::Lower, opinion, composability),
+            bracket.planning_sample(Pick::Upper, opinion, composability),
             times_close,
         );
         brackets.push(bracket);
     }
     BracketPlan {
         brackets,
-        composed: planner.into_samples(),
+        pending_query: planner.query(),
+        composed: payload_planner.unwrap_or(planner).into_samples(),
         incompatible,
     }
+}
+
+/// Plans a lazy source's bounded query after stronger sparse series.
+///
+/// A dense lower sample can mask weaker sources until a stronger upper sample.
+/// Reuse the ordinary numeric planner rather than materializing a lazy source's
+/// entire timeline. No value payloads are cloned by this planning pass.
+#[cfg(test)]
+pub(crate) fn query_time_for_weaker_source(
+    prefix: &[Opinion],
+    time: f64,
+    interp: InterpolationType,
+) -> Option<f64> {
+    query_time_for_weaker_source_with_composability(prefix, time, interp, None)
+}
+
+/// The ordinary entry point with exact source sample metadata overrides.
+pub(crate) fn query_time_for_weaker_source_with_composability(
+    prefix: &[Opinion],
+    time: f64,
+    interp: InterpolationType,
+    composability: Option<&SampleComposability<'_>>,
+) -> Option<f64> {
+    plan_brackets_recording(prefix, time, interp, None, composability, &mut |_| {}).pending_query
 }
 
 /// [`ArrayFamily`] reading, for one composed sample, the bracketing sample
@@ -1170,11 +1288,19 @@ fn resolve_array_at_time(
     interp: InterpolationType,
     array: ArrayFamily<'_>,
     accepts: Option<&dyn Fn(&Value) -> bool>,
+    composability: Option<&SampleComposability<'_>>,
     folder: &mut impl Folder,
 ) -> SparseResolveResult {
-    let plan = plan_brackets_recording(opinions, time, interp, accepts, &mut |position| {
-        folder.incompatible(position);
-    });
+    let plan = plan_brackets_recording(
+        opinions,
+        time,
+        interp,
+        accepts,
+        composability,
+        &mut |position| {
+            folder.incompatible(position);
+        },
+    );
     if plan.composed.is_empty()
         && let Some(value) = plan.incompatible
     {
@@ -1889,6 +2015,86 @@ mod tests {
             full, grouped,
             "sparse family folding should preserve associative grouped composition"
         );
+    }
+
+    #[test]
+    fn clip_metadata_plans_weaker_queries_without_changing_sparse_payloads() {
+        let (path, field) = test_ids();
+        let array =
+            |values: &[f64]| Value::Array(values.iter().copied().map(Value::Double).collect());
+        let write = |value| {
+            Value::ArrayEdit(ArrayEdit {
+                ops: vec![ArrayEditOp::Write {
+                    src: ArrayEditOperand::Literal(Value::Double(value)),
+                    index: ArrayIndex::Position(0),
+                }],
+            })
+        };
+        let ty = PropertyType::new(Arc::<str>::from("double"), true, Value::Double(0.));
+        let opinions = vec![
+            array_opinion(
+                path,
+                field,
+                samples(vec![(5., write(100.)), (10., write(200.))]),
+                0,
+            ),
+            array_opinion(
+                path,
+                field,
+                samples(vec![(2., array(&[2., 2.])), (8., array(&[8., 8.]))]),
+                1,
+            ),
+        ];
+        let classify = |op: &Opinion, time| (op.key.layer_strength == 0).then_some(time != 5.);
+        assert_eq!(
+            query_time_for_weaker_source(&opinions[..1], 7., InterpolationType::Linear),
+            Some(7.)
+        );
+        for interp in [InterpolationType::Linear, InterpolationType::Held] {
+            assert_eq!(
+                query_time_for_weaker_source_with_composability(
+                    &opinions[..1],
+                    7.,
+                    interp,
+                    Some(&classify)
+                ),
+                Some(10.)
+            );
+            let at_nine = if interp == InterpolationType::Linear {
+                150.
+            } else {
+                100.
+            };
+            for (time, expected) in [
+                (5., array(&[])),
+                (7., array(&[100., 8.])),
+                (9., array(&[at_nine, 8.])),
+            ] {
+                let query = SparseQuery::AtTime {
+                    time,
+                    interp,
+                    fallback: None,
+                };
+                let resolved = resolve_sparse_value_with_composability(
+                    &opinions,
+                    query,
+                    Some(&ty),
+                    Some(&classify),
+                );
+                assert_eq!(
+                    resolved,
+                    SparseResolveResult::Resolved(expected),
+                    "time {time}, {interp:?}"
+                );
+                let explained = explain_sparse_value_with_composability(
+                    &opinions,
+                    query,
+                    Some(&ty),
+                    Some(&classify),
+                );
+                assert_eq!(explained.result, resolved);
+            }
+        }
     }
 
     fn write_edit(value: i32, index: i64) -> Value {
@@ -2911,6 +3117,7 @@ mod tests {
                             property_type: Some(&ty),
                             fallback: seed_value.as_ref(),
                         },
+                        None,
                         None,
                         &mut Lean,
                     );

@@ -3,8 +3,8 @@
 
 //! Detached topology, manifests and explicit value-clip sequence metadata.
 //!
-//! This is interchange authoring: `LayerStack` does **not** evaluate value clips
-//! at runtime. OpenUSD 26.8 `UsdClipsAPI::GenerateClipManifestFromLayers` and
+//! Runtime evaluation is provided by [`crate::Stage`] once the host loads and
+//! binds the authored assets. OpenUSD 26.8 `UsdClipsAPI::GenerateClipManifestFromLayers` and
 //! `UsdUtilsStitchClips` define the ordinary-input behavior. Asset strings are
 //! already anchored by the caller; no filesystem lookup or path rebasing occurs.
 //! All input layers share the supplied token and path interners.

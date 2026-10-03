@@ -595,7 +595,9 @@ impl LiveStage {
 
     /// Records the generations of every layer the stage reads.
     fn record_generations(&mut self, store: &dyn LayerStore) {
-        self.generations = participating_layers(store, self.root)
+        let mut layers = participating_layers(store, self.root);
+        layers.extend(self.stage.clip_layers());
+        self.generations = layers
             .into_iter()
             .map(|layer| (layer, generations_of(store, layer)))
             .collect();
@@ -966,6 +968,14 @@ impl LiveStage {
 
         // Replace only the recomposed prim indexes; hierarchy is unchanged.
         self.stage.merge_prims_from(partial, &affected);
+        // A metadata-only clip edit can introduce an already resident layer.
+        // Start watching it without acknowledging unrelated, unnotified edits
+        // to layers whose generations were already tracked.
+        for layer in self.stage.clip_layers() {
+            self.generations
+                .entry(layer)
+                .or_insert_with(|| generations_of(store, layer));
+        }
 
         self.update_prim_edges(&affected, &partial_deps);
         for &prim in &affected {

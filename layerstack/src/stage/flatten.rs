@@ -71,7 +71,7 @@
 //!   (AOUSD Core §12.2.7).
 //!
 //! What a flattened layer cannot hold is a [`Loss`], never dropped
-//! silently: value clips, which composition does not read; times authored
+//! silently: value clips, whose external schedules are not baked by flattening; times authored
 //! at another `timeCodesPerSecond`, which composition does not rescale; and
 //! an attribute no opinion gives a type, which OpenUSD's flatten omits too.
 //!

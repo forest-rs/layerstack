@@ -14,7 +14,7 @@
 //! - **Layer stacks** — recursive sublayers with deterministic strength ordering
 //! - **Stage population** — a composed prim tree from all contributing layers
 //! - **Value resolution** — scalars, [`ListOp`] chaining, recursive dictionaries,
-//!   sparse array edits, time samples and splines
+//!   sparse array edits, time samples, splines and runtime value clips
 //! - **Composition arcs** — local, inherits, variants, references, payloads,
 //!   specializes, and namespace relocates (LIVERPS)
 //! - **Path expressions** — sets of prim and property paths
@@ -100,7 +100,9 @@
 //! [`opinionated`](https://docs.rs/opinionated).
 //!
 //! OpenUSD compatibility is bounded by the implemented and tested subset. Value
-//! clips are not evaluated. Feature presence is not a guarantee of full OpenUSD
+//! clips are evaluated from host-loaded raw layers; inspect
+//! [`Stage::clip_asset_requests`] and [`Stage::clip_issues`] for preparation gaps.
+//! Feature presence is not a guarantee of full OpenUSD
 //! equivalence. The repository's [conformance harness][conformance] records exact
 //! ordered stack and value checks against upstream fixtures and differential tests
 //! for additional behavior.
@@ -142,6 +144,7 @@ pub mod dependency_map;
 pub mod doc;
 mod shared_vec;
 mod value_array;
+pub mod value_clips;
 pub use value_array::{ArrayRef, TypedArray};
 pub mod edit;
 pub(crate) mod expression_variables;
@@ -183,11 +186,11 @@ pub use composition_error::{
 };
 pub use dependency_map::ArcDependency;
 pub use doc::{
-    FieldEntry, FieldValue, InMemoryStore, InterpolationType, Layer, LayerId, LayerOffset,
-    LayerStore, PrimSpec, Reference, ReferenceTarget, Relocate, Specifier, SublayerEntry, Value,
-    VariantBranch, VariantBranches, VariantSetSpec, VariantSpec, combine_dictionaries,
-    combine_dictionary_chain, get_field, get_field_mut, insert_field_if_absent, remove_field,
-    set_field_vec,
+    AssetAvailability, FieldEntry, FieldValue, InMemoryStore, InterpolationType, Layer, LayerId,
+    LayerOffset, LayerStore, PrimSpec, Reference, ReferenceTarget, Relocate, Specifier,
+    SublayerEntry, Value, VariantBranch, VariantBranches, VariantSetSpec, VariantSpec,
+    combine_dictionaries, combine_dictionary_chain, get_field, get_field_mut,
+    insert_field_if_absent, remove_field, set_field_vec,
 };
 pub use edit::{
     Address, Applied, Changes, EditError, EditTarget, PrimPropertyChanges, PropertyChange,

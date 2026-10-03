@@ -7,7 +7,7 @@
 
 mod explain;
 pub mod flatten;
-mod stage_time;
+pub(crate) mod stage_time;
 
 pub use explain::{
     Contribution, DictionaryMerge, ExplainedOpinion, IgnoreCause, KeyPath, OpinionRole, SampleUse,
@@ -18,6 +18,7 @@ pub use flatten::{
 };
 
 use alloc::{
+    borrow::Cow,
     sync::{Arc, Weak},
     vec::Vec,
 };
@@ -44,7 +45,8 @@ use crate::{
     spec_path::SpecPath,
     spline::{SplineData, SplineDataType},
     value_resolution::{
-        SparseQuery, SparseResolveResult, interpolate_samples, resolve_sparse_value,
+        SampleComposability, SparseQuery, SparseResolveResult, interpolate_samples,
+        resolve_sparse_value,
     },
 };
 
@@ -310,6 +312,7 @@ pub struct StageOptions {
 #[derive(Debug)]
 pub struct Stage {
     root_layer: Option<LayerId>,
+    clips: crate::value_clips::Catalog,
     prims: HashMap<PathId, PrimIndex>,
     children: HashMap<PathId, Vec<PathId>>,
     with_provenance: bool,
@@ -324,6 +327,50 @@ pub struct Stage {
     /// The schemas the stage was composed with ([`StageOptions::schemas`]).
     schemas: Option<Arc<SchemaRegistry>>,
     type_infos: HashMap<SchemaIdentity, Weak<PrimTypeInfo>>,
+}
+
+// Independent sets may share a metadata authoring site and compose sparsely.
+#[derive(Clone, Debug)]
+struct SelectedClip {
+    entry: usize,
+    key: OpinionKey,
+    query: f64,
+}
+#[derive(Clone, Debug)]
+struct ClipOpinion {
+    entry: usize,
+    opinion: Opinion,
+    query: f64,
+    contributes: bool,
+}
+
+// Keep exact clip sample types separate from the held/interpolated payloads.
+// Pointer equality identifies our shared synthetic property snapshots, even
+// when independent clip sets have the same source key.
+#[derive(Default)]
+struct ClipSampleKinds {
+    entries: Vec<(Arc<PropertySpec>, usize)>,
+}
+impl ClipSampleKinds {
+    fn insert(&mut self, opinion: &Opinion, entry: usize) {
+        if let OpinionValue::Property(spec) = &opinion.value {
+            self.entries.push((Arc::clone(spec), entry));
+        }
+    }
+    fn entry(&self, opinion: &Opinion) -> Option<usize> {
+        let OpinionValue::Property(spec) = &opinion.value else {
+            return None;
+        };
+        self.entries
+            .iter()
+            .find_map(|(known, entry)| Arc::ptr_eq(known, spec).then_some(*entry))
+    }
+}
+struct ClipPlan<'s> {
+    opinions: Cow<'s, [Opinion]>,
+    source: Option<crate::value_clips::ClipValueSource>,
+    selected: Option<SelectedClip>,
+    kinds: ClipSampleKinds,
 }
 
 impl Stage {
@@ -341,6 +388,7 @@ impl Stage {
         stage.root_layer = Some(root);
         stage.schemas = schemas;
         stage.prepare_type_info(store);
+        stage.prepare_clips(store);
         stage
     }
 
@@ -355,6 +403,7 @@ impl Stage {
         stage.root_layer = Some(root);
         stage.schemas = schemas;
         stage.prepare_type_info(store);
+        stage.prepare_clips(store);
         stage
     }
 
@@ -498,6 +547,415 @@ impl Stage {
         self.schemas.as_deref()
     }
 
+    fn prepare_clips(&mut self, store: &mut dyn LayerStore) {
+        self.clips = crate::value_clips::Catalog::prepare(store, &self.prims);
+        if let Some(deps) = &mut self.deps {
+            for prim in self.prims.keys().copied() {
+                for (layer, _) in self.clips.source_sites(prim) {
+                    deps.layer_to_prims.entry(layer).or_default().insert(prim);
+                    deps.prim_to_layers.entry(prim).or_default().insert(layer);
+                }
+            }
+        }
+    }
+
+    /// Assets consulted while preparing value clips, including unresolved assets.
+    ///
+    /// The host resolves and inserts these assets, registers their bindings with
+    /// [`LayerStore`], and composes again. Numeric queries use owned snapshots
+    /// and never perform I/O. Template holes require confirmed missing results.
+    #[must_use]
+    pub fn clip_asset_requests(&self) -> &[crate::value_clips::ClipAssetRequest] {
+        self.clips.asset_requests()
+    }
+
+    /// Invalid or unsupported clip definitions found during preparation.
+    #[must_use]
+    pub fn clip_issues(&self) -> &[crate::value_clips::ClipIssue] {
+        self.clips.issues()
+    }
+
+    pub(crate) fn clip_layers(&self) -> Vec<LayerId> {
+        self.clips.layers()
+    }
+
+    /// The selected clip source and its mapped bracketing samples.
+    ///
+    /// Describes the selected numeric source chain. Returns `None` when ordinary
+    /// source selection ends before clips or no manifest declares eligibility.
+    /// Under held interpolation, a stronger dense lower sample may supply the
+    /// entire result even when the selected chain reaches a clip at its upper
+    /// bracket. Explanations and provenance identify actual contributions.
+    /// Eligible gaps retain their clip source.
+    #[must_use]
+    pub fn property_clip_source(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        time: f64,
+        interp: InterpolationType,
+    ) -> Option<crate::value_clips::ClipValueSource> {
+        let index = self.prims.get(&prim)?;
+        self.clip_time_opinions(prim, field, index, time, interp)
+            .source
+    }
+
+    /// A selected clip evaluator's query error, without exposing weaker values.
+    ///
+    /// Preparation errors are in [`Self::clip_issues`]. This separate diagnostic
+    /// covers invalid query times and errors encountered while evaluating a
+    /// selected source. It performs no loading or mutation.
+    #[must_use]
+    pub fn property_clip_evaluation_error(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        time: f64,
+        interp: InterpolationType,
+    ) -> Option<crate::value_clips::ClipEvalError> {
+        let index = self.prims.get(&prim)?;
+        let selected = self
+            .clip_time_opinions(prim, field, index, time, interp)
+            .selected?;
+        self.clips
+            .evaluation_error_for(prim, field, selected.entry, selected.query, interp)
+    }
+
+    // OpenUSD stage.cpp::_ResolveInfoResolver::ProcessLayerAtTime: a site
+    // supplies one numeric value opinion, even when that opinion is sparse.
+    fn clip_opinions_after_authored(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        ordinary: &[Opinion],
+        time: f64,
+        interp: InterpolationType,
+    ) -> Vec<ClipOpinion> {
+        let Some(index) = self.prims.get(&prim) else {
+            return Vec::new();
+        };
+        let initial = self.clips.opinions(prim, field, time, interp, &[]);
+        if initial.is_empty() {
+            return Vec::new();
+        }
+        let mut tagged: Vec<_> = ordinary.iter().cloned().map(|op| (op, None)).collect();
+        tagged.extend(initial.into_iter().enumerate().filter_map(|(entry, clip)| {
+            // OpenUSD stage.cpp::_GetResolveInfoWithClipsImpl: an authored
+            // source and a clip source cannot both occupy the same site.
+            let masked = ordinary.iter().any(|op| {
+                op.key.node == clip.key.node
+                    && op.key.layer_strength == clip.key.layer_strength
+                    && (op.value.time_samples().is_some()
+                        || op.value.spline().is_some()
+                        || op.value.default_value().is_some())
+            });
+            (!masked).then_some((clip, Some(entry)))
+        }));
+        tagged.sort_by(|(a, a_entry), (b, b_entry)| {
+            index
+                .graph
+                .cmp_nodes(a.key.node, b.key.node)
+                .then_with(|| a.key.layer_strength.cmp(&b.key.layer_strength))
+                .then_with(|| a_entry.cmp(b_entry))
+        });
+        let mut prefix = Vec::new();
+        let mut prefix_kinds = ClipSampleKinds::default();
+        let mut clips = Vec::new();
+        for (opinion, entry) in tagged {
+            let Some(entry) = entry else {
+                prefix.push(opinion);
+                continue;
+            };
+            // The existing kernel owns query advancement. Earlier finalized
+            // clips belong to this prefix too, including mixed dense/sparse sets.
+            let classify = |opinion: &Opinion, sample_time| {
+                prefix_kinds.entry(opinion).and_then(|entry| {
+                    self.clips
+                        .sample_composes_for(prim, field, entry, sample_time)
+                })
+            };
+            let planned = crate::value_resolution::query_time_for_weaker_source_with_composability(
+                &prefix,
+                time,
+                interp,
+                Some(&classify),
+            );
+            let sparse_at_query = prefix.iter().any(|op| {
+                value_at_time(op, time, interp)
+                    .flatten()
+                    .is_some_and(|value| value.array_edit_ref().is_some())
+            });
+            let query = planned.unwrap_or(time);
+            let queries = [query];
+            let projection = if planned.is_some() && (sparse_at_query || query != time) {
+                &queries[..]
+            } else {
+                &[]
+            };
+            let Some(opinion) = self
+                .clips
+                .opinion_for(prim, field, entry, time, interp, projection)
+            else {
+                continue;
+            };
+            prefix_kinds.insert(&opinion, entry);
+            prefix.push(opinion.clone());
+            clips.push(ClipOpinion {
+                entry,
+                opinion,
+                query,
+                contributes: planned.is_some(),
+            });
+        }
+        clips
+    }
+
+    // AOUSD Core §12.3.2, §12.3.7; OpenUSD stage.cpp
+    // _ProcessClipsForLayer: an anchor layer's authored values precede its clips.
+    fn clip_time_opinions<'s>(
+        &'s self,
+        prim: PathId,
+        field: TokenId,
+        index: &'s PrimIndex,
+        time: f64,
+        interp: InterpolationType,
+    ) -> ClipPlan<'s> {
+        let ordinary = index.property_opinions(field).unwrap_or(&[]);
+        if ordinary.is_empty() && self.property_definition_ref(prim, field).is_none() {
+            return ClipPlan {
+                opinions: Cow::Borrowed(ordinary),
+                source: None,
+                selected: None,
+                kinds: ClipSampleKinds::default(),
+            };
+        }
+        let clips = self.clip_opinions_after_authored(prim, field, ordinary, time, interp);
+        if clips.is_empty() {
+            return ClipPlan {
+                opinions: Cow::Borrowed(ordinary),
+                source: None,
+                selected: None,
+                kinds: ClipSampleKinds::default(),
+            };
+        }
+        // Source participation follows the same temporal prefix plan as the
+        // value. A dense ordinary lower sample can expose a clip beneath its
+        // sparse upper sample, so inspecting only the original query is wrong.
+        let selected = clips
+            .iter()
+            .find(|clip| clip.contributes)
+            .map(|clip| SelectedClip {
+                entry: clip.entry,
+                key: clip.opinion.key.clone(),
+                query: clip.query,
+            });
+        let mut tagged: Vec<_> = ordinary.iter().cloned().map(|op| (op, None)).collect();
+        tagged.extend(clips.into_iter().map(|clip| {
+            let selected = SelectedClip {
+                entry: clip.entry,
+                key: clip.opinion.key.clone(),
+                query: clip.query,
+            };
+            (clip.opinion, Some(selected))
+        }));
+        tagged.sort_by(|(a, a_clip), (b, b_clip)| {
+            index
+                .graph
+                .cmp_nodes(a.key.node, b.key.node)
+                .then_with(|| a.key.layer_strength.cmp(&b.key.layer_strength))
+                .then_with(|| {
+                    a_clip
+                        .as_ref()
+                        .map(|s| s.entry)
+                        .cmp(&b_clip.as_ref().map(|s| s.entry))
+                })
+        });
+        let source = selected.as_ref().and_then(|selected| {
+            self.clips
+                .evaluation_for(prim, field, selected.entry, selected.query, interp)
+        });
+        let mut kinds = ClipSampleKinds::default();
+        for (opinion, selected) in &tagged {
+            if let Some(selected) = selected {
+                kinds.insert(opinion, selected.entry);
+            }
+        }
+        ClipPlan {
+            opinions: Cow::Owned(tagged.into_iter().map(|(op, _)| op).collect()),
+            source,
+            selected,
+            kinds,
+        }
+    }
+
+    fn resolve_property_at_time(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        time: f64,
+        interp: InterpolationType,
+        fallback: Option<&Value>,
+        accepts: Option<&dyn Fn(&Value) -> bool>,
+        with_source: bool,
+    ) -> (Option<Resolved<Value>>, bool) {
+        let Some(index) = self.prims.get(&prim) else {
+            return (None, false);
+        };
+        let ClipPlan {
+            opinions,
+            source: clip,
+            selected,
+            kinds,
+        } = self.clip_time_opinions(prim, field, index, time, interp);
+        let classify = |opinion: &Opinion, sample_time| {
+            kinds.entry(opinion).and_then(|entry| {
+                self.clips
+                    .sample_composes_for(prim, field, entry, sample_time)
+            })
+        };
+        let composability =
+            (!kinds.entries.is_empty()).then_some(&classify as &SampleComposability<'_>);
+        let mut resolved = self.resolve_at_time_with_source(
+            field,
+            &opinions,
+            index.property_type_for(&field),
+            time,
+            interp,
+            fallback,
+            accepts,
+            with_source,
+            composability,
+        );
+        if let (Some(resolved), Some(source)) = (&mut resolved, &clip) {
+            // Sparse edits retain their own strongest provenance. Dense clip
+            // values identify the raw data layer, not the metadata anchor.
+            if with_source
+                && resolved.provenance.as_ref().is_some_and(|p| {
+                    selected.as_ref().is_some_and(|key| {
+                        p.layer == key.key.layer_id && p.spec_path == key.key.spec_path
+                    })
+                })
+            {
+                resolved.provenance = source.lower.layer.map(|layer| Provenance {
+                    layer,
+                    spec_path: source.lower.spec_path.clone(),
+                    field,
+                });
+            }
+        }
+        (resolved, selected.is_some())
+    }
+
+    /// Whether the effective property source might vary across numeric times.
+    ///
+    /// A contributing source with multiple samples, or a spline, counts as
+    /// varying even when its values agree. Dense defaults and blocks mask weaker
+    /// animation. Several contributing single-sample sources remain constant
+    /// across numeric times, even when their combined sample grid has many knots.
+    /// Numeric values may still differ from the default-time value.
+    #[must_use]
+    pub fn property_might_be_time_varying(&self, prim: PathId, field: TokenId) -> bool {
+        self.property_time_info(prim, field).1
+    }
+
+    /// Sorted, unique stage-time samples of the effective property sources.
+    ///
+    /// Dense defaults and blocks mask weaker animation. Sparse array edits retain
+    /// weaker grids. Clip times include activations and mapping discontinuities;
+    /// splines have no discrete sample times. Default-time reads ignore clips.
+    #[must_use]
+    pub fn property_sample_times(&self, prim: PathId, field: TokenId) -> Vec<f64> {
+        self.property_time_info(prim, field).0
+    }
+
+    // AOUSD Core §12.3.2: variability belongs to each contributing series;
+    // merging differently timed single samples cannot create animation.
+    fn property_time_info(&self, prim: PathId, field: TokenId) -> (Vec<f64>, bool) {
+        let Some(index) = self.prims.get(&prim) else {
+            return (Vec::new(), false);
+        };
+        let ordinary = index.property_opinions(field).unwrap_or(&[]);
+        if ordinary.is_empty() && self.property_definition_ref(prim, field).is_none() {
+            return (Vec::new(), false);
+        }
+        let clip_opinions =
+            self.clip_opinions_after_authored(prim, field, ordinary, 0.0, InterpolationType::Held);
+        let mut tagged: Vec<_> = ordinary.iter().map(|op| (op, None)).collect();
+        tagged.extend(
+            clip_opinions
+                .iter()
+                .map(|clip| (&clip.opinion, Some(clip.entry))),
+        );
+        if !clip_opinions.is_empty() {
+            tagged.sort_by(|(a, a_clip), (b, b_clip)| {
+                index
+                    .graph
+                    .cmp_nodes(a.key.node, b.key.node)
+                    .then_with(|| a.key.layer_strength.cmp(&b.key.layer_strength))
+                    .then_with(|| a_clip.cmp(b_clip))
+            });
+        }
+        let mut times = Vec::new();
+        let mut varying = false;
+        let mut masking: Vec<Vec<(f64, bool)>> = Vec::new();
+        for (op, clip) in tagged {
+            let grid: Vec<_> = if let Some(entry) = clip {
+                self.clips.sample_kinds_for(prim, field, entry)
+            } else if let Some(samples) = op.value.time_samples() {
+                samples
+                    .iter()
+                    .map(|(time, value)| {
+                        (
+                            op.layer_offset.offset + time * op.layer_offset.scale,
+                            value.array_edit_ref().is_some(),
+                        )
+                    })
+                    .collect()
+            } else {
+                if op.value.spline().is_some() {
+                    varying = true;
+                    break;
+                }
+                if op
+                    .value
+                    .default_value()
+                    .is_some_and(|v| v.array_edit_ref().is_none())
+                {
+                    break;
+                }
+                continue;
+            };
+            // Prepared sample clips always have at least an activation knot;
+            // only a manifest-selected spline has an empty discrete grid.
+            if clip.is_some() && grid.is_empty() {
+                varying = true;
+                break;
+            }
+            let before = times.len();
+            let mut grid = grid;
+            grid.sort_by(|a, b| a.0.total_cmp(&b.0));
+            times.extend(grid.iter().filter_map(|&(time, _)| {
+                masking
+                    .iter()
+                    .all(|strong| {
+                        let lower = strong
+                            .partition_point(|&(t, _)| t <= time)
+                            .saturating_sub(1);
+                        strong[lower].1
+                    })
+                    .then_some(time)
+            }));
+            varying |= grid.len() > 1 && times.len() > before;
+            if grid.iter().all(|&(_, sparse)| !sparse) {
+                break;
+            }
+            masking.push(grid);
+        }
+        times.sort_by(f64::total_cmp);
+        times.dedup_by(|a, b| *a == *b);
+        (times, varying)
+    }
+
     pub(crate) fn from_parts(
         prims: HashMap<PathId, PrimIndex>,
         children: HashMap<PathId, Vec<PathId>>,
@@ -514,6 +972,7 @@ impl Stage {
         };
         Self {
             root_layer: None,
+            clips: crate::value_clips::Catalog::default(),
             prims,
             children,
             with_provenance,
@@ -571,6 +1030,7 @@ impl Stage {
     /// composition's. Sublayer cycle errors are kept: layer stacks change
     /// only through structural edits, which rebuild the whole stage.
     pub(crate) fn merge_prims_from(&mut self, mut partial: Self, recomposed: &[PathId]) {
+        self.clips.merge_from(partial.clips, recomposed);
         for path in recomposed {
             if let Some(mut index) = partial.prims.remove(path) {
                 if let Some(info) = &mut index.type_info {
@@ -618,6 +1078,12 @@ impl Stage {
         edits: &[crate::edit::PropertyValueEdit],
         dependents: &[Vec<PathId>],
     ) -> bool {
+        if edits
+            .iter()
+            .any(|edit| self.clips.layers().contains(&edit.layer))
+        {
+            return false;
+        }
         let mut patches = Vec::new();
         for (edit_index, (edit, prims)) in edits.iter().zip(dependents).enumerate() {
             let Some(authored) = edit.property(store) else {
@@ -803,7 +1269,10 @@ impl Stage {
             sites.insert((key.layer_id, key.lookup_path));
             sites.insert((key.layer_id, key.spec_path.prim_path()));
         }
-        sites.into_iter().collect()
+        sites.extend(self.clips.source_sites(prim));
+        let mut sites: Vec<_> = sites.into_iter().collect();
+        sites.sort_unstable();
+        sites
     }
 
     /// Returns all prim paths present in the stage.
@@ -1239,6 +1708,19 @@ impl Stage {
         lookup: Lookup,
         fallback: Option<&Value>,
     ) -> Option<Resolved<Value>> {
+        if matches!(lookup, Lookup::Property) {
+            return self
+                .resolve_property_at_time(
+                    prim,
+                    field,
+                    time,
+                    interp,
+                    fallback,
+                    None,
+                    self.with_provenance,
+                )
+                .0;
+        }
         let (index, opinions) = self.opinions(prim, field, lookup)?;
         self.resolve_at_time_over(
             field,
@@ -1272,6 +1754,7 @@ impl Stage {
             fallback,
             accepts,
             self.with_provenance,
+            None,
         )
     }
 
@@ -1285,6 +1768,7 @@ impl Stage {
         fallback: Option<&Value>,
         accepts: Option<&dyn Fn(&Value) -> bool>,
         with_source: bool,
+        composability: Option<&SampleComposability<'_>>,
     ) -> Option<Resolved<Value>> {
         // Spec: AOUSD Core §12.3.2.1 (`timecode` values are read in stage
         // time, through each opinion's layer offset).
@@ -1303,15 +1787,18 @@ impl Stage {
         }
 
         let sparse = match accepts {
-            Some(accepts) => crate::value_resolution::resolve_sparse_at_time_matching(
-                opinions,
-                property_type,
-                time,
-                interp,
-                fallback,
-                accepts,
-            ),
-            None => resolve_sparse_value(
+            Some(accepts) => {
+                crate::value_resolution::resolve_sparse_at_time_matching_with_composability(
+                    opinions,
+                    property_type,
+                    time,
+                    interp,
+                    fallback,
+                    accepts,
+                    composability,
+                )
+            }
+            None => crate::value_resolution::resolve_sparse_value_with_composability(
                 opinions,
                 SparseQuery::AtTime {
                     time,
@@ -1319,6 +1806,7 @@ impl Stage {
                     fallback,
                 },
                 property_type,
+                composability,
             ),
         };
         match sparse {
@@ -2059,25 +2547,21 @@ impl Stage {
                 interpolation,
             } => {
                 let fallback = self.schema_fallback(prim, field);
-                let resolved =
-                    self.opinions(prim, field, Lookup::Property)
-                        .and_then(|(index, opinions)| {
-                            self.resolve_at_time_with_source(
-                                field,
-                                opinions,
-                                index.property_type_for(&field),
-                                code,
-                                interpolation,
-                                fallback,
-                                Some(&|value| read(value).is_some()),
-                                with_source,
-                            )
-                        });
+                let (resolved, clip_selected) = self.resolve_property_at_time(
+                    prim,
+                    field,
+                    code,
+                    interpolation,
+                    fallback,
+                    Some(&|value| read(value).is_some()),
+                    with_source,
+                );
                 match resolved {
                     Some(resolved) => Some(Resolved {
                         value: read(&resolved.value)?,
                         provenance: resolved.provenance,
                     }),
+                    None if clip_selected => None,
                     None => self.read_fallback(fallback, &read),
                 }
             }
@@ -2262,10 +2746,17 @@ impl Stage {
         _store: &dyn LayerStore,
     ) -> Option<Resolved<Value>> {
         let fallback = self.schema_fallback(prim, field);
-        if let Some(resolved) =
-            self.resolve_value_at_time_by(prim, field, time, interp, Lookup::Property, fallback)
-        {
-            return Some(resolved);
+        let (resolved, clip_selected) = self.resolve_property_at_time(
+            prim,
+            field,
+            time,
+            interp,
+            fallback,
+            None,
+            self.with_provenance,
+        );
+        if resolved.is_some() || clip_selected {
+            return resolved;
         }
         let value = match fallback? {
             Value::Dictionary(entries) => {

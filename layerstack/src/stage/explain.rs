@@ -65,8 +65,13 @@ use crate::{
 pub struct ValueExplanation<'s, T> {
     /// The resolved value; `None` when the query resolves no value.
     pub value: Option<T>,
-    /// Where the value comes from.
+    /// The selected resolution method or numeric source chain.
+    /// Per-opinion roles identify contributions to this particular result.
     pub source: ValueSource,
+    /// The clip set and mapped samples in the selected numeric source chain.
+    /// Held output can use only a stronger ordinary lower sample even when the
+    /// selected chain reaches clips. Eligible gaps also retain this evidence.
+    pub clip: Option<crate::value_clips::ClipValueSource>,
     /// `true` when authored sparse array edits or dictionary entries
     /// composed over the schema fallback, the weakest seed of the fold.
     pub seeded_by_fallback: bool,
@@ -122,6 +127,12 @@ pub enum ValueSource {
     ///
     /// Spec: AOUSD Core §12.3.3.
     Spline,
+    /// The selected numeric source chain reaches a value clip.
+    ///
+    /// Includes eligible gaps and blocks. Under held interpolation a stronger
+    /// dense lower sample may supply the entire result; opinion roles and
+    /// provenance identify actual contributions.
+    ValueClips,
     /// The schema fallback, with no authored contribution.
     ///
     /// Spec: AOUSD Core §12.3.5, §13.3.2.4.
@@ -323,8 +334,12 @@ impl Stage {
     ) -> Option<ValueExplanation<'_, Value>> {
         let prim = property_path.prim_path();
         let name = property_path.property();
-        let (index, opinions) = self.opinions(prim, name, Lookup::Property)?;
-        Some(self.explain_at_time(index, name, opinions, time, interp, None))
+        let index = self.prims.get(&prim)?;
+        let opinions = index.property_opinions(name).unwrap_or(&[]);
+        if opinions.is_empty() && self.property_definition_ref(prim, name).is_none() {
+            return None;
+        }
+        Some(self.explain_property_at_time(prim, index, name, opinions, time, interp, None))
     }
 
     /// Explains [`Stage::resolve_value_with_schema`]: like
@@ -402,13 +417,28 @@ impl Stage {
         _store: &dyn LayerStore,
     ) -> Option<ValueExplanation<'_, Value>> {
         let fallback = self.schema_fallback(prim, field);
+        let index = self.prims.get(&prim)?;
+        if index.property_opinions(field).is_none()
+            && self.property_definition_ref(prim, field).is_none()
+        {
+            return None;
+        }
         let seed = fallback;
-        let explained = self
-            .opinions(prim, field, Lookup::Property)
-            .map(|(index, opinions)| {
-                self.explain_at_time(index, field, opinions, time, interp, seed)
-            });
-        if explained.as_ref().is_some_and(|e| e.value.is_some()) {
+        let explained = Some(index).map(|index| {
+            self.explain_property_at_time(
+                prim,
+                index,
+                field,
+                index.property_opinions(field).unwrap_or(&[]),
+                time,
+                interp,
+                seed,
+            )
+        });
+        if explained
+            .as_ref()
+            .is_some_and(|e| e.value.is_some() || e.source == ValueSource::ValueClips)
+        {
             return explained;
         }
         // Without a fallback, an authored block (or nothing authored at
@@ -557,6 +587,58 @@ impl Stage {
     /// Opinions read through a layer offset are explained as authored; the
     /// value is the resolved one, `timecode` values in stage time (AOUSD
     /// Core §12.3.2.1).
+    fn explain_property_at_time<'s>(
+        &'s self,
+        prim: PathId,
+        index: &'s PrimIndex,
+        field: TokenId,
+        opinions: &'s [Opinion],
+        time: f64,
+        interp: InterpolationType,
+        fallback: Option<&Value>,
+    ) -> ValueExplanation<'s, Value> {
+        let mut explained = self.explain_at_time(index, field, opinions, time, interp, fallback);
+        let super::ClipPlan {
+            opinions: planned,
+            source: clip,
+            selected,
+            kinds,
+        } = self.clip_time_opinions(prim, field, index, time, interp);
+        if selected.is_some() {
+            let classify = |opinion: &Opinion, sample_time| {
+                kinds.entry(opinion).and_then(|entry| {
+                    self.clips
+                        .sample_composes_for(prim, field, entry, sample_time)
+                })
+            };
+            // Explain the same fold used to read the value. Sparse clips retain
+            // weaker ordinary bases; dense clips shadow them through the kernel.
+            let folded = self.explain_at_time_with_composability(
+                index,
+                field,
+                &planned,
+                time,
+                interp,
+                fallback,
+                Some(&classify),
+            );
+            for ordinary in &mut explained.opinions {
+                if let Some(actual) = folded.opinions.iter().find(|entry| {
+                    entry.opinion.key == ordinary.opinion.key
+                        && entry.opinion.value == ordinary.opinion.value
+                }) {
+                    ordinary.role = actual.role.clone();
+                    ordinary.samples.clone_from(&actual.samples);
+                }
+            }
+            explained.value = folded.value;
+            explained.seeded_by_fallback = folded.seeded_by_fallback;
+            explained.source = ValueSource::ValueClips;
+            explained.clip = clip;
+        }
+        explained
+    }
+
     fn explain_at_time<'s>(
         &self,
         index: &'s PrimIndex,
@@ -566,14 +648,36 @@ impl Stage {
         interp: InterpolationType,
         fallback: Option<&Value>,
     ) -> ValueExplanation<'s, Value> {
-        let mut explained =
-            self.explain_at_time_as_authored(index, field, opinions, time, interp, fallback);
+        self.explain_at_time_with_composability(
+            index, field, opinions, time, interp, fallback, None,
+        )
+    }
+
+    fn explain_at_time_with_composability<'s>(
+        &self,
+        index: &'s PrimIndex,
+        field: TokenId,
+        opinions: &'s [Opinion],
+        time: f64,
+        interp: InterpolationType,
+        fallback: Option<&Value>,
+        composability: Option<&crate::value_resolution::SampleComposability<'_>>,
+    ) -> ValueExplanation<'s, Value> {
+        let mut explained = self.explain_at_time_as_authored(
+            index,
+            field,
+            opinions,
+            time,
+            interp,
+            fallback,
+            composability,
+        );
         if matches!(
             super::stage_time::opinions_in_stage_time(opinions),
             alloc::borrow::Cow::Owned(_)
         ) {
             explained.value = self
-                .resolve_at_time_over(
+                .resolve_at_time_with_source(
                     field,
                     opinions,
                     index.property_type_for(&field),
@@ -581,6 +685,8 @@ impl Stage {
                     interp,
                     fallback,
                     None,
+                    false,
+                    composability,
                 )
                 .map(|resolved| resolved.value);
         }
@@ -595,6 +701,7 @@ impl Stage {
         time: f64,
         interp: InterpolationType,
         fallback: Option<&Value>,
+        composability: Option<&crate::value_resolution::SampleComposability<'_>>,
     ) -> ValueExplanation<'s, Value> {
         let mut roles = Roles::new(index, opinions);
         let reads = |opinion: &Opinion| {
@@ -635,7 +742,7 @@ impl Stage {
             return roles.finish(fold.value, source, seeded);
         }
 
-        let sparse = explain_sparse_value(
+        let sparse = crate::value_resolution::explain_sparse_value_with_composability(
             opinions,
             SparseQuery::AtTime {
                 time,
@@ -643,6 +750,7 @@ impl Stage {
                 fallback,
             },
             index.property_type_for(&field),
+            composability,
         );
         match sparse.result {
             SparseResolveResult::NotApplicable => {}
@@ -823,6 +931,7 @@ fn with_fallback<'s, T>(
     ValueExplanation {
         value,
         source,
+        clip: None,
         seeded_by_fallback: false,
         opinions,
     }
@@ -1198,6 +1307,7 @@ impl<'s> Roles<'s> {
         ValueExplanation {
             value,
             source,
+            clip: None,
             seeded_by_fallback,
             opinions,
         }

@@ -246,6 +246,12 @@ pub enum Value {
     Token(String),
     /// `SdfAssetPath`.
     Asset(String),
+    /// `SdfPathExpression`, requiring crate version 0.10.
+    PathExpression(String),
+    /// Array of `SdfPathExpression` values.
+    PathExpressionArray(Vec<String>),
+    /// Ordered layer relocates (`SdfRelocates`), requiring crate version 0.11.
+    Relocates(Vec<(String, String)>),
     Specifier(Specifier),
     Variability(Variability),
     Permission(Permission),

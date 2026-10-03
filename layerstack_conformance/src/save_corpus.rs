@@ -232,9 +232,64 @@ pub struct SaveCase {
     pub composition: Option<&'static [(&'static str, &'static str)]>,
 }
 
+const NAMESPACE_VALUES: &str = r#"#usda 1.0
+(
+    relocates = {
+        </World/Before>: </World/After>,
+        </World/Removed>: <>
+    }
+)
+def Scope "World" (
+    prepend variantSets = "look"
+) {
+    pathExpression selection = "/World// - /World/Hidden//"
+    pathExpression[] choices = ["/World/A", "/World/B"]
+    pathExpression[] empty = []
+    variantSet "look" = {
+        "day" {
+            pathExpression selected = "/World//"
+        }
+    }
+}
+"#;
+
+const NAMESPACE_VALUES_EDITED: &str = r#"#usda 1.0
+(
+    relocates = {
+        </World/Before>: </World/After>,
+        </World/Removed>: <>
+    }
+)
+def Scope "World" (
+    prepend variantSets = "look"
+) {
+    pathExpression selection = "/World/A + /World/B"
+    pathExpression[] choices = ["/World/A", "/World/B"]
+    pathExpression[] empty = []
+    variantSet "look" = {
+        "day" {
+            pathExpression selected = "/World//"
+        }
+    }
+}
+"#;
+
 /// The preservation corpus.
 pub fn cases() -> Vec<SaveCase> {
     vec![
+        SaveCase {
+            name: "relocates_path_expressions",
+            covers: "ordered relocates, removed destinations, scalar and array path expressions, and expressions in variants",
+            source: NAMESPACE_VALUES,
+            edit: |layer| {
+                layer.property("/World.selection").default =
+                    Some(Value::PathExpression(Arc::from("/World/A + /World/B")));
+            },
+            expected: NAMESPACE_VALUES_EDITED,
+            weaker: None,
+            composition: None,
+            minimum_openusd: Some(((24, 11), "layer relocates")),
+        },
         SaveCase {
             name: "ui_hints",
             covers: "nested `limits` and `uiHints` dictionaries on prims, attributes and \
@@ -545,11 +600,6 @@ pub fn unsupported_cases() -> Vec<(&'static str, &'static str, SaveError)> {
                 "/A#customData/profilesInfo/profileCompatibility/profile.studio.vfx.25.08",
                 Unsupported::Value("untyped empty array"),
             ),
-        ),
-        (
-            "path_expression",
-            "#usda 1.0\ndef \"A\"\n{\n    pathExpression p = \"/A//\"\n}\n",
-            unsupported("/A.p", Unsupported::Value("pathExpression")),
         ),
     ]
 }

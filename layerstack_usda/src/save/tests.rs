@@ -212,16 +212,6 @@ over "Other"
 fn rejects_unsupported_features_with_their_source_paths() {
     let cases: &[(&str, &str, Unsupported)] = &[
         (
-            "#usda 1.0\ndef \"A\"\n{\n    variantSet \"v\" = {\n        \"x\" {\n            pathExpression p = \"/A//\"\n        }\n    }\n}\n",
-            "/A{v=x}.p",
-            Unsupported::Value("pathExpression"),
-        ),
-        (
-            "#usda 1.0\ndef \"A\"\n{\n    pathExpression p = \"/A//\"\n}\n",
-            "/A.p",
-            Unsupported::Value("pathExpression"),
-        ),
-        (
             "#usda 1.0\ndef \"A\" (\n    customData = {\n        string[] e = []\n    }\n)\n{\n}\n",
             "/A#customData/e",
             Unsupported::Value("untyped empty array"),
@@ -230,11 +220,6 @@ fn rejects_unsupported_features_with_their_source_paths() {
             "#usda 1.0\ndef \"A\"\n{\n    int[] a = edit [append 4]\n}\n",
             "/A.a",
             Unsupported::ArrayEdit,
-        ),
-        (
-            "#usda 1.0\n(\n    relocates = {\n        </A/B>: </A/C>\n    }\n)\ndef \"A\"\n{\n}\n",
-            "/",
-            Unsupported::Relocates,
         ),
     ];
     for (source, path, feature) in cases {

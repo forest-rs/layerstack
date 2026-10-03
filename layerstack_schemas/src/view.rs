@@ -348,6 +348,14 @@ impl<'a> PrimView<'a> {
     // Include masked samples, splines and single samples: default time can
     // differ even when all numeric times agree (AOUSD Core §12.3, §12.5).
     pub(crate) fn property_might_vary(&self, name: &str) -> bool {
+        if self.property_path(name).is_some_and(|p| {
+            self.scene
+                .stage
+                .property_clip_source(p.prim_path(), p.property(), 0.0, InterpolationType::Held)
+                .is_some()
+        }) {
+            return true;
+        }
         self.property_path(name)
             .and_then(|property| self.scene.stage.explain_property_path(property))
             .is_some_and(|opinions| {
@@ -378,6 +386,19 @@ impl<'a> PrimView<'a> {
         let Some(property) = self.property_path(name) else {
             return false;
         };
+        if self
+            .scene
+            .stage
+            .property_clip_source(
+                property.prim_path(),
+                property.property(),
+                0.0,
+                InterpolationType::Held,
+            )
+            .is_some()
+        {
+            return true;
+        }
         let Some(opinions) = self.scene.stage.explain_property_path(property) else {
             return false;
         };

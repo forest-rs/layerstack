@@ -561,12 +561,10 @@ impl<'a> Xformable<'a> {
     pub fn transform_might_be_time_varying(&self) -> bool {
         self.ordered_xform_ops().ops.iter().any(|op| {
             op.op_type.is_some()
-                && transform_op_source(self, op.attribute).is_some_and(|source| {
-                    source.value.spline().is_some()
-                        || source
-                            .value
-                            .time_samples()
-                            .is_some_and(|samples| samples.len() > 1)
+                && self.property_path(op.attribute).is_some_and(|p| {
+                    self.scene()
+                        .stage()
+                        .property_might_be_time_varying(p.prim_path(), p.property())
                 })
         })
     }
@@ -585,12 +583,12 @@ impl<'a> Xformable<'a> {
             if op.op_type.is_none() {
                 continue;
             }
-            if let Some(source) = transform_op_source(self, op.attribute)
-                && let Some(samples) = source.value.time_samples()
-            {
-                times.extend(samples.iter().map(|(time, _)| {
-                    time * source.layer_offset.scale + source.layer_offset.offset
-                }));
+            if let Some(p) = self.property_path(op.attribute) {
+                times.extend(
+                    self.scene()
+                        .stage()
+                        .property_sample_times(p.prim_path(), p.property()),
+                );
             }
         }
         times.sort_by(f64::total_cmp);
@@ -628,25 +626,6 @@ impl<'a> Xformable<'a> {
     pub fn local_transform(&self, time: Time) -> LocalTransform {
         self.local_transform_inputs(time).evaluate()
     }
-}
-
-// Transform op values are atomic scalars/vectors/matrices, never sparse-array
-// opinions. Numeric source precedence is samples, spline, then default at each
-// site (AOUSD Core §12.3). Keep this separate from conservative cache dependency
-// classification, which must also cover default/numeric transitions.
-fn transform_op_source<'a>(prim: &Xformable<'a>, name: &str) -> Option<&'a layerstack::Opinion> {
-    prim.scene()
-        .stage()
-        .explain_property_path(prim.property_path(name)?)?
-        .iter()
-        .find(|opinion| {
-            opinion
-                .value
-                .time_samples()
-                .is_some_and(|samples| !samples.is_empty())
-                || opinion.value.spline().is_some()
-                || opinion.value.default_value().is_some()
-        })
 }
 
 impl<'a> Imageable<'a> {

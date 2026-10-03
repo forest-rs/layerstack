@@ -5,7 +5,7 @@
 use super::{SkelError, compose, invalid, length, read, tokens};
 use crate::{PrimView, Time, usd_skel::SkelAnimation};
 use alloc::vec::Vec;
-use layerstack::{PropertyPath, Value};
+use layerstack::PropertyPath;
 const TRS: [&str; 3] = ["translations", "rotations", "scales"];
 
 /// Sampled joint-local transform components in the animation's joint order.
@@ -22,56 +22,16 @@ fn sample_info(prim: &PrimView<'_>, names: &[&str]) -> (Vec<f64>, bool) {
     let mut result = Vec::new();
     let mut varying = false;
     for name in names {
-        let Some(opinions) = prim
-            .property_path(name)
-            .and_then(|path| prim.scene().stage().explain_property_path(path))
-        else {
-            continue;
-        };
-        // Numeric precedence is samples, spline, then default (AOUSD Core
-        // §12.3.2–12.3.3). Sparse edits compose through weaker sources; dense
-        // values and blocks terminate the chain (§12.3.6, §12.5).
-        // Mixed sampled grids mask weaker times only where their held value
-        // is dense. Borrow values and map/sort grids once, including reversal.
-        let mut masking: Vec<Vec<(f64, &Value)>> = Vec::new();
-        for opinion in opinions {
-            if let Some(samples) = opinion.value.time_samples().filter(|s| !s.is_empty()) {
-                let mut mapped: Vec<_> = samples
-                    .iter()
-                    .map(|(t, v)| {
-                        (
-                            t * opinion.layer_offset.scale + opinion.layer_offset.offset,
-                            v,
-                        )
-                    })
-                    .collect();
-                mapped.sort_by(|a, b| a.0.total_cmp(&b.0));
-                let before = result.len();
-                result.extend(mapped.iter().filter_map(|&(time, _)| {
-                    masking
-                        .iter()
-                        .all(|grid| {
-                            let index = grid.partition_point(|&(t, _)| t <= time).saturating_sub(1);
-                            grid[index].1.array_edit_ref().is_some()
-                        })
-                        .then_some(time)
-                }));
-                varying |= samples.len() > 1 && result.len() > before;
-                if mapped
-                    .iter()
-                    .all(|(_, value)| value.array_edit_ref().is_none())
-                {
-                    break;
-                }
-                masking.push(mapped);
-            } else if opinion.value.spline().is_some() {
-                varying = true;
-                break;
-            } else if let Some(value) = opinion.value.default_value()
-                && value.array_edit_ref().is_none()
-            {
-                break;
-            }
+        if let Some(p) = prim.property_path(name) {
+            result.extend(
+                prim.scene()
+                    .stage()
+                    .property_sample_times(p.prim_path(), p.property()),
+            );
+            varying |= prim
+                .scene()
+                .stage()
+                .property_might_be_time_varying(p.prim_path(), p.property());
         }
     }
     result.sort_by(f64::total_cmp);

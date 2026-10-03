@@ -347,6 +347,7 @@ mod common_xform;
 mod edit;
 mod metadata;
 pub use metadata::{PropertyMetadata, StageMetadata};
+pub mod assets;
 #[cfg(feature = "usd-geom")]
 mod extent;
 mod generated;

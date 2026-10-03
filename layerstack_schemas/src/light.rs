@@ -9,6 +9,11 @@ pub use helpers::*;
 mod nodes;
 pub use nodes::*;
 
+mod inputs;
+pub use inputs::*;
+mod linking;
+pub use linking::*;
+
 use crate::{
     PrimView, Scene, SchemaEdit,
     usd_lux::{LightListApi, LightListApiEdit, LightListApiLightListCacheBehavior as Behavior},

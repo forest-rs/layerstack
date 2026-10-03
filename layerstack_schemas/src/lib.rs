@@ -363,6 +363,8 @@ pub mod assets;
 mod extent;
 mod generated;
 #[cfg(feature = "usd-geom")]
+pub mod geometry;
+#[cfg(feature = "usd-geom")]
 mod gf;
 #[cfg(feature = "usd-geom")]
 mod imageable;

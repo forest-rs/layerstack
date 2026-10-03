@@ -156,6 +156,7 @@ pub mod prim_index_graph;
 pub mod property;
 pub mod relocates;
 pub mod schema;
+pub mod sparse_writer;
 pub mod spec_path;
 pub mod spline;
 pub mod stage;

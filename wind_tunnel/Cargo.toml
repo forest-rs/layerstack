@@ -108,3 +108,7 @@ harness = false
 [[bench]]
 name = "package_loading"
 harness = false
+
+[[bench]]
+name = "usda_import"
+harness = false

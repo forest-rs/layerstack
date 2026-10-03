@@ -159,7 +159,7 @@ impl Rotation {
     }
 
     /// `GfRotation::GetQuat`: `[i, j, k, r]`, normalized.
-    fn quat(self) -> [f64; 4] {
+    pub(crate) fn quat(self) -> [f64; 4] {
         let half = self.degrees * (PI / 180.0) / 2.0;
         let (sin, cos) = libm::sincos(half);
         let i = self.axis.map(|c| c * sin);

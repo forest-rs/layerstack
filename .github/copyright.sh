@@ -11,11 +11,12 @@
 # below.
 generated="layerstack_schemas/src/generated"
 generated_tests="layerstack_conformance/tests/generated"
-# Private Gf math adapted from OpenUSD carries its upstream license.
+# Helpers adapted from OpenUSD carry their upstream license.
 licensed_math="layerstack_schemas/src/gf/decomposition.rs"
+licensed_mass="layerstack_schemas/src/mass/diagonalize.rs"
 
 # Check all the standard Rust source files
-output=$(rg "^// Copyright (19|20)[\d]{2} (.+ and )?the LayerStack Authors( and .+)?$\n^// SPDX-License-Identifier: Apache-2\.0 OR MIT$\n\n" --files-without-match --multiline -g "*.rs" -g "!$generated/**" -g "!$generated_tests/**" -g "!$licensed_math" .)
+output=$(rg "^// Copyright (19|20)[\d]{2} (.+ and )?the LayerStack Authors( and .+)?$\n^// SPDX-License-Identifier: Apache-2\.0 OR MIT$\n\n" --files-without-match --multiline -g "*.rs" -g "!$generated/**" -g "!$generated_tests/**" -g "!$licensed_math" -g "!$licensed_mass" .)
 
 if [ -n "$output" ]; then
 	echo -e "The following files lack the correct copyright header:\n"
@@ -27,9 +28,9 @@ if [ -n "$output" ]; then
 	exit 1
 fi
 
-# Check generated tables and adapted math: OpenUSD's copyright, then ours, under the
+# Check generated tables and adapted helpers: OpenUSD's copyright, then ours, under the
 # Tomorrow Open Source Technology License 1.0.
-output=$(rg "^// Copyright 2016 Pixar$\n^// Copyright (19|20)[\d]{2} the LayerStack Authors$\n^// SPDX-License-Identifier: LicenseRef-TOST-1\.0$\n" --files-without-match --multiline -g "*.rs" "$generated" "$generated_tests" "$licensed_math")
+output=$(rg "^// Copyright (19|20)[\d]{2}(, (19|20)[\d]{2})* Pixar$\n^// Copyright (19|20)[\d]{2} the LayerStack Authors$\n^// SPDX-License-Identifier: LicenseRef-TOST-1\.0$\n" --files-without-match --multiline -g "*.rs" "$generated" "$generated_tests" "$licensed_math" "$licensed_mass")
 
 if [ -n "$output" ]; then
 	echo -e "The following OpenUSD-derived files lack the upstream header:\n"

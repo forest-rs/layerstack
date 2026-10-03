@@ -58,8 +58,10 @@ input and traces the value supplying a shader input.
 The library target compiles a generated `shaderDefs.usda` matrix interface with
 `#![no_std]`, covering scalar/array inputs and outputs without the standard prelude.
 
-`cargo run -p layerstack_examples --bin lighting_inputs` discovers an emitter,
-captures owned lighting inputs and ordered linking decisions, prepares engine-owned
-parameter staging, and uses component revisions to avoid a repeated transform upload.
-Shader-driven inputs retain provider evidence and require explicit engine execution.
-GPU packing, resources, color management and sampling remain engine choices.
+`cargo run -p layerstack_examples --bin lighting_inputs` discovers emitters,
+captures shaping/shadow/environment groups, checks full affine factors before
+optional TRS conversion, and anchors a texture with its authoring-layer evidence.
+It retains illumination/shadow decisions across edits and uses component revisions
+to avoid repeated transform and membership-buffer uploads. Shader-driven inputs
+retain provider evidence and require explicit engine execution. GPU layouts,
+resource handles, color management and sampling remain engine choices.

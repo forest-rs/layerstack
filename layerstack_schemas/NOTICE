@@ -10,6 +10,8 @@ Technology License 1.0; see `LICENSE-TOST-1.0`.
 orthogonalization and quaternion extraction under the same license.
 `src/mass/diagonalize.rs` adapts OpenUSD's physics inertia diagonalization
 and float matrix rotation extraction under the same license. OpenUSD's notice follows.
+`src/light/helpers.rs` adapts OpenUSD's blackbody table and conversion
+under the same license.
 
 Universal Scene Description
 Copyright 2016 Pixar

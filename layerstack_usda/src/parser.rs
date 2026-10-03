@@ -19,9 +19,12 @@ use crate::cst::{CstParseResult, SyntaxKind, TreeBuilder};
 use crate::diagnostic::Diagnostic;
 use crate::lexer::{Token, TokenKind, tokenize};
 
-/// Parses a USDA source string into an AST (via CST → lower pipeline).
+/// Parses a USDA source string into an AST through the shared CST grammar.
+///
+/// The temporary tree omits consumed trivia and array/tuple punctuation. Use
+/// [`parse_cst`] when every token must remain available for lossless editing.
 pub fn parse(source: &str) -> ParseResult<'_> {
-    let cst_result = parse_cst(source);
+    let cst_result = parse_tree::<false>(source);
     let mut ast_result = crate::lower::lower(&cst_result.tree, source);
     // Merge CST diagnostics into AST result.
     let mut all_diag = cst_result.diagnostics;
@@ -32,8 +35,12 @@ pub fn parse(source: &str) -> ParseResult<'_> {
 
 /// Parses a USDA source string into a lossless CST.
 pub fn parse_cst(source: &str) -> CstParseResult {
+    parse_tree::<true>(source)
+}
+
+fn parse_tree<const LOSSLESS: bool>(source: &str) -> CstParseResult {
     let tokens = tokenize(source);
-    let mut parser = Parser::new(source, tokens);
+    let mut parser = Parser::<LOSSLESS>::new(source, tokens);
     parser.parse_source_file();
     let tree = parser.builder.finish();
     CstParseResult {
@@ -44,7 +51,7 @@ pub fn parse_cst(source: &str) -> CstParseResult {
 
 // ── Parser ─────────────────────────────────────────────────────────────
 
-struct Parser<'a> {
+struct Parser<'a, const LOSSLESS: bool> {
     source: &'a str,
     tokens: Vec<Token>,
     pos: usize,
@@ -52,7 +59,7 @@ struct Parser<'a> {
     builder: TreeBuilder,
 }
 
-impl<'a> Parser<'a> {
+impl<'a, const LOSSLESS: bool> Parser<'a, LOSSLESS> {
     fn new(source: &'a str, tokens: Vec<Token>) -> Self {
         Self {
             source,
@@ -94,9 +101,17 @@ impl<'a> Parser<'a> {
 
     /// Advances past the current token, emitting it to the CST builder.
     fn bump(&mut self) -> Option<Token> {
+        self.bump_stored::<true>()
+    }
+
+    // Some grammar tokens carry no information needed by AST lowering.
+    // Consume them identically in both modes, storing them only for editing.
+    fn bump_stored<const STORE: bool>(&mut self) -> Option<Token> {
         let tok = self.tokens.get(self.pos).copied();
         if let Some(t) = tok {
-            self.builder.token(SyntaxKind::from(t.kind), t.span);
+            if STORE {
+                self.builder.token(SyntaxKind::from(t.kind), t.span);
+            }
             self.pos += 1;
         }
         tok
@@ -106,7 +121,9 @@ impl<'a> Parser<'a> {
     fn eat_trivia(&mut self) {
         while let Some(tok) = self.current() {
             if is_trivia(tok.kind) {
-                self.builder.token(SyntaxKind::from(tok.kind), tok.span);
+                if LOSSLESS {
+                    self.builder.token(SyntaxKind::from(tok.kind), tok.span);
+                }
                 self.pos += 1;
             } else {
                 break;
@@ -118,7 +135,9 @@ impl<'a> Parser<'a> {
     fn eat_whitespace_only(&mut self) {
         while let Some(tok) = self.current() {
             if tok.kind == TokenKind::Whitespace || tok.kind == TokenKind::Newline {
-                self.builder.token(SyntaxKind::from(tok.kind), tok.span);
+                if LOSSLESS {
+                    self.builder.token(SyntaxKind::from(tok.kind), tok.span);
+                }
                 self.pos += 1;
             } else {
                 break;
@@ -142,9 +161,13 @@ impl<'a> Parser<'a> {
 
     /// Consumes the current token if it matches `kind`.
     fn eat(&mut self, kind: TokenKind) -> Option<&'a str> {
+        self.eat_stored::<true>(kind)
+    }
+
+    fn eat_stored<const STORE: bool>(&mut self, kind: TokenKind) -> Option<&'a str> {
         self.eat_trivia();
         if self.peek() == Some(kind) {
-            let tok = self.bump().unwrap();
+            let tok = self.bump_stored::<STORE>().unwrap();
             Some(tok.text(self.source))
         } else {
             None
@@ -164,9 +187,13 @@ impl<'a> Parser<'a> {
 
     /// Expects the current token to be `kind`. Emits diagnostic on mismatch.
     fn expect(&mut self, kind: TokenKind) -> Option<&'a str> {
+        self.expect_stored::<true>(kind)
+    }
+
+    fn expect_stored<const STORE: bool>(&mut self, kind: TokenKind) -> Option<&'a str> {
         self.eat_trivia();
         if self.peek() == Some(kind) {
-            let tok = self.bump().unwrap();
+            let tok = self.bump_stored::<STORE>().unwrap();
             Some(tok.text(self.source))
         } else {
             let span = self.current_span();
@@ -1408,16 +1435,16 @@ impl<'a> Parser<'a> {
     fn parse_tuple_value(&mut self) {
         let start = self.current_span().start;
         self.builder.start_node(SyntaxKind::TupleValue, start);
-        self.bump(); // `(`
+        self.bump_stored::<LOSSLESS>(); // `(`
         loop {
             self.eat_trivia();
             if self.peek() == Some(TokenKind::RightParen) || self.current().is_none() {
                 break;
             }
             self.parse_value_expr();
-            self.eat(TokenKind::Comma);
+            self.eat_stored::<LOSSLESS>(TokenKind::Comma);
         }
-        self.expect(TokenKind::RightParen);
+        self.expect_stored::<LOSSLESS>(TokenKind::RightParen);
         let end = self.current_span().start;
         self.builder.finish_node(end);
     }
@@ -1425,16 +1452,16 @@ impl<'a> Parser<'a> {
     fn parse_array_value(&mut self) {
         let start = self.current_span().start;
         self.builder.start_node(SyntaxKind::ArrayValue, start);
-        self.bump(); // `[`
+        self.bump_stored::<LOSSLESS>(); // `[`
         loop {
             self.eat_trivia();
             if self.peek() == Some(TokenKind::RightBracket) || self.current().is_none() {
                 break;
             }
             self.parse_value_expr();
-            self.eat(TokenKind::Comma);
+            self.eat_stored::<LOSSLESS>(TokenKind::Comma);
         }
-        self.expect(TokenKind::RightBracket);
+        self.expect_stored::<LOSSLESS>(TokenKind::RightBracket);
         let end = self.current_span().start;
         self.builder.finish_node(end);
     }
@@ -1495,7 +1522,9 @@ impl<'a> Parser<'a> {
                 break;
             }
             newline |= tok.kind == TokenKind::Newline;
-            self.builder.token(SyntaxKind::from(tok.kind), tok.span);
+            if LOSSLESS {
+                self.builder.token(SyntaxKind::from(tok.kind), tok.span);
+            }
             self.pos += 1;
         }
         newline
@@ -1857,6 +1886,52 @@ fn is_trivia(kind: TokenKind) -> bool {
 mod tests {
     use super::*;
     use crate::ast::*;
+
+    #[test]
+    fn ast_parsing_preserves_lossless_lowering_and_diagnostics() {
+        // Both entry points must retain byte spans, header text and newline
+        // separators even though AST loading omits trivia and list punctuation.
+        let sources = [
+            r#"  #usda 1.0
+( customLayerData = { string note = "héllo" } )
+def Xform "Root" (
+    variants = { string look = "red" }
+    prepend variantSets = ["look"]
+) {
+    // A comment between typed values must not change their spans.
+    float3[] points = [(1, -0, .5), /* block */ (-1e-3, inf, nan)]
+    custom string label = "a\nlabel"
+    double weight.timeSamples = { 0: 1, 2: -2 }
+    variantSet "look" = {
+        "red" { custom token color = "red" }
+    }
+    float[] edits = edit [
+        write [1, 2] [0]
+        minsize 4 fill [3]; erase [1]
+    ]
+}
+"#,
+            "#usda 1.0\r\ndef \"A\" { /* multiline\ncomment */ float[] a = edit [resize 3\r\nwrite [2] [1]] }",
+            "#usda 1.0\ndef \"A\" { double a.spline = { 0: 1; post linear, 2: 3; post held, } }",
+            "#usda 1.0\ndef \"A\" { float[] a = edit [resize 3 write [2] [1]] double b.curve = { 1: 0 } }",
+            "#bad header\ndef \"A\" { float a = - /* comment */ token }",
+            "#usda 1.0\ndef \"A\" { float3[] a = [(1,, 2), (3, 4] }",
+            "#usda 1.0\ndef \"A\" { float[] a = [1, 2",
+        ];
+        for source in sources {
+            let cst = parse_cst(source);
+            let mut expected = crate::lower::lower(&cst.tree, source);
+            let mut diagnostics = cst.diagnostics;
+            diagnostics.append(&mut expected.diagnostics);
+            expected.diagnostics = diagnostics;
+            let actual = parse(source);
+            assert_eq!(
+                format!("{actual:?}"),
+                format!("{expected:?}"),
+                "AST content, source spans and diagnostics agree for {source}"
+            );
+        }
+    }
 
     #[test]
     fn parse_reports_unsupported_attribute_field() {

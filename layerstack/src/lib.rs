@@ -133,6 +133,7 @@ pub(crate) mod arc_cycle;
 pub(crate) mod arcs;
 pub mod array_edit;
 pub mod asset;
+pub mod asset_dependencies;
 pub(crate) mod compose;
 pub(crate) mod composition_checks;
 pub mod composition_error;

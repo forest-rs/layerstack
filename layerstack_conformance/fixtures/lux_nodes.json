@@ -1,0 +1,1863 @@
+{
+  "nodes": [
+    {
+      "context": "light",
+      "identifier": "CylinderLight",
+      "ports": [
+        {
+          "asset_identifier": false,
+          "default": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "kind": "input",
+          "name": "color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 6500.0,
+          "kind": "input",
+          "name": "colorTemperature",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "diffuse",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "enableColorTemperature",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "exposure",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "intensity",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "length",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.5,
+          "kind": "input",
+          "name": "radius",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shadow:color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:distance",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": true,
+          "kind": "input",
+          "name": "shadow:enable",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:falloff",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "shadow:falloffGamma",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 90.0,
+          "kind": "input",
+          "name": "shaping:cone:angle",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:cone:softness",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:focus",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shaping:focusTint",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:ies:angleScale",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": true,
+          "default": null,
+          "kind": "input",
+          "name": "shaping:ies:file",
+          "usd_type": "asset"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "shaping:ies:normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "specular",
+          "usd_type": "float"
+        }
+      ],
+      "source_type": "USD",
+      "subdomain": "lighting"
+    },
+    {
+      "context": "light",
+      "identifier": "DiskLight",
+      "ports": [
+        {
+          "asset_identifier": false,
+          "default": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "kind": "input",
+          "name": "color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 6500.0,
+          "kind": "input",
+          "name": "colorTemperature",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "diffuse",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "enableColorTemperature",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "exposure",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "intensity",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.5,
+          "kind": "input",
+          "name": "radius",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shadow:color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:distance",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": true,
+          "kind": "input",
+          "name": "shadow:enable",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:falloff",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "shadow:falloffGamma",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 90.0,
+          "kind": "input",
+          "name": "shaping:cone:angle",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:cone:softness",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:focus",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shaping:focusTint",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:ies:angleScale",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": true,
+          "default": null,
+          "kind": "input",
+          "name": "shaping:ies:file",
+          "usd_type": "asset"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "shaping:ies:normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "specular",
+          "usd_type": "float"
+        }
+      ],
+      "source_type": "USD",
+      "subdomain": "lighting"
+    },
+    {
+      "context": "light",
+      "identifier": "DistantLight",
+      "ports": [
+        {
+          "asset_identifier": false,
+          "default": 0.5299999713897705,
+          "kind": "input",
+          "name": "angle",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "kind": "input",
+          "name": "color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 6500.0,
+          "kind": "input",
+          "name": "colorTemperature",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "diffuse",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "enableColorTemperature",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "exposure",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 50000.0,
+          "kind": "input",
+          "name": "intensity",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shadow:color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:distance",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": true,
+          "kind": "input",
+          "name": "shadow:enable",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:falloff",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "shadow:falloffGamma",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 90.0,
+          "kind": "input",
+          "name": "shaping:cone:angle",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:cone:softness",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:focus",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shaping:focusTint",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:ies:angleScale",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": true,
+          "default": null,
+          "kind": "input",
+          "name": "shaping:ies:file",
+          "usd_type": "asset"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "shaping:ies:normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "specular",
+          "usd_type": "float"
+        }
+      ],
+      "source_type": "USD",
+      "subdomain": "lighting"
+    },
+    {
+      "context": "light",
+      "identifier": "DomeLight",
+      "ports": [
+        {
+          "asset_identifier": false,
+          "default": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "kind": "input",
+          "name": "color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 6500.0,
+          "kind": "input",
+          "name": "colorTemperature",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "diffuse",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "enableColorTemperature",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "exposure",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "intensity",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shadow:color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:distance",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": true,
+          "kind": "input",
+          "name": "shadow:enable",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:falloff",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "shadow:falloffGamma",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 90.0,
+          "kind": "input",
+          "name": "shaping:cone:angle",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:cone:softness",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:focus",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shaping:focusTint",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:ies:angleScale",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": true,
+          "default": null,
+          "kind": "input",
+          "name": "shaping:ies:file",
+          "usd_type": "asset"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "shaping:ies:normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "specular",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": true,
+          "default": null,
+          "kind": "input",
+          "name": "texture:file",
+          "usd_type": "asset"
+        },
+        {
+          "asset_identifier": false,
+          "default": "automatic",
+          "kind": "input",
+          "name": "texture:format",
+          "usd_type": "token"
+        }
+      ],
+      "source_type": "USD",
+      "subdomain": "lighting"
+    },
+    {
+      "context": "light",
+      "identifier": "DomeLight_1",
+      "ports": [
+        {
+          "asset_identifier": false,
+          "default": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "kind": "input",
+          "name": "color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 6500.0,
+          "kind": "input",
+          "name": "colorTemperature",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "diffuse",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "enableColorTemperature",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "exposure",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "intensity",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shadow:color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:distance",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": true,
+          "kind": "input",
+          "name": "shadow:enable",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:falloff",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "shadow:falloffGamma",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 90.0,
+          "kind": "input",
+          "name": "shaping:cone:angle",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:cone:softness",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:focus",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shaping:focusTint",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:ies:angleScale",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": true,
+          "default": null,
+          "kind": "input",
+          "name": "shaping:ies:file",
+          "usd_type": "asset"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "shaping:ies:normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "specular",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": true,
+          "default": null,
+          "kind": "input",
+          "name": "texture:file",
+          "usd_type": "asset"
+        },
+        {
+          "asset_identifier": false,
+          "default": "automatic",
+          "kind": "input",
+          "name": "texture:format",
+          "usd_type": "token"
+        }
+      ],
+      "source_type": "USD",
+      "subdomain": "lighting"
+    },
+    {
+      "context": "light",
+      "identifier": "GeometryLight",
+      "ports": [
+        {
+          "asset_identifier": false,
+          "default": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "kind": "input",
+          "name": "color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 6500.0,
+          "kind": "input",
+          "name": "colorTemperature",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "diffuse",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "enableColorTemperature",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "exposure",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "intensity",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shadow:color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:distance",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": true,
+          "kind": "input",
+          "name": "shadow:enable",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:falloff",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "shadow:falloffGamma",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 90.0,
+          "kind": "input",
+          "name": "shaping:cone:angle",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:cone:softness",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:focus",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shaping:focusTint",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:ies:angleScale",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": true,
+          "default": null,
+          "kind": "input",
+          "name": "shaping:ies:file",
+          "usd_type": "asset"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "shaping:ies:normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "specular",
+          "usd_type": "float"
+        }
+      ],
+      "source_type": "USD",
+      "subdomain": "lighting"
+    },
+    {
+      "context": "light",
+      "identifier": "MeshLight",
+      "ports": [
+        {
+          "asset_identifier": false,
+          "default": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "kind": "input",
+          "name": "color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 6500.0,
+          "kind": "input",
+          "name": "colorTemperature",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "diffuse",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "enableColorTemperature",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "exposure",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "intensity",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shadow:color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:distance",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": true,
+          "kind": "input",
+          "name": "shadow:enable",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:falloff",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "shadow:falloffGamma",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 90.0,
+          "kind": "input",
+          "name": "shaping:cone:angle",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:cone:softness",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:focus",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shaping:focusTint",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:ies:angleScale",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": true,
+          "default": null,
+          "kind": "input",
+          "name": "shaping:ies:file",
+          "usd_type": "asset"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "shaping:ies:normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "specular",
+          "usd_type": "float"
+        }
+      ],
+      "source_type": "USD",
+      "subdomain": "lighting"
+    },
+    {
+      "context": "light",
+      "identifier": "PortalLight",
+      "ports": [
+        {
+          "asset_identifier": false,
+          "default": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "kind": "input",
+          "name": "color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 6500.0,
+          "kind": "input",
+          "name": "colorTemperature",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "diffuse",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "enableColorTemperature",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "exposure",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "height",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "intensity",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shadow:color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:distance",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": true,
+          "kind": "input",
+          "name": "shadow:enable",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:falloff",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "shadow:falloffGamma",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 90.0,
+          "kind": "input",
+          "name": "shaping:cone:angle",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:cone:softness",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:focus",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shaping:focusTint",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:ies:angleScale",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": true,
+          "default": null,
+          "kind": "input",
+          "name": "shaping:ies:file",
+          "usd_type": "asset"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "shaping:ies:normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "specular",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "width",
+          "usd_type": "float"
+        }
+      ],
+      "source_type": "USD",
+      "subdomain": "lighting"
+    },
+    {
+      "context": "light",
+      "identifier": "RectLight",
+      "ports": [
+        {
+          "asset_identifier": false,
+          "default": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "kind": "input",
+          "name": "color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 6500.0,
+          "kind": "input",
+          "name": "colorTemperature",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "diffuse",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "enableColorTemperature",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "exposure",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "height",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "intensity",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shadow:color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:distance",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": true,
+          "kind": "input",
+          "name": "shadow:enable",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:falloff",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "shadow:falloffGamma",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 90.0,
+          "kind": "input",
+          "name": "shaping:cone:angle",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:cone:softness",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:focus",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shaping:focusTint",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:ies:angleScale",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": true,
+          "default": null,
+          "kind": "input",
+          "name": "shaping:ies:file",
+          "usd_type": "asset"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "shaping:ies:normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "specular",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": true,
+          "default": null,
+          "kind": "input",
+          "name": "texture:file",
+          "usd_type": "asset"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "width",
+          "usd_type": "float"
+        }
+      ],
+      "source_type": "USD",
+      "subdomain": "lighting"
+    },
+    {
+      "context": "light",
+      "identifier": "SphereLight",
+      "ports": [
+        {
+          "asset_identifier": false,
+          "default": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "kind": "input",
+          "name": "color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 6500.0,
+          "kind": "input",
+          "name": "colorTemperature",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "diffuse",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "enableColorTemperature",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "exposure",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "intensity",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.5,
+          "kind": "input",
+          "name": "radius",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shadow:color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:distance",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": true,
+          "kind": "input",
+          "name": "shadow:enable",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:falloff",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "shadow:falloffGamma",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 90.0,
+          "kind": "input",
+          "name": "shaping:cone:angle",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:cone:softness",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:focus",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shaping:focusTint",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:ies:angleScale",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": true,
+          "default": null,
+          "kind": "input",
+          "name": "shaping:ies:file",
+          "usd_type": "asset"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "shaping:ies:normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "specular",
+          "usd_type": "float"
+        }
+      ],
+      "source_type": "USD",
+      "subdomain": "lighting"
+    },
+    {
+      "context": "light",
+      "identifier": "VolumeLight",
+      "ports": [
+        {
+          "asset_identifier": false,
+          "default": [
+            1.0,
+            1.0,
+            1.0
+          ],
+          "kind": "input",
+          "name": "color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 6500.0,
+          "kind": "input",
+          "name": "colorTemperature",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "diffuse",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "enableColorTemperature",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "exposure",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "intensity",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shadow:color",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:distance",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": true,
+          "kind": "input",
+          "name": "shadow:enable",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": -1.0,
+          "kind": "input",
+          "name": "shadow:falloff",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "shadow:falloffGamma",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 90.0,
+          "kind": "input",
+          "name": "shaping:cone:angle",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:cone:softness",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:focus",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": false,
+          "default": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "kind": "input",
+          "name": "shaping:focusTint",
+          "usd_type": "color3f"
+        },
+        {
+          "asset_identifier": false,
+          "default": 0.0,
+          "kind": "input",
+          "name": "shaping:ies:angleScale",
+          "usd_type": "float"
+        },
+        {
+          "asset_identifier": true,
+          "default": null,
+          "kind": "input",
+          "name": "shaping:ies:file",
+          "usd_type": "asset"
+        },
+        {
+          "asset_identifier": false,
+          "default": false,
+          "kind": "input",
+          "name": "shaping:ies:normalize",
+          "usd_type": "bool"
+        },
+        {
+          "asset_identifier": false,
+          "default": 1.0,
+          "kind": "input",
+          "name": "specular",
+          "usd_type": "float"
+        }
+      ],
+      "source_type": "USD",
+      "subdomain": "lighting"
+    }
+  ],
+  "version": "26.8"
+}

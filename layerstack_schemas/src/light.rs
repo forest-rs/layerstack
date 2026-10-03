@@ -6,6 +6,9 @@
 mod helpers;
 pub use helpers::*;
 
+mod nodes;
+pub use nodes::*;
+
 use crate::{
     PrimView, Scene, SchemaEdit,
     usd_lux::{LightListApi, LightListApiEdit, LightListApiLightListCacheBehavior as Behavior},

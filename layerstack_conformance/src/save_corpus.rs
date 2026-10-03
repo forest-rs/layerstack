@@ -232,6 +232,42 @@ pub struct SaveCase {
     pub composition: Option<&'static [(&'static str, &'static str)]>,
 }
 
+const SPARSE_EDITS: &str = r#"#usda 1.0
+def "Edits" {
+    double marker = 1
+    int[] all = edit [resize 4; minsize 6 fill 9; write 12 to [0]; write [0] to [1]; insert 7 at [2]; insert [-1] at [0]; erase [-1]; maxsize 5; minsize 8; resize 10 fill 4; append 15; prepend [1]]
+    int[] noLiterals = edit [resize 4; erase [0]; maxsize 2]
+    int[] empty = edit []
+    int[] sentinel = edit [insert 7 at [-9223372036854775808]]
+    point3f[] points = edit [append (1, 2, 3); resize 4 fill (0, 0, 0)]
+    token[] tokens = edit [append "leaf"]
+    timecode[] clocks = edit [append 24; minsize 3]
+    pathExpression[] expressions = edit [append "/Edits//"]
+    float[] animated.timeSamples = {
+        0: edit [append 1],
+        12: edit [append 2; resize 3]
+    }
+}
+"#;
+
+const SPARSE_EDITS_CHANGED: &str = r#"#usda 1.0
+def "Edits" {
+    double marker = 2
+    int[] all = edit [resize 4; minsize 6 fill 9; write 12 to [0]; write [0] to [1]; insert 7 at [2]; insert [-1] at [0]; erase [-1]; maxsize 5; minsize 8; resize 10 fill 4; append 15; prepend [1]]
+    int[] noLiterals = edit [resize 4; erase [0]; maxsize 2]
+    int[] empty = edit []
+    int[] sentinel = edit [insert 7 at [-9223372036854775808]]
+    point3f[] points = edit [append (1, 2, 3); resize 4 fill (0, 0, 0)]
+    token[] tokens = edit [append "leaf"]
+    timecode[] clocks = edit [append 24; minsize 3]
+    pathExpression[] expressions = edit [append "/Edits//"]
+    float[] animated.timeSamples = {
+        0: edit [append 1],
+        12: edit [append 2; resize 3]
+    }
+}
+"#;
+
 const NAMESPACE_VALUES: &str = r#"#usda 1.0
 (
     relocates = {
@@ -277,6 +313,18 @@ def Scope "World" (
 /// The preservation corpus.
 pub fn cases() -> Vec<SaveCase> {
     vec![
+        SaveCase {
+            name: "sparse_edits",
+            covers: "every native edit opcode, literal-free and empty programs, dimensioned and string literals, timecodes, expressions and time samples",
+            source: SPARSE_EDITS,
+            edit: |layer| {
+                layer.property("/Edits.marker").default = Some(Value::Double(2.0));
+            },
+            expected: SPARSE_EDITS_CHANGED,
+            weaker: None,
+            composition: Some(&[]),
+            minimum_openusd: Some(((26, 8), "native sparse array edits")),
+        },
         SaveCase {
             name: "relocates_path_expressions",
             covers: "ordered relocates, removed destinations, scalar and array path expressions, and expressions in variants",
@@ -587,21 +635,14 @@ pub fn unsupported_cases() -> Vec<(&'static str, &'static str, SaveError)> {
         path: path.into(),
         feature,
     };
-    vec![
-        (
-            "array_edit",
-            "#usda 1.0\ndef \"A\"\n{\n    int[] ids = edit [append 4]\n}\n",
-            unsupported("/A.ids", Unsupported::ArrayEdit),
+    vec![(
+        "untyped_empty_array",
+        "#usda 1.0\ndef \"A\" (\n    customData = {\n        dictionary profilesInfo = {\n            dictionary profileCompatibility = {\n                string[] \"profile.studio.vfx.25.08\" = []\n            }\n        }\n    }\n)\n{\n}\n",
+        unsupported(
+            "/A#customData/profilesInfo/profileCompatibility/profile.studio.vfx.25.08",
+            Unsupported::Value("untyped empty array"),
         ),
-        (
-            "untyped_empty_array",
-            "#usda 1.0\ndef \"A\" (\n    customData = {\n        dictionary profilesInfo = {\n            dictionary profileCompatibility = {\n                string[] \"profile.studio.vfx.25.08\" = []\n            }\n        }\n    }\n)\n{\n}\n",
-            unsupported(
-                "/A#customData/profilesInfo/profileCompatibility/profile.studio.vfx.25.08",
-                Unsupported::Value("untyped empty array"),
-            ),
-        ),
-    ]
+    )]
 }
 
 /// A layer to compose: USDA text or a USDC file.

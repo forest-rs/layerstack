@@ -670,7 +670,64 @@ impl<'a> Packer<'a> {
             Value::UnregisteredValue(inner) => self.unregistered(inner, site)?,
             Value::TimeSamples(samples) => self.time_samples(samples, site)?,
             Value::Spline(spline) => self.spline(spline)?,
+            Value::ArrayEdit {
+                literals,
+                instructions,
+            } => self.array_edit(literals, instructions, site)?,
         })
+    }
+
+    /// OpenUSD `_ValueHandler::PackArrayEdit`: packed literals, packed int64
+    /// instructions and the discarded legacy `isDense` byte. Each instruction
+    /// is its own group; group coalescing changes size, never semantics.
+    fn array_edit(
+        &mut self,
+        literals: &'a Value,
+        instructions: &[crate::value_rep::CrateArrayEditOp],
+        site: Site<'_>,
+    ) -> Result<u64, UsdcWriteError> {
+        use crate::value_rep::CrateArrayEditOp as I;
+        let invalid = || UsdcWriteError::InvalidArrayEdit {
+            path: site.path.into(),
+            field: site.field.into(),
+        };
+        let num_literals = array_len(literals).ok_or_else(invalid)?;
+        let literal = |i: usize| {
+            if i < num_literals {
+                i64::try_from(i).map_err(|_| UsdcWriteError::TooLarge)
+            } else {
+                Err(invalid())
+            }
+        };
+        let size = |n: u64| i64::try_from(n).map_err(|_| UsdcWriteError::TooLarge);
+        let mut words = Vec::new();
+        for op in instructions {
+            let (opcode, args) = match *op {
+                I::WriteLiteral { literal: i, index } => (0_u8, [literal(i)?, index]),
+                I::WriteRef { src, index } => (1, [src, index]),
+                I::InsertLiteral { literal: i, index } => (2, [literal(i)?, index]),
+                I::InsertRef { src, index } => (3, [src, index]),
+                I::Erase { index } => (4, [index, 0]),
+                I::MinSize { len } => (5, [size(len)?, 0]),
+                I::MinSizeFill { len, literal: i } => (6, [size(len)?, literal(i)?]),
+                I::SetSize { len } => (7, [size(len)?, 0]),
+                I::SetSizeFill { len, literal: i } => (8, [size(len)?, literal(i)?]),
+                I::MaxSize { len } => (9, [size(len)?, 0]),
+            };
+            words.push((i64::from(opcode) << 56) | 1);
+            words.push(args[0]);
+            if matches!(opcode, 0..=3 | 6 | 8) {
+                words.push(args[1]);
+            }
+        }
+        let rep_literals = self.pack(literals, site)?;
+        let element_type = u8::try_from((rep_literals >> 48) & 0xff).map_err(|_| invalid())?;
+        let element_type = ValueType::try_from(element_type).map_err(|_| invalid())?;
+        let rep_words = self.int_array(ValueType::Int64, &words, IntWidth::W64)?;
+        let mut bytes = rep_literals.to_le_bytes().to_vec();
+        bytes.extend_from_slice(&rep_words.to_le_bytes());
+        bytes.push(0);
+        self.blob(element_type, 1 << 60, bytes, false)
     }
 
     /// `Write(TsSpline)`: the spline's Ts binary data as a byte vector (a
@@ -1366,7 +1423,9 @@ fn has_timecode(value: &Value) -> bool {
 /// the version a value needs (`Write(GfTimeCode)`, `Write(TsSpline)`).
 pub(super) fn required_version(specs: &[Spec]) -> CrateVersion {
     let fields = || specs.iter().flat_map(|s| &s.fields);
-    if fields().any(|f| matches!(f.value, Value::Spline(_))) {
+    if fields().any(|f| has_array_edit(&f.value)) {
+        CrateVersion::ARRAY_EDITS
+    } else if fields().any(|f| matches!(f.value, Value::Spline(_))) {
         CrateVersion::SPLINES
     } else if fields().any(|f| matches!(f.value, Value::Relocates(_))) {
         CrateVersion::new(0, 11, 0)
@@ -1376,6 +1435,54 @@ pub(super) fn required_version(specs: &[Spec]) -> CrateVersion {
         CrateVersion::TIMECODES
     } else {
         CrateVersion::NEW_FILE_DEFAULT
+    }
+}
+
+fn array_len(value: &Value) -> Option<usize> {
+    Some(match value {
+        Value::PathExpressionArray(v) => v.len(),
+        Value::BoolArray(v) => v.len(),
+        Value::UCharArray(v) => v.len(),
+        Value::IntArray(v) => v.len(),
+        Value::UIntArray(v) => v.len(),
+        Value::Int64Array(v) => v.len(),
+        Value::UInt64Array(v) => v.len(),
+        Value::HalfArray(v) => v.len(),
+        Value::FloatArray(v) => v.len(),
+        Value::DoubleArray(v) => v.len(),
+        Value::TimeCodeArray(v) => v.len(),
+        Value::StringArray(v) => v.len(),
+        Value::TokenArray(v) => v.len(),
+        Value::AssetArray(v) => v.len(),
+        Value::Vec2hArray(v) => v.len(),
+        Value::Vec3hArray(v) => v.len(),
+        Value::Vec4hArray(v) => v.len(),
+        Value::Vec2fArray(v) => v.len(),
+        Value::Vec3fArray(v) => v.len(),
+        Value::Vec4fArray(v) => v.len(),
+        Value::Vec2dArray(v) => v.len(),
+        Value::Vec3dArray(v) => v.len(),
+        Value::Vec4dArray(v) => v.len(),
+        Value::Vec2iArray(v) => v.len(),
+        Value::Vec3iArray(v) => v.len(),
+        Value::Vec4iArray(v) => v.len(),
+        Value::QuathArray(v) => v.len(),
+        Value::QuatfArray(v) => v.len(),
+        Value::QuatdArray(v) => v.len(),
+        Value::Matrix2dArray(v) => v.len(),
+        Value::Matrix3dArray(v) => v.len(),
+        Value::Matrix4dArray(v) => v.len(),
+        _ => return None,
+    })
+}
+
+fn has_array_edit(value: &Value) -> bool {
+    match value {
+        Value::ArrayEdit { .. } => true,
+        Value::Dictionary(entries) => entries.iter().any(|(_, v)| has_array_edit(v)),
+        Value::TimeSamples(samples) => samples.iter().any(|(_, v)| has_array_edit(v)),
+        Value::UnregisteredValue(v) => has_array_edit(v),
+        _ => false,
     }
 }
 

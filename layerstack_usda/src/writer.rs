@@ -71,6 +71,7 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use core::fmt::{self, Write as _};
 
+use layerstack::array_edit::{ArrayIndex, Instruction, Operand};
 use layerstack::spline::SplineData;
 
 pub use crate::ast::Specifier;
@@ -139,11 +140,10 @@ impl Document {
     /// See [`Self::to_usda`].
     pub fn write_usda(&self, out: &mut String) -> Result<(), WriteError> {
         self.validate()?;
-        // USDA has no syntax for a knot's own curve type (`SplineKnotItem`
-        // in `pxr/usd/sdf/textFileFormatParser.h`): a spline whose knots
-        // say otherwise than the spline is rejected rather than rewritten.
+        // Text cannot preserve every binary value description. Reject
+        // those differences before output rather than silently rewrite them.
         for prim in &self.prims {
-            knot_curve_types(prim, "")?;
+            validate_text_prim(prim, "")?;
         }
         let mut w = Writer { out };
         w.document(self);
@@ -950,6 +950,16 @@ pub enum Value {
     PathExpression(String),
     /// Array of authored `SdfPathExpression` texts.
     PathExpressionArray(Vec<String>),
+    /// A native sparse array edit. `element` is the scalar type descriptor;
+    /// its value is ignored. Instructions retain their authored order and
+    /// operate over weaker arrays rather than storing an evaluated result.
+    /// OpenUSD: `VtArrayEdit<T>`; sparse-array-edits proposal.
+    ArrayEdit {
+        /// Scalar descriptor, such as `Int(0)` or `Float3([0.0; 3])`.
+        element: Box<Self>,
+        /// Portable edit program; every literal must match `element`.
+        instructions: Vec<Instruction<Self>>,
+    },
     /// `float2` and its semantic aliases (e.g. `texCoord2f`).
     Float2([f32; 2]),
     /// `float3` and its semantic aliases (e.g. `point3f`, `color3f`).
@@ -1573,10 +1583,10 @@ const RESERVED_METADATA: &[&str] = &[
 /// fields), §16.2.19 (`PermissionMetadata`, legacy content).
 pub const PERMISSIONS: &[&str] = &["public", "private"];
 
-/// Rejects a spline of `prim` or anything it holds whose knots carry a
-/// curve type other than the spline's, which USDA cannot write. `parent`
-/// is the path of the spec that holds `prim`.
-fn knot_curve_types(prim: &Prim, parent: &str) -> Result<(), WriteError> {
+/// Rejects binary descriptions USDA cannot preserve: per-knot curve types
+/// and sparse-edit kinds distinct from their declaration. `parent` is the
+/// path of the spec holding `prim`.
+fn validate_text_prim(prim: &Prim, parent: &str) -> Result<(), WriteError> {
     // A prim in a variant (`/P{v=x}C`) follows its variant's selection
     // directly, as in `Prim::validate`.
     let path = if parent.ends_with('}') {
@@ -1584,33 +1594,54 @@ fn knot_curve_types(prim: &Prim, parent: &str) -> Result<(), WriteError> {
     } else {
         alloc::format!("{parent}/{}", prim.name)
     };
-    knot_curve_types_in_body(prim, &path)
+    validate_text_body(prim, &path)
 }
 
-/// [`knot_curve_types`] for the contents of a prim spec or a variant's
+/// [`validate_text_prim`] for the contents of a prim spec or a variant's
 /// prim spec at `path`: its properties, its children and its variant sets,
 /// nested ones included.
-fn knot_curve_types_in_body(body: &Prim, path: &str) -> Result<(), WriteError> {
+fn validate_text_body(body: &Prim, path: &str) -> Result<(), WriteError> {
     for property in &body.properties {
-        if let Property::Attribute(attribute) = property
-            && let Some(spline) = attribute.spline.as_deref()
+        let Property::Attribute(attribute) = property else {
+            continue;
+        };
+        let location = alloc::format!("{path}.{}", attribute.name);
+        if let Some(spline) = attribute.spline.as_deref()
             && spline
                 .knots
                 .iter()
                 .any(|knot| knot.curve_type != spline.default_curve_type)
         {
-            return Err(WriteError::KnotCurveType {
-                path: alloc::format!("{path}.{}", attribute.name),
-            });
+            return Err(WriteError::KnotCurveType { path: location });
+        }
+        for value in attribute.value.iter().chain(
+            attribute
+                .time_samples
+                .iter()
+                .flatten()
+                .map(|(_, value)| value),
+        ) {
+            // Native VtArrayEdit keeps its own storage kind. USDA derives
+            // that kind from the declaration (textFileFormatParser.h), so
+            // double/timecode shape compatibility alone would change retiming.
+            if let Value::ArrayEdit { element, .. } = value
+                && matches!(&**element, Value::Double(_) | Value::TimeCode(_))
+                && (attribute.type_name == "timecode[]") != matches!(&**element, Value::TimeCode(_))
+            {
+                return Err(WriteError::TypeMismatch {
+                    path: location,
+                    type_name: attribute.type_name.clone(),
+                });
+            }
         }
     }
     for child in &body.children {
-        knot_curve_types(child, path)?;
+        validate_text_prim(child, path)?;
     }
     for set in &body.variant_sets {
         for variant in &set.variants {
             let branch = alloc::format!("{path}{{{}={}}}", set.name, variant.name);
-            knot_curve_types_in_body(variant, &branch)?;
+            validate_text_body(variant, &branch)?;
         }
     }
     Ok(())
@@ -1689,6 +1720,45 @@ fn validate_value(value: &Value, path: &str) -> Result<(), WriteError> {
         Value::StringArray(texts)
         | Value::TokenArray(texts)
         | Value::PathExpressionArray(texts) => texts.iter().find_map(bad_text).map_or(Ok(()), Err),
+        Value::ArrayEdit {
+            element,
+            instructions,
+        } => {
+            let shape = element
+                .shape()
+                .filter(|shape| {
+                    !shape.array && !matches!(shape.elem, Elem::Dictionary | Elem::ListOp)
+                })
+                .ok_or_else(|| WriteError::TypeMismatch {
+                    path: path.into(),
+                    type_name: "array edit".into(),
+                })?;
+            let literal = |value: &Value| {
+                if value.shape() != Some(shape) {
+                    return Err(WriteError::TypeMismatch {
+                        path: path.into(),
+                        type_name: element.canonical_type_name().into(),
+                    });
+                }
+                validate_value(value, path)
+            };
+            for op in instructions {
+                match op {
+                    Instruction::Write {
+                        src: Operand::Literal(value),
+                        ..
+                    }
+                    | Instruction::Insert {
+                        src: Operand::Literal(value),
+                        ..
+                    }
+                    | Instruction::MinSizeFill { fill: value, .. }
+                    | Instruction::ResizeFill { fill: value, .. } => literal(value)?,
+                    _ => {}
+                }
+            }
+            Ok(())
+        }
         Value::Asset(asset) => bad_asset(asset).map_or(Ok(()), Err),
         Value::AssetArray(assets) => assets.iter().find_map(bad_asset).map_or(Ok(()), Err),
         Value::Dictionary(entries) => {
@@ -1825,6 +1895,9 @@ impl Value {
     /// `point3f[]`), or `None` when the name is not an array type this
     /// writer has a [`Value`] for.
     pub(crate) fn empty_array_of(type_name: &str) -> Option<Self> {
+        if type_name == "timecode[]" {
+            return Some(Self::TimeCodeArray(Vec::new()));
+        }
         let shape = parse_type_name(type_name).filter(|shape| shape.array)?;
         Some(match (shape.elem, shape.arity) {
             (Elem::Bool, 1) => Self::BoolArray(Vec::new()),
@@ -1862,6 +1935,23 @@ impl Value {
         })
     }
 
+    /// Builds a homogeneous array from a scalar descriptor and elements.
+    ///
+    /// Returns `None` for unsupported descriptors or any mismatched element.
+    /// The descriptor's value is ignored, so an empty array keeps its type.
+    /// Semantic aliases belong to the attribute declaration.
+    #[must_use]
+    pub fn array_of(element: &Self, values: impl IntoIterator<Item = Self>) -> Option<Self> {
+        let mut array =
+            Self::empty_array_of(&alloc::format!("{}[]", element.canonical_type_name()))?;
+        for value in values {
+            if !crate::save::push_element(&mut array, value) {
+                return None;
+            }
+        }
+        Some(array)
+    }
+
     /// For a list-op value, whether it is well formed (see [`ListOp`]);
     /// `None` for any other value.
     fn list_op_is_valid(&self) -> Option<bool> {
@@ -1876,6 +1966,11 @@ impl Value {
     }
 
     fn shape(&self) -> Option<Shape> {
+        if let Self::ArrayEdit { element, .. } = self {
+            let mut shape = element.shape().filter(|shape| !shape.array)?;
+            shape.array = true;
+            return Some(shape);
+        }
         let (elem, arity, array) = match self {
             Self::Bool(_) => (Elem::Bool, 1, false),
             Self::UChar(_) => (Elem::UChar, 1, false),
@@ -1946,7 +2041,7 @@ impl Value {
             | Self::UIntListOp(_)
             | Self::Int64ListOp(_)
             | Self::UInt64ListOp(_) => (Elem::ListOp, 1, false),
-            Self::Block => return None,
+            Self::Block | Self::ArrayEdit { .. } => return None,
         };
         Some(Shape { elem, arity, array })
     }
@@ -2028,6 +2123,10 @@ impl Value {
             Self::UIntListOp(_) => "uintListOp",
             Self::Int64ListOp(_) => "int64ListOp",
             Self::UInt64ListOp(_) => "uint64ListOp",
+            Self::ArrayEdit { element, .. } => {
+                Self::empty_array_of(&alloc::format!("{}[]", element.canonical_type_name()))
+                    .map_or("opaque", |array| array.canonical_type_name())
+            }
             Self::Block => "SdfValueBlock",
         }
     }
@@ -2541,6 +2640,64 @@ impl Writer<'_> {
 
     fn value(&mut self, value: &Value, depth: usize) {
         match value {
+            Value::ArrayEdit { instructions, .. } => {
+                self.out.push_str("edit [");
+                for (i, op) in instructions.iter().enumerate() {
+                    if i != 0 {
+                        self.out.push_str("; ");
+                    }
+                    match op {
+                        Instruction::Write { src, index } => {
+                            self.out.push_str("write ");
+                            self.edit_operand(src, depth);
+                            self.out.push_str(" to ");
+                            self.edit_index(*index);
+                        }
+                        Instruction::Insert {
+                            src,
+                            index: ArrayIndex::End,
+                        } => {
+                            self.out.push_str("append ");
+                            self.edit_operand(src, depth);
+                        }
+                        Instruction::Insert { src, index } => {
+                            self.out.push_str("insert ");
+                            self.edit_operand(src, depth);
+                            self.out.push_str(" at ");
+                            self.edit_index(*index);
+                        }
+                        Instruction::Erase { index } => {
+                            self.out.push_str("erase ");
+                            self.edit_index(*index);
+                        }
+                        Instruction::MinSize { len } => {
+                            self.out.push_str("minsize ");
+                            self.display(len);
+                        }
+                        Instruction::MaxSize { len } => {
+                            self.out.push_str("maxsize ");
+                            self.display(len);
+                        }
+                        Instruction::Resize { len } => {
+                            self.out.push_str("resize ");
+                            self.display(len);
+                        }
+                        Instruction::MinSizeFill { len, fill }
+                        | Instruction::ResizeFill { len, fill } => {
+                            self.out
+                                .push_str(if matches!(op, Instruction::MinSizeFill { .. }) {
+                                    "minsize "
+                                } else {
+                                    "resize "
+                                });
+                            self.display(len);
+                            self.out.push_str(" fill ");
+                            self.value(fill, depth);
+                        }
+                    }
+                }
+                self.out.push(']');
+            }
             Value::Bool(v) => self.out.push_str(if *v { "true" } else { "false" }),
             Value::UChar(v) => self.display(v),
             Value::Int(v) => self.display(v),
@@ -2629,6 +2786,22 @@ impl Writer<'_> {
                 self.indent(depth);
                 self.out.push('}');
             }
+        }
+    }
+
+    fn edit_index(&mut self, index: ArrayIndex) {
+        self.out.push('[');
+        self.display(&match index {
+            ArrayIndex::Position(i) => i,
+            ArrayIndex::End => i64::MIN,
+        });
+        self.out.push(']');
+    }
+
+    fn edit_operand(&mut self, src: &Operand<Value>, depth: usize) {
+        match src {
+            Operand::Literal(value) => self.value(value, depth),
+            Operand::CopyFrom(index) => self.edit_index(*index),
         }
     }
 

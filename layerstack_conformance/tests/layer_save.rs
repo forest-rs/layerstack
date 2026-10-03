@@ -549,3 +549,134 @@ fn unsupported_encodings_are_rejected_before_output() {
         );
     }
 }
+
+/// An untagged edit supplied through the public layer model uses the attribute
+/// declaration. Literal-free programs must still retain their native type.
+#[test]
+fn sparse_edit_descriptors_and_preflight_errors() {
+    use layerstack::{ArrayEdit, ArrayEditOp, Value};
+    let mut source = Imported::usda("#usda 1.0\ndef \"A\" {\n    int[] ids = []\n}\n");
+    let program = ArrayEdit {
+        ops: vec![
+            ArrayEditOp::Resize { len: 4 },
+            ArrayEditOp::Erase {
+                index: layerstack::ArrayIndex::Position(0),
+            },
+        ],
+    };
+    source.property("/A.ids").default = Some(Value::ArrayEdit(program.clone()));
+    let bytes = source.save_usdc().unwrap();
+    assert_eq!(&bytes[8..11], &[0, 14, 0]);
+    let mut imported = Imported::usdc(&bytes);
+    let Some(Value::TypedArrayEdit(edit)) = &imported.property("/A.ids").default else {
+        panic!("typed native edit");
+    };
+    assert_eq!(edit.edit(), &program);
+    assert_eq!(&*edit.value_type().type_name, "int");
+    assert_eq!(source.save_usda().unwrap(), imported.save_usda().unwrap());
+
+    // Writing another actual element kind under this declaration is rejected
+    // before a file is produced, including a program with no literals.
+    source.property("/A.ids").default = Some(Value::typed_array_edit(
+        program,
+        layerstack::property::PropertyType::new("float", true, Value::Float(0.0)),
+    ));
+    assert!(matches!(
+        source.save_usda(),
+        Err(layerstack_usda::save::SaveError::Document(
+            layerstack_usda::writer::WriteError::TypeMismatch { .. }
+        ))
+    ));
+    assert!(matches!(source.save_usdc(), Err(UsdcWriteError::Save(_))));
+}
+
+/// The signed minimum is OpenUSD's `EndIndex` sentinel, not a magnitude that
+/// overflows while parsing. Its native edit form survives both save formats.
+#[test]
+fn sparse_end_index_survives_signed_text_and_binary() {
+    let source = Imported::usda(
+        "#usda 1.0\ndef \"A\" {\n    int[] ids = edit [insert 7 at [-9223372036854775808]]\n}\n",
+    );
+    for mut saved in [
+        Imported::usda(&source.save_usda().unwrap()),
+        Imported::usdc(&source.save_usdc().unwrap()),
+    ] {
+        let Some(layerstack::Value::TypedArrayEdit(edit)) = &saved.property("/A.ids").default
+        else {
+            panic!("typed edit");
+        };
+        assert!(matches!(
+            edit.edit().ops[0],
+            layerstack::ArrayEditOp::Insert {
+                index: layerstack::ArrayIndex::End,
+                ..
+            }
+        ));
+    }
+}
+
+#[test]
+fn text_refuses_sparse_edit_kind_changes_while_binary_preserves_retiming() {
+    use layerstack::{InterpolationType, LayerOffset, PropertyType, Value};
+    use layerstack_usda::{save::SaveError, writer::WriteError};
+    for (kind, declaration, descriptor, expected) in [
+        (
+            "double",
+            "timecode",
+            Value::TimeCode(0.),
+            Value::from(vec![5_f64]),
+        ),
+        (
+            "timecode",
+            "double",
+            Value::Double(0.),
+            Value::array_with_element(vec![Value::TimeCode(18.)], Some(&Value::TimeCode(0.))),
+        ),
+    ] {
+        for sampled in [false, true] {
+            let opinion = if sampled {
+                "x.timeSamples = {0: edit [append 5]}"
+            } else {
+                "x = edit [append 5]"
+            };
+            let mut authored = Imported::usda(&format!(
+                "#usda 1.0\ndef \"P\" {{\n {kind}[] {opinion}\n}}\n"
+            ));
+            authored.property("/P.x").type_name =
+                Some(PropertyType::new(declaration, true, descriptor.clone()));
+            assert!(matches!(
+                authored.save_usda(),
+                Err(SaveError::Document(WriteError::TypeMismatch { .. }))
+            ));
+            let bytes = authored.save_usdc().unwrap();
+            let mut store = InMemoryStore::default();
+            let read = layerstack_usdc::read_usdc(
+                &bytes,
+                LayerId(1),
+                &mut store.tokens,
+                &mut store.paths,
+                &mut AnyAsset::default(),
+            )
+            .unwrap();
+            assert!(read.diagnostics.is_empty());
+            store.insert_layer(read.layer);
+            let mut root = Layer::new(LayerId(2));
+            let mut entry = SublayerEntry::new(LayerId(1));
+            entry.offset = LayerOffset {
+                offset: 8.,
+                scale: 2.,
+            };
+            root.sublayers.push(entry);
+            store.insert_layer(root);
+            let x = store.property_path("/P.x");
+            let stage = Stage::compose(&mut store, LayerId(2), StageOptions::default());
+            let resolved = stage
+                .resolve_property_path_at_time(x, 8., InterpolationType::Held)
+                .unwrap();
+            assert_eq!(
+                resolved.value, expected,
+                "{kind} edit under {declaration} declaration"
+            );
+        }
+    }
+}

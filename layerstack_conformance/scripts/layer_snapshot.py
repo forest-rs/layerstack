@@ -50,6 +50,19 @@ def composed(path, weaker):
     return out
 
 
+def value_repr(value):
+    # OpenUSD 26.8 can return an unapplied PathExpressionArrayEdit from Get.
+    # Its Python repr embeds an address. Keep that distinction explicit and
+    # compare its application over an empty array; the authored snapshot above
+    # separately compares the full edit program, including every instruction.
+    if isinstance(value, getattr(Sdf, "PathExpressionArrayEdit", ())):
+        return {
+            "unapplied": "Sdf.PathExpressionArrayEdit",
+            "over_empty": repr(value.ComposeOver(Sdf.PathExpressionArray())),
+        }
+    return repr(value)
+
+
 def compose(path, times):
     stage = Usd.Stage.Open(path)
     if stage is None:
@@ -59,8 +72,8 @@ def compose(path, times):
         properties = {}
         for prop in prim.GetProperties():
             if isinstance(prop, Usd.Attribute):
-                values = [repr(prop.Get())]
-                values += [repr(prop.Get(Usd.TimeCode(t))) for t in times]
+                values = [value_repr(prop.Get())]
+                values += [value_repr(prop.Get(Usd.TimeCode(t))) for t in times]
                 properties[prop.GetName()] = values
             else:
                 properties[prop.GetName()] = [str(t) for t in prop.GetTargets()]

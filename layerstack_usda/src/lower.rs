@@ -1202,12 +1202,19 @@ impl<'a> LowerCtx<'a> {
                 SyntaxKind::Minus => negative = true,
                 SyntaxKind::Number => {
                     let raw = self.text(self.node_from(tree, id));
-                    let parsed = raw.parse::<i64>().ok()?;
-                    return Some(ArrayEditIndex::Position(if negative {
-                        -parsed
+                    // Parse the signed spelling together: negating a parsed
+                    // magnitude cannot represent i64::MIN, Vt's EndIndex.
+                    let signed = if negative {
+                        alloc::format!("-{raw}")
                     } else {
-                        parsed
-                    }));
+                        String::from(raw)
+                    };
+                    let parsed = signed.parse::<i64>().ok()?;
+                    return Some(if parsed == i64::MIN {
+                        ArrayEditIndex::End
+                    } else {
+                        ArrayEditIndex::Position(parsed)
+                    });
                 }
                 _ => {}
             }

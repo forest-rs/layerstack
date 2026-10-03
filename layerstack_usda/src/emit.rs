@@ -2967,7 +2967,7 @@ def \"A\" {
     }
 
     #[test]
-    fn literal_free_array_edits_retain_authored_type_and_aliases() {
+    fn literal_free_array_edits_retain_native_type_and_property_roles() {
         let src = "#usda 1.0\ndef \"A\" {\n\
             point3f[] points = edit []\n\
             timecode[] clock.timeSamples = {1: edit [resize 2]}\n\
@@ -2975,10 +2975,10 @@ def \"A\" {
         }\n";
         let (result, mut tokens, paths) = emit_source(src);
         let a = prim(&result, &mut tokens, &paths, "/A");
-        for (name, expected, prototype) in [
-            ("points", "point3f", Value::Vec3f([0.0; 3])),
-            ("clock", "timecode", Value::TimeCode(0.0)),
-            ("scalar", "float", Value::Float(0.0)),
+        for (name, expected, storage, prototype) in [
+            ("points", "point3f", "float3", Value::Vec3f([0.0; 3])),
+            ("clock", "timecode", "timecode", Value::TimeCode(0.0)),
+            ("scalar", "float", "float", Value::Float(0.0)),
         ] {
             let property = prop(&a.properties, &tokens.intern(name));
             let value = property
@@ -2992,7 +2992,11 @@ def \"A\" {
                 })
                 .unwrap();
             let actual = value.array_edit_type().unwrap();
-            assert_eq!(actual.type_name.as_ref(), expected);
+            assert_eq!(actual.type_name.as_ref(), storage);
+            assert_eq!(
+                property.type_name.as_ref().unwrap().type_name.as_ref(),
+                expected
+            );
             assert_eq!(actual.default_scalar, prototype);
             assert!(actual.is_array);
             assert!(value.array_edit_ref().is_some());

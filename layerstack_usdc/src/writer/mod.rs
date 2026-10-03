@@ -252,6 +252,14 @@ pub enum Value {
     PathExpressionArray(Vec<String>),
     /// Ordered layer relocates (`SdfRelocates`), requiring crate version 0.11.
     Relocates(Vec<(String, String)>),
+    /// Native sparse edit, requiring crate version 0.14.
+    ArrayEdit {
+        /// Homogeneous array containing the instruction literals. Its element
+        /// type carries the edit type, including when this array is empty.
+        literals: Box<Self>,
+        /// Ordered native instructions; literal indices refer to `literals`.
+        instructions: Vec<crate::value_rep::CrateArrayEditOp>,
+    },
     Specifier(Specifier),
     Variability(Variability),
     Permission(Permission),

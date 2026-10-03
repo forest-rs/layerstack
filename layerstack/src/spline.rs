@@ -13,6 +13,9 @@
 use alloc::vec::Vec;
 use core::fmt;
 
+mod queries;
+pub use queries::{SplineChangeInterval, SplinePolyline, SplineQueryError, SplineSample};
+
 // ---------------------------------------------------------------------------
 // Enumerations
 // ---------------------------------------------------------------------------
@@ -215,7 +218,7 @@ impl SplineData {
     /// Spec: §12.5 (interpolation methods).
     #[must_use]
     pub fn evaluate(&self, time: f64) -> Option<f64> {
-        if self.knots.is_empty() {
+        if self.knots.is_empty() || !time.is_finite() {
             return None;
         }
 
@@ -244,7 +247,16 @@ impl SplineData {
                 .partial_cmp(&time)
                 .unwrap_or(core::cmp::Ordering::Equal)
         }) {
-            Ok(i) => return Some(self.knots[i].value),
+            Ok(i) => {
+                // AOUSD §12.5; Ts evaluation uses the right-hand segment at a
+                // knot, including its value block, or post-extrapolation at last.
+                if (i + 1 == self.knots.len() && self.post_extrapolation == Extrapolation::Block)
+                    || (i + 1 < self.knots.len() && self.knots[i].next_interp == KnotInterp::Block)
+                {
+                    return None;
+                }
+                return Some(self.knots[i].value);
+            }
             Err(i) => i,
         };
 
@@ -325,10 +337,18 @@ impl SplineData {
     ) -> Option<f64> {
         // Initial guess: linear proportion.
         let span = tx3 - tx0;
-        if span.abs() < f64::EPSILON {
-            return Some(0.0);
+        if span == 0.0 || !span.is_finite() {
+            return None;
         }
-        let mut u = (target - tx0) / span;
+        // Solve in normalized time so sub-frame intervals and large timeline
+        // offsets use the same relative accuracy. AOUSD §12.5 Bézier inversion.
+        let (tx1, tx2, target) = (
+            (tx1 - tx0) / span,
+            (tx2 - tx0) / span,
+            (target - tx0) / span,
+        );
+        let (tx0, tx3) = (0.0, 1.0);
+        let mut u = target;
         u = u.clamp(0.0, 1.0);
 
         // Newton-Raphson iterations.
@@ -361,7 +381,7 @@ impl SplineData {
     /// Uses standard Hermite basis functions with the knot slopes.
     fn eval_hermite(&self, k0: &Knot, k1: &Knot, time: f64) -> f64 {
         let dt = k1.time - k0.time;
-        if dt.abs() < f64::EPSILON {
+        if dt == 0.0 {
             return k0.value;
         }
 
@@ -389,7 +409,7 @@ impl SplineData {
             Extrapolation::Block => None,
             Extrapolation::Held => Some(first.pre_value.unwrap_or(first.value)),
             Extrapolation::Linear => {
-                let slope = first.pre_tan_slope;
+                let slope = self.linear_extrapolation_slope(true);
                 let dt = time - first.time;
                 Some(first.pre_value.unwrap_or(first.value) + slope * dt)
             }
@@ -410,7 +430,7 @@ impl SplineData {
             Extrapolation::Block => None,
             Extrapolation::Held => Some(last.value),
             Extrapolation::Linear => {
-                let slope = last.post_tan_slope;
+                let slope = self.linear_extrapolation_slope(false);
                 let dt = time - last.time;
                 Some(last.value + slope * dt)
             }

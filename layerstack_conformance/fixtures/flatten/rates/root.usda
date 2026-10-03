@@ -7,9 +7,8 @@
     ]
 )
 
-# A sublayer authored at 48 time codes per second, whose times OpenUSD
-# rescales into the root layer's 24; composition here does not rescale
-# them.
+# A sublayer authored at 48 time codes per second is rescaled into
+# the root layer's 24 before flattening.
 def Xform "Hedge"
 {
     double height = 2

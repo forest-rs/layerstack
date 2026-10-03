@@ -212,7 +212,19 @@ impl LayerStack {
                                 }));
                             continue;
                         }
-                        self.visit(sublayer, accumulated.compose(sub.offset));
+                        // OpenUSD PcpLayerStack::_BuildLayerStack scales the
+                        // authored scale by parent/child TCPS before composing
+                        // the accumulated offset; the translation stays in
+                        // the parent's time domain. Core §12.3.2.1.
+                        let parent_rate = layer.time_codes_per_second(self.store.tokens());
+                        let child_rate = self.store.layer(sublayer).map_or(24.0, |layer| {
+                            layer.time_codes_per_second(self.store.tokens())
+                        });
+                        let mut offset = sub.offset;
+                        if parent_rate != child_rate {
+                            offset.scale = offset.scale * parent_rate / child_rate;
+                        }
+                        self.visit(sublayer, accumulated.compose(offset));
                     }
                 }
                 self.visiting.remove(&id);

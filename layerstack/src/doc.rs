@@ -1919,6 +1919,30 @@ impl Layer {
         }
     }
 
+    /// The layer's time rate: authored `timeCodesPerSecond`, otherwise
+    /// `framesPerSecond`, otherwise 24. This is a layer-local value; composition
+    /// converts child-layer time into parent time through their rate ratio.
+    ///
+    /// Returns authored numerical metadata as given. Hosts can validate rates
+    /// before composition; this accessor does not sanitize invalid opinions.
+    /// Spec: AOUSD Core §7.6.1 (layer metadata), §12.3.2.1 (layer time).
+    /// OpenUSD: `SdfLayer::GetTimeCodesPerSecond`.
+    #[must_use]
+    pub fn time_codes_per_second(&self, tokens: &TokenInterner) -> f64 {
+        let rate = |name| {
+            let field = get_field(&self.metadata, &tokens.lookup(name)?)?;
+            match field {
+                FieldValue::Value(Value::Double(v)) => Some(*v),
+                FieldValue::Value(Value::Float(v)) => Some(f64::from(*v)),
+                FieldValue::Value(Value::Int(v)) => Some(f64::from(*v)),
+                _ => None,
+            }
+        };
+        rate("timeCodesPerSecond")
+            .or_else(|| rate("framesPerSecond"))
+            .unwrap_or(24.0)
+    }
+
     /// Returns this layer's generation: a counter that every edit made
     /// through the layer's own methods moves forward.
     ///

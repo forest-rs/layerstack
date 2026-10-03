@@ -1,0 +1,11 @@
+#usda 1.0
+(
+    timeCodesPerSecond = 24
+    subLayers = [@./fast.usda@ (offset = 7; scale = 2)]
+)
+def "Local" {
+    double own.timeSamples = {0: 0, 24: 1}
+    timecode ownClock = 6
+}
+def "Internal" (references = </Local>) {
+}

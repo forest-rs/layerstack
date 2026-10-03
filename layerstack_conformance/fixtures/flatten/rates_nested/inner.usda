@@ -1,0 +1,13 @@
+#usda 1.0
+(
+    timeCodesPerSecond = 60
+)
+over "Asset" {
+    double subAnim.timeSamples = {0: 0, 60: 1}
+    timecode subClock = 6
+    timecode[] sparseClock = edit [resize 2 fill 6]
+    double curve.spline = {
+        0: 0; post linear,
+        60: 1; post held,
+    }
+}

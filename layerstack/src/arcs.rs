@@ -361,14 +361,31 @@ impl ArcAuthoring<'_> {
             anchor_internal_arcs(self.store, op, layer, anchor)
         });
         let internal = item.asset.is_none() && item.layer == anchor.layer;
-        let reference = match index {
+        let layer = index.and_then(|index| self.stack.layers.get(index).copied());
+        let mut reference = match index {
             Some(index) if !internal => Reference {
                 layer_offset: self.stack.offset_at(index).compose(item.layer_offset),
                 ..item
             },
             _ => item,
         };
-        let layer = index.and_then(|index| self.stack.layers.get(index).copied());
+        if !internal && let Some(authoring) = layer {
+            // OpenUSD adjusts the already accumulated reference/payload scale,
+            // using the actual introducing layer's rate, not the stack root's.
+            // Keep multiplication before division, as Pcp_BuildPrimIndex does;
+            // reassociation changes the saved sample grid. Core §12.3.2.1.
+            let rate = |id| {
+                self.store.layer(id).map_or(24.0, |layer| {
+                    layer.time_codes_per_second(self.store.tokens())
+                })
+            };
+            let parent_rate = rate(authoring);
+            let child_rate = rate(reference.layer);
+            if parent_rate != child_rate {
+                reference.layer_offset.scale =
+                    reference.layer_offset.scale * parent_rate / child_rate;
+            }
+        }
         (AuthoredReference { reference, layer }, sites)
     }
 }

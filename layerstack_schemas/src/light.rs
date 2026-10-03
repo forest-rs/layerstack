@@ -20,6 +20,8 @@ mod linking;
 pub use linking::*;
 mod nodes;
 pub use nodes::*;
+mod parameters;
+pub use parameters::*;
 mod inputs;
 pub use inputs::*;
 mod helpers;

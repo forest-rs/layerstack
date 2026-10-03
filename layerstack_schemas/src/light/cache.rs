@@ -252,6 +252,8 @@ impl LightCache {
                             || old.visibility != inputs.visibility
                             || old.transform_problems != inputs.transform_problems,
                         old.kind != inputs.kind
+                            || old.has_shaping_api != inputs.has_shaping_api
+                            || old.has_shadow_api != inputs.has_shadow_api
                             || old.type_name != inputs.type_name
                             || old.meters_per_unit.to_bits() != inputs.meters_per_unit.to_bits()
                             || old.up_axis != inputs.up_axis

@@ -368,6 +368,7 @@ pub(crate) fn compose_stage_with_paths(
 
     if !local_only {
         prune_unselected_variant_specs(store, resolver, &layer_stack, &mut prims);
+        inherit_ancestral_nodes(store, resolver, &layer_stack, &mut prims);
     }
 
     relocated_child_names(
@@ -1137,6 +1138,102 @@ fn prune_unselected_variant_specs(
                 });
             // Read this prim's selections again from what remains.
             selection_cache.remove(&prim_path);
+        }
+    }
+}
+
+/// Carries ancestor arcs into existing descendant indexes, even when the
+/// source authors no spec at the descendant's site. Unselected variant branches
+/// and their descendants are excluded. Source-free nodes preserve inherited
+/// metadata's strength, namespace and time offset without fabricating opinions.
+///
+/// Spec: AOUSD Core §10.3.2.5, §10.4 (ancestral arcs and LIVERPS). OpenUSD
+/// copies the parent's graph before evaluating child specs
+/// (`_BuildInitialPrimIndexFromAncestor`, `AppendChildNameToAllSites`, and
+/// `_ConvertNodeForChild`, pxr/usd/pcp/primIndex.cpp).
+fn inherit_ancestral_nodes(
+    store: &mut dyn LayerStore,
+    resolver: &SelectionResolver<'_>,
+    stage_stack: &LayerStack,
+    prims: &mut HashMap<PathId, PrimIndex>,
+) {
+    let mut paths: Vec<PathId> = prims.keys().copied().collect();
+    paths.sort_by_key(|path| (store.paths().resolve(*path).depth(), *path));
+    let mut selections = HashMap::new();
+    for path in paths {
+        let concrete = store.paths().resolve(path);
+        let Some((parent, name)) = concrete
+            .parent()
+            .and_then(|parent| Some((store.paths().lookup(&parent)?, concrete.leaf()?)))
+        else {
+            continue;
+        };
+        let Some(parent_index) = prims.get(&parent) else {
+            continue;
+        };
+        let graph = parent_index.graph.clone();
+        let mut mapped: HashMap<NodeId, NodeId> = HashMap::from([(NodeId::ROOT, NodeId::ROOT)]);
+        let mut inserted = Vec::new();
+        for (id, node) in graph.nodes().filter(|(id, _)| *id != NodeId::ROOT) {
+            let Some(&child_parent) = node.parent().and_then(|parent| mapped.get(&parent)) else {
+                continue;
+            };
+            if node.arc_kind() == ArcKind::Variants
+                && [BranchHosts::Ancestors, BranchHosts::Own]
+                    .iter()
+                    .any(|hosts| {
+                        !spec_path_branches_selected(
+                            store,
+                            resolver,
+                            stage_stack,
+                            prims,
+                            &mut selections,
+                            parent,
+                            id,
+                            node.layer_stack(),
+                            node.site(),
+                            *hosts,
+                        )
+                    })
+            {
+                continue;
+            }
+            let mut arc = node.arc.clone();
+            arc.site = arc.site.join_prims(&[name], store.paths_mut());
+            let child_graph = &mut prims.get_mut(&path).expect("existing child").graph;
+            let existing = child_graph
+                .node(child_parent)
+                .expect("mapped parent")
+                .children()
+                .iter()
+                .copied()
+                .find(|child| child_graph.node(*child).is_some_and(|node| node.arc == arc));
+            let child = match existing {
+                Some(child) => child,
+                None => {
+                    let child = child_graph.intern_child(child_parent, arc);
+                    child_graph.set_layer_offset(child, node.layer_offset());
+                    inserted.push((id, child));
+                    child
+                }
+            };
+            mapped.insert(id, child);
+        }
+        if !inserted.is_empty() {
+            let child = prims.get_mut(&path).expect("existing child");
+            // Origins can be sibling nodes inserted later in arena order.
+            // Preserve existing child origins; only copied nodes need remapping.
+            for (source, target) in inserted {
+                if let Some(origin) = graph
+                    .node(source)
+                    .and_then(PrimNode::origin)
+                    .and_then(|origin| mapped.get(&origin))
+                    .copied()
+                {
+                    child.graph.set_origin(target, origin);
+                }
+            }
+            child.finalize();
         }
     }
 }
@@ -9060,6 +9157,142 @@ mod child_order_tests {
     use crate::path::Path;
     use crate::prim_index::OpinionKey;
     use alloc::vec;
+
+    /// No-spec inherited variants retain their source namespace and offset,
+    /// without adding opinions or reviving the unselected parent branch.
+    #[test]
+    fn inherited_variant_nodes_keep_selected_branch_offsets_without_specs() {
+        let mut store = InMemoryStore::default();
+        let [
+            model,
+            child,
+            grandchild,
+            world,
+            world_child,
+            world_grandchild,
+        ] = [
+            "/Model",
+            "/Model/Q",
+            "/Model/Q/R",
+            "/World",
+            "/World/Q",
+            "/World/Q/R",
+        ]
+        .map(|path| store.path(path));
+        let mode = store.tokens.intern("mode");
+        let a = store.tokens.intern("a");
+        let b = store.tokens.intern("b");
+        let marker = store.tokens.intern("marker");
+        let branch = |value| VariantSpec {
+            fields: vec![crate::FieldEntry {
+                name: marker,
+                value: crate::Value::Int(value).into(),
+            }],
+            ..VariantSpec::default()
+        };
+        let mut parent = PrimSpec::def();
+        parent.variant_selections.insert(mode, a);
+        parent.variant_set_order.push(mode);
+        parent.variant_sets.insert(
+            mode,
+            VariantSetSpec {
+                variants: HashMap::from([(a, branch(1)), (b, branch(2))]),
+            },
+        );
+        let mut model_layer = Layer::new(LayerId(2));
+        model_layer.insert_prim(model, parent);
+        model_layer.insert_prim(child, PrimSpec::def());
+        model_layer.insert_prim(grandchild, PrimSpec::def());
+        store.insert_layer(model_layer);
+        let offset = LayerOffset {
+            offset: 20.,
+            scale: 2.,
+        };
+        let mut reference = Reference::new(LayerId(2), model);
+        reference.layer_offset = offset;
+        let mut root = Layer::new(LayerId(1));
+        root.insert_prim(world, PrimSpec::def().with_reference(reference));
+        store.insert_layer(root);
+        let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        for (path, source_path) in [(world_child, child), (world_grandchild, grandchild)] {
+            let graph = stage.explain_prim_graph(path).unwrap();
+            let variants: Vec<_> = graph
+                .nodes()
+                .filter(|(_, node)| node.arc_kind() == ArcKind::Variants)
+                .collect();
+            assert_eq!(variants.len(), 1, "only the selected branch is inherited");
+            assert_eq!(
+                variants[0].1.site(),
+                &SpecPath::from_variant_selection_sites(
+                    source_path,
+                    &[VariantSelectionSite {
+                        host_path: model,
+                        set: mode,
+                        variant: a
+                    }],
+                    &store.paths
+                )
+            );
+            assert_eq!(variants[0].1.layer_offset(), offset);
+            assert!(
+                stage
+                    .explain_prim(path)
+                    .unwrap()
+                    .iter()
+                    .all(|source| { !source.spec_path.has_variant_selections() }),
+                "no fabricated variant spec is added to the prim stack"
+            );
+            assert_eq!(stage.resolve_field(path, marker), None);
+        }
+        // Reapplying propagation is idempotent, including at a second level
+        // of descent; graph-only nodes never manufacture source specs.
+        let mut prims: HashMap<PathId, PrimIndex> = stage
+            .prim_paths()
+            .map(|path| {
+                (
+                    path,
+                    PrimIndex {
+                        sources: stage.explain_prim(path).unwrap_or_default().to_vec(),
+                        ..PrimIndex::new(stage.explain_prim_graph(path).unwrap().clone())
+                    },
+                )
+            })
+            .collect();
+        // Parent graphs can retain nodes after their opinions were pruned.
+        // An unselected branch must not be propagated merely because it exists.
+        let parent_graph = &mut prims.get_mut(&world).unwrap().graph;
+        let selected = parent_graph
+            .nodes()
+            .find(|(_, node)| node.arc_kind() == ArcKind::Variants)
+            .unwrap()
+            .1
+            .clone();
+        let mut rejected_arc = selected.arc.clone();
+        rejected_arc.site = SpecPath::from_variant_selection_sites(
+            model,
+            &[VariantSelectionSite {
+                host_path: model,
+                set: mode,
+                variant: b,
+            }],
+            &store.paths,
+        );
+        parent_graph.intern_child(selected.parent().unwrap(), rejected_arc);
+        let sizes: HashMap<PathId, usize> = prims
+            .iter()
+            .map(|(&path, index)| (path, index.graph.nodes().count()))
+            .collect();
+        let stack = LayerStack::gather(&store, LayerId(1));
+        inherit_ancestral_nodes(
+            &mut store,
+            &SelectionResolver::new(&VariantFallbacks::default()),
+            &stack,
+            &mut prims,
+        );
+        for (path, index) in prims {
+            assert_eq!(index.graph.nodes().count(), sizes[&path]);
+        }
+    }
 
     /// A hierarchy authored through `Layer::insert_prim` leaves
     /// `authored_children` empty; a `reorder nameChildren` still orders the

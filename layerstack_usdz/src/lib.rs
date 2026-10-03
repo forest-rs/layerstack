@@ -47,6 +47,7 @@ use layerstack::path::PathInterner;
 pub mod crc32;
 pub mod diagnostic;
 pub mod error;
+pub mod localize;
 mod resolver;
 pub mod writer;
 pub mod zip;

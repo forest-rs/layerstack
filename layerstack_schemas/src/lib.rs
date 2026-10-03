@@ -283,6 +283,14 @@
 //! normal source transactions. Disconnecting authors an empty list; clearing
 //! removes the source opinion to reveal weaker connections.
 //!
+//! With `usd-lux`, [`light::LightInputs`] captures owned emitter inputs with
+//! shader readiness, source evidence, stage units and typed shape/photometric
+//! accessors. [`light::LightCache`] retains discovery and inputs across explicit
+//! edits, with component revisions for engine uploads. [`light::LightLinkMembership`]
+//! captures ordered CPU link decisions for engine masks. GPU layouts, shader
+//! execution, asset loading and color management remain engine responsibilities.
+//! See `layerstack_examples`' `lighting_inputs` binary for the complete flow.
+//!
 //! With `usd-shade`, `PrimView::compute_bound_material` (every view derefs
 //! to [`PrimView`]) resolves a prim's material for a [`MaterialPurpose`] as
 //! `ComputeBoundMaterial` does: direct and collection bindings, binding

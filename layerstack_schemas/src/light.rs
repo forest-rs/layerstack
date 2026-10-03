@@ -1,18 +1,29 @@
 // Copyright 2026 the LayerStack Authors
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 
-//! Light discovery with authored model caches and caller-owned snapshot queries.
+//! Renderer-neutral lighting discovery, input capture and retained evaluation.
+//!
+//! Start with [`LightCache::discover`] and [`LightCache::capture`]. Inspect
+//! parameter readiness before preparing engine data; shader outputs are never
+//! presented as computed constants. [`LightLinkMembership::read`] captures
+//! ordered linking decisions for engine masks. [`builtin_light_node_definitions`]
+//! describes intrinsic node ports/defaults without loading renderer plugins.
+//!
+//! Engines own GPU layouts, resource loading, shader execution, light sampling,
+//! color management and upload scheduling. Feed every edit report to the cache;
+//! clear after losing history or switching stages/stores. Captured IDs belong to
+//! that store and follow namespace paths rather than persistent object identity.
 //! OpenUSD: `UsdLuxLightListAPI` (AOUSD Core §11.4–11.5, §12.5 relationships).
-mod helpers;
-pub use helpers::*;
-
-mod nodes;
-pub use nodes::*;
-
-mod inputs;
-pub use inputs::*;
+mod cache;
+pub use cache::*;
 mod linking;
 pub use linking::*;
+mod nodes;
+pub use nodes::*;
+mod inputs;
+pub use inputs::*;
+mod helpers;
+pub use helpers::*;
 
 use crate::{
     PrimView, Scene, SchemaEdit,

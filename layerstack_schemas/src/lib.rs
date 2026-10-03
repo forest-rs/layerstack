@@ -332,6 +332,8 @@ extern crate alloc;
 
 #[macro_use]
 mod view;
+#[cfg(feature = "usd-geom")]
+pub mod affine;
 #[cfg(feature = "usd-shade")]
 mod binding;
 #[cfg(feature = "usd-geom")]

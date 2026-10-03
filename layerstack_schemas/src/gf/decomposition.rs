@@ -10,7 +10,7 @@
 use crate::gf;
 pub(crate) type Matrix3 = [[f64; 3]; 3];
 pub(crate) const IDENTITY: Matrix3 = [[1., 0., 0.], [0., 1., 0.], [0., 0., 1.]];
-fn transpose(m: &Matrix3) -> Matrix3 {
+pub(crate) fn transpose(m: &Matrix3) -> Matrix3 {
     core::array::from_fn(|i| core::array::from_fn(|j| m[j][i]))
 }
 pub(crate) fn mul(a: &Matrix3, b: &Matrix3) -> Matrix3 {
@@ -138,7 +138,7 @@ pub(crate) fn orthonormalize(mut rows: Matrix3) -> Matrix3 {
     }
     rows
 }
-fn determinant(matrix: &Matrix3) -> f64 {
+pub(crate) fn determinant(matrix: &Matrix3) -> f64 {
     matrix[0][0] * (matrix[1][1] * matrix[2][2] - matrix[1][2] * matrix[2][1])
         - matrix[0][1] * (matrix[1][0] * matrix[2][2] - matrix[1][2] * matrix[2][0])
         + matrix[0][2] * (matrix[1][0] * matrix[2][1] - matrix[1][1] * matrix[2][0])
@@ -206,4 +206,21 @@ pub(crate) fn quaternion(m: &Matrix3) -> [f64; 4] {
     }
     q[0] = q[0].clamp(-1., 1.);
     q
+}
+
+/// Raw `GfMatrix4d::Factor` linear factors, without orthonormalizing U.
+pub(crate) fn factor(matrix: &Matrix3, epsilon: f64) -> (Matrix3, [f64; 3], Matrix3, bool) {
+    let det = determinant(matrix);
+    let sign = if det < 0. { -1. } else { 1. };
+    let (eigenvalues, orientation) = jacobi(mul(matrix, &transpose(matrix)));
+    let scales = eigenvalues.map(|v| sign * if v < epsilon { epsilon } else { libm::sqrt(v) });
+    let mut inverse = IDENTITY;
+    for i in 0..3 {
+        inverse[i][i] = 1. / scales[i];
+    }
+    let rotation = mul(
+        &mul(&mul(&orientation, &inverse), &transpose(&orientation)),
+        matrix,
+    );
+    (orientation, scales, rotation, det.abs() < epsilon)
 }

@@ -94,32 +94,11 @@ fn read<'a, T>(
     }
 }
 fn sample_times(prim: &PrimView<'_>, name: &str) -> Vec<f64> {
-    let mut times = Vec::new();
-    if let Some(p) = prim.property_path(name)
-        && let Some(opinions) = prim.scene().stage().explain_property_path(p)
-    {
-        for opinion in opinions {
-            if let Some(samples) = opinion.value.time_samples().filter(|s| !s.is_empty()) {
-                times.extend(
-                    samples
-                        .iter()
-                        .map(|(t, _)| t * opinion.layer_offset.scale + opinion.layer_offset.offset),
-                );
-                if samples.iter().all(|(_, v)| v.array_edit_ref().is_none()) {
-                    break;
-                }
-            } else if opinion
-                .value
-                .default_value()
-                .is_some_and(|v| v.array_edit_ref().is_none())
-            {
-                break;
-            }
-        }
-    }
-    times.sort_by(f64::total_cmp);
-    times.dedup_by(|a, b| *a == *b);
-    times
+    prim.property_path(name).map_or_else(Vec::new, |p| {
+        prim.scene()
+            .stage()
+            .property_sample_times(p.prim_path(), p.property())
+    })
 }
 fn valid_geom(geom: &Imageable<'_>, element: &SubsetElementType) -> bool {
     let scene = geom.scene();

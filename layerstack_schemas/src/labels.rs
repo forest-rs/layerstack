@@ -181,25 +181,14 @@ impl<'a> LabelsQuery<'a> {
                 let name = alloc::format!("semantics:labels:{}", self.taxonomy);
                 let prim = PrimView::new(self.scene, path);
                 let mut times = Vec::new();
-                if let Some(property) = prim.property_path(&name)
-                    && let Some(opinions) = self.scene.stage().explain_property_path(property)
-                {
-                    // A conservative superset of visible array sample
-                    // knots is sufficient for held token arrays: extra
-                    // masked knots cannot add a label to the result.
-                    // AOUSD Core §12.3.2.1 applies source layer offsets.
-                    for opinion in opinions {
-                        if let Some(samples) = opinion.value.time_samples() {
-                            times.extend(
-                                samples
-                                    .iter()
-                                    .map(|(t, _)| {
-                                        t * opinion.layer_offset.scale + opinion.layer_offset.offset
-                                    })
-                                    .filter(|t| interval.contains(*t)),
-                            );
-                        }
-                    }
+                if let Some(property) = prim.property_path(&name) {
+                    times.extend(
+                        self.scene
+                            .stage()
+                            .property_sample_times(property.prim_path(), property.property())
+                            .into_iter()
+                            .filter(|t| interval.contains(*t)),
+                    );
                 }
                 times.push(if interval.start.is_finite() {
                     interval.start

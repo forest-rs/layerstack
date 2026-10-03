@@ -7,6 +7,9 @@ Small runnable programs that demonstrate how to use the `layerstack` API, and th
 
 - `cargo run -p layerstack_examples`
 - `cargo run -p layerstack_examples --example minimal`
+- `cargo run -p layerstack_examples --example value_clips`
+  (authors a detached clip bundle, loads its explicit asset requests through a host catalog,
+  then queries interpolated values, sample times and raw-layer provenance)
 - `cargo run -p layerstack_examples --example sparse_array_edits`
 - `cargo run -p layerstack_examples --example explain_value`
   (explains the values of a tree asset referenced into a grove: a local override, a sparse edit

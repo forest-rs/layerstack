@@ -2300,6 +2300,21 @@ fn insert_branch_spec(specs: &mut Vec<PrimSpec>, spec: PrimSpec) {
     }
 }
 
+/// The host's explicit knowledge of an asset anchored to a layer.
+///
+/// Value-clip templates omit confirmed missing candidates, but must not treat
+/// an asset the host has not examined as a missing file. No variant performs I/O.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AssetAvailability {
+    /// The host resolved the asset to this layer identifier.
+    /// The layer may still need to be inserted into the store.
+    Loaded(LayerId),
+    /// The host resolved the asset and confirmed that it does not exist.
+    Missing,
+    /// The host has not supplied a resolution result.
+    Unresolved,
+}
+
 /// A store for accessing layers and shared interners.
 pub trait LayerStore {
     /// Returns a layer, if present.
@@ -2345,6 +2360,14 @@ pub trait LayerStore {
         let _ = (anchor, asset_path);
         None
     }
+    /// Returns the host's asset availability without resolving or loading it.
+    ///
+    /// The default derives known layers from [`Self::asset_layer`]. Hosts
+    /// supporting clip templates should also report confirmed missing candidates.
+    fn asset_availability(&self, anchor: LayerId, asset_path: &str) -> AssetAvailability {
+        self.asset_layer(anchor, asset_path)
+            .map_or(AssetAvailability::Unresolved, AssetAvailability::Loaded)
+    }
 }
 
 /// A simple in-memory [`LayerStore`] implementation.
@@ -2358,6 +2381,9 @@ pub struct InMemoryStore {
     pub layers: HashMap<LayerId, Layer>,
     /// The layers asset paths resolve to, by the layer each path is
     /// anchored to, then by path, for [`LayerStore::asset_layer`].
+    /// [`LayerId::UNRESOLVED`] records a confirmed missing asset. Use
+    /// [`Self::insert_asset_layer`] and [`Self::mark_asset_missing`] to make
+    /// binding changes visible to live-stage generation checks.
     pub asset_layers: HashMap<LayerId, HashMap<Arc<str>, LayerId>>,
 }
 
@@ -2385,10 +2411,25 @@ impl InMemoryStore {
     /// Records that `asset_path`, anchored to the layer `anchor`, resolves
     /// to the layer `layer` (see [`LayerStore::asset_layer`]).
     pub fn insert_asset_layer(&mut self, anchor: LayerId, asset_path: &str, layer: LayerId) {
-        self.asset_layers
+        let previous = self
+            .asset_layers
             .entry(anchor)
             .or_default()
             .insert(Arc::from(asset_path), layer);
+        if previous != Some(layer)
+            && let Some(source) = self.layers.get_mut(&anchor)
+        {
+            source.touch_structure();
+        }
+    }
+
+    /// Records a host-confirmed missing asset, invalidating its anchor layer.
+    ///
+    /// This lets value-clip templates distinguish a filename hole from a
+    /// candidate that has not yet been resolved. A later [`Self::insert_asset_layer`]
+    /// replaces this result and invalidates the same anchor.
+    pub fn mark_asset_missing(&mut self, anchor: LayerId, asset_path: &str) {
+        self.insert_asset_layer(anchor, asset_path, LayerId::UNRESOLVED);
     }
 
     /// Parses and interns an absolute path, returning its [`PathId`].
@@ -2447,7 +2488,22 @@ impl LayerStore for InMemoryStore {
     }
 
     fn asset_layer(&self, anchor: LayerId, asset_path: &str) -> Option<LayerId> {
-        self.asset_layers.get(&anchor)?.get(asset_path).copied()
+        self.asset_layers
+            .get(&anchor)?
+            .get(asset_path)
+            .copied()
+            .filter(|id| *id != LayerId::UNRESOLVED)
+    }
+    fn asset_availability(&self, anchor: LayerId, asset_path: &str) -> AssetAvailability {
+        match self
+            .asset_layers
+            .get(&anchor)
+            .and_then(|assets| assets.get(asset_path))
+        {
+            Some(&LayerId::UNRESOLVED) => AssetAvailability::Missing,
+            Some(&id) => AssetAvailability::Loaded(id),
+            None => AssetAvailability::Unresolved,
+        }
     }
 }
 

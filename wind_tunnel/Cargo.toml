@@ -23,7 +23,7 @@ layerstack = { workspace = true }
 criterion = { features = ["html_reports"], version = "0.8" }
 fearless_simd = { features = ["std"], workspace = true }
 glam = { default-features = false, features = ["f64", "libm"], version = "0.33" }
-layerstack_schemas = { default-features = false, features = ["usd-geom", "usd-shade", "usd-skel"], workspace = true }
+layerstack_schemas = { default-features = false, features = ["usd-geom", "usd-proc", "usd-shade", "usd-skel"], workspace = true }
 layerstack_usda = { workspace = true }
 layerstack_usdc = { features = ["std"], workspace = true }
 layerstack_usdz = { workspace = true }

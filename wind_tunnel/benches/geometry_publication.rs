@@ -17,7 +17,7 @@
 )]
 mod support;
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use layerstack::{EditTarget, Transaction};
+use layerstack::{EditTarget, Transaction, Value};
 use layerstack_schemas::{
     GeneratedMesh, Scene, Time,
     bounds::{BoundsCache, BoundsOptions},
@@ -54,13 +54,6 @@ fn publication(c: &mut Criterion) {
     ] {
         let mut group = c.benchmark_group(name);
         for &count in counts {
-            let mut generated = if name == "geometry_publication" {
-                support::GeneratedScene::with_counts(100, count)
-            } else {
-                support::GeneratedScene::with_counts(count, 100)
-            };
-            generated.geometry = grid();
-            generated.publish();
             for workload in [
                 "initial",
                 "unchanged",
@@ -68,28 +61,34 @@ fn publication(c: &mut Criterion) {
                 "topology",
                 "prototype_bounds",
             ] {
-                let base = grid();
-                generated.geometry = base.clone();
-                generated.publish();
-                let mut alternate = base.clone();
-                if workload == "topology" {
-                    let mut indices = base.face_vertex_indices.as_ref().clone();
-                    indices.swap(0, 1);
-                    alternate.face_vertex_indices = Arc::new(indices);
-                } else {
-                    let mut points = base.points.as_ref().clone();
-                    points[0][1] = -1.;
-                    alternate.points = Arc::new(points);
-                }
-                let mut cache = BoundsCache::new(Time::Default, BoundsOptions::default());
-                cache
-                    .world_bound(
-                        &Scene::new(generated.live.stage(), &generated.store),
-                        generated.scatter,
-                    )
-                    .unwrap();
-                let mut swap = false;
+                // Build only selected cases; setup remains outside timed iterations.
                 group.bench_function(BenchmarkId::new(workload, count), |b| {
+                    let mut generated = if name == "geometry_publication" {
+                        support::GeneratedScene::with_counts(100, count)
+                    } else {
+                        support::GeneratedScene::with_counts(count, 100)
+                    };
+                    let base = grid();
+                    generated.geometry = base.clone();
+                    generated.publish();
+                    let mut alternate = base.clone();
+                    if workload == "topology" {
+                        let mut indices = base.face_vertex_indices.as_ref().clone();
+                        indices.swap(0, 1);
+                        alternate.face_vertex_indices = Arc::new(indices);
+                    } else {
+                        let mut points = base.points.as_ref().clone();
+                        points[0][1] = -1.;
+                        alternate.points = Arc::new(points);
+                    }
+                    let mut cache = BoundsCache::new(Time::Default, BoundsOptions::default());
+                    cache
+                        .world_bound(
+                            &Scene::new(generated.live.stage(), &generated.store),
+                            generated.scatter,
+                        )
+                        .unwrap();
+                    let mut swap = false;
                     b.iter_custom(|iterations| {
                         let mut elapsed = Duration::ZERO;
                         for _ in 0..iterations {
@@ -132,5 +131,77 @@ fn publication(c: &mut Criterion) {
         group.finish();
     }
 }
-criterion_group!(benches, publication);
+fn procedural_publication(c: &mut Criterion) {
+    let mut group = c.benchmark_group("procedural_publication");
+    for count in [100, 10_000, 100_000] {
+        for workload in [
+            "unchanged",
+            "recipe_points",
+            "upstream_points",
+            "recipe_bounds",
+        ] {
+            group.bench_function(BenchmarkId::new(workload, count), |b| {
+                let mut generated = support::GeneratedScene::with_counts(100, count);
+                generated.terrain_generator.evaluator_mut().template = grid();
+                generated.asset_generator.evaluator_mut().template = grid();
+                generated.evaluate_terrain(Time::Default).unwrap();
+                generated.evaluate_asset(Time::Default).unwrap();
+                let (layer, property) = if workload == "upstream_points" {
+                    (support::TERRAIN, "/Recipes/Terrain.primvars:height")
+                } else {
+                    (support::ASSET, "/Recipes/Tree.primvars:height")
+                };
+                let parameter = generated.store.property_path(property);
+                let mut cache = BoundsCache::new(Time::Default, BoundsOptions::default());
+                cache
+                    .world_bound(
+                        &Scene::new(generated.live.stage(), &generated.store),
+                        generated.scatter,
+                    )
+                    .unwrap();
+                let mut swap = false;
+                b.iter_custom(|iterations| {
+                    let mut elapsed = Duration::ZERO;
+                    for _ in 0..iterations {
+                        if workload != "unchanged" {
+                            swap = !swap;
+                            let mut edit = Transaction::new();
+                            edit.set_default(
+                                EditTarget::for_layer(layer).property(parameter),
+                                Value::Float(if swap { 1.25 } else { 1. }),
+                            );
+                            let applied =
+                                generated.live.apply(&mut generated.store, &edit).unwrap();
+                            cache.apply_changes(
+                                &Scene::new(generated.live.stage(), &generated.store),
+                                &applied.changes,
+                            );
+                            if workload == "upstream_points" {
+                                let changes = generated.evaluate_terrain(Time::Default).unwrap();
+                                cache.apply_changes(
+                                    &Scene::new(generated.live.stage(), &generated.store),
+                                    &changes,
+                                );
+                            }
+                        }
+                        // Time input checks, application evaluation and validated publication.
+                        // Recipe editing and upstream publication are deliberately outside it.
+                        let start = Instant::now();
+                        let changes = generated.evaluate_asset(Time::Default).unwrap();
+                        if workload == "recipe_bounds" {
+                            let scene = Scene::new(generated.live.stage(), &generated.store);
+                            cache.apply_changes(&scene, &changes);
+                            black_box(cache.world_bound(&scene, generated.scatter).unwrap());
+                        }
+                        elapsed += start.elapsed();
+                        black_box(generated.asset_generator.work());
+                    }
+                    elapsed
+                });
+            });
+        }
+    }
+    group.finish();
+}
+criterion_group!(benches, publication, procedural_publication);
 criterion_main!(benches);

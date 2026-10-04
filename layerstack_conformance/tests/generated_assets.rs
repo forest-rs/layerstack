@@ -14,6 +14,8 @@ use layerstack_schemas::{
     point_instancer::InstanceTransformOptions,
     primvar::Primvar,
     usd_geom::{Mesh, PointInstancer},
+    usd_proc::GenerativeProcedural,
+    usd_shade::Material,
 };
 use std::{path::Path, process::Command, sync::Arc};
 
@@ -23,6 +25,366 @@ fn height(cache: &mut BoundsCache, scene: &Scene<'_>, scatter: layerstack::PathI
         .unwrap()
         .aligned_range()
         .max[1]
+}
+
+fn recipe_edit(
+    generated: &mut support::GeneratedScene,
+    layer: layerstack::LayerId,
+    property: &str,
+    value: Value,
+) -> layerstack::Changes {
+    let path = generated.store.property_path(property);
+    let mut edit = Transaction::new();
+    edit.set_default(EditTarget::for_layer(layer).property(path), value);
+    generated
+        .live
+        .apply(&mut generated.store, &edit)
+        .unwrap()
+        .changes
+}
+
+#[test]
+fn recipes_drive_shared_geometry_material_inputs_and_dependent_bounds() {
+    let mut generated = support::GeneratedScene::new(4);
+    let native = generated.store.path("/World/Native_0/Geometry");
+    let scene = Scene::new(generated.live.stage(), &generated.store);
+    let initial = Mesh::new(&scene, native).unwrap().points().unwrap();
+    let topology = generated.geometry.face_vertex_indices.clone();
+    assert!(Arc::ptr_eq(
+        &initial,
+        &Mesh::new(&scene, generated.terrain)
+            .unwrap()
+            .points()
+            .unwrap()
+    ));
+    assert_eq!(generated.asset_generator.work().evaluations, 1);
+    assert_eq!(
+        generated.evaluate_asset(Time::Default).unwrap(),
+        layerstack::Changes::default()
+    );
+    assert_eq!(
+        generated.evaluate_terrain(Time::Default).unwrap(),
+        layerstack::Changes::default()
+    );
+    assert_eq!(generated.asset_generator.work().evaluations, 1);
+    let mut cache = BoundsCache::new(Time::Default, BoundsOptions::default());
+    assert_eq!(
+        height(
+            &mut cache,
+            &Scene::new(generated.live.stage(), &generated.store),
+            generated.scatter
+        ),
+        1.
+    );
+    let changes = recipe_edit(
+        &mut generated,
+        support::ASSET,
+        "/Recipes/Tree.primvars:height",
+        Value::Float(3.),
+    );
+    cache.apply_changes(
+        &Scene::new(generated.live.stage(), &generated.store),
+        &changes,
+    );
+    assert_eq!(
+        height(
+            &mut cache,
+            &Scene::new(generated.live.stage(), &generated.store),
+            generated.scatter
+        ),
+        1.,
+        "USD composition does not execute the recipe"
+    );
+    recipe_edit(
+        &mut generated,
+        support::ASSET,
+        "/Recipes/Tree.primvars:texture",
+        Value::Asset("textures/moss.png".into()),
+    );
+    let changes = generated.evaluate_asset(Time::Default).unwrap();
+    let scene = Scene::new(generated.live.stage(), &generated.store);
+    cache.apply_changes(&scene, &changes);
+    assert_eq!(height(&mut cache, &scene, generated.scatter), 3.);
+    assert!(Arc::ptr_eq(
+        &topology,
+        &Mesh::new(&scene, native)
+            .unwrap()
+            .face_vertex_indices()
+            .unwrap()
+    ));
+    assert!(
+        Arc::ptr_eq(
+            &initial,
+            &Mesh::new(&scene, generated.terrain)
+                .unwrap()
+                .points()
+                .unwrap()
+        ),
+        "other producers' buffers remain untouched"
+    );
+    let texture = generated.store.path("/Assets/Tree/Material/Texture");
+    assert_eq!(
+        generated
+            .live
+            .stage()
+            .prim(texture, &generated.store)
+            .unwrap()
+            .attribute("inputs:file")
+            .unwrap()
+            .get(Time::Default)
+            .unwrap()
+            .value,
+        Value::Asset("textures/moss.png".into())
+    );
+    assert!(
+        generated
+            .asset_generator
+            .dependencies()
+            .any(|d| d.prim == generated.terrain && d.property == "points")
+    );
+    // A masked authored edit changes neither the composed input nor the output.
+    recipe_edit(
+        &mut generated,
+        support::ROOT,
+        "/Recipes/Tree.primvars:height",
+        Value::Float(3.),
+    );
+    recipe_edit(
+        &mut generated,
+        support::ASSET,
+        "/Recipes/Tree.primvars:height",
+        Value::Float(9.),
+    );
+    let evaluations = generated.asset_generator.work().evaluations;
+    assert_eq!(
+        generated.evaluate_asset(Time::Default).unwrap(),
+        layerstack::Changes::default()
+    );
+    assert_eq!(generated.asset_generator.work().evaluations, evaluations);
+    // The host orders two producer updates, then forwards both change reports.
+    recipe_edit(
+        &mut generated,
+        support::TERRAIN,
+        "/Recipes/Terrain.primvars:height",
+        Value::Float(2.),
+    );
+    let changes = generated.evaluate_terrain(Time::Default).unwrap();
+    cache.apply_changes(
+        &Scene::new(generated.live.stage(), &generated.store),
+        &changes,
+    );
+    let changes = generated.evaluate_asset(Time::Default).unwrap();
+    let scene = Scene::new(generated.live.stage(), &generated.store);
+    cache.apply_changes(&scene, &changes);
+    assert_eq!(height(&mut cache, &scene, generated.scatter), 6.);
+    assert_eq!(
+        Mesh::new(&scene, native).unwrap().points().unwrap()[2][1],
+        6.
+    );
+    let quad = generated.store.tokens.intern("quad");
+    recipe_edit(
+        &mut generated,
+        support::ASSET,
+        "/Recipes/Tree.primvars:topology",
+        Value::Token(quad),
+    );
+    recipe_edit(
+        &mut generated,
+        support::ASSET,
+        "/Recipes/Tree.primvars:normals",
+        Value::Bool(false),
+    );
+    generated.evaluate_asset(Time::Default).unwrap();
+    let scene = Scene::new(generated.live.stage(), &generated.store);
+    assert_eq!(
+        &**Mesh::new(&scene, native)
+            .unwrap()
+            .face_vertex_counts()
+            .unwrap(),
+        &[4]
+    );
+    assert!(Primvar::new(&scene, native, "normals").is_none());
+    assert!(
+        Primvar::new(&scene, native, "st")
+            .unwrap()
+            .compute_flattened(Time::Default)
+            .unwrap()
+            .is_some()
+    );
+}
+
+#[test]
+fn invalid_missing_and_recreated_recipes_preserve_last_good_publication() {
+    let mut generated = support::GeneratedScene::new(4);
+    let initial = generated.geometry.points.clone();
+    recipe_edit(
+        &mut generated,
+        support::ASSET,
+        "/Recipes/Tree.primvars:height",
+        Value::Float(-1.),
+    );
+    assert!(generated.evaluate_asset(Time::Default).is_err());
+    assert!(Arc::ptr_eq(
+        &initial,
+        &Mesh::new(
+            &Scene::new(generated.live.stage(), &generated.store),
+            generated.source
+        )
+        .unwrap()
+        .points()
+        .unwrap()
+    ));
+    recipe_edit(
+        &mut generated,
+        support::ASSET,
+        "/Recipes/Tree.primvars:height",
+        Value::Float(1.),
+    );
+    assert_eq!(
+        generated.evaluate_asset(Time::Default).unwrap(),
+        layerstack::Changes::default()
+    );
+    let mut deletion = Transaction::new();
+    deletion.remove_spec(EditTarget::for_layer(support::TERRAIN).prim(generated.terrain));
+    generated
+        .live
+        .apply(&mut generated.store, &deletion)
+        .unwrap();
+    assert!(generated.evaluate_asset(Time::Default).is_err());
+    assert!(Arc::ptr_eq(
+        &initial,
+        &Mesh::new(
+            &Scene::new(generated.live.stage(), &generated.store),
+            generated.source
+        )
+        .unwrap()
+        .points()
+        .unwrap()
+    ));
+    generated.evaluate_terrain(Time::Default).unwrap();
+    assert_eq!(
+        generated.evaluate_asset(Time::Default).unwrap(),
+        layerstack::Changes::default()
+    );
+    let recipe = generated.asset_generator.recipe();
+    let mut deletion = Transaction::new();
+    deletion.remove_spec(EditTarget::for_layer(support::ASSET).prim(recipe));
+    let removed = generated
+        .live
+        .apply(&mut generated.store, &deletion)
+        .unwrap();
+    assert!(generated.evaluate_asset(Time::Default).is_err());
+    assert!(
+        generated.live.stage().has_prim(generated.source),
+        "recipe removal has an explicit output-lifecycle policy"
+    );
+    generated
+        .live
+        .apply(&mut generated.store, &removed.inverse)
+        .unwrap();
+    assert_eq!(
+        generated.evaluate_asset(Time::Default).unwrap(),
+        layerstack::Changes::default()
+    );
+}
+
+#[test]
+fn material_publication_uses_owned_opinions_and_rejects_partial_updates() {
+    let mut generated = support::GeneratedScene::new(4);
+    let file = generated
+        .store
+        .property_path("/Assets/Tree/Material/Texture.inputs:file");
+    let initial = generated.geometry.points.clone();
+    let mut conflict = Transaction::new();
+    conflict.remove_spec(EditTarget::for_layer(support::ASSET).property(file));
+    conflict.create_property(
+        EditTarget::for_layer(support::ASSET).property(file),
+        layerstack::PropertySpec::typed_attribute(layerstack::PropertyType::new(
+            "int",
+            false,
+            Value::Int(0),
+        ))
+        .with_default(Value::Int(17)),
+    );
+    let conflicting = generated
+        .live
+        .apply(&mut generated.store, &conflict)
+        .unwrap();
+    recipe_edit(
+        &mut generated,
+        support::ASSET,
+        "/Recipes/Tree.primvars:height",
+        Value::Float(2.),
+    );
+    assert!(matches!(
+        generated.evaluate_asset(Time::Default),
+        Err(support::RecipeError::Publication(_))
+    ));
+    assert!(
+        Arc::ptr_eq(
+            &initial,
+            &Mesh::new(
+                &Scene::new(generated.live.stage(), &generated.store),
+                generated.source
+            )
+            .unwrap()
+            .points()
+            .unwrap()
+        ),
+        "invalid material declarations cannot partially publish geometry"
+    );
+    generated
+        .live
+        .apply(&mut generated.store, &conflicting.inverse)
+        .unwrap();
+    let evaluations = generated.asset_generator.work().evaluations;
+    let mut sample = Transaction::new();
+    sample.set_time_sample(
+        EditTarget::for_layer(support::ASSET).property(file),
+        1.,
+        Value::Asset("textures/old-sample.png".into()),
+    );
+    generated.live.apply(&mut generated.store, &sample).unwrap();
+    recipe_edit(
+        &mut generated,
+        support::ROOT,
+        "/Assets/Tree/Material/Texture.inputs:file",
+        Value::Asset("textures/moss.png".into()),
+    );
+    recipe_edit(
+        &mut generated,
+        support::ASSET,
+        "/Recipes/Tree.primvars:texture",
+        Value::Asset("textures/moss.png".into()),
+    );
+    generated.evaluate_asset(Time::Default).unwrap();
+    assert_eq!(
+        generated.asset_generator.work().evaluations,
+        evaluations + 1
+    );
+    let local = generated.store.layers[&support::ASSET]
+        .property(file)
+        .unwrap();
+    assert_eq!(
+        local.default,
+        Some(Value::Asset("textures/moss.png".into())),
+        "equal composed values do not hide stale producer opinions"
+    );
+    assert!(
+        local
+            .time_samples
+            .as_ref()
+            .is_none_or(|samples| samples.as_slice().is_empty())
+    );
+    assert_eq!(
+        generated.store.layers[&support::ROOT]
+            .property(file)
+            .unwrap()
+            .default,
+        Some(Value::Asset("textures/moss.png".into())),
+        "other producers' overrides remain intact"
+    );
+    assert_eq!(generated.geometry.points[2][1], 2.);
 }
 
 #[test]
@@ -337,6 +699,32 @@ fn report(stage: &Stage, store: &InMemoryStore) -> serde_json::Value {
         .unwrap();
     let uv = Primvar::new(&scene, proxy, "st").unwrap();
     let normals = Primvar::new(&scene, proxy, "normals").unwrap();
+    let recipe = GenerativeProcedural::new(&scene, find("/Recipes/Tree")).unwrap();
+    let mut evaluator = support::asset_generator(recipe.path());
+    let generated = evaluator.evaluate(&scene, time).unwrap();
+    let texture_shader = find("/Assets/Tree/Material/Texture");
+    let source_material = Material::new(&scene, find("/Assets/Tree/Material")).unwrap();
+    let texture = stage
+        .prim(texture_shader, store)
+        .unwrap()
+        .attribute("inputs:file")
+        .unwrap()
+        .get(time)
+        .unwrap()
+        .value;
+    let instance_connections: Vec<Vec<_>> = (0..2)
+        .map(|i| {
+            stage
+                .prim(find(&format!("/World/Native_{i}/Material/Surface")), store)
+                .unwrap()
+                .attribute("inputs:diffuseColor")
+                .unwrap()
+                .connections()
+                .into_iter()
+                .map(|target| target.display(&store.paths, &store.tokens))
+                .collect()
+        })
+        .collect();
     serde_json::json!({
         "nativeInstances": stage.prototypes().flat_map(|p| p.instances().to_vec()).count(),
         "isProxy": stage.is_instance(find("/World/Native_0")),
@@ -354,6 +742,14 @@ fn report(stage: &Stage, store: &InMemoryStore) -> serde_json::Value {
         "sourceHeight": Mesh::new(&scene, source).unwrap().points_at(13.,layerstack::InterpolationType::Linear).unwrap()[2][1],
         "material": store.paths.display(mesh.compute_bound_material(&MaterialPurpose::All,BindingOptions::default()).material.unwrap(), &store.tokens).to_string(),
         "userTag": mesh.read_value("user:tag", layerstack_schemas::value::read_int),
+        "proceduralSystem": recipe.procedural_system(),
+        "recipeHeight": recipe.read_value_at("primvars:height", 13., layerstack::InterpolationType::Linear, layerstack_schemas::value::read_float),
+        "recipeGeneratedPoints": &**generated.geometry.points,
+        "recipeGeneratedCounts": &**generated.geometry.face_vertex_counts,
+        "recipeTexture": generated.texture.as_deref(),
+        "textureAsset": layerstack_schemas::value::read_asset(&texture, &store.tokens).unwrap().as_ref(),
+        "sourceSurface": store.paths.display(source_material.compute_surface_source(&[]).shader.unwrap(), &store.tokens).to_string(),
+        "instanceMaterialConnections": instance_connections,
     })
 }
 
@@ -488,9 +884,88 @@ def Xform "Asset" (variants = { string shape = "mesh" }; prepend variantSets = "
 #[test]
 fn authored_layers_round_trip_in_both_formats_and_match_openusd() {
     let mut generated = support::GeneratedScene::new(4);
+    recipe_edit(
+        &mut generated,
+        support::ASSET,
+        "/Recipes/Tree.primvars:height",
+        Value::Float(3.),
+    );
+    recipe_edit(
+        &mut generated,
+        support::ASSET,
+        "/Recipes/Tree.primvars:texture",
+        Value::Asset("textures/moss.png".into()),
+    );
+    generated.evaluate_asset(Time::Default).unwrap();
+    // Bake remains explicit: sampled recipes can be evaluated without replacing output.
+    let height = generated
+        .store
+        .property_path("/Recipes/Tree.primvars:height");
+    let target = EditTarget::for_node_layer(
+        generated.live.stage(),
+        &generated.store,
+        generated.asset_generator.recipe(),
+        NodeId::ROOT,
+        support::ASSET,
+    )
+    .unwrap();
+    let mut edit = Transaction::new();
+    edit.set_time_sample(target.property(height), 12., Value::Float(1.));
+    edit.set_time_sample(target.property(height), 14., Value::Float(3.));
+    generated.live.apply(&mut generated.store, &edit).unwrap();
+    let evaluations = generated.asset_generator.work().evaluations;
+    let output = generated
+        .asset_generator
+        .evaluate(
+            &Scene::new(generated.live.stage(), &generated.store),
+            Time::at(12.),
+        )
+        .unwrap();
+    assert!(
+        Arc::ptr_eq(
+            &output.geometry.points,
+            &Mesh::new(
+                &Scene::new(generated.live.stage(), &generated.store),
+                generated.terrain
+            )
+            .unwrap()
+            .points()
+            .unwrap()
+        ),
+        "exact unchanged input samples retain their buffers"
+    );
+    assert_eq!(
+        generated
+            .asset_generator
+            .evaluate(
+                &Scene::new(generated.live.stage(), &generated.store),
+                Time::at(13.)
+            )
+            .unwrap()
+            .geometry
+            .points[2][1],
+        2.
+    );
+    assert_eq!(
+        generated.asset_generator.work().evaluations,
+        evaluations + 2
+    );
     animate(&mut generated);
     let expected = report(generated.live.stage(), &generated.store);
-    assert_eq!(expected["sourceHeight"], 2.);
+    assert_eq!(
+        expected["sourceHeight"], 3.,
+        "baked sample at 12 retains the default publication's height 3"
+    );
+    assert_eq!(expected["recipeHeight"], 2.);
+    assert_eq!(expected["recipeGeneratedPoints"][2][1], 2.);
+    assert_eq!(expected["textureAsset"], "textures/moss.png");
+    assert_eq!(
+        expected["instanceMaterialConnections"],
+        serde_json::json!([
+            ["/World/Native_0/Material/Texture.outputs:rgb"],
+            ["/World/Native_1/Material/Texture.outputs:rgb"],
+        ])
+    );
     assert_eq!(expected["ids"], serde_json::json!([101, 103]));
     let base = Path::new(env!("CARGO_TARGET_TMPDIR")).join("generated-assets");
     std::fs::create_dir_all(&base).unwrap();

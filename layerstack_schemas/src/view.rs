@@ -371,18 +371,68 @@ impl<'a> PrimView<'a> {
             })
     }
 
+    /// Whether an attribute has a resolved value source, including a schema
+    /// fallback or animation-only source. A block without a fallback has none.
+    /// OpenUSD: `UsdAttribute::HasValue`; AOUSD Core §12.3.
+    #[must_use]
+    pub fn has_value(&self, name: &str) -> bool {
+        self.has_attribute(name)
+            && (self.has_authored_value(name) || self.raw_value(name, Time::Default).is_some())
+    }
+    /// Declared attributes whose names equal `namespace` or start with that
+    /// namespace followed by `:`. An empty namespace selects all attributes.
+    /// A trailing `:` is accepted; partial token prefixes do not match.
+    /// Includes schema-only declarations, sorted by name.
+    #[must_use]
+    pub fn attributes_in_namespace(&self, namespace: &str) -> Vec<PropertyPath> {
+        self.namespace_attributes(namespace, false)
+    }
+    /// Authored attributes in a namespace, excluding schema-only declarations.
+    /// Matching follows `attributes_in_namespace`, with results sorted by name.
+    #[must_use]
+    pub fn authored_attributes_in_namespace(&self, namespace: &str) -> Vec<PropertyPath> {
+        self.namespace_attributes(namespace, true)
+    }
+    fn namespace_attributes(&self, namespace: &str, authored: bool) -> Vec<PropertyPath> {
+        let namespace = namespace.trim_end_matches(':');
+        let scene = self.scene();
+        let names = if authored {
+            scene
+                .stage()
+                .authored_property_names(self.path(), scene.store())
+        } else {
+            scene.stage().property_names(self.path(), scene.store())
+        };
+        let mut names: Vec<_> = names
+            .into_iter()
+            .filter(|token| {
+                let name = scene.store().tokens().resolve(*token);
+                (namespace.is_empty()
+                    || name == namespace
+                    || name
+                        .strip_prefix(namespace)
+                        .is_some_and(|tail| tail.starts_with(':')))
+                    && self.has_attribute(name)
+            })
+            .collect();
+        names.sort_by_key(|n| scene.store().tokens().resolve(*n));
+        names
+            .into_iter()
+            .map(|n| PropertyPath::new(self.path(), n))
+            .collect()
+    }
+
     /// Whether an opinion authors a value for the attribute `name`, at any
     /// time: the strongest opinion with a spline, time samples or a
-    /// default decides, and a default block authors none. Whether that
-    /// value applies at a given time is [`PrimView::raw_value`]'s to say:
-    /// an attribute with only time samples still reads its fallback at the
-    /// default time.
+    /// default decides, and a default block authors none. Attribute reads
+    /// resolve the value at the requested time: an attribute with only
+    /// time samples still reads its fallback at the default time.
     ///
     /// OpenUSD: `UsdAttribute::HasAuthoredValue` (`UsdResolveInfo` with no
     /// time).
     ///
     /// Spec: AOUSD Core §12.3 (value resolution), §12.3.6 (blocks).
-    pub(crate) fn has_authored_value(&self, name: &str) -> bool {
+    pub fn has_authored_value(&self, name: &str) -> bool {
         let Some(property) = self.property_path(name) else {
             return false;
         };
@@ -419,7 +469,7 @@ impl<'a> PrimView<'a> {
     /// its schemas define.
     ///
     /// OpenUSD: `UsdPrim::GetAttribute(name)` is valid.
-    pub(crate) fn has_attribute(&self, name: &str) -> bool {
+    pub fn has_attribute(&self, name: &str) -> bool {
         let Some(token) = self.scene.token(name) else {
             return false;
         };

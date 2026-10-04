@@ -109,6 +109,37 @@ impl<'a> PropertyMetadata<'a> {
         self.path
     }
 
+    /// Whether any property opinion authors this metadata field, including a
+    /// block. Registered defaults and schema-only declarations do not count.
+    /// This presence query also accepts application-defined metadata keys.
+    /// OpenUSD: `UsdObject::HasAuthoredMetadata`; AOUSD Core §7.4.
+    #[must_use]
+    pub fn has_authored(&self, name: &str) -> bool {
+        let key = self.scene.store().tokens().lookup(name);
+        self.scene
+            .stage()
+            .explain_property_path(self.path)
+            .is_some_and(|opinions| {
+                opinions
+                    .iter()
+                    .filter_map(|o| o.value.as_property())
+                    .any(|p| match name {
+                        "typeName" => p.type_name.is_some(),
+                        "custom" | "variability" => true,
+                        "default" => p.default.is_some(),
+                        "timeSamples" => p.time_samples.is_some(),
+                        "spline" => p.spline.is_some(),
+                        "connectionPaths" => {
+                            p.kind == PropertyKind::Attribute && p.targets.is_some()
+                        }
+                        "targetPaths" => {
+                            p.kind == PropertyKind::Relationship && p.targets.is_some()
+                        }
+                        _ => key.is_some_and(|key| p.metadata(key).is_some()),
+                    })
+            })
+    }
+
     /// A registered, applicable field's composed authored value.
     /// No value is synthesized from the field's registered default.
     ///

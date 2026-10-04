@@ -229,6 +229,7 @@ pub(crate) struct CycleDetector {
     /// stage paths relocations prohibit.
     relocations: Relocations,
     inventory: SourceInventory,
+    used_layers: HashSet<LayerId>,
     errors: Vec<CompositionError>,
     seen: HashSet<CompositionError>,
     /// Target paths authored inside the class an inherit maps, as
@@ -253,6 +254,7 @@ impl CycleDetector {
             arcs: Vec::new(),
             relocations: Relocations::default(),
             inventory: SourceInventory::default(),
+            used_layers: HashSet::new(),
             errors: Vec::new(),
             seen: HashSet::new(),
             class_internal_targets: HashSet::new(),
@@ -465,10 +467,21 @@ impl CycleDetector {
         let mut errors = Vec::new();
         let chain = self.chain.stacks_for(root);
         let stack = LayerStack::gather_recording(store, &chain, &mut errors, Some(&mut self.reads));
+        self.used_layers.extend(
+            stack
+                .layers
+                .iter()
+                .copied()
+                .filter(|id| store.layer(*id).is_some()),
+        );
         for error in errors {
             self.report(error);
         }
         stack
+    }
+
+    pub(crate) fn used_layers(&self) -> &HashSet<LayerId> {
+        &self.used_layers
     }
 
     /// Starts composing with the relocations of the stage's layer stack

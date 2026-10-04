@@ -45,6 +45,7 @@ type VisitedClass = (PathId, PathId, ExpressionVariables);
 #[derive(Debug, Default)]
 pub(crate) struct SourceInventory {
     stacks: HashMap<Vec<LayerId>, HashMap<PathId, Rc<[PathId]>>>,
+    pub(crate) load_rules: crate::PayloadLoadRules,
 }
 
 impl SourceInventory {
@@ -94,12 +95,24 @@ impl SourceInventory {
 /// follows the arcs of unselected variant branches too, so the sources of
 /// the relocations it lifts through them stay: composition removes those
 /// of the arcs it follows.
+#[cfg(test)]
 pub(crate) fn populate(
     store: &mut dyn LayerStore,
     local_stack: &LayerStack,
     mask: Option<&PopulationMask>,
     relocations: &mut Relocations,
     inventory: &mut SourceInventory,
+) -> (BTreeSet<PathId>, HashMap<PathId, Vec<PathId>>) {
+    populate_selected(store, local_stack, mask, relocations, inventory, false)
+}
+
+pub(crate) fn populate_selected(
+    store: &mut dyn LayerStore,
+    local_stack: &LayerStack,
+    mask: Option<&PopulationMask>,
+    relocations: &mut Relocations,
+    inventory: &mut SourceInventory,
+    exact_mask: bool,
 ) -> (BTreeSet<PathId>, HashMap<PathId, Vec<PathId>>) {
     let mut paths = gather_populated_paths(store, local_stack, relocations, inventory);
     let moved = relocations.take_moved();
@@ -108,7 +121,7 @@ pub(crate) fn populate(
     add_moved_paths(store, &mut paths, placed);
     add_relocation_targets(store, relocations, &mut paths);
     paths.retain(|path| !relocations.is_prohibited(store.paths(), *path));
-    apply_population_mask(store, &mut paths, mask);
+    apply_population_mask(store, &mut paths, mask, exact_mask);
     let children = build_children_index(store, paths.iter().copied());
     (paths, children)
 }
@@ -351,6 +364,13 @@ fn gather_populated_paths(
             anchor,
         ));
         for payload in payloads {
+            if !chain
+                .inventory
+                .load_rules
+                .is_loaded(store.paths().resolve(path))
+            {
+                continue;
+            }
             expand_reference_paths(
                 store,
                 path,
@@ -368,6 +388,13 @@ fn gather_populated_paths(
         let branch_payloads =
             collect_all_variant_branch_payloads(store, fallbacks, local_stack, path, anchor);
         for payload in branch_payloads {
+            if !chain
+                .inventory
+                .load_rules
+                .is_loaded(store.paths().resolve(path))
+            {
+                continue;
+            }
             expand_reference_paths(
                 store,
                 path,
@@ -547,14 +574,20 @@ fn expand_inherit_paths(
             SelectionScope::Discover,
             anchor,
         ));
-        nested_refs.extend(arcs_of(resolve_payloads_for_prim(
-            store,
-            fallbacks,
-            stack,
-            remote_path_id,
-            SelectionScope::Discover,
-            anchor,
-        )));
+        if chain
+            .inventory
+            .load_rules
+            .is_loaded(store.paths().resolve(dest_path_id))
+        {
+            nested_refs.extend(arcs_of(resolve_payloads_for_prim(
+                store,
+                fallbacks,
+                stack,
+                remote_path_id,
+                SelectionScope::Discover,
+                anchor,
+            )));
+        }
         for nested in nested_refs {
             expand_reference_paths(
                 store,
@@ -769,6 +802,13 @@ fn expand_reference_paths(
             anchor,
         );
         for nested in branch_payloads {
+            if !chain
+                .inventory
+                .load_rules
+                .is_loaded(store.paths().resolve(dest_path_id))
+            {
+                continue;
+            }
             expand_reference_paths(
                 store,
                 dest_path_id,
@@ -792,6 +832,13 @@ fn expand_reference_paths(
             anchor,
         ));
         for payload in payloads {
+            if !chain
+                .inventory
+                .load_rules
+                .is_loaded(store.paths().resolve(dest_path_id))
+            {
+                continue;
+            }
             expand_reference_paths(
                 store,
                 dest_path_id,
@@ -974,12 +1021,18 @@ fn expand_ancestral_paths_from(
         references.extend(collect_all_variant_branch_references(
             store, fallbacks, stack, ancestor, anchor,
         ));
-        references.extend(arcs_of(resolve_payloads_for_prim(
-            store, fallbacks, stack, ancestor, scope, anchor,
-        )));
-        references.extend(collect_all_variant_branch_payloads(
-            store, fallbacks, stack, ancestor, anchor,
-        ));
+        if chain
+            .inventory
+            .load_rules
+            .is_loaded(store.paths().resolve(dest_root))
+        {
+            references.extend(arcs_of(resolve_payloads_for_prim(
+                store, fallbacks, stack, ancestor, scope, anchor,
+            )));
+            references.extend(collect_all_variant_branch_payloads(
+                store, fallbacks, stack, ancestor, anchor,
+            ));
+        }
         for reference in references {
             let Some(path) = reference.target_path(store) else {
                 continue;
@@ -1290,6 +1343,7 @@ fn apply_population_mask(
     store: &mut dyn LayerStore,
     paths: &mut BTreeSet<PathId>,
     mask: Option<&PopulationMask>,
+    exact: bool,
 ) {
     let Some(mask) = mask else {
         return;
@@ -1308,7 +1362,20 @@ fn apply_population_mask(
     }
 
     allowed.insert(store.paths_mut().intern(Path::root()));
-    paths.retain(|p| allowed.contains(p));
+    // Core §11.3: a population mask selects subtrees plus their ancestors.
+    // Exact selections are reserved for incremental recomposition, where
+    // including an ancestor must not pull every sibling subtree back in.
+    paths.retain(|p| {
+        allowed.contains(p)
+            || (!exact
+                && mask.include.iter().any(|root| {
+                    store
+                        .paths()
+                        .resolve(*p)
+                        .strip_prefix(store.paths().resolve(*root))
+                        .is_some()
+                }))
+    });
 }
 
 pub(crate) fn build_children_index(

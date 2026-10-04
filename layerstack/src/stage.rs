@@ -70,6 +70,7 @@ pub struct Provenance {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct SchemaIdentity {
     type_name: Option<TokenId>,
+    mapped_type_name: Option<TokenId>,
     applied: Vec<TokenId>,
 }
 
@@ -572,6 +573,7 @@ impl Stage {
     /// refreshes retain it; partial composition replaces affected identities.
     fn prepare_type_info(&mut self, store: &mut dyn LayerStore) {
         let empty = Arc::new(PrimDefinition::default());
+        let fallback_types = self.fallback_type_map(store);
         // Resolve only authored API lists through the normal metadata fold.
         // The common plain typed case needs no temporary entry or path list.
         let mut applied: HashMap<_, _> =
@@ -587,6 +589,8 @@ impl Stage {
         for (&path, index) in &mut self.prims {
             let identity = SchemaIdentity {
                 type_name: Self::source_type_name(index, store),
+                mapped_type_name: Self::source_type_name(index, store)
+                    .and_then(|name| fallback_types.get(&name).copied()),
                 applied: applied.remove(&path).unwrap_or_default(),
             };
             let info = self
@@ -594,15 +598,16 @@ impl Stage {
                 .get(&identity)
                 .and_then(Weak::upgrade)
                 .unwrap_or_else(|| {
+                    let schema_type = identity.mapped_type_name.or(identity.type_name);
                     let definition = match self.schemas.as_deref() {
                         None => empty.clone(),
                         Some(schemas) if identity.applied.is_empty() => schemas
-                            .shared_typed(identity.type_name)
+                            .shared_typed(schema_type)
                             .unwrap_or_else(|| empty.clone()),
                         Some(schemas) => {
                             schemas.intern_instance_names(&identity.applied, store.tokens_mut());
                             Arc::new(schemas.prim_definition(
-                                identity.type_name,
+                                schema_type,
                                 &identity.applied,
                                 store.tokens(),
                             ))
@@ -617,6 +622,47 @@ impl Stage {
                 });
             index.type_info = Some(info);
         }
+    }
+
+    // AOUSD Core §13.3.2.3; OpenUSD
+    // Usd_PrimTypeInfoCache::ComputeInvalidPrimTypeToFallbackMap.
+    // Candidates are direct substitutions, never recursively chased.
+    fn fallback_type_map(&self, store: &dyn LayerStore) -> HashMap<TokenId, TokenId> {
+        let Some(schemas) = self.schemas() else {
+            return HashMap::new();
+        };
+        let concrete = |name| {
+            schemas
+                .schema(name)
+                .is_some_and(|s| s.kind == crate::SchemaKind::ConcreteTyped)
+        };
+        let Some(key) = store.tokens().lookup("fallbackPrimTypes") else {
+            return HashMap::new();
+        };
+        let Some(Value::Dictionary(entries)) = self.layer_metadata(key, store) else {
+            return HashMap::new();
+        };
+        entries
+            .into_iter()
+            .filter_map(|(name, candidates)| {
+                let name = store.tokens().lookup(&name)?;
+                if concrete(name) {
+                    return None;
+                }
+                let candidates = candidates.array_ref()?;
+                // Sdf's field is a token array, not a string array.
+                if candidates
+                    .iter()
+                    .any(|v| !matches!(v.as_ref(), Value::Token(_)))
+                {
+                    return None;
+                }
+                candidates.iter().find_map(|value| match value.as_ref() {
+                    Value::Token(candidate) if concrete(*candidate) => Some((name, *candidate)),
+                    _ => None,
+                })
+            })
+            .collect()
     }
 
     // Retire only identities whose last prim was removed. A sweep of every
@@ -3256,7 +3302,11 @@ impl Stage {
             .schemas
             .as_deref()
             .ok_or(CannotApply::NotAnAppliedSchema)?;
-        let type_name = self.resolve_type_name(prim, store);
+        let type_name = self
+            .prims
+            .get(&prim)
+            .and_then(|p| p.type_info.as_ref())
+            .and_then(|info| info.identity.mapped_type_name.or(info.identity.type_name));
         schemas.can_apply(type_name, schema, instance, store.tokens())
     }
 

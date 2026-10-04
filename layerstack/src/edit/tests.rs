@@ -871,7 +871,8 @@ fn assert_live_matches_fresh(live: &crate::LiveStage, store: &mut InMemoryStore,
         assert_eq!(
             stage.variant_selections(prim, store),
             fresh.variant_selections(prim, store),
-            "{context}: selections"
+            "{context}: selections at {}",
+            store.paths.display(prim, &store.tokens)
         );
         for &name in &names {
             assert_eq!(

@@ -337,6 +337,7 @@ impl super::Stage {
         store: &dyn LayerStore,
         mut partial: Self,
         affected: &[PathId],
+        hierarchy: &[PathId],
         roots: &[PathId],
         options: super::StageOptions,
     ) {
@@ -392,7 +393,7 @@ impl super::Stage {
             store,
             partial,
             affected,
-            affected,
+            hierarchy,
             boundaries.into_iter().collect(),
         );
     }

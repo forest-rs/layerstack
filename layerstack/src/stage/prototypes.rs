@@ -84,6 +84,10 @@ pub struct CompositionWork {
     pub composed_prim_indexes: usize,
     /// Descendant indexes materialized from a proven equivalent representative.
     pub reused_prim_indexes: usize,
+    /// Authored namespace entries visited by discovery queries (duplicates count).
+    pub inspected_source_paths: usize,
+    /// Source slots indexed, including initial indexing and journal updates.
+    pub indexed_source_paths: usize,
 }
 
 /// Counts retained composed records, excluding payload allocations and graphs.
@@ -216,6 +220,10 @@ impl Stage {
     }
     pub(super) fn prepare_prototypes(&mut self, store: &dyn LayerStore) {
         let mut table = PrototypeTable::default();
+        if self.instances.is_empty() {
+            self.prototypes = table;
+            return;
+        }
         let mut identities = HashMap::new();
         let mut relative_groups: Vec<HashMap<Vec<TokenId>, Vec<PathId>>> = Vec::new();
         let root = store.paths().lookup(&crate::Path::root());

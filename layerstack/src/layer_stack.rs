@@ -381,6 +381,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(2),
@@ -392,6 +393,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(3),
@@ -403,6 +405,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         });
 
         let stack = LayerStack::gather(&store, LayerId(1));
@@ -427,6 +430,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(2),
@@ -438,6 +442,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(3),
@@ -449,6 +454,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         });
 
         let mut cycles = Vec::new();
@@ -507,6 +513,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(2),
@@ -518,6 +525,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         });
 
         let mut cycles = Vec::new();
@@ -548,6 +556,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(2),
@@ -566,6 +575,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(3),
@@ -577,6 +587,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         });
 
         let stack = LayerStack::gather(&store, LayerId(1));
@@ -621,6 +632,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(2),
@@ -639,6 +651,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         });
         store.insert_layer(Layer {
             id: LayerId(3),
@@ -650,6 +663,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         });
 
         let stack = LayerStack::gather(&store, LayerId(1));

@@ -8,7 +8,11 @@
 //!
 //! Spec: AOUSD Core §11 (stage population).
 
-use alloc::{collections::BTreeSet, rc::Rc, vec::Vec};
+use alloc::{
+    collections::{BTreeMap, BTreeSet},
+    rc::Rc,
+    vec::Vec,
+};
 
 use hashbrown::{HashMap, HashSet};
 
@@ -45,10 +49,164 @@ type VisitedClass = (PathId, PathId, ExpressionVariables);
 #[derive(Debug, Default)]
 pub(crate) struct SourceInventory {
     stacks: HashMap<Vec<LayerId>, HashMap<PathId, Rc<[PathId]>>>,
+    pub(crate) namespace: NamespaceInventory,
+    scope: Option<Vec<Path>>,
+    scope_exact: bool,
+    pub(crate) inspected_paths: usize,
+    pub(crate) indexed_paths: usize,
     pub(crate) load_rules: crate::PayloadLoadRules,
 }
 
+/// Retained raw layer namespaces. Paths use interned segment ordering only for
+/// range lookup; visible USD ordering is applied after querying (Core §8, §11).
+#[derive(Debug, Default)]
+pub(crate) struct NamespaceInventory {
+    layers: HashMap<LayerId, (u64, u64, BTreeMap<Path, PathId>)>,
+}
+
 impl SourceInventory {
+    pub(crate) fn set_scope(
+        &mut self,
+        store: &dyn LayerStore,
+        mask: Option<&PopulationMask>,
+        exact: bool,
+    ) {
+        self.scope_exact = exact;
+        self.scope = mask.map(|m| {
+            m.include
+                .iter()
+                .map(|p| store.paths().resolve(*p).clone())
+                .collect()
+        });
+    }
+
+    fn admits(&self, paths: &PathInterner, path: PathId) -> bool {
+        self.scope.as_ref().is_none_or(|scope| {
+            scope.iter().any(|root| {
+                let path = paths.resolve(path);
+                root.is_prefix_of(path) || path.is_prefix_of(root)
+            })
+        })
+    }
+
+    fn raw_paths(
+        &mut self,
+        store: &dyn LayerStore,
+        stack: &LayerStack,
+        roots: &[Path],
+    ) -> Vec<PathId> {
+        let mut result = Vec::new();
+        for &id in &stack.layers {
+            let Some(layer) = store.layer(id) else {
+                continue;
+            };
+            let current = self.namespace.layers.get_mut(&id);
+            let rebuild = match current {
+                Some((generation, _structure, _tree)) if *generation == layer.generation() => false,
+                Some((generation, structure, tree)) => {
+                    if *structure == layer.structural_generation() {
+                        *generation = layer.generation();
+                        false
+                    } else {
+                        if let Some(changed) = layer.changed_paths_since(*generation) {
+                            for path in changed {
+                                self.indexed_paths += 1;
+                                let key = store.paths().resolve(path).clone();
+                                if layer.prims.contains_key(&path) {
+                                    tree.insert(key, path);
+                                } else {
+                                    tree.remove(&key);
+                                }
+                            }
+                            *generation = layer.generation();
+                            *structure = layer.structural_generation();
+                            false
+                        } else {
+                            true
+                        }
+                    }
+                }
+                None => true,
+            };
+            if rebuild {
+                self.indexed_paths += layer.prims.len();
+                let tree = layer
+                    .prims
+                    .keys()
+                    .map(|p| (store.paths().resolve(*p).clone(), *p))
+                    .collect();
+                self.namespace.layers.insert(
+                    id,
+                    (layer.generation(), layer.structural_generation(), tree),
+                );
+            }
+            let tree = &self.namespace.layers[&id].2;
+            for root in roots {
+                if self.scope_exact {
+                    if let Some(&path) = tree.get(root) {
+                        self.inspected_paths += 1;
+                        result.push(path);
+                    }
+                } else {
+                    for (_, &path) in tree
+                        .range(root.clone()..)
+                        .take_while(|(p, _)| root.is_prefix_of(p))
+                    {
+                        self.inspected_paths += 1;
+                        result.push(path);
+                    }
+                }
+                let mut parent = root.parent();
+                while let Some(path) = parent {
+                    if let Some(&id) = tree.get(&path) {
+                        self.inspected_paths += 1;
+                        result.push(id);
+                    }
+                    parent = path.parent();
+                }
+            }
+        }
+        result.sort_by(|a, b| {
+            store
+                .paths()
+                .resolve(*a)
+                .cmp_with_tokens(store.paths().resolve(*b), store.tokens())
+        });
+        result.dedup();
+        result
+    }
+
+    pub(crate) fn mapped_paths(
+        &mut self,
+        store: &dyn LayerStore,
+        stack: &LayerStack,
+        source: PathId,
+        dest: PathId,
+    ) -> Rc<[PathId]> {
+        let source_path = store.paths().resolve(source);
+        let dest_path = store.paths().resolve(dest);
+        let roots: Vec<_> = match &self.scope {
+            None => return self.subtree_paths(store, stack, source),
+            Some(scope) => scope
+                .iter()
+                .filter_map(|root| {
+                    if root.is_prefix_of(dest_path) {
+                        Some(source_path.clone())
+                    } else {
+                        root.strip_prefix(dest_path)
+                            .map(|suffix| source_path.join(suffix))
+                    }
+                })
+                .collect(),
+        };
+        let result = self
+            .raw_paths(store, stack, &roots)
+            .into_iter()
+            .filter(|p| source_path.is_prefix_of(store.paths().resolve(*p)))
+            .collect::<Vec<_>>();
+        Rc::from(result)
+    }
+
     /// Returns the ordered namespace at and below `root` (AOUSD Core §10.3.2).
     /// Resolved layer sequences distinguish expression-dependent sublayers.
     /// Offsets and variable values do not affect this raw namespace.
@@ -58,32 +216,25 @@ impl SourceInventory {
         stack: &LayerStack,
         root: PathId,
     ) -> Rc<[PathId]> {
-        let inventories = match self.stacks.get_mut(stack.layers.as_slice()) {
-            Some(inventories) => inventories,
-            None => self.stacks.entry(stack.layers.clone()).or_default(),
-        };
-        inventories
-            .entry(root)
-            .or_insert_with(|| {
-                // Filter before sorting: a small subtree must not sort unrelated prims.
-                let paths = store.paths();
-                let root = paths.resolve(root);
-                let mut result: Vec<_> = stack
-                    .layers
-                    .iter()
-                    .filter_map(|id| store.layer(*id))
-                    .flat_map(|layer| layer.prims.keys().copied())
-                    .filter(|path| paths.resolve(*path).strip_prefix(root).is_some())
-                    .collect();
-                result.sort_by(|a, b| {
-                    paths
-                        .resolve(*a)
-                        .cmp_with_tokens(paths.resolve(*b), store.tokens())
-                });
-                result.dedup();
-                Rc::from(result)
-            })
-            .clone()
+        if let Some(result) = self
+            .stacks
+            .get(stack.layers.as_slice())
+            .and_then(|i| i.get(&root))
+        {
+            return result.clone();
+        }
+        let root_path = store.paths().resolve(root).clone();
+        let result: Rc<[PathId]> = Rc::from(
+            self.raw_paths(store, stack, core::slice::from_ref(&root_path))
+                .into_iter()
+                .filter(|p| root_path.is_prefix_of(store.paths().resolve(*p)))
+                .collect::<Vec<_>>(),
+        );
+        self.stacks
+            .entry(stack.layers.clone())
+            .or_default()
+            .insert(root, result.clone());
+        result
     }
 }
 
@@ -243,12 +394,11 @@ fn gather_populated_paths(
     // Keep this ordered set: deterministic iteration here helps keep derived
     // path interning stable across runs.
     let mut paths = BTreeSet::new();
-    for layer_id in &local_stack.layers {
-        let Some(layer) = store.layer(*layer_id) else {
-            continue;
-        };
-        paths.extend(layer.prims.keys().copied());
-    }
+    let roots = inventory
+        .scope
+        .clone()
+        .unwrap_or_else(|| alloc::vec![Path::root()]);
+    paths.extend(inventory.raw_paths(store, local_stack, &roots));
 
     // Expand using references and inherits (including descendants and nested arcs).
     //
@@ -521,7 +671,9 @@ fn expand_inherit_paths(
 
     let src_root = store.paths().resolve(inherited_root).clone();
 
-    let remote_paths = chain.inventory.subtree_paths(store, stack, inherited_root);
+    let remote_paths = chain
+        .inventory
+        .mapped_paths(store, stack, inherited_root, dest_root);
 
     for remote_path_id in remote_paths.iter().copied() {
         let rel: Vec<_> = {
@@ -535,6 +687,9 @@ fn expand_inherit_paths(
         let Some((dest_path_id, moved)) = chain.walk().place(store, dest_root, &rel) else {
             continue;
         };
+        if !chain.inventory.admits(store.paths(), dest_path_id) {
+            continue;
+        }
         let new = paths.insert(dest_path_id);
         chain.relocations.place(dest_path_id, moved, new);
         if new {
@@ -671,9 +826,10 @@ fn expand_reference_paths(
     let target = store.paths().resolve(reference_path).clone();
     let base = store.paths().resolve(dest_root).clone();
 
-    let remote_paths = chain
-        .inventory
-        .subtree_paths(store, &remote_stack, reference_path);
+    let remote_paths =
+        chain
+            .inventory
+            .mapped_paths(store, &remote_stack, reference_path, dest_root);
 
     for remote_path_id in remote_paths.iter().copied() {
         let rel: Vec<_> = {
@@ -687,6 +843,9 @@ fn expand_reference_paths(
         let Some((dest_path_id, moved)) = chain.walk().place(store, dest_root, &rel) else {
             continue;
         };
+        if !chain.inventory.admits(store.paths(), dest_path_id) {
+            continue;
+        }
         let new = paths.insert(dest_path_id);
         chain.relocations.place(dest_path_id, moved, new);
         if new {

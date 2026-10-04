@@ -6,7 +6,7 @@
 //! Spec: AOUSD Core §6–§7 (scene description data model and opinions), plus §10
 //! for arc-related fields (variants/references).
 
-use alloc::{boxed::Box, collections::VecDeque, string::String, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 use core::fmt;
 
 use hashbrown::HashMap;
@@ -1922,7 +1922,7 @@ pub struct Layer {
     /// Counts the edits that may change namespace or arcs (see
     /// [`Layer::structural_generation`]).
     pub(crate) structure: u64,
-    pub(crate) change_history: VecDeque<LayerChange>,
+    pub(crate) change_history: crate::change_history::History<LayerChange>,
 }
 
 /// Bounded authored evidence, independent of each stage's synchronization cursor.
@@ -1931,6 +1931,21 @@ pub(crate) struct LayerChange {
     generation: u64,
     paths: Option<Vec<PathId>>,
     scope_ignored: Option<PathId>,
+}
+impl crate::change_history::Record for LayerChange {
+    fn revision(&self) -> u64 {
+        self.generation
+    }
+    fn bytes(&self) -> usize {
+        size_of::<Self>()
+            + self
+                .paths
+                .as_ref()
+                .map_or(0, |p| p.capacity() * size_of::<PathId>())
+    }
+    fn items(&self) -> usize {
+        self.paths.as_ref().map_or(0, Vec::len)
+    }
 }
 
 impl PartialEq for Layer {
@@ -1970,7 +1985,7 @@ impl Layer {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         }
     }
 
@@ -2012,7 +2027,7 @@ impl Layer {
     /// Writes straight into the public fields ([`Layer::prims`] and the
     /// others) bypass the counter: they are the importers' building API,
     /// not an authoring API. Hosts that write a field after composition
-    /// call [`Layer::touch`]. The most recent 64 method/transaction batches
+    /// call [`Layer::touch`]. The default budget retains up to 64 method/transaction batches and 1 MiB
     /// retain changed prim paths for independently synchronized live stages;
     /// unknown writes and expired history conservatively invalidate the stage.
     ///
@@ -2020,6 +2035,21 @@ impl Layer {
     #[must_use]
     pub fn generation(&self) -> u64 {
         self.generation
+    }
+
+    /// Changes this layer's authored-evidence retention budget and evicts old
+    /// evidence immediately. A stage behind the retained history recovers through
+    /// conservative recomposition when synchronized; layer content is unchanged.
+    pub fn set_change_history_budget(&mut self, budget: crate::ChangeHistoryBudget) {
+        self.change_history.set_budget(budget);
+    }
+    /// Current authored-evidence budget.
+    pub fn change_history_budget(&self) -> crate::ChangeHistoryBudget {
+        self.change_history.budget()
+    }
+    /// Authored-evidence memory and cumulative retention work.
+    pub fn change_history_stats(&self) -> crate::ChangeHistoryStats {
+        self.change_history.stats()
     }
 
     /// Returns this layer's structural generation: a counter that the
@@ -2065,10 +2095,7 @@ impl Layer {
     ) {
         self.generation += 1;
         self.structure += u64::from(structural);
-        if self.change_history.len() == 64 {
-            self.change_history.pop_front();
-        }
-        self.change_history.push_back(LayerChange {
+        self.change_history.record(LayerChange {
             generation: self.generation,
             paths,
             scope_ignored,

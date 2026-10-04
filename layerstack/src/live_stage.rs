@@ -1126,11 +1126,27 @@ impl LiveStage {
 
     /// Starts an independent observer at the current composed revision.
     ///
-    /// Reports are retained only after the first observer subscribes. At most
-    /// 64 batches are retained; a slower reader receives an explicit history
-    /// error and must refresh its derived state. No callbacks are registered.
+    /// Reports are retained only after the first cursor is created. The default
+    /// budget is 64 batches and 1 MiB. Missing evidence causes an explicit history
+    /// error requiring derived-state recovery. No callbacks are registered.
     pub fn change_cursor(&mut self) -> ChangeCursor {
         self.notices.cursor()
+    }
+
+    /// Changes composed-report retention and immediately evicts excess evidence.
+    /// This does not change source layers' independent authored-evidence budgets.
+    /// Oversized reports still notify callbacks but cannot be replayed by cursors.
+    pub fn set_change_history_budget(&mut self, budget: crate::ChangeHistoryBudget) {
+        self.notices.set_budget(budget);
+    }
+    /// Current composed-report retention budget.
+    pub fn change_history_budget(&self) -> crate::ChangeHistoryBudget {
+        self.notices.budget()
+    }
+    /// Report-storage memory and cumulative retention work. No report clones
+    /// are retained before the first change cursor enables replay.
+    pub fn change_history_stats(&self) -> crate::ChangeHistoryStats {
+        self.notices.stats()
     }
 
     /// Borrows reports since this cursor and advances it to the current revision.
@@ -1824,7 +1840,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         let mut spec = PrimSpec::default();
         spec.set_field(field_x, FieldValue::Value(Value::Int64(42)));
@@ -1855,7 +1871,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         layer.insert_prim(prim, PrimSpec::default());
         store.insert_layer(layer);
@@ -1881,7 +1897,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         let mut spec = PrimSpec::default();
         spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
@@ -1955,7 +1971,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         layer.insert_prim(prim, PrimSpec::default());
         store.insert_layer(layer);
@@ -2038,7 +2054,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         let mut p_spec = PrimSpec::default();
         p_spec.add_reference(Reference::new(LayerId(2), prim_q));
@@ -2055,7 +2071,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         let mut q_spec = PrimSpec::default();
         q_spec.set_field(field_x, FieldValue::Value(Value::Int64(10)));
@@ -2106,7 +2122,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         let mut spec2 = PrimSpec::default();
         spec2.set_field(field_x, FieldValue::Value(Value::Int64(10)));
@@ -2123,7 +2139,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         let mut spec1 = PrimSpec::default();
         spec1.set_field(field_x, FieldValue::Value(Value::Int64(20)));
@@ -2185,7 +2201,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         // /Class_C defines x = 42.
         let mut class_spec = PrimSpec::default();
@@ -2244,7 +2260,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         let mut a_spec = PrimSpec::default();
         a_spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
@@ -2261,7 +2277,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         let mut b_spec = PrimSpec::default();
         b_spec.set_field(field_y, FieldValue::Value(Value::Int64(2)));
@@ -2315,7 +2331,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         let mut spec = PrimSpec::default();
         spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
@@ -2362,7 +2378,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         let mut p_spec = PrimSpec::default();
         p_spec.add_reference(Reference::new(LayerId(2), prim_q));
@@ -2380,7 +2396,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         let mut q_spec = PrimSpec::default();
         q_spec.set_field(field_x, FieldValue::Value(Value::Int64(100)));
@@ -2426,7 +2442,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         let mut a_spec = PrimSpec::default();
         a_spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
@@ -2481,7 +2497,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         let mut a_spec = PrimSpec::default();
         a_spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
@@ -2539,7 +2555,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         let mut a_spec = PrimSpec::default();
         a_spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
@@ -2556,7 +2572,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         let mut b_spec = PrimSpec::default();
         b_spec.set_field(field_x, FieldValue::Value(Value::Int64(2)));
@@ -2593,7 +2609,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
-            change_history: alloc::collections::VecDeque::new(),
+            change_history: crate::change_history::History::default(),
         };
         for &(prim, val) in &[(prim_a, 1), (prim_b, 2), (prim_c, 3)] {
             let mut spec = PrimSpec::default();

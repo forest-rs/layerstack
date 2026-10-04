@@ -101,6 +101,15 @@ impl<'a> SemanticsLabelsApi<'a> {
         #[doc = "USD attribute `semantics:labels:&lt;instance&gt;` (`token\\[\\]`; fallback `\\[\\]`)."]
         labels, labels_at, "semantics:labels:__INSTANCE_NAME__", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_labels(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<&'a str>>, layerstack::ArrayReadError> {
+        self.try_read_value("semantics:labels:__INSTANCE_NAME__", time, |v, t| {
+            crate::value::read_array(v, t, crate::value::read_token)
+        })
+    }
 }
 
 #[doc = "Authors the properties of OpenUSD's `SemanticsLabelsAPI` through a [`SchemaEdit`]."]

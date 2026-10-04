@@ -36,6 +36,19 @@ pub fn read_array<'a, T>(
     array.iter().map(|item| read(&item, tokens)).collect()
 }
 
+/// Reads an array with explicit deferred decode failure. Incompatible values
+/// return `Ok(None)`; legacy arrays are converted into an owned vector.
+pub fn try_read_array<'a, T>(
+    value: &Value,
+    tokens: &'a TokenInterner,
+    read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
+) -> Result<Option<Vec<T>>, layerstack::ArrayReadError> {
+    if let Value::TypedArray(array) = value {
+        array.try_materialize().map_err(Clone::clone)?;
+    }
+    Ok(read_array(value, tokens, read))
+}
+
 /// Writes an array of `write`'s type.
 pub fn write_array<T: Copy>(
     items: &[T],
@@ -46,7 +59,7 @@ pub fn write_array<T: Copy>(
 }
 
 macro_rules! plain {
-    ($read:ident, $write:ident, $ty:ty, $variant:ident, $read_array:ident, $write_array:ident, $borrow:ident, $share:ident, $owned:ident, $shared:ident) => {
+    ($read:ident, $write:ident, $ty:ty, $variant:ident, $read_array:ident, $write_array:ident, $borrow:ident, $share:ident, $owned:ident, $shared:ident, $try_share:ident) => {
         /// Decodes the USD value without coercing incompatible types.
         pub fn $read(value: &Value, _: &TokenInterner) -> Option<$ty> {
             match value {
@@ -89,13 +102,22 @@ macro_rules! plain {
         /// Sparse composition or interpolation may materialize a result before
         /// this conversion runs. Deferred sources may decode; no file I/O occurs.
         pub fn $share(value: &Value, tokens: &TokenInterner) -> Option<Arc<Vec<$ty>>> {
+            $try_share(value, tokens).ok().flatten()
+        }
+
+        /// Retains matching storage without copying, preserving deferred decode
+        /// failures. Incompatible types return `Ok(None)`; legacy values allocate.
+        pub fn $try_share(
+            value: &Value,
+            tokens: &TokenInterner,
+        ) -> Result<Option<Arc<Vec<$ty>>>, layerstack::ArrayReadError> {
             if let Value::TypedArray(array) = value {
-                return match array.try_materialize().ok()? {
+                return Ok(match array.try_materialize().map_err(Clone::clone)? {
                     layerstack::TypedArray::$variant(items) => Some(items.clone()),
                     _ => None,
-                };
+                });
             }
-            read_array(value, tokens, $read).map(Arc::new)
+            try_read_array(value, tokens, $read).map(|items| items.map(Arc::new))
         }
 
         /// Transfers an owned vector without copying elements. Allocates a shared
@@ -121,7 +143,8 @@ plain!(
     borrow_bool_array,
     read_bool_array_shared,
     write_bool_array_owned,
-    write_bool_array_shared
+    write_bool_array_shared,
+    try_read_bool_array_shared
 );
 plain!(
     read_uchar,
@@ -133,7 +156,8 @@ plain!(
     borrow_uchar_array,
     read_uchar_array_shared,
     write_uchar_array_owned,
-    write_uchar_array_shared
+    write_uchar_array_shared,
+    try_read_uchar_array_shared
 );
 plain!(
     read_int,
@@ -145,7 +169,8 @@ plain!(
     borrow_int_array,
     read_int_array_shared,
     write_int_array_owned,
-    write_int_array_shared
+    write_int_array_shared,
+    try_read_int_array_shared
 );
 plain!(
     read_uint,
@@ -157,7 +182,8 @@ plain!(
     borrow_uint_array,
     read_uint_array_shared,
     write_uint_array_owned,
-    write_uint_array_shared
+    write_uint_array_shared,
+    try_read_uint_array_shared
 );
 plain!(
     read_int64,
@@ -169,7 +195,8 @@ plain!(
     borrow_int64_array,
     read_int64_array_shared,
     write_int64_array_owned,
-    write_int64_array_shared
+    write_int64_array_shared,
+    try_read_int64_array_shared
 );
 plain!(
     read_uint64,
@@ -181,7 +208,8 @@ plain!(
     borrow_uint64_array,
     read_uint64_array_shared,
     write_uint64_array_owned,
-    write_uint64_array_shared
+    write_uint64_array_shared,
+    try_read_uint64_array_shared
 );
 plain!(
     read_float,
@@ -193,7 +221,8 @@ plain!(
     borrow_float_array,
     read_float_array_shared,
     write_float_array_owned,
-    write_float_array_shared
+    write_float_array_shared,
+    try_read_float_array_shared
 );
 plain!(
     read_double,
@@ -205,7 +234,8 @@ plain!(
     borrow_double_array,
     read_double_array_shared,
     write_double_array_owned,
-    write_double_array_shared
+    write_double_array_shared,
+    try_read_double_array_shared
 );
 plain!(
     read_timecode,
@@ -217,7 +247,8 @@ plain!(
     borrow_timecode_array,
     read_timecode_array_shared,
     write_timecode_array_owned,
-    write_timecode_array_shared
+    write_timecode_array_shared,
+    try_read_timecode_array_shared
 );
 plain!(
     read_float2,
@@ -229,7 +260,8 @@ plain!(
     borrow_float2_array,
     read_float2_array_shared,
     write_float2_array_owned,
-    write_float2_array_shared
+    write_float2_array_shared,
+    try_read_float2_array_shared
 );
 plain!(
     read_float3,
@@ -241,7 +273,8 @@ plain!(
     borrow_float3_array,
     read_float3_array_shared,
     write_float3_array_owned,
-    write_float3_array_shared
+    write_float3_array_shared,
+    try_read_float3_array_shared
 );
 plain!(
     read_float4,
@@ -253,7 +286,8 @@ plain!(
     borrow_float4_array,
     read_float4_array_shared,
     write_float4_array_owned,
-    write_float4_array_shared
+    write_float4_array_shared,
+    try_read_float4_array_shared
 );
 plain!(
     read_double2,
@@ -265,7 +299,8 @@ plain!(
     borrow_double2_array,
     read_double2_array_shared,
     write_double2_array_owned,
-    write_double2_array_shared
+    write_double2_array_shared,
+    try_read_double2_array_shared
 );
 plain!(
     read_double3,
@@ -277,7 +312,8 @@ plain!(
     borrow_double3_array,
     read_double3_array_shared,
     write_double3_array_owned,
-    write_double3_array_shared
+    write_double3_array_shared,
+    try_read_double3_array_shared
 );
 plain!(
     read_double4,
@@ -289,7 +325,8 @@ plain!(
     borrow_double4_array,
     read_double4_array_shared,
     write_double4_array_owned,
-    write_double4_array_shared
+    write_double4_array_shared,
+    try_read_double4_array_shared
 );
 plain!(
     read_int2,
@@ -301,7 +338,8 @@ plain!(
     borrow_int2_array,
     read_int2_array_shared,
     write_int2_array_owned,
-    write_int2_array_shared
+    write_int2_array_shared,
+    try_read_int2_array_shared
 );
 plain!(
     read_int3,
@@ -313,7 +351,8 @@ plain!(
     borrow_int3_array,
     read_int3_array_shared,
     write_int3_array_owned,
-    write_int3_array_shared
+    write_int3_array_shared,
+    try_read_int3_array_shared
 );
 plain!(
     read_int4,
@@ -325,7 +364,8 @@ plain!(
     borrow_int4_array,
     read_int4_array_shared,
     write_int4_array_owned,
-    write_int4_array_shared
+    write_int4_array_shared,
+    try_read_int4_array_shared
 );
 plain!(
     read_quatf,
@@ -337,7 +377,8 @@ plain!(
     borrow_quatf_array,
     read_quatf_array_shared,
     write_quatf_array_owned,
-    write_quatf_array_shared
+    write_quatf_array_shared,
+    try_read_quatf_array_shared
 );
 plain!(
     read_quatd,
@@ -349,7 +390,8 @@ plain!(
     borrow_quatd_array,
     read_quatd_array_shared,
     write_quatd_array_owned,
-    write_quatd_array_shared
+    write_quatd_array_shared,
+    try_read_quatd_array_shared
 );
 
 macro_rules! text {

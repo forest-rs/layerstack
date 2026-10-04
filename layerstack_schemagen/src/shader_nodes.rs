@@ -314,6 +314,7 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
             "scene",
             "read_value",
             "read_value_at",
+            "try_read_value",
         ]
         .into_iter()
         .map(String::from)

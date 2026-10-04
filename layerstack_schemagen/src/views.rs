@@ -44,6 +44,7 @@ const RESERVED: &[&str] = &[
     "property_path",
     "read_value",
     "read_value_at",
+    "try_read_value",
     "read_targets",
     "write_value",
     "write_targets",
@@ -503,6 +504,13 @@ fn method_names<'m>(
         if property
             .value_type
             .as_ref()
+            .is_some_and(|(_, array, _)| *array)
+        {
+            out.push((format!("try_{name}"), Some(property)));
+        }
+        if property
+            .value_type
+            .as_ref()
             .is_some_and(|(_, array, zero)| *array && shared_array(zero))
         {
             for suffix in ["owned", "shared"] {
@@ -730,7 +738,7 @@ fn accessors(
             },
         },
     );
-    let getters = if varying {
+    let mut getters = if varying {
         format!(
             "{constant}    attribute! {{\n{docs}        {name}, {name}_at, {:?}, {}, {}\n    }}\n",
             property.name, ty.read, ty.read_fn
@@ -741,6 +749,13 @@ fn accessors(
             property.name, ty.read, ty.read_fn
         )
     };
+    if *is_array {
+        let _ = writeln!(
+            getters,
+            "    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.\n    pub fn try_{name}(&self, time: crate::Time) -> Result<Option<{}>, layerstack::ArrayReadError> {{ self.try_read_value({:?}, time, {}) }}",
+            ty.read, property.name, ty.read_fn
+        );
+    }
     let mut setters = if varying {
         format!(
             "    set_attribute! {{\n{docs}        set_{name}, set_{name}_at, {:?}, {}, {}\n    }}\n",

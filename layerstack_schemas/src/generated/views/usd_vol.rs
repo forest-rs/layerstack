@@ -1086,6 +1086,14 @@ impl<'a> ParticleFieldOpacityAttributeApi<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         opacities, opacities_at, "opacities", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_opacities(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("opacities", time, crate::value::read_float_array_shared)
+    }
     /// The USD name of [`Self::opacitiesh`].
     pub const OPACITIESH: &'static str = "opacitiesh";
 
@@ -1094,6 +1102,13 @@ impl<'a> ParticleFieldOpacityAttributeApi<'a> {
         #[doc = ""]
         #[doc = "USD attribute `opacitiesh` (`half\\[\\]`)."]
         opacitiesh, opacitiesh_at, "opacitiesh", ::alloc::vec::Vec<f32>, crate::value::read_half_array
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_opacitiesh(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<f32>>, layerstack::ArrayReadError> {
+        self.try_read_value("opacitiesh", time, crate::value::read_half_array)
     }
 }
 
@@ -1216,6 +1231,14 @@ impl<'a> ParticleFieldOrientationAttributeApi<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         orientations, orientations_at, "orientations", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>, crate::value::read_quatf_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_orientations(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("orientations", time, crate::value::read_quatf_array_shared)
+    }
     /// The USD name of [`Self::orientationsh`].
     pub const ORIENTATIONSH: &'static str = "orientationsh";
 
@@ -1224,6 +1247,13 @@ impl<'a> ParticleFieldOrientationAttributeApi<'a> {
         #[doc = ""]
         #[doc = "USD attribute `orientationsh` (`quath\\[\\]`)."]
         orientationsh, orientationsh_at, "orientationsh", ::alloc::vec::Vec<[f32; 4]>, crate::value::read_quath_array
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_orientationsh(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<[f32; 4]>>, layerstack::ArrayReadError> {
+        self.try_read_value("orientationsh", time, crate::value::read_quath_array)
     }
 }
 
@@ -1346,6 +1376,14 @@ impl<'a> ParticleFieldPositionAttributeApi<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         positions, positions_at, "positions", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_positions(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("positions", time, crate::value::read_float3_array_shared)
+    }
     /// The USD name of [`Self::positionsh`].
     pub const POSITIONSH: &'static str = "positionsh";
 
@@ -1354,6 +1392,13 @@ impl<'a> ParticleFieldPositionAttributeApi<'a> {
         #[doc = ""]
         #[doc = "USD attribute `positionsh` (`point3h\\[\\]`)."]
         positionsh, positionsh_at, "positionsh", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_half3_array
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_positionsh(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<[f32; 3]>>, layerstack::ArrayReadError> {
+        self.try_read_value("positionsh", time, crate::value::read_half3_array)
     }
 }
 
@@ -1648,6 +1693,14 @@ impl<'a> ParticleFieldScaleAttributeApi<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         scales, scales_at, "scales", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_scales(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("scales", time, crate::value::read_float3_array_shared)
+    }
     /// The USD name of [`Self::scalesh`].
     pub const SCALESH: &'static str = "scalesh";
 
@@ -1656,6 +1709,13 @@ impl<'a> ParticleFieldScaleAttributeApi<'a> {
         #[doc = ""]
         #[doc = "USD attribute `scalesh` (`half3\\[\\]`)."]
         scalesh, scalesh_at, "scalesh", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_half3_array
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_scalesh(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<[f32; 3]>>, layerstack::ArrayReadError> {
+        self.try_read_value("scalesh", time, crate::value::read_half3_array)
     }
 }
 
@@ -1781,6 +1841,18 @@ impl<'a> ParticleFieldSphericalHarmonicsAttributeApi<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         radiance_spherical_harmonics_coefficients, radiance_spherical_harmonics_coefficients_at, "radiance:sphericalHarmonicsCoefficients", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_radiance_spherical_harmonics_coefficients(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "radiance:sphericalHarmonicsCoefficients",
+            time,
+            crate::value::read_float3_array_shared,
+        )
+    }
     /// The USD name of [`Self::radiance_spherical_harmonics_coefficientsh`].
     pub const RADIANCE_SPHERICAL_HARMONICS_COEFFICIENTSH: &'static str =
         "radiance:sphericalHarmonicsCoefficientsh";
@@ -1790,6 +1862,17 @@ impl<'a> ParticleFieldSphericalHarmonicsAttributeApi<'a> {
         #[doc = ""]
         #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficientsh` (`half3\\[\\]`)."]
         radiance_spherical_harmonics_coefficientsh, radiance_spherical_harmonics_coefficientsh_at, "radiance:sphericalHarmonicsCoefficientsh", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_half3_array
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_radiance_spherical_harmonics_coefficientsh(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<[f32; 3]>>, layerstack::ArrayReadError> {
+        self.try_read_value(
+            "radiance:sphericalHarmonicsCoefficientsh",
+            time,
+            crate::value::read_half3_array,
+        )
     }
     /// The USD name of [`Self::radiance_spherical_harmonics_degree`].
     pub const RADIANCE_SPHERICAL_HARMONICS_DEGREE: &'static str =

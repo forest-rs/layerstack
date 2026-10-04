@@ -389,7 +389,7 @@ fn materialize(
     Ok(value)
 }
 
-fn check_decode(
+pub(super) fn check_decode(
     stage: &Stage,
     path: PropertyPath,
     time: Time,

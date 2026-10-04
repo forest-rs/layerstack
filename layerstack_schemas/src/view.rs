@@ -309,6 +309,28 @@ impl<'a> PrimView<'a> {
             .map(|resolved| resolved.value)
     }
 
+    /// Reads a typed attribute at `time`, preserving deferred decode failures.
+    /// `Ok(None)` means missing, blocked or incompatible; `Err` means corrupt
+    /// numeric storage. Schema fallbacks and typed source selection match the
+    /// ordinary getters. Prefer generated `try_*` array getters when available.
+    /// Spec: AOUSD Core §12.3–12.5 (attribute values and interpolation).
+    pub fn try_read_value<T>(
+        &self,
+        name: &str,
+        time: Time,
+        read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
+    ) -> Result<Option<T>, layerstack::ArrayReadError> {
+        let Some(token) = self.scene.token(name) else {
+            return Ok(None);
+        };
+        self.scene
+            .stage
+            .try_read_property(PropertyPath::new(self.path, token), time, |value| {
+                read(value, self.scene.store.tokens())
+            })
+            .map(|result| result.map(|resolved| resolved.value))
+    }
+
     /// The resolved value of the attribute `name` at `time`, schema
     /// fallback included, as the stage holds it.
     pub(crate) fn raw_value(&self, name: &str, time: Time) -> Option<Value> {
@@ -589,6 +611,19 @@ impl<'a> InstanceView<'a> {
     ) -> Option<T> {
         self.prim
             .read_value_at(&instance_name(template, self.instance), time, interp, read)
+    }
+
+    /// Checked typed read of this instance's namespaced attribute.
+    /// Missing, blocked or incompatible values return `Ok(None)`; deferred
+    /// numeric decode errors are returned unchanged.
+    pub fn try_read_value<T>(
+        &self,
+        template: &str,
+        time: Time,
+        read: impl Fn(&Value, &'a TokenInterner) -> Option<T>,
+    ) -> Result<Option<T>, layerstack::ArrayReadError> {
+        self.prim
+            .try_read_value(&instance_name(template, self.instance), time, read)
     }
 
     pub(crate) fn read_targets(&self, template: &str) -> Vec<TargetPath> {

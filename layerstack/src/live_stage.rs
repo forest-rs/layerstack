@@ -13,6 +13,8 @@
 use alloc::{collections::BTreeSet, vec::Vec};
 
 mod controls;
+mod mask;
+pub use mask::MaskExpansionReport;
 mod discovery;
 pub use controls::RecompositionWork;
 mod local;

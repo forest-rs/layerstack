@@ -8,7 +8,7 @@ use super::*;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(crate) struct ClipInstanceKey {
-    stack: LayerId,
+    stack: crate::LayerStackIdentifier,
     site: SpecPath,
     layer_strength: u16,
     offset: (u64, u64),
@@ -60,7 +60,9 @@ pub(crate) fn instance_keys(
             let stack = index
                 .graph
                 .node(definition.anchor.node)
-                .map_or(definition.anchor.layer_id, |node| node.layer_stack());
+                .map_or(definition.anchor.layer_id.into(), |node| {
+                    node.layer_stack_identifier()
+                });
             ClipInstanceKey {
                 stack,
                 site: definition.anchor.spec_path,

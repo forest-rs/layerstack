@@ -14,7 +14,7 @@ use crate::prim_index::PrimIndexData;
 /// `PcpInstanceKey`, `Usd_InstanceKey` (`usd/instanceKey.cpp`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub(super) struct InstanceKey {
-    arcs: Vec<(ArcKind, LayerId, SpecPath, u64, u64)>,
+    arcs: Vec<(ArcKind, crate::LayerStackIdentifier, SpecPath, u64, u64)>,
     selections: Vec<(TokenId, TokenId)>,
     clips: Vec<crate::value_clips::ClipInstanceKey>,
     topology: Vec<(Vec<TokenId>, bool)>,
@@ -140,7 +140,7 @@ impl Stage {
                 let offset = node.layer_offset();
                 arcs.push((
                     node.arc_kind(),
-                    node.layer_stack(),
+                    node.layer_stack_identifier(),
                     node.site().clone(),
                     offset.offset.to_bits(),
                     offset.scale.to_bits(),

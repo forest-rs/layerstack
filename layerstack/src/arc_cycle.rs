@@ -37,7 +37,7 @@ use crate::{
     doc::{LayerId, LayerStore},
     expression_variables::{ExpressionScope, VariableReads, expression_error},
     interner::TokenId,
-    layer_stack::LayerStack,
+    layer_stack::{LayerStack, LayerStackIdentifier},
     path::{Path, PathId, PathInterner, TargetPath},
     population::SourceInventory,
     prim_index::{ArcKind, PrimIndex},
@@ -49,7 +49,7 @@ use crate::{
 #[derive(Clone, Copy, Debug)]
 struct ChainSite {
     /// Root layer of the layer stack holding the site.
-    layer_stack: LayerId,
+    layer_stack: LayerStackIdentifier,
     /// The site's prim path at the namespace depth of `dest`.
     site: PathId,
     /// The composed prim path the site contributes to.
@@ -70,7 +70,7 @@ pub(crate) struct ArcChain {
 impl ArcChain {
     /// Starts a chain at the composed prim `prim` in the stage's layer stack
     /// (rooted at `layer_stack`).
-    pub(crate) fn new(layer_stack: LayerId, prim: PathId) -> Self {
+    pub(crate) fn new(layer_stack: LayerStackIdentifier, prim: PathId) -> Self {
         Self {
             sites: alloc::vec![ChainSite {
                 layer_stack,
@@ -90,7 +90,7 @@ impl ArcChain {
         &self,
         paths: &PathInterner,
         dest: PathId,
-        layer_stack: LayerId,
+        layer_stack: LayerStackIdentifier,
         target: PathId,
     ) -> bool {
         reaches(&self.sites, paths, dest, target, |stack| {
@@ -102,7 +102,7 @@ impl ArcChain {
     ///
     /// `target` is the arc's target path in the layer stack rooted at
     /// `layer_stack`, and `dest` the composed prim it contributes to.
-    pub(crate) fn push(&mut self, layer_stack: LayerId, target: PathId, dest: PathId) {
+    pub(crate) fn push(&mut self, layer_stack: LayerStackIdentifier, target: PathId, dest: PathId) {
         self.sites.push(ChainSite {
             layer_stack,
             site: target,
@@ -143,7 +143,7 @@ impl ArcChain {
     /// OpenUSD: `_EvalRefOrPayloadArcs` in `pxr/usd/pcp/primIndex.cpp`
     /// computes a referenced layer stack's variables over those of the
     /// layer stack that references it.
-    pub(crate) fn expression_stacks(&self) -> Vec<LayerId> {
+    pub(crate) fn expression_stacks(&self) -> Vec<LayerStackIdentifier> {
         match self.sites.last() {
             Some(last) => self.stacks_for(last.layer_stack),
             None => Vec::new(),
@@ -159,13 +159,13 @@ impl ArcChain {
     /// OpenUSD identifies a referenced layer stack with the source of the
     /// variables that override its own
     /// (`PcpLayerStackIdentifier::expressionVariablesOverrideSource`).
-    pub(crate) fn stacks_for(&self, root: LayerId) -> Vec<LayerId> {
+    pub(crate) fn stacks_for(&self, root: LayerStackIdentifier) -> Vec<LayerStackIdentifier> {
         let end = self
             .sites
             .iter()
             .position(|site| site.layer_stack == root)
             .map_or(self.sites.len(), |index| index + 1);
-        let mut stacks: Vec<LayerId> = self.sites[..end]
+        let mut stacks: Vec<LayerStackIdentifier> = self.sites[..end]
             .iter()
             .map(|site| site.layer_stack)
             .collect();
@@ -188,7 +188,11 @@ impl ArcChain {
     /// Returns the chain's sites, from the composed prim outwards, as
     /// `(layer stack, path)` pairs translated to the namespace depth of
     /// `dest`.
-    fn sites_at(&self, paths: &mut PathInterner, dest: PathId) -> Vec<(LayerId, PathId)> {
+    fn sites_at(
+        &self,
+        paths: &mut PathInterner,
+        dest: PathId,
+    ) -> Vec<(LayerStackIdentifier, PathId)> {
         self.sites
             .iter()
             .map(|site| {
@@ -221,7 +225,7 @@ pub(crate) struct ChainState {
 /// and kept in the order found.
 #[derive(Debug)]
 pub(crate) struct CycleDetector {
-    stage_layer_stack: LayerId,
+    stage_layer_stack: LayerStackIdentifier,
     chain: ArcChain,
     /// The arc that introduced each site on `chain` after its root.
     arcs: Vec<ArcKind>,
@@ -247,7 +251,7 @@ pub(crate) struct CycleDetector {
 impl CycleDetector {
     /// Creates a detector for a stage whose layer stack is rooted at
     /// `stage_layer_stack`.
-    pub(crate) fn new(stage_layer_stack: LayerId) -> Self {
+    pub(crate) fn new(stage_layer_stack: LayerStackIdentifier) -> Self {
         Self {
             stage_layer_stack,
             chain: ArcChain { sites: Vec::new() },
@@ -264,7 +268,7 @@ impl CycleDetector {
     }
 
     /// Returns the root layer of the stage's layer stack.
-    pub(crate) fn stage_layer_stack(&self) -> LayerId {
+    pub(crate) fn stage_layer_stack(&self) -> LayerStackIdentifier {
         self.stage_layer_stack
     }
 
@@ -282,7 +286,7 @@ impl CycleDetector {
         &mut self,
         paths: &mut PathInterner,
         dest: PathId,
-        layer_stack: LayerId,
+        layer_stack: LayerStackIdentifier,
         target: PathId,
         arc: ArcKind,
     ) -> bool {
@@ -296,13 +300,13 @@ impl CycleDetector {
             .into_iter()
             .zip(arcs)
             .map(|((layer_stack, path), arc)| ArcCycleSite {
-                layer_stack,
+                layer_stack: layer_stack.root,
                 path,
                 arc,
             })
             .collect();
         sites.push(ArcCycleSite {
-            layer_stack,
+            layer_stack: layer_stack.root,
             path: target,
             arc: Some(arc),
         });
@@ -331,7 +335,7 @@ impl CycleDetector {
             .into_iter()
             .map(|relocation_target| {
                 let mut through = alloc::vec![ArcCycleSite {
-                    layer_stack: self.stage_layer_stack,
+                    layer_stack: self.stage_layer_stack.root,
                     path: relocation_target,
                     arc: None,
                 }];
@@ -362,7 +366,7 @@ impl CycleDetector {
     /// [`closes_cycle`](Self::closes_cycle) first.
     pub(crate) fn enter(
         &mut self,
-        layer_stack: LayerId,
+        layer_stack: LayerStackIdentifier,
         target: PathId,
         dest: PathId,
         arc: ArcKind,
@@ -380,7 +384,7 @@ impl CycleDetector {
     /// The root layers of the layer stacks whose expression variables
     /// apply to the layer stack rooted at `root` as the chain reaches it
     /// ([`ArcChain::stacks_for`]).
-    pub(crate) fn stacks_for(&self, root: LayerId) -> Vec<LayerId> {
+    pub(crate) fn stacks_for(&self, root: LayerStackIdentifier) -> Vec<LayerStackIdentifier> {
         self.chain.stacks_for(root)
     }
 
@@ -453,6 +457,21 @@ impl CycleDetector {
         core::mem::take(&mut self.reads)
     }
 
+    /// Internal arcs retain the authoring stack's session identity; external
+    /// assets always open a separate, session-free stack.
+    pub(crate) fn reference_stack(&self, reference: &crate::Reference) -> LayerStackIdentifier {
+        if reference.asset.is_none() {
+            self.chain
+                .sites
+                .iter()
+                .rev()
+                .find(|s| s.layer_stack.root == reference.layer)
+                .map_or(reference.layer.into(), |s| s.layer_stack)
+        } else {
+            reference.layer.into()
+        }
+    }
+
     /// Gathers the layer stack rooted at `root`, as reached along the chain
     /// ([`ArcChain::stacks_for`]), recording each sublayer it ignores (a
     /// cycle or an unresolved asset path).
@@ -462,7 +481,7 @@ impl CycleDetector {
     pub(crate) fn gather_layer_stack(
         &mut self,
         store: &dyn LayerStore,
-        root: LayerId,
+        root: LayerStackIdentifier,
     ) -> LayerStack {
         let mut errors = Vec::new();
         let chain = self.chain.stacks_for(root);
@@ -518,7 +537,7 @@ impl CycleDetector {
     pub(crate) fn lift_relocations(
         &mut self,
         store: &mut dyn LayerStore,
-        layer_stack: LayerId,
+        layer_stack: LayerStackIdentifier,
         target_root: PathId,
         dest_root: PathId,
         outer: &Walk<'_>,
@@ -591,10 +610,10 @@ impl CycleDetector {
                 }
                 false
             };
-            let sites: Vec<(LayerId, PathId)> = graph
+            let sites: Vec<(LayerStackIdentifier, PathId)> = graph
                 .nodes()
                 .filter(|(_, node)| node.arc_kind() == ArcKind::Relocates && own(node))
-                .map(|(_, node)| (node.layer_stack(), node.site().prim_path()))
+                .map(|(_, node)| (node.layer_stack_identifier(), node.site().prim_path()))
                 .collect();
             for (layer_stack, site) in sites {
                 let table = self.relocation_table(store, layer_stack);
@@ -612,7 +631,7 @@ impl CycleDetector {
         &mut self,
         store: &dyn LayerStore,
         prim: PathId,
-        layer_stack: LayerId,
+        layer_stack: LayerStackIdentifier,
         source: PathId,
     ) {
         let stack = self.gather_layer_stack(store, layer_stack);
@@ -641,7 +660,7 @@ impl CycleDetector {
     pub(crate) fn relocation_table(
         &mut self,
         store: &dyn LayerStore,
-        layer_stack: LayerId,
+        layer_stack: LayerStackIdentifier,
     ) -> Rc<RelocationTable> {
         let stack = self.gather_layer_stack(store, layer_stack);
         let table = self.relocations.table(store, &stack);
@@ -707,7 +726,7 @@ fn reaches(
     paths: &PathInterner,
     dest: PathId,
     path: PathId,
-    in_stack: impl Fn(LayerId) -> bool,
+    in_stack: impl Fn(LayerStackIdentifier) -> bool,
 ) -> bool {
     let path = paths.resolve(path);
     sites
@@ -736,14 +755,14 @@ mod tests {
         let grandchild = path(&mut paths, &mut tokens, "/Parent/Child/Class");
         let sibling = path(&mut paths, &mut tokens, "/Parent/Sibling");
 
-        let chain = ArcChain::new(stage, child);
+        let chain = ArcChain::new(stage.into(), child);
         // Inheriting an ancestor or a descendant is a cycle; a sibling is not.
-        assert!(chain.closes_cycle(&paths, child, stage, parent));
-        assert!(chain.closes_cycle(&paths, child, stage, grandchild));
-        assert!(chain.closes_cycle(&paths, child, stage, child));
-        assert!(!chain.closes_cycle(&paths, child, stage, sibling));
+        assert!(chain.closes_cycle(&paths, child, stage.into(), parent));
+        assert!(chain.closes_cycle(&paths, child, stage.into(), grandchild));
+        assert!(chain.closes_cycle(&paths, child, stage.into(), child));
+        assert!(!chain.closes_cycle(&paths, child, stage.into(), sibling));
         // The same path in another layer stack is a different site.
-        assert!(!chain.closes_cycle(&paths, child, LayerId(2), parent));
+        assert!(!chain.closes_cycle(&paths, child, LayerId(2).into(), parent));
     }
 
     #[test]
@@ -760,11 +779,11 @@ mod tests {
         let p1 = path(&mut paths, &mut tokens, "/CoRecursiveParent1");
         let dest = path(&mut paths, &mut tokens, "/CoRecursiveParent1/Child1/Child2");
 
-        let mut chain = ArcChain::new(stage, p1_child1);
-        assert!(!chain.closes_cycle(&paths, p1_child1, stage, p2));
-        chain.push(stage, p2, p1_child1);
-        assert!(chain.closes_cycle(&paths, dest, stage, p1));
+        let mut chain = ArcChain::new(stage.into(), p1_child1);
+        assert!(!chain.closes_cycle(&paths, p1_child1, stage.into(), p2));
+        chain.push(stage.into(), p2, p1_child1);
+        assert!(chain.closes_cycle(&paths, dest, stage.into(), p1));
         // Following `/CoRecursiveParent2` again from inside it is a cycle too.
-        assert!(chain.closes_cycle(&paths, dest, stage, p2));
+        assert!(chain.closes_cycle(&paths, dest, stage.into(), p2));
     }
 }

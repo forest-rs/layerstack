@@ -44,7 +44,7 @@ use crate::{
         read_selections, same_context, site_selections,
     },
     interner::TokenId,
-    layer_stack::LayerStack,
+    layer_stack::{LayerStack, LayerStackIdentifier},
     path::PathId,
     prim_index::{ArcKind, FieldKey, Opinion, OpinionKey, OpinionValue, PrimIndex},
     prim_index_graph::{NodeArc, NodeId, PrimIndexGraph, PrimNode},
@@ -89,7 +89,7 @@ impl<'a> SelectionResolver<'a> {
 #[derive(Hash, PartialEq, Eq)]
 struct StackContext {
     layers: Vec<LayerId>,
-    chains: Vec<Rc<[LayerId]>>,
+    chains: Vec<Rc<[LayerStackIdentifier]>>,
 }
 
 struct StackContextRef<'a>(&'a LayerStack);
@@ -205,8 +205,11 @@ pub(crate) fn compose_stage_selected(
         ..SelectionResolver::new(&options.variant_fallbacks)
     };
     let local_only = populated.is_some();
-    let mut cycles = CycleDetector::new(root);
-    let layer_stack = cycles.gather_layer_stack(store, root);
+    let mut cycles = CycleDetector::new(LayerStackIdentifier {
+        root,
+        session: options.session_layer,
+    });
+    let layer_stack = cycles.gather_layer_stack(store, cycles.stage_layer_stack());
     // Spec: AOUSD Core §10.3.2.6 (relocates are computed per layer stack;
     // invalid ones are composition errors of the layer stack authoring
     // them).
@@ -235,7 +238,7 @@ pub(crate) fn compose_stage_selected(
     let stage_relocates = cycles.relocations().stage();
     cycles.report_source_opinions(store, &stage_relocates);
 
-    let reuse = if local_only {
+    let reuse = if local_only || options.session_layer.is_some() {
         instances::InstanceReuse::default()
     } else {
         instances::InstanceReuse::discover(store, root, &mut paths, &options)
@@ -252,7 +255,7 @@ pub(crate) fn compose_stage_selected(
                 u16::try_from(store.paths().resolve(path).depth()).unwrap_or(u16::MAX);
             let root_node = NodeArc {
                 arc_kind: ArcKind::Local,
-                layer_stack: root,
+                layer_stack: cycles.stage_layer_stack(),
                 site: SpecPath::from_prim_path(path, store.paths()),
                 namespace_depth,
                 sibling_index: 0,
@@ -1439,7 +1442,7 @@ fn stage_host_path(
             continue;
         }
         if cursor.arc_kind() == ArcKind::Relocates {
-            host = relocated_path(store, cursor.layer_stack(), host);
+            host = relocated_path(store, cursor.layer_stack_identifier(), host);
             continue;
         }
         let levels = depths[at].saturating_sub(usize::from(cursor.namespace_depth()));
@@ -1455,7 +1458,7 @@ fn stage_host_path(
         host = match mapped {
             Some(mapped) => mapped,
             None if matches!(cursor.arc_kind(), ArcKind::Inherits | ArcKind::Specializes)
-                || cursor.layer_stack() == parent.layer_stack() =>
+                || cursor.layer_stack_identifier() == parent.layer_stack_identifier() =>
             {
                 host
             }
@@ -1472,10 +1475,10 @@ fn stage_host_path(
 /// one a relocation removes, is kept.
 fn relocated_path(
     store: &dyn LayerStore,
-    layer_stack: LayerId,
+    layer_stack: LayerStackIdentifier,
     path: crate::path::Path,
 ) -> crate::path::Path {
-    let stack = LayerStack::gather(store, layer_stack);
+    let stack = LayerStack::gather_identifier(store, layer_stack);
     let table = crate::relocates::RelocationTable::compute(store, &stack, &mut Vec::new());
     let paths = store.paths();
     table
@@ -2621,7 +2624,7 @@ fn authored_full_variant_selections(
         // they find when it follows the arcs.
         let chain = local_stack.chain_of(root).to_vec();
         let scope = ExpressionScope::new(chain.clone());
-        let anchor = ArcAnchor::new(root, Some(&scope));
+        let anchor = ArcAnchor::new(*chain.last().expect("stack context"), Some(&scope));
         let applied = |spec: &&crate::doc::PrimSpec| {
             spec_arcs_apply(
                 store,
@@ -2653,7 +2656,11 @@ fn authored_full_variant_selections(
             };
             // The target stack as this stack's arcs reach it.
             let mut target_chain = chain.clone();
-            target_chain.push(arc.layer);
+            target_chain.push(if arc.asset.is_none() {
+                *chain.last().expect("stack context")
+            } else {
+                arc.layer.into()
+            });
             let stack = LayerStack::gather_recording(store, &target_chain, &mut Vec::new(), None);
             targets.push((stack, target));
         }
@@ -2929,7 +2936,7 @@ fn admitted_arcs(
     dest_path: PathId,
     cache: &mut HashMap<PathId, HashMap<TokenId, TokenId>>,
     // The root layer of `data_stack`, which internal arcs target.
-    anchor: LayerId,
+    anchor: LayerStackIdentifier,
     // Its asset path expressions evaluate in the chain's scope.
     cycles: &mut CycleDetector,
 ) -> AdmittedArcs {
@@ -3359,12 +3366,12 @@ fn local_variant_node(
 }
 
 /// The layer stack of the root node of `out[path]`'s graph: the stage's.
-fn root_layer_stack(out: &HashMap<PathId, PrimIndex>, path: PathId) -> LayerId {
+fn root_layer_stack(out: &HashMap<PathId, PrimIndex>, path: PathId) -> LayerStackIdentifier {
     out[&path]
         .graph
         .node(NodeId::ROOT)
         .expect("a prim graph has a root")
-        .layer_stack()
+        .layer_stack_identifier()
 }
 
 /// Adds to the composed prim `dest`, beneath the relocate node `nodes`, the
@@ -3532,7 +3539,7 @@ fn add_relocated_variant_opinions(
     cycles: &mut CycleDetector,
 ) {
     // Stage target → (relocating layer stack, source in its namespace).
-    let by_target: HashMap<PathId, (LayerId, PathId)> = relocates
+    let by_target: HashMap<PathId, (LayerStackIdentifier, PathId)> = relocates
         .iter()
         .filter(|relocate| relocate.stage_source.is_some())
         .filter_map(|relocate| {
@@ -3797,7 +3804,7 @@ fn resolve_arc_target(
     // in that context.
     let mut has_spec = |store: &dyn LayerStore, path: PathId| {
         cycles
-            .gather_layer_stack(store, reference.layer)
+            .gather_layer_stack(store, cycles.reference_stack(reference))
             .layers
             .iter()
             .filter_map(|id| store.layer(*id))
@@ -4009,7 +4016,7 @@ enum StepTarget {
 #[derive(Clone, Debug)]
 struct ArcStep {
     arc_kind: ArcKind,
-    layer_stack: LayerId,
+    layer_stack: LayerStackIdentifier,
     target: StepTarget,
     namespace_depth: u16,
     sibling_index: u16,
@@ -4084,7 +4091,7 @@ impl ArcStep {
         store: &mut dyn LayerStore,
         dest: PathId,
         cursor: &mut PathCursor,
-        chain: &[LayerId],
+        chain: &[LayerStackIdentifier],
     ) -> Option<NodeArc> {
         let mut sibling_index = self.sibling_index;
         let (site, namespace_depth) = match self.target {
@@ -4203,7 +4210,7 @@ fn enclosing_branches(
 /// (`PcpLayerStackIdentifier::expressionVariablesOverrideSource`).
 fn declared_variant_set_index(
     store: &dyn LayerStore,
-    chain: &[LayerId],
+    chain: &[LayerStackIdentifier],
     site: VariantSelectionSite,
     enclosing: &[(TokenId, TokenId)],
 ) -> u16 {
@@ -4422,7 +4429,7 @@ fn lift_arc_relocates(
     store: &mut dyn LayerStore,
     cycles: &mut CycleDetector,
     parent: &[ArcStep],
-    layer_stack: LayerId,
+    layer_stack: LayerStackIdentifier,
     target_root: PathId,
     dest_root: PathId,
 ) -> Option<Rc<LiftedSet>> {
@@ -4441,7 +4448,7 @@ fn lift_arc_relocates(
 fn add_relocation_dependencies(
     deps: &mut DependencyBuilder,
     above: &[ArcStep],
-    arc: (PathId, LayerId),
+    arc: (PathId, LayerStackIdentifier),
     dest: PathId,
 ) {
     let hosts = above.iter().filter_map(|step| match step.target {
@@ -4454,7 +4461,7 @@ fn add_relocation_dependencies(
                 source,
                 target: dest,
                 arc_kind: ArcKind::Relocates,
-                layer,
+                layer: layer.root,
             });
         }
     }
@@ -4471,7 +4478,7 @@ fn targets_prohibited_child(
     cycles: &mut CycleDetector,
     prim: PathId,
     arc: ArcKind,
-    layer_stack: LayerId,
+    layer_stack: LayerStackIdentifier,
     target: PathId,
 ) -> bool {
     let table = cycles.relocation_table(store, layer_stack);
@@ -4482,7 +4489,7 @@ fn targets_prohibited_child(
         ArcToProhibitedChild {
             prim,
             arc,
-            layer_stack,
+            layer_stack: layer_stack.root,
             target,
             relocation_source,
         },
@@ -4492,7 +4499,10 @@ fn targets_prohibited_child(
 
 /// The steps from a composed prim's root node through the selected branches
 /// `sites` of the prim's own layer stack, rooted at `layer_stack`.
-fn local_variant_steps(layer_stack: LayerId, sites: &[VariantSelectionSite]) -> Vec<ArcStep> {
+fn local_variant_steps(
+    layer_stack: LayerStackIdentifier,
+    sites: &[VariantSelectionSite],
+) -> Vec<ArcStep> {
     sites
         .iter()
         .map(|site| ArcStep {
@@ -4722,7 +4732,7 @@ impl TransferRelocates {
 /// `pxr/usd/pcp/primIndex.cpp`.
 fn implied_classes(
     store: &mut dyn LayerStore,
-    stage_layer_stack: LayerId,
+    stage_layer_stack: LayerStackIdentifier,
     stage_relocates: &Rc<LiftedSet>,
     steps: &[ArcStep],
     class: &ArcStep,
@@ -5059,7 +5069,7 @@ impl ArcNodes {
     /// rooted at `stage_stack`; `relocated` as there.
     fn target_map<'a>(
         &'a self,
-        stage_stack: LayerId,
+        stage_stack: LayerStackIdentifier,
         relocated: &'a [(PathId, PathId)],
     ) -> TargetMap<'a> {
         TargetMap {
@@ -5185,16 +5195,20 @@ impl ArcNodes {
 /// The sites a class arc's ancestral arcs do not add again (see
 /// `AncestralArcs::used_sites`): a layer stack's root layer, a prim path,
 /// and the expression variables the layer stack is read with.
-type UsedSites = HashSet<(LayerId, PathId, ExpressionVariables)>;
+type UsedSites = HashSet<(LayerStackIdentifier, PathId, ExpressionVariables)>;
 
 /// The expression variables of the layer stack of the last of `steps`, a
 /// prefix of an arc path from the composed prim, whose layer stack is
 /// rooted at `root` (see `ArcChain::stacks_for`).
-fn step_variables(store: &dyn LayerStore, root: LayerId, steps: &[ArcStep]) -> ExpressionVariables {
+fn step_variables(
+    store: &dyn LayerStore,
+    root: LayerStackIdentifier,
+    steps: &[ArcStep],
+) -> ExpressionVariables {
     let Some(last) = steps.last() else {
         return composed_variables(store, &[root]);
     };
-    let mut chain: Vec<LayerId> = core::iter::once(root)
+    let mut chain: Vec<LayerStackIdentifier> = core::iter::once(root)
         .chain(steps.iter().map(|step| step.layer_stack))
         .collect();
     if let Some(end) = chain.iter().position(|stack| *stack == last.layer_stack) {
@@ -5204,7 +5218,13 @@ fn step_variables(store: &dyn LayerStore, root: LayerId, steps: &[ArcStep]) -> E
     composed_variables(store, &chain)
 }
 
-type VisitedClasses = HashSet<(PathId, LayerId, PathId, bool, ExpressionVariables)>;
+type VisitedClasses = HashSet<(
+    PathId,
+    LayerStackIdentifier,
+    PathId,
+    bool,
+    ExpressionVariables,
+)>;
 
 /// An opinion of a class arc's target, held until the sources of its layer
 /// are added: the destination prim, the source prim, the spec path, the
@@ -5248,7 +5268,7 @@ struct AncestralArcs<'a> {
     /// [`enclosing_variant_selections`]).
     ancestor_stack: &'a LayerStack,
     /// Root layer of the target layer stack; internal arcs target it.
-    arc_stack: LayerId,
+    arc_stack: LayerStackIdentifier,
     dest_root: PathId,
     target: PathId,
     /// The offset of the arc, applied to class arcs nested in it.
@@ -5287,7 +5307,7 @@ impl AncestralArcs<'_> {
             })
             .map(|(id, node)| {
                 (
-                    node.layer_stack(),
+                    node.layer_stack_identifier(),
                     node.site().prim_path(),
                     node_variables(store, graph, id),
                 )
@@ -5471,8 +5491,13 @@ impl AncestralArcs<'_> {
         let path = resolve_arc_target(store, reference, self.dest_root, kind, cycles, deps)?;
         let joined = store.paths().resolve(path).join(rel);
         let path = store.paths_mut().intern(joined);
-        let variables = composed_variables(store, &cycles.stacks_for(reference.layer));
-        if used.contains(&(reference.layer, path, variables)) {
+        let target_stack = if reference.asset.is_none() {
+            self.arc_stack
+        } else {
+            reference.layer.into()
+        };
+        let variables = composed_variables(store, &cycles.stacks_for(target_stack));
+        if used.contains(&(target_stack, path, variables)) {
             return None;
         }
         Some(AuthoredReference {
@@ -6047,7 +6072,7 @@ fn add_inherit_edge_opinions(
     dest_root: PathId,
     inherited_root: PathId,
     // Root layer of the layer stack the inherit is authored in.
-    arc_stack: LayerId,
+    arc_stack: LayerStackIdentifier,
     namespace_depth: u16,
     arc_list_index: u16,
     // The arcs this arc is authored inside, and whether it is implied.
@@ -6087,7 +6112,7 @@ fn add_inherit_edge_opinions(
         return;
     }
     // One expansion per class site and layer stack, authored or implied.
-    let layers_read = local_stack.layers.first().copied().unwrap_or(arc_stack);
+    let layers_read = arc_stack;
     let variables = composed_variables(store, &cycles.stacks_for(layers_read));
     if !visited.insert((
         dest_root,
@@ -6606,7 +6631,7 @@ struct TargetMap<'a> {
     /// The relocations of the stage's layer stack.
     stage: &'a LiftedSet,
     /// Root layer of the stage's layer stack.
-    stage_stack: LayerId,
+    stage_stack: LayerStackIdentifier,
     /// The arc path to the arc, the arc last.
     steps: &'a [ArcStep],
     /// The relocations of the innermost arc's layer stack, as `(target,
@@ -6951,10 +6976,18 @@ fn add_reference_edge_opinions(
     };
     // An arc that would close a cycle is a composition error and is skipped
     // (AOUSD Core §10.6; OpenUSD `_CheckForCycle`).
+    let target_stack = if reference.asset.is_none() {
+        parent
+            .steps
+            .last()
+            .map_or(cycles.stage_layer_stack(), |step| step.layer_stack)
+    } else {
+        reference.layer.into()
+    };
     if cycles.closes_cycle(
         store.paths_mut(),
         dest_root,
-        reference.layer,
+        target_stack,
         reference_path,
         ArcKind::References,
     ) {
@@ -6965,7 +6998,7 @@ fn add_reference_edge_opinions(
         cycles,
         dest_root,
         ArcKind::References,
-        reference.layer,
+        target_stack,
         reference_path,
     ) {
         return;
@@ -6979,19 +7012,14 @@ fn add_reference_edge_opinions(
         reference_path,
         namespace_depth,
     );
-    cycles.enter(
-        reference.layer,
-        reference_path,
-        dest_root,
-        ArcKind::References,
-    );
+    cycles.enter(target_stack, reference_path, dest_root, ArcKind::References);
 
     // `reference.layer` is the root layer of the arc's target layer stack.
     // Arc resolution anchors an internal arc (no asset path) to the root of
     // the layer stack containing the node that authors it, so it reads that
     // whole stack (AOUSD Core §10.3.2.1; OpenUSD `_EvalRefOrPayloadArcs` in
     // `pxr/usd/pcp/primIndex.cpp`, see `anchor_internal_arcs`).
-    let remote_stack = cycles.gather_layer_stack(store, reference.layer);
+    let remote_stack = cycles.gather_layer_stack(store, target_stack);
     let combined_stack = stage_stack.joined(&remote_stack);
     let target_root = store.paths().resolve(reference_path).clone();
     let offset_layers = parent.offset_layers_within(arc.layer);
@@ -7001,7 +7029,7 @@ fn add_reference_edge_opinions(
         store,
         cycles,
         parent.steps,
-        reference.layer,
+        target_stack,
         reference_path,
         dest_root,
     );
@@ -7009,7 +7037,7 @@ fn add_reference_edge_opinions(
         parent,
         ArcStep {
             arc_kind: ArcKind::References,
-            layer_stack: reference.layer,
+            layer_stack: target_stack,
             target: StepTarget::Namespace {
                 dest_root,
                 target_root: reference_path,
@@ -7050,7 +7078,7 @@ fn add_reference_edge_opinions(
         };
         if moved && let Some(d) = deps.as_deref_mut() {
             let above = &nodes.path[..nodes.path.len() - 1];
-            add_relocation_dependencies(d, above, (dest_root, reference.layer), dest_path_id);
+            add_relocation_dependencies(d, above, (dest_root, target_stack), dest_path_id);
         }
         if out.contains_key(&dest_path_id) {
             mapping.push((remote_path_id, dest_path_id));
@@ -7192,7 +7220,7 @@ fn add_reference_edge_opinions(
     let nested = NestedArcs {
         remote_stack: &remote_stack,
         combined_stack: &combined_stack,
-        anchor: reference.layer,
+        anchor: target_stack,
         layer_offset: reference.layer_offset,
     };
     for &(remote_path_id, dest_path_id) in &mapping {
@@ -7207,7 +7235,7 @@ fn add_reference_edge_opinions(
             remote_path_id,
             dest_path_id,
             &mut host_selection_cache,
-            reference.layer,
+            target_stack,
             cycles,
         );
         // The arcs of the prim's own branches follow their selection (see
@@ -7237,7 +7265,7 @@ fn add_reference_edge_opinions(
         data_stack: &remote_stack,
         selection_stack: &combined_stack,
         ancestor_stack: &remote_stack,
-        arc_stack: reference.layer,
+        arc_stack: target_stack,
         dest_root,
         target: reference_path,
         layer_offset: reference.layer_offset,
@@ -7274,7 +7302,7 @@ fn add_reference_edge_opinions(
             stage_stack: stage_stack.clone(),
             combined_stack: combined_stack.clone(),
             remote_stack: remote_stack.clone(),
-            anchor: reference.layer,
+            anchor: target_stack,
             layer_offset: reference.layer_offset,
             target_root: reference_path,
             provenance_remap,
@@ -7316,7 +7344,7 @@ struct NestedArcs<'a> {
     /// the stronger layer stacks, then `remote_stack`'s.
     combined_stack: &'a LayerStack,
     /// Root layer of the target layer stack; internal arcs target it.
-    anchor: LayerId,
+    anchor: LayerStackIdentifier,
     /// The offset of the arc, applied to the class arcs nested in it.
     layer_offset: LayerOffset,
 }
@@ -7473,7 +7501,7 @@ struct LateArc {
     /// The arc's target layer stack.
     remote_stack: LayerStack,
     /// Root layer of the target layer stack; internal arcs target it.
-    anchor: LayerId,
+    anchor: LayerStackIdentifier,
     /// The arc's offset.
     layer_offset: LayerOffset,
     /// The arc's target.
@@ -7855,10 +7883,18 @@ fn add_payload_edge_opinions(
     };
     // An arc that would close a cycle is a composition error and is skipped
     // (AOUSD Core §10.6; OpenUSD `_CheckForCycle`).
+    let target_stack = if reference.asset.is_none() {
+        parent
+            .steps
+            .last()
+            .map_or(cycles.stage_layer_stack(), |step| step.layer_stack)
+    } else {
+        reference.layer.into()
+    };
     if cycles.closes_cycle(
         store.paths_mut(),
         dest_root,
-        reference.layer,
+        target_stack,
         reference_path,
         ArcKind::Payloads,
     ) {
@@ -7869,7 +7905,7 @@ fn add_payload_edge_opinions(
         cycles,
         dest_root,
         ArcKind::Payloads,
-        reference.layer,
+        target_stack,
         reference_path,
     ) {
         return;
@@ -7883,19 +7919,14 @@ fn add_payload_edge_opinions(
         reference_path,
         namespace_depth,
     );
-    cycles.enter(
-        reference.layer,
-        reference_path,
-        dest_root,
-        ArcKind::Payloads,
-    );
+    cycles.enter(target_stack, reference_path, dest_root, ArcKind::Payloads);
 
     // `reference.layer` is the root layer of the arc's target layer stack.
     // Arc resolution anchors an internal arc (no asset path) to the root of
     // the layer stack containing the node that authors it, so it reads that
     // whole stack (AOUSD Core §10.3.2.1; OpenUSD `_EvalRefOrPayloadArcs` in
     // `pxr/usd/pcp/primIndex.cpp`, see `anchor_internal_arcs`).
-    let remote_stack = cycles.gather_layer_stack(store, reference.layer);
+    let remote_stack = cycles.gather_layer_stack(store, target_stack);
     let combined_stack = stage_stack.joined(&remote_stack);
     let target_root = store.paths().resolve(reference_path).clone();
     let offset_layers = parent.offset_layers_within(arc.layer);
@@ -7905,7 +7936,7 @@ fn add_payload_edge_opinions(
         store,
         cycles,
         parent.steps,
-        reference.layer,
+        target_stack,
         reference_path,
         dest_root,
     );
@@ -7913,7 +7944,7 @@ fn add_payload_edge_opinions(
         parent,
         ArcStep {
             arc_kind: ArcKind::Payloads,
-            layer_stack: reference.layer,
+            layer_stack: target_stack,
             target: StepTarget::Namespace {
                 dest_root,
                 target_root: reference_path,
@@ -7954,7 +7985,7 @@ fn add_payload_edge_opinions(
         };
         if moved && let Some(d) = deps.as_deref_mut() {
             let above = &nodes.path[..nodes.path.len() - 1];
-            add_relocation_dependencies(d, above, (dest_root, reference.layer), dest_path_id);
+            add_relocation_dependencies(d, above, (dest_root, target_stack), dest_path_id);
         }
         if out.contains_key(&dest_path_id) {
             mapping.push((remote_path_id, dest_path_id));
@@ -8089,7 +8120,7 @@ fn add_payload_edge_opinions(
     let nested = NestedArcs {
         remote_stack: &remote_stack,
         combined_stack: &combined_stack,
-        anchor: reference.layer,
+        anchor: target_stack,
         layer_offset: reference.layer_offset,
     };
     for &(remote_path_id, dest_path_id) in &mapping {
@@ -8104,7 +8135,7 @@ fn add_payload_edge_opinions(
             remote_path_id,
             dest_path_id,
             &mut host_selection_cache,
-            reference.layer,
+            target_stack,
             cycles,
         );
         // The arcs of the prim's own branches follow their selection (see
@@ -8133,7 +8164,7 @@ fn add_payload_edge_opinions(
         data_stack: &remote_stack,
         selection_stack: &combined_stack,
         ancestor_stack: &remote_stack,
-        arc_stack: reference.layer,
+        arc_stack: target_stack,
         dest_root,
         target: reference_path,
         layer_offset: reference.layer_offset,
@@ -8170,7 +8201,7 @@ fn add_payload_edge_opinions(
             stage_stack: stage_stack.clone(),
             combined_stack: combined_stack.clone(),
             remote_stack: remote_stack.clone(),
-            anchor: reference.layer,
+            anchor: target_stack,
             layer_offset: reference.layer_offset,
             target_root: reference_path,
             provenance_remap,
@@ -8266,7 +8297,7 @@ fn add_specializes_edge_opinions(
     specialized_root: PathId,
     // Root layer of the layer stack the specializes arc is authored in: the
     // layers the arc reads.
-    arc_stack: LayerId,
+    arc_stack: LayerStackIdentifier,
     namespace_depth: u16,
     arc_list_index: u16,
     // The arcs this arc is authored inside, and whether it is implied.
@@ -8906,7 +8937,7 @@ fn relocated_child_names(
     authored_children: &mut HashMap<PathId, ChildOrderOpinions>,
 ) {
     let paths = store.paths();
-    let mut added: HashMap<(PathId, NodeId), (LayerId, Vec<TokenId>)> = HashMap::new();
+    let mut added: HashMap<(PathId, NodeId), (LayerStackIdentifier, Vec<TokenId>)> = HashMap::new();
     // Renames: the parent, the node of the relocating layer stack, and the
     // old and new names.
     let mut renames: Vec<(PathId, Option<NodeId>, TokenId, TokenId)> = Vec::new();
@@ -8935,7 +8966,7 @@ fn relocated_child_names(
                 .graph
                 .nodes()
                 .find(|(_, node)| {
-                    node.layer_stack() == relocate.layer_stack
+                    node.layer_stack_identifier() == relocate.layer_stack
                         && Some(node.site().prim_path()) == site
                 })
                 .map(|(id, _)| id);
@@ -8948,7 +8979,8 @@ fn relocated_child_names(
             .and_then(|target| paths.resolve(target).parent())
             .and_then(|site| paths.lookup(&site));
         let Some((node, _)) = index.graph.nodes().find(|(_, node)| {
-            node.layer_stack() == relocate.layer_stack && Some(node.site().prim_path()) == site
+            node.layer_stack_identifier() == relocate.layer_stack
+                && Some(node.site().prim_path()) == site
         }) else {
             continue;
         };
@@ -9000,7 +9032,7 @@ fn relocated_child_names(
         let key = OpinionKey {
             node,
             layer_strength: u16::MAX,
-            layer_id: layer,
+            layer_id: layer.root,
             lookup_path: parent,
             spec_path: site,
         };
@@ -10243,7 +10275,9 @@ mod default_prim_tests {
             let prim = store.path(placement);
             let graph = stage.explain_prim_graph(prim).expect("graph");
             assert!(
-                graph.nodes().all(|(_, node)| node.layer_stack() == ROOT),
+                graph
+                    .nodes()
+                    .all(|(_, node)| node.layer_stack_identifier() == ROOT.into()),
                 "{placement}'s nodes are in the root layer stack"
             );
         }
@@ -10412,10 +10446,11 @@ mod selection_cache_tests {
         spec.variant_sets.insert(mode, set);
         source.insert_prim(path, spec);
         store.insert_layer(source);
-        let stack =
-            |root| LayerStack::gather_recording(&store, &[root, LayerId(3)], &mut Vec::new(), None);
-        let first = stack(LayerId(1));
-        let second = stack(LayerId(2));
+        let stack = |root| {
+            LayerStack::gather_recording(&store, &[root, LayerId(3).into()], &mut Vec::new(), None)
+        };
+        let first = stack(LayerId(1).into());
+        let second = stack(LayerId(2).into());
         assert_eq!(first.layers, second.layers);
         let fallbacks = VariantFallbacks::default();
         let resolver = SelectionResolver::new(&fallbacks);

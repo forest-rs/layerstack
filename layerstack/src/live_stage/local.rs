@@ -24,7 +24,8 @@ impl LocalNamespace {
         options: &StageOptions,
     ) -> Option<Self> {
         let layer = store.layer(root)?;
-        if options.mask.is_some()
+        if options.session_layer.is_some()
+            || options.mask.is_some()
             || !layer.sublayers.is_empty()
             || !layer.relocates.is_empty()
             || !layer.variant_prims.is_empty()

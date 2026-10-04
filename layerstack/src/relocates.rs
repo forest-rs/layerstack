@@ -37,7 +37,7 @@ use crate::{
     },
     doc::{LayerId, LayerStore, Relocate},
     interner::TokenId,
-    layer_stack::LayerStack,
+    layer_stack::{LayerStack, LayerStackIdentifier},
     path::{Path, PathId, PathInterner},
     prim_index::{ArcKind, OpinionKey, PrimIndex},
 };
@@ -323,7 +323,7 @@ fn cmp_paths(store: &dyn LayerStore, a: PathId, b: PathId) -> Ordering {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) struct LiftedRelocate {
     /// Root layer of the relocating layer stack.
-    pub(crate) layer_stack: LayerId,
+    pub(crate) layer_stack: LayerStackIdentifier,
     /// The relocation source, in that layer stack's namespace.
     pub(crate) source: PathId,
     /// The relocation target there; `None` when the source is removed.
@@ -410,7 +410,7 @@ impl LiftedSet {
     pub(crate) fn lift(
         store: &mut dyn LayerStore,
         table: &RelocationTable,
-        layer_stack: LayerId,
+        layer_stack: LayerStackIdentifier,
         target_root: PathId,
         dest_root: PathId,
         outer: &Walk<'_>,
@@ -456,7 +456,7 @@ impl LiftedSet {
                         lifted.blocked.push(ArcToProhibitedChild {
                             prim,
                             arc: ArcKind::Relocates,
-                            layer_stack: blocked.layer_stack,
+                            layer_stack: blocked.layer_stack.root,
                             target: blocked.source,
                             relocation_source: relocate.source,
                         });
@@ -479,7 +479,7 @@ impl LiftedSet {
 
     /// The relocations of the stage's own layer stack, whose namespace is
     /// the stage namespace.
-    pub(crate) fn stage(table: &RelocationTable, layer_stack: LayerId) -> Self {
+    pub(crate) fn stage(table: &RelocationTable, layer_stack: LayerStackIdentifier) -> Self {
         let mut lifted = Self::default();
         for relocate in table.iter() {
             lifted.push(LiftedRelocate {
@@ -783,7 +783,7 @@ impl Relocations {
     /// The relocation state of a stage whose layer stack is `stack`.
     pub(crate) fn new(store: &dyn LayerStore, stack: &LayerStack) -> Self {
         let mut relocations = Self::default();
-        let Some(&root) = stack.layers.first() else {
+        let Some(&root) = stack.chains.first().and_then(|chain| chain.last()) else {
             return relocations;
         };
         let table = relocations.table(store, stack);
@@ -1274,7 +1274,7 @@ mod tests {
         LiftedSet::lift(
             store,
             &table,
-            LayerId(2),
+            LayerId(2).into(),
             target_root,
             dest_root,
             &Walk::default(),

@@ -237,13 +237,28 @@ impl super::Stage {
             .is_some_and(|l| l.default_prim.is_some())
     }
 
-    /// The root layer's effective time-code rate, including framesPerSecond
-    /// fallback and the USD default of 24. Sublayer rates do not set stage rate.
+    /// The session/root stack's effective time-code rate, including authored
+    /// timeCodesPerSecond, framesPerSecond fallback and the USD default of 24.
+    /// Sublayer rates do not set the stage rate.
     #[must_use]
     pub fn time_codes_per_second(&self, store: &dyn LayerStore) -> f64 {
-        self.root_layer()
-            .and_then(|root| store.layer(root))
-            .map_or(24.0, |l| l.time_codes_per_second(store.tokens()))
+        self.root_layer().map_or(24.0, |root| {
+            crate::LayerStackIdentifier {
+                root,
+                session: self
+                    .options
+                    .session_layer
+                    .filter(|id| !self.options.muted_layers.contains(id)),
+            }
+            .time_codes_per_second(store)
+        })
+    }
+
+    /// The host-owned session root selected for this stage, if any. A muted
+    /// session remains selected but contributes no opinions until unmuted.
+    #[must_use]
+    pub fn session_layer(&self) -> Option<LayerId> {
+        self.options.session_layer
     }
 
     /// The effective controls captured by this immutable snapshot.

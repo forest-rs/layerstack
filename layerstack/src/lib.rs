@@ -197,7 +197,7 @@ pub use edit::{
     PrimPropertyChanges, PropertyChange, PropertyField, Transaction,
 };
 pub use interner::{TokenId, TokenInterner};
-pub use layer_stack::LayerStack;
+pub use layer_stack::{LayerStack, LayerStackIdentifier};
 pub use listop::ListOp;
 pub use path::{
     Path, PathError, PathId, PathInterner, PropertyPath, PropertyPathError, TargetPath,

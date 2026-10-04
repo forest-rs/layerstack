@@ -12,6 +12,8 @@
 //!
 //! Spec: AOUSD Core §10 (composition arcs), including variants (§10.5) and references.
 
+use crate::layer_stack::LayerStackIdentifier;
+
 use alloc::vec::Vec;
 
 use hashbrown::HashMap;
@@ -792,7 +794,7 @@ pub(crate) fn authored_variant_selections_for_prim(
 /// A spec of a prim with the chain of layer stacks that reaches its layer,
 /// the context its variant selection expressions evaluate in
 /// ([`LayerStack::chain_of`]).
-pub(crate) type HostSpec<'a, 's> = (&'a PrimSpec, &'s [LayerId]);
+pub(crate) type HostSpec<'a, 's> = (&'a PrimSpec, &'s [LayerStackIdentifier]);
 
 /// Returns the specs of `prim` in `local_stack`, stronger layers first,
 /// whose variant selections and variant sets compose: its specs outside any

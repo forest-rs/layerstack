@@ -7,6 +7,7 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 readme = "README.md"
+documentation = "https://docs.rs/layerstack_io"
 keywords = ["usd", "scene-description", "io"]
 categories = ["encoding", "no-std"]
 

@@ -356,8 +356,9 @@ extern crate alloc;
 mod mesh_publication;
 #[cfg(feature = "usd-geom")]
 pub use mesh_publication::{
-    GeneratedMesh, MeshPrimvar, MeshPublication, MeshPublicationError, MeshSites,
-    validate_mesh_primvar_cardinality, validate_mesh_primvar_indices,
+    GeneratedMesh, MeshPrimvar, MeshPublication, MeshPublicationError, MeshPublicationWork,
+    MeshSites, MeshValidationWork, ValidatedMesh, validate_mesh_primvar_cardinality,
+    validate_mesh_primvar_indices,
 };
 
 #[macro_use]

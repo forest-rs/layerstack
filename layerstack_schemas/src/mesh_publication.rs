@@ -209,6 +209,41 @@ pub struct GeneratedMesh {
 }
 
 impl GeneratedMesh {
+    /// Consumes and validates one immutable snapshot for repeated publication.
+    /// Numeric owners are retained; deferred primvars decode once. Subsequent
+    /// preparations do not scan geometry or derive extent. The cached two-point
+    /// extent can be compared by value; geometry arrays use owner identity.
+    pub fn into_validated(mut self) -> Result<ValidatedMesh, MeshPublicationError> {
+        for primvar in &mut self.primvars {
+            if let Value::TypedArray(array) = &mut primvar.value {
+                *array = array
+                    .try_materialize()
+                    .map_err(|_| MeshPublicationError::PrimvarType(primvar.name.clone()))?
+                    .clone();
+            }
+        }
+        self.validate()?;
+        let extent = derive_extent(&self.points);
+        let work = MeshValidationWork {
+            points: self.points.len(),
+            faces: self.face_vertex_counts.len(),
+            corners: self.face_vertex_indices.len(),
+            primvar_arrays: self.primvars.len(),
+            primvar_indices: self
+                .primvars
+                .iter()
+                .filter_map(|p| p.indices.as_ref())
+                .map(|i| i.len())
+                .sum(),
+            extent_points: self.points.len(),
+        };
+        Ok(ValidatedMesh(Arc::new(ValidatedMeshData {
+            mesh: self,
+            extent,
+            work,
+        })))
+    }
+
     /// Validates topology, finite points, declaration/storage compatibility,
     /// interpolation, element size, indices and cardinality before publication.
     /// Deferred arrays may decode here; decoding failures reject the update.
@@ -302,6 +337,18 @@ impl GeneratedMesh {
         previous_properties: &[String],
     ) -> Result<MeshPublication, MeshPublicationError> {
         self.validate()?;
+        self.prepare_impl(stage, store, target, path, previous_properties, None)
+    }
+
+    fn prepare_impl(
+        &self,
+        stage: &Stage,
+        store: &mut dyn LayerStore,
+        target: &EditTarget,
+        path: PathId,
+        previous_properties: &[String],
+        retained_extent: Option<&Arc<Vec<[f32; 3]>>>,
+    ) -> Result<MeshPublication, MeshPublicationError> {
         let mut ancestor = store.paths().parent(path);
         while let Some(parent) = ancestor {
             if stage.is_instance(parent) {
@@ -365,24 +412,12 @@ impl GeneratedMesh {
                 TypedArray::Int(self.face_vertex_indices.clone()),
             ),
         ));
-        let mut extent = Vec::new();
-        if let Some(first) = self.points.first() {
-            let (mut lo, mut hi) = (*first, *first);
-            for point in self.points.iter().skip(1) {
-                for axis in 0..3 {
-                    lo[axis] = lo[axis].min(point[axis]);
-                    hi[axis] = hi[axis].max(point[axis]);
-                }
-            }
-            extent.extend([lo, hi]);
-        }
+        let extent = retained_extent
+            .cloned()
+            .unwrap_or_else(|| derive_extent(&self.points));
         attributes.push((
             String::from("extent"),
-            typed(
-                "float3",
-                Value::Vec3f([0.; 3]),
-                TypedArray::Vec3f(Arc::new(extent)),
-            ),
+            typed("float3", Value::Vec3f([0.; 3]), TypedArray::Vec3f(extent)),
         ));
         let subdivision = store.tokens_mut().intern("none");
         attributes.push((
@@ -443,7 +478,14 @@ impl GeneratedMesh {
                     .default
                     .as_ref()
                     .zip(desired.default.as_ref())
-                    .is_some_and(|(a, b)| a.same_representation(b))
+                    .is_some_and(|(a, b)| match (a, b) {
+                        (Value::TypedArray(a), Value::TypedArray(b))
+                            if retained_extent.is_some() && name != "extent" =>
+                        {
+                            a.shares_storage(b)
+                        }
+                        _ => a.same_representation(b),
+                    })
                 {
                     transaction.set_default(
                         target.property(property),
@@ -472,14 +514,114 @@ impl GeneratedMesh {
                 transaction.create_property(target.property(property), desired);
             }
         }
-        if !transaction.is_empty() {
+        if retained_extent.is_some() || !transaction.is_empty() {
             transaction.expect_generation(target.layer(), generation);
         }
         Ok(MeshPublication {
             transaction,
+            work: MeshPublicationWork {
+                geometry_validations: usize::from(retained_extent.is_none()),
+                extent_points: if retained_extent.is_none() {
+                    self.points.len()
+                } else {
+                    0
+                },
+                authored_properties: properties.len(),
+            },
             properties,
         })
     }
+}
+
+fn derive_extent(points: &[[f32; 3]]) -> Arc<Vec<[f32; 3]>> {
+    let mut extent = Vec::new();
+    if let Some(first) = points.first() {
+        let (mut lo, mut hi) = (*first, *first);
+        for point in points.iter().skip(1) {
+            for axis in 0..3 {
+                lo[axis] = lo[axis].min(point[axis]);
+                hi[axis] = hi[axis].max(point[axis]);
+            }
+        }
+        extent.extend([lo, hi]);
+    }
+    Arc::new(extent)
+}
+
+/// Geometry covered by one successful immutable snapshot validation.
+/// Counts describe payload entries, not CPU instructions or allocations.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MeshValidationWork {
+    /// Points checked for finite coordinates.
+    pub points: usize,
+    /// Polygon counts validated.
+    pub faces: usize,
+    /// Topology indices validated.
+    pub corners: usize,
+    /// Numeric primvar declarations and cardinalities validated.
+    pub primvar_arrays: usize,
+    /// Indexed primvar entries validated.
+    pub primvar_indices: usize,
+    /// Points visited when deriving the retained extent.
+    pub extent_points: usize,
+}
+
+#[derive(Debug)]
+struct ValidatedMeshData {
+    mesh: GeneratedMesh,
+    extent: Arc<Vec<[f32; 3]>>,
+    work: MeshValidationWork,
+}
+
+/// Immutable, reusable polygon snapshot with retained validation and extent.
+/// Clones share one snapshot. Mutating an exported owner detaches its buffer;
+/// it cannot change this validated snapshot. No content hash is inferred.
+#[derive(Clone, Debug)]
+pub struct ValidatedMesh(Arc<ValidatedMeshData>);
+impl ValidatedMesh {
+    /// Borrows the immutable generated geometry.
+    pub fn mesh(&self) -> &GeneratedMesh {
+        &self.0.mesh
+    }
+    /// Work performed once when this snapshot was validated.
+    pub fn validation_work(&self) -> MeshValidationWork {
+        self.0.work
+    }
+    /// Prepares a default publication by checking the current authored site and
+    /// owned properties. Geometry is not rescanned and extent is not recomputed.
+    /// Independently allocated payload arrays are replaced by these shared owners
+    /// even when their contents are equal. The two-point extent compares by value.
+    /// Deletion/replacement is detected each time.
+    /// No-op transactions also guard target-layer generation. Other publication
+    /// and ownership rules are those of [`GeneratedMesh::prepare`].
+    pub fn prepare(
+        &self,
+        stage: &Stage,
+        store: &mut dyn LayerStore,
+        target: &EditTarget,
+        path: PathId,
+        previous_properties: &[String],
+    ) -> Result<MeshPublication, MeshPublicationError> {
+        self.0.mesh.prepare_impl(
+            stage,
+            store,
+            target,
+            path,
+            previous_properties,
+            Some(&self.0.extent),
+        )
+    }
+}
+
+/// Planning work of one successfully prepared publication.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct MeshPublicationWork {
+    /// Complete geometry validations during this preparation (zero for retained snapshots).
+    pub geometry_validations: usize,
+    /// Points visited to derive extent during this preparation.
+    pub extent_points: usize,
+    /// Desired authored property declarations/defaults checked.
+    pub authored_properties: usize,
 }
 
 /// A fully validated publication, ready for `LiveStage::apply`.
@@ -490,6 +632,8 @@ pub struct MeshPublication {
     pub transaction: Transaction,
     /// Producer-owned property names for the next update at this same authored site.
     pub properties: Vec<String>,
+    /// Geometry and authored-property planning work for this preparation.
+    pub work: MeshPublicationWork,
 }
 
 #[cfg(test)]
@@ -516,6 +660,72 @@ mod tests {
             element_size: 1,
             indices: Some(Arc::new(vec![0, 1, 2])),
         }
+    }
+    #[test]
+    fn validated_snapshots_repair_authored_output_without_scanning_geometry() {
+        let mut store = InMemoryStore::default();
+        let root = LayerId(1);
+        store.insert_layer(Layer::new(root));
+        let mut live = LiveStage::compose(&mut store, root, StageOptions::default());
+        let path = store.path("/Mesh");
+        let target = EditTarget::for_layer(root);
+        let mut external = triangle();
+        external.primvars.push(uv());
+        let snapshot = external.clone().into_validated().unwrap();
+        Arc::make_mut(&mut external.points)[1][0] = 99.;
+        assert_eq!(
+            snapshot.mesh().points[1][0],
+            1.,
+            "immutable snapshot survives caller COW edits"
+        );
+        assert_eq!(snapshot.validation_work().extent_points, 3);
+        let initial = snapshot
+            .prepare(live.stage(), &mut store, &target, path, &[])
+            .unwrap();
+        live.apply(&mut store, &initial.transaction).unwrap();
+        let unchanged = snapshot
+            .prepare(live.stage(), &mut store, &target, path, &initial.properties)
+            .unwrap();
+        assert!(unchanged.transaction.is_empty());
+        assert_eq!(unchanged.work.geometry_validations, 0);
+        assert_eq!(unchanged.work.extent_points, 0);
+        let points = store.property_path("/Mesh.points");
+        let mut replacement = Transaction::new();
+        replacement.set_default(
+            target.property(points),
+            Value::TypedArray(TypedArray::Vec3f(Arc::new(
+                snapshot.mesh().points.as_ref().clone(),
+            ))),
+        );
+        live.apply(&mut store, &replacement).unwrap();
+        // Even an empty retained publication carries the authored-site guard.
+        assert!(live.apply(&mut store, &unchanged.transaction).is_err());
+        let repaired = snapshot
+            .prepare(live.stage(), &mut store, &target, path, &initial.properties)
+            .unwrap();
+        assert!(
+            !repaired.transaction.is_empty(),
+            "equal contents in another owner are rebound explicitly"
+        );
+        live.apply(&mut store, &repaired.transaction).unwrap();
+        let local = store.layers[&root]
+            .property(points)
+            .unwrap()
+            .default
+            .as_ref()
+            .unwrap();
+        assert!(
+            matches!(local, Value::TypedArray(a) if a.shares_storage(&TypedArray::Vec3f(snapshot.mesh().points.clone())))
+        );
+        let mut deletion = Transaction::new();
+        deletion.remove_spec(target.prim(path));
+        live.apply(&mut store, &deletion).unwrap();
+        let recreated = snapshot
+            .prepare(live.stage(), &mut store, &target, path, &initial.properties)
+            .unwrap();
+        assert_eq!(recreated.work.geometry_validations, 0);
+        live.apply(&mut store, &recreated.transaction).unwrap();
+        assert!(live.stage().has_prim(path));
     }
     #[test]
     fn updates_are_atomic_share_storage_and_prune_only_owned_properties() {

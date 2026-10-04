@@ -98,6 +98,10 @@ name = "geometry_publication"
 harness = false
 
 [[bench]]
+name = "producer_durability"
+harness = false
+
+[[bench]]
 name = "composition_storage"
 harness = false
 

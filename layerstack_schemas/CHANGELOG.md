@@ -4,6 +4,10 @@
 
 Initial release.
 
+- `GeneratedMesh::into_validated` retains an immutable snapshot and derived
+  extent for repeated preparation without geometry rescans. `MeshPublication`
+  adds a `work` field; struct literals must supply its planning counters.
+
 - Numeric schema array getters and `Primvar::indices` retain `Arc<Vec<T>>`
   storage. Migration: borrow with `as_slice()` / `iter()` or explicitly copy
   with `as_ref().clone()` when a mutable `Vec<T>` is required. Half and matrix

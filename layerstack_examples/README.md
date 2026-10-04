@@ -70,6 +70,7 @@ These additional workflows are binaries: use
 
 | Binary | What it demonstrates |
 | --- | --- |
+| `primvar_workflow` | Indexed primvar authoring, index animation, ID targets and reusable inheritance sets |
 | `shading_values` | Material interface inputs and shader value providers |
 | `lighting_inputs` | Light discovery, shaping, shadows, texture provenance and incremental engine inputs |
 | `retained_queries` | Reusable transform, bounds and shading evaluation across changes |

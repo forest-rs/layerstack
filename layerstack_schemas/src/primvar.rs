@@ -507,6 +507,50 @@ pub struct PrimvarEdit {
     name: String,
 }
 impl PrimEdit {
+    /// Creates and authors an indexed array primvar as one fallible child group.
+    /// Invalid names, metadata or sidecars append no edits.
+    pub fn create_indexed_primvar(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        name: &str,
+        ty: PropertyType,
+        value: Value,
+        indices: &[i32],
+        interpolation: &str,
+        element_size: i32,
+    ) -> Result<PrimvarEdit, PrimvarError> {
+        edit.group(|edit| {
+            let pv = self.create_primvar(edit, name, ty)?;
+            pv.set_interpolation(edit, interpolation)?;
+            pv.set_element_size(edit, element_size)?;
+            pv.set(edit, value)?;
+            pv.set_indices(edit, indices, None)?;
+            Ok(pv)
+        })
+    }
+    /// Creates and authors a nonindexed primvar, blocking any existing indices
+    /// in the target layer so weaker indexing cannot leak into the new value.
+    /// Invalid declarations or metadata append no edits.
+    pub fn create_nonindexed_primvar(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        name: &str,
+        ty: PropertyType,
+        value: Value,
+        interpolation: &str,
+        element_size: i32,
+    ) -> Result<PrimvarEdit, PrimvarError> {
+        edit.group(|edit| {
+            let pv = self.create_primvar(edit, name, ty)?;
+            pv.set_interpolation(edit, interpolation)?;
+            pv.set_element_size(edit, element_size)?;
+            pv.set(edit, value)?;
+            if pv.validate(edit)?.is_array {
+                pv.block_indices(edit)?;
+            }
+            Ok(pv)
+        })
+    }
     /// Creates a noncustom primvar, preserving existing compatible declarations.
     /// Invalid names, missing prims and incompatible properties append no edits.
     pub fn create_primvar(
@@ -540,6 +584,51 @@ impl PrimEdit {
     }
 }
 impl PrimvarEdit {
+    /// Blocks this value and, for arrays, its indices in the edit target,
+    /// clearing local samples and splines. An indices block is created even
+    /// when no sidecar exists, preventing later weaker indices from leaking in.
+    /// Declaration and other metadata remain intact.
+    /// OpenUSD: `UsdGeomPrimvarsAPI::BlockPrimvar`; AOUSD Core §12.3.6.
+    pub fn block(&self, edit: &mut SchemaEdit<'_>) -> Result<&Self, PrimvarError> {
+        let ty = self.validate(edit)?;
+        if ty.is_array {
+            self.block_indices(edit)?;
+        }
+        edit.block_attribute(self.prim, &self.name);
+        Ok(self)
+    }
+    /// Blocks array indices in the target layer, creating a noncustom `int[]`
+    /// sidecar if needed to mask future weaker indexing. Local animation is
+    /// cleared. Scalar primvars and relationship sidecars append no edits.
+    pub fn block_indices(&self, edit: &mut SchemaEdit<'_>) -> Result<&Self, PrimvarError> {
+        if !self.validate(edit)?.is_array {
+            return Err(PrimvarError::TypeMismatch(self.name.clone()));
+        }
+        let indices = format!("{}:indices", self.name);
+        match edit.property_kind(self.prim, &indices) {
+            Some(layerstack::PropertyKind::Attribute) => {}
+            Some(_) => return Err(PrimvarError::TypeMismatch(indices)),
+            None => edit.create_attribute(
+                self.prim,
+                &indices,
+                PropertyType::new("int", true, Value::Int(0)),
+            ),
+        }
+        edit.block_attribute(self.prim, &indices);
+        Ok(self)
+    }
+    /// Removes this primvar and its indices specs from the edit target only.
+    /// Weaker declarations can reappear. An ID relationship is an independent
+    /// property and is retained, matching `RemovePrimvar`.
+    pub fn remove(&self, edit: &mut SchemaEdit<'_>) -> Result<&Self, PrimvarError> {
+        self.validate(edit)?;
+        edit.remove_property(self.prim, &self.name);
+        let indices = format!("{}:indices", self.name);
+        if edit.property_kind(self.prim, &indices) == Some(layerstack::PropertyKind::Attribute) {
+            edit.remove_property(self.prim, &indices);
+        }
+        Ok(self)
+    }
     /// Authors the string primvar's ID relationship through the edit target.
     /// `None` targets this prim. Targets need not exist; prim and property paths
     /// are mapped by the core transaction. Other attribute types append no edits.

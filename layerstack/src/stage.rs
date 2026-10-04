@@ -2947,6 +2947,45 @@ impl Stage {
         self.read_property_by(property, time, read, self.with_provenance)
     }
 
+    /// Reads a typed value while preserving deferred numeric decode failures.
+    /// Missing, blocked or incompatible values return `Ok(None)`. A malformed
+    /// selected array returns an error rather than appearing absent or searching
+    /// a weaker fallback. Conversion and source selection follow `read_property`.
+    /// Spec: AOUSD Core §12.3 (value resolution), §13.3.2.4 (fallbacks).
+    pub fn try_read_property<T>(
+        &self,
+        property: PropertyPath,
+        time: Time,
+        read: impl Fn(&Value) -> Option<T>,
+    ) -> Result<Option<Resolved<T>>, crate::ArrayReadError> {
+        objects::check_decode(self, property, time)?;
+        // Schema fallbacks are not authored property-path opinions. Preserve
+        // their decode errors too, including conversions used by sparse folding.
+        let error = core::cell::RefCell::new(None);
+        let checked_read = |value: &Value| {
+            if let Value::TypedArray(array) = value
+                && let Err(failure) = array.try_materialize()
+            {
+                *error.borrow_mut() = Some(failure.clone());
+                return None;
+            }
+            read(value)
+        };
+        let result = match time {
+            Time::Default => self.try_read_default(
+                property.prim_path(),
+                property.property(),
+                checked_read,
+                self.with_provenance,
+            )?,
+            Time::At { .. } => self.read_property(property, time, checked_read),
+        };
+        match error.into_inner() {
+            Some(error) => Err(error),
+            None => Ok(result),
+        }
+    }
+
     /// Reads the same typed composed value as `read_property`, always including
     /// the winning authored source. This opt-in query does not change the stage's
     /// provenance policy; schema fallbacks still have no authoring source.
@@ -3030,16 +3069,28 @@ impl Stage {
         read: impl Fn(&Value) -> Option<T>,
         with_source: bool,
     ) -> Option<Resolved<T>> {
+        self.try_read_default(prim, field, read, with_source)
+            .ok()
+            .flatten()
+    }
+
+    // Keep decode failure in the actual typed selection path: a stronger
+    // incompatible opinion can hide the failing array from untyped resolution.
+    fn try_read_default<T>(
+        &self,
+        prim: PathId,
+        field: TokenId,
+        read: impl Fn(&Value) -> Option<T>,
+        with_source: bool,
+    ) -> Result<Option<Resolved<T>>, crate::ArrayReadError> {
         let fallback = self.schema_fallback(prim, field);
         if let Some((index, opinions)) = self.opinions(prim, field, Lookup::Property) {
             for (position, opinion) in opinions.iter().enumerate() {
                 let Some(value) = opinion.value.default_value() else {
                     continue;
                 };
-                if let Value::TypedArray(array) = value
-                    && array.try_materialize().is_err()
-                {
-                    return None;
+                if let Value::TypedArray(array) = value {
+                    array.try_materialize().map_err(Clone::clone)?;
                 }
                 if matches!(value, Value::Blocked) {
                     break;
@@ -3056,14 +3107,14 @@ impl Stage {
                     if let SparseResolveResult::Resolved(value) = resolved
                         && let Some(value) = read(&value)
                     {
-                        return Some(Resolved {
+                        return Ok(Some(Resolved {
                             value,
                             provenance: source.and_then(|i| {
                                 self.provenance_for_if(field, &mapped[i], with_source)
                             }),
-                        });
+                        }));
                     }
-                    return None;
+                    return Ok(None);
                 }
                 // Compositional families must resolve as a family, never by
                 // feeding one uncomposed authored edit to the conversion.
@@ -3080,26 +3131,26 @@ impl Stage {
                     let value = match resolved.value {
                         ResolvedValue::Scalar(value) => value,
                         ResolvedValue::Dictionary(entries) => Value::Dictionary(entries),
-                        _ => return None,
+                        _ => return Ok(None),
                     };
                     if let Some(value) = read(&value) {
-                        return Some(Resolved {
+                        return Ok(Some(Resolved {
                             value,
                             provenance: resolved.provenance,
-                        });
+                        }));
                     }
                     continue;
                 }
                 let mapped = stage_time::retime_value(value, opinion.layer_offset);
                 if let Some(value) = read(mapped.as_ref().unwrap_or(value)) {
-                    return Some(Resolved {
+                    return Ok(Some(Resolved {
                         value,
                         provenance: self.provenance_for_if(field, opinion, with_source),
-                    });
+                    }));
                 }
             }
         }
-        self.read_fallback(fallback, &read)
+        Ok(self.read_fallback(fallback, &read))
     }
 
     fn read_fallback<T>(

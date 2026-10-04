@@ -84,6 +84,18 @@ impl<'a> LODDistanceHeuristic<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         blend_thresholds, "blendThresholds", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_blend_thresholds(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "blendThresholds",
+            time,
+            crate::value::read_float_array_shared,
+        )
+    }
     /// The USD name of [`Self::bounding_volume`].
     pub const BOUNDING_VOLUME: &'static str = "boundingVolume";
 
@@ -112,6 +124,14 @@ impl<'a> LODDistanceHeuristic<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         thresholds, "thresholds", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_thresholds(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("thresholds", time, crate::value::read_float_array_shared)
     }
 }
 
@@ -598,6 +618,18 @@ impl<'a> LODScreenSizeHeuristic<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         blend_thresholds, "blendThresholds", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_blend_thresholds(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "blendThresholds",
+            time,
+            crate::value::read_float_array_shared,
+        )
+    }
     /// The USD name of [`Self::bounding_volume`].
     pub const BOUNDING_VOLUME: &'static str = "boundingVolume";
 
@@ -618,6 +650,14 @@ impl<'a> LODScreenSizeHeuristic<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         extent, extent_at, "extent", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_extent(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("extent", time, crate::value::read_float3_array_shared)
+    }
     /// The USD name of [`Self::projection_method`].
     pub const PROJECTION_METHOD: &'static str = "projectionMethod";
 
@@ -637,6 +677,14 @@ impl<'a> LODScreenSizeHeuristic<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         thresholds, "thresholds", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_thresholds(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("thresholds", time, crate::value::read_float_array_shared)
     }
 }
 

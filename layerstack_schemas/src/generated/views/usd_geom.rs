@@ -473,6 +473,14 @@ impl<'a> Boundable<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         extent, extent_at, "extent", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_extent(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("extent", time, crate::value::read_float3_array_shared)
+    }
 }
 
 #[doc = "Authors the properties of OpenUSD's `Boundable` through a [`SchemaEdit`]; it derefs to the handle of the schema it inherits from."]
@@ -604,6 +612,18 @@ impl<'a> Camera<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         clipping_planes, clipping_planes_at, "clippingPlanes", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>, crate::value::read_float4_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_clipping_planes(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "clippingPlanes",
+            time,
+            crate::value::read_float4_array_shared,
+        )
     }
     /// The USD name of [`Self::clipping_range`].
     pub const CLIPPING_RANGE: &'static str = "clippingRange";
@@ -1489,6 +1509,18 @@ impl<'a> Curves<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         curve_vertex_counts, curve_vertex_counts_at, "curveVertexCounts", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_curve_vertex_counts(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "curveVertexCounts",
+            time,
+            crate::value::read_int_array_shared,
+        )
+    }
     /// The USD name of [`Self::widths`].
     pub const WIDTHS: &'static str = "widths";
 
@@ -1499,6 +1531,14 @@ impl<'a> Curves<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         widths, widths_at, "widths", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_widths(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("widths", time, crate::value::read_float_array_shared)
     }
 }
 
@@ -2245,6 +2285,14 @@ impl<'a> GeomSubset<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         indices, indices_at, "indices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_indices(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("indices", time, crate::value::read_int_array_shared)
+    }
 }
 
 #[doc = "Authors the properties of OpenUSD's `GeomSubset` through a [`SchemaEdit`]; it derefs to the handle of the schema it inherits from."]
@@ -2385,6 +2433,18 @@ impl<'a> Gprim<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         display_color, display_color_at, "primvars:displayColor", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_display_color(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "primvars:displayColor",
+            time,
+            crate::value::read_float3_array_shared,
+        )
+    }
     /// The USD name of [`Self::display_opacity`].
     pub const DISPLAY_OPACITY: &'static str = "primvars:displayOpacity";
 
@@ -2395,6 +2455,18 @@ impl<'a> Gprim<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         display_opacity, display_opacity_at, "primvars:displayOpacity", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_display_opacity(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "primvars:displayOpacity",
+            time,
+            crate::value::read_float_array_shared,
+        )
     }
 }
 
@@ -2533,6 +2605,14 @@ impl<'a> HermiteCurves<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         tangents, tangents_at, "tangents", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_tangents(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("tangents", time, crate::value::read_float3_array_shared)
     }
 }
 
@@ -2840,6 +2920,14 @@ impl<'a> Mesh<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         corner_indices, corner_indices_at, "cornerIndices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_corner_indices(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("cornerIndices", time, crate::value::read_int_array_shared)
+    }
     /// The USD name of [`Self::corner_sharpnesses`].
     pub const CORNER_SHARPNESSES: &'static str = "cornerSharpnesses";
 
@@ -2850,6 +2938,18 @@ impl<'a> Mesh<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         corner_sharpnesses, corner_sharpnesses_at, "cornerSharpnesses", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_corner_sharpnesses(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "cornerSharpnesses",
+            time,
+            crate::value::read_float_array_shared,
+        )
     }
     /// The USD name of [`Self::crease_indices`].
     pub const CREASE_INDICES: &'static str = "creaseIndices";
@@ -2862,6 +2962,14 @@ impl<'a> Mesh<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         crease_indices, crease_indices_at, "creaseIndices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_crease_indices(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("creaseIndices", time, crate::value::read_int_array_shared)
+    }
     /// The USD name of [`Self::crease_lengths`].
     pub const CREASE_LENGTHS: &'static str = "creaseLengths";
 
@@ -2873,6 +2981,14 @@ impl<'a> Mesh<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         crease_lengths, crease_lengths_at, "creaseLengths", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_crease_lengths(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("creaseLengths", time, crate::value::read_int_array_shared)
+    }
     /// The USD name of [`Self::crease_sharpnesses`].
     pub const CREASE_SHARPNESSES: &'static str = "creaseSharpnesses";
 
@@ -2883,6 +2999,18 @@ impl<'a> Mesh<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         crease_sharpnesses, crease_sharpnesses_at, "creaseSharpnesses", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_crease_sharpnesses(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "creaseSharpnesses",
+            time,
+            crate::value::read_float_array_shared,
+        )
     }
     /// The USD name of [`Self::face_varying_linear_interpolation`].
     pub const FACE_VARYING_LINEAR_INTERPOLATION: &'static str = "faceVaryingLinearInterpolation";
@@ -2904,6 +3032,18 @@ impl<'a> Mesh<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         face_vertex_counts, face_vertex_counts_at, "faceVertexCounts", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_face_vertex_counts(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "faceVertexCounts",
+            time,
+            crate::value::read_int_array_shared,
+        )
+    }
     /// The USD name of [`Self::face_vertex_indices`].
     pub const FACE_VERTEX_INDICES: &'static str = "faceVertexIndices";
 
@@ -2915,6 +3055,18 @@ impl<'a> Mesh<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         face_vertex_indices, face_vertex_indices_at, "faceVertexIndices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_face_vertex_indices(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "faceVertexIndices",
+            time,
+            crate::value::read_int_array_shared,
+        )
+    }
     /// The USD name of [`Self::hole_indices`].
     pub const HOLE_INDICES: &'static str = "holeIndices";
 
@@ -2925,6 +3077,14 @@ impl<'a> Mesh<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         hole_indices, hole_indices_at, "holeIndices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_hole_indices(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("holeIndices", time, crate::value::read_int_array_shared)
     }
     /// The USD name of [`Self::interpolate_boundary`].
     pub const INTERPOLATE_BOUNDARY: &'static str = "interpolateBoundary";
@@ -3329,6 +3489,14 @@ impl<'a> NurbsCurves<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         knots, knots_at, "knots", ::alloc::sync::Arc<::alloc::vec::Vec<f64>>, crate::value::read_double_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_knots(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f64>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("knots", time, crate::value::read_double_array_shared)
+    }
     /// The USD name of [`Self::order`].
     pub const ORDER: &'static str = "order";
 
@@ -3339,6 +3507,14 @@ impl<'a> NurbsCurves<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         order, order_at, "order", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_order(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("order", time, crate::value::read_int_array_shared)
     }
     /// The USD name of [`Self::point_weights`].
     pub const POINT_WEIGHTS: &'static str = "pointWeights";
@@ -3351,6 +3527,14 @@ impl<'a> NurbsCurves<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         point_weights, point_weights_at, "pointWeights", ::alloc::sync::Arc<::alloc::vec::Vec<f64>>, crate::value::read_double_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_point_weights(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f64>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("pointWeights", time, crate::value::read_double_array_shared)
+    }
     /// The USD name of [`Self::ranges`].
     pub const RANGES: &'static str = "ranges";
 
@@ -3361,6 +3545,14 @@ impl<'a> NurbsCurves<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         ranges, ranges_at, "ranges", ::alloc::sync::Arc<::alloc::vec::Vec<[f64; 2]>>, crate::value::read_double2_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_ranges(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f64; 2]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("ranges", time, crate::value::read_double2_array_shared)
     }
 }
 
@@ -3544,6 +3736,14 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         point_weights, point_weights_at, "pointWeights", ::alloc::sync::Arc<::alloc::vec::Vec<f64>>, crate::value::read_double_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_point_weights(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f64>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("pointWeights", time, crate::value::read_double_array_shared)
+    }
     /// The USD name of [`Self::trim_curve_counts`].
     pub const TRIM_CURVE_COUNTS: &'static str = "trimCurve:counts";
 
@@ -3554,6 +3754,18 @@ impl<'a> NurbsPatch<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         trim_curve_counts, trim_curve_counts_at, "trimCurve:counts", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_trim_curve_counts(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "trimCurve:counts",
+            time,
+            crate::value::read_int_array_shared,
+        )
     }
     /// The USD name of [`Self::trim_curve_knots`].
     pub const TRIM_CURVE_KNOTS: &'static str = "trimCurve:knots";
@@ -3566,6 +3778,18 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         trim_curve_knots, trim_curve_knots_at, "trimCurve:knots", ::alloc::sync::Arc<::alloc::vec::Vec<f64>>, crate::value::read_double_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_trim_curve_knots(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f64>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "trimCurve:knots",
+            time,
+            crate::value::read_double_array_shared,
+        )
+    }
     /// The USD name of [`Self::trim_curve_orders`].
     pub const TRIM_CURVE_ORDERS: &'static str = "trimCurve:orders";
 
@@ -3576,6 +3800,18 @@ impl<'a> NurbsPatch<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         trim_curve_orders, trim_curve_orders_at, "trimCurve:orders", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_trim_curve_orders(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "trimCurve:orders",
+            time,
+            crate::value::read_int_array_shared,
+        )
     }
     /// The USD name of [`Self::trim_curve_points`].
     pub const TRIM_CURVE_POINTS: &'static str = "trimCurve:points";
@@ -3588,6 +3824,18 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         trim_curve_points, trim_curve_points_at, "trimCurve:points", ::alloc::sync::Arc<::alloc::vec::Vec<[f64; 3]>>, crate::value::read_double3_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_trim_curve_points(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f64; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "trimCurve:points",
+            time,
+            crate::value::read_double3_array_shared,
+        )
+    }
     /// The USD name of [`Self::trim_curve_ranges`].
     pub const TRIM_CURVE_RANGES: &'static str = "trimCurve:ranges";
 
@@ -3599,6 +3847,18 @@ impl<'a> NurbsPatch<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         trim_curve_ranges, trim_curve_ranges_at, "trimCurve:ranges", ::alloc::sync::Arc<::alloc::vec::Vec<[f64; 2]>>, crate::value::read_double2_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_trim_curve_ranges(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f64; 2]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "trimCurve:ranges",
+            time,
+            crate::value::read_double2_array_shared,
+        )
+    }
     /// The USD name of [`Self::trim_curve_vertex_counts`].
     pub const TRIM_CURVE_VERTEX_COUNTS: &'static str = "trimCurve:vertexCounts";
 
@@ -3609,6 +3869,18 @@ impl<'a> NurbsPatch<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         trim_curve_vertex_counts, trim_curve_vertex_counts_at, "trimCurve:vertexCounts", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_trim_curve_vertex_counts(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "trimCurve:vertexCounts",
+            time,
+            crate::value::read_int_array_shared,
+        )
     }
     /// The USD name of [`Self::u_form`].
     pub const U_FORM: &'static str = "uForm";
@@ -3629,6 +3901,14 @@ impl<'a> NurbsPatch<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         u_knots, u_knots_at, "uKnots", ::alloc::sync::Arc<::alloc::vec::Vec<f64>>, crate::value::read_double_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_u_knots(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f64>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("uKnots", time, crate::value::read_double_array_shared)
     }
     /// The USD name of [`Self::u_order`].
     pub const U_ORDER: &'static str = "uOrder";
@@ -3676,6 +3956,14 @@ impl<'a> NurbsPatch<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         v_knots, v_knots_at, "vKnots", ::alloc::sync::Arc<::alloc::vec::Vec<f64>>, crate::value::read_double_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_v_knots(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f64>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("vKnots", time, crate::value::read_double_array_shared)
     }
     /// The USD name of [`Self::v_order`].
     pub const V_ORDER: &'static str = "vOrder";
@@ -4120,6 +4408,18 @@ impl<'a> PointBased<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         accelerations, accelerations_at, "accelerations", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_accelerations(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "accelerations",
+            time,
+            crate::value::read_float3_array_shared,
+        )
+    }
     /// The USD name of [`Self::normals`].
     pub const NORMALS: &'static str = "normals";
 
@@ -4130,6 +4430,14 @@ impl<'a> PointBased<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         normals, normals_at, "normals", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_normals(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("normals", time, crate::value::read_float3_array_shared)
     }
     /// The USD name of [`Self::points`].
     pub const POINTS: &'static str = "points";
@@ -4142,6 +4450,14 @@ impl<'a> PointBased<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         points, points_at, "points", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_points(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("points", time, crate::value::read_float3_array_shared)
+    }
     /// The USD name of [`Self::velocities`].
     pub const VELOCITIES: &'static str = "velocities";
 
@@ -4152,6 +4468,14 @@ impl<'a> PointBased<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         velocities, velocities_at, "velocities", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_velocities(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("velocities", time, crate::value::read_float3_array_shared)
     }
 }
 
@@ -4311,6 +4635,18 @@ impl<'a> PointInstancer<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         accelerations, accelerations_at, "accelerations", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_accelerations(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "accelerations",
+            time,
+            crate::value::read_float3_array_shared,
+        )
+    }
     /// The USD name of [`Self::angular_velocities`].
     pub const ANGULAR_VELOCITIES: &'static str = "angularVelocities";
 
@@ -4321,6 +4657,18 @@ impl<'a> PointInstancer<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         angular_velocities, angular_velocities_at, "angularVelocities", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_angular_velocities(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "angularVelocities",
+            time,
+            crate::value::read_float3_array_shared,
+        )
     }
     /// The USD name of [`Self::ids`].
     pub const IDS: &'static str = "ids";
@@ -4333,6 +4681,14 @@ impl<'a> PointInstancer<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         ids, ids_at, "ids", ::alloc::sync::Arc<::alloc::vec::Vec<i64>>, crate::value::read_int64_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_ids(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<i64>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("ids", time, crate::value::read_int64_array_shared)
+    }
     /// The USD name of [`Self::invisible_ids`].
     pub const INVISIBLE_IDS: &'static str = "invisibleIds";
 
@@ -4344,6 +4700,14 @@ impl<'a> PointInstancer<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         invisible_ids, invisible_ids_at, "invisibleIds", ::alloc::sync::Arc<::alloc::vec::Vec<i64>>, crate::value::read_int64_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_invisible_ids(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<i64>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("invisibleIds", time, crate::value::read_int64_array_shared)
+    }
     /// The USD name of [`Self::orientations`].
     pub const ORIENTATIONS: &'static str = "orientations";
 
@@ -4352,6 +4716,13 @@ impl<'a> PointInstancer<'a> {
         #[doc = ""]
         #[doc = "USD attribute `orientations` (`quath\\[\\]`)."]
         orientations, orientations_at, "orientations", ::alloc::vec::Vec<[f32; 4]>, crate::value::read_quath_array
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_orientations(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<[f32; 4]>>, layerstack::ArrayReadError> {
+        self.try_read_value("orientations", time, crate::value::read_quath_array)
     }
     /// The USD name of [`Self::orientationsf`].
     pub const ORIENTATIONSF: &'static str = "orientationsf";
@@ -4364,6 +4735,14 @@ impl<'a> PointInstancer<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         orientationsf, orientationsf_at, "orientationsf", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>, crate::value::read_quatf_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_orientationsf(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("orientationsf", time, crate::value::read_quatf_array_shared)
+    }
     /// The USD name of [`Self::positions`].
     pub const POSITIONS: &'static str = "positions";
 
@@ -4375,6 +4754,14 @@ impl<'a> PointInstancer<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         positions, positions_at, "positions", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_positions(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("positions", time, crate::value::read_float3_array_shared)
+    }
     /// The USD name of [`Self::proto_indices`].
     pub const PROTO_INDICES: &'static str = "protoIndices";
 
@@ -4385,6 +4772,14 @@ impl<'a> PointInstancer<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         proto_indices, proto_indices_at, "protoIndices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_proto_indices(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("protoIndices", time, crate::value::read_int_array_shared)
     }
     /// The USD name of [`Self::prototypes`].
     pub const PROTOTYPES: &'static str = "prototypes";
@@ -4406,6 +4801,14 @@ impl<'a> PointInstancer<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         scales, scales_at, "scales", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_scales(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("scales", time, crate::value::read_float3_array_shared)
+    }
     /// The USD name of [`Self::velocities`].
     pub const VELOCITIES: &'static str = "velocities";
 
@@ -4416,6 +4819,14 @@ impl<'a> PointInstancer<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         velocities, velocities_at, "velocities", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_velocities(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("velocities", time, crate::value::read_float3_array_shared)
     }
 }
 
@@ -4667,6 +5078,14 @@ impl<'a> Points<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         ids, ids_at, "ids", ::alloc::sync::Arc<::alloc::vec::Vec<i64>>, crate::value::read_int64_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_ids(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<i64>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("ids", time, crate::value::read_int64_array_shared)
+    }
     /// The USD name of [`Self::widths`].
     pub const WIDTHS: &'static str = "widths";
 
@@ -4677,6 +5096,14 @@ impl<'a> Points<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         widths, widths_at, "widths", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_widths(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("widths", time, crate::value::read_float_array_shared)
     }
 }
 
@@ -4983,6 +5410,18 @@ impl<'a> TetMesh<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         surface_face_vertex_indices, surface_face_vertex_indices_at, "surfaceFaceVertexIndices", ::alloc::sync::Arc<::alloc::vec::Vec<[i32; 3]>>, crate::value::read_int3_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_surface_face_vertex_indices(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[i32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "surfaceFaceVertexIndices",
+            time,
+            crate::value::read_int3_array_shared,
+        )
+    }
     /// The USD name of [`Self::tet_vertex_indices`].
     pub const TET_VERTEX_INDICES: &'static str = "tetVertexIndices";
 
@@ -4993,6 +5432,18 @@ impl<'a> TetMesh<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         tet_vertex_indices, tet_vertex_indices_at, "tetVertexIndices", ::alloc::sync::Arc<::alloc::vec::Vec<[i32; 4]>>, crate::value::read_int4_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_tet_vertex_indices(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[i32; 4]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "tetVertexIndices",
+            time,
+            crate::value::read_int4_array_shared,
+        )
     }
 }
 
@@ -5357,6 +5808,15 @@ impl<'a> Xformable<'a> {
         #[doc = ""]
         #[doc = "USD attribute `xformOpOrder` (`token\\[\\]`, uniform)."]
         xform_op_order, "xformOpOrder", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_xform_op_order(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<&'a str>>, layerstack::ArrayReadError> {
+        self.try_read_value("xformOpOrder", time, |v, t| {
+            crate::value::read_array(v, t, crate::value::read_token)
+        })
     }
 }
 

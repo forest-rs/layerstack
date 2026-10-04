@@ -82,6 +82,16 @@ impl<'a> RenderPass<'a> {
         #[doc = "USD attribute `command` (`string\\[\\]`, uniform)."]
         command, "command", ::alloc::vec::Vec<::alloc::sync::Arc<str>>, |v, t| crate::value::read_array(v, t, crate::value::read_string)
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_command(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<::alloc::sync::Arc<str>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("command", time, |v, t| {
+            crate::value::read_array(v, t, crate::value::read_string)
+        })
+    }
     /// The USD name of [`Self::file_name`].
     pub const FILE_NAME: &'static str = "fileName";
 
@@ -378,6 +388,15 @@ impl<'a> RenderSettings<'a> {
         #[doc = "USD attribute `includedPurposes` (`token\\[\\]`, uniform; fallback `\\[\"default\", \"render\"\\]`)."]
         included_purposes, "includedPurposes", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_included_purposes(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<&'a str>>, layerstack::ArrayReadError> {
+        self.try_read_value("includedPurposes", time, |v, t| {
+            crate::value::read_array(v, t, crate::value::read_token)
+        })
+    }
     /// The USD name of [`Self::material_binding_purposes`].
     pub const MATERIAL_BINDING_PURPOSES: &'static str = "materialBindingPurposes";
 
@@ -386,6 +405,15 @@ impl<'a> RenderSettings<'a> {
         #[doc = ""]
         #[doc = "USD attribute `materialBindingPurposes` (`token\\[\\]`, uniform; fallback `\\[\"full\", \"\"\\]`)."]
         material_binding_purposes, "materialBindingPurposes", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_material_binding_purposes(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<&'a str>>, layerstack::ArrayReadError> {
+        self.try_read_value("materialBindingPurposes", time, |v, t| {
+            crate::value::read_array(v, t, crate::value::read_token)
+        })
     }
     /// The USD name of [`Self::products`].
     pub const PRODUCTS: &'static str = "products";

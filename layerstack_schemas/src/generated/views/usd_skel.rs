@@ -84,6 +84,18 @@ impl<'a> BlendShape<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         normal_offsets, "normalOffsets", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_normal_offsets(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "normalOffsets",
+            time,
+            crate::value::read_float3_array_shared,
+        )
+    }
     /// The USD name of [`Self::offsets`].
     pub const OFFSETS: &'static str = "offsets";
 
@@ -95,6 +107,14 @@ impl<'a> BlendShape<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         offsets, "offsets", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_offsets(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("offsets", time, crate::value::read_float3_array_shared)
+    }
     /// The USD name of [`Self::point_indices`].
     pub const POINT_INDICES: &'static str = "pointIndices";
 
@@ -105,6 +125,14 @@ impl<'a> BlendShape<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         point_indices, "pointIndices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_point_indices(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("pointIndices", time, crate::value::read_int_array_shared)
     }
 }
 
@@ -246,6 +274,15 @@ impl<'a> SkelAnimation<'a> {
         #[doc = "USD attribute `blendShapes` (`token\\[\\]`, uniform)."]
         blend_shapes, "blendShapes", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_blend_shapes(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<&'a str>>, layerstack::ArrayReadError> {
+        self.try_read_value("blendShapes", time, |v, t| {
+            crate::value::read_array(v, t, crate::value::read_token)
+        })
+    }
     /// The USD name of [`Self::blend_shape_weights`].
     pub const BLEND_SHAPE_WEIGHTS: &'static str = "blendShapeWeights";
 
@@ -257,6 +294,18 @@ impl<'a> SkelAnimation<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         blend_shape_weights, blend_shape_weights_at, "blendShapeWeights", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_blend_shape_weights(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "blendShapeWeights",
+            time,
+            crate::value::read_float_array_shared,
+        )
+    }
     /// The USD name of [`Self::joints`].
     pub const JOINTS: &'static str = "joints";
 
@@ -265,6 +314,15 @@ impl<'a> SkelAnimation<'a> {
         #[doc = ""]
         #[doc = "USD attribute `joints` (`token\\[\\]`, uniform)."]
         joints, "joints", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_joints(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<&'a str>>, layerstack::ArrayReadError> {
+        self.try_read_value("joints", time, |v, t| {
+            crate::value::read_array(v, t, crate::value::read_token)
+        })
     }
     /// The USD name of [`Self::rotations`].
     pub const ROTATIONS: &'static str = "rotations";
@@ -277,6 +335,14 @@ impl<'a> SkelAnimation<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         rotations, rotations_at, "rotations", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>, crate::value::read_quatf_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_rotations(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("rotations", time, crate::value::read_quatf_array_shared)
+    }
     /// The USD name of [`Self::scales`].
     pub const SCALES: &'static str = "scales";
 
@@ -285,6 +351,13 @@ impl<'a> SkelAnimation<'a> {
         #[doc = ""]
         #[doc = "USD attribute `scales` (`half3\\[\\]`)."]
         scales, scales_at, "scales", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_half3_array
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_scales(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<[f32; 3]>>, layerstack::ArrayReadError> {
+        self.try_read_value("scales", time, crate::value::read_half3_array)
     }
     /// The USD name of [`Self::translations`].
     pub const TRANSLATIONS: &'static str = "translations";
@@ -296,6 +369,14 @@ impl<'a> SkelAnimation<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         translations, translations_at, "translations", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_translations(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value("translations", time, crate::value::read_float3_array_shared)
     }
 }
 
@@ -481,6 +562,18 @@ impl<'a> SkelBindingApi<'a> {
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         joint_indices, joint_indices_at, "primvars:skel:jointIndices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_joint_indices(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<i32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "primvars:skel:jointIndices",
+            time,
+            crate::value::read_int_array_shared,
+        )
+    }
     /// The USD name of [`Self::joint_weights`].
     pub const JOINT_WEIGHTS: &'static str = "primvars:skel:jointWeights";
 
@@ -491,6 +584,18 @@ impl<'a> SkelBindingApi<'a> {
         #[doc = ""]
         #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         joint_weights, joint_weights_at, "primvars:skel:jointWeights", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_joint_weights(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::sync::Arc<::alloc::vec::Vec<f32>>>, layerstack::ArrayReadError>
+    {
+        self.try_read_value(
+            "primvars:skel:jointWeights",
+            time,
+            crate::value::read_float_array_shared,
+        )
     }
     /// The USD name of [`Self::skinning_method`].
     pub const SKINNING_METHOD: &'static str = "primvars:skel:skinningMethod";
@@ -519,6 +624,15 @@ impl<'a> SkelBindingApi<'a> {
         #[doc = "USD attribute `skel:blendShapes` (`token\\[\\]`, uniform)."]
         blend_shapes, "skel:blendShapes", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_blend_shapes(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<&'a str>>, layerstack::ArrayReadError> {
+        self.try_read_value("skel:blendShapes", time, |v, t| {
+            crate::value::read_array(v, t, crate::value::read_token)
+        })
+    }
     /// The USD name of [`Self::blend_shape_targets`].
     pub const BLEND_SHAPE_TARGETS: &'static str = "skel:blendShapeTargets";
 
@@ -536,6 +650,15 @@ impl<'a> SkelBindingApi<'a> {
         #[doc = ""]
         #[doc = "USD attribute `skel:joints` (`token\\[\\]`, uniform)."]
         joints, "skel:joints", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_joints(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<&'a str>>, layerstack::ArrayReadError> {
+        self.try_read_value("skel:joints", time, |v, t| {
+            crate::value::read_array(v, t, crate::value::read_token)
+        })
     }
     /// The USD name of [`Self::skeleton`].
     pub const SKELETON: &'static str = "skel:skeleton";
@@ -793,6 +916,13 @@ impl<'a> Skeleton<'a> {
         #[doc = "USD attribute `bindTransforms` (`matrix4d\\[\\]`, uniform)."]
         bind_transforms, "bindTransforms", ::alloc::vec::Vec<[[f64; 4]; 4]>, crate::value::read_matrix4d_array
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_bind_transforms(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<[[f64; 4]; 4]>>, layerstack::ArrayReadError> {
+        self.try_read_value("bindTransforms", time, crate::value::read_matrix4d_array)
+    }
     /// The USD name of [`Self::joint_names`].
     pub const JOINT_NAMES: &'static str = "jointNames";
 
@@ -801,6 +931,15 @@ impl<'a> Skeleton<'a> {
         #[doc = ""]
         #[doc = "USD attribute `jointNames` (`token\\[\\]`, uniform)."]
         joint_names, "jointNames", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_joint_names(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<&'a str>>, layerstack::ArrayReadError> {
+        self.try_read_value("jointNames", time, |v, t| {
+            crate::value::read_array(v, t, crate::value::read_token)
+        })
     }
     /// The USD name of [`Self::joints`].
     pub const JOINTS: &'static str = "joints";
@@ -811,6 +950,15 @@ impl<'a> Skeleton<'a> {
         #[doc = "USD attribute `joints` (`token\\[\\]`, uniform)."]
         joints, "joints", ::alloc::vec::Vec<&'a str>, |v, t| crate::value::read_array(v, t, crate::value::read_token)
     }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_joints(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<&'a str>>, layerstack::ArrayReadError> {
+        self.try_read_value("joints", time, |v, t| {
+            crate::value::read_array(v, t, crate::value::read_token)
+        })
+    }
     /// The USD name of [`Self::rest_transforms`].
     pub const REST_TRANSFORMS: &'static str = "restTransforms";
 
@@ -819,6 +967,13 @@ impl<'a> Skeleton<'a> {
         #[doc = ""]
         #[doc = "USD attribute `restTransforms` (`matrix4d\\[\\]`, uniform)."]
         rest_transforms, "restTransforms", ::alloc::vec::Vec<[[f64; 4]; 4]>, crate::value::read_matrix4d_array
+    }
+    /// Checked array read at `time`; deferred decode errors remain distinct from missing values.
+    pub fn try_rest_transforms(
+        &self,
+        time: crate::Time,
+    ) -> Result<Option<::alloc::vec::Vec<[[f64; 4]; 4]>>, layerstack::ArrayReadError> {
+        self.try_read_value("restTransforms", time, crate::value::read_matrix4d_array)
     }
 }
 

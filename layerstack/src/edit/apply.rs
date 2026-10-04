@@ -144,6 +144,25 @@ impl Raw {
         }
     }
 
+    /// Structural scopes preserve child edits without widening to all siblings.
+    fn change_path(&self, store: &dyn LayerStore) -> Option<PathId> {
+        match self {
+            Self::LayerFields { .. } => None,
+            Self::PrimSlots { path, .. } => Some(*path),
+            Self::Child { parent, name, .. } => {
+                let path = store.paths().resolve(parent.prim_path()).join(&[*name]);
+                store.paths().lookup(&path)
+            }
+            Self::Variant { host, .. } => Some(host.prim_path()),
+            Self::Selection { loc, .. }
+            | Self::Property { loc, .. }
+            | Self::Default { loc, .. }
+            | Self::Sample { loc, .. }
+            | Self::Targets { loc, .. }
+            | Self::Field { loc, .. } => Some(loc.prim_path()),
+        }
+    }
+
     /// The namespace path of the prim whose opinions a value step changes;
     /// `None` for a step that changes namespace or composition arcs.
     fn opinion_site(&self) -> Option<PathId> {
@@ -592,13 +611,44 @@ pub(crate) fn apply(
         }
     }
     for id in &journal.layers {
-        let structural = journal.structural_layers.contains(id);
+        let paths = journal
+            .steps
+            .iter()
+            .filter(|g| g.written.layer() == *id)
+            .map(|g| g.written.change_path(store))
+            .collect::<Option<Vec<_>>>();
+        let root = store.paths().lookup(&crate::Path::root());
+        let root_has_child_edits = journal.steps.iter().any(|g| matches!(&g.written, Raw::Child { layer, parent, .. } if *layer == *id && Some(parent.prim_path()) == root));
+        let root_only_supports_children = root_has_child_edits
+            && journal
+                .steps
+                .iter()
+                .filter(|g| g.written.layer() == *id)
+                .all(|g| {
+                    let supports = |step: &Raw| match step {
+                        Raw::PrimSlots {
+                            path,
+                            main,
+                            branches,
+                            ..
+                        } if Some(*path) == root => {
+                            branches.as_ref().is_none_or(|b| b.is_empty())
+                                && main.as_ref().is_none_or(|spec| {
+                                    let mut spec = spec.clone();
+                                    spec.authored_children.clear();
+                                    spec == PrimSpec::default()
+                                })
+                        }
+                        _ => step.change_path(store) != root,
+                    };
+                    supports(&g.written) && supports(&g.step)
+                });
         if let Some(layer) = store.layer_mut(*id) {
-            if structural {
-                layer.touch_structure();
-            } else {
-                layer.touch_values();
-            }
+            layer.record_scoped_change(
+                journal.structural_layers.contains(id),
+                paths,
+                root.filter(|_| root_only_supports_children),
+            );
         }
     }
     let Journal {

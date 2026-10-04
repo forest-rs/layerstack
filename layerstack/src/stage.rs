@@ -361,6 +361,7 @@ pub struct Stage {
     local_layers: Vec<LayerId>,
     used_layers: alloc::collections::BTreeSet<LayerId>,
     used_layer_sites: HashMap<PathId, HashSet<LayerId>>,
+    used_layer_counts: HashMap<LayerId, usize>,
     inactive: HashSet<PathId>,
     inactive_children: HashMap<PathId, Vec<PathId>>,
     root_layer: Option<LayerId>,
@@ -443,8 +444,19 @@ impl Stage {
     pub(crate) fn compose_selected(
         store: &mut dyn LayerStore,
         root: LayerId,
+        options: StageOptions,
+        exact_mask: bool,
+    ) -> Self {
+        Self::compose_retained(store, root, options, exact_mask, None, false)
+    }
+
+    pub(crate) fn compose_retained(
+        store: &mut dyn LayerStore,
+        root: LayerId,
         mut options: StageOptions,
         exact_mask: bool,
+        namespace: Option<&mut crate::population::NamespaceInventory>,
+        bounded: bool,
     ) -> Self {
         options.muted_layers.remove(&root);
         let captured = options.clone();
@@ -455,8 +467,9 @@ impl Stage {
             muted: &captured.muted_layers,
         };
         let store: &mut dyn LayerStore = &mut controlled;
-        let mut stage =
-            crate::compose::compose_stage_selected(store, root, options, None, exact_mask);
+        let mut stage = crate::compose::compose_stage_retained(
+            store, root, options, None, exact_mask, namespace, bounded,
+        );
         stage.options = captured.clone();
         stage.root_layer = Some(root);
         stage.schemas = schemas;
@@ -1123,6 +1136,7 @@ impl Stage {
             local_layers: Vec::new(),
             used_layers: alloc::collections::BTreeSet::new(),
             used_layer_sites: HashMap::new(),
+            used_layer_counts: HashMap::new(),
             inactive: HashSet::new(),
             inactive_children: HashMap::new(),
             prototypes: prototypes::PrototypeTable::default(),
@@ -1149,6 +1163,10 @@ impl Stage {
     ) -> Self {
         self.local_layers = local;
         self.used_layers = used;
+        self.used_layer_counts.clear();
+        for &layer in sites.values().flatten() {
+            *self.used_layer_counts.entry(layer).or_default() += 1;
+        }
         self.used_layer_sites = sites;
         self
     }
@@ -1219,8 +1237,19 @@ impl Stage {
         recomposed: &[PathId],
     ) {
         for path in recomposed {
-            self.used_layer_sites.remove(path);
+            if let Some(layers) = self.used_layer_sites.remove(path) {
+                for layer in layers {
+                    let count = self.used_layer_counts.get_mut(&layer).expect("counted use");
+                    *count -= 1;
+                    if *count == 0 {
+                        self.used_layer_counts.remove(&layer);
+                    }
+                }
+            }
             if let Some(layers) = partial.used_layer_sites.remove(path) {
+                for &layer in &layers {
+                    *self.used_layer_counts.entry(layer).or_default() += 1;
+                }
                 self.used_layer_sites.insert(*path, layers);
             }
         }
@@ -1228,7 +1257,7 @@ impl Stage {
             .local_layers
             .iter()
             .copied()
-            .chain(self.used_layer_sites.values().flatten().copied())
+            .chain(self.used_layer_counts.keys().copied())
             .collect();
         self.clips.merge_from(partial.clips, recomposed);
         for path in recomposed {

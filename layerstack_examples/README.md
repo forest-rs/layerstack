@@ -72,5 +72,7 @@ resource handles, color management and sampling remain engine choices.
 `cargo run -p layerstack_examples --bin session_collaboration` composes a shared
 live-edit layer beneath two independent session roots. Private overrides remain
 local, incoming authored-value guards reject stale batches, and each client
-synchronizes and observes changes independently. The host owns transport, durable
+synchronizes and observes changes independently. Shared prim creation, guarded
+undo and per-client recomposition counters show scoped structural updates.
+The host owns transport, durable
 identity mapping, permissions, conflict policy and persistent publication.

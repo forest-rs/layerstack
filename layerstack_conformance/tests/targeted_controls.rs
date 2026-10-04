@@ -153,7 +153,7 @@ fn payload_and_external_mute_deltas_match_full_recomposition() {
             live.recomposition_work(),
             layerstack::RecompositionWork::default()
         );
-        // A structural source edit concurrent with controls remains a full rebuild.
+        // Known structural source edits compose in the same scoped control batch.
         live.unload(&store, host);
         let new = store.path("/New");
         store
@@ -162,7 +162,7 @@ fn payload_and_external_mute_deltas_match_full_recomposition() {
             .unwrap()
             .insert_prim(new, PrimSpec::def());
         live.synchronize(&mut store);
-        assert!(live.recomposition_work().full_rebuild);
+        assert!(!live.recomposition_work().full_rebuild);
         assert_full(&mut store, &live);
     }
 }

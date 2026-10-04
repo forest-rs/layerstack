@@ -198,6 +198,18 @@ pub(crate) fn compose_stage_selected(
     populated: Option<BTreeSet<PathId>>,
     exact_mask: bool,
 ) -> Stage {
+    compose_stage_retained(store, root, options, populated, exact_mask, None, false)
+}
+
+pub(crate) fn compose_stage_retained(
+    store: &mut dyn LayerStore,
+    root: LayerId,
+    options: StageOptions,
+    populated: Option<BTreeSet<PathId>>,
+    exact_mask: bool,
+    mut namespace: Option<&mut crate::population::NamespaceInventory>,
+    bounded: bool,
+) -> Stage {
     // The variant fallbacks every selection is resolved with, passed
     // explicitly to each function that resolves selections.
     let resolver = &SelectionResolver {
@@ -209,6 +221,14 @@ pub(crate) fn compose_stage_selected(
         root,
         session: options.session_layer,
     });
+    if let Some(namespace) = namespace.as_deref_mut() {
+        cycles.source_inventory().namespace = core::mem::take(namespace);
+    }
+    if bounded {
+        cycles
+            .source_inventory()
+            .set_scope(store, options.mask.as_ref(), exact_mask);
+    }
     let layer_stack = cycles.gather_layer_stack(store, cycles.stage_layer_stack());
     // Spec: AOUSD Core §10.3.2.6 (relocates are computed per layer stack;
     // invalid ones are composition errors of the layer stack authoring
@@ -471,6 +491,11 @@ pub(crate) fn compose_stage_selected(
         .filter(|id| store.layer(*id).is_some())
         .collect();
     let used_layer_sites = cycles.take_used_layer_sites();
+    let inspected_source_paths = cycles.source_inventory().inspected_paths;
+    let indexed_source_paths = cycles.source_inventory().indexed_paths;
+    if let Some(namespace) = namespace {
+        *namespace = core::mem::take(&mut cycles.source_inventory().namespace);
+    }
     let errors = cycles
         .into_errors()
         .into_iter()
@@ -485,6 +510,8 @@ pub(crate) fn compose_stage_selected(
         .with_composition_work(crate::stage::CompositionWork {
             composed_prim_indexes,
             reused_prim_indexes,
+            inspected_source_paths,
+            indexed_source_paths,
         })
         .with_composition_errors(errors)
         .with_instances(instances)
@@ -6221,9 +6248,10 @@ fn add_inherit_edge_opinions(
 
     let inherited_path = store.paths().resolve(inherited_root).clone();
 
-    let remote_paths = cycles
-        .source_inventory()
-        .subtree_paths(store, local_stack, inherited_root);
+    let remote_paths =
+        cycles
+            .source_inventory()
+            .mapped_paths(store, local_stack, inherited_root, dest_root);
 
     let mut mapping: Vec<(PathId, PathId)> = Vec::new();
     let walk = parent.class_walk(&stage_relocates, step.relocates.as_deref());
@@ -7060,7 +7088,7 @@ fn add_reference_edge_opinions(
     let remote_paths =
         cycles
             .source_inventory()
-            .subtree_paths(store, &remote_stack, reference_path);
+            .mapped_paths(store, &remote_stack, reference_path, dest_root);
 
     // The arc maps the target and its namespace descendants; the arcs of
     // the target's ancestors follow (see `AncestralArcs`).
@@ -7967,7 +7995,7 @@ fn add_payload_edge_opinions(
     let remote_paths =
         cycles
             .source_inventory()
-            .subtree_paths(store, &remote_stack, reference_path);
+            .mapped_paths(store, &remote_stack, reference_path, dest_root);
 
     // The arc maps the target and its namespace descendants; the arcs of
     // the target's ancestors follow (see `AncestralArcs`).
@@ -8442,7 +8470,7 @@ fn add_specializes_edge_opinions(
     let remote_paths =
         cycles
             .source_inventory()
-            .subtree_paths(store, local_stack, specialized_root);
+            .mapped_paths(store, local_stack, specialized_root, dest_root);
 
     let mut mapping: Vec<(PathId, PathId)> = Vec::new();
     let walk = parent.class_walk(&stage_relocates, relocates.as_deref());

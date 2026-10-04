@@ -13,6 +13,7 @@
 use alloc::{collections::BTreeSet, vec::Vec};
 
 mod controls;
+mod discovery;
 pub use controls::RecompositionWork;
 mod local;
 mod notices;
@@ -220,6 +221,10 @@ pub struct LiveStage {
     options: StageOptions,
     needs_full_rebuild: bool,
     controls_pending: bool,
+    structural_roots: Vec<PathId>,
+    structural_sources: Vec<(LayerId, PathId)>,
+    namespace_inventory: crate::population::NamespaceInventory,
+    layer_discovery: discovery::LayerDiscovery,
     work: RecompositionWork,
     notices: notices::Journal,
 }
@@ -232,7 +237,15 @@ impl LiveStage {
             with_dependencies: true,
             ..options.clone()
         };
-        let mut stage = Stage::compose(store, root, opts);
+        let mut namespace_inventory = crate::population::NamespaceInventory::default();
+        let mut stage = Stage::compose_retained(
+            store,
+            root,
+            opts,
+            false,
+            Some(&mut namespace_inventory),
+            false,
+        );
         let deps = stage.take_deps().unwrap_or_default();
         let tracker =
             InvalidationTracker::from_graph_with_cycle_handling(deps.graph, CycleHandling::Ignore);
@@ -255,6 +268,10 @@ impl LiveStage {
             options,
             needs_full_rebuild: false,
             controls_pending: false,
+            structural_roots: Vec::new(),
+            structural_sources: Vec::new(),
+            namespace_inventory,
+            layer_discovery: discovery::LayerDiscovery::default(),
             work: RecompositionWork::default(),
             notices: notices::Journal::default(),
         };
@@ -403,8 +420,10 @@ impl LiveStage {
     /// includes ancestor composition and the changed boundary child lists to
     /// preserve ordering and pruning. Unchanged sibling indexes are retained;
     /// processing a wide boundary list still costs work proportional to it.
-    /// Other structural edits rebuild the stage; other opinion edits use
-    /// scoped composition.
+    /// Shared/session and referenced structural edits map retained authored
+    /// change paths through their source sites and replace complete dependent
+    /// subtrees. Unknown edits, expired source history, relocations and global
+    /// composition errors conservatively rebuild the stage.
     ///
     /// [`Applied::changes`] separates exact created/removed prim inventories,
     /// subtree resync roots and changes that invalidate only the named prim.
@@ -423,8 +442,11 @@ impl LiveStage {
         txn: &Transaction,
     ) -> Result<Applied, EditError> {
         let pending_opinions = self.tracker.has_invalidated(OPINION_EDIT);
-        let pending_recomposition =
-            self.needs_full_rebuild || pending_opinions || self.controls_pending;
+        let pending_recomposition = self.needs_full_rebuild
+            || pending_opinions
+            || self.controls_pending
+            || !self.structural_roots.is_empty()
+            || !self.structural_sources.is_empty();
         // Precision is valid only against the source generations we composed.
         // Unknown external edits must not be hidden behind this transaction.
         let sources_current = self
@@ -517,7 +539,25 @@ impl LiveStage {
                 .then_some(affected)
         });
         if refreshed.is_none() {
-            if outcome.structural {
+            if outcome.structural
+                && sources_current
+                && !pending_opinions
+                && !self.needs_full_rebuild
+            {
+                for &layer in &outcome.layers {
+                    let paths = self
+                        .generations
+                        .get(&layer)
+                        .copied()
+                        .flatten()
+                        .and_then(|seen| store.layer(layer)?.changed_scopes_since(seen.0));
+                    match paths {
+                        Some(paths) => self.queue_source_structure(store, layer, &paths),
+                        None => self.notify_structural_change(),
+                    }
+                    self.generations.insert(layer, generations_of(store, layer));
+                }
+            } else if outcome.structural {
                 self.notify_structural_change();
             } else {
                 for &(layer, prim) in &outcome.touched {
@@ -700,12 +740,11 @@ impl LiveStage {
     ///
     /// A layer whose [`Layer::structural_generation`](crate::Layer::structural_generation)
     /// moved too may have gained or lost specs, children, arcs or variant
-    /// sets, so it is notified as a structural change
-    /// ([`notify_structural_change`](Self::notify_structural_change)), as
-    /// is a layer that joined or left the store. A layer whose other edits
-    /// only changed opinion values is notified with
-    /// [`notify_layer_edit`](Self::notify_layer_edit), which recomposes the
-    /// prims drawing on it.
+    /// sets. Layer methods and transactions retain prim paths for the most
+    /// recent 64 authored batches; complete history maps structural changes to
+    /// dependent subtrees and opinion changes to their contributing prims.
+    /// Unknown edits, expired history, and layer arrival/removal use conservative
+    /// layer notifications or full structural rebuilds.
     ///
     /// The layers the stage reads are its root layer stack and every layer
     /// stack a reference or payload authored in them targets, including
@@ -717,10 +756,10 @@ impl LiveStage {
     /// [`recompose`](Self::recompose) stops serving what those layers no
     /// longer hold.
     ///
-    /// Generations cannot tell which prims changed, so this is coarser than
-    /// the notifications that name them, and a layer edited by a host that
-    /// did notify precisely is reported again. Writes into the public
-    /// fields of a layer do not move its generations and are not found.
+    /// Each stage keeps its own generation cursor; polling one client does
+    /// not consume another client's authored evidence. A host that separately
+    /// notified an edit can still see its layer reported here. Writes into
+    /// public importer fields must call `Layer::touch` to become observable.
     ///
     /// OpenUSD: `UsdStage` handles `SdfNotice::LayersDidChange`, resyncing
     /// the prims of significant changes and updating the info of the rest.
@@ -736,7 +775,19 @@ impl LiveStage {
         for &(layer, found) in &changed {
             let seen = self.generations.insert(layer, found).flatten();
             match (seen, found) {
-                (Some(seen), Some(found)) if seen.1 == found.1 => self.notify_layer_edit(layer),
+                (Some(seen), Some(found)) => {
+                    let paths = store
+                        .layer(layer)
+                        .and_then(|l| l.changed_scopes_since(seen.0));
+                    match paths {
+                        Some(paths) if seen.1 == found.1 => {
+                            self.notify_layer_prim_edits(layer, &paths);
+                        }
+                        Some(paths) => self.queue_source_structure(store, layer, &paths),
+                        None if seen.1 == found.1 => self.notify_layer_edit(layer),
+                        None => self.notify_structural_change(),
+                    }
+                }
                 _ => self.notify_structural_change(),
             }
         }
@@ -745,39 +796,43 @@ impl LiveStage {
 
     /// Records the generations of every layer the stage reads.
     fn record_generations(&mut self, store: &dyn LayerStore) {
-        let mut layers = participating_layers(store, self.root, &self.options.muted_layers);
+        let mut layers =
+            self.layer_discovery
+                .participating(store, self.root, &self.options.muted_layers);
         if let Some(session) = self.options.session_layer {
-            layers.extend(participating_layers(
+            layers.extend(self.layer_discovery.participating(
                 store,
                 session,
                 &self.options.muted_layers,
             ));
-            for walked in crate::expression_variables::walk_identifier(
-                store,
-                crate::LayerStackIdentifier {
-                    root: self.root,
-                    session: Some(session),
-                },
-            )
-            .stacks
-            {
-                if walked.stack.chains.iter().any(|chain| {
-                    chain.iter().any(|id| {
-                        self.options.muted_layers.contains(&id.root)
-                            || id
-                                .session
-                                .is_some_and(|s| self.options.muted_layers.contains(&s))
-                    })
-                }) {
-                    continue;
+            if self.layer_discovery.has_expressions() {
+                for walked in crate::expression_variables::walk_identifier(
+                    store,
+                    crate::LayerStackIdentifier {
+                        root: self.root,
+                        session: Some(session),
+                    },
+                )
+                .stacks
+                {
+                    if walked.stack.chains.iter().any(|chain| {
+                        chain.iter().any(|id| {
+                            self.options.muted_layers.contains(&id.root)
+                                || id
+                                    .session
+                                    .is_some_and(|s| self.options.muted_layers.contains(&s))
+                        })
+                    }) {
+                        continue;
+                    }
+                    layers.extend(
+                        walked
+                            .stack
+                            .layers
+                            .into_iter()
+                            .filter(|id| !self.options.muted_layers.contains(id)),
+                    );
                 }
-                layers.extend(
-                    walked
-                        .stack
-                        .layers
-                        .into_iter()
-                        .filter(|id| !self.options.muted_layers.contains(id)),
-                );
             }
         }
         layers.extend(self.stage.clip_layers());
@@ -998,8 +1053,8 @@ impl LiveStage {
     ///   with the affected prims.
     /// - If the scoped recomposition shows that an affected prim appeared,
     ///   disappeared, or changed its children (for example `active` or child
-    ///   reordering edits), falls back to a full rebuild, with the same return
-    ///   value as a structural change.
+    ///   reordering edits), replaces complete affected subtrees. Unknown scope,
+    ///   relocations and global composition errors require a full rebuild.
     ///
     /// Edits that introduce prims this stage has never populated (new specs,
     /// new arcs, a variant selection that adds children) are not visible to a
@@ -1099,7 +1154,10 @@ impl LiveStage {
         if self.needs_full_rebuild {
             return self.full_rebuild(store, changes);
         }
-        if self.controls_pending {
+        if self.controls_pending
+            || !self.structural_roots.is_empty()
+            || !self.structural_sources.is_empty()
+        {
             return self.recompose_controls(store, changes);
         }
 
@@ -1119,12 +1177,15 @@ impl LiveStage {
         let mut partial = loop {
             let partial = self.compose_scoped(store, &affected);
             self.work.composed_prim_indexes += partial.composition_work().composed_prim_indexes;
+            self.work.inspected_source_paths += partial.composition_work().inspected_source_paths;
+            self.work.indexed_source_paths += partial.composition_work().indexed_source_paths;
 
             // An opinion edit that turns out to change hierarchy (activation,
             // child ordering, ...) cannot be patched from a masked
             // composition, whose child lists are partial by construction.
             if self.stage.hierarchy_diverges(&partial, &affected) {
-                return self.full_rebuild(store, changes);
+                self.structural_roots.extend(affected);
+                return self.recompose_controls(store, changes);
             }
 
             // A prim whose contributing specs change (another variant
@@ -1290,7 +1351,7 @@ impl LiveStage {
     /// the children make the masked composition's child lists for
     /// `affected` complete, so [`Stage::hierarchy_diverges`] can detect
     /// hierarchy changes.
-    fn compose_scoped(&self, store: &mut dyn LayerStore, affected: &[PathId]) -> Stage {
+    fn compose_scoped(&mut self, store: &mut dyn LayerStore, affected: &[PathId]) -> Stage {
         let mut mask_set: HashSet<PathId> = HashSet::from_iter(affected.iter().copied());
         for &prim in affected {
             for dep in self.tracker.graph().dependencies(prim, OPINION_EDIT) {
@@ -1309,7 +1370,23 @@ impl LiveStage {
             load_rules: self.options.load_rules.clone(),
             muted_layers: self.options.muted_layers.clone(),
         };
-        Stage::compose_selected(store, self.root, scoped_opts, true)
+        let bounded = !self
+            .stage
+            .composition_errors()
+            .iter()
+            .any(|e| e.prim().is_none())
+            && !self
+                .relocation_layers
+                .iter()
+                .any(|id| store.layer(*id).is_some_and(|l| !l.relocates.is_empty()));
+        Stage::compose_retained(
+            store,
+            self.root,
+            scoped_opts,
+            true,
+            Some(&mut self.namespace_inventory),
+            bounded,
+        )
     }
 
     /// Recomposes the whole stage and returns every path in the new stage
@@ -1322,6 +1399,13 @@ impl LiveStage {
     ) -> Vec<PathId> {
         self.needs_full_rebuild = false;
         self.controls_pending = false;
+        self.structural_roots.clear();
+        self.structural_sources.clear();
+        // Unknown authoring or source replacement invalidates retained identity
+        // evidence. A recreated LayerId can reuse the departed layer's counters;
+        // full resynchronization must rediscover its namespace and potential arcs.
+        self.namespace_inventory = crate::population::NamespaceInventory::default();
+        self.layer_discovery = discovery::LayerDiscovery::default();
         self.tracker.clear(OPINION_EDIT);
         let old_prims: HashSet<PathId> = self.stage.prim_paths().collect();
 
@@ -1329,11 +1413,20 @@ impl LiveStage {
             with_dependencies: true,
             ..self.options.clone()
         };
-        let mut stage = Stage::compose(store, self.root, opts);
+        let mut stage = Stage::compose_retained(
+            store,
+            self.root,
+            opts,
+            false,
+            Some(&mut self.namespace_inventory),
+            false,
+        );
         let deps = stage.take_deps().unwrap_or_default();
 
         self.work.full_rebuild = true;
         self.work.composed_prim_indexes += stage.composition_work().composed_prim_indexes;
+        self.work.inspected_source_paths += stage.composition_work().inspected_source_paths;
+        self.work.indexed_source_paths += stage.composition_work().indexed_source_paths;
         self.work.replaced_prim_indexes = old_prims.len()
             + stage
                 .prim_paths()
@@ -1729,6 +1822,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         let mut spec = PrimSpec::default();
         spec.set_field(field_x, FieldValue::Value(Value::Int64(42)));
@@ -1759,6 +1853,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         layer.insert_prim(prim, PrimSpec::default());
         store.insert_layer(layer);
@@ -1784,6 +1879,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         let mut spec = PrimSpec::default();
         spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
@@ -1857,6 +1953,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         layer.insert_prim(prim, PrimSpec::default());
         store.insert_layer(layer);
@@ -1939,6 +2036,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         let mut p_spec = PrimSpec::default();
         p_spec.add_reference(Reference::new(LayerId(2), prim_q));
@@ -1955,6 +2053,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         let mut q_spec = PrimSpec::default();
         q_spec.set_field(field_x, FieldValue::Value(Value::Int64(10)));
@@ -2005,6 +2104,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         let mut spec2 = PrimSpec::default();
         spec2.set_field(field_x, FieldValue::Value(Value::Int64(10)));
@@ -2021,6 +2121,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         let mut spec1 = PrimSpec::default();
         spec1.set_field(field_x, FieldValue::Value(Value::Int64(20)));
@@ -2082,6 +2183,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         // /Class_C defines x = 42.
         let mut class_spec = PrimSpec::default();
@@ -2140,6 +2242,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         let mut a_spec = PrimSpec::default();
         a_spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
@@ -2156,6 +2259,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         let mut b_spec = PrimSpec::default();
         b_spec.set_field(field_y, FieldValue::Value(Value::Int64(2)));
@@ -2209,6 +2313,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         let mut spec = PrimSpec::default();
         spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
@@ -2255,6 +2360,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         let mut p_spec = PrimSpec::default();
         p_spec.add_reference(Reference::new(LayerId(2), prim_q));
@@ -2272,6 +2378,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         let mut q_spec = PrimSpec::default();
         q_spec.set_field(field_x, FieldValue::Value(Value::Int64(100)));
@@ -2317,6 +2424,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         let mut a_spec = PrimSpec::default();
         a_spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
@@ -2371,6 +2479,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         let mut a_spec = PrimSpec::default();
         a_spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
@@ -2428,6 +2537,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         let mut a_spec = PrimSpec::default();
         a_spec.set_field(field_x, FieldValue::Value(Value::Int64(1)));
@@ -2444,6 +2554,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         let mut b_spec = PrimSpec::default();
         b_spec.set_field(field_x, FieldValue::Value(Value::Int64(2)));
@@ -2480,6 +2591,7 @@ mod tests {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: alloc::collections::VecDeque::new(),
         };
         for &(prim, val) in &[(prim_a, 1), (prim_b, 2), (prim_c, 3)] {
             let mut spec = PrimSpec::default();

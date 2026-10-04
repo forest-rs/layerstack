@@ -7,7 +7,7 @@
 //! and change cursors are local APIs, not a transport or replicated edit log.
 use layerstack::{
     EditTarget, InMemoryStore, Layer, LayerId, LiveStage, PrimSpec, PropertySpec, PropertyType,
-    StageOptions, SublayerEntry, Transaction, Value,
+    Specifier, StageOptions, SublayerEntry, Transaction, Value,
 };
 
 fn main() {
@@ -85,6 +85,77 @@ fn main() {
         "client B reports: {}",
         b.changes_since(&mut cursor_b).unwrap().count()
     );
+    // Client A creates a shared prim. B's snapshot stays unchanged until its
+    // own explicit synchronization, even though both borrow the same store.
+    let child = store.path("/World/SharedLamp");
+    let mut create = Transaction::new();
+    create.create_prim(
+        EditTarget::for_layer(LayerId(2)).prim(child),
+        Specifier::Def,
+        None,
+    );
+    let added = a.apply(&mut store, &create).unwrap();
+    assert!(a.stage().has_prim(child), "A sees its committed creation");
+    assert!(!b.stage().has_prim(child), "B retains its prior snapshot");
+    println!(
+        "A created SharedLamp; B sees it before synchronization: {}",
+        b.stage().has_prim(child)
+    );
+    b.synchronize(&mut store);
+    assert!(
+        b.stage().has_prim(child),
+        "B sees the shared creation after synchronization"
+    );
+    assert!(
+        !a.recomposition_work().full_rebuild,
+        "A replaces only the changed subtree"
+    );
+    assert!(
+        !b.recomposition_work().full_rebuild,
+        "B independently replaces only the changed subtree"
+    );
+    println!("A creation work: {:?}", a.recomposition_work());
+    println!("B synchronization work: {:?}", b.recomposition_work());
+    for (name, reports) in [
+        (
+            "A",
+            a.changes_since(&mut cursor_a).unwrap().collect::<Vec<_>>(),
+        ),
+        (
+            "B",
+            b.changes_since(&mut cursor_b).unwrap().collect::<Vec<_>>(),
+        ),
+    ] {
+        for changes in reports {
+            println!(
+                "{name} created: {:?}; resynced: {:?}",
+                changes
+                    .created
+                    .iter()
+                    .map(|p| store.paths.display(*p, &store.tokens))
+                    .collect::<Vec<_>>(),
+                changes
+                    .resynced
+                    .iter()
+                    .map(|p| store.paths.display(*p, &store.tokens))
+                    .collect::<Vec<_>>()
+            );
+        }
+    }
+
+    // Undo is another guarded authored batch; either client can apply it.
+    b.apply(&mut store, &added.inverse).unwrap();
+    assert!(
+        a.stage().has_prim(child),
+        "A retains its snapshot until synchronization"
+    );
+    a.synchronize(&mut store);
+    assert!(
+        !a.stage().has_prim(child) && !b.stage().has_prim(child),
+        "both clients incorporate the shared removal"
+    );
+    println!("SharedLamp removed from both clients after independent synchronization.");
+
     // Each consumer owns its cursor. Persistent publication or merging the live
     // layer is a separate host operation; saving the root does not save sessions.
 }

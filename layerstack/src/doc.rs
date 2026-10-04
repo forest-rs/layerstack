@@ -6,7 +6,7 @@
 //! Spec: AOUSD Core §6–§7 (scene description data model and opinions), plus §10
 //! for arc-related fields (variants/references).
 
-use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, collections::VecDeque, string::String, sync::Arc, vec::Vec};
 use core::fmt;
 
 use hashbrown::HashMap;
@@ -1922,6 +1922,15 @@ pub struct Layer {
     /// Counts the edits that may change namespace or arcs (see
     /// [`Layer::structural_generation`]).
     pub(crate) structure: u64,
+    pub(crate) change_history: VecDeque<LayerChange>,
+}
+
+/// Bounded authored evidence, independent of each stage's synchronization cursor.
+#[derive(Clone, Debug)]
+pub(crate) struct LayerChange {
+    generation: u64,
+    paths: Option<Vec<PathId>>,
+    scope_ignored: Option<PathId>,
 }
 
 impl PartialEq for Layer {
@@ -1936,6 +1945,7 @@ impl PartialEq for Layer {
             relocates,
             generation: _,
             structure: _,
+            change_history: _,
         } = self;
         *id == other.id
             && *sublayers == other.sublayers
@@ -1960,6 +1970,7 @@ impl Layer {
             variant_prims: HashMap::new(),
             generation: 0,
             structure: 0,
+            change_history: VecDeque::new(),
         }
     }
 
@@ -2001,7 +2012,9 @@ impl Layer {
     /// Writes straight into the public fields ([`Layer::prims`] and the
     /// others) bypass the counter: they are the importers' building API,
     /// not an authoring API. Hosts that write a field after composition
-    /// call [`Layer::touch`].
+    /// call [`Layer::touch`]. The most recent 64 method/transaction batches
+    /// retain changed prim paths for independently synchronized live stages;
+    /// unknown writes and expired history conservatively invalidate the stage.
     ///
     /// OpenUSD reports the same edits as `SdfNotice::LayersDidChange`.
     #[must_use]
@@ -2033,17 +2046,70 @@ impl Layer {
         self.touch_structure();
     }
 
-    /// Moves [`Layer::generation`] forward, for an edit of opinion values
-    /// only.
-    pub(crate) fn touch_values(&mut self) {
-        self.generation += 1;
-    }
-
     /// Moves both counters forward, for an edit that may change namespace
     /// or arcs.
     pub(crate) fn touch_structure(&mut self) {
+        self.record_change(true, None);
+    }
+
+    /// Records an atomic authored batch. Unknown edits invalidate history precision.
+    pub(crate) fn record_change(&mut self, structural: bool, paths: Option<Vec<PathId>>) {
+        self.record_scoped_change(structural, paths, None);
+    }
+
+    pub(crate) fn record_scoped_change(
+        &mut self,
+        structural: bool,
+        paths: Option<Vec<PathId>>,
+        scope_ignored: Option<PathId>,
+    ) {
         self.generation += 1;
-        self.structure += 1;
+        self.structure += u64::from(structural);
+        if self.change_history.len() == 64 {
+            self.change_history.pop_front();
+        }
+        self.change_history.push_back(LayerChange {
+            generation: self.generation,
+            paths,
+            scope_ignored,
+        });
+    }
+
+    /// Complete authored prim evidence, or None after unknown writes/history expiry.
+    pub(crate) fn changed_paths_since(&self, generation: u64) -> Option<Vec<PathId>> {
+        self.changed_paths(generation, false)
+    }
+
+    pub(crate) fn changed_scopes_since(&self, generation: u64) -> Option<Vec<PathId>> {
+        self.changed_paths(generation, true)
+    }
+
+    fn changed_paths(&self, generation: u64, scoped: bool) -> Option<Vec<PathId>> {
+        if generation == self.generation {
+            return Some(Vec::new());
+        }
+        if generation > self.generation || self.change_history.front()?.generation > generation + 1
+        {
+            return None;
+        }
+        let mut paths = Vec::new();
+        for change in self
+            .change_history
+            .iter()
+            .filter(|c| c.generation > generation)
+        {
+            paths.extend(
+                change
+                    .paths
+                    .as_ref()?
+                    .iter()
+                    .copied()
+                    .filter(|p| !scoped || change.scope_ignored != Some(*p)),
+            );
+        }
+        paths.sort_unstable();
+        paths.dedup();
+        Some(paths)
     }
 
     /// Inserts a prim spec at the given path, replacing the spec authored in
@@ -2053,7 +2119,7 @@ impl Layer {
     /// one (see [`Layer::variant_prims`]) instead of replacing it; a spec
     /// authored outside any variant branch takes the [`Layer::prims`] slot.
     pub fn insert_prim(&mut self, path: PathId, spec: PrimSpec) {
-        self.touch_structure();
+        self.record_change(true, Some(alloc::vec![path]));
         let displaced = match self.prims.get(&path) {
             Some(existing) if existing.outer_variant_sites == spec.outer_variant_sites => None,
             Some(_) if !spec.outer_variant_sites.is_empty() => {
@@ -2322,11 +2388,10 @@ impl Layer {
     /// [`PrimSpec`] is created first, which is a structural edit (see
     /// [`Layer::structural_generation`]).
     pub fn set_property(&mut self, property_path: PropertyPath, spec: PropertySpec) -> &mut Self {
-        if self.prims.contains_key(&property_path.prim_path()) {
-            self.touch_values();
-        } else {
-            self.touch_structure();
-        }
+        self.record_change(
+            !self.prims.contains_key(&property_path.prim_path()),
+            Some(alloc::vec![property_path.prim_path()]),
+        );
         self.prims
             .entry(property_path.prim_path())
             .or_default()
@@ -2349,7 +2414,7 @@ impl Layer {
     /// Moves [`Layer::generation`] forward, since the caller may write
     /// through the reference.
     pub fn property_mut(&mut self, property_path: PropertyPath) -> Option<&mut PropertySpec> {
-        self.touch_values();
+        self.record_change(false, Some(alloc::vec![property_path.prim_path()]));
         self.prims
             .get_mut(&property_path.prim_path())?
             .property_mut(property_path.property())
@@ -2467,6 +2532,7 @@ impl InMemoryStore {
                 .max(previous.generation)
                 .checked_add(1)
                 .expect("layer generation exhausted");
+            layer.change_history.clear();
             layer.structure = layer
                 .structure
                 .max(previous.structure)

@@ -316,7 +316,7 @@ fn masks_arcs_variants_and_instanceable_use_general_composition() {
         let mut txn = Transaction::new();
         txn.create_prim(address(&mut store, "/World/A/New"), Specifier::Def, None);
         let applied = live.apply(&mut store, &txn).unwrap();
-        assert_eq!(applied.changes.resynced, [store.path("/")]);
+        assert!(!applied.changes.resynced.contains(&store.path("/")));
         assert!(live.local_namespace.is_none());
         let fresh = Stage::compose(&mut store, ROOT, options);
         let mut actual: Vec<_> = live.stage().prim_paths().collect();

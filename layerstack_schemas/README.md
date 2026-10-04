@@ -71,12 +71,12 @@ Wrong property kinds and decoding failures are explicit errors. The system token
 must match the evaluator, including when supplied by an applied schema fallback.
 
 ```rust,ignore
-let mut recipe = procedural::Procedural::new(recipe_path, application_evaluator);
-let generated = recipe.evaluate(&Scene::new(live.stage(), &store), Time::Default)?;
-let publication = generated.geometry.prepare(
+let mut recipe = procedural::Procedural::new(&store, recipe_path, application_evaluator);
+let evaluated = recipe.snapshot(&Scene::new(live.stage(), &store), Time::Default)?;
+let publication = evaluated.output().geometry.prepare(
     live.stage(), &mut store, &edit_target, mesh_path, &owned_properties,
 )?;
-let applied = live.apply(&mut store, &publication.transaction)?;
+let applied = evaluated.evidence().apply(&mut live, &mut store, &publication.transaction)?;
 bounds.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);
 owned_properties = publication.properties;
 ```
@@ -91,15 +91,32 @@ effects. If evaluation or validation fails, the example preserves its previous
 published asset. Deleting a recipe likewise requires an explicit host policy for
 retaining or removing that output.
 
-Every evaluation request checks the schema/system and re-reads consumed inputs.
-Equal composed values reuse the result without invoking the evaluator, even
-after masked or unrelated edits; callers need not deliver change notices to this
-helper. Successful evaluation replaces dynamic dependencies. Native owner
+Every request checks retained schema and input query identities. Unchanged
+requests and unrelated edits on other prims skip composed input resolution.
+Queries are conservative at prim granularity: another opinion on a consumed prim
+can require revalidation. Relationship queries retain forwarding dependencies,
+including missing property targets. Changed records with equal composed values
+reuse the result without invoking the evaluator; callers need not deliver change
+notices. Successful evaluation replaces dynamic dependencies. Native owner
 equality avoids element comparison; distinct owners can require O(elements)
-comparison. Memory consists of one generated result and its consumed values and
-targets. `dependencies()` exposes those inputs; `work()` counts evaluations,
-cache hits and composed reads. Timing belongs to the host. Publication still
-validates the snapshot when evaluation is reused.
+comparison. `dependencies()` exposes consumed inputs; `work()` counts evaluations,
+result reuse, composed reads and query reuse. Timing belongs to the host.
+
+`snapshot()` detaches a shared output and `EvaluationEvidence` for delayed work.
+Its `apply()` synchronizes source edits, verifies consumed values at the captured
+time and applies the transaction while retaining mutable access to the stage and
+store. Stale work authors nothing. The mesh transaction's target-layer generation
+guard separately rejects intervening output-site edits. `verify()` alone checks
+only the supplied scene snapshot; another edit requires another verification.
+Construction captures affinity of the token and path domains. Moving the store
+preserves it; replacing either interner or supplying a foreign stage/store is
+rejected before path lookup. This affinity is process-local, not a file identity.
+
+The binding retains one shared output and its query records. Detached results
+extend those lifetimes and can pin other opinions on consumed prims; applications
+budget pending work. `GeneratedMesh::into_validated()` lets an evaluator return
+an immutable `ValidatedMesh`, so repeated publication skips geometry validation
+and extent derivation too. The runnable fixture uses this path for both producers.
 
 This adapter remains in `layerstack_schemas`: its responsibility is composed
 schema input access and retained evaluation state. A future execution runtime
@@ -114,7 +131,9 @@ path is not a USD value change. The helper does not track file contents,
 attribute connections, metadata or arbitrary child traversal, discover a producer
 graph, schedule work, load C++ plugins, or implement Hydra's runtime. Evaluators
 must use tracked reads and explicitly invalidate for other dependencies. Hosts
-must reevaluate against the current scene before publishing delayed results.
+must publish delayed results through current input evidence. Explicit invalidation
+also retires detached evidence. Applications own external-resource concurrency;
+USD evidence does not establish file contents or freshness at another frame.
 
 The runnable example authors terrain and asset recipes under `/Recipes`, then
 evaluates upstream terrain before the asset. The asset reads terrain points
@@ -125,6 +144,25 @@ geometry only after explicit evaluation and publication. The material includes
 `UsdPreviewSurface`, `UsdUVTexture` and a UV reader; the example publishes texture
 references, not generated image files or a Substance implementation. Supply the
 referenced images when rendering it.
+
+Run `cargo run -p layerstack_examples --example producer_durability` for unchanged
+requests, unrelated edits, authored-output repair, same-ID source-layer replacement,
+stale delayed work and history recovery with both producers. Configure authored
+evidence through each `Layer::set_change_history_budget`, and composed report replay
+through `LiveStage::set_change_history_budget`. Both default to 64 batches and
+1 MiB. `change_history_stats()` reports retained batches/bytes, allocated bytes,
+recorded work, evictions and discarded oversized batches. Retained-byte limits
+include record headers and owned vector capacities; spare ring capacity is included
+in allocated bytes separately, and allocator overhead is excluded. These counters
+do not measure whole-stage, query, detached-result or application memory.
+
+Call `live.synchronize(&mut store)` before cursor reads. On
+`ChangeHistoryError::Expired`, the cursor advances and notice-dependent consumers
+must rebuild (for example, `bounds.clear()`) before processing later reports.
+Oversized batches still reach synchronous callbacks. Missing authored evidence
+causes conservative recomposition; query-backed producers verify current records
+without relying on replay. History loss alone need not invalidate generated
+outputs or retire otherwise-current input evidence.
 
 ## Publishing generated meshes
 
@@ -146,6 +184,24 @@ let applied = live.apply(&mut store, &publication.transaction)?;
 bounds.apply_changes(&Scene::new(live.stage(), &store), &applied.changes);
 owned_properties = publication.properties; // Only after successful application.
 ```
+
+For repeated requests, consume the generated data once with
+`let snapshot = generated_mesh.into_validated()?;`, then call `snapshot.prepare`
+with the same arguments. Clones share its immutable geometry and cached extent.
+Mutating an exported owner uses copy-on-write and cannot alter the validated
+snapshot. Deferred numeric primvars decode once at construction. New point or
+topology data requires a new validated snapshot; untouched buffers keep their
+owners. `validation_work()` describes the initial validation; the returned
+publication's `work` reports zero geometry validations and extent visits on reuse.
+
+Each preparation still inspects the actual authored site and owned properties,
+so deletion or replacement is detected even with unchanged inputs. Payload
+arrays are compared by owner and rebound to the snapshot when owners differ,
+including equal contents in an independently allocated buffer. The cached
+two-point extent is compared by value. This avoids geometry scans without a
+content hash. Empty retained transactions also carry the target-generation guard.
+Planning costs scale with properties, metadata and authored samples, not geometry
+size; preparation allocates property specs, names and transaction storage.
 
 Each producer owns its property manifest at one authored site. Keep the manifest
 with that producer's state and pass it to subsequent preparations at that same
@@ -248,16 +304,34 @@ evaluation and validated publication for the same mesh and placement counts:
 
 | Point instances | Unchanged | Recipe point update | Upstream point update | Recipe update + scatter bounds |
 | ---: | ---: | ---: | ---: | ---: |
-| 100 | 23.0 µs | 98.8 µs | 98.9 µs | 121 µs |
-| 10,000 | 23.0 µs | 98.4 µs | 98.5 µs | 409 µs |
-| 100,000 | 23.0 µs | 98.2 µs | 98.7 µs | 4.02 ms |
+| 100 | 2.00 µs | 76.9 µs | 78.3 µs | 98.4 µs |
+| 10,000 | 2.02 µs | 77.5 µs | 78.5 µs | 390 µs |
+| 100,000 | 2.03 µs | 77.4 µs | 77.5 µs | 3.77 ms |
 
 Each case has 100 native references. Recipe edits and upstream terrain
 evaluation/publication are excluded from these timings; the upstream column
-measures the dependent asset after terrain changes. Unchanged requests reuse
-evaluation but still revalidate input reads and the mesh snapshot. Only the last
+measures the dependent asset after terrain changes. Unchanged requests check
+query identities, reuse validated geometry and verify detached input evidence;
+they skip input resolution and geometry scans. The prior raw-mesh workflow
+measured about 23 µs unchanged at these counts. Only the last
 column includes bounds consumption. Initial publication and topology workloads
 are covered by the direct publication groups above.
+
+`cargo bench -p wind_tunnel --bench producer_durability` isolates unchanged
+mesh preparation/application from scene population and generator work:
+
+| Points | Raw `GeneratedMesh` | Retained `ValidatedMesh` |
+| ---: | ---: | ---: |
+| 100 | 1.35 µs | 1.22 µs |
+| 4,096 | 4.91 µs | 1.18 µs |
+| 1,000,000 | 883 µs | 1.19 µs |
+
+This workload uses points without faces/primvars to isolate point validation and
+extent work. Initial validation/publication is excluded. The raw baseline was
+measured before migrating the benchmark to retained snapshots, on the same host
+with the same short Criterion settings. The polygon/instance table above covers
+the complete producer path. These measurements do not establish allocation-free
+publication; planning still allocates as described above.
 
 The existing `numeric_arrays/schema_points` benchmark fell from about 179 µs to
 22 ns for a million-point dense getter, with pointer-identity tests establishing

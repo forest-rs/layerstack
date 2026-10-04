@@ -43,6 +43,7 @@ Run an example with `cargo run -p layerstack_examples --example NAME`.
 | `asset_localization` | Explicit localization for portable assets |
 | `instancing` | Shared composition prototypes and instance occurrences |
 | `generated_assets` | Two `UsdProc` recipes, tracked evaluation, shared geometry, material texture references, native/point placements and dependent-bound invalidation |
+| `producer_durability` | Store-bound retained producers, unchanged query/snapshot reuse, output repair, source-layer replacement, rejection of stale delayed work and explicit history recovery |
 | `live_editing` | Retained stage edits and synchronization |
 | `sparse_array_edits` | Incremental array changes |
 | `explain_value` | Value provenance through references, overrides, sparse edits and time offsets |

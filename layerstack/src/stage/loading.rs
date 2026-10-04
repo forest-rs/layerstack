@@ -326,3 +326,123 @@ impl super::Stage {
         out
     }
 }
+
+impl super::Stage {
+    pub(crate) fn capture_controls(&mut self, options: super::StageOptions) {
+        self.options = options;
+    }
+
+    pub(crate) fn merge_control_subtrees(
+        &mut self,
+        store: &dyn LayerStore,
+        mut partial: Self,
+        affected: &[PathId],
+        roots: &[PathId],
+        options: super::StageOptions,
+    ) {
+        let within = |path: PathId| {
+            roots.iter().any(|root| {
+                store
+                    .paths()
+                    .resolve(*root)
+                    .is_prefix_of(store.paths().resolve(path))
+            })
+        };
+        let mut boundaries = BTreeMap::new();
+        for &root in roots {
+            if let Some(parent) = store
+                .paths()
+                .resolve(root)
+                .parent()
+                .and_then(|p| store.paths().lookup(&p))
+            {
+                if within(parent) {
+                    continue;
+                }
+                let mut children = self
+                    .all_children_of(parent)
+                    .unwrap_or(&[])
+                    .iter()
+                    .copied()
+                    .filter(|p| !within(*p))
+                    .collect::<Vec<_>>();
+                children.extend(
+                    partial
+                        .all_children_of(parent)
+                        .unwrap_or(&[])
+                        .iter()
+                        .copied()
+                        .filter(|p| within(*p)),
+                );
+                children.sort_by(|a, b| {
+                    store
+                        .paths()
+                        .resolve(*a)
+                        .cmp_with_tokens(store.paths().resolve(*b), store.tokens())
+                });
+                children.dedup();
+                boundaries.insert(parent, children);
+            }
+        }
+        self.loadable.retain(|p| !within(*p));
+        self.loadable
+            .extend(partial.loadable.drain().filter(|p| within(*p)));
+        self.options = options;
+        self.merge_local_subtrees(
+            store,
+            partial,
+            affected,
+            affected,
+            boundaries.into_iter().collect(),
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Layer, PrimSpec, Reference};
+    use crate::{LiveStage, StageOptions};
+    use alloc::sync::Arc;
+    #[test]
+    fn payload_control_preserves_unrelated_record_identity() {
+        let mut store = crate::InMemoryStore::default();
+        let host = store.path("/Host");
+        let source = store.path("/Asset");
+        let child = store.path("/Asset/Child");
+        let unrelated = store.path("/Unrelated");
+        let mut root = Layer::new(LayerId(1));
+        let mut spec = PrimSpec::def();
+        spec.payloads.explicit = Some(alloc::vec![Reference::with_asset(
+            LayerId(2),
+            source,
+            "asset.usda"
+        )]);
+        root.insert_prim(host, spec);
+        root.insert_prim(unrelated, PrimSpec::def());
+        store.insert_layer(root);
+        let mut asset = Layer::new(LayerId(2));
+        asset.insert_prim(source, PrimSpec::def());
+        asset.insert_prim(child, PrimSpec::def());
+        store.insert_layer(asset);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let retained = live.stage().prims[&unrelated].data.clone();
+        live.unload(&store, host);
+        let changes = live.recompose_changes(&mut store);
+        assert_eq!(changes.resynced, [host]);
+        assert!(!live.recomposition_work().full_rebuild);
+        assert!(Arc::ptr_eq(&retained, &live.stage().prims[&unrelated].data));
+        live.load(&store, host, LoadPolicy::WithDescendants);
+        live.recompose_changes(&mut store);
+        assert!(Arc::ptr_eq(&retained, &live.stage().prims[&unrelated].data));
+        assert!(live.stage().has_prim(store.path("/Host/Child")));
+        assert!(live.mute_layer(LayerId(2)).unwrap());
+        live.recompose_changes(&mut store);
+        assert!(!live.recomposition_work().full_rebuild);
+        assert!(Arc::ptr_eq(&retained, &live.stage().prims[&unrelated].data));
+        assert!(live.unmute_layer(LayerId(2)));
+        live.recompose_changes(&mut store);
+        assert!(live.stage().has_prim(store.path("/Host/Child")));
+        assert!(Arc::ptr_eq(&retained, &live.stage().prims[&unrelated].data));
+    }
+}

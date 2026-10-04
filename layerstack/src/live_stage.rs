@@ -12,6 +12,8 @@
 
 use alloc::{collections::BTreeSet, vec::Vec};
 
+mod controls;
+pub use controls::RecompositionWork;
 mod local;
 mod notices;
 pub use notices::{ChangeCursor, ChangeHistoryError, ChangeNotice, ChangeSubscription};
@@ -217,6 +219,8 @@ pub struct LiveStage {
     root: LayerId,
     options: StageOptions,
     needs_full_rebuild: bool,
+    controls_pending: bool,
+    work: RecompositionWork,
     notices: notices::Journal,
 }
 
@@ -250,6 +254,8 @@ impl LiveStage {
             root,
             options,
             needs_full_rebuild: false,
+            controls_pending: false,
+            work: RecompositionWork::default(),
             notices: notices::Journal::default(),
         };
         live.reindex_all_sources();
@@ -286,9 +292,7 @@ impl LiveStage {
         for layer in unmute {
             changed |= self.options.muted_layers.remove(layer);
         }
-        if changed {
-            self.notify_structural_change();
-        }
+        self.controls_pending |= changed;
         Ok(changed)
     }
 
@@ -331,7 +335,7 @@ impl LiveStage {
             return false;
         }
         self.options.load_rules = rules;
-        self.notify_structural_change();
+        self.controls_pending = true;
         true
     }
 
@@ -419,14 +423,15 @@ impl LiveStage {
         txn: &Transaction,
     ) -> Result<Applied, EditError> {
         let pending_opinions = self.tracker.has_invalidated(OPINION_EDIT);
+        let pending_recomposition =
+            self.needs_full_rebuild || pending_opinions || self.controls_pending;
         // Precision is valid only against the source generations we composed.
         // Unknown external edits must not be hidden behind this transaction.
         let sources_current = self
             .generations
             .iter()
             .all(|(&layer, seen)| generations_of(store, layer) == *seen);
-        let local_current = !self.needs_full_rebuild
-            && !pending_opinions
+        let local_current = !pending_recomposition
             && self
                 .local_namespace
                 .as_ref()
@@ -436,10 +441,10 @@ impl LiveStage {
             .flatten()
             .map(|index| index as &dyn crate::edit::SourceNamespace);
         let outcome = crate::edit::apply(store, txn, Some(&self.stage), namespace)?;
+        self.work = RecompositionWork::default();
         let mut property_changes = alloc::collections::BTreeMap::new();
         if sources_current
-            && !pending_opinions
-            && !self.needs_full_rebuild
+            && !pending_recomposition
             && let Some(properties) = &outcome.properties
         {
             for &(layer, source, field) in properties {
@@ -484,7 +489,7 @@ impl LiveStage {
         // Property values do not change prim indexes, dependency edges or
         // namespace. Do not rediscover population to refresh those slots.
         let refreshed = outcome.values.as_ref().and_then(|edits| {
-            if self.needs_full_rebuild || self.tracker.has_invalidated(OPINION_EDIT) {
+            if pending_recomposition {
                 return None;
             }
             let dependents: Vec<Vec<PathId>> = edits
@@ -1090,8 +1095,12 @@ impl LiveStage {
         store: &mut dyn LayerStore,
         mut changes: Option<&mut Changes>,
     ) -> Vec<PathId> {
+        self.work = RecompositionWork::default();
         if self.needs_full_rebuild {
             return self.full_rebuild(store, changes);
+        }
+        if self.controls_pending {
+            return self.recompose_controls(store, changes);
         }
 
         if !self.tracker.has_invalidated(OPINION_EDIT) {
@@ -1109,6 +1118,7 @@ impl LiveStage {
         let mut resynced_roots = Vec::new();
         let mut partial = loop {
             let partial = self.compose_scoped(store, &affected);
+            self.work.composed_prim_indexes += partial.composition_work().composed_prim_indexes;
 
             // An opinion edit that turns out to change hierarchy (activation,
             // child ordering, ...) cannot be patched from a masked
@@ -1151,6 +1161,7 @@ impl LiveStage {
         self.expression_variables
             .extend(core::mem::take(&mut partial_deps.expression_variables));
 
+        self.work.replaced_prim_indexes = affected.len();
         // Replace only the recomposed prim indexes; hierarchy is unchanged.
         self.stage.merge_prims_from(store, partial, &affected);
         // A metadata-only clip edit can introduce an already resident layer.
@@ -1187,6 +1198,11 @@ impl LiveStage {
     /// Replaces dependency data for the affected batch, leaving other
     /// dependents intact. Scan global metadata once, not once per prim.
     fn update_prim_edges(&mut self, affected: &[PathId], partial: &CompositionDeps) {
+        // Relocation tables are consulted even when currently empty. A newly
+        // introduced stack must receive future table-change notifications too;
+        // retain conservative watches until a full rebuild re-establishes them.
+        self.relocation_layers
+            .extend(partial.relocation_layers.iter().copied());
         let affected_set: HashSet<_> = affected.iter().copied().collect();
         self.arc_metadata
             .retain(|arc| !affected_set.contains(&arc.target));
@@ -1305,6 +1321,7 @@ impl LiveStage {
         changes: Option<&mut Changes>,
     ) -> Vec<PathId> {
         self.needs_full_rebuild = false;
+        self.controls_pending = false;
         self.tracker.clear(OPINION_EDIT);
         let old_prims: HashSet<PathId> = self.stage.prim_paths().collect();
 
@@ -1315,6 +1332,13 @@ impl LiveStage {
         let mut stage = Stage::compose(store, self.root, opts);
         let deps = stage.take_deps().unwrap_or_default();
 
+        self.work.full_rebuild = true;
+        self.work.composed_prim_indexes += stage.composition_work().composed_prim_indexes;
+        self.work.replaced_prim_indexes = old_prims.len()
+            + stage
+                .prim_paths()
+                .filter(|p| !old_prims.contains(p))
+                .count();
         self.stage = stage;
         self.tracker =
             InvalidationTracker::from_graph_with_cycle_handling(deps.graph, CycleHandling::Ignore);

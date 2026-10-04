@@ -439,6 +439,13 @@ jobs:
 
       - name: check shading port authoring oracle
         run: python layerstack_conformance/scripts/shading_ports_oracle.py --check
+      - name: check runnable tutorial outputs with OpenUSD
+        run: |
+          for tutorial in tutorial_hello_world tutorial_references tutorial_variants tutorial_stage_io; do
+            cargo run --locked -p layerstack_examples --example "$tutorial" -- "$RUNNER_TEMP/tutorials/$tutorial"
+          done
+          python layerstack_conformance/scripts/tutorials_oracle.py "$RUNNER_TEMP/tutorials"
+
       - name: check retained query oracle
         run: python layerstack_conformance/scripts/retained_queries_oracle.py --check
 

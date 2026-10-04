@@ -1,78 +1,92 @@
 # layerstack_examples
 
-Small runnable programs that demonstrate how to use the `layerstack` API, and the
-`opinionated` kernels on their own.
+Runnable workflows for Layerstack's composition, authoring, schema and I/O APIs.
+Examples stay in this workspace crate so application dependencies do not enter
+core crates. Existing example names remain stable.
 
-## Run
+## Start here: OpenUSD tutorials in Rust
 
-- `cargo run -p layerstack_examples`
-- `cargo run -p layerstack_examples --example minimal`
-- `cargo run -p layerstack_examples --example value_clips`
-  (authors a detached clip bundle, loads its explicit asset requests through a host catalog,
-  then queries interpolated values, sample times and raw-layer provenance)
-- `cargo run -p layerstack_examples --example sparse_array_edits`
-- `cargo run -p layerstack_examples --example explain_value`
-  (explains the values of a tree asset referenced into a grove: a local override, a sparse edit
-  on its points from a sublayer, time samples through the reference's layer offset, combined
-  `customData` and an inherited attribute)
-- `cargo run -p layerstack_examples --example flatten`
-  (flattens a grove of referenced trees, one retimed, with a sublayer's overrides, into a single
-  USDA file with no composition arcs, as `usdcat --flatten` does, prints the report of what it
-  wrote exactly and what it transformed, and verifies that the file composes the same values on
-  its own)
-- `cargo run -p layerstack_examples --example typed_schema`
-  (authors a mesh, a sphere light and a collection through `layerstack_schemas`' edit handles in
-  a base layer and a stronger shot layer, then reads them through the typed views: the strongest
-  opinion, schema fallbacks, `allowedTokens` enums and inherited properties, the purpose and
-  visibility the arm inherits, and the raw value with its provenance)
-- `cargo run -p layerstack_examples --example world_transforms`
-  (authors a small animated orrery through the transform op API, then prints the world
-  transform, visibility and purpose of every `Gprim` at two time codes, through one `XformCache`
-  per time code)
-- `cargo run -p layerstack_examples --example camera_frustum`
-  (computes sampled camera projection, view and primary frustum, then culls ordered
-  shutter samples of moving point instances without a graphics backend)
-- `cargo run -p layerstack_examples --example morph_animation`
-  (retains animated morph targets without a skeleton, with independent definition/weight
-  revisions and cached geometry-space point outputs)
-- `cargo run -p layerstack_examples --example deformation_inputs`
-  (prepares renderer-owned binding buffers and a shared rig palette without reading or
-  deforming CPU vertices; revisions skip repeat uploads and the renderer keeps previous-frame
-  palettes for motion history)
-- `cargo run -p layerstack_examples --example light_rig_slots`
-  (sparse edits to a typed `Vec` of light rig slots with `opinionated` alone: insert a light,
-  duplicate the last slot, and resize with an unlit light as the host-supplied fill)
-- `cargo run -p layerstack_examples --example mesh_to_usdz -- cube.usdz [arkit|generic]`
-  (writes a cube with normals and UVs as a USDZ package; the default ARKit / AR Quick Look
-  profile uses a USDC root layer, `generic` a USDA one)
-- `cargo run -p layerstack_examples --example mesh_materials_to_usdz -- cube.usdz [arkit|generic]`
-  (writes a cube whose faces are split between a textured and a constant `UsdPreviewSurface`
-  material, with its textures packaged, in the same two profiles)
-- `cargo run -p layerstack_examples --example scatter_to_usdz -- field.usdz [arkit|generic]`
-  (scatters trees and rocks over a field as one `PointInstancer`: each prototype, with its
-  materials, is written once, and each placement, given as an affine matrix and split by
-  `push_affine` (mirrors become negative scales), is an index, a position, an orientation, a
-  scale and an id; the `arkit` package writes the instances as references, which Apple's
-  viewers draw)
+These programs adapt the official OpenUSD tutorials (which use Python bindings
+on the C++ implementation) to our explicit store, stage and edit-target APIs.
+Each program creates its own input and checks its results. Pass an output directory
+as the first argument, or use the temporary directory printed by the program.
 
-`cargo run -p layerstack_examples --bin shading_values` authors a material interface
-input and traces the value supplying a shader input.
+```sh
+cargo run -p layerstack_examples --example tutorial_hello_world -- ./tutorial-output/hello
+cargo run -p layerstack_examples --example tutorial_references -- ./tutorial-output/references
+cargo run -p layerstack_examples --example tutorial_variants -- ./tutorial-output/variants
+cargo run -p layerstack_examples --example tutorial_stage_io -- ./tutorial-output/io
+```
 
-The library target compiles a generated `shaderDefs.usda` matrix interface with
-`#![no_std]`, covering scalar/array inputs and outputs without the standard prelude.
+| Example | Workflow | OpenUSD tutorial |
+| --- | --- | --- |
+| `tutorial_hello_world` | Create, type and save a sphere; inspect generic properties | [Hello World](https://openusd.org/release/tut_helloworld.html), [Generic Prims](https://openusd.org/release/tut_helloworld_redux.html), [Properties](https://openusd.org/release/tut_inspect_and_author_props.html) |
+| `tutorial_references` | Load one asset, reference it twice and override one occurrence | [Referencing Layers](https://openusd.org/release/tut_referencing_layers.html) |
+| `tutorial_variants` | Clear a stronger opinion, author through variant edit targets and select a branch | [Authoring Variants](https://openusd.org/release/tut_authoring_variants.html) |
+| `tutorial_stage_io` | Traverse with pruning, retain a checked query, undo edits, export USDC and reload | [Traversing a Stage](https://openusd.org/release/tut_traversing_stage.html), [Layer Formats](https://openusd.org/release/tut_converting_between_layer_formats.html) |
 
-`cargo run -p layerstack_examples --bin lighting_inputs` discovers emitters,
-captures shaping/shadow/environment groups, checks full affine factors before
-optional TRS conversion, and anchors a texture with its authoring-layer evidence.
-It retains illumination/shadow decisions across edits and uses component revisions
-to avoid repeated transform and membership-buffer uploads. Shader-driven inputs
-retain provider evidence and require explicit engine execution. GPU layouts,
-resource handles, color management and sampling remain engine choices.
+CI reopens these authored outputs with OpenUSD 26.8 and independently checks
+schema values, reference overrides, variant selection and binary export.
+The examples use `StageDocument<Filesystem>` for file workflows, `SchemaEdit`
+for typed authoring and `Transaction` for guarded edits. Composition arcs use
+layer APIs followed by explicit synchronization. Applications supply storage,
+transport, conflict handling and rendering.
 
-`cargo run -p layerstack_examples --bin session_collaboration` composes a shared
-live-edit layer beneath two independent session roots. Private overrides remain
-local, incoming authored-value guards reject stale batches, and each client
-synchronizes and observes changes independently. Shared prim creation, guarded
-undo and per-client recomposition counters show scoped structural updates.
-The host owns transport, durable
-identity mapping, permissions, conflict policy and persistent publication.
+## Composition and editing
+
+Run an example with `cargo run -p layerstack_examples --example NAME`.
+
+| Example | What it demonstrates |
+| --- | --- |
+| `minimal` | A small composed layer stack |
+| `asset_resolution` | Host-owned asset resolution |
+| `asset_localization` | Explicit localization for portable assets |
+| `instancing` | Shared composition prototypes and instance occurrences |
+| `live_editing` | Retained stage edits and synchronization |
+| `sparse_array_edits` | Incremental array changes |
+| `explain_value` | Value provenance through references, overrides, sparse edits and time offsets |
+| `flatten` | Flatten a referenced scene and verify its composed values |
+| `timeline` | Time samples and interpolation |
+| `value_clips` | Detached clip bundles, asset requests, interpolation and provenance |
+| `validate_usda` | Validation of authored scene data |
+
+`cargo run -p layerstack_examples` runs the introductory composition program.
+
+## Geometry, shading and engine inputs
+
+| Example | What it demonstrates |
+| --- | --- |
+| `typed_schema` | Typed mesh, light and collection authoring, fallbacks and inherited properties |
+| `world_transforms` | Animated transforms, inherited visibility and purpose through `XformCache` |
+| `camera_frustum` | Sampled projection and frustum culling of moving point instances |
+| `morph_animation` | Retained morph definitions and weights with cached geometry outputs |
+| `deformation_inputs` | Renderer-owned binding buffers and shared rig palettes for GPU deformation |
+| `light_rig_slots` | Sparse slot edits using `opinionated` alone |
+
+These additional workflows are binaries: use
+`cargo run -p layerstack_examples --bin NAME`.
+
+| Binary | What it demonstrates |
+| --- | --- |
+| `shading_values` | Material interface inputs and shader value providers |
+| `lighting_inputs` | Light discovery, shaping, shadows, texture provenance and incremental engine inputs |
+| `retained_queries` | Reusable transform, bounds and shading evaluation across changes |
+| `stage_notices` | Inspecting retained stage changes |
+| `session_collaboration` | Two clients with independent session overrides over shared live edits, guarded conflicts and scoped synchronization |
+
+GPU layouts, resource handles, color management, sampling, transport, permissions
+and persistent publication remain application choices. The library target also
+compiles a generated `shaderDefs.usda` interface with `#![no_std]`, covering
+scalar and array inputs and outputs without the standard prelude.
+
+## Package export
+
+| Command | What it writes |
+| --- | --- |
+| `cargo run -p layerstack_examples --example mesh_to_usdz -- cube.usdz [arkit\|generic]` | A cube with normals and UVs |
+| `cargo run -p layerstack_examples --example mesh_materials_to_usdz -- cube.usdz [arkit\|generic]` | A cube with textured and constant `UsdPreviewSurface` face materials |
+| `cargo run -p layerstack_examples --example scatter_to_usdz -- field.usdz [arkit\|generic]` | Material-bearing prototypes and point instances |
+
+The default ARKit / AR Quick Look profile uses a USDC root and exports scatter
+instances as references. The generic profile uses a USDA root and a
+`PointInstancer`. Affine placements include negative scales for mirrors.

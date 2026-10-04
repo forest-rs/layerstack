@@ -17,6 +17,7 @@ workspace = true
 
 [dependencies]
 layerstack = { workspace = true }
+layerstack_io = { features = ["std"], workspace = true }
 layerstack_mesh_export = { workspace = true }
 layerstack_schemas = { features = ["all"], workspace = true }
 layerstack_usda = { workspace = true }
@@ -25,3 +26,19 @@ opinionated = { workspace = true }
 
 [build-dependencies]
 layerstack_schemagen = { path = "../layerstack_schemagen" }
+
+[[example]]
+name = "tutorial_hello_world"
+path = "examples/tutorials/hello_world.rs"
+
+[[example]]
+name = "tutorial_references"
+path = "examples/tutorials/references.rs"
+
+[[example]]
+name = "tutorial_variants"
+path = "examples/tutorials/variants.rs"
+
+[[example]]
+name = "tutorial_stage_io"
+path = "examples/tutorials/stage_io.rs"

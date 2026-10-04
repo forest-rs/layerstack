@@ -297,11 +297,33 @@ impl<'a> Imageable<'a> {
         element: &SubsetElementType,
         family: &str,
     ) -> SubsetValidation {
+        self.validate_subset_family_impl(element, family, None)
+    }
+    /// Checks a family against topology and indices at one requested stage time.
+    /// Useful for importers evaluating a snapshot instead of auditing all samples.
+    /// The same bounds, overlap and partition rules as `validate_subset_family`
+    /// apply. AOUSD Core §12.3–12.5 (time-based attribute resolution).
+    #[must_use]
+    pub fn validate_subset_family_at(
+        &self,
+        element: &SubsetElementType,
+        family: &str,
+        time: Time,
+    ) -> SubsetValidation {
+        self.validate_subset_family_impl(element, family, Some(time))
+    }
+    fn validate_subset_family_impl(
+        &self,
+        element: &SubsetElementType,
+        family: &str,
+        selected_time: Option<Time>,
+    ) -> SubsetValidation {
         let mut result = SubsetValidation::default();
+        let diagnostic_time = selected_time.unwrap_or(Time::Default);
         if !valid_geom(self, element) {
             result.push(
                 self.path(),
-                Time::Default,
+                diagnostic_time,
                 SubsetProblemKind::InvalidGeometry,
             );
             return result;
@@ -311,7 +333,7 @@ impl<'a> Imageable<'a> {
             if subset.element_type().as_ref() != Some(element) {
                 result.push(
                     subset.path(),
-                    Time::Default,
+                    diagnostic_time,
                     SubsetProblemKind::ElementTypeMismatch,
                 );
                 return result;
@@ -320,25 +342,37 @@ impl<'a> Imageable<'a> {
         let family_type = self.subset_family_type(family);
         let restricted = family_type != "unrestricted";
         let partition = family_type == "partition";
-        let varying = topology_names(element, self)
-            .iter()
-            .any(|name| sample_times(self, name).len() > 1);
-        let earliest = elements(self, element, Time::held(f64::MIN));
-        if !varying && earliest.as_ref().map_or(true, |e| e.len() == 0) {
+        let varying = selected_time.is_some()
+            || topology_names(element, self)
+                .iter()
+                .any(|name| sample_times(self, name).len() > 1);
+        if !varying
+            && elements(self, element, Time::held(f64::MIN))
+                .as_ref()
+                .map_or(true, |e| e.len() == 0)
+        {
             result.push(
                 self.path(),
                 Time::held(f64::MIN),
                 SubsetProblemKind::InvalidTopology,
             );
         }
-        let mut times: Vec<_> = subsets
-            .iter()
-            .flat_map(|s| sample_times(s, "indices"))
-            .collect();
-        times.sort_by(f64::total_cmp);
-        times.dedup_by(|a, b| *a == *b);
+        let mut times = Vec::new();
+        if selected_time.is_none() {
+            times.extend(subsets.iter().flat_map(|s| sample_times(s, "indices")));
+            times.sort_by(f64::total_cmp);
+            times.dedup_by(|a, b| *a == *b);
+        }
         let mut any = false;
-        for time in core::iter::once(Time::Default).chain(times.into_iter().map(Time::held)) {
+        let evaluated: Vec<_> = selected_time.map_or_else(
+            || {
+                core::iter::once(Time::Default)
+                    .chain(times.into_iter().map(Time::held))
+                    .collect()
+            },
+            |time| alloc::vec![time],
+        );
+        for time in evaluated {
             let topology = if varying {
                 elements(self, element, time)
             } else {
@@ -408,7 +442,7 @@ impl<'a> Imageable<'a> {
             }
         }
         if !any {
-            result.push(self.path(), Time::Default, SubsetProblemKind::NoIndices);
+            result.push(self.path(), diagnostic_time, SubsetProblemKind::NoIndices);
         }
         result
     }

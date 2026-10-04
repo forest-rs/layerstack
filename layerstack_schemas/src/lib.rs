@@ -446,6 +446,8 @@ mod xform_edit;
 #[cfg(feature = "usd-geom")]
 pub use common_xform::{CommonTransform, CommonTransformError, RotationOrder};
 
+#[cfg(all(feature = "usd-geom", feature = "usd-shade"))]
+mod material_subsets;
 #[cfg(feature = "usd-shade")]
 pub use binding::{
     Binding, BindingCache, BindingCacheStats, BindingInputs, BindingKind, BindingOptions,
@@ -467,6 +469,8 @@ pub use kind::KindRegistry;
 #[cfg(feature = "usd-semantics")]
 pub use labels::{LabelInterval, LabelQueryError, LabelsQuery};
 pub use layerstack::Time;
+#[cfg(all(feature = "usd-geom", feature = "usd-shade"))]
+pub use material_subsets::{MaterialBindingSubset, MaterialBindingSubsets, MaterialSubsetError};
 #[cfg(feature = "usd")]
 pub use predicate::{CollectionPredicate, CollectionPredicates};
 pub use view::{InstanceEdit, InstanceView, PrimEdit, PrimView, Scene};

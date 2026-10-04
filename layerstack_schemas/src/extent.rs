@@ -47,9 +47,14 @@ pub(crate) fn compute(scene: &Scene<'_>, path: PathId, time: Time) -> Option<(Ra
     let points_schema = scene.is_a(path, "Points");
     let curves = scene.is_a(path, "Curves");
     if scene.is_a(path, "Mesh") || points_schema || curves {
-        let points = read(&prim, "points", time, crate::value::read_float3_array)?;
+        let points = read(
+            &prim,
+            "points",
+            time,
+            crate::value::read_float3_array_shared,
+        )?;
         let widths = if points_schema || curves {
-            read(&prim, "widths", time, crate::value::read_float_array)
+            read(&prim, "widths", time, crate::value::read_float_array_shared)
         } else {
             None
         };

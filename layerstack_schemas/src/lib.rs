@@ -64,6 +64,10 @@
 //! Vectors are arrays, quaternions `[i, j, k, r]`, halves `f32`, strings,
 //! assets and path expressions `Arc<str>`, and matrices arrays of rows
 //! (`m[row][column]`, translation in the last row, as USD stores them).
+//! Matching numeric array getters retain `Arc<Vec<T>>` storage. Borrow with
+//! `as_slice()` or explicitly copy with `as_ref().clone()` for a mutable vector.
+//! Half and matrix representation conversions still materialize vectors.
+//! Slice setters copy; `_owned` and `_shared` setters transfer numeric buffers.
 //! For anything a view does not offer, resolve the property by its USD name
 //! on [`Scene::stage`]: `Stage::resolve_value_with_schema` returns the raw
 //! resolved value with its provenance.
@@ -105,7 +109,7 @@
 //!
 //! let scene = Scene::new(live.stage(), &store);
 //! let mesh = Mesh::new(&scene, path).expect("a mesh");
-//! assert_eq!(mesh.face_vertex_counts(), Some(vec![4]));
+//! assert_eq!(mesh.face_vertex_counts(), Some(vec![4].into()));
 //! assert_eq!(mesh.points_at(1.0, InterpolationType::Held).map(|p| p.len()), Some(4));
 //! // Nothing authored: the schema's fallback.
 //! assert_eq!(mesh.subdivision_scheme(), Some(MeshSubdivisionScheme::CatmullClark));

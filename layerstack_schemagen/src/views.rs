@@ -147,6 +147,33 @@ pub(crate) struct RustType {
     pub(crate) write_fn: String,
 }
 
+/// Element representations that match native typed-array storage exactly.
+pub(crate) fn shared_array(zero: &Value) -> bool {
+    matches!(
+        zero,
+        Value::Bool(_)
+            | Value::UChar(_)
+            | Value::Int(_)
+            | Value::UInt(_)
+            | Value::Int64(_)
+            | Value::UInt64(_)
+            | Value::Float(_)
+            | Value::Double(_)
+            | Value::TimeCode(_)
+            | Value::Vec2f(_)
+            | Value::Vec3f(_)
+            | Value::Vec4f(_)
+            | Value::Vec2d(_)
+            | Value::Vec3d(_)
+            | Value::Vec4d(_)
+            | Value::Vec2i(_)
+            | Value::Vec3i(_)
+            | Value::Vec4i(_)
+            | Value::Quatf(_)
+            | Value::Quatd(_)
+    )
+}
+
 /// The Rust type of a property whose element type's zero value is `zero`;
 /// `None` for a value-less type (`opaque`).
 pub(crate) fn rust_type(zero: &Value, is_array: bool) -> Result<Option<RustType>, String> {
@@ -188,13 +215,19 @@ pub(crate) fn rust_type(zero: &Value, is_array: bool) -> Result<Option<RustType>
     };
     Ok(Some(if is_array {
         RustType {
-            read: format!("::alloc::vec::Vec<{read}>"),
+            read: if shared_array(zero) {
+                format!("::alloc::sync::Arc<::alloc::vec::Vec<{read}>>")
+            } else {
+                format!("::alloc::vec::Vec<{read}>")
+            },
             write: format!("&[{write}]"),
             read_fn: if matches!(
                 zero,
                 Value::String(_) | Value::Asset(_) | Value::PathExpression(_) | Value::Token(_)
             ) {
                 format!("|v, t| crate::value::read_array(v, t, crate::value::read_{name})")
+            } else if shared_array(zero) {
+                format!("crate::value::read_{name}_array_shared")
             } else {
                 format!("crate::value::read_{name}_array")
             },
@@ -467,6 +500,18 @@ fn method_names<'m>(
         let name = method_name(&schema.name, property);
         out.push((name.clone(), Some(property)));
         out.push((format!("set_{name}"), Some(property)));
+        if property
+            .value_type
+            .as_ref()
+            .is_some_and(|(_, array, zero)| *array && shared_array(zero))
+        {
+            for suffix in ["owned", "shared"] {
+                out.push((format!("set_{name}_{suffix}"), Some(property)));
+                if property.variability == Variability::Varying {
+                    out.push((format!("set_{name}_{suffix}_at"), Some(property)));
+                }
+            }
+        }
         if property.kind == PropertyKind::Attribute && property.variability == Variability::Varying
         {
             out.push((format!("{name}_at"), Some(property)));
@@ -607,6 +652,13 @@ fn accessors(
     }
     facts.push_str(").");
     brief.push(doc_text(&facts));
+    if property
+        .value_type
+        .as_ref()
+        .is_some_and(|(_, array, zero)| *array && shared_array(zero))
+    {
+        brief.push("Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage.".into());
+    }
     let docs = doc_attrs("        ", &brief);
     // The USD name, for authoring and reading by name (OpenUSD's schema
     // tokens); a multiple-apply schema's names depend on the instance.
@@ -689,7 +741,7 @@ fn accessors(
             property.name, ty.read, ty.read_fn
         )
     };
-    let setters = if varying {
+    let mut setters = if varying {
         format!(
             "    set_attribute! {{\n{docs}        set_{name}, set_{name}_at, {:?}, {}, {}\n    }}\n",
             property.name, ty.write, ty.write_fn
@@ -700,6 +752,40 @@ fn accessors(
             property.name, ty.write, ty.write_fn
         )
     };
+    if *is_array && shared_array(zero) {
+        let element = rust_type(zero, false)?.expect("an array element").read;
+        for (suffix, input) in [
+            ("owned", format!("::alloc::vec::Vec<{element}>")),
+            (
+                "shared",
+                format!("::alloc::sync::Arc<::alloc::vec::Vec<{element}>>"),
+            ),
+        ] {
+            let write = format!("{}_{suffix}", ty.write_fn);
+            let note = if suffix == "owned" {
+                "Transfers the vector allocation and capacity; allocates only its shared owner."
+            } else {
+                "Transfers a shared owner without allocating or copying elements."
+            };
+            let docs = doc_attrs(
+                "        ",
+                &[format!("{note} Slice callers can use `set_{name}`.")],
+            );
+            if varying {
+                let _ = write!(
+                    setters,
+                    "    set_attribute! {{\n{docs}        set_{name}_{suffix}, set_{name}_{suffix}_at, {:?}, {input}, {write}\n    }}\n",
+                    property.name
+                );
+            } else {
+                let _ = write!(
+                    setters,
+                    "    set_uniform_attribute! {{\n{docs}        set_{name}_{suffix}, {:?}, {input}, {write}\n    }}\n",
+                    property.name
+                );
+            }
+        }
+    }
     Ok(Accessors {
         getters,
         setters,

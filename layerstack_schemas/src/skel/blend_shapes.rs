@@ -4,7 +4,7 @@
 //! Dense/sparse point and normal offsets, with weighted inbetween interpolation.
 use super::{SkelError, SkeletonQuery, SkinningQuery, invalid, length, read, tokens};
 use crate::{PrimView, Scene, Time, usd_skel::BlendShape};
-use alloc::{string::String, vec, vec::Vec};
+use alloc::{string::String, sync::Arc, vec, vec::Vec};
 use layerstack::{HashSet, PathId, TargetPath};
 
 fn validate_offsets(offsets: &[[f32; 3]], indices: &[i32], count: usize) -> Result<(), SkelError> {
@@ -80,12 +80,12 @@ pub fn apply_blend_shape_in_place(
 #[derive(Clone, Debug)]
 struct Sample {
     weight: f32,
-    offsets: Vec<[f32; 3]>,
-    normals: Vec<[f32; 3]>,
+    offsets: Arc<Vec<[f32; 3]>>,
+    normals: Arc<Vec<[f32; 3]>>,
 }
 #[derive(Clone, Debug)]
 struct Shape {
-    indices: Vec<i32>,
+    indices: Arc<Vec<i32>>,
     samples: Vec<Sample>,
 }
 /// Borrowed dense/sparse definition of one primary, null or inbetween sample.
@@ -178,8 +178,8 @@ impl BlendShapeQuery {
             let mut samples = vec![
                 Sample {
                     weight: 0.,
-                    offsets: Vec::new(),
-                    normals: Vec::new(),
+                    offsets: Arc::default(),
+                    normals: Arc::default(),
                 },
                 Sample {
                     weight: 1.,
@@ -199,12 +199,12 @@ impl BlendShapeQuery {
                     return Err(invalid(path, "inbetweens"));
                 }
                 let offsets = shape
-                    .read_value(name, crate::value::read_float3_array)
+                    .read_value(name, crate::value::read_float3_array_shared)
                     .ok_or_else(|| invalid(path, "inbetweens"))?;
                 let normals = shape
                     .read_value(
                         &alloc::format!("{name}:normalOffsets"),
-                        crate::value::read_float3_array,
+                        crate::value::read_float3_array_shared,
                     )
                     .unwrap_or_default();
                 samples.push(Sample {
@@ -422,7 +422,7 @@ impl BlendShapeQuery {
                     );
                 }
             } else {
-                for (&p, offset) in shape.indices.iter().zip(offsets) {
+                for (&p, offset) in shape.indices.iter().zip(offsets.iter()) {
                     let start = point_corners.partition_point(|&(point, _)| point < p);
                     for &(_, corner) in point_corners[start..]
                         .iter()
@@ -517,18 +517,21 @@ impl SkinningQuery<'_> {
             &PrimView::new(self.scene, self.definition.geometry),
             "points",
             time,
-            crate::value::read_float3_array,
+            crate::value::read_float3_array_shared,
         )
         .ok_or_else(|| invalid(self.definition.geometry, "points"))?;
-        let points = if let Some(shapes) = &self.definition.blend_shapes {
-            shapes.deform_points(
-                &self.skeleton.blend_shape_weights(time, shapes.names())?,
-                &points,
-            )?
-        } else {
-            points
-        };
-        self.skin_points(&points, time)
+        let deformed = self
+            .definition
+            .blend_shapes
+            .as_ref()
+            .map(|shapes| {
+                shapes.deform_points(
+                    &self.skeleton.blend_shape_weights(time, shapes.names())?,
+                    &points,
+                )
+            })
+            .transpose()?;
+        self.skin_points(deformed.as_deref().unwrap_or(&points), time)
     }
     /// Local shape definition snapshot retained by this geometry binding.
     #[must_use]

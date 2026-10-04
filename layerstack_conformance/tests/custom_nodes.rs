@@ -40,7 +40,7 @@ fn inherited_ports_compile_and_author_through_the_public_api() {
     let applied = live.apply(&mut store, &transaction).unwrap();
     let scene = Scene::new(live.stage(), &store);
     let node = custom::StudioWetPaint::new(&scene, path).unwrap();
-    assert_eq!(node.weights(), Some(vec![0.25, 0.75]));
+    assert_eq!(node.weights(), Some(vec![0.25, 0.75].into()));
     assert_eq!(node.precision(), Some(0.5));
     assert_eq!(node.enabled(), Some(false));
     assert_eq!(node.tint(), Some([1.0, 0.5, 0.25]));

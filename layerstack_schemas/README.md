@@ -9,6 +9,50 @@ time, and as typed views over a composed stage: `usd_geom::Mesh`,
 getter per property (its fallback applied), enums for `allowedTokens`, and
 edit handles whose setters author through a `SchemaEdit` transaction.
 
+## Numeric buffer ownership
+
+Matching numeric array getters, including `Mesh::points`, return
+`Option<Arc<Vec<T>>>`. A dense native read clones the shared owner in O(1);
+it does not copy the elements. `as_slice()` borrows that storage.
+`as_ref().clone()` explicitly materializes an independently mutable vector;
+`Arc::make_mut` copies only when another owner retains the buffer.
+Half values exposed as `f32` and matrices exposed as nested rows still require
+representation conversion and return vectors. Text arrays retain their previous types.
+
+| Operation | Element allocation/copy cost |
+| --- | --- |
+| Matching numeric getter / `value::read_*_array_shared` | Shared-owner increment; no element allocation or copy |
+| `value::borrow_*_array` | Borrow only; returns `None` for legacy storage |
+| Existing slice setter / `value::write_*_array` | Allocates and copies all elements |
+| `_owned` setter | Transfers the vector allocation and capacity; allocates a shared-owner header |
+| `_shared` setter | Transfers an `Arc<Vec<T>>`; no element allocation or copy |
+| `value::read_*_array` | Explicit vector materialization; copies native elements |
+
+The same setters have `_at` forms for time samples. `Primvar::indices` retains
+shared storage, and `PrimvarEdit::set_indices_owned` / `set_indices_shared`
+transfer their inputs. `PrimvarEdit::set(Value::TypedArray(...))` already retains
+the shared value buffer.
+
+For an immediate borrowed operation, use `Stage::read_property` with
+`value::borrow_float3_array` inside its callback. A callback's borrowed slice
+cannot escape the source's lifetime. A typed getter's shared owner can outlive
+the stage, layer and store.
+
+Legacy boxed arrays convert to native buffers. Sparse array composition and
+numeric interpolation can allocate a composed result; the getter retains that
+result without copying it again. Deferred native storage may decode on first
+access, using retained memory without file I/O. There is no promise of sharing
+between independent sparse/interpolated evaluations. To inspect decoding errors,
+use checked attribute queries or `Stage::try_resolve_property_path` /
+`try_resolve_property_path_at_time`; a retained raw `TypedArray` also exposes
+`try_materialize`. Ordinary `Option` getters report no value on decoding failure.
+
+**Migration:** callers with an explicit `Vec<T>` return type or a consuming
+iteration must choose a borrow (`array.iter()` / `array.as_slice()`) or an
+explicit copy (`array.as_ref().clone()`). Assertions can use
+`Some(vec![...].into())`. Existing slice setters remain source compatible.
+Generated shader-node numeric array defaults also return shared owners.
+
 ```rust
 let mut tokens = layerstack::TokenInterner::default();
 let schemas = layerstack_schemas::openusd(&mut tokens);

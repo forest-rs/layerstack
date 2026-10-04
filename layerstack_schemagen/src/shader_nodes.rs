@@ -406,7 +406,10 @@ pub(crate) fn render(model: &Model, external: bool) -> Result<Vec<(String, Strin
                     );
                 }
                 if let Some(value) = &port.default {
-                    let literal = default_literal(value, &model.tokens, external)?;
+                    let mut literal = default_literal(value, &model.tokens, external)?;
+                    if port.ty.is_array && crate::views::shared_array(&port.ty.default_scalar) {
+                        literal.push_str(".into()");
+                    }
                     let _ = writeln!(
                         out,
                         "    /// The `{full}` default in the node definition, separate from authored values.\n    #[must_use]\n    pub fn {m}_default() -> {} {{ {literal} }}",

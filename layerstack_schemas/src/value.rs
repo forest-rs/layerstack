@@ -46,7 +46,7 @@ pub fn write_array<T: Copy>(
 }
 
 macro_rules! plain {
-    ($read:ident, $write:ident, $ty:ty, $variant:ident, $read_array:ident, $write_array:ident) => {
+    ($read:ident, $write:ident, $ty:ty, $variant:ident, $read_array:ident, $write_array:ident, $borrow:ident, $share:ident, $owned:ident, $shared:ident) => {
         /// Decodes the USD value without coercing incompatible types.
         pub fn $read(value: &Value, _: &TokenInterner) -> Option<$ty> {
             match value {
@@ -60,20 +60,53 @@ macro_rules! plain {
             Value::$variant(value)
         }
 
-        /// Decodes the USD value without coercing incompatible types.
+        /// Materializes a mutable vector, copying native elements or converting
+        /// legacy values. Deferred storage may decode before the explicit copy.
         pub fn $read_array(value: &Value, tokens: &TokenInterner) -> Option<Vec<$ty>> {
-            match value {
-                Value::TypedArray(layerstack::TypedArray::$variant(items)) => {
-                    Some(items.as_ref().clone())
-                }
-                Value::TypedArray(_) => None,
-                _ => read_array(value, tokens, $read),
-            }
+            $share(value, tokens).map(|items| items.as_ref().clone())
         }
 
         /// Encodes the USD value without coercing incompatible types.
         pub fn $write_array(items: &[$ty], _: &mut TokenInterner) -> Value {
             Value::TypedArray(layerstack::TypedArray::$variant(Arc::new(items.to_vec())))
+        }
+
+        /// Borrows matching native elements without copying them. Legacy boxed
+        /// values return `None`; use the shared reader for a conversion fallback.
+        /// Deferred native storage may decode on its first access.
+        pub fn $borrow(value: &Value) -> Option<&[$ty]> {
+            let Value::TypedArray(array) = value else {
+                return None;
+            };
+            match array.try_materialize().ok()? {
+                layerstack::TypedArray::$variant(items) => Some(items),
+                _ => None,
+            }
+        }
+
+        /// Retains matching native storage with an O(1) shared-owner clone.
+        /// Legacy boxed storage is materialized into a new native buffer.
+        /// Sparse composition or interpolation may materialize a result before
+        /// this conversion runs. Deferred sources may decode; no file I/O occurs.
+        pub fn $share(value: &Value, tokens: &TokenInterner) -> Option<Arc<Vec<$ty>>> {
+            if let Value::TypedArray(array) = value {
+                return match array.try_materialize().ok()? {
+                    layerstack::TypedArray::$variant(items) => Some(items.clone()),
+                    _ => None,
+                };
+            }
+            read_array(value, tokens, $read).map(Arc::new)
+        }
+
+        /// Transfers an owned vector without copying elements. Allocates a shared
+        /// owner header; the vector's element allocation and capacity survive.
+        pub fn $owned(items: Vec<$ty>, _: &mut TokenInterner) -> Value {
+            Value::TypedArray(layerstack::TypedArray::$variant(Arc::new(items)))
+        }
+
+        /// Transfers a shared owner without allocating or copying elements.
+        pub fn $shared(items: Arc<Vec<$ty>>, _: &mut TokenInterner) -> Value {
+            Value::TypedArray(layerstack::TypedArray::$variant(items))
         }
     };
 }
@@ -84,7 +117,11 @@ plain!(
     bool,
     Bool,
     read_bool_array,
-    write_bool_array
+    write_bool_array,
+    borrow_bool_array,
+    read_bool_array_shared,
+    write_bool_array_owned,
+    write_bool_array_shared
 );
 plain!(
     read_uchar,
@@ -92,7 +129,11 @@ plain!(
     u8,
     UChar,
     read_uchar_array,
-    write_uchar_array
+    write_uchar_array,
+    borrow_uchar_array,
+    read_uchar_array_shared,
+    write_uchar_array_owned,
+    write_uchar_array_shared
 );
 plain!(
     read_int,
@@ -100,7 +141,11 @@ plain!(
     i32,
     Int,
     read_int_array,
-    write_int_array
+    write_int_array,
+    borrow_int_array,
+    read_int_array_shared,
+    write_int_array_owned,
+    write_int_array_shared
 );
 plain!(
     read_uint,
@@ -108,7 +153,11 @@ plain!(
     u32,
     UInt,
     read_uint_array,
-    write_uint_array
+    write_uint_array,
+    borrow_uint_array,
+    read_uint_array_shared,
+    write_uint_array_owned,
+    write_uint_array_shared
 );
 plain!(
     read_int64,
@@ -116,7 +165,11 @@ plain!(
     i64,
     Int64,
     read_int64_array,
-    write_int64_array
+    write_int64_array,
+    borrow_int64_array,
+    read_int64_array_shared,
+    write_int64_array_owned,
+    write_int64_array_shared
 );
 plain!(
     read_uint64,
@@ -124,7 +177,11 @@ plain!(
     u64,
     UInt64,
     read_uint64_array,
-    write_uint64_array
+    write_uint64_array,
+    borrow_uint64_array,
+    read_uint64_array_shared,
+    write_uint64_array_owned,
+    write_uint64_array_shared
 );
 plain!(
     read_float,
@@ -132,7 +189,11 @@ plain!(
     f32,
     Float,
     read_float_array,
-    write_float_array
+    write_float_array,
+    borrow_float_array,
+    read_float_array_shared,
+    write_float_array_owned,
+    write_float_array_shared
 );
 plain!(
     read_double,
@@ -140,7 +201,11 @@ plain!(
     f64,
     Double,
     read_double_array,
-    write_double_array
+    write_double_array,
+    borrow_double_array,
+    read_double_array_shared,
+    write_double_array_owned,
+    write_double_array_shared
 );
 plain!(
     read_timecode,
@@ -148,7 +213,11 @@ plain!(
     f64,
     TimeCode,
     read_timecode_array,
-    write_timecode_array
+    write_timecode_array,
+    borrow_timecode_array,
+    read_timecode_array_shared,
+    write_timecode_array_owned,
+    write_timecode_array_shared
 );
 plain!(
     read_float2,
@@ -156,7 +225,11 @@ plain!(
     [f32; 2],
     Vec2f,
     read_float2_array,
-    write_float2_array
+    write_float2_array,
+    borrow_float2_array,
+    read_float2_array_shared,
+    write_float2_array_owned,
+    write_float2_array_shared
 );
 plain!(
     read_float3,
@@ -164,7 +237,11 @@ plain!(
     [f32; 3],
     Vec3f,
     read_float3_array,
-    write_float3_array
+    write_float3_array,
+    borrow_float3_array,
+    read_float3_array_shared,
+    write_float3_array_owned,
+    write_float3_array_shared
 );
 plain!(
     read_float4,
@@ -172,7 +249,11 @@ plain!(
     [f32; 4],
     Vec4f,
     read_float4_array,
-    write_float4_array
+    write_float4_array,
+    borrow_float4_array,
+    read_float4_array_shared,
+    write_float4_array_owned,
+    write_float4_array_shared
 );
 plain!(
     read_double2,
@@ -180,7 +261,11 @@ plain!(
     [f64; 2],
     Vec2d,
     read_double2_array,
-    write_double2_array
+    write_double2_array,
+    borrow_double2_array,
+    read_double2_array_shared,
+    write_double2_array_owned,
+    write_double2_array_shared
 );
 plain!(
     read_double3,
@@ -188,7 +273,11 @@ plain!(
     [f64; 3],
     Vec3d,
     read_double3_array,
-    write_double3_array
+    write_double3_array,
+    borrow_double3_array,
+    read_double3_array_shared,
+    write_double3_array_owned,
+    write_double3_array_shared
 );
 plain!(
     read_double4,
@@ -196,7 +285,11 @@ plain!(
     [f64; 4],
     Vec4d,
     read_double4_array,
-    write_double4_array
+    write_double4_array,
+    borrow_double4_array,
+    read_double4_array_shared,
+    write_double4_array_owned,
+    write_double4_array_shared
 );
 plain!(
     read_int2,
@@ -204,7 +297,11 @@ plain!(
     [i32; 2],
     Vec2i,
     read_int2_array,
-    write_int2_array
+    write_int2_array,
+    borrow_int2_array,
+    read_int2_array_shared,
+    write_int2_array_owned,
+    write_int2_array_shared
 );
 plain!(
     read_int3,
@@ -212,7 +309,11 @@ plain!(
     [i32; 3],
     Vec3i,
     read_int3_array,
-    write_int3_array
+    write_int3_array,
+    borrow_int3_array,
+    read_int3_array_shared,
+    write_int3_array_owned,
+    write_int3_array_shared
 );
 plain!(
     read_int4,
@@ -220,7 +321,11 @@ plain!(
     [i32; 4],
     Vec4i,
     read_int4_array,
-    write_int4_array
+    write_int4_array,
+    borrow_int4_array,
+    read_int4_array_shared,
+    write_int4_array_owned,
+    write_int4_array_shared
 );
 plain!(
     read_quatf,
@@ -228,7 +333,11 @@ plain!(
     [f32; 4],
     Quatf,
     read_quatf_array,
-    write_quatf_array
+    write_quatf_array,
+    borrow_quatf_array,
+    read_quatf_array_shared,
+    write_quatf_array_owned,
+    write_quatf_array_shared
 );
 plain!(
     read_quatd,
@@ -236,7 +345,11 @@ plain!(
     [f64; 4],
     Quatd,
     read_quatd_array,
-    write_quatd_array
+    write_quatd_array,
+    borrow_quatd_array,
+    read_quatd_array_shared,
+    write_quatd_array_owned,
+    write_quatd_array_shared
 );
 
 macro_rules! text {
@@ -479,6 +592,72 @@ matrix!(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(Debug)]
+    struct RetainedNative(layerstack::TypedArray);
+    impl layerstack::DeferredArraySource for RetainedNative {
+        fn materialize(&self) -> Result<&layerstack::TypedArray, &layerstack::ArrayReadError> {
+            Ok(&self.0)
+        }
+        fn element_kind(&self) -> Value {
+            self.0.element_kind()
+        }
+    }
+
+    #[test]
+    fn deferred_storage_is_retained_after_materialization() {
+        let tokens = TokenInterner::default();
+        let points = Arc::new(alloc::vec![[1., 2., 3.]]);
+        let value = Value::TypedArray(layerstack::TypedArray::Deferred(Arc::new(RetainedNative(
+            layerstack::TypedArray::Vec3f(points.clone()),
+        ))));
+        assert!(Arc::ptr_eq(
+            &points,
+            &read_float3_array_shared(&value, &tokens).unwrap()
+        ));
+        assert_eq!(
+            borrow_float3_array(&value).unwrap().as_ptr(),
+            points.as_ptr()
+        );
+        let copied = read_float3_array(&value, &tokens).unwrap();
+        assert_ne!(copied.as_ptr(), points.as_ptr());
+    }
+
+    #[test]
+    fn numeric_reads_and_transfers_preserve_the_allocation() {
+        let mut tokens = TokenInterner::default();
+        let mut points = Vec::with_capacity(32);
+        points.push([-0.0, 1.0, 2.0]);
+        let pointer = points.as_ptr();
+        let value = write_float3_array_owned(points, &mut tokens);
+        let shared = read_float3_array_shared(&value, &tokens).unwrap();
+        assert_eq!(shared.as_ptr(), pointer);
+        assert_eq!(shared.capacity(), 32);
+        assert_eq!(borrow_float3_array(&value).unwrap().as_ptr(), pointer);
+        let transferred = write_float3_array_shared(shared.clone(), &mut tokens);
+        assert!(Arc::ptr_eq(
+            &shared,
+            &read_float3_array_shared(&transferred, &tokens).unwrap()
+        ));
+        let copy = read_float3_array(&value, &tokens).unwrap();
+        assert_ne!(copy.as_ptr(), pointer);
+        drop(value);
+        drop(transferred);
+        assert_eq!(shared[0][0].to_bits(), (-0.0_f32).to_bits());
+        let legacy = Value::Array(alloc::vec![Value::Vec3f([1.0; 3])]);
+        assert!(borrow_float3_array(&legacy).is_none());
+        assert_eq!(
+            &**read_float3_array_shared(&legacy, &tokens).unwrap(),
+            &[[1.0; 3]]
+        );
+        assert!(
+            read_float3_array_shared(
+                &Value::TypedArray(layerstack::TypedArray::Float(Arc::new(Vec::new()))),
+                &tokens
+            )
+            .is_none()
+        );
+    }
 
     #[test]
     fn native_array_readers_keep_kind_and_bits() {

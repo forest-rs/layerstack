@@ -8,11 +8,16 @@
 //! time offsets and interpolation follow AOUSD Core §12.3–12.5.
 use crate::{
     Time, gf,
-    motion_sampling::{aligned, anchor, rate, read, vectors},
+    motion_sampling::{aligned, anchor, rate, read},
     usd_geom::PointInstancer,
 };
-use alloc::vec::Vec;
+use alloc::{sync::Arc, vec::Vec};
+use core::num::NonZeroUsize;
 use layerstack::{PathId, TargetPath};
+
+fn vectors(prim: &crate::PrimView<'_>, name: &str, time: Time) -> Option<Arc<Vec<[f32; 3]>>> {
+    read(prim, name, time, crate::value::read_float3_array_shared)
+}
 
 /// Policies for computing per-instance transforms.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,15 +93,27 @@ impl PointInstancer<'_> {
         }
         hidden.sort_unstable();
         hidden.dedup();
-        let ids = read(self, "ids", time, crate::value::read_int64_array).unwrap_or_else(|| {
-            (0..read(self, "protoIndices", time, crate::value::read_int_array)
-                .map_or(0, |v| v.len()))
-                .map(|i| i64::try_from(i).expect("instance index fits int64"))
-                .collect()
-        });
-        let mask: Vec<_> = ids
-            .iter()
-            .map(|id| hidden.binary_search(id).is_err())
+        let ids = read(self, "ids", time, crate::value::read_int64_array_shared);
+        let count = ids.as_ref().map_or_else(
+            || {
+                read(
+                    self,
+                    "protoIndices",
+                    time,
+                    crate::value::read_int_array_shared,
+                )
+                .map_or(0, |v| v.len())
+            },
+            |ids| ids.len(),
+        );
+        let mask: Vec<_> = (0..count)
+            .map(|i| {
+                let id = ids.as_ref().map_or_else(
+                    || i64::try_from(i).expect("instance index fits int64"),
+                    |ids| ids[i],
+                );
+                hidden.binary_search(&id).is_err()
+            })
             .collect();
         if mask.iter().all(|&v| v) {
             Vec::new()
@@ -127,16 +144,43 @@ impl PointInstancer<'_> {
     /// degrees per second. Misaligned motion arrays are ignored as in OpenUSD;
     /// malformed required arrays and prototype indices return explicit errors.
     /// Prototype transforms are local, even when their ancestors are transformed.
-    #[allow(
-        clippy::cast_possible_truncation,
-        reason = "GfVec3f motion arithmetic rounds each vector result to float32"
-    )]
     pub fn compute_instance_transforms(
         &self,
         time: Time,
         base_time: Time,
         options: InstanceTransformOptions,
     ) -> Result<Vec<InstanceTransform>, PointInstancerError> {
+        Ok(self
+            .prepare_instance_transforms(time, base_time, options)?
+            .iter()
+            .collect())
+    }
+    /// Reuses a caller-owned output allocation. Required input validation happens
+    /// before changing `output`; failures leave its previous contents intact.
+    pub fn compute_instance_transforms_into(
+        &self,
+        time: Time,
+        base_time: Time,
+        options: InstanceTransformOptions,
+        output: &mut Vec<InstanceTransform>,
+    ) -> Result<(), PointInstancerError> {
+        self.prepare_instance_transforms(time, base_time, options)?
+            .write_into(output);
+        Ok(())
+    }
+    /// Captures and validates inputs without allocating per-instance matrices.
+    /// Iterate the immutable snapshot directly, reuse a vector, or emit bounded
+    /// chunks. Numeric inputs retain native buffers where representations match;
+    /// half rotations, legacy values and interpolation can materialize inputs.
+    /// Captured data remains valid after stage edits and carries no hidden cache.
+    /// Motion anchoring, masks and prototype transforms match the ordinary
+    /// computation (AOUSD Core §12.3–12.5; `UsdGeom::samplingUtils`).
+    pub fn prepare_instance_transforms(
+        &self,
+        time: Time,
+        base_time: Time,
+        options: InstanceTransformOptions,
+    ) -> Result<InstanceTransforms, PointInstancerError> {
         let code = match (time, base_time) {
             (Time::Default, Time::Default) => None,
             (Time::At { code, .. }, Time::At { code: base, .. })
@@ -152,7 +196,7 @@ impl PointInstancer<'_> {
             self,
             "protoIndices",
             indices_anchor.time,
-            crate::value::read_int_array,
+            crate::value::read_int_array_shared,
         )
         .ok_or(PointInstancerError::MissingAttribute("protoIndices"))?;
         let count = indices.len();
@@ -172,9 +216,14 @@ impl PointInstancer<'_> {
             .map_err(PointInstancerError::UnsupportedMotionSource)?;
         let orientations = |at| {
             if orientation_name == "orientationsf" {
-                read(self, orientation_name, at, crate::value::read_quatf_array)
+                read(
+                    self,
+                    orientation_name,
+                    at,
+                    crate::value::read_quatf_array_shared,
+                )
             } else {
-                read(self, orientation_name, at, crate::value::read_quath_array)
+                read(self, orientation_name, at, crate::value::read_quath_array).map(Arc::new)
             }
         };
         let mut rotations = orientations(orientation_anchor.time)
@@ -220,7 +269,12 @@ impl PointInstancer<'_> {
                 rotations = values;
             }
         }
-        let ids = read(self, "ids", base_time, crate::value::read_int64_array);
+        let ids = read(
+            self,
+            "ids",
+            base_time,
+            crate::value::read_int64_array_shared,
+        );
         if ids.as_ref().is_some_and(|v| v.len() != count) {
             return Err(PointInstancerError::LengthMismatch("ids"));
         }
@@ -265,59 +319,157 @@ impl PointInstancer<'_> {
         };
         let velocity_delta = delta(velocity_anchor.sample);
         let angular_delta = delta(angular_anchor.sample);
-        let mut result = Vec::new();
         for (i, &index) in indices.iter().enumerate() {
-            let prototype_index = usize::try_from(index)
+            if usize::try_from(index)
                 .ok()
                 .filter(|&v| !options.include_prototype_transform || v < prototypes.len())
-                .ok_or(PointInstancerError::InvalidPrototypeIndex { instance: i, index })?;
-            if !mask.is_empty() && !mask[i] {
-                continue;
+                .is_none()
+            {
+                return Err(PointInstancerError::InvalidPrototypeIndex { instance: i, index });
             }
-            let mut matrix = if scales.is_empty() {
-                gf::IDENTITY
-            } else {
-                gf::scale(scales[i].map(f64::from))
-            };
-            if !rotations.is_empty() {
-                matrix = gf::mul(&matrix, &gf::quaternion(rotations[i].map(f64::from)));
-            }
-            if !angular.is_empty() {
-                let [x, y, z] = angular[i];
-                // GfVec3f::GetLength rounds both the dot product and speed to
-                // float32 before the double-precision rotation is constructed.
-                let length = f64::from(libm::sqrtf(x * x + y * y + z * z));
-                let axis = angular[i].map(f64::from);
-                matrix = gf::mul(
-                    &matrix,
-                    &gf::Rotation::new(axis, angular_delta * length).matrix(),
-                );
-            }
-            let mut position = positions[i];
-            if !velocities.is_empty() {
-                for (axis, coordinate) in position.iter_mut().enumerate() {
-                    let mut velocity = velocities[i][axis];
-                    if !accelerations.is_empty() {
-                        velocity +=
-                            ((velocity_delta * f64::from(accelerations[i][axis])) as f32) * 0.5;
-                    }
-                    *coordinate += (velocity_delta * f64::from(velocity)) as f32;
-                }
-            }
-            matrix[3][..3].copy_from_slice(&position.map(f64::from));
-            if options.include_prototype_transform {
-                matrix = gf::mul(&prototypes[prototype_index], &matrix);
-            }
-            result.push(InstanceTransform {
-                index: i,
-                id: ids.as_ref().map_or_else(
-                    || i64::try_from(i).expect("instance index fits int64"),
-                    |v| v[i],
-                ),
-                prototype_index,
-                matrix,
-            });
         }
-        Ok(result)
+        let survivors = if mask.is_empty() {
+            count
+        } else {
+            mask.iter().filter(|&&v| v).count()
+        };
+        Ok(InstanceTransforms {
+            indices,
+            positions,
+            rotations,
+            scales,
+            velocities,
+            accelerations,
+            angular,
+            ids,
+            mask,
+            prototypes,
+            include_prototype_transform: options.include_prototype_transform,
+            velocity_delta,
+            angular_delta,
+            survivors,
+        })
+    }
+}
+
+/// Validated immutable inputs for streaming point-instance transforms.
+/// Repeated iteration computes matrices without creating a complete output array.
+#[derive(Clone, Debug)]
+pub struct InstanceTransforms {
+    indices: Arc<Vec<i32>>,
+    positions: Arc<Vec<[f32; 3]>>,
+    rotations: Arc<Vec<[f32; 4]>>,
+    scales: Arc<Vec<[f32; 3]>>,
+    velocities: Arc<Vec<[f32; 3]>>,
+    accelerations: Arc<Vec<[f32; 3]>>,
+    angular: Arc<Vec<[f32; 3]>>,
+    ids: Option<Arc<Vec<i64>>>,
+    mask: Vec<bool>,
+    prototypes: Vec<[[f64; 4]; 4]>,
+    include_prototype_transform: bool,
+    velocity_delta: f64,
+    angular_delta: f64,
+    survivors: usize,
+}
+impl InstanceTransforms {
+    /// Number of transforms after mask compaction.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.survivors
+    }
+    /// Whether no instance passes the captured mask.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+    /// Original instance count before masking.
+    #[must_use]
+    pub fn source_len(&self) -> usize {
+        self.indices.len()
+    }
+    /// Computes each surviving transform in original array order.
+    pub fn iter(&self) -> impl Iterator<Item = InstanceTransform> + '_ {
+        (0..self.indices.len())
+            .filter(|&i| self.mask.is_empty() || self.mask[i])
+            .map(|i| self.transform(i))
+    }
+    /// Replaces output contents while reusing its allocation and capacity.
+    pub fn write_into(&self, output: &mut Vec<InstanceTransform>) {
+        output.clear();
+        output.reserve(self.len());
+        output.extend(self.iter());
+    }
+    /// Visits bounded chunks using one caller-owned scratch allocation. The
+    /// final chunk may be shorter; no callback runs for an empty snapshot.
+    /// Scratch is cleared on entry; on exit it contains the final partial chunk
+    /// or is empty when no partial chunk remained.
+    pub fn for_each_chunk(
+        &self,
+        chunk_size: NonZeroUsize,
+        scratch: &mut Vec<InstanceTransform>,
+        mut visit: impl FnMut(&[InstanceTransform]),
+    ) {
+        scratch.clear();
+        for transform in self.iter() {
+            scratch.push(transform);
+            if scratch.len() == chunk_size.get() {
+                visit(scratch);
+                scratch.clear();
+            }
+        }
+        if !scratch.is_empty() {
+            visit(scratch);
+        }
+    }
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "GfVec3f motion arithmetic rounds to float32"
+    )]
+    fn transform(&self, i: usize) -> InstanceTransform {
+        let prototype_index = usize::try_from(self.indices[i]).expect("validated prototype index");
+        let mut matrix = if self.scales.is_empty() {
+            gf::IDENTITY
+        } else {
+            gf::scale(self.scales[i].map(f64::from))
+        };
+        if !self.rotations.is_empty() {
+            matrix = gf::mul(&matrix, &gf::quaternion(self.rotations[i].map(f64::from)));
+        }
+        if !self.angular.is_empty() {
+            let [x, y, z] = self.angular[i];
+            // GfVec3f::GetLength rounds both the dot product and speed to
+            // float32 before the double-precision rotation is constructed.
+            let length = f64::from(libm::sqrtf(x * x + y * y + z * z));
+            let axis = self.angular[i].map(f64::from);
+            matrix = gf::mul(
+                &matrix,
+                &gf::Rotation::new(axis, self.angular_delta * length).matrix(),
+            );
+        }
+        let mut position = self.positions[i];
+        if !self.velocities.is_empty() {
+            for (axis, coordinate) in position.iter_mut().enumerate() {
+                let mut velocity = self.velocities[i][axis];
+                if !self.accelerations.is_empty() {
+                    velocity += ((self.velocity_delta * f64::from(self.accelerations[i][axis]))
+                        as f32)
+                        * 0.5;
+                }
+                *coordinate += (self.velocity_delta * f64::from(velocity)) as f32;
+            }
+        }
+        matrix[3][..3].copy_from_slice(&position.map(f64::from));
+        if self.include_prototype_transform {
+            matrix = gf::mul(&self.prototypes[prototype_index], &matrix);
+        }
+        InstanceTransform {
+            index: i,
+            id: self.ids.as_ref().map_or_else(
+                || i64::try_from(i).expect("instance index fits int64"),
+                |v| v[i],
+            ),
+            prototype_index,
+            matrix,
+        }
     }
 }

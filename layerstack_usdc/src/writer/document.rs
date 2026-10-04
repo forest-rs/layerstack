@@ -576,6 +576,8 @@ pub enum FieldType {
     Dictionary,
     /// `SdfAssetPath`.
     Asset,
+    /// `VtArray<SdfAssetPath>`; a USDA asset-path array.
+    AssetArray,
     /// `VtTokenArray`; a USDA token or string array.
     TokenArray,
     /// `VtStringArray`; a USDA string or token array.
@@ -665,6 +667,8 @@ pub fn metadata_field(owner: Owner, key: &str) -> Option<(&'static str, FieldTyp
             "instanceable" => Some(("instanceable", F::Bool)),
             "customData" => Some(("customData", F::Dictionary)),
             "assetInfo" => Some(("assetInfo", F::Dictionary)),
+            // Sdf plugin metadata; AOUSD Core §7.4 (registered field types).
+            "payloadAssetDependencies" => Some(("payloadAssetDependencies", F::AssetArray)),
             "displayName" => Some(("displayName", F::String)),
             "displayGroupOrder" => Some(("displayGroupOrder", F::StringArray)),
             "sdrMetadata" => Some(("sdrMetadata", F::Dictionary)),
@@ -758,6 +762,7 @@ fn metadatum(owner: Owner, path: &str, entry: &Metadatum) -> Result<super::Field
         (FieldType::Bool, U::Bool(v)) => Some(Value::Bool(*v)),
         (FieldType::Dictionary, v @ U::Dictionary(_)) => Some(natural(v)),
         (FieldType::Asset, U::Asset(v)) => Some(Value::Asset(v.clone())),
+        (FieldType::AssetArray, U::AssetArray(v)) => Some(Value::AssetArray(v.clone())),
         (FieldType::TokenArray, U::TokenArray(v) | U::StringArray(v)) => {
             Some(Value::TokenArray(v.clone()))
         }

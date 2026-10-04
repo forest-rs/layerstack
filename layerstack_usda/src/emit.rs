@@ -1673,6 +1673,8 @@ fn metadata_field_type(key: &str) -> MetadataFieldType {
         "allowedTokens" => Typed("token[]"),
         "displayGroupOrder" => Typed("string[]"),
         "colorConfiguration" => Typed("asset"),
+        // Sdf's plugin registration; AOUSD Core §7.4 (metadata field types).
+        "payloadAssetDependencies" => Typed("asset[]"),
         "apiSchemas" => ListOp(ListElement::Token),
         "clipSets" => ListOp(ListElement::String),
         "inactiveIds" => ListOp(ListElement::Int64),

@@ -232,3 +232,49 @@ fn empty_stage_retains_its_root_and_reads_only_layer_applicable_defaults() {
     assert_eq!(Scene::new(&stage, &store).metadata().up_axis(), Some("Y"));
     assert!(stage.layer_metadata(element_size, &store).is_none());
 }
+
+#[path = "support/schema_scene.rs"]
+mod support;
+
+#[test]
+fn registered_asset_array_metadata_retains_its_crate_type() {
+    use layerstack_usdc::{CrateFile, DecodeBudget, value_rep::CrateValue, value_type::ValueType};
+    let (store, _) = support::scene(
+        r#"#usda 1.0
+        def "Empty" (payloadAssetDependencies = []) {}
+        def "Populated" (payloadAssetDependencies = [@a.usda@, @b.usda@]) {}
+    "#,
+    );
+    let bytes = layerstack_usdc::writer::save_layer(
+        &store.layers[&LayerId(1)],
+        &store.tokens,
+        &store.paths,
+    )
+    .unwrap();
+    let mut budget = DecodeBudget::for_input(bytes.len());
+    let file = CrateFile::open(&bytes, &mut budget).unwrap();
+    for (path, expected) in [("/Empty", vec![]), ("/Populated", vec!["a.usda", "b.usda"])] {
+        let field = file
+            .spec(path)
+            .unwrap()
+            .field("payloadAssetDependencies")
+            .unwrap();
+        assert_eq!(
+            field.representation().value_type().unwrap(),
+            ValueType::AssetPath,
+            "{path}"
+        );
+        assert!(field.representation().is_array(), "{path}");
+        let CrateValue::Array(values) = field.decode(&mut budget).unwrap() else {
+            panic!("expected asset array for {path}");
+        };
+        let actual: Vec<_> = values
+            .into_iter()
+            .map(|v| match v {
+                CrateValue::AssetPath(path) => path,
+                _ => panic!("expected asset path"),
+            })
+            .collect();
+        assert_eq!(actual, expected);
+    }
+}

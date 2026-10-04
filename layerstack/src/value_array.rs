@@ -88,6 +88,17 @@ macro_rules! array_types {
         }
 
         impl TypedArray {
+            /// Whether these arrays retain the same native owner or deferred
+            /// source. This never decodes storage or compares elements. Equal
+            /// contents in independent allocations are different storage.
+            pub fn shares_storage(&self, other: &Self) -> bool {
+                match (self, other) {
+                    $((Self::$variant(a), Self::$variant(b)) => Arc::ptr_eq(a, b),)*
+                    (Self::Deferred(a), Self::Deferred(b)) => Arc::ptr_eq(a, b),
+                    _ => false,
+                }
+            }
+
             /// Borrows a native buffer, or the source's cached decode error.
             /// No file I/O occurs. Prefer this before infallible inspection:
             /// `len`, `capacity` and `element_bytes` report zero on failure;
@@ -361,6 +372,14 @@ mod tests {
     use super::*;
     use crate::{ArrayIndex, PropertyType};
     use alloc::vec;
+
+    #[test]
+    fn shared_storage_comparison_distinguishes_owners_from_equal_contents() {
+        let array = TypedArray::Int(Arc::new(vec![1, 2, 3]));
+        assert!(array.shares_storage(&array.clone()));
+        assert!(!array.shares_storage(&TypedArray::Int(Arc::new(vec![1, 2, 3]))));
+        assert!(!array.shares_storage(&TypedArray::Float(Arc::new(vec![1., 2., 3.]))));
+    }
 
     #[test]
     fn native_points_share_until_an_edit_needs_unique_ownership() {

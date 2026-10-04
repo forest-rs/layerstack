@@ -76,6 +76,16 @@ pub(super) struct PrototypeTable {
     members: Vec<Vec<PathId>>,
 }
 
+/// Work performed by the most recent complete composition of this snapshot.
+/// Incremental value refreshes do not change these initial composition counts.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CompositionWork {
+    /// Prim indexes constructed by ordinary composition, including pruned prims.
+    pub composed_prim_indexes: usize,
+    /// Descendant indexes materialized from a proven equivalent representative.
+    pub reused_prim_indexes: usize,
+}
+
 /// Counts retained composed records, excluding payload allocations and graphs.
 /// Logical counts include occurrences; physical counts count shared buffers once.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -95,6 +105,15 @@ pub struct CompositionStorage {
 }
 
 impl Stage {
+    /// Reports ordinary composition versus early representative reuse.
+    pub fn composition_work(&self) -> CompositionWork {
+        self.composition_work
+    }
+    pub(crate) fn with_composition_work(mut self, work: CompositionWork) -> Self {
+        self.composition_work = work;
+        self
+    }
+
     /// The [`InstanceKey`] of `instance`: the strongest-first nodes of its
     /// graph whose arcs are authored at the instance, beneath nodes that are
     /// not, with its variant selections.
@@ -450,6 +469,424 @@ mod tests {
         assert_ne!(
             stage.instance_prototype(changed),
             stage.instance_prototype(instances[1])
+        );
+    }
+}
+
+#[cfg(test)]
+mod early_reuse_tests {
+    use super::*;
+    use crate::{
+        FieldEntry, InMemoryStore, LiveStage, PopulationMask, PrimSpec, PropertyPath, PropertySpec,
+        PropertyType, Reference, TargetPath, VariantSetSpec, VariantSpec,
+    };
+    use alloc::vec;
+
+    fn scene() -> (InMemoryStore, PathId, TokenId) {
+        let mut store = InMemoryStore::default();
+        let asset = store.path("/Asset");
+        let a = store.path("/Asset/A");
+        let b = store.path("/Asset/A/B");
+        let c = store.path("/Asset/A/C");
+        let hidden = store.path("/Asset/Hidden");
+        let field = store.tokens.intern("value");
+        let a_name = store.tokens.intern("A");
+        let b_name = store.tokens.intern("B");
+        let c_name = store.tokens.intern("C");
+        let hidden_name = store.tokens.intern("Hidden");
+        let mut source = crate::Layer::new(LayerId(2));
+        source.insert_prim(
+            asset,
+            PrimSpec::def().with_children(vec![a_name, hidden_name]),
+        );
+        source.insert_prim(a, PrimSpec::def().with_children(vec![c_name, b_name]));
+        source.insert_prim(
+            b,
+            PrimSpec::def().with_property(
+                field,
+                PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+                    .with_default(Value::Int(7)),
+            ),
+        );
+        source.insert_prim(c, PrimSpec::def().with_field(field, Value::Int(11)));
+        source.insert_prim(
+            hidden,
+            PrimSpec {
+                active: Some(false),
+                ..PrimSpec::def()
+            },
+        );
+        store.insert_layer(source);
+        let mut layer = crate::Layer::new(LayerId(1));
+        for (name, value) in [("Left", 1), ("Right", 2)] {
+            let root = store.path(&alloc::format!("/{name}"));
+            layer.insert_prim(
+                root,
+                PrimSpec::def()
+                    .with_instanceable(true)
+                    .with_field(field, Value::Int(value))
+                    .with_reference(Reference::with_asset(LayerId(2), asset, "asset.usda")),
+            );
+            let local = store.path(&alloc::format!("/{name}/A/B"));
+            layer.insert_prim(
+                local,
+                PrimSpec::over().with_property(
+                    field,
+                    PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+                        .with_default(Value::Int(99)),
+                ),
+            );
+            let local_only = store.path(&alloc::format!("/{name}/LocalOnly"));
+            layer.insert_prim(local_only, PrimSpec::def());
+        }
+        store.insert_layer(layer);
+        (store, b, field)
+    }
+
+    fn assert_matches_full(store: &mut InMemoryStore, reused: usize) -> Stage {
+        let options = StageOptions {
+            with_dependencies: true,
+            with_provenance: true,
+            ..StageOptions::default()
+        };
+        let optimized = Stage::compose(store, LayerId(1), options.clone());
+        let include = optimized.prims.keys().copied().collect();
+        let full = Stage::compose(
+            store,
+            LayerId(1),
+            StageOptions {
+                mask: Some(PopulationMask { include }),
+                ..options
+            },
+        );
+        assert_eq!(optimized.composition_work().reused_prim_indexes, reused);
+        assert_eq!(full.composition_work().reused_prim_indexes, 0);
+        assert_eq!(optimized.children, full.children);
+        assert_eq!(optimized.inactive, full.inactive);
+        assert_eq!(optimized.inactive_children, full.inactive_children);
+        assert_eq!(optimized.instances, full.instances);
+        assert_eq!(optimized.prims.len(), full.prims.len());
+        assert_eq!(
+            alloc::format!("{:?}", optimized.composition_errors()),
+            alloc::format!("{:?}", full.composition_errors())
+        );
+        for (path, index) in &optimized.prims {
+            let expected = &full.prims[path];
+            assert!(
+                index.data.same_records(&expected.data),
+                "records differ at {:?}",
+                store.paths.resolve(*path)
+            );
+            assert_eq!(
+                alloc::format!("{:?}", index.graph),
+                alloc::format!("{:?}", expected.graph),
+                "graph differs at {:?}",
+                store.paths.resolve(*path)
+            );
+            let mut layers = optimized.layers_affecting_prim(*path);
+            let mut expected_layers = full.layers_affecting_prim(*path);
+            layers.sort_unstable();
+            expected_layers.sort_unstable();
+            assert_eq!(layers, expected_layers);
+        }
+        optimized
+    }
+
+    #[test]
+    fn early_reuse_matches_full_graphs_ordering_activation_and_local_stripping() {
+        let (mut store, _, field) = scene();
+        let right = store.path("/Right");
+        let hidden = store.tokens.intern("Hidden");
+        let a = store.tokens.intern("A");
+        store
+            .layers
+            .get_mut(&LayerId(1))
+            .unwrap()
+            .prims
+            .get_mut(&right)
+            .unwrap()
+            .prim_order = Some(vec![hidden, a]);
+        let stage = assert_matches_full(&mut store, 4);
+        for (name, value) in [("Left", 1), ("Right", 2)] {
+            let root = store.path(&alloc::format!("/{name}"));
+            assert_eq!(
+                stage.resolve_field(root, field).unwrap().value,
+                Value::Int(value)
+            );
+            let child = store.path(&alloc::format!("/{name}/A/B"));
+            assert_eq!(
+                stage
+                    .resolve_field_path(PropertyPath::new(child, field))
+                    .unwrap()
+                    .value,
+                Value::Int(7)
+            );
+            assert!(!stage.has_prim(store.path(&alloc::format!("/{name}/LocalOnly"))));
+            let hidden = store.path(&alloc::format!("/{name}/Hidden"));
+            assert!(stage.has_prim(hidden));
+            assert!(!stage.is_active(hidden));
+            assert!(!stage.traverse(root).any(|prim| prim == hidden));
+            assert!(stage.traverse_all(root).any(|prim| prim == hidden));
+        }
+    }
+
+    #[test]
+    fn namespace_dependent_targets_and_expressions_use_full_composition() {
+        let (mut store, source, field) = scene();
+        let target = TargetPath::prim(source);
+        store.layers.get_mut(&LayerId(2)).unwrap().insert_prim(
+            source,
+            PrimSpec::def().with_property(
+                field,
+                PropertySpec::relationship().with_targets(ListOp::explicit(vec![target])),
+            ),
+        );
+        let stage = assert_matches_full(&mut store, 0);
+        for name in ["Left", "Right"] {
+            let child = store.path(&alloc::format!("/{name}/A/B"));
+            assert_eq!(
+                stage
+                    .resolve_target_list_path(PropertyPath::new(child, field))
+                    .unwrap()
+                    .value,
+                vec![TargetPath::prim(child)]
+            );
+        }
+        store.layers.get_mut(&LayerId(2)).unwrap().insert_prim(
+            source,
+            PrimSpec::def().with_property(
+                field,
+                PropertySpec::typed_attribute(PropertyType::new(
+                    "pathExpression",
+                    false,
+                    Value::PathExpression(Arc::from("")),
+                ))
+                .with_default(Value::PathExpression(Arc::from("../C"))),
+            ),
+        );
+        let stage = assert_matches_full(&mut store, 0);
+        for name in ["Left", "Right"] {
+            let child = store.path(&alloc::format!("/{name}/A/B"));
+            assert_eq!(
+                stage
+                    .resolve_field_path(PropertyPath::new(child, field))
+                    .unwrap()
+                    .value,
+                Value::PathExpression(Arc::from(alloc::format!("/{name}/A/C")))
+            );
+        }
+    }
+
+    #[test]
+    fn source_edits_update_every_occurrence_and_preserve_old_snapshot() {
+        let (mut store, source, field) = scene();
+        let old = assert_matches_full(&mut store, 4);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        store.layers.get_mut(&LayerId(2)).unwrap().insert_prim(
+            source,
+            PrimSpec::def().with_property(
+                field,
+                PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+                    .with_default(Value::Int(23)),
+            ),
+        );
+        live.synchronize(&mut store);
+        for name in ["Left", "Right"] {
+            let child = store.path(&alloc::format!("/{name}/A/B"));
+            assert_eq!(
+                old.resolve_field_path(PropertyPath::new(child, field))
+                    .unwrap()
+                    .value,
+                Value::Int(7)
+            );
+            assert_eq!(
+                live.stage()
+                    .resolve_field_path(PropertyPath::new(child, field))
+                    .unwrap()
+                    .value,
+                Value::Int(23)
+            );
+        }
+        assert_matches_full(&mut store, 4);
+        let new_source = store.path("/Asset/A/New");
+        store.layers.get_mut(&LayerId(2)).unwrap().insert_prim(
+            new_source,
+            PrimSpec::def().with_field(field, Value::Int(29)),
+        );
+        live.synchronize(&mut store);
+        for name in ["Left", "Right"] {
+            assert!(
+                live.stage()
+                    .has_prim(store.path(&alloc::format!("/{name}/A/New")))
+            );
+        }
+        assert_matches_full(&mut store, 5);
+    }
+
+    #[test]
+    fn clips_and_nested_arcs_exclude_early_reuse() {
+        let (mut store, source, _) = scene();
+        let clips = store.tokens.intern("clips");
+        store.layers.get_mut(&LayerId(2)).unwrap().insert_prim(
+            source,
+            PrimSpec::def().with_field(clips, Value::Dictionary(vec![])),
+        );
+        assert_matches_full(&mut store, 0);
+        let remote = store.path("/Other");
+        let mut other = crate::Layer::new(LayerId(3));
+        other.insert_prim(remote, PrimSpec::def());
+        store.insert_layer(other);
+        store.layers.get_mut(&LayerId(2)).unwrap().insert_prim(
+            source,
+            PrimSpec::def().with_reference(Reference::with_asset(LayerId(3), remote, "other.usda")),
+        );
+        assert_matches_full(&mut store, 0);
+    }
+    #[test]
+    fn retargeting_one_instance_rebuilds_its_group_without_changing_others() {
+        let (mut store, _, field) = scene();
+        let old = assert_matches_full(&mut store, 4);
+        let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+        let asset = store.path("/Asset");
+        let source = store.path("/Asset/A/B");
+        let mut other = store.layers[&LayerId(2)].clone();
+        other.id = LayerId(3);
+        other.insert_prim(
+            source,
+            PrimSpec::def().with_property(
+                field,
+                PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+                    .with_default(Value::Int(31)),
+            ),
+        );
+        store.insert_layer(other);
+        let right = store.path("/Right");
+        store.layers.get_mut(&LayerId(1)).unwrap().insert_prim(
+            right,
+            PrimSpec::def()
+                .with_instanceable(true)
+                .with_reference(Reference::with_asset(LayerId(3), asset, "other.usda")),
+        );
+        live.synchronize(&mut store);
+        for (name, expected) in [("Left", 7), ("Right", 31)] {
+            let child = store.path(&alloc::format!("/{name}/A/B"));
+            let property = PropertyPath::new(child, field);
+            assert_eq!(
+                old.resolve_field_path(property).unwrap().value,
+                Value::Int(7)
+            );
+            assert_eq!(
+                live.stage().resolve_field_path(property).unwrap().value,
+                Value::Int(expected)
+            );
+        }
+        assert_matches_full(&mut store, 0);
+    }
+
+    #[test]
+    fn selected_variants_use_the_full_context_path() {
+        let (mut store, source, field) = scene();
+        let mode = store.tokens.intern("mode");
+        let selected = store.tokens.intern("selected");
+        let mut spec = PrimSpec::def();
+        spec.variant_selections.insert(mode, selected);
+        spec.variant_sets.insert(
+            mode,
+            VariantSetSpec {
+                variants: HashMap::from([(
+                    selected,
+                    VariantSpec {
+                        fields: vec![FieldEntry {
+                            name: field,
+                            value: Value::Int(37).into(),
+                        }],
+                        ..VariantSpec::default()
+                    },
+                )]),
+            },
+        );
+        store
+            .layers
+            .get_mut(&LayerId(2))
+            .unwrap()
+            .insert_prim(source, spec);
+        let stage = assert_matches_full(&mut store, 0);
+        for name in ["Left", "Right"] {
+            let child = store.path(&alloc::format!("/{name}/A/B"));
+            assert_eq!(
+                stage.resolve_field(child, field).unwrap().value,
+                Value::Int(37)
+            );
+        }
+    }
+    #[test]
+    fn reused_inactive_roots_preserve_all_children_and_exclude_descendants() {
+        let (mut store, _, field) = scene();
+        let hidden = store.path("/Asset/A/NestedHidden");
+        let secret = store.path("/Asset/A/NestedHidden/Secret");
+        store.layers.get_mut(&LayerId(2)).unwrap().insert_prim(
+            hidden,
+            PrimSpec {
+                active: Some(false),
+                ..PrimSpec::def()
+            },
+        );
+        store
+            .layers
+            .get_mut(&LayerId(2))
+            .unwrap()
+            .insert_prim(secret, PrimSpec::def().with_field(field, Value::Int(41)));
+        let stage = assert_matches_full(&mut store, 5);
+        for name in ["Left", "Right"] {
+            let root = store.path(&alloc::format!("/{name}"));
+            let parent = store.path(&alloc::format!("/{name}/A"));
+            let hidden = store.path(&alloc::format!("/{name}/A/NestedHidden"));
+            let secret = store.path(&alloc::format!("/{name}/A/NestedHidden/Secret"));
+            assert!(stage.has_prim(hidden));
+            assert!(!stage.is_active(hidden));
+            assert!(!stage.has_prim(secret));
+            assert!(stage.all_children_of(parent).unwrap().contains(&hidden));
+            assert!(!stage.children_of(parent).unwrap().contains(&hidden));
+            assert!(stage.all_children_of(hidden).is_none());
+            assert!(stage.traverse_all(root).any(|prim| prim == hidden));
+            assert!(!stage.traverse(root).any(|prim| prim == hidden));
+        }
+    }
+    #[test]
+    fn instance_root_activation_overrides_do_not_reuse_pruned_representatives() {
+        let (mut store, _, field) = scene();
+        let asset = store.path("/Asset");
+        store
+            .layers
+            .get_mut(&LayerId(2))
+            .unwrap()
+            .prims
+            .get_mut(&asset)
+            .unwrap()
+            .active = Some(false);
+        let right = store.path("/Right");
+        store
+            .layers
+            .get_mut(&LayerId(1))
+            .unwrap()
+            .prims
+            .get_mut(&right)
+            .unwrap()
+            .active = Some(true);
+        let stage = assert_matches_full(&mut store, 0);
+        let left = store.path("/Left");
+        let left_child = store.path("/Left/A/B");
+        let right_child = store.path("/Right/A/B");
+        assert!(stage.has_prim(left));
+        assert!(!stage.is_active(left));
+        assert!(!stage.has_prim(left_child));
+        assert!(stage.is_active(right));
+        assert_eq!(
+            stage
+                .resolve_field_path(PropertyPath::new(right_child, field))
+                .unwrap()
+                .value,
+            Value::Int(7)
         );
     }
 }

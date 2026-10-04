@@ -79,8 +79,13 @@ fn main() {
         "every proxy must preserve its source value"
     );
     let storage = stage.composition_storage();
+    let work = stage.composition_work();
     println!(
-        "{{\"instances\":{count},\"children\":{children},\"prims\":{prims},\"record_buffers\":{},\"logical_opinions\":{},\"physical_opinions\":{},\"compose_ms\":{compose_ms:.3},\"query_ms\":{query_ms:.3}}}",
-        storage.record_buffers, storage.logical_opinions, storage.physical_opinions
+        "{{\"instances\":{count},\"children\":{children},\"prims\":{prims},\"record_buffers\":{},\"logical_opinions\":{},\"physical_opinions\":{},\"composed_prim_indexes\":{},\"reused_prim_indexes\":{},\"compose_ms\":{compose_ms:.3},\"query_ms\":{query_ms:.3}}}",
+        storage.record_buffers,
+        storage.logical_opinions,
+        storage.physical_opinions,
+        work.composed_prim_indexes,
+        work.reused_prim_indexes
     );
 }

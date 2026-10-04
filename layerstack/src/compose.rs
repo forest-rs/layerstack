@@ -8,6 +8,8 @@
 //!
 //! Spec: AOUSD Core §9–§12 (layer stacks, arcs/strength ordering, population, and resolution).
 
+mod instances;
+
 use alloc::{borrow::Cow, collections::BTreeSet, rc::Rc, sync::Arc, vec::Vec};
 
 use core::{cell::RefCell, cmp::Ordering};
@@ -209,7 +211,7 @@ pub(crate) fn compose_stage_selected(
     // invalid ones are composition errors of the layer stack authoring
     // them).
     cycles.set_relocations(Relocations::new(store, &layer_stack));
-    let (paths, mut children) = match populated {
+    let (mut paths, mut children) = match populated {
         Some(paths) => {
             let children = crate::population::build_children_index(store, paths.iter().copied());
             (paths, children)
@@ -232,6 +234,13 @@ pub(crate) fn compose_stage_selected(
     }
     let stage_relocates = cycles.relocations().stage();
     cycles.report_source_opinions(store, &stage_relocates);
+
+    let reuse = if local_only {
+        instances::InstanceReuse::default()
+    } else {
+        instances::InstanceReuse::discover(store, root, &mut paths, &options)
+    };
+    let composed_prim_indexes = paths.len();
 
     // Every prim's graph starts at its own site in the root layer stack
     // (OpenUSD: the root node of `PcpPrimIndex`).
@@ -409,7 +418,16 @@ pub(crate) fn compose_stage_selected(
         )
     };
 
-    let (mut inactive, inactive_children) = prune_deactivated(store, &mut prims, &mut children);
+    let (mut inactive, mut inactive_children) = prune_deactivated(store, &mut prims, &mut children);
+    let reused_prim_indexes = reuse.materialize(
+        store,
+        &mut prims,
+        &mut children,
+        &mut inactive,
+        &mut inactive_children,
+        dep_builder.as_mut(),
+        root,
+    );
 
     // Runs last so the ordering passes above see the populated child lists;
     // removal only drops entries.
@@ -460,6 +478,10 @@ pub(crate) fn compose_stage_selected(
         .with_loadable(resolver.loadable.take())
         .with_layer_inventory(local_layers, used_layers)
         .with_inactive(inactive, inactive_children)
+        .with_composition_work(crate::stage::CompositionWork {
+            composed_prim_indexes,
+            reused_prim_indexes,
+        })
         .with_composition_errors(errors)
         .with_instances(instances)
         .with_variant_fallbacks(options.variant_fallbacks.clone())

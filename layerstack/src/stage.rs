@@ -6,6 +6,9 @@
 //! Spec: AOUSD Core §11–§12 (stage population and value resolution).
 
 mod explain;
+mod relationships;
+mod traversal;
+pub use traversal::{PrimPredicate, PrimRange, PrimStatus, PrimVisit, PrimVisits};
 pub(crate) mod metadata;
 pub use metadata::StageMetadataError;
 mod loading;

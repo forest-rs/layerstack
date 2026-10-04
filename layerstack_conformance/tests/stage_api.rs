@@ -224,3 +224,225 @@ fn fallback_metadata_changes_rebuild_schema_definitions_and_undo() {
     live.apply(&mut store, &inverse).unwrap();
     assert!(!live.stage().prim_definition_ref(prim).unwrap().is_a(mesh));
 }
+
+fn source_store(source: &str) -> InMemoryStore {
+    struct NoAssets;
+    impl layerstack::AssetResolver for NoAssets {
+        fn resolve(
+            &mut self,
+            _: &str,
+            _: Option<LayerId>,
+            _: &mut layerstack::TokenInterner,
+            _: &mut layerstack::PathInterner,
+        ) -> Result<layerstack::ResolvedAsset, layerstack::AssetResolveError> {
+            Err(layerstack::AssetResolveError::NotFound)
+        }
+        fn resolved_path(&self, _: LayerId) -> Option<&str> {
+            None
+        }
+    }
+    let mut store = InMemoryStore::default();
+    let result = layerstack_usda::read_usda(
+        source,
+        LayerId(1),
+        &mut store.tokens,
+        &mut store.paths,
+        &mut NoAssets,
+    );
+    assert!(!result.emitted.rejected, "{:?}", result.emitted.diagnostics);
+    assert!(
+        result.parse_diagnostics.is_empty(),
+        "{:?}",
+        result.parse_diagnostics
+    );
+    store.insert_layer(result.emitted.layer);
+    store
+}
+
+#[test]
+fn predicate_ranges_prune_and_balance_visits_with_explicit_instance_proxies() {
+    use layerstack::PrimPredicate;
+    let source = r#"#usda 1.0
+def "A" {
+    def "Child" {
+        def "Leaf" {}
+    }
+}
+over "Over" {
+    def "Hidden" {}
+}
+class "Class" {
+    def "Hidden" {}
+}
+def "Off" (active = false) {
+    def "Hidden" {}
+}
+def "Prototype" {
+    def "Leaf" {}
+}
+def "Instance" (
+    instanceable = true
+    prepend references = </Prototype>
+) {}
+"#;
+    let mut store = source_store(source);
+    let root = store.path("/");
+    let a = store.path("/A");
+    let child = store.path("/A/Child");
+    let leaf = store.path("/A/Child/Leaf");
+    let proxy = store.path("/Instance/Leaf");
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let default: Vec<_> = stage
+        .prim_range(root, &store, PrimPredicate::DEFAULT)
+        .collect();
+    assert!(default.contains(&leaf));
+    assert!(!default.contains(&proxy));
+    assert!(!default.contains(&store.path("/Over/Hidden")));
+    assert!(!default.contains(&store.path("/Class/Hidden")));
+    let proxy_predicate = PrimPredicate {
+        instance_proxies: true,
+        ..PrimPredicate::ALL
+    };
+    assert!(
+        stage
+            .prim_range(root, &store, proxy_predicate)
+            .any(|p| p == proxy)
+    );
+    assert!(stage.prim_status(proxy, &store).unwrap().instance_proxy);
+    let mut range = stage.prim_range(a, &store, PrimPredicate::DEFAULT);
+    assert!(!range.prune_children());
+    assert_eq!(range.next(), Some(a));
+    assert_eq!(range.next(), Some(child));
+    assert!(range.prune_children());
+    assert_eq!(range.next(), None);
+    assert!(!range.prune_children());
+    let mut visits = stage
+        .prim_range(a, &store, PrimPredicate::DEFAULT)
+        .pre_and_post();
+    assert_eq!(visits.next().unwrap().prim, a);
+    assert_eq!(visits.next().unwrap().prim, child);
+    assert!(visits.prune_children());
+    let exit = visits.next().unwrap();
+    assert_eq!(exit.prim, child);
+    assert!(exit.is_post_visit);
+    assert!(!visits.prune_children());
+    assert_eq!(visits.next().unwrap().prim, a);
+    assert!(visits.next().is_none());
+    // Compare the default and explicit proxy namespaces to native C++ USD.
+    let actual: Vec<_> = default
+        .into_iter()
+        .filter(|p| *p != root)
+        .map(|p| store.paths.resolve(p).display(&store.tokens))
+        .collect();
+    let python = std::env::var("LAYERSTACK_USD_PYTHON").unwrap_or_else(|_| "python3".into());
+    if !Command::new(&python)
+        .args(["-c", "from pxr import Usd"])
+        .status()
+        .is_ok_and(|s| s.success())
+    {
+        return;
+    }
+    let output = Command::new(python).args(["-c", "from pxr import Usd; import json,sys; s=Usd.Stage.CreateInMemory(); assert s.GetRootLayer().ImportFromString(sys.argv[1]); print(json.dumps([str(p.GetPath()) for p in s.Traverse()]))", source]).output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let expected: Vec<String> = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn mask_expansion_follows_connections_and_relationships_to_a_fixed_point() {
+    use layerstack::{LiveStage, PopulationMask, PrimPredicate};
+    let source = r#"#usda 1.0
+def "A" {
+    rel links = </B>
+    rel skip = </D>
+}
+def "B" {
+    float input.connect = </C.output>
+}
+def "C" {
+    rel links = </A>
+    float output = 1
+}
+def "D" {}
+"#;
+    let mut store = source_store(source);
+    let a = store.path("/A");
+    let b = store.path("/B");
+    let c = store.path("/C");
+    let d = store.path("/D");
+    let skip = store.tokens.intern("skip");
+    let mut live = LiveStage::compose(
+        &mut store,
+        LayerId(1),
+        StageOptions {
+            mask: Some(PopulationMask { include: vec![a] }),
+            ..Default::default()
+        },
+    );
+    assert!(!live.stage().has_prim(b));
+    let report = live.expand_population_mask_with(
+        &mut store,
+        PrimPredicate::DEFAULT,
+        |_, _, property| property.property() != skip,
+        |_, _, _| true,
+    );
+    assert_eq!(report.added_roots, vec![b, c]);
+    assert_eq!(report.changes.len(), 2);
+    assert!(live.stage().has_prim(c));
+    assert!(!live.stage().has_prim(d));
+    let again = live.expand_population_mask_with(
+        &mut store,
+        PrimPredicate::DEFAULT,
+        |_, _, property| property.property() != skip,
+        |_, _, _| true,
+    );
+    assert!(again.added_roots.is_empty());
+    assert!(again.changes.is_empty());
+    let unfiltered = live.expand_population_mask(&mut store);
+    assert_eq!(unfiltered.added_roots, vec![d]);
+    assert!(live.stage().has_prim(d));
+    let python = std::env::var("LAYERSTACK_USD_PYTHON").unwrap_or_else(|_| "python3".into());
+    if !Command::new(&python)
+        .args(["-c", "from pxr import Usd"])
+        .status()
+        .is_ok_and(|s| s.success())
+    {
+        return;
+    }
+    let output = Command::new(python).args(["-c", "from pxr import Usd,Sdf; import sys; l=Sdf.Layer.CreateAnonymous(); assert l.ImportFromString(sys.argv[1]); s=Usd.Stage.OpenMasked(l, Usd.StagePopulationMask(['/A'])); s.ExpandPopulationMask(lambda r:r.GetName()!='skip', lambda a:True); assert [str(p.GetPath()) for p in s.Traverse()]==['/A','/B','/C']; s.ExpandPopulationMask(); assert [str(p.GetPath()) for p in s.Traverse()]==['/A','/B','/C','/D']", source]).output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn selected_relationships_forward_through_unselected_relationship_properties() {
+    use layerstack::{LiveStage, PopulationMask, PrimPredicate};
+    let mut store = source_store(
+        "#usda 1.0\ndef \"A\" {\n rel links = </B.forward>\n}\ndef \"B\" {\n rel forward = </C>\n}\ndef \"C\" {}\n",
+    );
+    let a = store.path("/A");
+    let c = store.path("/C");
+    let links = store.tokens.intern("links");
+    let mut live = LiveStage::compose(
+        &mut store,
+        LayerId(1),
+        StageOptions {
+            mask: Some(PopulationMask { include: vec![a] }),
+            ..Default::default()
+        },
+    );
+    live.expand_population_mask_with(
+        &mut store,
+        PrimPredicate::DEFAULT,
+        |_, _, p| p.property() == links,
+        |_, _, _| false,
+    );
+    assert!(live.stage().has_prim(c));
+}

@@ -222,13 +222,14 @@ pub use spline::SplineData;
 pub use stage::{
     Contribution, DictionaryMerge, ExplainedOpinion, FlattenError, FlattenReport,
     FlattenRequirements, FlattenVerification, Flattened, IgnoreCause, KeyPath, LayerMuteError,
-    LoadPolicy, OpinionRole, PayloadLoadRules, PayloadRule, PopulationMask, PropertyDeclaration,
-    Provenance, Resolved, ResolvedValue, SampleUse, Stage, StageMetadataError, StageOptions,
-    Traverse, ValueExplanation, ValueSource,
+    LoadPolicy, OpinionRole, PayloadLoadRules, PayloadRule, PopulationMask, PrimPredicate,
+    PrimRange, PrimStatus, PrimVisit, PrimVisits, PropertyDeclaration, Provenance, Resolved,
+    ResolvedValue, SampleUse, Stage, StageMetadataError, StageOptions, Traverse, ValueExplanation,
+    ValueSource,
 };
 pub use variant_fallbacks::VariantFallbacks;
 
 pub use live_stage::{
     ChangeCursor, ChangeHistoryError, ChangeNotice, ChangeSubscription, LiveStage,
-    RecompositionWork,
+    MaskExpansionReport, RecompositionWork,
 };

@@ -1366,6 +1366,11 @@ impl Stage {
         edits: &[crate::edit::PropertyValueEdit],
         dependents: &[Vec<PathId>],
     ) -> bool {
+        // An empty edit has no records to detach or reshare. In particular, avoid
+        // revisiting every native prototype member on unchanged publication.
+        if edits.is_empty() {
+            return true;
+        }
         if edits
             .iter()
             .any(|edit| self.clips.layers().contains(&edit.layer))
@@ -1444,6 +1449,7 @@ impl Stage {
         // cannot be reused during this refresh. An edit's unmapped slots are
         // identical across placements sharing the same old snapshot; mapped
         // expression values deliberately bypass this sharing.
+        let changed: HashSet<_> = patches.iter().map(|(prim, ..)| *prim).collect();
         let mut refreshed = HashMap::new();
         for (prim, name, position, default, samples, edit_index, shareable) in patches {
             let opinion = &mut self
@@ -1472,7 +1478,7 @@ impl Stage {
                 refreshed.insert(shared_key, (original, Arc::clone(spec)));
             }
         }
-        self.reshare_prototype_records();
+        self.reshare_changed_prototype_records(&changed);
         true
     }
 

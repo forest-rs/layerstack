@@ -7,6 +7,81 @@
 
 use super::*;
 use crate::prim_index::PrimIndexData;
+use core::hash::{BuildHasher, Hash, Hasher};
+
+/// A cheap sharing bucket, not an identity. Exact equality remains mandatory.
+/// Sources and mapped paths separate namespace-dependent records without hashing
+/// geometry payloads. Equal records always hash equally; collisions are harmless.
+struct RecordBucket<'a>(&'a PrimIndexData);
+impl Hash for RecordBucket<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.0.fields.hash(state);
+        self.0.sources.hash(state);
+        for opinion in &self.0.opinions {
+            opinion.key.hash(state);
+            opinion.field.hash(state);
+            opinion.layer_offset.offset.to_bits().hash(state);
+            opinion.layer_offset.scale.to_bits().hash(state);
+            match &opinion.value {
+                OpinionValue::Property(spec) => {
+                    if let Some(targets) = &spec.targets {
+                        hash_targets(targets, state);
+                    }
+                    // Declared numeric/string attributes cannot contain mapped
+                    // expressions. Skip their buffers and sample histories too.
+                    if spec.type_name.as_ref().is_none_or(|ty| {
+                        matches!(
+                            ty.default_scalar,
+                            Value::PathExpression(_) | Value::Dictionary(_)
+                        )
+                    }) {
+                        if let Some(value) = &spec.default {
+                            hash_expression_paths(value, state);
+                        }
+                        if let Some(samples) = &spec.time_samples {
+                            for (_, value) in samples.as_slice() {
+                                hash_expression_paths(value, state);
+                            }
+                        }
+                    }
+                    for field in &spec.metadata {
+                        hash_field_paths(&field.value, state);
+                    }
+                }
+                OpinionValue::Field(field) => hash_field_paths(field, state),
+            }
+        }
+    }
+}
+fn hash_targets<H: Hasher>(targets: &ListOp<TargetPath>, state: &mut H) {
+    for target in targets.items() {
+        target.hash(state);
+    }
+}
+fn hash_field_paths<H: Hasher>(field: &FieldValue, state: &mut H) {
+    match field {
+        FieldValue::Value(value) => hash_expression_paths(value, state),
+        FieldValue::PathListOp(targets) => hash_targets(targets, state),
+        _ => {}
+    }
+}
+fn hash_expression_paths<H: Hasher>(value: &Value, state: &mut H) {
+    match value {
+        Value::PathExpression(text) => text.hash(state),
+        Value::Array(values) => {
+            for value in values.iter() {
+                hash_expression_paths(value, state);
+            }
+        }
+        Value::Dictionary(fields) => {
+            for (_, value) in fields {
+                hash_expression_paths(value, state);
+            }
+        }
+        // Native numeric arrays cannot contain paths; retain their O(1) bucket cost.
+        _ => {}
+    }
+}
 
 /// What makes two instances share a prototype: the arcs that bring in the
 /// instance's descendants, each with its kind, site and offset, and the
@@ -272,26 +347,43 @@ impl Stage {
         self.prototypes = table;
         self.reshare_prototype_records();
     }
-    pub(super) fn reshare_prototype_records(&mut self) {
+    /// Returns exact comparison work so tests can assert scaling without timing.
+    pub(super) fn reshare_prototype_records(&mut self) -> usize {
+        self.reshare_records(None)
+    }
+    /// Value-only edits need to revisit only relative paths whose records changed.
+    pub(super) fn reshare_changed_prototype_records(&mut self, changed: &HashSet<PathId>) -> usize {
+        self.reshare_records(Some(changed))
+    }
+    fn reshare_records(&mut self, changed: Option<&HashSet<PathId>>) -> usize {
         // AOUSD Core §11.4: descendants exclude opinions authored directly
         // beneath an instance. Equality additionally guards mapped targets,
         // anchored expressions, source sites, offsets and graph-node identities.
+        let builder = hashbrown::DefaultHashBuilder::default();
+        let mut comparisons = 0;
         for members in &self.prototypes.members {
-            let mut candidates: Vec<Arc<PrimIndexData>> = Vec::new();
+            if changed.is_some_and(|paths| !members.iter().any(|member| paths.contains(member))) {
+                continue;
+            }
+            let mut buckets: HashMap<u64, Vec<Arc<PrimIndexData>>> = HashMap::new();
             for member in members {
                 let Some(index) = self.prims.get_mut(member) else {
                     continue;
                 };
-                if let Some(shared) = candidates
-                    .iter()
-                    .find(|data| data.same_records(&index.data))
-                {
+                let candidates = buckets
+                    .entry(builder.hash_one(RecordBucket(&index.data)))
+                    .or_default();
+                if let Some(shared) = candidates.iter().find(|data| {
+                    comparisons += 1;
+                    data.same_records(&index.data)
+                }) {
                     index.data = Arc::clone(shared);
                 } else {
                     candidates.push(Arc::clone(&index.data));
                 }
             }
         }
+        comparisons
     }
 }
 
@@ -415,6 +507,88 @@ mod tests {
             !positive.same_records(&negative),
             "signed zero must not alias"
         );
+    }
+
+    #[test]
+    fn mapped_connections_bucket_linearly_and_keep_each_occurrences_namespace() {
+        let (mut store, instances, _, _) = scene();
+        let source = store.property_path("/Asset/Child.outputs:link");
+        let target = store.property_path("/Asset/Child.outputs:target");
+        store.layers.get_mut(&LayerId(2)).unwrap().set_property(
+            source,
+            PropertySpec::attribute()
+                .with_targets(ListOp::explicit(vec![TargetPath::Property(target)])),
+        );
+        let mut stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        for instance in &instances {
+            let child = stage.traverse(*instance).nth(1).unwrap();
+            let connection = PropertyPath::new(child, source.property());
+            assert_eq!(
+                stage.resolve_target_list_path(connection).unwrap().value,
+                vec![TargetPath::Property(PropertyPath::new(
+                    child,
+                    target.property()
+                ))]
+            );
+        }
+        let comparisons = stage.reshare_prototype_records();
+        assert!(
+            comparisons < instances.len(),
+            "unique remapped records must not compare every earlier occurrence: {comparisons}"
+        );
+        let source_only = HashSet::from([source.prim_path()]);
+        assert_eq!(
+            stage.reshare_changed_prototype_records(&source_only),
+            0,
+            "an edit outside prototype members must not scan their candidate records"
+        );
+    }
+
+    #[test]
+    fn bucket_collisions_preserve_signed_zero_and_share_identical_nan_records() {
+        let (mut store, instances, _, field) = scene();
+        let mut stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+        let children: Vec<_> = instances
+            .iter()
+            .map(|p| stage.traverse(*p).nth(1).unwrap())
+            .collect();
+        for (i, child) in children.iter().enumerate() {
+            let value = match i {
+                0 => 0.,
+                1 => -0.,
+                _ => f32::from_bits(0x7fc0_1234),
+            };
+            stage
+                .prims
+                .get_mut(child)
+                .unwrap()
+                .opinions
+                .iter_mut()
+                .find(|op| op.field == field)
+                .unwrap()
+                .value = OpinionValue::Field(Value::Float(value).into());
+        }
+        let builder = hashbrown::DefaultHashBuilder::default();
+        let bucket = builder.hash_one(RecordBucket(&stage.prims[&children[0]].data));
+        assert!(
+            children
+                .iter()
+                .all(|p| builder.hash_one(RecordBucket(&stage.prims[p].data)) == bucket),
+            "numeric values intentionally collide in the cheap path bucket"
+        );
+        stage.reshare_prototype_records();
+        assert!(!Arc::ptr_eq(
+            &stage.prims[&children[0]].data,
+            &stage.prims[&children[1]].data
+        ));
+        assert!(!Arc::ptr_eq(
+            &stage.prims[&children[1]].data,
+            &stage.prims[&children[2]].data
+        ));
+        assert!(Arc::ptr_eq(
+            &stage.prims[&children[2]].data,
+            &stage.prims[&children[3]].data
+        ));
     }
 
     #[test]

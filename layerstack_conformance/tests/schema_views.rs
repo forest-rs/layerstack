@@ -120,6 +120,12 @@ impl<T: Canon> Canon for Vec<T> {
     }
 }
 
+impl<T: Canon> Canon for Arc<Vec<T>> {
+    fn canon(&self) -> Json {
+        self.as_ref().canon()
+    }
+}
+
 /// Compares every reading with the oracle.
 pub(crate) struct Readings<'a> {
     store: &'a InMemoryStore,

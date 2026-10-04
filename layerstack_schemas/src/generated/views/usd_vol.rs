@@ -1082,7 +1082,9 @@ impl<'a> ParticleFieldOpacityAttributeApi<'a> {
         #[doc = "Defines the opacity for each particle."]
         #[doc = ""]
         #[doc = "USD attribute `opacities` (`float\\[\\]`)."]
-        opacities, opacities_at, "opacities", ::alloc::vec::Vec<f32>, crate::value::read_float_array
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        opacities, opacities_at, "opacities", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
     }
     /// The USD name of [`Self::opacitiesh`].
     pub const OPACITIESH: &'static str = "opacitiesh";
@@ -1128,7 +1130,17 @@ impl ParticleFieldOpacityAttributeApiEdit {
         #[doc = "Defines the opacity for each particle."]
         #[doc = ""]
         #[doc = "USD attribute `opacities` (`float\\[\\]`)."]
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         set_opacities, set_opacities_at, "opacities", &[f32], crate::value::write_float_array
+    }
+    set_attribute! {
+        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_opacities`."]
+        set_opacities_owned, set_opacities_owned_at, "opacities", ::alloc::vec::Vec<f32>, crate::value::write_float_array_owned
+    }
+    set_attribute! {
+        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_opacities`."]
+        set_opacities_shared, set_opacities_shared_at, "opacities", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::write_float_array_shared
     }
     set_attribute! {
         #[doc = "Defines the opacity for each particle."]
@@ -1200,7 +1212,9 @@ impl<'a> ParticleFieldOrientationAttributeApi<'a> {
         #[doc = "Defines the quaternion orientation for each particle."]
         #[doc = ""]
         #[doc = "USD attribute `orientations` (`quatf\\[\\]`)."]
-        orientations, orientations_at, "orientations", ::alloc::vec::Vec<[f32; 4]>, crate::value::read_quatf_array
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        orientations, orientations_at, "orientations", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>, crate::value::read_quatf_array_shared
     }
     /// The USD name of [`Self::orientationsh`].
     pub const ORIENTATIONSH: &'static str = "orientationsh";
@@ -1246,7 +1260,17 @@ impl ParticleFieldOrientationAttributeApiEdit {
         #[doc = "Defines the quaternion orientation for each particle."]
         #[doc = ""]
         #[doc = "USD attribute `orientations` (`quatf\\[\\]`)."]
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         set_orientations, set_orientations_at, "orientations", &[[f32; 4]], crate::value::write_quatf_array
+    }
+    set_attribute! {
+        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_orientations`."]
+        set_orientations_owned, set_orientations_owned_at, "orientations", ::alloc::vec::Vec<[f32; 4]>, crate::value::write_quatf_array_owned
+    }
+    set_attribute! {
+        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_orientations`."]
+        set_orientations_shared, set_orientations_shared_at, "orientations", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>, crate::value::write_quatf_array_shared
     }
     set_attribute! {
         #[doc = "Defines the quaternion orientation for each particle."]
@@ -1318,7 +1342,9 @@ impl<'a> ParticleFieldPositionAttributeApi<'a> {
         #[doc = "Defines the position for each particle in local space."]
         #[doc = ""]
         #[doc = "USD attribute `positions` (`point3f\\[\\]`)."]
-        positions, positions_at, "positions", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_float3_array
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        positions, positions_at, "positions", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// The USD name of [`Self::positionsh`].
     pub const POSITIONSH: &'static str = "positionsh";
@@ -1364,7 +1390,17 @@ impl ParticleFieldPositionAttributeApiEdit {
         #[doc = "Defines the position for each particle in local space."]
         #[doc = ""]
         #[doc = "USD attribute `positions` (`point3f\\[\\]`)."]
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         set_positions, set_positions_at, "positions", &[[f32; 3]], crate::value::write_float3_array
+    }
+    set_attribute! {
+        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_positions`."]
+        set_positions_owned, set_positions_owned_at, "positions", ::alloc::vec::Vec<[f32; 3]>, crate::value::write_float3_array_owned
+    }
+    set_attribute! {
+        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_positions`."]
+        set_positions_shared, set_positions_shared_at, "positions", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::write_float3_array_shared
     }
     set_attribute! {
         #[doc = "Defines the position for each particle in local space."]
@@ -1608,7 +1644,9 @@ impl<'a> ParticleFieldScaleAttributeApi<'a> {
         #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
         #[doc = ""]
         #[doc = "USD attribute `scales` (`float3\\[\\]`)."]
-        scales, scales_at, "scales", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_float3_array
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        scales, scales_at, "scales", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// The USD name of [`Self::scalesh`].
     pub const SCALESH: &'static str = "scalesh";
@@ -1654,7 +1692,17 @@ impl ParticleFieldScaleAttributeApiEdit {
         #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
         #[doc = ""]
         #[doc = "USD attribute `scales` (`float3\\[\\]`)."]
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         set_scales, set_scales_at, "scales", &[[f32; 3]], crate::value::write_float3_array
+    }
+    set_attribute! {
+        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_scales`."]
+        set_scales_owned, set_scales_owned_at, "scales", ::alloc::vec::Vec<[f32; 3]>, crate::value::write_float3_array_owned
+    }
+    set_attribute! {
+        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_scales`."]
+        set_scales_shared, set_scales_shared_at, "scales", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::write_float3_array_shared
     }
     set_attribute! {
         #[doc = "Affine linear scale factor applied to the kernel that is instantiated at each particle."]
@@ -1729,7 +1777,9 @@ impl<'a> ParticleFieldSphericalHarmonicsAttributeApi<'a> {
         #[doc = "An array of spherical harmonics coefficients."]
         #[doc = ""]
         #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficients` (`float3\\[\\]`)."]
-        radiance_spherical_harmonics_coefficients, radiance_spherical_harmonics_coefficients_at, "radiance:sphericalHarmonicsCoefficients", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_float3_array
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        radiance_spherical_harmonics_coefficients, radiance_spherical_harmonics_coefficients_at, "radiance:sphericalHarmonicsCoefficients", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// The USD name of [`Self::radiance_spherical_harmonics_coefficientsh`].
     pub const RADIANCE_SPHERICAL_HARMONICS_COEFFICIENTSH: &'static str =
@@ -1786,7 +1836,17 @@ impl ParticleFieldSphericalHarmonicsAttributeApiEdit {
         #[doc = "An array of spherical harmonics coefficients."]
         #[doc = ""]
         #[doc = "USD attribute `radiance:sphericalHarmonicsCoefficients` (`float3\\[\\]`)."]
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         set_radiance_spherical_harmonics_coefficients, set_radiance_spherical_harmonics_coefficients_at, "radiance:sphericalHarmonicsCoefficients", &[[f32; 3]], crate::value::write_float3_array
+    }
+    set_attribute! {
+        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_radiance_spherical_harmonics_coefficients`."]
+        set_radiance_spherical_harmonics_coefficients_owned, set_radiance_spherical_harmonics_coefficients_owned_at, "radiance:sphericalHarmonicsCoefficients", ::alloc::vec::Vec<[f32; 3]>, crate::value::write_float3_array_owned
+    }
+    set_attribute! {
+        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_radiance_spherical_harmonics_coefficients`."]
+        set_radiance_spherical_harmonics_coefficients_shared, set_radiance_spherical_harmonics_coefficients_shared_at, "radiance:sphericalHarmonicsCoefficients", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::write_float3_array_shared
     }
     set_attribute! {
         #[doc = "An array of spherical harmonics coefficients."]

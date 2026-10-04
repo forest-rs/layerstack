@@ -80,7 +80,9 @@ impl<'a> BlendShape<'a> {
         #[doc = "\\*\\*Required property\\*\\*."]
         #[doc = ""]
         #[doc = "USD attribute `normalOffsets` (`vector3f\\[\\]`, uniform)."]
-        normal_offsets, "normalOffsets", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_float3_array
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        normal_offsets, "normalOffsets", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// The USD name of [`Self::offsets`].
     pub const OFFSETS: &'static str = "offsets";
@@ -89,7 +91,9 @@ impl<'a> BlendShape<'a> {
         #[doc = "\\*\\*Required property\\*\\*."]
         #[doc = ""]
         #[doc = "USD attribute `offsets` (`vector3f\\[\\]`, uniform)."]
-        offsets, "offsets", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_float3_array
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        offsets, "offsets", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
     /// The USD name of [`Self::point_indices`].
     pub const POINT_INDICES: &'static str = "pointIndices";
@@ -98,7 +102,9 @@ impl<'a> BlendShape<'a> {
         #[doc = "\\*\\*Optional property\\*\\*."]
         #[doc = ""]
         #[doc = "USD attribute `pointIndices` (`int\\[\\]`, uniform)."]
-        point_indices, "pointIndices", ::alloc::vec::Vec<i32>, crate::value::read_int_array
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        point_indices, "pointIndices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
 }
 
@@ -135,19 +141,49 @@ impl BlendShapeEdit {
         #[doc = "\\*\\*Required property\\*\\*."]
         #[doc = ""]
         #[doc = "USD attribute `normalOffsets` (`vector3f\\[\\]`, uniform)."]
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         set_normal_offsets, "normalOffsets", &[[f32; 3]], crate::value::write_float3_array
+    }
+    set_uniform_attribute! {
+        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_normal_offsets`."]
+        set_normal_offsets_owned, "normalOffsets", ::alloc::vec::Vec<[f32; 3]>, crate::value::write_float3_array_owned
+    }
+    set_uniform_attribute! {
+        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_normal_offsets`."]
+        set_normal_offsets_shared, "normalOffsets", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::write_float3_array_shared
     }
     set_uniform_attribute! {
         #[doc = "\\*\\*Required property\\*\\*."]
         #[doc = ""]
         #[doc = "USD attribute `offsets` (`vector3f\\[\\]`, uniform)."]
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         set_offsets, "offsets", &[[f32; 3]], crate::value::write_float3_array
+    }
+    set_uniform_attribute! {
+        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_offsets`."]
+        set_offsets_owned, "offsets", ::alloc::vec::Vec<[f32; 3]>, crate::value::write_float3_array_owned
+    }
+    set_uniform_attribute! {
+        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_offsets`."]
+        set_offsets_shared, "offsets", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::write_float3_array_shared
     }
     set_uniform_attribute! {
         #[doc = "\\*\\*Optional property\\*\\*."]
         #[doc = ""]
         #[doc = "USD attribute `pointIndices` (`int\\[\\]`, uniform)."]
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         set_point_indices, "pointIndices", &[i32], crate::value::write_int_array
+    }
+    set_uniform_attribute! {
+        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_point_indices`."]
+        set_point_indices_owned, "pointIndices", ::alloc::vec::Vec<i32>, crate::value::write_int_array_owned
+    }
+    set_uniform_attribute! {
+        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_point_indices`."]
+        set_point_indices_shared, "pointIndices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::write_int_array_shared
     }
 }
 
@@ -217,7 +253,9 @@ impl<'a> SkelAnimation<'a> {
         #[doc = "Array of weight values for each blend shape."]
         #[doc = ""]
         #[doc = "USD attribute `blendShapeWeights` (`float\\[\\]`)."]
-        blend_shape_weights, blend_shape_weights_at, "blendShapeWeights", ::alloc::vec::Vec<f32>, crate::value::read_float_array
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        blend_shape_weights, blend_shape_weights_at, "blendShapeWeights", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
     }
     /// The USD name of [`Self::joints`].
     pub const JOINTS: &'static str = "joints";
@@ -235,7 +273,9 @@ impl<'a> SkelAnimation<'a> {
         #[doc = "Joint-local unit quaternion rotations of all affected joints, in 32-bit precision."]
         #[doc = ""]
         #[doc = "USD attribute `rotations` (`quatf\\[\\]`)."]
-        rotations, rotations_at, "rotations", ::alloc::vec::Vec<[f32; 4]>, crate::value::read_quatf_array
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        rotations, rotations_at, "rotations", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>, crate::value::read_quatf_array_shared
     }
     /// The USD name of [`Self::scales`].
     pub const SCALES: &'static str = "scales";
@@ -253,7 +293,9 @@ impl<'a> SkelAnimation<'a> {
         #[doc = "Joint-local translations of all affected joints."]
         #[doc = ""]
         #[doc = "USD attribute `translations` (`float3\\[\\]`)."]
-        translations, translations_at, "translations", ::alloc::vec::Vec<[f32; 3]>, crate::value::read_float3_array
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        translations, translations_at, "translations", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::read_float3_array_shared
     }
 }
 
@@ -296,7 +338,17 @@ impl SkelAnimationEdit {
         #[doc = "Array of weight values for each blend shape."]
         #[doc = ""]
         #[doc = "USD attribute `blendShapeWeights` (`float\\[\\]`)."]
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         set_blend_shape_weights, set_blend_shape_weights_at, "blendShapeWeights", &[f32], crate::value::write_float_array
+    }
+    set_attribute! {
+        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_blend_shape_weights`."]
+        set_blend_shape_weights_owned, set_blend_shape_weights_owned_at, "blendShapeWeights", ::alloc::vec::Vec<f32>, crate::value::write_float_array_owned
+    }
+    set_attribute! {
+        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_blend_shape_weights`."]
+        set_blend_shape_weights_shared, set_blend_shape_weights_shared_at, "blendShapeWeights", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::write_float_array_shared
     }
     set_uniform_attribute! {
         #[doc = "Array of tokens identifying which joints this animation's data applies to."]
@@ -308,7 +360,17 @@ impl SkelAnimationEdit {
         #[doc = "Joint-local unit quaternion rotations of all affected joints, in 32-bit precision."]
         #[doc = ""]
         #[doc = "USD attribute `rotations` (`quatf\\[\\]`)."]
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         set_rotations, set_rotations_at, "rotations", &[[f32; 4]], crate::value::write_quatf_array
+    }
+    set_attribute! {
+        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_rotations`."]
+        set_rotations_owned, set_rotations_owned_at, "rotations", ::alloc::vec::Vec<[f32; 4]>, crate::value::write_quatf_array_owned
+    }
+    set_attribute! {
+        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_rotations`."]
+        set_rotations_shared, set_rotations_shared_at, "rotations", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 4]>>, crate::value::write_quatf_array_shared
     }
     set_attribute! {
         #[doc = "Joint-local scales of all affected joints, in 16 bit precision."]
@@ -320,7 +382,17 @@ impl SkelAnimationEdit {
         #[doc = "Joint-local translations of all affected joints."]
         #[doc = ""]
         #[doc = "USD attribute `translations` (`float3\\[\\]`)."]
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         set_translations, set_translations_at, "translations", &[[f32; 3]], crate::value::write_float3_array
+    }
+    set_attribute! {
+        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_translations`."]
+        set_translations_owned, set_translations_owned_at, "translations", ::alloc::vec::Vec<[f32; 3]>, crate::value::write_float3_array_owned
+    }
+    set_attribute! {
+        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_translations`."]
+        set_translations_shared, set_translations_shared_at, "translations", ::alloc::sync::Arc<::alloc::vec::Vec<[f32; 3]>>, crate::value::write_float3_array_shared
     }
 }
 
@@ -405,7 +477,9 @@ impl<'a> SkelBindingApi<'a> {
         #[doc = "Indices into the \\*joints\\* attribute of the closest (in namespace) bound Skeleton that affect each point of a PointBased gprim."]
         #[doc = ""]
         #[doc = "USD attribute `primvars:skel:jointIndices` (`int\\[\\]`)."]
-        joint_indices, joint_indices_at, "primvars:skel:jointIndices", ::alloc::vec::Vec<i32>, crate::value::read_int_array
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        joint_indices, joint_indices_at, "primvars:skel:jointIndices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::read_int_array_shared
     }
     /// The USD name of [`Self::joint_weights`].
     pub const JOINT_WEIGHTS: &'static str = "primvars:skel:jointWeights";
@@ -414,7 +488,9 @@ impl<'a> SkelBindingApi<'a> {
         #[doc = "Weights for the joints that affect each point of a PointBased gprim."]
         #[doc = ""]
         #[doc = "USD attribute `primvars:skel:jointWeights` (`float\\[\\]`)."]
-        joint_weights, joint_weights_at, "primvars:skel:jointWeights", ::alloc::vec::Vec<f32>, crate::value::read_float_array
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
+        joint_weights, joint_weights_at, "primvars:skel:jointWeights", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::read_float_array_shared
     }
     /// The USD name of [`Self::skinning_method`].
     pub const SKINNING_METHOD: &'static str = "primvars:skel:skinningMethod";
@@ -511,13 +587,33 @@ impl SkelBindingApiEdit {
         #[doc = "Indices into the \\*joints\\* attribute of the closest (in namespace) bound Skeleton that affect each point of a PointBased gprim."]
         #[doc = ""]
         #[doc = "USD attribute `primvars:skel:jointIndices` (`int\\[\\]`)."]
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         set_joint_indices, set_joint_indices_at, "primvars:skel:jointIndices", &[i32], crate::value::write_int_array
+    }
+    set_attribute! {
+        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_joint_indices`."]
+        set_joint_indices_owned, set_joint_indices_owned_at, "primvars:skel:jointIndices", ::alloc::vec::Vec<i32>, crate::value::write_int_array_owned
+    }
+    set_attribute! {
+        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_joint_indices`."]
+        set_joint_indices_shared, set_joint_indices_shared_at, "primvars:skel:jointIndices", ::alloc::sync::Arc<::alloc::vec::Vec<i32>>, crate::value::write_int_array_shared
     }
     set_attribute! {
         #[doc = "Weights for the joints that affect each point of a PointBased gprim."]
         #[doc = ""]
         #[doc = "USD attribute `primvars:skel:jointWeights` (`float\\[\\]`)."]
+        #[doc = ""]
+        #[doc = "Numeric array getters retain shared storage without copying elements. Legacy arrays, sparse composition and interpolation may materialize storage. Use `as_slice()` to borrow or `as_ref().clone()` for an explicit mutable copy. Slice setters copy; the `_owned` and `_shared` setters transfer storage."]
         set_joint_weights, set_joint_weights_at, "primvars:skel:jointWeights", &[f32], crate::value::write_float_array
+    }
+    set_attribute! {
+        #[doc = "Transfers the vector allocation and capacity; allocates only its shared owner. Slice callers can use `set_joint_weights`."]
+        set_joint_weights_owned, set_joint_weights_owned_at, "primvars:skel:jointWeights", ::alloc::vec::Vec<f32>, crate::value::write_float_array_owned
+    }
+    set_attribute! {
+        #[doc = "Transfers a shared owner without allocating or copying elements. Slice callers can use `set_joint_weights`."]
+        set_joint_weights_shared, set_joint_weights_shared_at, "primvars:skel:jointWeights", ::alloc::sync::Arc<::alloc::vec::Vec<f32>>, crate::value::write_float_array_shared
     }
     set_uniform_attribute! {
         #[doc = "The skinningMethod specifies the skinning method for the prim."]

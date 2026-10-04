@@ -9,6 +9,7 @@ use crate::{PrimEdit, PrimView, Scene, SchemaEdit, Time};
 use alloc::{
     format,
     string::{String, ToString},
+    sync::Arc,
     vec::Vec,
 };
 use layerstack::{PathId, PropertyPath, PropertyType, Value};
@@ -139,13 +140,15 @@ impl<'a> Primvar<'a> {
         self.prim
             .has_authored_value(&format!("{}:indices", self.name))
     }
-    /// The composed indices at `time`, if readable as an int array.
+    /// The composed indices at `time`, retaining shared native storage.
+    /// Legacy storage or sparse composition can materialize; `as_ref().clone()`
+    /// makes an explicit mutable copy.
     #[must_use]
-    pub fn indices(&self, time: Time) -> Option<Vec<i32>> {
+    pub fn indices(&self, time: Time) -> Option<Arc<Vec<i32>>> {
         let value = self
             .prim
             .raw_value(&format!("{}:indices", self.name), time)?;
-        crate::value::read_int_array(&value, self.prim.scene().store().tokens())
+        crate::value::read_int_array_shared(&value, self.prim.scene().store().tokens())
     }
     /// Reads the composed value. ID-target string indirection returns an
     /// explicit unsupported error instead of reading a misleading local value.
@@ -187,7 +190,7 @@ impl<'a> Primvar<'a> {
             .map(layerstack::TypedArray::element_kind)
             .or_else(|| array.get(0).map(|v| v.into_owned()));
         let mut result = Vec::new();
-        for (position, index) in indices.into_iter().enumerate() {
+        for (position, index) in indices.iter().copied().enumerate() {
             let start = usize::try_from(index)
                 .ok()
                 .and_then(|i| i.checked_mul(width))
@@ -375,6 +378,26 @@ impl PrimvarEdit {
         indices: &[i32],
         time: Option<f64>,
     ) -> Result<&Self, PrimvarError> {
+        self.set_indices_owned(edit, indices.to_vec(), time)
+    }
+    /// Transfers an index vector without copying its allocation or capacity.
+    /// Allocates only a shared owner; `time` is mapped through the edit target.
+    pub fn set_indices_owned(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        indices: Vec<i32>,
+        time: Option<f64>,
+    ) -> Result<&Self, PrimvarError> {
+        self.set_indices_shared(edit, Arc::new(indices), time)
+    }
+    /// Transfers a shared index buffer without copying or allocating elements.
+    /// Indices are checked against values when flattening or publishing a mesh.
+    pub fn set_indices_shared(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        indices: Arc<Vec<i32>>,
+        time: Option<f64>,
+    ) -> Result<&Self, PrimvarError> {
         if !self.validate(edit)?.is_array {
             return Err(PrimvarError::TypeMismatch(self.name.clone()));
         }
@@ -389,7 +412,7 @@ impl PrimvarEdit {
         } else {
             edit.create_attribute(self.prim, &name, ty);
         }
-        let value = crate::value::write_int_array(indices, edit.tokens());
+        let value = crate::value::write_int_array_shared(indices, edit.tokens());
         edit.set_value(self.prim, &name, time, value);
         Ok(self)
     }

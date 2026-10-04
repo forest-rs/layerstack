@@ -97,7 +97,7 @@ fn builtin_particle_apis_author_read_and_change_precision_with_undo() {
         splat
             .particle_field_orientation_attribute_api()
             .orientations(),
-        Some(vec![[0., 0., 0., 1.]])
+        Some(vec![[0., 0., 0., 1.]].into())
     );
     assert_eq!(
         splat.particle_field_scale_attribute_api().scalesh(),
@@ -105,7 +105,7 @@ fn builtin_particle_apis_author_read_and_change_precision_with_undo() {
     );
     assert_eq!(
         splat.particle_field_opacity_attribute_api().opacities(),
-        Some(vec![0.5])
+        Some(vec![0.5].into())
     );
     assert_eq!(
         splat
@@ -130,7 +130,7 @@ fn builtin_particle_apis_author_read_and_change_precision_with_undo() {
         splat
             .particle_field_position_attribute_api()
             .positions_at(2., layerstack::InterpolationType::Held),
-        Some(vec![[4., 5., 6.]])
+        Some(vec![[4., 5., 6.]].into())
     );
     live.apply(&mut store, &applied.inverse).unwrap();
     assert!(

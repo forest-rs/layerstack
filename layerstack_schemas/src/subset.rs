@@ -506,15 +506,20 @@ impl Mesh<'_> {
     /// Validates this mesh's topology at `time`, including point-index bounds.
     /// Returns an error for missing required arrays or inconsistent topology.
     pub fn validate_topology(&self, time: Time) -> Result<(), MeshTopologyError> {
-        let points = read(self, "points", time, crate::value::read_float3_array)
+        let points = read(self, "points", time, crate::value::read_float3_array_shared)
             .ok_or(MeshTopologyError::MissingAttribute)?;
-        let counts = read(self, "faceVertexCounts", time, crate::value::read_int_array)
-            .ok_or(MeshTopologyError::MissingAttribute)?;
+        let counts = read(
+            self,
+            "faceVertexCounts",
+            time,
+            crate::value::read_int_array_shared,
+        )
+        .ok_or(MeshTopologyError::MissingAttribute)?;
         let indices = read(
             self,
             "faceVertexIndices",
             time,
-            crate::value::read_int_array,
+            crate::value::read_int_array_shared,
         )
         .ok_or(MeshTopologyError::MissingAttribute)?;
         validate_mesh_topology(&indices, &counts, points.len())

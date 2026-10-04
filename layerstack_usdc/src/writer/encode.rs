@@ -584,7 +584,7 @@ impl<'a> Packer<'a> {
             }
             Value::ReferenceListOp(op) => {
                 let bytes = self.list_op(op, site, |packer, item, out| {
-                    packer.reference(item, false, site, out)
+                    packer.reference(item, &item.custom_data, false, site, out)
                 })?;
                 self.blob(T::ReferenceListOp, 0, bytes, false)?
             }
@@ -614,20 +614,21 @@ impl<'a> Packer<'a> {
                     prim_path: String::new(),
                     offset: 0.0,
                     scale: 1.0,
+                    custom_data: Vec::new(),
                 };
                 let mut bytes = Vec::new();
-                self.reference(items.first().unwrap_or(&none), true, site, &mut bytes)?;
+                self.reference(items.first().unwrap_or(&none), &[], true, site, &mut bytes)?;
                 self.blob(T::Payload, 0, bytes, false)?
             }
             Value::PayloadListOp(op) => {
                 let bytes = self.list_op(op, site, |packer, item, out| {
-                    packer.reference(item, true, site, out)
+                    packer.reference(item, &item.custom_data, true, site, out)
                 })?;
                 self.blob(T::PayloadListOp, 0, bytes, false)?
             }
             Value::Payload(payload) => {
                 let mut bytes = Vec::new();
-                self.reference(payload, true, site, &mut bytes)?;
+                self.reference(payload, &payload.custom_data, true, site, &mut bytes)?;
                 self.blob(T::Payload, 0, bytes, false)?
             }
             // `Write(std::vector<std::string>)`: count, then string indexes.
@@ -671,7 +672,7 @@ impl<'a> Packer<'a> {
             }
             Value::UnregisteredValue(inner) => self.unregistered(inner, site)?,
             Value::TimeSamples(samples) => self.time_samples(samples, site)?,
-            Value::Spline(spline) => self.spline(spline)?,
+            Value::Spline(spline, custom_data) => self.spline(spline, custom_data, site)?,
             Value::ArrayEdit {
                 literals,
                 instructions,
@@ -734,18 +735,41 @@ impl<'a> Packer<'a> {
 
     /// `Write(TsSpline)`: the spline's Ts binary data as a byte vector (a
     /// `u64` length, then the bytes), then its knot custom data as a map
-    /// (a `u64` count; there is none). An empty spline is inlined as
+    /// (a `u64` count followed by each time and typed dictionary). An empty spline is inlined as
     /// nothing.
     ///
     /// Spec: AOUSD Core §16.3.10.33 (spline encoding).
-    fn spline(&mut self, spline: &layerstack::spline::SplineData) -> Result<u64, UsdcWriteError> {
+    fn spline(
+        &mut self,
+        spline: &layerstack::spline::SplineData,
+        custom_data: &'a [(f64, Vec<(String, Value)>)],
+        site: Site<'_>,
+    ) -> Result<u64, UsdcWriteError> {
+        if custom_data.iter().enumerate().any(|(i, (time, _))| {
+            !spline.knots.iter().any(|k| k.time == *time)
+                || custom_data[..i].iter().any(|(t, _)| t == time)
+        }) || spline
+            .knots
+            .iter()
+            .any(|k| !k.custom_data.is_empty() && !custom_data.iter().any(|(t, _)| *t == k.time))
+        {
+            return Err(UsdcWriteError::Document(
+                layerstack_usda::writer::WriteError::InvalidSplineCustomData {
+                    path: site.path.into(),
+                },
+            ));
+        }
         if is_empty_spline(spline) {
             return Ok(inlined(ValueType::Spline, 0));
         }
         let data = ts_spline_data(spline);
         let mut bytes = (data.len() as u64).to_le_bytes().to_vec();
         bytes.extend_from_slice(&data);
-        bytes.extend_from_slice(&0_u64.to_le_bytes());
+        bytes.extend_from_slice(&(custom_data.len() as u64).to_le_bytes());
+        for (time, entries) in custom_data {
+            bytes.extend_from_slice(&time.to_le_bytes());
+            self.dictionary_inline(entries, site, &mut bytes)?;
+        }
         self.blob(ValueType::Spline, 0, bytes, false)
     }
 
@@ -1060,17 +1084,41 @@ impl<'a> Packer<'a> {
         self.path(&path)
     }
 
+    fn dictionary_inline(
+        &mut self,
+        entries: &'a [(String, Value)],
+        site: Site<'_>,
+        out: &mut Vec<u8>,
+    ) -> Result<(), UsdcWriteError> {
+        let rep = self.dictionary(entries, site)?;
+        if entries.is_empty() {
+            out.extend_from_slice(&0_u64.to_le_bytes());
+        } else {
+            let at = (rep & ((1_u64 << 48) - 1)) as usize;
+            out.extend_from_slice(&self.out[at..at + 8 + entries.len() * 20]);
+        }
+        Ok(())
+    }
+
     /// `Write(SdfReference)` / `Write(SdfPayload)` into `out`: the asset
     /// path's string index, the prim path's index (the empty path for the
     /// `defaultPrim`), the layer offset and scale, and for a reference its
-    /// `customData`, written empty (a zero entry count).
+    /// authored typed `customData`.
     fn reference(
         &mut self,
         arc: &Reference,
+        custom_data: &'a [(String, Value)],
         payload: bool,
         site: Site<'_>,
         out: &mut Vec<u8>,
     ) -> Result<(), UsdcWriteError> {
+        if payload && !custom_data.is_empty() {
+            return Err(UsdcWriteError::Document(
+                layerstack_usda::writer::WriteError::PayloadCustomData {
+                    path: site.path.into(),
+                },
+            ));
+        }
         site.check_text(&arc.asset)?;
         out.extend_from_slice(&self.string(&arc.asset)?.to_le_bytes());
         let path = if arc.prim_path.is_empty() {
@@ -1082,7 +1130,7 @@ impl<'a> Packer<'a> {
         out.extend_from_slice(&arc.offset.to_le_bytes());
         out.extend_from_slice(&arc.scale.to_le_bytes());
         if !payload {
-            out.extend_from_slice(&0_u64.to_le_bytes());
+            self.dictionary_inline(custom_data, site, out)?;
         }
         Ok(())
     }
@@ -1091,9 +1139,9 @@ impl<'a> Packer<'a> {
     /// present list as a `u64` count and its items, each written by `item`.
     fn list_op<T>(
         &mut self,
-        op: &ListOp<T>,
+        op: &'a ListOp<T>,
         site: Site<'_>,
-        mut item: impl FnMut(&mut Self, &T, &mut Vec<u8>) -> Result<(), UsdcWriteError>,
+        mut item: impl FnMut(&mut Self, &'a T, &mut Vec<u8>) -> Result<(), UsdcWriteError>,
     ) -> Result<Vec<u8>, UsdcWriteError> {
         const IS_EXPLICIT: u8 = 1 << 0;
         const HAS_EXPLICIT: u8 = 1 << 1;
@@ -1424,20 +1472,38 @@ fn has_timecode(value: &Value) -> bool {
 /// `RequestWriteVersionUpgrade`: start from OpenUSD's default and move to
 /// the version a value needs (`Write(GfTimeCode)`, `Write(TsSpline)`).
 pub(super) fn required_version(specs: &[Spec]) -> CrateVersion {
-    let fields = || specs.iter().flat_map(|s| &s.fields);
-    if fields().any(|f| has_array_edit(&f.value)) {
-        CrateVersion::ARRAY_EDITS
-    } else if fields().any(|f| matches!(f.value, Value::Spline(_))) {
-        CrateVersion::SPLINES
-    } else if fields().any(|f| matches!(f.value, Value::Relocates(_))) {
-        CrateVersion::new(0, 11, 0)
-    } else if fields().any(|f| has_path_expression(&f.value)) {
-        CrateVersion::new(0, 10, 0)
-    } else if fields().any(|f| has_timecode(&f.value)) {
-        CrateVersion::TIMECODES
-    } else {
-        CrateVersion::NEW_FILE_DEFAULT
+    let mut version = CrateVersion::NEW_FILE_DEFAULT;
+    for field in specs.iter().flat_map(|s| &s.fields) {
+        if has_array_edit(&field.value) {
+            version = version.max(CrateVersion::ARRAY_EDITS);
+        }
+        if let Value::Spline(s, _) = &field.value {
+            let required = if s.pre_loop_boundary.is_some()
+                || s.post_loop_boundary.is_some()
+                || s.data_type == layerstack::spline::SplineDataType::TimeCode
+            {
+                CrateVersion::SPLINE_LOOP_BOUNDARY_AND_TIMECODE
+            } else if s.knots.iter().any(|k| {
+                k.pre_tan_algorithm != layerstack::spline::TangentAlgorithm::None
+                    || k.post_tan_algorithm != layerstack::spline::TangentAlgorithm::None
+            }) {
+                CrateVersion::SPLINE_TANGENT_ALGORITHMS
+            } else {
+                CrateVersion::SPLINES
+            };
+            version = version.max(required);
+        }
+        if matches!(field.value, Value::Relocates(_)) {
+            version = version.max(CrateVersion::new(0, 11, 0));
+        }
+        if has_path_expression(&field.value) {
+            version = version.max(CrateVersion::new(0, 10, 0));
+        }
+        if has_timecode(&field.value) {
+            version = version.max(CrateVersion::TIMECODES);
+        }
     }
+    version
 }
 
 fn array_len(value: &Value) -> Option<usize> {
@@ -1501,7 +1567,9 @@ fn has_path_expression(value: &Value) -> bool {
 /// Whether `spline` is a default `TsSpline`, which OpenUSD inlines.
 fn is_empty_spline(spline: &layerstack::spline::SplineData) -> bool {
     use layerstack::spline::{CurveType, Extrapolation, SplineDataType};
-    spline.data_type == SplineDataType::Unspecified
+    spline.pre_loop_boundary.is_none()
+        && spline.post_loop_boundary.is_none()
+        && spline.data_type == SplineDataType::Unspecified
         && spline.knots.is_empty()
         && spline.default_curve_type == CurveType::Bezier
         && spline.pre_extrapolation == Extrapolation::Held
@@ -1519,10 +1587,9 @@ fn no_loops() -> layerstack::spline::LoopParams {
     }
 }
 
-/// The Ts binary data of `spline` in format 1, as
-/// `Ts_BinaryDataAccess::GetBinaryData` writes it (`pxr/base/ts/binary.cpp`,
-/// OpenUSD v26.08): no tangent algorithms and no `loopBoundaryTime`, which
-/// [`layerstack::spline::SplineData`] does not hold.
+/// Encodes the smallest Ts binary format that retains the authored features:
+/// format 1 for basic splines, 2 for tangent algorithms, 3 for loop boundary
+/// times and `TimeCode` values. OpenUSD `ts/binary.cpp::GetBinaryData`.
 fn ts_spline_data(spline: &layerstack::spline::SplineData) -> Vec<u8> {
     use layerstack::spline::{CurveType, Extrapolation, KnotInterp, SplineDataType};
     let mode = |e: Extrapolation| -> u8 {
@@ -1541,16 +1608,42 @@ fn ts_spline_data(spline: &layerstack::spline::SplineData) -> Vec<u8> {
         SplineDataType::Double => 1,
         SplineDataType::Float => 2,
         SplineDataType::Half => 3,
+        SplineDataType::TimeCode => 4,
     };
     let hermite = spline.default_curve_type == CurveType::Hermite;
     let loops = spline.loop_params.filter(|lp| *lp != no_loops());
     let mut out = Vec::new();
-    out.push(1 | (descriptor << 4) | (u8::from(hermite) << 7));
+    let format = if spline.pre_loop_boundary.is_some()
+        || spline.post_loop_boundary.is_some()
+        || spline.data_type == SplineDataType::TimeCode
+    {
+        3
+    } else if spline.knots.iter().any(|k| {
+        k.pre_tan_algorithm != layerstack::spline::TangentAlgorithm::None
+            || k.post_tan_algorithm != layerstack::spline::TangentAlgorithm::None
+    }) {
+        2
+    } else {
+        1
+    };
+    out.push(format | (descriptor << 4) | (u8::from(hermite) << 7));
     out.push(
         mode(spline.pre_extrapolation)
             | (mode(spline.post_extrapolation) << 3)
             | (u8::from(loops.is_some()) << 6),
     );
+    if format == 3 {
+        out.push(
+            u8::from(spline.pre_loop_boundary.is_some())
+                | (u8::from(spline.post_loop_boundary.is_some()) << 1),
+        );
+        for boundary in [spline.pre_loop_boundary, spline.post_loop_boundary]
+            .into_iter()
+            .flatten()
+        {
+            out.extend_from_slice(&boundary.to_le_bytes());
+        }
+    }
     for extrapolation in [spline.pre_extrapolation, spline.post_extrapolation] {
         if let Extrapolation::Sloped(slope) = extrapolation {
             out.extend_from_slice(&slope.to_le_bytes());
@@ -1567,7 +1660,7 @@ fn ts_spline_data(spline: &layerstack::spline::SplineData) -> Vec<u8> {
         return out;
     }
     let value = |out: &mut Vec<u8>, v: f64| match spline.data_type {
-        SplineDataType::Double | SplineDataType::Unspecified => {
+        SplineDataType::Double | SplineDataType::TimeCode | SplineDataType::Unspecified => {
             out.extend_from_slice(&v.to_le_bytes());
         }
         #[allow(clippy::cast_possible_truncation, reason = "a float spline's values")]
@@ -1605,6 +1698,9 @@ fn ts_spline_data(spline: &layerstack::spline::SplineData) -> Vec<u8> {
         }
         value(&mut out, knot.pre_tan_slope);
         value(&mut out, knot.post_tan_slope);
+        if format > 1 {
+            out.push(knot.pre_tan_algorithm as u8 | ((knot.post_tan_algorithm as u8) << 4));
+        }
     }
     out
 }

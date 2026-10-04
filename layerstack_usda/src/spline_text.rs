@@ -27,10 +27,9 @@
 //! `(width, slope)`, a Hermite tangent `(slope)`, either optionally with a
 //! tangent algorithm.
 //!
-//! [`SplineData`] holds no knot custom data and no `loopBoundaryTime`, so a
-//! spline that authors them is rejected rather than read without them.
-//! Tangent algorithms are read and dropped: the tangents they produced are
-//! authored beside them and kept, as the USDC reader does.
+//! Knot dictionaries are parsed by the normal typed-dictionary grammar and
+//! converted at the emitter boundary. Tangent algorithms and loop boundary
+//! times remain authored; evaluation uses the stored tangent values.
 //!
 //! Spec: AOUSD Core §12.3.3 (spline opinions).
 
@@ -46,13 +45,20 @@ use layerstack::spline::{
 /// # Errors
 ///
 /// A message naming what is malformed or unsupported.
-pub(crate) fn parse(text: &str, data_type: SplineDataType) -> Result<SplineData, String> {
+pub(crate) fn parse(
+    text: &str,
+    data_type: SplineDataType,
+) -> Result<(SplineData, Vec<f64>), String> {
     let mut parser = Parser {
         tokens: tokenize(text)?,
         pos: 0,
+        custom_times: Vec::new(),
     };
     parser.expect(&Token::Punct('{'))?;
     let mut spline = SplineData {
+        pre_loop_boundary: None,
+        post_loop_boundary: None,
+
         data_type,
         default_curve_type: CurveType::Bezier,
         pre_extrapolation: Extrapolation::Held,
@@ -94,7 +100,81 @@ pub(crate) fn parse(text: &str, data_type: SplineDataType) -> Result<SplineData,
     if spline.knots.windows(2).any(|w| w[0].time == w[1].time) {
         return Err("two knots at the same time".into());
     }
-    Ok(spline)
+    apply_auto_ease(&mut spline);
+    Ok((spline, parser.custom_times))
+}
+
+/// USDA authors knots through `TsSpline::SetKnots`, which computes `AutoEase`
+/// tangents. USDC reads already-computed tangents and does not run this path.
+/// AOUSD Core §12.3.3; OpenUSD `ts/knotData.cpp::_UpdateTangentAutoEase`.
+pub(crate) fn apply_auto_ease(spline: &mut SplineData) {
+    use layerstack::spline::TangentAlgorithm;
+    for i in 0..spline.knots.len() {
+        let prev = i.checked_sub(1).map(|j| &spline.knots[j]);
+        let knot = &spline.knots[i];
+        let next = spline.knots.get(i + 1);
+        let discontinuity = prev.is_none()
+            || next.is_none()
+            || knot.pre_value.is_some()
+            || knot.next_interp == KnotInterp::Block
+            || prev.is_some_and(|k| k.next_interp == KnotInterp::Block);
+        let slope = if discontinuity {
+            0.
+        } else {
+            let prev = prev.expect("neighbor");
+            let next = next.expect("neighbor");
+            let a = (knot.value - prev.value) / (knot.time - prev.time);
+            let b = (next.pre_value.unwrap_or(next.value) - knot.value) / (next.time - knot.time);
+            if a * b > 0. {
+                let u = (knot.time - prev.time) / (next.time - prev.time) - 0.5;
+                let g = 0.5 + u * (0.5 + 2. * u * u);
+                let slope = a + (b - a) * g;
+                if b > 0. {
+                    slope.min(3. * a).min(3. * b)
+                } else {
+                    slope.max(3. * a).max(3. * b)
+                }
+            } else {
+                0.
+            }
+        };
+        let mut typed_slope = quantize(slope, spline.data_type);
+        let max = match spline.data_type {
+            SplineDataType::Half => 65504.,
+            SplineDataType::Float => f64::from(f32::MAX),
+            _ => f64::MAX,
+        };
+        let overflow = !typed_slope.is_finite();
+        if overflow {
+            typed_slope = max.copysign(slope);
+        }
+        let incoming = if knot.pre_tan_algorithm == TangentAlgorithm::AutoEase {
+            prev.map(|p| (knot.time - p.time) / 3.)
+        } else {
+            None
+        };
+        let outgoing = if knot.post_tan_algorithm == TangentAlgorithm::AutoEase {
+            next.map(|n| (n.time - knot.time) / 3.)
+        } else {
+            None
+        };
+        let knot = &mut spline.knots[i];
+        for (width, stored_width, stored_slope) in [
+            (incoming, &mut knot.pre_tan_width, &mut knot.pre_tan_slope),
+            (outgoing, &mut knot.post_tan_width, &mut knot.post_tan_slope),
+        ] {
+            if let Some(width) = width {
+                *stored_slope = typed_slope;
+                if spline.default_curve_type == CurveType::Bezier {
+                    *stored_width = if overflow {
+                        slope * width / typed_slope
+                    } else {
+                        width
+                    };
+                }
+            }
+        }
+    }
 }
 
 /// `v` rounded to the spline's value type.
@@ -106,12 +186,13 @@ fn quantize(v: f64, data_type: SplineDataType) -> f64 {
     match data_type {
         SplineDataType::Float => f64::from(v as f32),
         SplineDataType::Half => f64::from(layerstack::half::to_f32(layerstack::half::from_f64(v))),
-        SplineDataType::Double | SplineDataType::Unspecified => v,
+        SplineDataType::Double | SplineDataType::TimeCode | SplineDataType::Unspecified => v,
     }
 }
 
 #[derive(Clone, Debug, PartialEq)]
 enum Token {
+    Dictionary,
     Number(f64),
     Word(String),
     Punct(char),
@@ -125,6 +206,28 @@ fn tokenize(text: &str) -> Result<Vec<Token>, String> {
             chars.next();
         } else if c == '#' {
             while chars.next_if(|&(_, c)| c != '\n').is_some() {}
+        } else if c == '{' && !tokens.is_empty() {
+            // Use the USDA lexer for nested braces, strings and comments.
+            let mut depth = 0;
+            let mut end = None;
+            for token in crate::lexer::tokenize(&text[at..]) {
+                match token.kind {
+                    crate::lexer::TokenKind::LeftBrace => depth += 1,
+                    crate::lexer::TokenKind::RightBrace => {
+                        depth -= 1;
+                        if depth == 0 {
+                            end = Some(at + token.span.end as usize);
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            let end = end.ok_or("unterminated knot dictionary")?;
+            while chars.peek().is_some_and(|(i, _)| *i < end) {
+                chars.next();
+            }
+            tokens.push(Token::Dictionary);
         } else if "{}(),:;&=[]<>@".contains(c) {
             // Beyond the spline's own punctuation, what a knot's custom
             // data dictionary holds, which is reported rather than read.
@@ -192,6 +295,7 @@ fn tokenize(text: &str) -> Result<Vec<Token>, String> {
 struct Parser {
     tokens: Vec<Token>,
     pos: usize,
+    custom_times: Vec<f64>,
 }
 
 impl Parser {
@@ -250,11 +354,15 @@ impl Parser {
             "hermite" => spline.default_curve_type = CurveType::Hermite,
             "pre" => {
                 self.expect(&Token::Punct(':'))?;
-                spline.pre_extrapolation = self.extrapolation()?;
+                let (mode, boundary) = self.extrapolation()?;
+                spline.pre_extrapolation = mode;
+                spline.pre_loop_boundary = boundary;
             }
             "post" => {
                 self.expect(&Token::Punct(':'))?;
-                spline.post_extrapolation = self.extrapolation()?;
+                let (mode, boundary) = self.extrapolation()?;
+                spline.post_extrapolation = mode;
+                spline.post_loop_boundary = boundary;
             }
             "loop" => {
                 self.expect(&Token::Punct(':'))?;
@@ -293,9 +401,10 @@ impl Parser {
         }
     }
 
-    fn extrapolation(&mut self) -> Result<Extrapolation, String> {
+    fn extrapolation(&mut self) -> Result<(Extrapolation, Option<f64>), String> {
+        let mut boundary = None;
         let word = self.word().ok_or("expected an extrapolation")?;
-        Ok(match word.as_str() {
+        let mode = match word.as_str() {
             "none" => Extrapolation::Block,
             "held" => Extrapolation::Held,
             "linear" => Extrapolation::Linear,
@@ -314,12 +423,15 @@ impl Parser {
                     other => return Err(format!("unknown loop mode `{other}`")),
                 };
                 if self.peek() == Some(&Token::Punct('(')) {
-                    return Err("unsupported: spline loopBoundaryTime".into());
+                    self.expect(&Token::Punct('('))?;
+                    boundary = Some(self.number()?);
+                    self.expect(&Token::Punct(')'))?;
                 }
                 extrapolation
             }
             other => return Err(format!("unknown extrapolation `{other}`")),
-        })
+        };
+        Ok((mode, boundary))
     }
 
     fn knot(&mut self) -> Result<Knot, String> {
@@ -332,6 +444,10 @@ impl Parser {
             (None, first)
         };
         let mut knot = Knot {
+            custom_data: Vec::new(),
+            pre_tan_algorithm: layerstack::spline::TangentAlgorithm::None,
+            post_tan_algorithm: layerstack::spline::TangentAlgorithm::None,
+
             time,
             value,
             pre_value,
@@ -345,15 +461,17 @@ impl Parser {
             post_tan_slope: 0.0,
         };
         while self.eat(&Token::Punct(';')) {
-            if self.peek() == Some(&Token::Punct('{')) {
-                return Err("unsupported: spline knot custom data".into());
+            if self.eat(&Token::Dictionary) {
+                self.custom_times.push(time);
+                continue;
             }
             let word = self.word().ok_or("expected a knot parameter")?;
             match word.as_str() {
                 "pre" => {
-                    let (width, slope) = self.tangent()?;
+                    let (width, slope, algorithm) = self.tangent()?;
                     knot.pre_tan_width = width.unwrap_or(0.0);
                     knot.pre_tan_slope = slope;
+                    knot.pre_tan_algorithm = algorithm;
                 }
                 "post" => {
                     let interp = self.word().ok_or("expected an interpolation")?;
@@ -365,9 +483,10 @@ impl Parser {
                         other => return Err(format!("unknown interpolation `{other}`")),
                     };
                     if self.peek() == Some(&Token::Punct('(')) {
-                        let (width, slope) = self.tangent()?;
+                        let (width, slope, algorithm) = self.tangent()?;
                         knot.post_tan_width = width.unwrap_or(0.0);
                         knot.post_tan_slope = slope;
+                        knot.post_tan_algorithm = algorithm;
                     }
                 }
                 other => return Err(format!("unknown knot parameter `{other}`")),
@@ -377,31 +496,35 @@ impl Parser {
     }
 
     /// `(width, slope)` or `(slope)`, each optionally followed by a tangent
-    /// algorithm, which is dropped.
-    fn tangent(&mut self) -> Result<(Option<f64>, f64), String> {
+    /// algorithm, retained alongside the stored tangent.
+    fn tangent(
+        &mut self,
+    ) -> Result<(Option<f64>, f64, layerstack::spline::TangentAlgorithm), String> {
         self.expect(&Token::Punct('('))?;
         let first = self.number()?;
         let mut second = None;
+        let mut algorithm = layerstack::spline::TangentAlgorithm::None;
         if self.eat(&Token::Punct(',')) {
             if let Some(Token::Number(_)) = self.peek() {
                 second = Some(self.number()?);
                 if self.eat(&Token::Punct(',')) {
-                    self.algorithm()?;
+                    algorithm = self.algorithm()?;
                 }
             } else {
-                self.algorithm()?;
+                algorithm = self.algorithm()?;
             }
         }
         self.expect(&Token::Punct(')'))?;
         Ok(match second {
-            Some(slope) => (Some(first), slope),
-            None => (None, first),
+            Some(slope) => (Some(first), slope, algorithm),
+            None => (None, first, algorithm),
         })
     }
 
-    fn algorithm(&mut self) -> Result<(), String> {
+    fn algorithm(&mut self) -> Result<layerstack::spline::TangentAlgorithm, String> {
         match self.word().as_deref() {
-            Some("custom" | "autoEase") => Ok(()),
+            Some("custom") => Ok(layerstack::spline::TangentAlgorithm::Custom),
+            Some("autoEase") => Ok(layerstack::spline::TangentAlgorithm::AutoEase),
             _ => Err("expected a tangent algorithm".into()),
         }
     }
@@ -409,6 +532,7 @@ impl Parser {
 
 fn describe(token: &Token) -> String {
     match token {
+        Token::Dictionary => "a knot dictionary".into(),
         Token::Number(n) => format!("{n}"),
         Token::Word(w) => format!("`{w}`"),
         Token::Punct(c) => format!("`{c}`"),
@@ -424,6 +548,7 @@ pub(crate) fn write(
     spline: &SplineData,
     time: &dyn Fn(&mut String, f64),
     value: &dyn Fn(&mut String, f64),
+    custom: &dyn Fn(&mut String, f64),
 ) {
     let curves = spline
         .knots
@@ -436,9 +561,9 @@ pub(crate) fn write(
             CurveType::Hermite => "hermite,\n",
         });
     }
-    for (label, extrapolation) in [
-        ("pre", spline.pre_extrapolation),
-        ("post", spline.post_extrapolation),
+    for (label, extrapolation, boundary) in [
+        ("pre", spline.pre_extrapolation, spline.pre_loop_boundary),
+        ("post", spline.post_extrapolation, spline.post_loop_boundary),
     ] {
         let mode = match extrapolation {
             Extrapolation::Held => continue,
@@ -456,6 +581,11 @@ pub(crate) fn write(
         if let Extrapolation::Sloped(slope) = extrapolation {
             out.push('(');
             time(out, slope);
+            out.push(')');
+        }
+        if let Some(boundary) = boundary {
+            out.push('(');
+            time(out, boundary);
             out.push(')');
         }
         out.push_str(",\n");
@@ -479,7 +609,11 @@ pub(crate) fn write(
         out.push_str("),\n");
     }
     let bezier = spline.default_curve_type == CurveType::Bezier;
-    let tangent = |out: &mut String, label: &str, width: f64, slope: f64| {
+    let tangent = |out: &mut String,
+                   label: &str,
+                   width: f64,
+                   slope: f64,
+                   algorithm: layerstack::spline::TangentAlgorithm| {
         out.push_str("; ");
         out.push_str(label);
         out.push_str(" (");
@@ -488,6 +622,11 @@ pub(crate) fn write(
             out.push_str(", ");
         }
         value(out, slope);
+        match algorithm {
+            layerstack::spline::TangentAlgorithm::None => {}
+            layerstack::spline::TangentAlgorithm::Custom => out.push_str(", custom"),
+            layerstack::spline::TangentAlgorithm::AutoEase => out.push_str(", autoEase"),
+        }
         out.push(')');
     };
     // The first knot's pre-tangent is written as if a curve preceded it.
@@ -504,17 +643,30 @@ pub(crate) fn write(
         out.push(' ');
         value(out, knot.value);
         if interp == KnotInterp::Curve {
-            tangent(out, "pre", knot.pre_tan_width, knot.pre_tan_slope);
+            tangent(
+                out,
+                "pre",
+                knot.pre_tan_width,
+                knot.pre_tan_slope,
+                knot.pre_tan_algorithm,
+            );
         }
         interp = knot.next_interp;
         match interp {
             KnotInterp::Curve => {
-                tangent(out, "post curve", knot.post_tan_width, knot.post_tan_slope);
+                tangent(
+                    out,
+                    "post curve",
+                    knot.post_tan_width,
+                    knot.post_tan_slope,
+                    knot.post_tan_algorithm,
+                );
             }
             KnotInterp::Block => out.push_str("; post none"),
             KnotInterp::Held => out.push_str("; post held"),
             KnotInterp::Linear => out.push_str("; post linear"),
         }
+        custom(out, knot.time);
         out.push_str(",\n");
     }
 }

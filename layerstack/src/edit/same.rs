@@ -214,12 +214,22 @@ impl Same for Knot {
             && self.post_tan_width.same(&other.post_tan_width)
             && self.pre_tan_slope.same(&other.pre_tan_slope)
             && self.post_tan_slope.same(&other.post_tan_slope)
+            && self.pre_tan_algorithm == other.pre_tan_algorithm
+            && self.post_tan_algorithm == other.post_tan_algorithm
+            && self.custom_data.len() == other.custom_data.len()
+            && self
+                .custom_data
+                .iter()
+                .zip(&other.custom_data)
+                .all(|((ak, av), (bk, bv))| ak == bk && av.same(bv))
     }
 }
 
 impl Same for SplineData {
     fn same(&self, other: &Self) -> bool {
-        self.data_type == other.data_type
+        self.pre_loop_boundary.same(&other.pre_loop_boundary)
+            && self.post_loop_boundary.same(&other.post_loop_boundary)
+            && self.data_type == other.data_type
             && self.default_curve_type == other.default_curve_type
             && self.pre_extrapolation.same(&other.pre_extrapolation)
             && self.post_extrapolation.same(&other.post_extrapolation)

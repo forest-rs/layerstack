@@ -239,7 +239,8 @@ impl PreparedClipProperty {
     }
     /// Prepares manifest-selected spline evaluation with the same schedule.
     /// Authored splines retain their interpolation regardless of stage policy.
-    /// Loops are explicitly unsupported; malformed and regressive sources error.
+    /// Extrapolation loops are resolved; inner loops require baking.
+    /// Malformed and regressive sources error.
     /// Spline properties have no discrete sample timeline, as in OpenUSD 26.08.
     pub(super) fn new_spline(
         active: Vec<(f64, usize)>,
@@ -253,7 +254,8 @@ impl PreparedClipProperty {
             spline
                 .evaluate_pre_value(time)
                 .map_err(|error| match error {
-                    crate::spline::SplineQueryError::UnsupportedLoops => {
+                    crate::spline::SplineQueryError::UnsupportedLoops
+                    | crate::spline::SplineQueryError::RegressiveTangents => {
                         ClipEvalError::UnsupportedSpline
                     }
                     _ => ClipEvalError::InvalidSpline,
@@ -605,6 +607,7 @@ impl PreparedClipProperty {
 fn spline_value_type(kind: crate::spline::SplineDataType, value: f64) -> Value {
     match kind {
         crate::spline::SplineDataType::Float => Value::Float(value as f32),
+        crate::spline::SplineDataType::TimeCode => Value::TimeCode(value),
         crate::spline::SplineDataType::Half => Value::Half(crate::half::from_f64(value)),
         crate::spline::SplineDataType::Double | crate::spline::SplineDataType::Unspecified => {
             Value::Double(value)
@@ -795,6 +798,10 @@ mod tests {
             CurveType, Extrapolation, Knot, KnotInterp, SplineData, SplineDataType,
         };
         let knot = |time| Knot {
+            custom_data: Vec::new(),
+            pre_tan_algorithm: crate::spline::TangentAlgorithm::None,
+            post_tan_algorithm: crate::spline::TangentAlgorithm::None,
+
             time,
             value: time,
             pre_value: None,
@@ -809,6 +816,9 @@ mod tests {
         };
         Some(Arc::new(PropertySpec::attribute().with_spline(
             SplineData {
+                pre_loop_boundary: None,
+                post_loop_boundary: None,
+
                 data_type: SplineDataType::Double,
                 default_curve_type: CurveType::Bezier,
                 pre_extrapolation: Extrapolation::Held,
@@ -947,7 +957,8 @@ mod tests {
         assert_eq!(prepare(p).unwrap_err(), ClipEvalError::InvalidSpline);
         let mut p = (*spline_clip(0., 10.).unwrap()).clone();
         p.spline.as_mut().unwrap().post_extrapolation = Extrapolation::LoopRepeat;
-        assert_eq!(prepare(p).unwrap_err(), ClipEvalError::UnsupportedSpline);
+        let repeated = prepare(p).unwrap();
+        assert_eq!(value(&repeated, 15.), Some(Value::Double(15.)));
         let mut p = (*spline_clip(0., 10.).unwrap()).clone();
         let spline = p.spline.as_mut().unwrap();
         spline.knots[0].next_interp = KnotInterp::Curve;

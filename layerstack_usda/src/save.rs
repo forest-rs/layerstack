@@ -715,6 +715,25 @@ impl Lowering<'_> {
                     value,
                     time_samples,
                     spline: spec.spline.clone().map(Box::new),
+                    spline_custom_data: spec
+                        .spline
+                        .iter()
+                        .flat_map(|s| &s.knots)
+                        .filter(|k| !k.custom_data.is_empty())
+                        .map(|k| {
+                            let entries = k
+                                .custom_data
+                                .iter()
+                                .map(|(key, value)| {
+                                    Ok((
+                                        String::from(key.as_ref()),
+                                        self.value(value, Site::Metadata, &path)?,
+                                    ))
+                                })
+                                .collect::<Result<_, SaveError>>()?;
+                            Ok((k.time, entries))
+                        })
+                        .collect::<Result<_, SaveError>>()?,
                     connections: targets,
                     metadata,
                 })
@@ -763,6 +782,16 @@ impl Lowering<'_> {
             asset,
             prim_path,
             offset: layer_offset(arc.layer_offset),
+            custom_data: arc
+                .custom_data
+                .iter()
+                .map(|(k, v)| {
+                    Ok((
+                        String::from(k.as_ref()),
+                        self.value(v, Site::Metadata, prim)?,
+                    ))
+                })
+                .collect::<Result<_, SaveError>>()?,
         })
     }
 

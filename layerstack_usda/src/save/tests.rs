@@ -818,19 +818,16 @@ def "A"
         ),
         (3.77, -1.4, 1.1, -1.4)
     );
-    // Knot custom data has no place in a spline here: it is reported, not
-    // dropped.
+    // Knot custom data follows the normal typed dictionary grammar.
     let parsed = crate::parser::parse(
         "#usda 1.0\ndef \"A\"\n{\n    double a.spline = {\n        1: 0; { string n = \"x\" },\n    }\n}\n",
     );
-    assert!(
-        parsed
-            .diagnostics
-            .iter()
-            .any(|d| d.message.contains("custom data")),
-        "{:?}",
-        parsed.diagnostics
-    );
+    assert!(parsed.diagnostics.is_empty(), "{:?}", parsed.diagnostics);
+    let crate::ast::PrimChild::Attribute(attribute) = &parsed.layer.prims[0].children[0] else {
+        panic!("attribute")
+    };
+    assert_eq!(attribute.spline_custom_data[0].0, 1.);
+    assert_eq!(attribute.spline_custom_data[0].1[0].key, "n");
 }
 
 /// Half and float spline knots hold values of their type, as OpenUSD's
@@ -895,6 +892,10 @@ fn a_knot_curve_type_in_a_nested_variant_is_not_rewritten() {
     use layerstack::spline::{Knot, SplineData};
 
     let knot = |time: f64, curve_type| Knot {
+        custom_data: Vec::new(),
+        pre_tan_algorithm: layerstack::spline::TangentAlgorithm::None,
+        post_tan_algorithm: layerstack::spline::TangentAlgorithm::None,
+
         time,
         value: time,
         pre_value: None,
@@ -908,6 +909,9 @@ fn a_knot_curve_type_in_a_nested_variant_is_not_rewritten() {
         post_tan_slope: 0.0,
     };
     let spline = SplineData {
+        pre_loop_boundary: None,
+        post_loop_boundary: None,
+
         data_type: SplineDataType::Double,
         default_curve_type: CurveType::Bezier,
         pre_extrapolation: Extrapolation::Held,

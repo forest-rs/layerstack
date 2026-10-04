@@ -293,7 +293,25 @@ fn lower_attribute(attribute: &Attribute, prim: &str) -> Result<Spec, UsdcWriteE
         spec = spec.with_field("timeSamples", Value::TimeSamples(samples));
     }
     if let Some(spline) = &attribute.spline {
-        spec = spec.with_field("spline", Value::Spline((**spline).clone()));
+        spec = spec.with_field(
+            "spline",
+            Value::Spline(
+                (**spline).clone(),
+                attribute
+                    .spline_custom_data
+                    .iter()
+                    .map(|(time, entries)| {
+                        (
+                            *time,
+                            entries
+                                .iter()
+                                .map(|(k, v)| (k.clone(), natural(v)))
+                                .collect(),
+                        )
+                    })
+                    .collect(),
+            ),
+        );
     }
     Ok(spec)
 }
@@ -355,6 +373,11 @@ fn arc(arc: &UsdaReference) -> Reference {
         prim_path: arc.prim_path.clone().unwrap_or_default(),
         offset: arc.offset.offset,
         scale: arc.offset.scale,
+        custom_data: arc
+            .custom_data
+            .iter()
+            .map(|(k, v)| (k.clone(), natural(v)))
+            .collect(),
     }
 }
 
@@ -1554,6 +1577,7 @@ def Xform "A" (
         use layerstack_usda::writer::{LayerOffset, SubLayer};
 
         let arc = |asset: Option<&str>, prim_path: Option<&str>| UsdaReference {
+            custom_data: Vec::new(),
             asset: asset.map(Into::into),
             prim_path: prim_path.map(Into::into),
             offset: LayerOffset {
@@ -1600,6 +1624,7 @@ def Xform "A" (
             prim_path: prim_path.into(),
             offset: 2.0,
             scale: 1.0,
+            custom_data: Vec::new(),
         };
         assert_eq!(
             fields(&specs, "/P")[2..7],

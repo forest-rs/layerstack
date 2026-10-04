@@ -10,8 +10,12 @@ use alloc::{vec, vec::Vec};
 pub enum SplineQueryError {
     /// Nonfinite input, unordered knots, negative tangent widths or bad tolerance.
     InvalidInput,
-    /// Loop resolution is not implemented by these utilities. Bake loops first.
+    /// Inner loops require baking; adaptive sampling and change intervals also
+    /// require extrapolation loops to be baked.
     UnsupportedLoops,
+    /// The query spans 2^53 or more extrapolation periods; adjacent cycle
+    /// indices and their boundary sides cannot be distinguished in `f64`.
+    UnsupportedLoopRange,
     /// A Bézier time curve reverses direction, making inversion ambiguous.
     RegressiveTangents,
     /// The time derivative vanishes at the query, so the slope ratio is singular.
@@ -62,7 +66,10 @@ fn looped(spline: &SplineData) -> bool {
             })
 }
 fn validate(spline: &SplineData) -> Result<(), SplineQueryError> {
-    if looped(spline) {
+    if spline
+        .loop_params
+        .is_some_and(|lp| lp.proto_end > lp.proto_start)
+    {
         return Err(SplineQueryError::UnsupportedLoops);
     }
     if spline
@@ -112,7 +119,7 @@ fn finite(value: Option<f64>) -> Result<Option<f64>, SplineQueryError> {
 fn slope(a: &Knot, b: &Knot) -> f64 {
     (b.pre_value.unwrap_or(b.value) - a.value) / (b.time - a.time)
 }
-fn regressive(a: &Knot, b: &Knot) -> bool {
+pub(super) fn regressive(a: &Knot, b: &Knot) -> bool {
     // Test the minimum of x'(u)/3 over [0,1]. AOUSD §12.5; Ts Bézier time curves.
     let span = b.time - a.time;
     // Scale all lengths together; width/span may overflow on tiny segments.
@@ -130,6 +137,23 @@ fn regressive(a: &Knot, b: &Knot) -> bool {
     p < 0. || q < 0. || (aa * at + bb) * at + p < 0.
 }
 impl SplineData {
+    /// Evaluates a finite time with explicit invalid-data and unsupported-feature
+    /// errors. Extrapolation loops are resolved without expanding periods; inner loops
+    /// require baking and regressive Bézier tangents require containment.
+    /// AOUSD Core §12.3.3, §12.5.
+    pub fn evaluate_checked(&self, time: f64) -> Result<Option<f64>, SplineQueryError> {
+        validate(self)?;
+        if !time.is_finite() {
+            return Err(SplineQueryError::InvalidInput);
+        }
+        if self.has_regressive_tangents()? {
+            return Err(SplineQueryError::RegressiveTangents);
+        }
+        let Some(mapping) = self.map_extrapolation(time, false)? else {
+            return Ok(None);
+        };
+        finite(self.evaluate_mapped(mapping))
+    }
     pub(super) fn linear_extrapolation_slope(&self, pre: bool) -> f64 {
         // OpenUSD ts/eval.cpp::_GetExtrapolationSlope; tangent faces inward.
         if self.knots.len() < 2 {
@@ -171,15 +195,35 @@ impl SplineData {
     }
     /// Evaluates the left-hand limit, including held segments and blocked
     /// regions. At a dual-valued knot this uses its pre-value unless the preceding
-    /// segment is held (previous value) or blocked (no value). Looping descriptions
-    /// return an explicit unsupported error; nonfinite/invalid data is rejected.
+    /// segment is held (previous value) or blocked (no value). Extrapolation loops
+    /// preserve boundary sides; inner loops require baking. Invalid data errors.
     /// AOUSD Core §12.3.3, §12.5; OpenUSD `TsSpline::EvalPreValue`.
     pub fn evaluate_pre_value(&self, time: f64) -> Result<Option<f64>, SplineQueryError> {
         validate(self)?;
+        if self.has_regressive_tangents()? {
+            return Err(SplineQueryError::RegressiveTangents);
+        }
         if !time.is_finite() {
             return Err(SplineQueryError::InvalidInput);
         }
-        let result = match self
+        let Some(mapping) = self.map_extrapolation(time, true)? else {
+            return Ok(None);
+        };
+        let result = if mapping.held {
+            Some(if mapping.pre {
+                self.knots[0].pre_value.unwrap_or(self.knots[0].value)
+            } else {
+                self.knots.last().expect("nonempty").value
+            })
+        } else if mapping.pre {
+            self.pre_value_unlooped(mapping.time)
+        } else {
+            self.evaluate_unlooped(mapping.time)
+        };
+        finite(result.map(|v| v + mapping.offset))
+    }
+    pub(super) fn pre_value_unlooped(&self, time: f64) -> Option<f64> {
+        match self
             .knots
             .binary_search_by(|k| k.time.partial_cmp(&time).expect("finite time"))
         {
@@ -191,14 +235,13 @@ impl SplineData {
                 KnotInterp::Held => Some(self.knots[i - 1].value),
                 _ => Some(self.knots[i].pre_value.unwrap_or(self.knots[i].value)),
             },
-            Err(_) => self.evaluate(time),
-        };
-        finite(result)
+            Err(_) => self.evaluate_unlooped(time),
+        }
     }
     /// Analytic right-hand derivative, including linear/sloped extrapolation.
     /// Blocked regions return `None`. At a curved knot the authored right slope
     /// is used, including zero-width tangents, as `TsSpline::EvalDerivative` does.
-    /// Loops and regressive Bézier segments are explicitly unsupported; a
+    /// Inner loops and regressive Bézier segments are explicitly unsupported; a
     /// vanishing interior time derivative returns `SingularDerivative`.
     /// AOUSD Core §12.5; OpenUSD `ts/eval.cpp`.
     pub fn evaluate_derivative(&self, time: f64) -> Result<Option<f64>, SplineQueryError> {
@@ -218,6 +261,18 @@ impl SplineData {
         if self.knots.is_empty() {
             return Ok(None);
         }
+        let Some(mapping) = self.map_extrapolation(time, pre)? else {
+            return Ok(None);
+        };
+        if mapping.held {
+            return Ok(Some(0.));
+        }
+        finite(
+            self.derivative_unlooped(mapping.time, mapping.pre)?
+                .map(|v| v * mapping.sign),
+        )
+    }
+    fn derivative_unlooped(&self, time: f64, pre: bool) -> Result<Option<f64>, SplineQueryError> {
         let segment = match self
             .knots
             .binary_search_by(|k| k.time.partial_cmp(&time).expect("finite time"))
@@ -334,6 +389,9 @@ impl SplineData {
     ) -> Result<Option<SplineChangeInterval>, SplineQueryError> {
         validate(self)?;
         validate(other)?;
+        if looped(self) || looped(other) {
+            return Err(SplineQueryError::UnsupportedLoops);
+        }
         if self == other {
             return Ok(None);
         }
@@ -426,6 +484,9 @@ impl SplineData {
         max_samples: usize,
     ) -> Result<Vec<SplinePolyline>, SplineQueryError> {
         validate(self)?;
+        if looped(self) {
+            return Err(SplineQueryError::UnsupportedLoops);
+        }
         if !start.is_finite()
             || !end.is_finite()
             || start >= end
@@ -560,6 +621,10 @@ mod tests {
 
     fn knot(time: f64, value: f64) -> Knot {
         Knot {
+            custom_data: Vec::new(),
+            pre_tan_algorithm: crate::spline::TangentAlgorithm::None,
+            post_tan_algorithm: crate::spline::TangentAlgorithm::None,
+
             time,
             value,
             pre_value: None,
@@ -579,6 +644,9 @@ mod tests {
         let mut b = knot(2., 8.);
         b.pre_tan_slope = 4.;
         SplineData {
+            pre_loop_boundary: None,
+            post_loop_boundary: None,
+
             data_type: SplineDataType::Double,
             default_curve_type: CurveType::Bezier,
             pre_extrapolation: Extrapolation::Linear,
@@ -749,8 +817,16 @@ mod tests {
         assert_eq!(s, original);
         s = spline();
         s.pre_extrapolation = Extrapolation::LoopRepeat;
+        assert_eq!(s.evaluate_pre_value(0.), Ok(Some(2.)));
+        s.loop_params = Some(super::super::LoopParams {
+            proto_start: 0.,
+            proto_end: 2.,
+            num_pre_loops: 1,
+            num_post_loops: 1,
+            value_offset: 0.,
+        });
         assert_eq!(
-            s.evaluate_pre_value(0.),
+            s.evaluate_checked(1.),
             Err(SplineQueryError::UnsupportedLoops)
         );
         s = spline();

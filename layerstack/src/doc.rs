@@ -937,7 +937,7 @@ pub enum ReferenceTarget {
 }
 
 /// A composition reference or payload arc.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub struct Reference {
     /// The root layer of the referenced layer stack.
     ///
@@ -962,9 +962,38 @@ pub struct Reference {
     pub asset: Option<String>,
     /// Time offset applied across this reference boundary (§12.3.2.1).
     pub layer_offset: LayerOffset,
+    /// Authored reference custom data (AOUSD Core §16.2.17.5). Payloads have none.
+    pub custom_data: Vec<(Arc<str>, Value)>,
 }
 
+// Reference list identity must be reflexive even for metadata NaNs, just as
+// LayerOffset compares authored bits. AOUSD Core §10.3.2.1, §16.2.17.5.
+impl PartialEq for Reference {
+    fn eq(&self, other: &Self) -> bool {
+        use crate::edit::same::Same;
+        self.layer == other.layer
+            && self.target == other.target
+            && self.asset == other.asset
+            && self.layer_offset == other.layer_offset
+            && self.custom_data.len() == other.custom_data.len()
+            && self.custom_data.iter().all(|(k, v)| {
+                other
+                    .custom_data
+                    .iter()
+                    .find(|(key, _)| key == k)
+                    .is_some_and(|(_, value)| v.same(value))
+            })
+    }
+}
+impl Eq for Reference {}
+
 impl Reference {
+    /// Sets the authored custom data, preserving it through unresolved arcs.
+    pub fn with_custom_data(mut self, custom_data: Vec<(Arc<str>, Value)>) -> Self {
+        self.custom_data = custom_data;
+        self
+    }
+
     /// Creates a reference with no asset path.
     ///
     /// With `layer` set to the layer that authors it, the arc is internal
@@ -975,6 +1004,7 @@ impl Reference {
             target: ReferenceTarget::Prim(prim_path),
             asset: None,
             layer_offset: LayerOffset::IDENTITY,
+            custom_data: Vec::new(),
         }
     }
 
@@ -985,6 +1015,7 @@ impl Reference {
             target: ReferenceTarget::Prim(prim_path),
             asset: Some(asset.into()),
             layer_offset: LayerOffset::IDENTITY,
+            custom_data: Vec::new(),
         }
     }
 
@@ -996,6 +1027,7 @@ impl Reference {
             target: ReferenceTarget::DefaultPrim,
             asset: None,
             layer_offset: LayerOffset::IDENTITY,
+            custom_data: Vec::new(),
         }
     }
 
@@ -1007,6 +1039,7 @@ impl Reference {
             target: ReferenceTarget::DefaultPrim,
             asset: Some(asset.into()),
             layer_offset: LayerOffset::IDENTITY,
+            custom_data: Vec::new(),
         }
     }
 
@@ -1032,6 +1065,7 @@ impl Reference {
             target,
             asset: Some(asset.into()),
             layer_offset,
+            custom_data: Vec::new(),
         }
     }
 
@@ -1063,6 +1097,7 @@ impl Reference {
             target,
             asset: Some(asset.into()),
             layer_offset,
+            custom_data: Vec::new(),
         }
     }
 

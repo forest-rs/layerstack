@@ -365,26 +365,12 @@ fn spline_tangent_algorithms_need_crate_0_13() {
     );
 }
 
-/// Crate 0.15's spline `loopBoundaryTime` has no Layerstack representation.
+/// Crate 0.15's loop boundary and `TimeCode` spline features are represented.
 #[test]
-fn spline_loop_boundary_time_is_reported() {
-    assert_eq!(
-        read(&fixture_bytes("spline_loop_boundary.usdc")).err(),
-        Some(UsdcError::UnsupportedFeature {
-            feature: "spline loopBoundaryTime",
-        })
-    );
-}
-
-/// Crate 0.15's `GfTimeCode`-valued splines have no Layerstack representation.
-#[test]
-fn time_valued_spline_is_reported() {
-    assert_eq!(
-        read(&fixture_bytes("spline_time_valued.usdc")).err(),
-        Some(UsdcError::UnsupportedFeature {
-            feature: "time-valued spline",
-        })
-    );
+fn newest_authored_spline_features_are_readable() {
+    for name in ["spline_loop_boundary.usdc", "spline_time_valued.usdc"] {
+        assert!(read(&fixture_bytes(name)).is_ok(), "{name}");
+    }
 }
 
 // ---------------------------------------------------------------------------

@@ -553,7 +553,7 @@ fn spline_knots_are_charged_before_parsing() {
     let (rep, data) = spline_value(knots, false);
     let mut budget = DecodeBudget::with_limit(u64::MAX);
     let (value, bytes) = allocated_by(|| decode_value_within(&rep, &data, &sections, &mut budget));
-    let Ok(CrateValue::Spline(spline)) = value else {
+    let Ok(CrateValue::Spline(spline, _)) = value else {
         panic!("expected a spline, got {value:?}");
     };
     assert_eq!(spline.knots.len(), knots as usize);

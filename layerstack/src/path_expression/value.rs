@@ -726,6 +726,9 @@ mod tests {
         assert_eq!(fold_default(&array, None), None);
         assert_eq!(at_time(&array), None);
         let spline = chain(PropertySpec::attribute().with_spline(SplineData {
+            pre_loop_boundary: None,
+            post_loop_boundary: None,
+
             data_type: SplineDataType::Double,
             default_curve_type: CurveType::Bezier,
             pre_extrapolation: Extrapolation::Held,

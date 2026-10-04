@@ -185,7 +185,7 @@ pub enum CrateValue {
     /// Relocates map (source path → target path).
     RelocatesMap(Vec<(String, String)>),
     /// Decoded spline data (§16.3.10.33).
-    Spline(SplineData),
+    Spline(SplineData, Vec<(f64, Vec<(String, Self)>)>),
     /// A native array edit (crate 0.14 and later).
     ArrayEdit(CrateArrayEdit),
 }
@@ -1722,8 +1722,7 @@ fn lookup_path(
 /// path index for the prim path, the layer offset as two `f64`s (offset,
 /// scale), and the `customData` dictionary.
 ///
-/// The custom data is decoded to validate it and to find the end of the
-/// item, then dropped: `layerstack::doc::Reference` has no custom data.
+/// The typed custom data is retained for conversion by assembly.
 fn decode_reference_at(
     data: &[u8],
     pos: &mut usize,
@@ -1734,14 +1733,13 @@ fn decode_reference_at(
     let prim_path = lookup_path(sections, read_u32_le(data, pos)? as usize, budget)?;
     let layer_offset = read_f64_le(data, pos)?;
     let layer_scale = read_f64_le(data, pos)?;
-    let (_custom_data, end) = decode_dictionary_at(data, *pos, sections, budget)?;
+    let (custom_data, end) = decode_dictionary_at(data, *pos, sections, budget)?;
     *pos = end;
-    Ok(reference_dictionary(
-        asset_path,
-        prim_path,
-        layer_offset,
-        layer_scale,
-    ))
+    let mut reference = reference_dictionary(asset_path, prim_path, layer_offset, layer_scale);
+    if let CrateValue::Dictionary(entries) = &mut reference {
+        entries.push(("customData".into(), CrateValue::Dictionary(custom_data)));
+    }
+    Ok(reference)
 }
 
 /// Reads an `SdfPayload` (`Write(SdfPayload)`,
@@ -2323,6 +2321,9 @@ fn read_u32_array_or_inlined(
 
 fn empty_spline() -> SplineData {
     SplineData {
+        pre_loop_boundary: None,
+        post_loop_boundary: None,
+
         data_type: SplineDataType::Unspecified,
         default_curve_type: CurveType::Bezier,
         pre_extrapolation: Extrapolation::Block,
@@ -2338,8 +2339,8 @@ fn empty_spline() -> SplineData {
 /// binary data, and a map from knot time to custom-data dictionary
 /// (`Write(const TsSpline &)` and the `TsSpline` branch of `Read`,
 /// `pxr/usd/sdf/crateFile.cpp:1614` and `:1382`). The blob is parsed by
-/// [`parse_ts_spline`]. Knot custom data is decoded to validate it and then
-/// dropped, because [`Knot`] has no custom data.
+/// [`parse_ts_spline`]. Typed knot dictionaries remain separate until assembly
+/// converts token strings into the layer's interned values.
 ///
 /// Spec: AOUSD Core §16.3.10.33; OpenUSD v26.08 for crate 0.13 and later.
 fn decode_spline(
@@ -2351,7 +2352,7 @@ fn decode_spline(
     require_version(sections, CrateVersion::SPLINES, "spline value")?;
     let off = payload_offset_usize(rep, data)?;
     if off == 0 {
-        return Ok(CrateValue::Spline(empty_spline()));
+        return Ok(CrateValue::Spline(empty_spline(), Vec::new()));
     }
 
     let blob_len = read_u64_at(data, off)?;
@@ -2370,26 +2371,32 @@ fn decode_spline(
     // Knot custom data: `u64` count, then per knot a `f64` time and a
     // dictionary.
     let count = read_u64_at(data, blob_end)?;
+    budget.charge(count)?;
+    let mut custom_data = Vec::new();
     let mut pos = blob_end + 8;
     for _ in 0..count {
-        read_f64_le(data, &mut pos)?;
-        let (_, end) = decode_dictionary_at(data, pos, sections, budget)?;
+        let time = read_f64_le(data, &mut pos)?;
+        let (dictionary, end) = decode_dictionary_at(data, pos, sections, budget)?;
+        if !spline.knots.iter().any(|k| k.time == time)
+            || custom_data.iter().any(|(t, _)| *t == time)
+        {
+            return Err(UsdcError::Inconsistent {
+                message: "duplicate or orphan spline knot custom data",
+            });
+        }
+        custom_data.push((time, dictionary));
         pos = end;
     }
 
-    Ok(CrateValue::Spline(spline))
+    Ok(CrateValue::Spline(spline, custom_data))
 }
 
 /// Parses Ts binary spline data in formats 1 to 3 from `data[pos..]`.
 ///
 /// Follows `Ts_BinaryDataAccess::_ParseV1_3` (`pxr/base/ts/binary.cpp`,
-/// OpenUSD v26.08). Format 2 (crate 0.13) adds a tangent-algorithm byte per
-/// knot. It is validated and dropped: OpenUSD also stores the tangents the
-/// algorithm produced, and those are kept. Format 3 (crate 0.15) widens the
-/// value-type field and adds a third header byte for `loopBoundaryTime`.
-/// `GfTimeCode`-valued splines and `loopBoundaryTime` have no
-/// [`SplineData`] representation and fail with
-/// [`UsdcError::UnsupportedFeature`]. The data must be consumed exactly.
+/// OpenUSD v26.08). Format 2 (crate 0.13) adds authored tangent algorithms;
+/// format 3 (crate 0.15) adds `TimeCode` values and loop boundary times. All are
+/// retained. The data must be consumed exactly.
 ///
 /// The declared knots are charged to `budget` before any is read, so a
 /// spline that fails to parse later has still paid for what it allocated.
@@ -2433,12 +2440,9 @@ fn parse_ts_spline(
     }
     let descriptor = if format > 2 {
         (hdr1 & 0x70) >> 4
+    } else if hdr1 & 0x40 != 0 {
+        4
     } else {
-        if hdr1 & 0x40 != 0 {
-            return Err(UsdcError::UnsupportedFeature {
-                feature: "time-valued spline",
-            });
-        }
         (hdr1 & 0x30) >> 4
     };
     let data_type = match descriptor {
@@ -2446,11 +2450,7 @@ fn parse_ts_spline(
         1 => SplineDataType::Double,
         2 => SplineDataType::Float,
         3 => SplineDataType::Half,
-        4 => {
-            return Err(UsdcError::UnsupportedFeature {
-                feature: "time-valued spline",
-            });
-        }
+        4 => SplineDataType::TimeCode,
         _ => {
             return Err(UsdcError::Inconsistent {
                 message: "unknown spline value type",
@@ -2472,17 +2472,19 @@ fn parse_ts_spline(
 
     // Header byte 3 (format 3): `loopBoundaryTime` presence for pre (bit 0)
     // and post (bit 1) looping extrapolation.
+    let (mut pre_loop_boundary, mut post_loop_boundary) = (None, None);
     if format > 2 {
         let hdr3 = read_u8(data, &mut pos)?;
-        if hdr3 & 0x03 != 0 {
-            return Err(UsdcError::UnsupportedFeature {
-                feature: "spline loopBoundaryTime",
-            });
-        }
-        if hdr3 != 0 {
+        if hdr3 & !3 != 0 {
             return Err(UsdcError::Inconsistent {
                 message: "unknown spline header flags",
             });
+        }
+        if hdr3 & 1 != 0 {
+            pre_loop_boundary = Some(read_f64_le(data, &mut pos)?);
+        }
+        if hdr3 & 2 != 0 {
+            post_loop_boundary = Some(read_f64_le(data, &mut pos)?);
         }
     }
 
@@ -2519,6 +2521,8 @@ fn parse_ts_spline(
     }
 
     Ok(SplineData {
+        pre_loop_boundary,
+        post_loop_boundary,
         data_type,
         default_curve_type,
         pre_extrapolation,
@@ -2571,8 +2575,9 @@ fn read_knot(
 
     // Format 2 and later: tangent algorithms, pre (bits 0-3) and post
     // (bits 4-7): None, Custom or AutoEase (`TsTangentAlgorithm`).
+    let mut algorithms = 0;
     if format > 1 {
-        let algorithms = read_u8(data, pos)?;
+        algorithms = read_u8(data, pos)?;
         if algorithms & 0x0F > 2 || algorithms >> 4 > 2 {
             return Err(UsdcError::Inconsistent {
                 message: "unknown spline tangent algorithm",
@@ -2581,6 +2586,9 @@ fn read_knot(
     }
 
     Ok(Knot {
+        custom_data: Vec::new(),
+        pre_tan_algorithm: tangent_algorithm(algorithms & 15),
+        post_tan_algorithm: tangent_algorithm(algorithms >> 4),
         time,
         value,
         pre_value,
@@ -2593,6 +2601,15 @@ fn read_knot(
         pre_tan_slope,
         post_tan_slope,
     })
+}
+
+fn tangent_algorithm(value: u8) -> layerstack::spline::TangentAlgorithm {
+    use layerstack::spline::TangentAlgorithm;
+    match value {
+        1 => TangentAlgorithm::Custom,
+        2 => TangentAlgorithm::AutoEase,
+        _ => TangentAlgorithm::None,
+    }
 }
 
 /// Reads an extrapolation mode (`TsExtrapMode`), and its slope when sloped.
@@ -2641,7 +2658,9 @@ fn read_u32_le(data: &[u8], pos: &mut usize) -> Result<u32, UsdcError> {
 /// Read a value in the spline's data type, converting to `f64`.
 fn read_typed_value(data: &[u8], pos: &mut usize, dt: SplineDataType) -> Result<f64, UsdcError> {
     match dt {
-        SplineDataType::Double | SplineDataType::Unspecified => read_f64_le(data, pos),
+        SplineDataType::Double | SplineDataType::TimeCode | SplineDataType::Unspecified => {
+            read_f64_le(data, pos)
+        }
         SplineDataType::Float => Ok(f64::from(read_f32_le(data, pos)?)),
         SplineDataType::Half => Ok(half_to_f64(u16::from_le_bytes(read_bytes(data, pos)?))),
     }
@@ -3203,6 +3222,16 @@ mod tests {
             assert_eq!(spline.knots[0].time, 2.0);
             assert_eq!(spline.knots[0].value, 5.0);
             assert_eq!(spline.knots[0].next_interp, KnotInterp::Held);
+            if format > 1 {
+                assert_eq!(
+                    spline.knots[0].pre_tan_algorithm,
+                    layerstack::spline::TangentAlgorithm::Custom
+                );
+                assert_eq!(
+                    spline.knots[0].post_tan_algorithm,
+                    layerstack::spline::TangentAlgorithm::AutoEase
+                );
+            }
         }
         assert!(parse(&[], CrateVersion::SPLINES).unwrap().knots.is_empty());
     }
@@ -3220,24 +3249,26 @@ mod tests {
     }
 
     #[test]
-    fn ts_unrepresentable_features_are_reported() {
+    fn ts_new_features_are_preserved_and_future_formats_fail() {
         let newest = CrateVersion::SPLINE_LOOP_BOUNDARY_AND_TIMECODE;
         let unsupported = |feature| Some(UsdcError::UnsupportedFeature { feature });
+        let mut boundary = ts_blob(3, 0x02, 0);
+        boundary.splice(3..3, 2.0_f64.to_le_bytes());
         assert_eq!(
-            parse(&ts_blob(3, 0x02, 0), newest).err(),
-            unsupported("spline loopBoundaryTime")
+            parse(&boundary, newest).unwrap().post_loop_boundary,
+            Some(2.)
         );
         let mut time_valued = ts_blob(3, 0, 0);
         time_valued[0] = 3 | (4 << 4);
         assert_eq!(
-            parse(&time_valued, newest).err(),
-            unsupported("time-valued spline")
+            parse(&time_valued, newest).unwrap().data_type,
+            SplineDataType::TimeCode
         );
         let mut legacy_time_valued = ts_blob(1, 0, 0);
         legacy_time_valued[0] |= 0x40;
         assert_eq!(
-            parse(&legacy_time_valued, newest).err(),
-            unsupported("time-valued spline")
+            parse(&legacy_time_valued, newest).unwrap().data_type,
+            SplineDataType::TimeCode
         );
         let mut future = ts_blob(3, 0, 0);
         future[0] = (future[0] & 0xF0) | 4;
@@ -3434,6 +3465,7 @@ mod tests {
                 (_, CrateValue::String(prim)),
                 (_, CrateValue::Double(offset)),
                 (_, CrateValue::Double(scale)),
+                ..,
             ] => (asset.clone(), prim.clone(), *offset, *scale),
             other => panic!("unexpected reference entries {other:?}"),
         }
@@ -3478,6 +3510,13 @@ mod tests {
             )
         };
         assert_eq!(refs, [r(10.0, 2.0), r(45.0, 0.5)]);
+        let CrateValue::Dictionary(reference) = &op.prepended_items[0] else {
+            panic!("reference")
+        };
+        let CrateValue::Dictionary(custom) = &reference[4].1 else {
+            panic!("custom data")
+        };
+        assert!(matches!(custom.as_slice(), [(key, CrateValue::Int(7))] if key == "note"));
 
         // Truncated anywhere, the list op fails without panicking.
         for len in 0..data.len() {

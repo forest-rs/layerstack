@@ -263,6 +263,20 @@ fn anchor_value(value: &mut Value, anchor: &[String], maps: &[ArcMap]) {
 /// node's opinions by `UsdStage` value resolution.
 pub(crate) fn anchor_opinions(store: &dyn LayerStore, prims: &mut HashMap<PathId, PrimIndex>) {
     for (path, index) in prims.iter_mut() {
+        // Context-free prototype occurrences already share these records.
+        // Inspect before detaching: only expressions require namespace mapping.
+        if !index.opinions.iter().any(|opinion| match &opinion.value {
+            OpinionValue::Field(FieldValue::Value(value)) => has_path_expression(value),
+            OpinionValue::Property(spec) => {
+                spec.default.as_ref().is_some_and(has_path_expression)
+                    || spec.time_samples.as_ref().is_some_and(|samples| {
+                        samples.iter().any(|(_, value)| has_path_expression(value))
+                    })
+            }
+            OpinionValue::Field(_) => false,
+        }) {
+            continue;
+        }
         let prim_depth = store.paths().resolve(*path).depth();
         let graph = &index.graph;
         let mut maps: HashMap<NodeId, Option<NodeNamespace>> = HashMap::new();

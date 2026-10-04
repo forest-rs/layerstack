@@ -234,6 +234,7 @@ pub(crate) struct CycleDetector {
     relocations: Relocations,
     inventory: SourceInventory,
     used_layers: HashSet<LayerId>,
+    used_layer_sites: HashMap<PathId, HashSet<LayerId>>,
     errors: Vec<CompositionError>,
     seen: HashSet<CompositionError>,
     /// Target paths authored inside the class an inherit maps, as
@@ -259,6 +260,7 @@ impl CycleDetector {
             relocations: Relocations::default(),
             inventory: SourceInventory::default(),
             used_layers: HashSet::new(),
+            used_layer_sites: HashMap::new(),
             errors: Vec::new(),
             seen: HashSet::new(),
             class_internal_targets: HashSet::new(),
@@ -486,17 +488,26 @@ impl CycleDetector {
         let mut errors = Vec::new();
         let chain = self.chain.stacks_for(root);
         let stack = LayerStack::gather_recording(store, &chain, &mut errors, Some(&mut self.reads));
-        self.used_layers.extend(
-            stack
-                .layers
-                .iter()
-                .copied()
-                .filter(|id| store.layer(*id).is_some()),
-        );
+        let used = stack
+            .layers
+            .iter()
+            .copied()
+            .filter(|id| store.layer(*id).is_some());
+        if let Some(site) = self.chain.sites.first() {
+            self.used_layer_sites
+                .entry(site.dest)
+                .or_default()
+                .extend(used.clone());
+        }
+        self.used_layers.extend(used);
         for error in errors {
             self.report(error);
         }
         stack
+    }
+
+    pub(crate) fn take_used_layer_sites(&mut self) -> HashMap<PathId, HashSet<LayerId>> {
+        core::mem::take(&mut self.used_layer_sites)
     }
 
     pub(crate) fn used_layers(&self) -> &HashSet<LayerId> {

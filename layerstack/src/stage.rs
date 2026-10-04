@@ -360,6 +360,7 @@ pub struct Stage {
     loadable: HashSet<PathId>,
     local_layers: Vec<LayerId>,
     used_layers: alloc::collections::BTreeSet<LayerId>,
+    used_layer_sites: HashMap<PathId, HashSet<LayerId>>,
     inactive: HashSet<PathId>,
     inactive_children: HashMap<PathId, Vec<PathId>>,
     root_layer: Option<LayerId>,
@@ -1121,6 +1122,7 @@ impl Stage {
             loadable: HashSet::new(),
             local_layers: Vec::new(),
             used_layers: alloc::collections::BTreeSet::new(),
+            used_layer_sites: HashMap::new(),
             inactive: HashSet::new(),
             inactive_children: HashMap::new(),
             prototypes: prototypes::PrototypeTable::default(),
@@ -1143,9 +1145,11 @@ impl Stage {
         mut self,
         local: Vec<LayerId>,
         used: alloc::collections::BTreeSet<LayerId>,
+        sites: HashMap<PathId, HashSet<LayerId>>,
     ) -> Self {
         self.local_layers = local;
         self.used_layers = used;
+        self.used_layer_sites = sites;
         self
     }
 
@@ -1214,6 +1218,18 @@ impl Stage {
         mut partial: Self,
         recomposed: &[PathId],
     ) {
+        for path in recomposed {
+            self.used_layer_sites.remove(path);
+            if let Some(layers) = partial.used_layer_sites.remove(path) {
+                self.used_layer_sites.insert(*path, layers);
+            }
+        }
+        self.used_layers = self
+            .local_layers
+            .iter()
+            .copied()
+            .chain(self.used_layer_sites.values().flatten().copied())
+            .collect();
         self.clips.merge_from(partial.clips, recomposed);
         for path in recomposed {
             if partial.inactive.contains(path) {

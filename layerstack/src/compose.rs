@@ -470,6 +470,7 @@ pub(crate) fn compose_stage_selected(
         .copied()
         .filter(|id| store.layer(*id).is_some())
         .collect();
+    let used_layer_sites = cycles.take_used_layer_sites();
     let errors = cycles
         .into_errors()
         .into_iter()
@@ -479,7 +480,7 @@ pub(crate) fn compose_stage_selected(
         .collect();
     Stage::from_parts(prims, children, options.with_provenance, dependencies)
         .with_loadable(resolver.loadable.take())
-        .with_layer_inventory(local_layers, used_layers)
+        .with_layer_inventory(local_layers, used_layers, used_layer_sites)
         .with_inactive(inactive, inactive_children)
         .with_composition_work(crate::stage::CompositionWork {
             composed_prim_indexes,

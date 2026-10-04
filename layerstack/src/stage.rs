@@ -9,7 +9,7 @@ mod explain;
 pub(crate) mod loading;
 pub use loading::{LayerMuteError, LoadPolicy, PayloadLoadRules, PayloadRule};
 mod prototypes;
-pub use prototypes::{CompositionStorage, Prototype, PrototypeId, PrototypePrim};
+pub use prototypes::{CompositionStorage, CompositionWork, Prototype, PrototypeId, PrototypePrim};
 pub mod flatten;
 pub(crate) mod stage_time;
 
@@ -358,6 +358,7 @@ pub struct Stage {
     root_layer: Option<LayerId>,
     clips: crate::value_clips::Catalog,
     prototypes: prototypes::PrototypeTable,
+    composition_work: CompositionWork,
     prims: HashMap<PathId, PrimIndex>,
     children: HashMap<PathId, Vec<PathId>>,
     with_provenance: bool,
@@ -1079,6 +1080,7 @@ impl Stage {
             inactive: HashSet::new(),
             inactive_children: HashMap::new(),
             prototypes: prototypes::PrototypeTable::default(),
+            composition_work: CompositionWork::default(),
             root_layer: None,
             clips: crate::value_clips::Catalog::default(),
             prims,

@@ -273,6 +273,12 @@ impl PrimIndexGraph {
         }
     }
 
+    /// Changes the occurrence root after context-free prototype composition.
+    /// The caller proves all other sites and namespace depths identical.
+    pub(crate) fn set_root_site(&mut self, site: SpecPath) {
+        self.nodes[0].arc.site = site;
+    }
+
     /// Returns the child of `parent` reached by `arc`, adding it if needed.
     pub(crate) fn intern_child(&mut self, parent: NodeId, arc: NodeArc) -> NodeId {
         if let Some(existing) = self.nodes[parent.index()]

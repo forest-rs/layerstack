@@ -910,3 +910,13 @@ fn json_difference(want: &serde_json::Value, got: &serde_json::Value) -> String 
     }
     walk(want, got, "").unwrap_or_default()
 }
+
+#[test]
+fn native_instance_fixture_reuses_descendants_before_composition() {
+    let case = fixture_cases("flatten")
+        .into_iter()
+        .find(|case| case.name == "instance_reuse")
+        .unwrap();
+    let flattened = flatten(&case).unwrap();
+    assert_eq!(flattened.stage.composition_work().reused_prim_indexes, 4);
+}

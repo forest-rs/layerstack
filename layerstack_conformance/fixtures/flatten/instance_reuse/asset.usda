@@ -1,0 +1,17 @@
+#usda 1.0
+
+def Xform "Asset" {
+    def Scope "A" {
+        reorder nameChildren = ["C", "B"]
+        def Scope "B" {
+            int value = 7
+            double animated.timeSamples = { 0: 3, 2: 5 }
+        }
+        def Scope "C" {
+            int value = 11
+        }
+    }
+    def Scope "Hidden" (active = false) {
+        int value = 17
+    }
+}

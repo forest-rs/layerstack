@@ -1,0 +1,39 @@
+#usda 1.0
+
+def Xform "Left" (
+    instanceable = true
+    prepend references = @asset.usda@</Asset>
+) {
+    int rootValue = 1
+    over "A" {
+        over "B" {
+            int value = 99
+        }
+    }
+    def Scope "LocalOnly" {}
+}
+
+def Xform "Right" (
+    instanceable = true
+    prepend references = @asset.usda@</Asset>
+) {
+    int rootValue = 2
+    over "A" {
+        over "B" {
+            int value = 101
+        }
+    }
+    def Scope "LocalOnly" {}
+}
+
+def Xform "Offset" (
+    instanceable = true
+    prepend references = @asset.usda@</Asset> (offset = 10; scale = 2)
+) {}
+
+def Xform "Group" {
+    def Xform "Deep" (
+        instanceable = true
+        prepend references = @asset.usda@</Asset>
+    ) {}
+}

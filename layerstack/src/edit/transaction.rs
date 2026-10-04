@@ -237,6 +237,19 @@ impl Transaction {
         self.ops.len()
     }
 
+    /// Consumes `other`, appending its edits and preconditions without applying
+    /// either transaction. Edits retain their order; all preconditions are checked
+    /// against the initial store before any combined edit runs.
+    ///
+    /// Applying the result is one atomic operation with one inverse. Conflicting
+    /// guards or rejected edits reject the whole batch. Both transactions must
+    /// address the same store and use that store's interned paths and tokens.
+    pub fn append(&mut self, mut other: Self) -> &mut Self {
+        self.preconditions.append(&mut other.preconditions);
+        self.ops.append(&mut other.ops);
+        self
+    }
+
     /// Creates the prim spec at `at` with `specifier` and `type_name`,
     /// creating missing ancestors as `over`s and missing variant branches
     /// on the way. `at` may also name a variant (`/Rock{shape=smooth}`),

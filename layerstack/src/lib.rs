@@ -143,6 +143,8 @@ pub mod composition_error;
 pub mod dependency_map;
 pub mod doc;
 mod shared_vec;
+mod store_identity;
+pub use store_identity::StoreIdentity;
 mod value_array;
 pub mod value_clips;
 pub use value_array::{ArrayReadError, ArrayRef, DeferredArraySource, TypedArray};
@@ -224,9 +226,10 @@ pub use stage::{
     Attribute, AttributeQuery, AttributeQueryWork, Contribution, DictionaryMerge, ExplainedOpinion,
     FlattenError, FlattenReport, FlattenRequirements, FlattenVerification, Flattened, IgnoreCause,
     KeyPath, LayerMuteError, LoadPolicy, Object, OpinionRole, PayloadLoadRules, PayloadRule,
-    PopulationMask, Prim, PrimPredicate, PrimRange, PrimStatus, PrimVisit, PrimVisits,
-    PropertyDeclaration, Provenance, Relationship, Resolved, ResolvedValue, SampleUse, Stage,
-    StageMetadataError, StageOptions, Traverse, ValueExplanation, ValueSource,
+    PopulationMask, Prim, PrimPredicate, PrimRange, PrimSnapshot, PrimStatus, PrimVisit,
+    PrimVisits, PropertyDeclaration, Provenance, Relationship, RelationshipQuery,
+    RelationshipQueryWork, Resolved, ResolvedValue, SampleUse, Stage, StageMetadataError,
+    StageOptions, Traverse, ValueExplanation, ValueSource,
 };
 pub use variant_fallbacks::VariantFallbacks;
 

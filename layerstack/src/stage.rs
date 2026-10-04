@@ -8,7 +8,10 @@
 mod explain;
 mod objects;
 mod relationships;
-pub use objects::{Attribute, AttributeQuery, AttributeQueryWork, Object, Prim, Relationship};
+pub use objects::{
+    Attribute, AttributeQuery, AttributeQueryWork, Object, Prim, PrimSnapshot, Relationship,
+};
+pub use relationships::{RelationshipQuery, RelationshipQueryWork};
 mod traversal;
 pub use traversal::{PrimPredicate, PrimRange, PrimStatus, PrimVisit, PrimVisits};
 pub(crate) mod metadata;
@@ -365,6 +368,7 @@ pub struct StageOptions {
 #[derive(Debug)]
 pub struct Stage {
     options: StageOptions,
+    store_identity: Option<crate::StoreIdentity>,
     loadable: HashSet<PathId>,
     local_layers: Vec<LayerId>,
     used_layers: alloc::collections::BTreeSet<LayerId>,
@@ -479,6 +483,7 @@ impl Stage {
             store, root, options, None, exact_mask, namespace, bounded,
         );
         stage.options = captured.clone();
+        stage.store_identity = Some(store.identity());
         stage.root_layer = Some(root);
         stage.schemas = schemas;
         let mut offsets = HashMap::new();
@@ -501,6 +506,7 @@ impl Stage {
         let schemas = options.schemas.clone();
         let mut stage = crate::compose::compose_stage_with_paths(store, root, options, Some(paths));
         stage.options = captured;
+        stage.store_identity = Some(store.identity());
         stage.root_layer = Some(root);
         stage.schemas = schemas;
         let mut offsets = HashMap::new();
@@ -1185,6 +1191,7 @@ impl Stage {
         };
         Self {
             options: StageOptions::default(),
+            store_identity: None,
             loadable: HashSet::new(),
             local_layers: Vec::new(),
             used_layers: alloc::collections::BTreeSet::new(),

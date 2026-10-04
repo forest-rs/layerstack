@@ -446,3 +446,201 @@ fn selected_relationships_forward_through_unselected_relationship_properties() {
     );
     assert!(live.stage().has_prim(c));
 }
+#[test]
+fn generic_object_queries_retain_values_across_unrelated_edits_and_refresh_after_changes() {
+    use layerstack::{
+        AttributeQuery, EditTarget, LiveStage, Object, PropertySpec, Time, Transaction,
+    };
+    let mut store = source_store(
+        "#usda 1.0\ndef \"A\" {\n int value = 1\n rel links = </B.forward>\n}\ndef \"B\" {\n int value = 2\n rel forward = </A>\n}\n",
+    );
+    let a = store.path("/A");
+    let a_value = store.property_path("/A.value");
+    let b_value = store.property_path("/B.value");
+    let mut live = LiveStage::compose(&mut store, LayerId(1), StageOptions::default());
+    let prim = live.stage().prim(a, &store).unwrap();
+    assert!(prim.attribute("links").is_none());
+    assert!(prim.relationship("value").is_none());
+    assert_eq!(
+        prim.relationship("links").unwrap().forwarded_targets(),
+        vec![layerstack::TargetPath::Prim(a)]
+    );
+    assert!(matches!(
+        live.stage()
+            .object(layerstack::TargetPath::Property(a_value), &store),
+        Some(Object::Attribute(_))
+    ));
+    let mut query = AttributeQuery::new(a_value);
+    assert_eq!(
+        query.get(live.stage(), Time::Default).unwrap().value,
+        Value::Int(1)
+    );
+    assert_eq!(
+        query.get(live.stage(), Time::Default).unwrap().value,
+        Value::Int(1)
+    );
+    assert_eq!(query.work().cache_hits, 1);
+    let mut unrelated = Transaction::new();
+    unrelated.set_default(
+        EditTarget::for_layer(LayerId(1)).property(b_value),
+        Value::Int(9),
+    );
+    live.apply(&mut store, &unrelated).unwrap();
+    query.get(live.stage(), Time::Default);
+    assert_eq!(query.work().cache_hits, 2);
+    let mut relevant = Transaction::new();
+    relevant.set_default(
+        EditTarget::for_layer(LayerId(1)).property(a_value),
+        Value::Int(4),
+    );
+    let applied = live.apply(&mut store, &relevant).unwrap();
+    assert_eq!(
+        query.get(live.stage(), Time::Default).unwrap().value,
+        Value::Int(4)
+    );
+    live.apply(&mut store, &applied.inverse).unwrap();
+    assert_eq!(
+        query.get(live.stage(), Time::Default).unwrap().value,
+        Value::Int(1)
+    );
+    // A direct replacement and a fresh snapshot cannot reuse old source identity.
+    store.layers.get_mut(&LayerId(1)).unwrap().set_property(
+        a_value,
+        PropertySpec::attribute().with_default(Value::Int(8)),
+    );
+    live.synchronize(&mut store);
+    assert_eq!(
+        query.get(live.stage(), Time::Default).unwrap().value,
+        Value::Int(8)
+    );
+    let fresh = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    query.get(&fresh, Time::Default);
+    assert_eq!(query.work().evaluations, 5);
+}
+
+#[test]
+fn checked_object_queries_preserve_deferred_decode_failures_and_cache_them() {
+    use layerstack::{
+        ArrayReadError, AttributeQuery, DeferredArraySource, PropertySpec, PropertyType, Time,
+        TypedArray,
+    };
+    #[derive(Debug)]
+    struct Failed(ArrayReadError);
+    impl DeferredArraySource for Failed {
+        fn materialize(&self) -> Result<&TypedArray, &ArrayReadError> {
+            Err(&self.0)
+        }
+        fn element_kind(&self) -> Value {
+            Value::Float(0.0)
+        }
+    }
+    let mut store = InMemoryStore::default();
+    let property = store.property_path("/A.values");
+    let error = ArrayReadError::InvalidData("invalid backing data".into());
+    let mut layer = Layer::new(LayerId(1));
+    layer.set_property(
+        property,
+        PropertySpec::typed_attribute(PropertyType::new("float", true, Value::Float(0.0)))
+            .with_default(Value::TypedArray(TypedArray::Deferred(Arc::new(Failed(
+                error.clone(),
+            ))))),
+    );
+    store.insert_layer(layer);
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let attribute = stage
+        .prim(property.prim_path(), &store)
+        .unwrap()
+        .attribute("values")
+        .unwrap();
+    assert_eq!(attribute.try_get(Time::Default), Err(error.clone()));
+    let mut query = AttributeQuery::new(property);
+    assert_eq!(query.try_get(&stage, Time::Default), Err(error.clone()));
+    assert_eq!(query.try_get(&stage, Time::Default), Err(error));
+    assert_eq!(query.work().evaluations, 1);
+    assert_eq!(query.work().cache_hits, 1);
+}
+#[test]
+fn schema_property_kind_overrides_conflicting_authored_kind() {
+    let mut store = source_store("#usda 1.0\ndef Sphere \"S\" {\n rel radius = </Other>\n}\n");
+    let registry = Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let prim = store.path("/S");
+    let stage = Stage::compose(
+        &mut store,
+        LayerId(1),
+        StageOptions {
+            schemas: Some(registry),
+            ..Default::default()
+        },
+    );
+    let view = stage.prim(prim, &store).unwrap();
+    assert!(view.attribute("radius").is_some());
+    assert!(view.relationship("radius").is_none());
+}
+
+#[test]
+fn checked_numeric_queries_decode_only_the_selected_interpolation_endpoints() {
+    use layerstack::{
+        ArrayReadError, AttributeQuery, DeferredArraySource, InterpolationType, PropertySpec,
+        PropertyType, Time, TypedArray,
+    };
+    #[derive(Debug)]
+    struct Failed(ArrayReadError);
+    impl DeferredArraySource for Failed {
+        fn materialize(&self) -> Result<&TypedArray, &ArrayReadError> {
+            Err(&self.0)
+        }
+        fn element_kind(&self) -> Value {
+            Value::Float(0.0)
+        }
+    }
+    let mut store = InMemoryStore::default();
+    let property = store.property_path("/A.values");
+    let bad = Value::TypedArray(TypedArray::Deferred(Arc::new(Failed(
+        ArrayReadError::InvalidData("invalid upper endpoint".into()),
+    ))));
+    let good = Value::TypedArray(TypedArray::Float(Arc::new(vec![1.0])));
+    let mut layer = Layer::new(LayerId(1));
+    layer.set_property(
+        property,
+        PropertySpec::typed_attribute(PropertyType::new("float", true, Value::Float(0.0)))
+            .with_time_samples(vec![(0.0, good), (1.0, bad)]),
+    );
+    store.insert_layer(layer);
+    let stage = Stage::compose(&mut store, LayerId(1), StageOptions::default());
+    let mut query = AttributeQuery::new(property);
+    assert!(
+        query
+            .try_get(
+                &stage,
+                Time::At {
+                    code: 0.5,
+                    interpolation: InterpolationType::Linear
+                }
+            )
+            .is_err()
+    );
+    assert!(
+        query
+            .try_get(
+                &stage,
+                Time::At {
+                    code: 0.5,
+                    interpolation: InterpolationType::Held
+                }
+            )
+            .unwrap()
+            .is_some()
+    );
+    assert!(
+        query
+            .try_get(
+                &stage,
+                Time::At {
+                    code: 0.0,
+                    interpolation: InterpolationType::Linear
+                }
+            )
+            .unwrap()
+            .is_some()
+    );
+}

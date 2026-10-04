@@ -211,7 +211,38 @@ pub(crate) struct Catalog {
     requests: Vec<ClipAssetRequest>,
     issues: Vec<ClipIssue>,
 }
+/// Strong references prevent allocator-address reuse in retained query stamps.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct ClipQueryIdentity(Vec<Arc<PreparedClipProperty>>);
 impl Catalog {
+    pub(crate) fn query_identity(&self, prim: PathId, property: TokenId) -> ClipQueryIdentity {
+        ClipQueryIdentity(
+            self.properties
+                .get(&(prim, property))
+                .into_iter()
+                .flatten()
+                .map(|entry| entry.evaluator.clone())
+                .collect(),
+        )
+    }
+    pub(crate) fn query_identity_matches(
+        &self,
+        identity: &ClipQueryIdentity,
+        prim: PathId,
+        property: TokenId,
+    ) -> bool {
+        let current = self
+            .properties
+            .get(&(prim, property))
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        current.len() == identity.0.len()
+            && current
+                .iter()
+                .zip(&identity.0)
+                .all(|(entry, previous)| Arc::ptr_eq(&entry.evaluator, previous))
+    }
+
     pub(crate) fn prepare(
         store: &mut dyn LayerStore,
         prims: &HashMap<PathId, PrimIndex>,

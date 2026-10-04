@@ -5,6 +5,32 @@ USDA, USDC and USDZ format implementations. `StageDocument` loads dependencies
 into one shared store, exposes its retained stage, saves dirty layers separately
 from session edits, and reloads selected sources with an explicit dirty policy.
 
+[API documentation](https://docs.rs/layerstack_io) ·
+[Source](https://github.com/forest-rs/layerstack/tree/main/layerstack_io)
+
+```toml
+[dependencies]
+layerstack = "0.1"
+layerstack_io = "0.1"
+```
+
+Requires Rust **1.89** or later.
+
+```rust,no_run
+use layerstack::StageOptions;
+use layerstack_io::{Filesystem, StageDocument};
+
+let storage = Filesystem::new(".", [])?;
+let document = StageDocument::open(storage, "scene.usda", StageOptions::default())?;
+println!("Loaded {} layers", document.load_report().layers.len());
+# Ok::<(), layerstack_io::IoError>(())
+```
+
+For schema fallbacks and typed views, use `StageDocument::open_in`: construct
+`layerstack_schemas::openusd` using the supplied store's tokens, then pass that
+same store and its registry in `StageOptions`. `open` creates a fresh store;
+a registry built from another store cannot share its token domain.
+
 The default `std` feature provides `Filesystem`. Disable default features for
 `no_std` + `alloc` with a host implementation of `Storage`. Identifiers, transport,
 write atomicity and scheduling belong to that backend. No third-party dependencies

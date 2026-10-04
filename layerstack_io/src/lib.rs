@@ -6,6 +6,28 @@
 //! layers, dirty generations and explicit reloads. No global resolver or cache.
 //! AOUSD Core §9 (asset resolution), §16 (formats); OpenUSD `UsdStage::Open`,
 //! `Save`, `SaveSessionLayers`, `Reload`. Packages are read-only source layers.
+//!
+//! With the default `std` feature, open a filesystem-backed stage explicitly:
+//!
+//! ```no_run
+//! # #[cfg(feature = "std")]
+//! # fn example() -> Result<(), layerstack_io::IoError> {
+//! use layerstack::StageOptions;
+//! use layerstack_io::{Filesystem, StageDocument};
+//!
+//! let storage = Filesystem::new(".", [])?;
+//! let document = StageDocument::open(storage, "scene.usda", StageOptions::default())?;
+//! println!("Loaded {} layers", document.load_report().layers.len());
+//! # Ok(())
+//! # }
+//! ```
+//!
+//! For schema fallbacks and typed views, use [`StageDocument::open_in`]: build
+//! the registry using that store's tokens, then pass the same store and its
+//! registry in `StageOptions`. `open` creates a fresh store and cannot share a
+//! prebuilt registry's token domain. [`Storage`] supports transports without `std`.
+//! [`StageDocument::parts_mut`] provides explicit access for atomic authoring;
+//! saving, exporting and reloading remain separate operations.
 #![no_std]
 extern crate alloc;
 #[cfg(feature = "std")]

@@ -88,6 +88,17 @@ pub fn expression_asset_paths(store: &dyn LayerStore, root: LayerId) -> Vec<Expr
     crate::expression_variables::walk(store, root).unresolved
 }
 
+/// Discovers unresolved expression assets with the root/session variables of
+/// the explicit stack. Like `expression_asset_paths`, this visits potential
+/// arcs in all variant branches and performs no I/O. AOUSD Core §9, §10.3.2.
+#[must_use]
+pub fn expression_asset_paths_for_stack(
+    store: &dyn LayerStore,
+    stack: crate::LayerStackIdentifier,
+) -> Vec<ExpressionAssetPath> {
+    crate::expression_variables::walk_identifier(store, stack).unresolved
+}
+
 /// The result of successfully resolving an asset path.
 ///
 /// On the first resolution of a given path, `layer` is `Some` and the caller
@@ -190,6 +201,24 @@ pub trait AssetResolver {
     /// others; a package reader then fails rather than guess at free IDs.
     fn allocate_layer_id(&mut self) -> Option<LayerId> {
         None
+    }
+
+    /// Returns an already resident explicit package-member identity, when
+    /// distinct from the package's outer root identity. Package readers use
+    /// this to preserve self-reference semantics when a member becomes the
+    /// first entry on reload. The default retains ordinary first-member aliases.
+    /// AOUSD Core §9.7; OpenUSD `SdfLayer` package/member identifiers.
+    fn existing_package_layer_id(&self, _package: LayerId, _member: &str) -> Option<LayerId> {
+        None
+    }
+
+    /// Allocates or reuses an identity for a normalized member of `package`.
+    /// A resolver retaining package sources can override this to keep member
+    /// identities stable across reloads. The default allocates a fresh identity,
+    /// preserving existing resolver behavior. Distinct package/member pairs
+    /// must never share an identity. AOUSD Core §9.7 (package asset identity).
+    fn allocate_package_layer_id(&mut self, _package: LayerId, _member: &str) -> Option<LayerId> {
+        self.allocate_layer_id()
     }
 
     /// Returns `asset_path`, authored in the layer `anchor`, anchored to that

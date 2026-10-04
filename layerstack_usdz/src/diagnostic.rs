@@ -5,7 +5,7 @@
 
 use alloc::sync::Arc;
 
-use layerstack::LayerId;
+use layerstack::{AssetResolveError, LayerId};
 use layerstack_usda::diagnostic::{Diagnostic, Severity};
 use layerstack_usdc::assemble::AssembleDiagnostic;
 
@@ -30,6 +30,13 @@ pub struct MemberDiagnostic {
 /// emission and assembly diagnostics can describe omitted authored content.
 #[derive(Clone, Debug)]
 pub enum ImportDiagnostic {
+    /// An unresolved package-relative composition dependency.
+    AssetResolve {
+        /// Authored asset path anchored to this diagnostic's member.
+        asset: Arc<str>,
+        /// Original resolver error.
+        error: AssetResolveError,
+    },
     /// USDA syntax parsing, with a source span and severity.
     UsdaParse(Diagnostic),
     /// USDA CST-to-AST lowering, with a source span and severity.
@@ -52,7 +59,7 @@ impl ImportDiagnostic {
             Self::UsdaParse(d) | Self::UsdaLower(d) | Self::UsdaEmit(d) => {
                 matches!(d.severity, Severity::Error)
             }
-            Self::UsdcAssemble(_) => true,
+            Self::UsdcAssemble(_) | Self::AssetResolve { .. } => true,
         }
     }
 }

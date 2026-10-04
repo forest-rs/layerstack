@@ -4,6 +4,7 @@ members = [
     "layerstack",
     "layerstack_conformance",
     "layerstack_examples",
+    "layerstack_io",
     "layerstack_mesh_export",
     "layerstack_schemagen",
     "layerstack_schemas",
@@ -31,6 +32,7 @@ hashbrown = { default-features = false, features = [
 ], version = "0.17.0" }
 invalidation = { default-features = false, version = "0.2.0" }
 layerstack = { path = "layerstack", version = "0.1.0" }
+layerstack_io = { default-features = false, path = "layerstack_io", version = "0.1.0" }
 layerstack_mesh_export = { path = "layerstack_mesh_export", version = "0.1.0" }
 layerstack_schemas = { default-features = false, path = "layerstack_schemas", version = "0.1.0" }
 layerstack_usda = { path = "layerstack_usda", version = "0.1.0" }

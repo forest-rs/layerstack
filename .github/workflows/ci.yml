@@ -18,6 +18,7 @@ env:
     -p layerstack_usda
     -p layerstack_usdc
     -p layerstack_usdz
+    -p layerstack_io
     -p layerstack_mesh_export
   # List of packages that don't support `no_std`.
   RUST_NO_STD_PKGS: >-

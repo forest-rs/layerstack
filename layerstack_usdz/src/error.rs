@@ -25,6 +25,11 @@ pub enum UsdzError {
     },
     /// No root layer found (empty archive or first file is not a USD layer).
     NoRootLayer,
+    /// A host explicitly selected a resident member absent from the archive.
+    MissingMember {
+        /// Normalized path of the selected member.
+        member: Arc<str>,
+    },
     /// CRC-32 checksum mismatch on an archive entry.
     CrcMismatch {
         /// Name of the entry with the bad checksum.
@@ -70,6 +75,9 @@ impl fmt::Display for UsdzError {
             Self::InvalidZip { reason } => write!(f, "invalid ZIP: {reason}"),
             Self::ConstraintViolation { reason } => {
                 write!(f, "USDZ constraint violated: {reason}")
+            }
+            Self::MissingMember { member } => {
+                write!(f, "selected package member {member:?} is absent")
             }
             Self::NoRootLayer => write!(f, "no root USD layer found in package"),
             Self::CrcMismatch {

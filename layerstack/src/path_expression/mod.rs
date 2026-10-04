@@ -774,6 +774,60 @@ impl PathExpression {
         value::anchor_and_map(self.clone(), anchor, &[])
     }
 
+    // Namespace edits replace literal path prefixes, preserving wildcard
+    // components and predicates. Relative expressions are anchored at their
+    // original author before that author moves. OpenUSD UsdNamespaceEditor;
+    // AOUSD Core §8 (paths), §10 (namespace mapping).
+    pub(crate) fn edit_namespace(
+        &self,
+        source: &[String],
+        source_property: Option<&str>,
+        destination: &[String],
+        destination_property: Option<&str>,
+        anchor: &[String],
+        owner_moves: bool,
+    ) -> Self {
+        let absolute = self.make_absolute(anchor);
+        let edited = absolute.clone().rebuild(&mut |atom| match atom {
+            Expr::Pattern(mut pattern) => {
+                if let Some(property) = source_property {
+                    if pattern.prefix.prims == source
+                        && pattern.prefix.property.as_deref() == Some(property)
+                    {
+                        pattern.prefix.prims = destination.to_vec();
+                        pattern.prefix.property = destination_property.map(String::from);
+                    }
+                } else if let Some(suffix) = pattern.prefix.prims.strip_prefix(source) {
+                    let mut prims = destination.to_vec();
+                    prims.extend_from_slice(suffix);
+                    pattern.prefix.prims = prims;
+                }
+                Self::pattern(pattern)
+            }
+            Expr::Reference(mut reference) => {
+                if let Some(path) = &mut reference.path {
+                    // Expression references store a prim path and a separate
+                    // expression name. Native property namespace edits do not
+                    // rewrite that name; prim moves replace its path prefix.
+                    if source_property.is_none()
+                        && let Some(suffix) = path.prims.strip_prefix(source)
+                    {
+                        let mut prims = destination.to_vec();
+                        prims.extend_from_slice(suffix);
+                        path.prims = prims;
+                    }
+                }
+                Self::reference(reference)
+            }
+            atom => Self { root: Some(atom) },
+        });
+        if edited == absolute && !owner_moves {
+            self.clone()
+        } else {
+            edited
+        }
+    }
+
     /// The expression's text, as `SdfPathExpression::GetText` writes it.
     ///
     /// That text does not always parse back to the same expression:

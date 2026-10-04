@@ -1,0 +1,215 @@
+{
+  "prim_rename": {
+    "destination": "/Renamed",
+    "snapshot": {
+      "connections": [
+        "/Renamed.outputs:value"
+      ],
+      "defaultPrim": "Renamed",
+      "expression": "/Renamed// /AX// /Renamed.outputs:value %/Renamed:relative",
+      "prims": [
+        "/B",
+        "/Renamed",
+        "/Renamed/Child",
+        "/Watch"
+      ],
+      "properties": {
+        "/B": {
+          "names": [],
+          "order": []
+        },
+        "/Renamed": {
+          "names": [
+            "outputs:value",
+            "relative"
+          ],
+          "order": [
+            "relative",
+            "outputs:value"
+          ]
+        },
+        "/Renamed/Child": {
+          "names": [],
+          "order": []
+        },
+        "/Watch": {
+          "names": [
+            "expression",
+            "inputs:value",
+            "look"
+          ],
+          "order": []
+        }
+      },
+      "relativeExpressions": {
+        "/Renamed.relative": "/Renamed/Child//"
+      },
+      "watchTargets": [
+        "/Renamed",
+        "/Renamed/Child",
+        "/Renamed.outputs:value"
+      ]
+    },
+    "source": "/A"
+  },
+  "prim_reparent": {
+    "destination": "/B/New",
+    "snapshot": {
+      "connections": [
+        "/B/New.outputs:value"
+      ],
+      "defaultPrim": "/B/New",
+      "expression": "/B/New// /AX// /B/New.outputs:value %/B/New:relative",
+      "prims": [
+        "/B",
+        "/B/New",
+        "/B/New/Child",
+        "/Watch"
+      ],
+      "properties": {
+        "/B": {
+          "names": [],
+          "order": []
+        },
+        "/B/New": {
+          "names": [
+            "outputs:value",
+            "relative"
+          ],
+          "order": [
+            "relative",
+            "outputs:value"
+          ]
+        },
+        "/B/New/Child": {
+          "names": [],
+          "order": []
+        },
+        "/Watch": {
+          "names": [
+            "expression",
+            "inputs:value",
+            "look"
+          ],
+          "order": []
+        }
+      },
+      "relativeExpressions": {
+        "/B/New.relative": "/B/New/Child//"
+      },
+      "watchTargets": [
+        "/B/New",
+        "/B/New/Child",
+        "/B/New.outputs:value"
+      ]
+    },
+    "source": "/A"
+  },
+  "property_rename": {
+    "destination": "/A.outputs:renamed",
+    "snapshot": {
+      "connections": [
+        "/A.outputs:renamed"
+      ],
+      "defaultPrim": "A",
+      "expression": "/A// /AX// /A.outputs:renamed %/A:relative",
+      "prims": [
+        "/A",
+        "/A/Child",
+        "/B",
+        "/Watch"
+      ],
+      "properties": {
+        "/A": {
+          "names": [
+            "outputs:renamed",
+            "relative"
+          ],
+          "order": [
+            "relative",
+            "outputs:value"
+          ]
+        },
+        "/A/Child": {
+          "names": [],
+          "order": []
+        },
+        "/B": {
+          "names": [],
+          "order": []
+        },
+        "/Watch": {
+          "names": [
+            "expression",
+            "inputs:value",
+            "look"
+          ],
+          "order": []
+        }
+      },
+      "relativeExpressions": {
+        "/A.relative": "/A/Child//"
+      },
+      "watchTargets": [
+        "/A",
+        "/A/Child",
+        "/A.outputs:renamed"
+      ]
+    },
+    "source": "/A.outputs:value"
+  },
+  "property_reparent": {
+    "destination": "/B.relative",
+    "snapshot": {
+      "connections": [
+        "/A.outputs:value"
+      ],
+      "defaultPrim": "A",
+      "expression": "/A// /AX// /A.outputs:value %/A:relative",
+      "prims": [
+        "/A",
+        "/A/Child",
+        "/B",
+        "/Watch"
+      ],
+      "properties": {
+        "/A": {
+          "names": [
+            "outputs:value"
+          ],
+          "order": [
+            "relative",
+            "outputs:value"
+          ]
+        },
+        "/A/Child": {
+          "names": [],
+          "order": []
+        },
+        "/B": {
+          "names": [
+            "relative"
+          ],
+          "order": []
+        },
+        "/Watch": {
+          "names": [
+            "expression",
+            "inputs:value",
+            "look"
+          ],
+          "order": []
+        }
+      },
+      "relativeExpressions": {
+        "/B.relative": "/A/Child//"
+      },
+      "watchTargets": [
+        "/A",
+        "/A/Child",
+        "/A.outputs:value"
+      ]
+    },
+    "source": "/A.relative"
+  }
+}

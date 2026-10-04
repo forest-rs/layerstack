@@ -1,0 +1,407 @@
+{
+  "version": "0.26.8",
+  "idTargets": {
+    "id": {
+      "value": "/Missing.property",
+      "isIdTarget": true
+    },
+    "emptyId": {
+      "value": null,
+      "isIdTarget": true
+    },
+    "manyId": {
+      "value": null,
+      "isIdTarget": true
+    },
+    "ids": {
+      "value": [
+        "/A"
+      ],
+      "isIdTarget": true
+    },
+    "oneId": {
+      "value": null,
+      "isIdTarget": true
+    },
+    "notString": {
+      "value": 4.0,
+      "isIdTarget": false
+    },
+    "notRel": {
+      "value": "local",
+      "isIdTarget": false
+    }
+  },
+  "samples": {
+    "indexOnly": {
+      "times": [
+        1.0,
+        2.0
+      ],
+      "varying": true,
+      "indexed": true
+    },
+    "both": {
+      "times": [
+        0.0,
+        1.0,
+        2.0,
+        3.0
+      ],
+      "varying": true,
+      "indexed": true
+    },
+    "blockedIndices": {
+      "times": [],
+      "varying": false,
+      "indexed": false
+    },
+    "single": {
+      "times": [
+        1.0
+      ],
+      "varying": false,
+      "indexed": true
+    }
+  },
+  "inheritance": {
+    "/Root": {
+      "inheritable": [
+        [
+          "barrier",
+          "/Root"
+        ],
+        [
+          "tint",
+          "/Root"
+        ]
+      ],
+      "all": [
+        [
+          "barrier",
+          "/Root"
+        ],
+        [
+          "tint",
+          "/Root"
+        ]
+      ]
+    },
+    "/Root/Group": {
+      "inheritable": [
+        [
+          "local",
+          "/Root/Group"
+        ],
+        [
+          "tint",
+          "/Root"
+        ]
+      ],
+      "all": [
+        [
+          "barrier",
+          "/Root/Group"
+        ],
+        [
+          "local",
+          "/Root/Group"
+        ],
+        [
+          "tint",
+          "/Root"
+        ]
+      ]
+    },
+    "/Root/Group/Mesh": {
+      "inheritable": [
+        [
+          "badSidecar",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "blockedIndices",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "both",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "emptyId",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "id",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "ids",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "indexOnly",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "local",
+          "/Root/Group"
+        ],
+        [
+          "manyId",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "noIndices",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "notRel",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "notRel:idFrom",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "notString",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "oneId",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "single",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "tint",
+          "/Root"
+        ]
+      ],
+      "all": [
+        [
+          "badSidecar",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "blockedIndices",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "both",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "emptyId",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "id",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "ids",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "indexOnly",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "local",
+          "/Root/Group"
+        ],
+        [
+          "manyId",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "noIndices",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "notRel",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "notRel:idFrom",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "notString",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "oneId",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "single",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "tint",
+          "/Root"
+        ]
+      ]
+    },
+    "/Root/Group/Mesh/Child": {
+      "inheritable": [
+        [
+          "badSidecar",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "blockedIndices",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "both",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "emptyId",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "id",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "ids",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "indexOnly",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "local",
+          "/Root/Group"
+        ],
+        [
+          "manyId",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "noIndices",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "notRel",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "notRel:idFrom",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "notString",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "oneId",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "single",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "tint",
+          "/Root"
+        ]
+      ],
+      "all": [
+        [
+          "badSidecar",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "blockedIndices",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "both",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "emptyId",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "id",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "ids",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "indexOnly",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "local",
+          "/Root/Group"
+        ],
+        [
+          "manyId",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "noIndices",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "notRel",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "notRel:idFrom",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "notString",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "oneId",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "single",
+          "/Root/Group/Mesh"
+        ],
+        [
+          "tint",
+          "/Root"
+        ]
+      ]
+    },
+    "/Root/Group/Sibling": {
+      "inheritable": [
+        [
+          "local",
+          "/Root/Group"
+        ],
+        [
+          "tint",
+          "/Root"
+        ]
+      ],
+      "all": [
+        [
+          "local",
+          "/Root/Group"
+        ],
+        [
+          "tint",
+          "/Root"
+        ]
+      ]
+    }
+  }
+}

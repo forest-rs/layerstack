@@ -634,6 +634,15 @@ impl<'s> SchemaEdit<'s> {
         targets
     }
 
+    #[cfg(feature = "usd-geom")]
+    pub(crate) fn create_relationship(&mut self, path: PathId, name: &str) {
+        let name = self.store.tokens_mut().intern(name);
+        let at = self.target.property(PropertyPath::new(path, name));
+        self.transaction
+            .create_property(at, PropertySpec::relationship());
+        self.created.push((path, name, None));
+    }
+
     /// Authors `targets` as the explicit targets of the relationship `name`.
     pub(crate) fn set_targets(&mut self, path: PathId, name: &str, targets: &[TargetPath]) {
         let at = self.property(path, name);

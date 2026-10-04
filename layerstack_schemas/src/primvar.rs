@@ -12,7 +12,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use layerstack::{PathId, PropertyPath, PropertyType, Value};
+use layerstack::{PathId, PropertyPath, PropertyType, TargetPath, Value};
 
 /// A composed `primvars:*` attribute, excluding the `:indices` sidecar.
 #[derive(Clone, Copy, Debug)]
@@ -21,7 +21,7 @@ pub struct Primvar<'a> {
     name: &'a str,
 }
 
-/// Invalid primvar declaration, indexed data or unsupported ID indirection.
+/// Invalid primvar declaration or indexed data.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PrimvarError {
     /// The owning prim does not exist.
@@ -43,7 +43,7 @@ pub enum PrimvarError {
         /// The invalid authored index.
         index: i32,
     },
-    /// A string primvar uses the unsupported `:idFrom` relationship mechanism.
+    /// Reserved legacy error; ID-target reads are now supported.
     IdTargetUnsupported,
 }
 impl core::fmt::Display for PrimvarError {
@@ -150,24 +150,116 @@ impl<'a> Primvar<'a> {
             .raw_value(&format!("{}:indices", self.name), time)?;
         crate::value::read_int_array_shared(&value, self.prim.scene().store().tokens())
     }
-    /// Reads the composed value. ID-target string indirection returns an
-    /// explicit unsupported error instead of reading a misleading local value.
-    pub fn value(&self, time: Time) -> Result<Option<Value>, PrimvarError> {
+    fn string_type(&self) -> Option<bool> {
         let scene = self.prim.scene();
-        let property = scene
+        let ty = scene
             .stage()
-            .resolve_property_declaration(self.prim.path(), self.property().property());
-        if property
+            .resolve_property_declaration(self.prim.path(), self.property().property())
             .and_then(|p| p.type_name)
-            .is_some_and(|t| matches!(t.default_scalar, Value::String(_)))
-            && self
-                .prim
-                .property_metadata(&format!("{}:idFrom", self.name))
+            .or_else(|| {
+                scene
+                    .stage()
+                    .property_definition_ref(self.prim.path(), self.property().property())
+                    .and_then(|p| p.type_name.clone())
+            })?;
+        matches!(ty.default_scalar, Value::String(_)).then_some(ty.is_array)
+    }
+    /// Whether a string or string-array primvar has an `:idFrom` relationship.
+    /// A defined relationship overrides the attribute even when it has no targets.
+    #[must_use]
+    pub fn is_id_target(&self) -> bool {
+        let scene = self.prim.scene();
+        self.string_type().is_some()
+            && scene
+                .stage()
+                .prim(self.prim.path(), scene.store())
+                .and_then(|p| p.relationship(&format!("{}:idFrom", self.name)))
                 .is_some()
-        {
-            return Err(PrimvarError::IdTargetUnsupported);
+    }
+    /// Reads the composed value, resolving string ID targets through forwarded
+    /// relationship targets. Scalar strings require exactly one terminal target.
+    /// OpenUSD 26.8 string arrays require multiple targets and return the first.
+    /// Empty or ambiguous targets return `None`, without retrying the local value.
+    ///
+    /// OpenUSD: `UsdGeomPrimvar::Get`; AOUSD Core §12.4 (relationship resolution).
+    pub fn value(&self, time: Time) -> Result<Option<Value>, PrimvarError> {
+        if self.is_id_target() {
+            let scene = self.prim.scene();
+            let targets = scene
+                .stage()
+                .prim(self.prim.path(), scene.store())
+                .and_then(|p| p.relationship(&format!("{}:idFrom", self.name)))
+                .expect("defined ID relationship")
+                .forwarded_targets();
+            let is_array = self.string_type().expect("string ID primvar");
+            let valid = if is_array {
+                targets.len() > 1
+            } else {
+                targets.len() == 1
+            };
+            return Ok(valid.then(|| {
+                let value = Value::string(
+                    targets[0].display(scene.store().paths(), scene.store().tokens()),
+                );
+                if is_array {
+                    Value::array(alloc::vec![value])
+                } else {
+                    value
+                }
+            }));
         }
         Ok(self.prim.raw_value(self.name, time))
+    }
+    /// Sorted, unique stage-time samples of the value and, when indexed, indices.
+    /// Includes effective clip samples and sparse contributions from the core.
+    /// OpenUSD: `UsdGeomPrimvar::GetTimeSamples`; AOUSD Core §12.3.2.
+    #[must_use]
+    pub fn sample_times(&self) -> Vec<f64> {
+        let scene = self.prim.scene();
+        let path = self.property();
+        let mut times = scene
+            .stage()
+            .property_sample_times(path.prim_path(), path.property());
+        if self.is_indexed()
+            && let Some(indices) = self.prim.property_path(&format!("{}:indices", self.name))
+        {
+            times.extend(
+                scene
+                    .stage()
+                    .property_sample_times(indices.prim_path(), indices.property()),
+            );
+            times.sort_by(f64::total_cmp);
+            times.dedup_by(|a, b| a.total_cmp(b).is_eq());
+        }
+        times
+    }
+    /// Sample times within inclusive stage-time bounds. Reversed or NaN bounds
+    /// return an empty set; infinite bounds select the corresponding full range.
+    #[must_use]
+    pub fn sample_times_in_interval(&self, start: f64, end: f64) -> Vec<f64> {
+        self.sample_times()
+            .into_iter()
+            .filter(|t| start <= *t && *t <= end)
+            .collect()
+    }
+    /// Whether effective values or indexed indices might vary at numeric times.
+    /// Multiple samples or a spline count even when their values agree.
+    #[must_use]
+    pub fn might_be_time_varying(&self) -> bool {
+        let scene = self.prim.scene();
+        let path = self.property();
+        scene
+            .stage()
+            .property_might_be_time_varying(path.prim_path(), path.property())
+            || (self.is_indexed()
+                && self
+                    .prim
+                    .property_path(&format!("{}:indices", self.name))
+                    .is_some_and(|p| {
+                        scene
+                            .stage()
+                            .property_might_be_time_varying(p.prim_path(), p.property())
+                    }))
     }
     /// Expands each index into `element_size` consecutive values. Scalars and
     /// nonindexed arrays pass through. Invalid indices return no partial array.
@@ -236,6 +328,9 @@ impl<'a> PrimView<'a> {
     #[must_use]
     pub fn find_primvar_with_inheritance(&self, name: &str) -> Option<Primvar<'a>> {
         let scene = self.scene();
+        if !scene.stage().has_prim(self.path()) {
+            return None;
+        }
         let local = Primvar::new(&scene, self.path(), name);
         if local.is_some_and(|p| p.has_authored_value()) {
             return local;
@@ -254,27 +349,154 @@ impl<'a> PrimView<'a> {
         }
         local
     }
+    /// Authored primvar declarations, including declarations without values.
+    /// Schema-only properties are excluded; names are sorted.
+    #[must_use]
+    pub fn authored_primvars(&self) -> Vec<Primvar<'a>> {
+        let scene = self.scene();
+        let mut result: Vec<_> = scene
+            .stage()
+            .authored_property_names(self.path(), scene.store())
+            .into_iter()
+            .filter_map(|name| {
+                Primvar::new(&scene, self.path(), scene.store().tokens().resolve(name))
+            })
+            .collect();
+        result.sort_by_key(|p| p.name);
+        result
+    }
+    /// Local primvars with an effective authored value, excluding blocked and
+    /// fallback-only declarations. Animation-only values count.
+    #[must_use]
+    pub fn primvars_with_authored_values(&self) -> Vec<Primvar<'a>> {
+        self.authored_primvars()
+            .into_iter()
+            .filter(Primvar::has_authored_value)
+            .collect()
+    }
+    /// Authored primvar declarations whose attributes have a value source.
+    /// Schema fallbacks on authored declarations and animation-only sources
+    /// count; an ID relationship alone does not supply an attribute value.
+    /// OpenUSD: `UsdGeomPrimvarsAPI::GetPrimvarsWithValues`.
+    #[must_use]
+    pub fn primvars_with_values(&self) -> Vec<Primvar<'a>> {
+        self.authored_primvars()
+            .into_iter()
+            .filter(|p| p.prim.has_value(p.name))
+            .collect()
+    }
+    /// Constant authored primvars available to children, sorted by name.
+    /// Authored nonconstant values remove an ancestor of the same name; blocked
+    /// or unvalued declarations leave ancestor inheritance intact.
+    /// OpenUSD: `FindInheritablePrimvars`; AOUSD Core §12.2–12.5.
+    #[must_use]
+    pub fn inheritable_primvars(&self) -> Vec<Primvar<'a>> {
+        if !self.scene().stage().has_prim(self.path()) {
+            return Vec::new();
+        }
+        let mut paths = Vec::new();
+        let mut at = Some(self.path());
+        while let Some(path) = at {
+            at = self.scene().parent(path);
+            if at.is_some() {
+                paths.push(path);
+            }
+        }
+        let mut inherited = Vec::new();
+        for path in paths.into_iter().rev() {
+            if let Some(updated) =
+                PrimView::new(self.scene(), path).incrementally_inheritable_primvars(&inherited)
+            {
+                inherited = updated;
+            }
+        }
+        inherited
+    }
+    /// Updates the parent's inherited set with this prim's authored values.
+    /// `None` means unchanged, allowing callers to reuse the parent's allocation;
+    /// `Some([])` means local nonconstant values removed all inherited names.
+    /// Pass a set from the parent's `inheritable_primvars` or this method, using
+    /// the same immutable scene. Recompute after stage or store edits.
+    /// OpenUSD: `FindIncrementallyInheritablePrimvars`; AOUSD Core §12.2–12.5.
+    #[must_use]
+    pub fn incrementally_inheritable_primvars(
+        &self,
+        inherited: &[Primvar<'a>],
+    ) -> Option<Vec<Primvar<'a>>> {
+        if !self.scene().stage().has_prim(self.path()) {
+            return (!inherited.is_empty()).then(Vec::new);
+        }
+        self.merge_inherited_primvars(inherited, false)
+    }
+    fn merge_inherited_primvars(
+        &self,
+        inherited: &[Primvar<'a>],
+        accept_all: bool,
+    ) -> Option<Vec<Primvar<'a>>> {
+        let mut updated: Option<Vec<Primvar<'a>>> = None;
+        for pv in self.primvars_with_authored_values() {
+            let current = updated.as_deref().unwrap_or(inherited);
+            let found = current.iter().position(|p| p.name == pv.name);
+            let keep = accept_all || pv.interpolation() == "constant";
+            match (found, keep) {
+                (Some(index), true) => {
+                    if current[index].property() != pv.property() {
+                        updated.get_or_insert_with(|| inherited.to_vec())[index] = pv;
+                    }
+                }
+                (Some(index), false) => {
+                    updated
+                        .get_or_insert_with(|| inherited.to_vec())
+                        .remove(index);
+                }
+                (None, true) => updated.get_or_insert_with(|| inherited.to_vec()).push(pv),
+                (None, false) => {}
+            }
+        }
+        if let Some(values) = &mut updated {
+            values.sort_by_key(|p| p.name);
+        }
+        updated
+    }
+    /// Local and inherited authored values using a reusable parent set instead
+    /// of walking ancestors. Local values of any interpolation override it.
+    /// The input must come from the parent's inheritable query in this scene.
+    #[must_use]
+    pub fn primvars_with_inheritance_from(&self, inherited: &[Primvar<'a>]) -> Vec<Primvar<'a>> {
+        if !self.scene().stage().has_prim(self.path()) {
+            return Vec::new();
+        }
+        self.merge_inherited_primvars(inherited, true)
+            .unwrap_or_else(|| inherited.to_vec())
+    }
+    /// Finds one local or inherited primvar without walking ancestors. A local
+    /// authored value wins; otherwise a matching inherited value wins, else the
+    /// local declaration is returned (it may have only a fallback or no value).
+    #[must_use]
+    pub fn find_primvar_with_inheritance_from(
+        &self,
+        name: &str,
+        inherited: &[Primvar<'a>],
+    ) -> Option<Primvar<'a>> {
+        if !self.scene().stage().has_prim(self.path()) {
+            return None;
+        }
+        let local = Primvar::new(&self.scene(), self.path(), name);
+        if local.is_some_and(|p| p.has_authored_value()) {
+            return local;
+        }
+        let name = full_name(name);
+        inherited.iter().copied().find(|p| p.name == name).or(local)
+    }
     /// All value-producing local or inherited primvars, sorted by name.
     #[must_use]
     pub fn primvars_with_inheritance(&self) -> Vec<Primvar<'a>> {
-        let mut names = Vec::new();
-        let mut at = Some(self.path());
-        while let Some(path) = at {
-            names.extend(
-                PrimView::new(self.scene(), path)
-                    .primvars()
-                    .into_iter()
-                    .map(|p| p.name),
-            );
-            at = self.scene().parent(path);
-        }
-        names.sort_unstable();
-        names.dedup();
-        names
-            .into_iter()
-            .filter_map(|name| self.find_primvar_with_inheritance(name))
-            .filter(Primvar::has_authored_value)
-            .collect()
+        let inherited = self
+            .scene()
+            .parent(self.path())
+            .map(|parent| PrimView::new(self.scene(), parent).inheritable_primvars())
+            .unwrap_or_default();
+        self.primvars_with_inheritance_from(&inherited)
     }
 }
 
@@ -318,6 +540,32 @@ impl PrimEdit {
     }
 }
 impl PrimvarEdit {
+    /// Authors the string primvar's ID relationship through the edit target.
+    /// `None` targets this prim. Targets need not exist; prim and property paths
+    /// are mapped by the core transaction. Other attribute types append no edits.
+    /// OpenUSD: `UsdGeomPrimvar::SetIdTarget`; AOUSD Core §12.4.
+    pub fn set_id_target(
+        &self,
+        edit: &mut SchemaEdit<'_>,
+        target: Option<TargetPath>,
+    ) -> Result<&Self, PrimvarError> {
+        let ty = self.validate(edit)?;
+        if !matches!(ty.default_scalar, Value::String(_)) {
+            return Err(PrimvarError::TypeMismatch(self.name.clone()));
+        }
+        let name = format!("{}:idFrom", self.name);
+        match edit.property_kind(self.prim, &name) {
+            Some(layerstack::PropertyKind::Relationship) => {}
+            Some(_) => return Err(PrimvarError::TypeMismatch(name)),
+            None => edit.create_relationship(self.prim, &name),
+        }
+        edit.set_targets(
+            self.prim,
+            &name,
+            &[target.unwrap_or(TargetPath::Prim(self.prim))],
+        );
+        Ok(self)
+    }
     fn validate(&self, edit: &mut SchemaEdit<'_>) -> Result<PropertyType, PrimvarError> {
         if !edit.exists(self.prim) {
             return Err(PrimvarError::MissingPrim(self.prim));

@@ -37,6 +37,12 @@ use crate::{
 /// One storage step. Applying it returns the step that undoes it.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Raw {
+    LayerMetadata {
+        layer: LayerId,
+        key: TokenId,
+        value: Option<FieldValue>,
+        index: usize,
+    },
     LayerFields {
         layer: LayerId,
         default_prim: Option<TokenId>,
@@ -132,6 +138,7 @@ impl Raw {
     pub(crate) fn layer(&self) -> LayerId {
         match self {
             Self::LayerFields { layer, .. }
+            | Self::LayerMetadata { layer, .. }
             | Self::PrimSlots { layer, .. }
             | Self::Child { layer, .. }
             | Self::Variant { layer, .. }
@@ -147,7 +154,7 @@ impl Raw {
     /// Structural scopes preserve child edits without widening to all siblings.
     fn change_path(&self, store: &dyn LayerStore) -> Option<PathId> {
         match self {
-            Self::LayerFields { .. } => None,
+            Self::LayerFields { .. } | Self::LayerMetadata { .. } => None,
             Self::PrimSlots { path, .. } => Some(*path),
             Self::Child { parent, name, .. } => {
                 let path = store.paths().resolve(parent.prim_path()).join(&[*name]);
@@ -168,6 +175,7 @@ impl Raw {
     fn opinion_site(&self) -> Option<PathId> {
         match self {
             Self::LayerFields { .. }
+            | Self::LayerMetadata { .. }
             | Self::PrimSlots { .. }
             | Self::Child { .. }
             | Self::Variant { .. }
@@ -187,6 +195,17 @@ impl Raw {
     /// whatever position a list entry is at.
     fn same_state(&self, written: &Self) -> bool {
         match (self, written) {
+            (
+                Self::LayerMetadata {
+                    layer, key, value, ..
+                },
+                Self::LayerMetadata {
+                    layer: l,
+                    key: k,
+                    value: v,
+                    ..
+                },
+            ) => (layer, key) == (l, k) && value.same(v),
             (
                 Self::LayerFields {
                     layer,
@@ -346,6 +365,13 @@ impl Raw {
     /// The spec path and slot this step writes, for errors.
     fn slot(&self, paths: &PathInterner) -> (SpecPath, Slot) {
         match self {
+            Self::LayerMetadata { key, .. } => (
+                SpecPath::from_prim_path(
+                    paths.lookup(&crate::Path::root()).expect("interned root"),
+                    paths,
+                ),
+                Slot::Metadata(*key),
+            ),
             Self::LayerFields { .. } => (
                 SpecPath::from_prim_path(
                     paths.lookup(&crate::Path::root()).expect("interned root"),
@@ -685,6 +711,7 @@ pub(crate) fn apply(
                 }
             }
             Raw::LayerFields { .. }
+            | Raw::LayerMetadata { .. }
             | Raw::Variant { .. }
             | Raw::Selection { .. }
             | Raw::Field { .. } => {
@@ -720,6 +747,22 @@ pub(crate) fn apply(
 fn check_preconditions(store: &mut dyn LayerStore, txn: &Transaction) -> Result<(), EditError> {
     for (index, precondition) in txn.preconditions.iter().enumerate() {
         match precondition {
+            Precondition::LayerMetadata {
+                layer,
+                key,
+                expected,
+            } => {
+                let found = authored_layer_metadata(store, *layer, *key)
+                    .ok_or(EditError::UnresolvedPrecondition { index })?;
+                if !found.same(expected) {
+                    let root = store.paths_mut().intern(crate::Path::root());
+                    return Err(EditError::StaleValue {
+                        layer: *layer,
+                        path: SpecPath::from_prim_path(root, store.paths()),
+                        slot: Slot::Metadata(*key),
+                    });
+                }
+            }
             Precondition::Generation { layer, generation } => {
                 let found = store
                     .layer(*layer)
@@ -773,6 +816,38 @@ fn apply_op(
     journal: &mut Journal<'_>,
 ) -> Result<(), Rejection> {
     match op {
+        Op::LayerMetadata {
+            layer: id,
+            key,
+            value,
+        } => {
+            let _ = store.paths_mut().intern(crate::Path::root());
+            let name = store.tokens().resolve(*key);
+            if name == "defaultPrim" {
+                if !matches!(value, None | Some(FieldValue::Value(Value::Token(_)))) {
+                    return Err(Rejection::ReservedField(*key));
+                }
+            } else if matches!(
+                name,
+                "subLayers" | "subLayerOffsets" | "relocates" | "layerRelocates"
+            ) {
+                return Err(Rejection::ReservedField(*key));
+            }
+            let index = field_index(&layer(store, *id)?.metadata, *key);
+            let previous = authored_layer_metadata(store, *id, *key).expect("resident layer");
+            if value.is_none() && previous.is_none() {
+                return Ok(());
+            }
+            journal.run(
+                store,
+                Raw::LayerMetadata {
+                    layer: *id,
+                    key: *key,
+                    value: value.clone(),
+                    index,
+                },
+            )
+        }
         Op::Raw(guarded) => journal.run(store, guarded.step.clone()),
         Op::CreatePrim {
             at,
@@ -1542,6 +1617,41 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
     let id = step.layer();
     let diverged_at = |store: &dyn LayerStore, loc: &Loc| diverged(store, loc);
     match step {
+        Raw::LayerMetadata {
+            key, value, index, ..
+        } => {
+            let previous =
+                authored_layer_metadata(store, id, *key).ok_or(Rejection::NoSuchLayer(id))?;
+            let is_default = store.tokens().resolve(*key) == "defaultPrim";
+            let found = store.layer_mut(id).ok_or(Rejection::NoSuchLayer(id))?;
+            let old_index = field_index(&found.metadata, *key);
+            if is_default {
+                found.default_prim = match value {
+                    Some(FieldValue::Value(Value::Token(v))) => Some(*v),
+                    _ => None,
+                };
+            } else if let Some(position) = found.metadata.iter().position(|e| e.name == *key) {
+                if let Some(value) = value {
+                    found.metadata[position].value = value.clone();
+                } else {
+                    found.metadata.remove(position);
+                }
+            } else if let Some(value) = value {
+                found.metadata.insert(
+                    (*index).min(found.metadata.len()),
+                    FieldEntry {
+                        name: *key,
+                        value: value.clone(),
+                    },
+                );
+            }
+            Ok(Raw::LayerMetadata {
+                layer: id,
+                key: *key,
+                value: previous,
+                index: old_index,
+            })
+        }
         Raw::LayerFields {
             default_prim,
             metadata,
@@ -1904,4 +2014,20 @@ impl Loc {
     pub(crate) fn spec_path(&self, paths: &PathInterner) -> SpecPath {
         SpecPath::from_variant_selection_sites(self.prim_path(), self.sites(), paths)
     }
+}
+
+// Layer fields are distinct from the pseudo-root prim's metadata.
+fn authored_layer_metadata(
+    store: &dyn LayerStore,
+    layer: LayerId,
+    key: TokenId,
+) -> Option<Option<FieldValue>> {
+    let layer = store.layer(layer)?;
+    Some(if store.tokens().resolve(key) == "defaultPrim" {
+        layer
+            .default_prim
+            .map(|v| FieldValue::Value(Value::Token(v)))
+    } else {
+        layer.metadata(key).cloned()
+    })
 }

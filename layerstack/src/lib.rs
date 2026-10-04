@@ -223,8 +223,8 @@ pub use stage::{
     Contribution, DictionaryMerge, ExplainedOpinion, FlattenError, FlattenReport,
     FlattenRequirements, FlattenVerification, Flattened, IgnoreCause, KeyPath, LayerMuteError,
     LoadPolicy, OpinionRole, PayloadLoadRules, PayloadRule, PopulationMask, PropertyDeclaration,
-    Provenance, Resolved, ResolvedValue, SampleUse, Stage, StageOptions, Traverse,
-    ValueExplanation, ValueSource,
+    Provenance, Resolved, ResolvedValue, SampleUse, Stage, StageMetadataError, StageOptions,
+    Traverse, ValueExplanation, ValueSource,
 };
 pub use variant_fallbacks::VariantFallbacks;
 

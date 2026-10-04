@@ -72,6 +72,11 @@ pub struct Transaction {
 /// One edit of a [`Transaction`].
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Op {
+    LayerMetadata {
+        layer: LayerId,
+        key: TokenId,
+        value: Option<FieldValue>,
+    },
     CreatePrim {
         at: Address,
         specifier: Specifier,
@@ -129,6 +134,11 @@ pub(crate) enum Op {
 /// A condition a [`Transaction`] checks before applying anything.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Precondition {
+    LayerMetadata {
+        layer: LayerId,
+        key: TokenId,
+        expected: Box<Option<FieldValue>>,
+    },
     Generation {
         layer: LayerId,
         generation: u64,
@@ -167,6 +177,48 @@ impl Same for Authored {
 }
 
 impl Transaction {
+    /// Sets authored layer metadata, independently of prim metadata.
+    /// `defaultPrim` accepts a token; fields stored in other dedicated layer
+    /// members (sublayers and relocates) are rejected. Inverses guard this field
+    /// alone. AOUSD Core §7.6.1; OpenUSD `SdfLayer::SetField`.
+    pub fn set_layer_metadata(
+        &mut self,
+        layer: LayerId,
+        key: TokenId,
+        value: FieldValue,
+    ) -> &mut Self {
+        self.push(Op::LayerMetadata {
+            layer,
+            key,
+            value: Some(value),
+        })
+    }
+
+    /// Clears one authored layer field without erasing weaker stage opinions.
+    pub fn clear_layer_metadata(&mut self, layer: LayerId, key: TokenId) -> &mut Self {
+        self.push(Op::LayerMetadata {
+            layer,
+            key,
+            value: None,
+        })
+    }
+
+    /// Requires the authored layer field to match before any edit is applied.
+    /// Values compare by authored representation, including float bit patterns.
+    pub fn expect_layer_metadata(
+        &mut self,
+        layer: LayerId,
+        key: TokenId,
+        expected: Option<FieldValue>,
+    ) -> &mut Self {
+        self.preconditions.push(Precondition::LayerMetadata {
+            layer,
+            key,
+            expected: Box::new(expected),
+        });
+        self
+    }
+
     /// Creates an empty transaction.
     #[must_use]
     pub fn new() -> Self {
@@ -456,6 +508,7 @@ impl Transaction {
         for op in &self.ops {
             let layer = match op {
                 Op::Raw(guarded) => guarded.step.layer(),
+                Op::LayerMetadata { layer, .. } => *layer,
                 _ => op
                     .slot()
                     .map(|(at, _)| at.layer())
@@ -532,7 +585,7 @@ impl Op {
             Self::SetVariantSelection { at, set, .. } => (at, Slot::VariantSelection(*set)),
             Self::SetTargets { at, .. } => (at, Slot::Targets),
             Self::AddAppliedSchema { at, .. } => (at, Slot::AppliedSchemas),
-            Self::Raw(_) => return None,
+            Self::Raw(_) | Self::LayerMetadata { .. } => return None,
         })
     }
 }

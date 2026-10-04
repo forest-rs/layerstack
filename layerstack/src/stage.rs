@@ -6,7 +6,9 @@
 //! Spec: AOUSD Core §11–§12 (stage population and value resolution).
 
 mod explain;
-pub(crate) mod loading;
+pub(crate) mod metadata;
+pub use metadata::StageMetadataError;
+mod loading;
 pub use loading::{LayerMuteError, LoadPolicy, PayloadLoadRules, PayloadRule};
 mod prototypes;
 pub use prototypes::{CompositionStorage, CompositionWork, Prototype, PrototypeId, PrototypePrim};

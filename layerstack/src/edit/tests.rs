@@ -2158,3 +2158,88 @@ fn appended_inverses_keep_their_written_value_guards() {
         "a failed later inverse rolls back earlier inverses"
     );
 }
+
+#[test]
+fn attribute_block_clears_animation_and_preserves_unrelated_edits_on_undo() {
+    let mut store = rocks();
+    let spin = Address::spec(ROCK, spec(&mut store, "/Rock.spin"));
+    let path = spec(&mut store, "/Rock.spin");
+    let original = store.layers[&ROCK]
+        .property_at(&path, &store.paths)
+        .unwrap()
+        .clone();
+    let mut block = Transaction::new();
+    block.block_attribute(spin.clone());
+    let inverse = block.apply(&mut store).unwrap();
+    let attr = store.layers[&ROCK]
+        .property_at(&path, &store.paths)
+        .unwrap();
+    assert_eq!(attr.default, Some(Value::Blocked));
+    assert!(attr.time_samples.is_none() && attr.spline.is_none());
+    let note = store.tokens.intern("annotation");
+    let mut later = Transaction::new();
+    later.set_metadata(spin.clone(), note, FieldValue::Value(Value::string("keep")));
+    later.apply(&mut store).unwrap();
+    inverse.apply(&mut store).unwrap();
+    let attr = store.layers[&ROCK]
+        .property_at(&path, &store.paths)
+        .unwrap();
+    assert_eq!(attr.time_samples, original.time_samples);
+    assert_eq!(attr.default, original.default);
+    assert_eq!(
+        attr.metadata(note),
+        Some(&FieldValue::Value(Value::string("keep")))
+    );
+
+    let inverse = block.apply(&mut store).unwrap();
+    let mut later = Transaction::new();
+    later.set_time_sample(spin, 9., Value::Double(90.));
+    later.apply(&mut store).unwrap();
+    let before = layers(&store);
+    assert!(matches!(
+        inverse.apply(&mut store),
+        Err(EditError::StaleValue {
+            slot: Slot::Animation,
+            ..
+        })
+    ));
+    assert_eq!(layers(&store), before);
+}
+
+#[test]
+fn attribute_block_preserves_empty_sample_fields_and_splines_on_undo() {
+    use crate::spline::{CurveType, Extrapolation, SplineData, SplineDataType};
+    let mut store = rocks();
+    let path = spec(&mut store, "/Rock.animated");
+    let at = Address::spec(ROCK, path.clone());
+    let mut attr = attr(1.);
+    attr.time_samples = Some(vec![].into());
+    attr.spline = Some(SplineData {
+        pre_loop_boundary: None,
+        post_loop_boundary: None,
+        data_type: SplineDataType::Double,
+        default_curve_type: CurveType::Bezier,
+        pre_extrapolation: Extrapolation::Sloped(-0.0),
+        post_extrapolation: Extrapolation::Held,
+        loop_params: None,
+        knots: vec![],
+    });
+    let mut create = Transaction::new();
+    create.create_property(at.clone(), attr.clone());
+    create.apply(&mut store).unwrap();
+    let mut block = Transaction::new();
+    block.block_attribute(at);
+    let inverse = block.apply(&mut store).unwrap();
+    let blocked = store.layers[&ROCK]
+        .property_at(&path, &store.paths)
+        .unwrap();
+    assert!(blocked.time_samples.is_none() && blocked.spline.is_none());
+    inverse.apply(&mut store).unwrap();
+    let restored = store.layers[&ROCK]
+        .property_at(&path, &store.paths)
+        .unwrap();
+    assert!(
+        same::Same::same(restored, &attr),
+        "all authored bits survive block/undo"
+    );
+}

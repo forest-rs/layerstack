@@ -55,6 +55,8 @@ pub enum Slot {
     Spec,
     /// An attribute's default value.
     Default,
+    /// The attribute's authored time-sample and spline slots together.
+    Animation,
     /// An attribute's time sample at a time.
     TimeSample(f64),
     /// A relationship's targets or an attribute's connections.

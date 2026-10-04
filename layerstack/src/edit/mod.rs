@@ -179,6 +179,8 @@ pub struct Changes {
 pub enum PropertyField {
     /// The attribute's default value, including authored absence and blocks.
     Default,
+    /// Replacement or clearing of the time-sample and spline slots together.
+    Animation,
     /// One or more authored time samples.
     TimeSamples,
     /// Attribute connections or relationship targets.

@@ -34,6 +34,18 @@ use crate::{
     stage::Stage,
 };
 
+/// Authored animation slots, kept separate from declaration and metadata guards.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct AnimationState {
+    pub(crate) samples: Option<crate::SharedVec<crate::TimeSample>>,
+    pub(crate) spline: Option<crate::SplineData>,
+}
+impl Same for AnimationState {
+    fn same(&self, other: &Self) -> bool {
+        self.samples.same(&other.samples) && self.spline.same(&other.spline)
+    }
+}
+
 /// One storage step. Applying it returns the step that undoes it.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Raw {
@@ -95,6 +107,13 @@ pub(crate) enum Raw {
         name: TokenId,
         value: Option<Value>,
     },
+    /// Replaces both animation slots without touching declaration or metadata.
+    Animation {
+        layer: LayerId,
+        loc: Loc,
+        name: TokenId,
+        state: Box<AnimationState>,
+    },
     /// Sets (`Some`) or removes (`None`) the time sample at `time` of the
     /// attribute `name` at `loc`. Removing the last sample leaves an empty
     /// sample list when `keep_empty`, and no `timeSamples` field otherwise.
@@ -144,6 +163,7 @@ impl Raw {
             | Self::Variant { layer, .. }
             | Self::Property { layer, .. }
             | Self::Default { layer, .. }
+            | Self::Animation { layer, .. }
             | Self::Sample { layer, .. }
             | Self::Field { layer, .. }
             | Self::Targets { layer, .. }
@@ -164,6 +184,7 @@ impl Raw {
             Self::Selection { loc, .. }
             | Self::Property { loc, .. }
             | Self::Default { loc, .. }
+            | Self::Animation { loc, .. }
             | Self::Sample { loc, .. }
             | Self::Targets { loc, .. }
             | Self::Field { loc, .. } => Some(loc.prim_path()),
@@ -182,6 +203,7 @@ impl Raw {
             | Self::Selection { .. } => None,
             Self::Property { loc, .. }
             | Self::Default { loc, .. }
+            | Self::Animation { loc, .. }
             | Self::Sample { loc, .. }
             | Self::Targets { loc, .. }
             | Self::Field { loc, .. } => Some(loc.prim_path()),
@@ -295,6 +317,20 @@ impl Raw {
                 },
             ) => (layer, loc, name) == (l, lc, n) && value.same(v),
             (
+                Self::Animation {
+                    layer,
+                    loc,
+                    name,
+                    state,
+                },
+                Self::Animation {
+                    layer: l,
+                    loc: lc,
+                    name: n,
+                    state: s,
+                },
+            ) => (layer, loc, name) == (l, lc, n) && state.same(s),
+            (
                 Self::Sample {
                     layer,
                     loc,
@@ -389,6 +425,9 @@ impl Raw {
             Self::Default { loc, name, .. } => {
                 (loc.spec_path(paths).with_property(*name), Slot::Default)
             }
+            Self::Animation { loc, name, .. } => {
+                (loc.spec_path(paths).with_property(*name), Slot::Animation)
+            }
             Self::Sample {
                 loc, name, time, ..
             } => (
@@ -476,6 +515,9 @@ fn property_edits(steps: &[Guarded]) -> Option<Vec<(LayerId, PathId, super::Prop
                 Raw::Sample {
                     layer, loc, name, ..
                 } => (*layer, loc, *name, PropertyField::TimeSamples),
+                Raw::Animation {
+                    layer, loc, name, ..
+                } => (*layer, loc, *name, PropertyField::Animation),
                 Raw::Targets {
                     layer, loc, name, ..
                 } => (*layer, loc, *name, PropertyField::Targets),
@@ -934,6 +976,25 @@ fn apply_op(
                 }
                 None => remove_subtree(store, id, &loc, journal),
             }
+        }
+        Op::BlockAttribute { at } => {
+            set_value(store, at, None, &Value::Blocked, stage, journal)?;
+            let (path, loc, name) = property_address(store, at)?;
+            let id = at.layer();
+            let attr =
+                attribute_at(store, id, &loc, name, &path)?.expect("set_value ensured attribute");
+            if attr.time_samples.is_some() || attr.spline.is_some() {
+                journal.run(
+                    store,
+                    Raw::Animation {
+                        layer: id,
+                        loc,
+                        name,
+                        state: Box::default(),
+                    },
+                )?;
+            }
+            Ok(())
         }
         Op::SetDefault { at, value } => set_value(store, at, None, value, stage, journal),
         Op::SetTargets { at, targets } => set_targets(store, at, targets.as_ref(), stage, journal),
@@ -1864,6 +1925,31 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
                 loc: loc.clone(),
                 name: *name,
                 value: old,
+            })
+        }
+        Raw::Animation {
+            loc, name, state, ..
+        } => {
+            let old = store
+                .layer_mut(id)
+                .and_then(|l| spec_at_mut(l, loc))
+                .and_then(|mut s| {
+                    let property = s.properties().iter_mut().find(|p| p.name == *name)?;
+                    let property = Arc::make_mut(&mut property.spec);
+                    Some(AnimationState {
+                        samples: core::mem::replace(
+                            &mut property.time_samples,
+                            state.samples.clone(),
+                        ),
+                        spline: core::mem::replace(&mut property.spline, state.spline.clone()),
+                    })
+                })
+                .ok_or_else(|| diverged_at(store, loc))?;
+            Ok(Raw::Animation {
+                layer: id,
+                loc: loc.clone(),
+                name: *name,
+                state: Box::new(old),
             })
         }
         Raw::Sample {

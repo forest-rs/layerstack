@@ -6,7 +6,7 @@
 use alloc::{boxed::Box, vec::Vec};
 
 use super::{
-    apply::{self, Guarded},
+    apply::{self, AnimationState, Guarded},
     error::{EditError, Slot},
     same::Same,
     spec::{Loc, spec_at},
@@ -96,6 +96,9 @@ pub(crate) enum Op {
     ClearDefault {
         at: Address,
     },
+    BlockAttribute {
+        at: Address,
+    },
     SetTimeSample {
         at: Address,
         time: f64,
@@ -157,6 +160,7 @@ pub(crate) enum Precondition {
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Authored {
     Value(Value),
+    Animation(Box<AnimationState>),
     Field(FieldValue),
     Token(TokenId),
     Property(Box<PropertySpec>),
@@ -167,6 +171,7 @@ impl Same for Authored {
     fn same(&self, other: &Self) -> bool {
         match (self, other) {
             (Self::Value(a), Self::Value(b)) => a.same(b),
+            (Self::Animation(a), Self::Animation(b)) => a.same(b),
             (Self::Field(a), Self::Field(b)) => a.same(b),
             (Self::Property(a), Self::Property(b)) => a.same(b),
             (Self::Token(a), Self::Token(b)) => a == b,
@@ -368,6 +373,16 @@ impl Transaction {
     /// Spec: AOUSD Core §7.6.4.2.1 (`default`), §12.3 (value blocks).
     pub fn set_default(&mut self, at: Address, value: Value) -> &mut Self {
         self.push(Op::SetDefault { at, value })
+    }
+
+    /// Blocks an attribute's value in the target layer: clears its time samples
+    /// and spline, then authors a blocked default. Declaration, connections and
+    /// metadata are preserved. A missing local spec uses the composed declaration.
+    /// Undo guards the default and animation slots, retaining unrelated later edits.
+    ///
+    /// OpenUSD: `UsdAttribute::Block`; AOUSD Core §12.3.6 (value blocking).
+    pub fn block_attribute(&mut self, at: Address) -> &mut Self {
+        self.push(Op::BlockAttribute { at })
     }
 
     /// Clears the default value of the attribute at `at`; the attribute
@@ -587,7 +602,7 @@ impl Op {
     fn slot(&self) -> Option<(&Address, Slot)> {
         Some(match self {
             Self::CreatePrim { at, .. } | Self::RemoveSpec { at } => (at, Slot::Spec),
-            Self::CreateProperty { at, .. } => (at, Slot::Spec),
+            Self::CreateProperty { at, .. } | Self::BlockAttribute { at } => (at, Slot::Spec),
             Self::SetDefault { at, .. } | Self::ClearDefault { at } => (at, Slot::Default),
             Self::SetTimeSample { at, time, .. } | Self::RemoveTimeSample { at, time } => {
                 (at, Slot::TimeSample(*time))
@@ -627,6 +642,12 @@ pub(crate) fn authored(
         Slot::Default => property
             .and_then(|p| p.default.clone())
             .map(Authored::Value),
+        Slot::Animation => property.map(|p| {
+            Authored::Animation(Box::new(AnimationState {
+                samples: p.time_samples.clone(),
+                spline: p.spline.clone(),
+            }))
+        }),
         Slot::TimeSample(time) => {
             let time = at.layer_time(*time);
             property

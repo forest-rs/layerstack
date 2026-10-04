@@ -7,6 +7,9 @@
 //!   from stage paths to spec paths in it (including variant-qualified
 //!   ones), and a layer offset. It comes from a layer, a variant branch,
 //!   or any node of a prim's index graph.
+//! - A [`NamespaceEdit`] prepares a composed prim/property move and dependent
+//!   authored path repairs as a generation-guarded transaction. Its preview
+//!   identifies every affected layer and prim slot.
 //! - A [`Transaction`] lists spec edits, each addressed through a target
 //!   or by spec path ([`Address`]), and optional preconditions: layer
 //!   generations and expected authored values.
@@ -77,11 +80,14 @@
 
 mod apply;
 mod error;
+mod namespace;
 pub(crate) mod same;
 mod spec;
 mod target;
 mod transaction;
 
+#[cfg(test)]
+mod namespace_tests;
 #[cfg(test)]
 mod tests;
 
@@ -90,6 +96,7 @@ use alloc::vec::Vec;
 use crate::path::PathId;
 
 pub use error::{EditError, Rejection, Slot};
+pub use namespace::{NamespaceEdit, NamespaceError};
 pub use target::{Address, EditTarget};
 pub use transaction::Transaction;
 

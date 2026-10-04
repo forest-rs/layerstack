@@ -193,8 +193,8 @@ pub use doc::{
     insert_field_if_absent, remove_field, set_field_vec,
 };
 pub use edit::{
-    Address, Applied, Changes, EditError, EditTarget, PrimPropertyChanges, PropertyChange,
-    PropertyField, Transaction,
+    Address, Applied, Changes, EditError, EditTarget, NamespaceEdit, NamespaceError,
+    PrimPropertyChanges, PropertyChange, PropertyField, Transaction,
 };
 pub use interner::{TokenId, TokenInterner};
 pub use layer_stack::LayerStack;

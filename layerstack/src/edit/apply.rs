@@ -37,6 +37,11 @@ use crate::{
 /// One storage step. Applying it returns the step that undoes it.
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Raw {
+    LayerFields {
+        layer: LayerId,
+        default_prim: Option<TokenId>,
+        metadata: Vec<FieldEntry>,
+    },
     /// Replaces every prim spec stored at `path` ([`Layer::prims`] and
     /// [`Layer::variant_prims`]) with `main` and `branches`.
     PrimSlots {
@@ -126,7 +131,8 @@ pub(crate) enum Raw {
 impl Raw {
     pub(crate) fn layer(&self) -> LayerId {
         match self {
-            Self::PrimSlots { layer, .. }
+            Self::LayerFields { layer, .. }
+            | Self::PrimSlots { layer, .. }
             | Self::Child { layer, .. }
             | Self::Variant { layer, .. }
             | Self::Property { layer, .. }
@@ -142,7 +148,8 @@ impl Raw {
     /// `None` for a step that changes namespace or composition arcs.
     fn opinion_site(&self) -> Option<PathId> {
         match self {
-            Self::PrimSlots { .. }
+            Self::LayerFields { .. }
+            | Self::PrimSlots { .. }
             | Self::Child { .. }
             | Self::Variant { .. }
             | Self::Selection { .. } => None,
@@ -161,6 +168,18 @@ impl Raw {
     /// whatever position a list entry is at.
     fn same_state(&self, written: &Self) -> bool {
         match (self, written) {
+            (
+                Self::LayerFields {
+                    layer,
+                    default_prim,
+                    metadata,
+                },
+                Self::LayerFields {
+                    layer: l,
+                    default_prim: d,
+                    metadata: m,
+                },
+            ) => layer == l && default_prim == d && metadata.same(m),
             (
                 Self::PrimSlots {
                     layer,
@@ -308,6 +327,13 @@ impl Raw {
     /// The spec path and slot this step writes, for errors.
     fn slot(&self, paths: &PathInterner) -> (SpecPath, Slot) {
         match self {
+            Self::LayerFields { .. } => (
+                SpecPath::from_prim_path(
+                    paths.lookup(&crate::Path::root()).expect("interned root"),
+                    paths,
+                ),
+                Slot::Spec,
+            ),
             Self::PrimSlots { path, .. } => (SpecPath::from_prim_path(*path, paths), Slot::Spec),
             Self::Child { parent: loc, .. } | Self::Variant { host: loc, .. } => {
                 (loc.spec_path(paths), Slot::Spec)
@@ -608,7 +634,10 @@ pub(crate) fn apply(
                     paths.push(*path);
                 }
             }
-            Raw::Variant { .. } | Raw::Selection { .. } | Raw::Field { .. } => {
+            Raw::LayerFields { .. }
+            | Raw::Variant { .. }
+            | Raw::Selection { .. }
+            | Raw::Field { .. } => {
                 local_structure = None;
             }
             _ => {}
@@ -1463,6 +1492,18 @@ fn apply_raw(store: &mut dyn LayerStore, step: &Raw) -> Result<Raw, Rejection> {
     let id = step.layer();
     let diverged_at = |store: &dyn LayerStore, loc: &Loc| diverged(store, loc);
     match step {
+        Raw::LayerFields {
+            default_prim,
+            metadata,
+            ..
+        } => {
+            let found = store.layer_mut(id).ok_or(Rejection::NoSuchLayer(id))?;
+            Ok(Raw::LayerFields {
+                layer: id,
+                default_prim: core::mem::replace(&mut found.default_prim, *default_prim),
+                metadata: core::mem::replace(&mut found.metadata, metadata.clone()),
+            })
+        }
         Raw::PrimSlots {
             path,
             main,

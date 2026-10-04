@@ -1,0 +1,32 @@
+#usda 1.0
+(
+    defaultPrim = "A"
+)
+
+def "A"
+{
+    reorder properties = ["relative", "outputs:value"]
+    custom double outputs:value = 4
+    custom pathExpression relative = "/A/Child//"
+
+    def "Child"
+    {
+    }
+}
+
+def "B"
+{
+}
+
+def "Watch"
+{
+    custom pathExpression expression = "/A// /AX// /A.outputs:value %/A:relative"
+    custom double inputs:value
+    double inputs:value.connect = </A.outputs:value>
+    custom rel look = [
+        </A>,
+        </A/Child>,
+        </A.outputs:value>,
+    ]
+}
+

@@ -94,6 +94,8 @@ pub use report::{
 };
 pub use verify::{FlattenVerification, Mismatch, MismatchKind, SkipReason, Skipped, VerifiedScope};
 
+use super::prototypes::InstanceKey;
+
 use alloc::{borrow::Cow, format, string::String, sync::Arc, vec::Vec};
 
 use hashbrown::{HashMap, HashSet};
@@ -109,9 +111,8 @@ use crate::{
     listop::ListOp,
     path::{Path, PathId, PropertyPath, TargetPath},
     prim_index::{ArcKind, FieldKey, Opinion},
-    prim_index_graph::NodeId,
     property::{PropertyEntry, PropertyKind, PropertySpec, PropertyType, Variability},
-    spec_path::{SpecComponent, SpecPath},
+    spec_path::SpecComponent,
 };
 
 /// A flattened stage: the layer, and the report of how it was written.
@@ -139,15 +140,6 @@ const CLIP_FIELDS: &[&str] = &[
     "clipTemplateActiveOffset",
     "clipTimes",
 ];
-
-/// What makes two instances share a prototype: the arcs that bring in the
-/// instance's descendants, each with its kind, site and offset, and the
-/// variant selections. OpenUSD: `PcpInstanceKey` (`pxr/usd/pcp/instanceKey.h`).
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct InstanceKey {
-    arcs: Vec<(ArcKind, LayerId, SpecPath, u64, u64)>,
-    selections: Vec<(TokenId, TokenId)>,
-}
 
 /// Maps paths beneath an instance onto the prototype that stands for it.
 #[derive(Clone, Copy)]
@@ -476,7 +468,7 @@ impl Flattener<'_, '_> {
             .filter(|prim| self.stage.instances.contains(prim))
             .collect();
         for instance in instances {
-            let key = self.instance_key(instance);
+            let key = self.stage.instance_key(instance, self.store);
             let prototype = if let Some(&prototype) = self.prototypes.get(&key) {
                 prototype
             } else {
@@ -498,48 +490,6 @@ impl Flattener<'_, '_> {
             self.prototype_of.insert(instance, prototype);
         }
         found
-    }
-
-    /// The [`InstanceKey`] of `instance`: the strongest-first nodes of its
-    /// graph whose arcs are authored at the instance, beneath nodes that are
-    /// not, with its variant selections.
-    ///
-    /// OpenUSD: `PcpInstanceKey::_Collector`, which records each instanceable
-    /// node that no instanceable node is above (`pxr/usd/pcp/instanceKey.cpp`).
-    fn instance_key(&self, instance: PathId) -> InstanceKey {
-        let depth = u16::try_from(self.store.paths().resolve(instance).depth()).unwrap_or(u16::MAX);
-        let mut arcs = Vec::new();
-        if let Some(graph) = self.stage.explain_prim_graph(instance) {
-            for id in graph.strength_order() {
-                let Some(node) = graph.node(id) else { continue };
-                if id == NodeId::ROOT || node.namespace_depth() < depth {
-                    continue;
-                }
-                let parent_instanceable = node
-                    .parent()
-                    .filter(|&parent| parent != NodeId::ROOT)
-                    .and_then(|parent| graph.node(parent))
-                    .is_some_and(|parent| parent.namespace_depth() >= depth);
-                if parent_instanceable {
-                    continue;
-                }
-                let offset = node.layer_offset();
-                arcs.push((
-                    node.arc_kind(),
-                    node.layer_stack(),
-                    node.site().clone(),
-                    offset.offset.to_bits(),
-                    offset.scale.to_bits(),
-                ));
-            }
-        }
-        let mut selections: Vec<(TokenId, TokenId)> = self
-            .stage
-            .variant_selections(instance, &*self.store)
-            .into_iter()
-            .collect();
-        selections.sort_unstable();
-        InstanceKey { arcs, selections }
     }
 
     /// The variant selections whose arcs are authored at `prim`, strongest

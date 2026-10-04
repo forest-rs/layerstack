@@ -266,7 +266,7 @@ pub(crate) fn anchor_opinions(store: &dyn LayerStore, prims: &mut HashMap<PathId
         let prim_depth = store.paths().resolve(*path).depth();
         let graph = &index.graph;
         let mut maps: HashMap<NodeId, Option<NodeNamespace>> = HashMap::new();
-        for opinion in &mut index.opinions {
+        for opinion in &mut Arc::make_mut(&mut index.data).opinions {
             // Inspect shared storage before detaching: ordinary authored values
             // must retain their source payload across all placements.
             let (default, samples) = match &opinion.value {

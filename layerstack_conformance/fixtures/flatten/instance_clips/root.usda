@@ -1,0 +1,27 @@
+#usda 1.0
+
+def "First" (
+    instanceable = true
+    references = @./model.usda@</Asset>
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./animation.usda@]
+            double2[] active = [(0, 0)]
+            string primPath = "/Asset"
+            double2[] times = [(0, 0), (10, 10)]
+        }
+    }
+) {}
+
+def "Second" (
+    instanceable = true
+    references = @./model.usda@</Asset>
+    clips = {
+        dictionary default = {
+            asset[] assetPaths = [@./animation.usda@]
+            double2[] active = [(0, 0)]
+            string primPath = "/Asset"
+            double2[] times = [(0, 10), (10, 20)]
+        }
+    }
+) {}

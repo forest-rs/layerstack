@@ -8,7 +8,7 @@
 //!
 //! Spec: AOUSD Core §9–§12 (layer stacks, arcs/strength ordering, population, and resolution).
 
-use alloc::{borrow::Cow, collections::BTreeSet, rc::Rc, vec::Vec};
+use alloc::{borrow::Cow, collections::BTreeSet, rc::Rc, sync::Arc, vec::Vec};
 
 use core::{cell::RefCell, cmp::Ordering};
 
@@ -546,7 +546,8 @@ fn drop_skipped_duplicates(store: &dyn LayerStore, prim: &mut PrimIndex) {
             .is_some_and(|node| node.arc.skips_duplicates)
     };
     let mut seen = HashSet::new();
-    prim.sources
+    Arc::make_mut(&mut prim.data)
+        .sources
         .retain(|key| !skips(key.node) || (!dropped.contains(key) && seen.insert(key.clone())));
     let mut seen = HashSet::new();
     prim.retain_opinions(|graph, opinion| {
@@ -9252,7 +9253,10 @@ mod child_order_tests {
                 (
                     path,
                     PrimIndex {
-                        sources: stage.explain_prim(path).unwrap_or_default().to_vec(),
+                        data: Arc::new(crate::prim_index::PrimIndexData {
+                            sources: stage.explain_prim(path).unwrap_or_default().to_vec(),
+                            ..crate::prim_index::PrimIndexData::default()
+                        }),
                         ..PrimIndex::new(stage.explain_prim_graph(path).unwrap().clone())
                     },
                 )
@@ -9678,16 +9682,19 @@ mod child_order_tests {
         prims.insert(
             parent_path,
             PrimIndex {
-                sources: branches
-                    .iter()
-                    .map(|sites| OpinionKey {
-                        node: NodeId::ROOT,
-                        layer_strength: 0,
-                        layer_id,
-                        lookup_path: parent_path,
-                        spec_path: prim_spec_path(&store, parent_path, sites),
-                    })
-                    .collect(),
+                data: Arc::new(crate::prim_index::PrimIndexData {
+                    sources: branches
+                        .iter()
+                        .map(|sites| OpinionKey {
+                            node: NodeId::ROOT,
+                            layer_strength: 0,
+                            layer_id,
+                            lookup_path: parent_path,
+                            spec_path: prim_spec_path(&store, parent_path, sites),
+                        })
+                        .collect(),
+                    ..crate::prim_index::PrimIndexData::default()
+                }),
                 ..PrimIndex::new(PrimIndexGraph::from_arcs(
                     &prim_spec_path(&store, parent_path, &[]),
                     1,

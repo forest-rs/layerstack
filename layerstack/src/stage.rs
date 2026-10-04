@@ -6,6 +6,8 @@
 //! Spec: AOUSD Core §11–§12 (stage population and value resolution).
 
 mod explain;
+mod prototypes;
+pub use prototypes::{CompositionStorage, Prototype, PrototypeId, PrototypePrim};
 pub mod flatten;
 pub(crate) mod stage_time;
 
@@ -313,6 +315,7 @@ pub struct StageOptions {
 pub struct Stage {
     root_layer: Option<LayerId>,
     clips: crate::value_clips::Catalog,
+    prototypes: prototypes::PrototypeTable,
     prims: HashMap<PathId, PrimIndex>,
     children: HashMap<PathId, Vec<PathId>>,
     with_provenance: bool,
@@ -389,6 +392,7 @@ impl Stage {
         stage.schemas = schemas;
         stage.prepare_type_info(store);
         stage.prepare_clips(store);
+        stage.prepare_prototypes(store);
         stage
     }
 
@@ -404,6 +408,7 @@ impl Stage {
         stage.schemas = schemas;
         stage.prepare_type_info(store);
         stage.prepare_clips(store);
+        stage.prepare_prototypes(store);
         stage
     }
 
@@ -433,7 +438,7 @@ impl Stage {
                 }
             }
         }
-        self.merge_prims_from(partial, affected);
+        self.merge_prims_from(store, partial, affected);
         for (parent, mut children) in boundary_children {
             let Some(index) = self.prims.get(&parent) else {
                 self.children.remove(&parent);
@@ -449,6 +454,7 @@ impl Stage {
             children.retain(|child| self.prims.contains_key(child));
             self.children.insert(parent, children);
         }
+        self.prepare_prototypes(store);
     }
 
     /// Resolve schema identity once with the composed snapshot. Ordinary value
@@ -548,7 +554,7 @@ impl Stage {
     }
 
     fn prepare_clips(&mut self, store: &mut dyn LayerStore) {
-        self.clips = crate::value_clips::Catalog::prepare(store, &self.prims);
+        self.clips = crate::value_clips::Catalog::prepare(store, &self.prims, &self.instances);
         if let Some(deps) = &mut self.deps {
             for prim in self.prims.keys().copied() {
                 for (layer, _) in self.clips.source_sites(prim) {
@@ -979,6 +985,7 @@ impl Stage {
             prims
         };
         Self {
+            prototypes: prototypes::PrototypeTable::default(),
             root_layer: None,
             clips: crate::value_clips::Catalog::default(),
             prims,
@@ -1037,7 +1044,12 @@ impl Stage {
     /// Arc errors of the recomposed prims are replaced by the partial
     /// composition's. Sublayer cycle errors are kept: layer stacks change
     /// only through structural edits, which rebuild the whole stage.
-    pub(crate) fn merge_prims_from(&mut self, mut partial: Self, recomposed: &[PathId]) {
+    pub(crate) fn merge_prims_from(
+        &mut self,
+        store: &dyn LayerStore,
+        mut partial: Self,
+        recomposed: &[PathId],
+    ) {
         self.clips.merge_from(partial.clips, recomposed);
         for path in recomposed {
             if let Some(mut index) = partial.prims.remove(path) {
@@ -1070,6 +1082,7 @@ impl Stage {
                 .into_iter()
                 .filter(|error| is_recomposed(error)),
         );
+        self.prepare_prototypes(store);
     }
 
     /// Refreshes existing value slots without rebuilding prim graphs. The
@@ -1192,6 +1205,7 @@ impl Stage {
                 refreshed.insert(shared_key, (original, Arc::clone(spec)));
             }
         }
+        self.reshare_prototype_records();
         true
     }
 

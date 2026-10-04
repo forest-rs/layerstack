@@ -10,6 +10,7 @@
 //! OpenUSD 26.08 `usd/clipSetDefinition.cpp`, `clipCache.cpp`, `clipSet.cpp`.
 
 mod eval;
+mod instance_key;
 mod template;
 use crate::prim_index::PrimIndex;
 use crate::{
@@ -20,6 +21,7 @@ use crate::{
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 pub use eval::ClipEvalError;
 use eval::PreparedClipProperty;
+pub(crate) use instance_key::{ClipInstanceKey, instance_keys};
 
 /// Why the host should resolve this clip-related asset.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -210,7 +212,11 @@ pub(crate) struct Catalog {
     issues: Vec<ClipIssue>,
 }
 impl Catalog {
-    pub(crate) fn prepare(store: &mut dyn LayerStore, prims: &HashMap<PathId, PrimIndex>) -> Self {
+    pub(crate) fn prepare(
+        store: &mut dyn LayerStore,
+        prims: &HashMap<PathId, PrimIndex>,
+        instances: &HashSet<PathId>,
+    ) -> Self {
         let mut out = Self::default();
         let Some(clips_token) = store.tokens().lookup("clips") else {
             return out;
@@ -261,11 +267,26 @@ impl Catalog {
         }
         for &prim in &owners {
             let index = &prims[&prim];
+            // Instance proxies exclude local opinions outside their prototype.
+            // OpenUSD _ClipsApplyToNode / UsdStage::_GetResolveInfoWithClipsImpl.
+            let mut boundary = None;
+            let mut parent = store.paths().resolve(prim).parent();
+            while let Some(path) = parent {
+                if store
+                    .paths()
+                    .lookup(&path)
+                    .is_some_and(|p| instances.contains(&p))
+                {
+                    boundary = Some(u16::try_from(path.depth()).unwrap_or(u16::MAX));
+                    break;
+                }
+                parent = path.parent();
+            }
             let mut ancestor = Some(prim);
             while let Some(owner) = ancestor {
                 if let Some(sets) = prepared.get(&owner) {
                     for set in sets {
-                        out.prepare_properties(store, prim, index, &prims[&owner], set);
+                        out.prepare_properties(store, prim, index, &prims[&owner], set, boundary);
                     }
                 }
                 // Metadata dependencies also retain definitions that currently
@@ -498,6 +519,7 @@ impl Catalog {
         index: &PrimIndex,
         owner_index: &PrimIndex,
         set: &ReadySet,
+        instance_boundary: Option<u16>,
     ) {
         let Some(anchor_node) = owner_index.graph.node(set.definition.anchor.node) else {
             return;
@@ -511,7 +533,9 @@ impl Catalog {
             let Some(target) = index.graph.node(node) else {
                 return false;
             };
-            target.layer_stack() == anchor_node.layer_stack()
+            instance_boundary.is_none_or(|depth| {
+                node != crate::NodeId::ROOT && target.namespace_depth() >= depth
+            }) && target.layer_stack() == anchor_node.layer_stack()
                 // C++ _ClipsApplyToNode compares variant-qualified paths. A
                 // variant clip belongs at that arc, below local layer opinions.
                 && target.site().components().starts_with(source_spec.components())

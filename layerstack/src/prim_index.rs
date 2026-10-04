@@ -260,11 +260,51 @@ pub(crate) struct PrimIndex {
     /// The arc expansions contributing to the prim; every key below names
     /// one of its nodes.
     pub(crate) graph: PrimIndexGraph,
-    /// All opinions, built directly here and grouped by field at finalization.
+    /// Namespace-independent records. Equivalent prototype members share
+    /// these; mutation detaches while older stages retain their snapshot.
+    pub(crate) data: Arc<PrimIndexData>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub(crate) struct PrimIndexData {
     pub(crate) opinions: Vec<Opinion>,
-    /// Sorted field identities and their contiguous opinion ranges.
     pub(crate) fields: Vec<(FieldKey, Range<usize>)>,
     pub(crate) sources: Vec<OpinionKey>,
+}
+
+impl PrimIndexData {
+    /// Exact record identity for sharing; public value equality stays IEEE.
+    pub(crate) fn same_records(&self, other: &Self) -> bool {
+        use crate::edit::same::Same;
+        self.fields == other.fields
+            && self.sources == other.sources
+            && self.opinions.len() == other.opinions.len()
+            && self.opinions.iter().zip(&other.opinions).all(|(a, b)| {
+                a.key == b.key
+                    && a.field == b.field
+                    && a.layer_offset.offset.to_bits() == b.layer_offset.offset.to_bits()
+                    && a.layer_offset.scale.to_bits() == b.layer_offset.scale.to_bits()
+                    && match (&a.value, &b.value) {
+                        (OpinionValue::Property(a), OpinionValue::Property(b)) => {
+                            Arc::ptr_eq(a, b) || a.as_ref().same(b)
+                        }
+                        (OpinionValue::Field(a), OpinionValue::Field(b)) => a.same(b),
+                        _ => false,
+                    }
+            })
+    }
+}
+
+impl core::ops::Deref for PrimIndex {
+    type Target = PrimIndexData;
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+impl core::ops::DerefMut for PrimIndex {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        Arc::make_mut(&mut self.data)
+    }
 }
 
 impl PrimIndex {
@@ -315,25 +355,27 @@ impl PrimIndex {
     /// Rebuilds ranges after grouping or removing opinions. No authored data
     /// moves into a second representation: fields only index this buffer.
     fn index_fields(&mut self) {
-        self.fields.clear();
-        if self.fields.capacity() == 0 && !self.opinions.is_empty() {
-            self.fields.reserve_exact(1);
+        let data = Arc::make_mut(&mut self.data);
+        data.fields.clear();
+        if data.fields.capacity() == 0 && !data.opinions.is_empty() {
+            data.fields.reserve_exact(1);
         }
-        for (position, opinion) in self.opinions.iter().enumerate() {
+        for (position, opinion) in data.opinions.iter().enumerate() {
             let field = FieldKey::of(opinion);
-            if let Some((last, range)) = self.fields.last_mut()
+            if let Some((last, range)) = data.fields.last_mut()
                 && *last == field
             {
                 range.end = position + 1;
             } else {
-                self.fields.push((field, position..position + 1));
+                data.fields.push((field, position..position + 1));
             }
         }
     }
 
     /// Groups fields while preserving insertion order within each stack.
     fn group_by_field(&mut self) {
-        if self
+        let data = Arc::make_mut(&mut self.data);
+        if data
             .opinions
             .is_sorted_by(|a, b| FieldKey::of(a) <= FieldKey::of(b))
         {
@@ -342,30 +384,30 @@ impl PrimIndex {
         }
         // Count field contributions before moving payloads. Sorting only
         // field identities avoids comparing graph keys across unrelated fields.
-        let mut keys: Vec<FieldKey> = self.opinions.iter().map(FieldKey::of).collect();
+        let mut keys: Vec<FieldKey> = data.opinions.iter().map(FieldKey::of).collect();
         keys.sort_unstable();
         keys.dedup();
-        self.fields.clear();
-        self.fields.reserve(keys.len());
-        self.fields.extend(keys.iter().map(|&key| (key, 0..0)));
-        for opinion in &self.opinions {
+        data.fields.clear();
+        data.fields.reserve(keys.len());
+        data.fields.extend(keys.iter().map(|&key| (key, 0..0)));
+        for opinion in &data.opinions {
             let field = keys
                 .binary_search(&FieldKey::of(opinion))
                 .expect("counted field");
-            self.fields[field].1.end += 1;
+            data.fields[field].1.end += 1;
         }
         let mut offset = 0;
-        for (_, range) in &mut self.fields {
+        for (_, range) in &mut data.fields {
             let count = range.end;
             *range = offset..offset;
             offset += count;
         }
-        let mut order = alloc::vec![0; self.opinions.len()];
-        for (source, opinion) in self.opinions.iter().enumerate() {
+        let mut order = alloc::vec![0; data.opinions.len()];
+        for (source, opinion) in data.opinions.iter().enumerate() {
             let field = keys
                 .binary_search(&FieldKey::of(opinion))
                 .expect("counted field");
-            let range = &mut self.fields[field].1;
+            let range = &mut data.fields[field].1;
             order[range.end] = source;
             range.end += 1;
         }
@@ -375,7 +417,7 @@ impl PrimIndex {
             let mut current = start;
             while order[current] != start {
                 let next = order[current];
-                self.opinions.swap(current, next);
+                data.opinions.swap(current, next);
                 order[current] = current;
                 current = next;
             }
@@ -396,7 +438,9 @@ impl PrimIndex {
         mut keep: impl FnMut(&PrimIndexGraph, &Opinion) -> bool,
     ) {
         let before = self.opinions.len();
-        self.opinions.retain(|opinion| keep(&self.graph, opinion));
+        Arc::make_mut(&mut self.data)
+            .opinions
+            .retain(|opinion| keep(&self.graph, opinion));
         if self.opinions.len() != before && !self.fields.is_empty() {
             self.index_fields();
         }
@@ -422,7 +466,9 @@ impl PrimIndex {
         &mut self,
         mut keep: impl FnMut(&PrimIndexGraph, &OpinionKey) -> bool,
     ) {
-        self.sources.retain(|key| keep(&self.graph, key));
+        Arc::make_mut(&mut self.data)
+            .sources
+            .retain(|key| keep(&self.graph, key));
         self.retain_opinions(|graph, opinion| keep(graph, &opinion.key));
     }
 
@@ -432,10 +478,11 @@ impl PrimIndex {
         self.graph.rank();
         self.group_by_field();
         let graph = &self.graph;
-        for (_, range) in &self.fields {
-            self.opinions[range.clone()].sort_by(|a, b| graph.cmp_keys(&a.key, &b.key));
+        let data = Arc::make_mut(&mut self.data);
+        for (_, range) in &data.fields {
+            data.opinions[range.clone()].sort_by(|a, b| graph.cmp_keys(&a.key, &b.key));
         }
-        self.sources.sort_by(|a, b| graph.cmp_keys(a, b));
+        data.sources.sort_by(|a, b| graph.cmp_keys(a, b));
     }
 }
 

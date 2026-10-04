@@ -967,7 +967,7 @@ impl LiveStage {
             .extend(core::mem::take(&mut partial_deps.expression_variables));
 
         // Replace only the recomposed prim indexes; hierarchy is unchanged.
-        self.stage.merge_prims_from(partial, &affected);
+        self.stage.merge_prims_from(store, partial, &affected);
         // A metadata-only clip edit can introduce an already resident layer.
         // Start watching it without acknowledging unrelated, unnotified edits
         // to layers whose generations were already tracked.

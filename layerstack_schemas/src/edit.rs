@@ -9,8 +9,8 @@ use alloc::{string::String, vec::Vec};
 
 use layerstack::edit::{EditTarget, Transaction};
 use layerstack::{
-    CannotApply, LayerStore, ListOp, PathId, PropertyDefinition, PropertyKind, PropertyPath,
-    PropertySpec, PropertyType, ResolvedValue, Specifier, Stage, TargetPath, TokenId,
+    CannotApply, LayerStore, ListOp, PathId, PropertyDeclaration, PropertyDefinition, PropertyKind,
+    PropertyPath, PropertySpec, PropertyType, ResolvedValue, Specifier, Stage, TargetPath, TokenId,
     TokenInterner, Value,
 };
 
@@ -66,6 +66,8 @@ pub struct SchemaEdit<'s> {
     created: Vec<(PathId, TokenId, Option<PropertyType>)>,
     /// The defaults this edit sets, latest last.
     defaults: Vec<(PathId, TokenId, Value)>,
+    /// Local property specs removed during this edit.
+    removed: Vec<(PathId, TokenId)>,
     #[cfg(feature = "usd-ui")]
     ui_hints: Vec<(TargetPath, Value)>,
 }
@@ -92,6 +94,7 @@ impl<'s> SchemaEdit<'s> {
             applied: Vec::new(),
             created: Vec::new(),
             defaults: Vec::new(),
+            removed: Vec::new(),
             #[cfg(feature = "usd-ui")]
             ui_hints: Vec::new(),
         }
@@ -113,6 +116,41 @@ impl<'s> SchemaEdit<'s> {
     #[must_use]
     pub fn finish(self) -> Transaction {
         self.transaction
+    }
+
+    /// Collects a fallible child group. Success appends its transaction; an error
+    /// discards every child edit and restores the parent's schema overlay.
+    /// Nested groups follow the same rule. Interned tokens and paths remain in
+    /// the store; layer content changes only when the finished batch is applied.
+    pub fn group<T, E>(
+        &mut self,
+        collect: impl FnOnce(&mut SchemaEdit<'_>) -> Result<T, E>,
+    ) -> Result<T, E> {
+        let mut child = SchemaEdit {
+            stage: self.stage,
+            store: &mut *self.store,
+            target: self.target.clone(),
+            transaction: Transaction::new(),
+            defined: self.defined.clone(),
+            applied: self.applied.clone(),
+            created: self.created.clone(),
+            defaults: self.defaults.clone(),
+            removed: self.removed.clone(),
+            #[cfg(feature = "usd-ui")]
+            ui_hints: self.ui_hints.clone(),
+        };
+        let result = collect(&mut child)?;
+        self.transaction.append(child.transaction);
+        self.defined = child.defined;
+        self.applied = child.applied;
+        self.created = child.created;
+        self.defaults = child.defaults;
+        self.removed = child.removed;
+        #[cfg(feature = "usd-ui")]
+        {
+            self.ui_hints = child.ui_hints;
+        }
+        Ok(result)
     }
 
     /// The scene interner used to encode values collected by this edit.
@@ -208,6 +246,9 @@ impl<'s> SchemaEdit<'s> {
                 self.created.push((path, token, Some(ty)));
             }
             None => {
+                // Track the local declaration before a value op can implicitly
+                // create it, so a later metadata edit never queues a duplicate.
+                self.ensure_property(PropertyPath::new(path, token));
                 match time {
                     None => {
                         self.defaults.push((path, token, value.clone()));
@@ -232,6 +273,27 @@ impl<'s> SchemaEdit<'s> {
         {
             return Some(value.clone());
         }
+        if self.removed.contains(&(path, token)) {
+            let property = PropertyPath::new(path, token);
+            let mapped = self
+                .target
+                .map_property_to_spec_path(property, self.store.paths_mut());
+            if let Some(value) = self
+                .stage
+                .explain_property_path(property)
+                .into_iter()
+                .flatten()
+                .filter(|op| {
+                    !(op.key.layer_id == self.target.layer()
+                        && mapped.as_ref() == Some(&op.key.spec_path))
+                })
+                .filter_map(|op| op.value.as_property()?.default.as_ref())
+                .next()
+            {
+                return Some(value.clone());
+            }
+            return self.definition(path, token).and_then(|d| d.fallback);
+        }
         match self
             .stage
             .resolve_value_with_schema(path, token, &*self.store)?
@@ -240,6 +302,43 @@ impl<'s> SchemaEdit<'s> {
             ResolvedValue::Scalar(value) => Some(value),
             _ => None,
         }
+    }
+
+    // Resolve declarations after queued removals without hiding other source
+    // specs, including weaker opinions of the same property.
+    // Spec: AOUSD Core §12.2.2–§12.2.4 (declaration composition).
+    fn composed_declaration(&mut self, path: PathId, name: TokenId) -> Option<PropertyDeclaration> {
+        if !self.removed.contains(&(path, name)) {
+            return self.stage.resolve_property_declaration(path, name);
+        }
+        let property = PropertyPath::new(path, name);
+        let mapped = self
+            .target
+            .map_property_to_spec_path(property, self.store.paths_mut());
+        let mut specs = self
+            .stage
+            .explain_property_path(property)?
+            .iter()
+            .filter(|op| {
+                !(op.key.layer_id == self.target.layer()
+                    && mapped.as_ref() == Some(&op.key.spec_path))
+            })
+            .filter_map(|op| op.value.as_property());
+        let strongest = specs.next()?;
+        let mut declaration = PropertyDeclaration {
+            kind: strongest.kind,
+            type_name: strongest.type_name.clone(),
+            variability: strongest.variability,
+            custom: strongest.custom,
+        };
+        for spec in specs {
+            if declaration.type_name.is_none() {
+                declaration.type_name = spec.type_name.clone();
+            }
+            declaration.variability = spec.variability;
+            declaration.custom |= spec.custom;
+        }
+        Some(declaration)
     }
 
     /// The declared type of the attribute `name` of `path` as this edit
@@ -255,7 +354,7 @@ impl<'s> SchemaEdit<'s> {
         {
             return ty.clone();
         }
-        if let Some(declared) = self.stage.resolve_property_declaration(path, token) {
+        if let Some(declared) = self.composed_declaration(path, token) {
             return (declared.kind == PropertyKind::Attribute)
                 .then_some(declared.type_name)
                 .flatten();
@@ -280,8 +379,7 @@ impl<'s> SchemaEdit<'s> {
                 PropertyKind::Relationship
             });
         }
-        self.stage
-            .resolve_property_declaration(path, token)
+        self.composed_declaration(path, token)
             .map(|d| d.kind)
             .or_else(|| self.definition(path, token).map(|d| d.kind))
     }
@@ -340,6 +438,7 @@ impl<'s> SchemaEdit<'s> {
         value: Value,
     ) {
         let token = self.tokens().intern(name);
+        self.ensure_property(PropertyPath::new(path, token));
         let key = self.tokens().intern(key);
         let at = self.target.property(PropertyPath::new(path, token));
         self.transaction.set_metadata(at, key, value.into());
@@ -367,6 +466,11 @@ impl<'s> SchemaEdit<'s> {
 
     #[cfg(feature = "usd-ui")]
     fn local_ui_hints(&mut self, target: TargetPath) -> Value {
+        if let TargetPath::Property(path) = target
+            && self.removed.contains(&(path.prim_path(), path.property()))
+        {
+            return Value::Dictionary(Vec::new());
+        }
         let key = self.tokens().intern("uiHints");
         let mapped = match target {
             TargetPath::Prim(path) => self.target.map_to_spec_path(path, self.store.paths_mut()),
@@ -426,10 +530,58 @@ impl<'s> SchemaEdit<'s> {
     }
 
     #[cfg(feature = "usd-ui")]
-    pub(crate) fn ui_hint(&self, target: TargetPath, keys: &[&str]) -> Option<Value> {
+    pub(crate) fn ui_hint(&mut self, target: TargetPath, keys: &[&str]) -> Option<Value> {
         let key = self.store.tokens().lookup("uiHints")?;
         let resolved = match target {
             TargetPath::Prim(path) => self.stage.resolve_value(path, key),
+            TargetPath::Property(path)
+                if self.removed.contains(&(path.prim_path(), path.property())) =>
+            {
+                let mapped = self
+                    .target
+                    .map_property_to_spec_path(path, self.store.paths_mut());
+                let mut values = self
+                    .stage
+                    .explain_property_path(path)
+                    .into_iter()
+                    .flatten()
+                    .filter(|op| {
+                        !(op.key.layer_id == self.target.layer()
+                            && mapped.as_ref() == Some(&op.key.spec_path))
+                    })
+                    .filter_map(|op| op.value.as_property()?.metadata(key))
+                    .peekable();
+                // Spec: AOUSD Core §12.2.5: dictionaries combine through
+                // weaker opinions, stopping at a block. Removed specs never
+                // contribute labels to newly created properties.
+                let dictionary = if matches!(
+                    values.peek(),
+                    Some(layerstack::FieldValue::Value(Value::Dictionary(_)))
+                ) {
+                    layerstack::combine_dictionary_chain(
+                        values
+                            .map_while(|field| {
+                                (!matches!(field, layerstack::FieldValue::Value(Value::Blocked)))
+                                    .then_some(field)
+                            })
+                            .filter_map(|field| match field {
+                                layerstack::FieldValue::Value(Value::Dictionary(entries)) => {
+                                    Some(entries.as_slice())
+                                }
+                                _ => None,
+                            }),
+                    )
+                } else {
+                    Vec::new()
+                };
+                let mut dictionary = dictionary;
+                if let Some((_, Value::Dictionary(local))) =
+                    self.ui_hints.iter().rev().find(|(at, _)| *at == target)
+                {
+                    dictionary = layerstack::combine_dictionaries(local, &dictionary);
+                }
+                return crate::ui_hints::entry(&Value::Dictionary(dictionary), keys).cloned();
+            }
             TargetPath::Property(path) => {
                 self.stage
                     .resolve_property_metadata(path.prim_path(), path.property(), key)
@@ -450,8 +602,7 @@ impl<'s> SchemaEdit<'s> {
 
     // A composed property may have no spec in the current target layer.
     // Metadata edits need that local declaration, preserving the composed type.
-    #[cfg(feature = "usd-ui")]
-    fn ensure_ui_property(&mut self, path: PropertyPath) {
+    fn ensure_property(&mut self, path: PropertyPath) {
         if self
             .created
             .iter()
@@ -498,15 +649,12 @@ impl<'s> SchemaEdit<'s> {
                 }
             })
         });
-        if local {
+        if local && !self.removed.contains(&(path.prim_path(), path.property())) {
             return;
         }
-        let declared = self
-            .stage
-            .resolve_property_declaration(path.prim_path(), path.property());
-        let definition = self
-            .stage
-            .property_definition_ref(path.prim_path(), path.property());
+        let declared = self.composed_declaration(path.prim_path(), path.property());
+        let definition = self.definition(path.prim_path(), path.property());
+        let definition = definition.as_ref();
         let kind = declared
             .as_ref()
             .map(|d| d.kind)
@@ -537,7 +685,7 @@ impl<'s> SchemaEdit<'s> {
     #[cfg(feature = "usd-ui")]
     pub(crate) fn set_ui_metadata(&mut self, target: TargetPath, key: &str, value: Value) {
         if let TargetPath::Property(path) = target {
-            self.ensure_ui_property(path);
+            self.ensure_property(path);
         }
         let key = self.tokens().intern(key);
         let at = match target {
@@ -641,6 +789,28 @@ impl<'s> SchemaEdit<'s> {
         self.transaction
             .create_property(at, PropertySpec::relationship());
         self.created.push((path, name, None));
+    }
+
+    #[cfg(feature = "usd-geom")]
+    pub(crate) fn block_attribute(&mut self, path: PathId, name: &str) {
+        let name = self.store.tokens_mut().intern(name);
+        self.ensure_property(PropertyPath::new(path, name));
+        let at = self.target.property(PropertyPath::new(path, name));
+        self.transaction.block_attribute(at);
+        self.defaults.push((path, name, Value::Blocked));
+    }
+
+    #[cfg(feature = "usd-geom")]
+    pub(crate) fn remove_property(&mut self, path: PathId, name: &str) {
+        let name = self.store.tokens_mut().intern(name);
+        let at = self.target.property(PropertyPath::new(path, name));
+        self.transaction.remove_spec(at);
+        self.removed.push((path, name));
+        self.created.retain(|(p, n, _)| (*p, *n) != (path, name));
+        self.defaults.retain(|(p, n, _)| (*p, *n) != (path, name));
+        #[cfg(feature = "usd-ui")]
+        self.ui_hints
+            .retain(|(at, _)| *at != TargetPath::Property(PropertyPath::new(path, name)));
     }
 
     /// Authors `targets` as the explicit targets of the relationship `name`.

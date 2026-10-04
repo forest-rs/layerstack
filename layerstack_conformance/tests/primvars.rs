@@ -370,3 +370,491 @@ fn traversal_fed_inheritance_matches_cpp_and_full_queries() {
             .any(|p| p.name() == "both")
     );
 }
+
+#[test]
+fn primvar_groups_discard_failures_and_nonindexed_authoring_masks_weaker_indices() {
+    use layerstack::{Layer, StageOptions, SublayerEntry};
+    let (mut store, _) = query_scene();
+    let path = store.path("/Root/Group/Mesh");
+    let mut weak = store.layers.remove(&LayerId(1)).unwrap();
+    weak.id = LayerId(2);
+    store.insert_layer(weak);
+    let mut root = Layer::new(LayerId(1));
+    root.sublayers.push(SublayerEntry::new(LayerId(2)));
+    store.insert_layer(root);
+    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let mut live = LiveStage::compose(
+        &mut store,
+        LayerId(1),
+        StageOptions {
+            schemas: Some(schemas),
+            ..StageOptions::default()
+        },
+    );
+    let handle = Mesh::new(&Scene::new(live.stage(), &store), path)
+        .unwrap()
+        .edit();
+    let ty = PropertyType::new("float", true, Value::Float(0.));
+    let values = || Value::array(vec![Value::Float(7.), Value::Float(8.)]);
+    let before = store.layers[&LayerId(1)].clone();
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let checkpoint = edit.transaction().clone();
+    assert!(
+        handle
+            .create_indexed_primvar(
+                &mut edit,
+                "rejected",
+                ty.clone(),
+                values(),
+                &[0],
+                "bogus",
+                1
+            )
+            .is_err()
+    );
+    assert_eq!(edit.transaction(), &checkpoint);
+    assert!(
+        handle
+            .create_indexed_primvar(
+                &mut edit,
+                "badSidecar",
+                ty.clone(),
+                values(),
+                &[0],
+                "vertex",
+                1
+            )
+            .is_err()
+    );
+    assert_eq!(edit.transaction(), &checkpoint);
+    let failed: Result<(), &str> = edit.group(|child| {
+        let pv = handle
+            .create_primvar(child, "rolledBack", ty.clone())
+            .unwrap();
+        pv.set(child, values()).unwrap();
+        let nested: Result<(), &str> = child.group(|grandchild| {
+            handle
+                .create_primvar(grandchild, "nested", ty.clone())
+                .unwrap();
+            Err("nested failure")
+        });
+        assert!(nested.is_err());
+        Err("caller error")
+    });
+    assert_eq!(failed, Err("caller error"));
+    assert_eq!(edit.transaction(), &checkpoint);
+    // Overlay declarations from failed groups are discarded too.
+    handle
+        .create_primvar(
+            &mut edit,
+            "rolledBack",
+            PropertyType::new("int", false, Value::Int(0)),
+        )
+        .unwrap();
+    let pv = handle
+        .create_nonindexed_primvar(&mut edit, "indexOnly", ty, values(), "vertex", 1)
+        .unwrap();
+    let transaction = edit.finish();
+    let outcome = live.apply(&mut store, &transaction).unwrap();
+    let scene = Scene::new(live.stage(), &store);
+    let var = Primvar::new(&scene, path, "indexOnly").unwrap();
+    assert!(!var.is_indexed());
+    assert_eq!(
+        layerstack_schemas::value::read_float_array(
+            &var.compute_flattened(Time::Default).unwrap().unwrap(),
+            &store.tokens
+        ),
+        Some(vec![7., 8.])
+    );
+    assert!(Primvar::new(&scene, path, "rejected").is_none());
+    assert!(Primvar::new(&scene, path, "nested").is_none());
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    pv.remove(&mut edit).unwrap();
+    let transaction = edit.finish();
+    let removed = live.apply(&mut store, &transaction).unwrap();
+    assert!(
+        Primvar::new(&Scene::new(live.stage(), &store), path, "indexOnly")
+            .unwrap()
+            .is_indexed(),
+        "removal reveals weaker indices"
+    );
+    live.apply(&mut store, &removed.inverse).unwrap();
+    live.apply(&mut store, &outcome.inverse).unwrap();
+    assert_eq!(store.layers[&LayerId(1)], before);
+}
+
+#[test]
+fn primvar_block_erases_local_animation_and_authors_future_indices_barrier() {
+    let (mut store, mut live) = query_scene();
+    let path = store.path("/Root/Group/Mesh");
+    let scene = Scene::new(live.stage(), &store);
+    let animated = Primvar::new(&scene, path, "both").unwrap().edit();
+    let plain = Primvar::new(&scene, path, "noIndices").unwrap().edit();
+    let before = store.layers[&LayerId(1)].clone();
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    animated.block(&mut edit).unwrap();
+    plain.block(&mut edit).unwrap();
+    let transaction = edit.finish();
+    let outcome = live.apply(&mut store, &transaction).unwrap();
+    let scene = Scene::new(live.stage(), &store);
+    let pv = Primvar::new(&scene, path, "both").unwrap();
+    assert!(!pv.has_authored_value() && !pv.is_indexed());
+    let sidecar = store.tokens.lookup("primvars:noIndices:indices").unwrap();
+    assert_eq!(
+        store.layers[&LayerId(1)].prims[&path]
+            .property(sidecar)
+            .unwrap()
+            .default,
+        Some(Value::Blocked)
+    );
+    assert!(pv.sample_times().is_empty());
+    assert_eq!(
+        pv.value(Time::At {
+            code: 1.,
+            interpolation: InterpolationType::Held
+        })
+        .unwrap(),
+        None
+    );
+    live.apply(&mut store, &outcome.inverse).unwrap();
+    assert_eq!(store.layers[&LayerId(1)], before);
+}
+
+#[test]
+fn incremental_inheritance_distinguishes_unchanged_from_cleared() {
+    let (mut store, live) = support::scene(
+        r#"#usda 1.0
+        def "Only" {
+            float primvars:only = 1
+            def "Stop" { float primvars:only = 2 (interpolation = "vertex") }
+        }
+    "#,
+    );
+    let parent = store.path("/Only");
+    let child = store.path("/Only/Stop");
+    let scene = Scene::new(live.stage(), &store);
+    let inherited = PrimView::new(scene, parent).inheritable_primvars();
+    assert_eq!(inherited.len(), 1);
+    let prim = PrimView::new(scene, child);
+    assert!(
+        prim.incrementally_inheritable_primvars(&inherited)
+            .unwrap()
+            .is_empty()
+    );
+    assert!(prim.incrementally_inheritable_primvars(&[]).is_none());
+}
+
+#[test]
+fn weaker_primvar_value_and_block_edits_can_precede_metadata() {
+    use layerstack::{Layer, StageOptions, SublayerEntry};
+    for mode in ["default", "sample", "block"] {
+        let (mut store, _) = support::scene("#usda 1.0\ndef Mesh \"P\" {\nfloat primvars:x = 1\n}");
+        let path = store.path("/P");
+        let mut weak = store.layers.remove(&LayerId(1)).unwrap();
+        weak.id = LayerId(2);
+        store.insert_layer(weak);
+        let mut root = Layer::new(LayerId(1));
+        root.sublayers.push(SublayerEntry::new(LayerId(2)));
+        store.insert_layer(root);
+        let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+        let mut live = LiveStage::compose(
+            &mut store,
+            LayerId(1),
+            StageOptions {
+                schemas: Some(schemas),
+                ..StageOptions::default()
+            },
+        );
+        let pv = Primvar::new(&Scene::new(live.stage(), &store), path, "x")
+            .unwrap()
+            .edit();
+        let before = store.layers[&LayerId(1)].clone();
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+        match mode {
+            "default" => {
+                pv.set(&mut edit, Value::Float(2.)).unwrap();
+            }
+            "sample" => {
+                pv.set_at(&mut edit, 1., Value::Float(2.)).unwrap();
+            }
+            "block" => {
+                pv.block(&mut edit).unwrap();
+            }
+            _ => unreachable!(),
+        }
+        pv.set_interpolation(&mut edit, "vertex").unwrap();
+        pv.set_element_size(&mut edit, 2).unwrap();
+        let transaction = edit.finish();
+        let outcome = live.apply(&mut store, &transaction).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        let pv = Primvar::new(&scene, path, "x").unwrap();
+        assert_eq!(pv.interpolation(), "vertex");
+        assert_eq!(pv.element_size(), 2);
+        let time = if mode == "sample" {
+            Time::At {
+                code: 1.,
+                interpolation: InterpolationType::Held,
+            }
+        } else {
+            Time::Default
+        };
+        assert_eq!(
+            pv.value(time).unwrap(),
+            if mode == "block" {
+                None
+            } else {
+                Some(Value::Float(2.))
+            }
+        );
+        live.apply(&mut store, &outcome.inverse).unwrap();
+        assert_eq!(store.layers[&LayerId(1)], before);
+    }
+}
+
+#[test]
+fn removed_primvars_can_be_recreated_in_the_same_edit() {
+    for new_type in ["float", "int"] {
+        let (mut store, mut live) =
+            support::scene("#usda 1.0\ndef Mesh \"P\" {\nfloat primvars:x = 1\n}");
+        let path = store.path("/P");
+        let scene = Scene::new(live.stage(), &store);
+        let handle = Mesh::new(&scene, path).unwrap().edit();
+        let pv = Primvar::new(&scene, path, "x").unwrap().edit();
+        let before = store.layers[&LayerId(1)].clone();
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+        pv.remove(&mut edit).unwrap();
+        let value = if new_type == "int" {
+            Value::Int(4)
+        } else {
+            Value::Float(4.)
+        };
+        let recreated = handle
+            .create_primvar(
+                &mut edit,
+                "x",
+                PropertyType::new(new_type, false, value.clone()),
+            )
+            .unwrap();
+        recreated.set(&mut edit, value.clone()).unwrap();
+        recreated.set_element_size(&mut edit, 2).unwrap();
+        let transaction = edit.finish();
+        let outcome = live.apply(&mut store, &transaction).unwrap();
+        let scene = Scene::new(live.stage(), &store);
+        let pv = Primvar::new(&scene, path, "x").unwrap();
+        assert_eq!(pv.value(Time::Default).unwrap(), Some(value));
+        assert_eq!(pv.element_size(), 2);
+        live.apply(&mut store, &outcome.inverse).unwrap();
+        assert_eq!(store.layers[&LayerId(1)], before);
+    }
+}
+
+#[test]
+fn primvars_with_values_requires_an_attribute_value_source() {
+    let (mut store, live) = support::scene(
+        r#"#usda 1.0
+        def Mesh "P" {
+            string primvars:idOnly
+            rel primvars:idOnly:idFrom = </Q>
+            string primvars:idWithValue = "local"
+            rel primvars:idWithValue:idFrom = </Q>
+            float primvars:animated.timeSamples = { 1: 1 }
+            float primvars:blocked = None
+        }
+    "#,
+    );
+    let path = store.path("/P");
+    let scene = Scene::new(live.stage(), &store);
+    assert!(
+        Primvar::new(&scene, path, "idOnly")
+            .unwrap()
+            .value(Time::Default)
+            .unwrap()
+            .is_some()
+    );
+    let prim = PrimView::new(scene, path);
+    assert_eq!(
+        prim.primvars_with_values()
+            .iter()
+            .map(Primvar::name)
+            .collect::<Vec<_>>(),
+        vec!["animated", "idWithValue"]
+    );
+}
+
+#[test]
+fn removed_primvar_declarations_reveal_weaker_sources_and_group_rollback() {
+    use layerstack::{Layer, PrimSpec, PropertySpec, StageOptions, SublayerEntry};
+    let (mut store, _) = support::scene("#usda 1.0\ndef Mesh \"P\" {\nfloat primvars:x = 1\n}");
+    let path = store.path("/P");
+    let name = store.tokens.lookup("primvars:x").unwrap();
+    let mut weak = store.layers.remove(&LayerId(1)).unwrap();
+    weak.id = LayerId(2);
+    store.insert_layer(weak);
+    let mut root = Layer::new(LayerId(1));
+    root.sublayers.push(SublayerEntry::new(LayerId(2)));
+    root.prims.insert(
+        path,
+        PrimSpec::over().with_property(
+            name,
+            PropertySpec::typed_attribute(PropertyType::new("int", false, Value::Int(0)))
+                .with_default(Value::Int(9)),
+        ),
+    );
+    store.insert_layer(root);
+    let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+    let mut live = LiveStage::compose(
+        &mut store,
+        LayerId(1),
+        StageOptions {
+            schemas: Some(schemas),
+            ..StageOptions::default()
+        },
+    );
+    let scene = Scene::new(live.stage(), &store);
+    let handle = Mesh::new(&scene, path).unwrap().edit();
+    let pv = Primvar::new(&scene, path, "x").unwrap().edit();
+    let before = store.layers[&LayerId(1)].clone();
+    let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+    let checkpoint = edit.transaction().clone();
+    let failed: Result<(), &str> = edit.group(|child| {
+        pv.remove(child).unwrap();
+        handle
+            .create_primvar(
+                child,
+                "x",
+                PropertyType::new("float", false, Value::Float(0.)),
+            )
+            .unwrap();
+        Err("rollback")
+    });
+    assert_eq!(failed, Err("rollback"));
+    assert_eq!(edit.transaction(), &checkpoint);
+    // The rolled-back removal must not hide the original int declaration.
+    assert!(
+        handle
+            .create_primvar(
+                &mut edit,
+                "x",
+                PropertyType::new("float", false, Value::Float(0.))
+            )
+            .is_err()
+    );
+    pv.remove(&mut edit).unwrap();
+    // Removing only the strong spec exposes the weak float declaration.
+    assert!(
+        handle
+            .create_primvar(
+                &mut edit,
+                "x",
+                PropertyType::new("int", false, Value::Int(0))
+            )
+            .is_err()
+    );
+    let recreated = handle
+        .create_primvar(
+            &mut edit,
+            "x",
+            PropertyType::new("float", false, Value::Float(0.)),
+        )
+        .unwrap();
+    recreated.set(&mut edit, Value::Float(3.)).unwrap();
+    recreated.set_interpolation(&mut edit, "vertex").unwrap();
+    let transaction = edit.finish();
+    let outcome = live.apply(&mut store, &transaction).unwrap();
+    assert_eq!(
+        Primvar::new(&Scene::new(live.stage(), &store), path, "x")
+            .unwrap()
+            .value(Time::Default)
+            .unwrap(),
+        Some(Value::Float(3.))
+    );
+    live.apply(&mut store, &outcome.inverse).unwrap();
+    assert_eq!(store.layers[&LayerId(1)], before);
+}
+
+#[test]
+fn removed_primvar_ui_labels_do_not_leak_into_recreated_properties() {
+    use layerstack::{Layer, StageOptions, SublayerEntry};
+    use layerstack_schemas::ui_hints::{UiHintError, UiHintsEdit};
+    for weaker in [false, true] {
+        let (mut store, mut live) =
+            support::scene("#usda 1.0\ndef Mesh \"P\" {\nfloat primvars:x = 1\n}");
+        let path = store.path("/P");
+        let property = Primvar::new(&Scene::new(live.stage(), &store), path, "x")
+            .unwrap()
+            .property();
+        if weaker {
+            let mut edit =
+                SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+            UiHintsEdit::property(&mut edit, property)
+                .unwrap()
+                .set_value_labels(&mut edit, vec![("Weak".into(), Value::Float(9.))])
+                .unwrap();
+            let transaction = edit.finish();
+            live.apply(&mut store, &transaction).unwrap();
+            let mut weak = store.layers.remove(&LayerId(1)).unwrap();
+            weak.id = LayerId(2);
+            store.insert_layer(weak);
+            let mut root = Layer::new(LayerId(1));
+            root.sublayers.push(SublayerEntry::new(LayerId(2)));
+            store.insert_layer(root);
+            let schemas = std::sync::Arc::new(layerstack_schemas::openusd(&mut store.tokens));
+            live = LiveStage::compose(
+                &mut store,
+                LayerId(1),
+                StageOptions {
+                    schemas: Some(schemas),
+                    ..StageOptions::default()
+                },
+            );
+        }
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+        UiHintsEdit::property(&mut edit, property)
+            .unwrap()
+            .set_value_labels(&mut edit, vec![("Old".into(), Value::Float(7.))])
+            .unwrap();
+        let transaction = edit.finish();
+        live.apply(&mut store, &transaction).unwrap();
+        let before = store.layers[&LayerId(1)].clone();
+        let scene = Scene::new(live.stage(), &store);
+        let pv = Primvar::new(&scene, path, "x").unwrap().edit();
+        let handle = Mesh::new(&scene, path).unwrap().edit();
+        let mut edit = SchemaEdit::new(live.stage(), &mut store, EditTarget::for_layer(LayerId(1)));
+        pv.remove(&mut edit).unwrap();
+        handle
+            .create_primvar(
+                &mut edit,
+                "x",
+                PropertyType::new("float", false, Value::Float(0.)),
+            )
+            .unwrap();
+        let ui = UiHintsEdit::property(&mut edit, property).unwrap();
+        let checkpoint = edit.transaction().clone();
+        assert_eq!(
+            ui.apply_value_label(&mut edit, "Old"),
+            Err(UiHintError::MissingValueLabel("Old".into()))
+        );
+        assert_eq!(edit.transaction(), &checkpoint);
+        if weaker {
+            ui.apply_value_label(&mut edit, "Weak").unwrap();
+        }
+        ui.set_value_labels(&mut edit, vec![("New".into(), Value::Float(10.))])
+            .unwrap();
+        ui.apply_value_label(&mut edit, "New").unwrap();
+        assert_eq!(
+            ui.apply_value_label(&mut edit, "Old"),
+            Err(UiHintError::MissingValueLabel("Old".into()))
+        );
+        let transaction = edit.finish();
+        let outcome = live.apply(&mut store, &transaction).unwrap();
+        assert_eq!(
+            Primvar::new(&Scene::new(live.stage(), &store), path, "x")
+                .unwrap()
+                .value(Time::Default)
+                .unwrap(),
+            Some(Value::Float(10.))
+        );
+        live.apply(&mut store, &outcome.inverse).unwrap();
+        assert_eq!(store.layers[&LayerId(1)], before);
+    }
+}

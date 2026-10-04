@@ -397,6 +397,22 @@ fn scalar_conforms(ty: &PropertyType, value: &Value) -> bool {
 
 /// Reading authored specs by spec path.
 impl Layer {
+    /// Returns the authored prim spec at an exact spec path, including a prim
+    /// inside variant branches. Returns `None` for a property or variant endpoint,
+    /// or a missing spec; it never substitutes the selected branch or a composed prim.
+    /// AOUSD Core §7.3.5–§7.3.6 (prim and variant specs);
+    /// OpenUSD `SdfLayer::GetPrimAtPath`.
+    #[must_use]
+    pub fn prim_at(&self, path: &SpecPath, paths: &PathInterner) -> Option<&PrimSpec> {
+        if path.property().is_some() {
+            return None;
+        }
+        match spec_at(self, &Loc::lookup(path, paths)?)? {
+            SpecRef::Prim(prim) => Some(prim),
+            SpecRef::Variant(_) => None,
+        }
+    }
+
     /// Returns the property spec at the spec path `path`: a property of a
     /// prim spec (`/Rock.size`), of a prim spec inside variant branches
     /// (`/Rock{shape=jagged}Child.size`) or of a variant spec

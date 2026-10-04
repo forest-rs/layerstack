@@ -68,6 +68,8 @@
 //! `as_slice()` or explicitly copy with `as_ref().clone()` for a mutable vector.
 //! Half and matrix representation conversions still materialize vectors.
 //! Slice setters copy; `_owned` and `_shared` setters transfer numeric buffers.
+//! With `usd-geom`, [`GeneratedMesh::prepare`] validates complete polygon-mesh
+//! snapshots before collecting creation or update through an explicit edit target.
 //! For anything a view does not offer, resolve the property by its USD name
 //! on [`Scene::stage`]: `Stage::resolve_value_with_schema` returns the raw
 //! resolved value with its provenance.
@@ -344,6 +346,14 @@
 )]
 
 extern crate alloc;
+
+#[cfg(feature = "usd-geom")]
+mod mesh_publication;
+#[cfg(feature = "usd-geom")]
+pub use mesh_publication::{
+    GeneratedMesh, MeshPrimvar, MeshPublication, MeshPublicationError, MeshSites,
+    validate_mesh_primvar_cardinality, validate_mesh_primvar_indices,
+};
 
 #[macro_use]
 mod view;

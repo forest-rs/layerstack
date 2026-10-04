@@ -94,6 +94,10 @@ name = "numeric_arrays"
 harness = false
 
 [[bench]]
+name = "geometry_publication"
+harness = false
+
+[[bench]]
 name = "composition_storage"
 harness = false
 

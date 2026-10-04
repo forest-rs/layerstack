@@ -42,6 +42,7 @@ Run an example with `cargo run -p layerstack_examples --example NAME`.
 | `asset_resolution` | Host-owned asset resolution |
 | `asset_localization` | Explicit localization for portable assets |
 | `instancing` | Shared composition prototypes and instance occurrences |
+| `generated_assets` | Two geometry producers, shared buffers, editable asset sources, native references, masked point placements and prototype-bound invalidation |
 | `live_editing` | Retained stage edits and synchronization |
 | `sparse_array_edits` | Incremental array changes |
 | `explain_value` | Value provenance through references, overrides, sparse edits and time offsets |

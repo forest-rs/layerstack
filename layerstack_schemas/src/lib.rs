@@ -68,6 +68,11 @@
 //! `as_slice()` or explicitly copy with `as_ref().clone()` for a mutable vector.
 //! Half and matrix representation conversions still materialize vectors.
 //! Slice setters copy; `_owned` and `_shared` setters transfer numeric buffers.
+//!
+//! With `usd-proc`, `procedural::Procedural` binds a `UsdProc` recipe to a
+//! caller-supplied evaluator, tracks composed input reads and retains its result.
+//! Evaluation never implicitly publishes output; use an explicit edit target
+//! and, for polygon geometry, `GeneratedMesh::prepare`.
 //! With `usd-geom`, [`GeneratedMesh::prepare`] validates complete polygon-mesh
 //! snapshots before collecting creation or update through an explicit edit target.
 //! For anything a view does not offer, resolve the property by its USD name
@@ -411,6 +416,8 @@ pub mod point_motion;
 mod predicate;
 #[cfg(feature = "usd-geom")]
 pub mod primvar;
+#[cfg(feature = "usd-proc")]
+pub mod procedural;
 #[cfg(feature = "usd")]
 mod regex;
 #[cfg(feature = "usd-render")]

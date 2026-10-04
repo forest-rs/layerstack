@@ -94,7 +94,9 @@
 //! This crate owns in-memory composition, not file I/O, geometry evaluation, or
 //! material interpretation. Companion crates in the [repository][repo] provide
 //! USDA and USDC readers/writers, USDZ packaging, mesh export, and generated OpenUSD
-//! schema views with transform, bounds and shading queries. Applications supply
+//! schema views with transform, bounds and shading queries.
+//! [`layerstack_io`](https://docs.rs/layerstack_io) adds retained stage documents
+//! with host-owned storage, explicit saving and reload policies. Applications supply
 //! asset resolution through [`AssetResolver`] and their own domain behavior.
 //! For composition of already-ordered opinions without USD paths and arcs, see
 //! [`opinionated`](https://docs.rs/opinionated).

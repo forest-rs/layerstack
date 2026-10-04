@@ -42,15 +42,14 @@ Legacy boxed arrays convert to native buffers. Sparse array composition and
 numeric interpolation can allocate a composed result; the getter retains that
 result without copying it again. Deferred native storage may decode on first
 access, using retained memory without file I/O. There is no promise of sharing
-between independent sparse/interpolated evaluations. To inspect decoding errors,
-use checked attribute queries or `Stage::try_resolve_property_path` /
-`try_resolve_property_path_at_time`; a retained raw `TypedArray` also exposes
-`try_materialize`. Ordinary `Option` getters report no value on decoding failure.
+between independent sparse/interpolated evaluations. Prefer generated checked
+array getters such as `mesh.try_points(Time::Default)` when loading geometry:
+`Ok(None)` means missing, blocked or incompatible data; `Err` preserves a deferred
+decode failure. `PrimView::try_read_value` and `value::try_read_*_array_shared`
+provide the same distinction for generic typed reads and native conversions.
+Ordinary `Option` getters report no value on decoding failure. Raw numeric
+storage exposes `TypedArray::try_materialize`.
 
-**Migration:** callers with an explicit `Vec<T>` return type or a consuming
-iteration must choose a borrow (`array.iter()` / `array.as_slice()`) or an
-explicit copy (`array.as_ref().clone()`). Assertions can use
-`Some(vec![...].into())`. Existing slice setters remain source compatible.
 Generated shader-node numeric array defaults also return shared owners.
 
 ## Evaluating `UsdProc` recipes
@@ -348,10 +347,20 @@ let schemas = layerstack_schemas::openusd(&mut tokens);
 Requires Rust **1.89** or later and `no_std + alloc`. Add
 `layerstack_schemas = "0.1"` to your dependencies. To select individual domains,
 disable default features and enable the domain features you need. The optional
-`std` feature currently adds no behavior.
+`std` feature forwards standard-library support to the optional SIMD backend;
+the schema APIs remain usable with `no_std` + `alloc`.
 
 Each domain is a Cargo feature (`usd-geom`, `usd-lux`, …); `all`, the
 default, enables every one.
+
+With `usd-geom` and `usd-shade`, `BindingCache::material_binding_subsets` joins
+requested-time face-family validation with material resolution for each subset
+and the parent fallback. It preserves binding strength, collection and purpose
+rules and retains shared face indices. Nonempty `materialBind` families must be
+`nonOverlapping` or `partition`; an unauthored family type reads as
+`unrestricted`, matching C++ USD. Engines own triangulation and draw grouping.
+After relevant edits, invalidate changed binding inputs and collection queries
+explicitly. Clear the cache when precise dependency tracking is unavailable.
 
 The `usd-shade` feature also resolves composed connections and material surface,
 displacement and volume sources through node graphs and ordered render contexts.
@@ -429,8 +438,12 @@ value-producing primvars. Only authored constant values inherit, and a nearer
 authored nonconstant value stops inheritance. `primvar::Primvar` reads
 interpolation, element size, indices and placeholder metadata. `compute_flattened`
 expands indexed elements at default or numeric time, preserving native array
-kinds and reporting invalid indices without a partial result. String primvars
-with `:idFrom` indirection return an explicit unsupported error.
+kinds and reporting invalid indices or decoding failures without a partial result.
+`validated_values` instead retains source values and optional shared indices,
+with checked `element_range` mappings for direct vertex expansion or GPU upload.
+It validates complete ranges for `elementSize` without allocating flattened data.
+String `:idFrom` primvars resolve forwarded relationship targets with native USD
+cardinality rules; invalid target cardinality returns no value.
 
 Edit handles expose `create_primvar` with a declared `PropertyType`.
 `PrimvarEdit` authors values, samples, interpolation, element size and indices
@@ -441,6 +454,11 @@ append no edits. Ordinary transaction validation and undo remain in force.
 IDs or array positions. `compute_instance_transforms` retains original indices
 and IDs after masking, includes optional prototype-local transforms and anchors
 velocity, acceleration and angular velocity samples to an explicit base time.
+`prepare_instance_transforms` captures validated immutable inputs for direct
+iteration, reusable vectors, or bounded chunks. Captures survive later stage
+edits; `compute_instance_transforms_into` validates before changing caller output.
+See the `importer_inputs` binary for checked points, material subsets, indexed
+UV expansion and bounded instance placement together.
 Invalid topology returns an error. Misaligned motion arrays are ignored;
 ordinary interpolation is used when no usable linear or angular motion remains. Sparse motion edits compose through stage resolution; anchoring uses the
 effective contributing sample grids. Scalar spline motion sources return an

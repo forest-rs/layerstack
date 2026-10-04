@@ -145,7 +145,7 @@ pub mod doc;
 mod shared_vec;
 mod value_array;
 pub mod value_clips;
-pub use value_array::{ArrayRef, TypedArray};
+pub use value_array::{ArrayReadError, ArrayRef, DeferredArraySource, TypedArray};
 pub mod edit;
 pub(crate) mod expression_variables;
 pub mod half;

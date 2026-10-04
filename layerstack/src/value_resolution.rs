@@ -449,7 +449,13 @@ fn resolve_sparse_default_matching_impl(
             continue;
         }
         let accepted = accepts(value);
-        if value.array_ref().is_some() && !accepted {
+        if !accepted
+            && let Value::TypedArray(array) = value
+            && array.try_materialize().is_err()
+        {
+            return (SparseResolveResult::Resolved(value.clone()), Some(position));
+        }
+        if !accepted && value.array_ref().is_some() {
             trace(DefaultTrace::Ignored(position));
             continue;
         }
@@ -511,10 +517,13 @@ fn same_element_kind(a: &Value, b: &Value) -> bool {
 /// Actual storage kinds, not declaration names: role aliases share a kind.
 pub(crate) fn edit_matches_value(edit: &Value, base: &Value) -> bool {
     let Some(ty) = edit.array_edit_type() else {
-        return base.array_ref().is_some();
+        return matches!(base, Value::TypedArray(_)) || base.array_ref().is_some();
     };
     if let Some(other) = base.array_edit_type() {
         return same_element_kind(&ty.default_scalar, &other.default_scalar);
+    }
+    if let Value::TypedArray(array) = base {
+        return same_element_kind(&ty.default_scalar, &array.element_kind());
     }
     let Some(array) = base.array_ref() else {
         return false;
@@ -1408,6 +1417,39 @@ fn fold_entry(
     }
 }
 
+fn linearly_interpolatable(kind: &Value) -> bool {
+    matches!(
+        kind,
+        Value::Half(_)
+            | Value::Float(_)
+            | Value::Double(_)
+            | Value::TimeCode(_)
+            | Value::Vec2h(_)
+            | Value::Vec3h(_)
+            | Value::Vec4h(_)
+            | Value::Vec2f(_)
+            | Value::Vec3f(_)
+            | Value::Vec4f(_)
+            | Value::Vec2d(_)
+            | Value::Vec3d(_)
+            | Value::Vec4d(_)
+            | Value::Matrix2d(_)
+            | Value::Matrix3d(_)
+            | Value::Matrix4d(_)
+            | Value::Quath(_)
+            | Value::Quatf(_)
+            | Value::Quatd(_)
+    )
+}
+
+fn array_element_kind(value: &Value) -> Option<Value> {
+    match value {
+        Value::Array(values) => values.first().cloned(),
+        Value::TypedArray(array) => Some(array.element_kind()),
+        _ => None,
+    }
+}
+
 /// Linearly interpolates two composed arrays element by element.
 ///
 /// Returns `None`, meaning hold the lower array, when the sizes differ or an
@@ -1422,6 +1464,21 @@ fn fold_entry(
 fn lerp_array_values(lower: &Value, upper: &Value, alpha: f64) -> Option<Value> {
     if let (Value::TypedArray(a), Value::TypedArray(b)) = (lower, upper) {
         return lerp_typed(a, b, alpha).map(Value::TypedArray);
+    }
+    // AOUSD Core §12.5.2: integers and incompatible kinds hold even when
+    // legacy and retained storage mix. Inspect kinds before demanding upper.
+    let (a_kind, b_kind) = (array_element_kind(lower)?, array_element_kind(upper)?);
+    if !linearly_interpolatable(&a_kind)
+        || core::mem::discriminant(&a_kind) != core::mem::discriminant(&b_kind)
+    {
+        return None;
+    }
+    for value in [lower, upper] {
+        if let Value::TypedArray(array) = value
+            && array.try_materialize().is_err()
+        {
+            return Some(value.clone());
+        }
     }
     let (a, b) = (lower.array_ref()?, upper.array_ref()?);
     if a.len() != b.len() {
@@ -1442,6 +1499,23 @@ fn lerp_typed(
 ) -> Option<crate::TypedArray> {
     use crate::TypedArray as A;
     use alloc::sync::Arc;
+    // Non-interpolating native kinds hold without demanding an upper buffer.
+    let kind = a.element_kind();
+    if core::mem::discriminant(&kind) != core::mem::discriminant(&b.element_kind())
+        || !linearly_interpolatable(&kind)
+    {
+        return None;
+    }
+    // Preserve a failed endpoint as a selected value; fallible queries can
+    // report it instead of holding the other endpoint or falling through.
+    let a = match a.try_materialize() {
+        Ok(native) => native,
+        Err(_) => return Some(a.clone()),
+    };
+    let b = match b.try_materialize() {
+        Ok(native) => native,
+        Err(_) => return Some(b.clone()),
+    };
     macro_rules! lerp {
         ($($kind:ident => $f:expr),* $(,)?) => {
             match (a,b) {
@@ -1634,7 +1708,9 @@ fn slerp_quatf(a: &[f32; 4], b: &[f32; 4], alpha: f64) -> [f32; 4] {
 ///
 /// Spec: AOUSD Core §12.5.2 (the linearly interpolating types; others hold).
 fn lerp_element(a: &Value, b: &Value, alpha: f64) -> Option<Value> {
-    if a.array_ref().is_some() && b.array_ref().is_some() {
+    if matches!(a, Value::Array(_) | Value::TypedArray(_))
+        && matches!(b, Value::Array(_) | Value::TypedArray(_))
+    {
         return lerp_array_values(a, b, alpha);
     }
     Some(match (a, b) {

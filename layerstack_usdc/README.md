@@ -15,9 +15,9 @@ layerstack_usda = "0.1" # Shared authored-document API used below.
 ```
 
 Requires Rust **1.89** or later. Uses `no_std` with `alloc`; an allocator is
-required. Default features are empty. The declared `std` feature currently
-adds no APIs. Callers read and write files themselves; APIs consume byte
-slices and return owned data.
+required. Default features are empty. The `std` feature enables thread-safe
+retained numeric arrays. Callers read and write files themselves; eager APIs
+consume byte slices, and retained import takes immutable `Arc<[u8]>` input.
 
 ## Write a document
 
@@ -64,13 +64,33 @@ outer `Result` before assuming a complete import.
 The reader accepts crate versions **0.7 through 0.15**, with feature-specific
 limits described in the [version module](https://docs.rs/layerstack_usdc/latest/layerstack_usdc/version/index.html).
 The writer starts at **0.8.0**, upgrades to **0.9.0** for timecode values,
-and to **0.12.0** for splines;
+to **0.10.0** for path expressions, **0.11.0** for relocates,
+**0.12.0** for splines and **0.14.0** for native array edits;
 reader version support does not imply every feature of that version is writable.
 
 Decoding uses an input-derived `DecodeBudget`. Use `read_usdc_within` to supply
 an explicit budget for materialized data. Files larger than 4 GiB are unsupported
 on 32-bit targets. Asset resolution and its resource policy remain the caller's
 responsibility.
+
+With the existing `std` feature, `read_usdc_lazy` takes immutable `Arc<[u8]>`
+input and assembles the same `Layer`, retaining numeric defaults and time
+samples as `TypedArray::Deferred`. Composition and raw value inspection can
+keep payloads encoded. `TypedArray::try_materialize` borrows a cached native
+buffer or cached error; `Stage::try_resolve_property_path` and its time-query
+counterpart materialize the selected array and report failures explicitly.
+Ordinary slice accessors work too, returning `None` on decode failure.
+
+The adapter owns a thread-safe, immutable cache, with one decode per distinct
+numeric representation and one shared budget across assembly and later reads.
+It performs no file I/O or background work. `RetainedValues::stats` exposes
+retained input bytes, live sources, cached element bytes, failures, decode
+attempts and remaining budget without decoding values. Saving materializes
+retained arrays and fails before writing output when one cannot decode.
+Caches remain alive through layer/query clones. Demand-all workloads retain
+both encoded bytes and decoded buffers, so eager import remains useful when
+all values will be needed. File ownership and loading dependencies remain
+with the caller; this API does not provide memory mapping or cache eviction.
 
 For ZIP packaging of the resulting bytes and assets, use `layerstack_usdz`.
 

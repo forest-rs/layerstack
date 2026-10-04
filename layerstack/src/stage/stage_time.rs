@@ -49,6 +49,15 @@ pub(crate) fn map_leaves(
                 Some(&Value::TimeCode(0.0)),
             ))
         }
+        Value::TypedArray(array @ crate::TypedArray::Deferred(_))
+            if matches!(array.element_kind(), Value::TimeCode(_)) =>
+        {
+            if let Some(mapped) = leaf(value) {
+                return Some(mapped);
+            }
+            let native = array.try_materialize().ok()?;
+            map_leaves(&Value::TypedArray(native.clone()), leaf)
+        }
         Value::TypedArray(_) => None,
         Value::Dictionary(entries) => {
             let mut changed = false;
@@ -138,10 +147,17 @@ pub(crate) fn retime_value(value: &Value, offset: LayerOffset) -> Option<Value> 
     if offset.is_identity() {
         return None;
     }
-    map_leaves(value, &mut |leaf| match leaf {
+    map_leaves(value, &mut |leaf| retime_leaf(leaf, offset))
+}
+
+fn retime_leaf(value: &Value, offset: LayerOffset) -> Option<Value> {
+    match value {
         Value::TimeCode(time) => Some(Value::TimeCode(to_stage_time(offset, *time))),
+        Value::TypedArray(crate::TypedArray::Deferred(source)) => {
+            source.retimed(offset).map(Value::TypedArray)
+        }
         _ => None,
-    })
+    }
 }
 
 /// The field with every leaf `leaf` maps rewritten; `None` when none maps.
@@ -233,7 +249,7 @@ fn holds_timecode(value: &Value) -> bool {
     match value {
         Value::TimeCode(_) => true,
         Value::Array(items) => items.iter().any(holds_timecode),
-        Value::TypedArray(crate::TypedArray::TimeCode(_)) => true,
+        Value::TypedArray(array) => matches!(array.element_kind(), Value::TimeCode(_)),
         Value::Dictionary(entries) => entries.iter().any(|(_, v)| holds_timecode(v)),
         Value::ArrayEdit(_) | Value::TypedArrayEdit(_) => {
             value.array_edit_ref().is_some_and(|edit| {
@@ -277,10 +293,7 @@ fn needs_retiming(opinion: &Opinion) -> bool {
 /// The opinion's value in stage time; `None` when nothing changes.
 fn retime_opinion(opinion: &Opinion) -> Option<Opinion> {
     let offset = opinion.layer_offset;
-    map_opinion(opinion, &mut |leaf| match leaf {
-        Value::TimeCode(time) => Some(Value::TimeCode(to_stage_time(offset, *time))),
-        _ => None,
-    })
+    map_opinion(opinion, &mut |leaf| retime_leaf(leaf, offset))
 }
 
 /// `opinions` with every `timecode` value in stage time, borrowed, with

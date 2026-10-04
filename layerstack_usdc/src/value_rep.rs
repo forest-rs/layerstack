@@ -375,6 +375,16 @@ pub(crate) fn decode_field_within<'a>(
 ) -> Result<DecodedField<'a>, UsdcError> {
     within_value_budget(budget, |budget| {
         let vtype = rep.value_type()?;
+        #[cfg(feature = "std")]
+        if rep.is_array()
+            && !rep.is_array_edit()
+            && let Some(pool) = &budget.lazy
+            && let Some(kind) = crate::lazy::numeric_kind(vtype)
+        {
+            return Ok(DecodedField::Value(CrateValue::TypedArray(
+                pool.register(*rep, kind),
+            )));
+        }
         if rep.is_array() && !rep.is_array_edit() {
             if math_type_info(vtype).0 != 0 {
                 return decode_math_array(rep, data, vtype, budget).map(DecodedField::MathArray);
@@ -445,6 +455,8 @@ pub struct DecodeBudget {
     remaining: u64,
     /// Values being decoded that enclose the current one.
     depth: usize,
+    #[cfg(feature = "std")]
+    pub(crate) lazy: Option<alloc::sync::Arc<crate::lazy::LazyPool>>,
 }
 
 impl DecodeBudget {
@@ -477,6 +489,8 @@ impl DecodeBudget {
             limit: units,
             remaining: units,
             depth: 0,
+            #[cfg(feature = "std")]
+            lazy: None,
         }
     }
 

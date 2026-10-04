@@ -4,7 +4,7 @@
 //! Indexed USDC opening versus complete layer import, and selective reads.
 //! Files are prepared outside measurement; all cases use the same bytes.
 
-use std::hint::black_box;
+use std::{hint::black_box, sync::Arc};
 
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use layerstack::{
@@ -83,6 +83,61 @@ fn bench_open(c: &mut Criterion) {
                 });
             },
         );
+        let retained_bytes: Arc<[u8]> = bytes.clone().into();
+        for demand in if count == 1 {
+            vec![0_u32, 1]
+        } else {
+            vec![0_u32, 1, count]
+        } {
+            let label = if demand == 0 {
+                "retained"
+            } else if demand == 1 {
+                "retained_read_one"
+            } else {
+                "retained_read_all"
+            };
+            // count=1 intentionally has only one demand case.
+            if count == 1 && label == "retained_read_all" {
+                continue;
+            }
+            group.bench_with_input(
+                BenchmarkId::new(label, &size),
+                &retained_bytes,
+                |b, bytes| {
+                    b.iter(|| {
+                        let mut tokens = TokenInterner::default();
+                        let mut paths = PathInterner::default();
+                        let read = layerstack_usdc::read_usdc_lazy(
+                            Arc::clone(bytes),
+                            LayerId(1),
+                            &mut tokens,
+                            &mut paths,
+                            &mut NoAssets,
+                        )
+                        .unwrap();
+                        let weights = tokens.lookup("weights").unwrap();
+                        for i in 0..demand {
+                            let name = tokens.lookup(&format!("Rock{i}")).unwrap();
+                            let path = paths
+                                .lookup(&layerstack::Path::root().join(&[name]))
+                                .unwrap();
+                            let layerstack::Value::TypedArray(array) = read.assembled.layer.prims
+                                [&path]
+                                .property(weights)
+                                .unwrap()
+                                .default
+                                .as_ref()
+                                .unwrap()
+                            else {
+                                panic!("numeric array");
+                            };
+                            black_box(array.try_materialize().unwrap());
+                        }
+                        black_box(read);
+                    });
+                },
+            );
+        }
         group.bench_with_input(
             BenchmarkId::new("materialized", &size),
             &bytes,

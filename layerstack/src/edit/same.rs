@@ -91,6 +91,9 @@ impl<K: Eq + core::hash::Hash, V: Same> Same for HashMap<K, V> {
 
 impl Same for Value {
     fn same(&self, other: &Self) -> bool {
+        if let (Self::TypedArray(a), Self::TypedArray(b)) = (self, other) {
+            return a.same(b);
+        }
         if let (Some(a), Some(b)) = (self.array_ref(), other.array_ref()) {
             if let (Some(a), Some(b)) = (a.typed(), b.typed()) {
                 return a.same(b);

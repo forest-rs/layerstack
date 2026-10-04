@@ -220,6 +220,8 @@ fn corpus_saves_as_expected_in_both_formats() {
         let usdc = layer.save_usdc().unwrap_or_else(|e| panic!("{name}: {e}"));
         let from_usdc = Imported::usdc(&usdc).save_usda().unwrap();
         assert_eq!(from_usdc, usda, "{name}: USDC reads back as the USDA");
+        let retained = Imported::usdc_retained(usdc.into()).save_usda().unwrap();
+        assert_eq!(retained, usda, "{name}: retained USDC saves without loss");
 
         let again = Imported::usda(&usda).save_usda().unwrap();
         assert_eq!(again, usda, "{name}: stable");

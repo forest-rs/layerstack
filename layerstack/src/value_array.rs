@@ -15,6 +15,51 @@ use core::mem::size_of;
 
 use crate::{ArrayEdit, ArrayEditOp, ArrayEditOperand, Value};
 
+/// A retained numeric source could not materialize its immutable buffer.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ArrayReadError {
+    /// Malformed or unsupported encoded data; the adapter supplies context.
+    InvalidData(Arc<str>),
+    /// The retained source exhausted its shared decode budget.
+    BudgetExceeded {
+        /// Original budget limit, in adapter-defined units.
+        limit: u64,
+    },
+    /// A source returned another deferred source instead of a native buffer.
+    RecursiveSource,
+}
+impl core::fmt::Display for ArrayReadError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            Self::InvalidData(message) => f.write_str(message),
+            Self::BudgetExceeded { limit } => {
+                write!(f, "array decode budget exceeded ({limit} units)")
+            }
+            Self::RecursiveSource => f.write_str("array source returned a deferred buffer"),
+        }
+    }
+}
+impl core::error::Error for ArrayReadError {}
+
+/// Adapter-owned immutable numeric storage, decoded from retained memory.
+///
+/// Implementations cache success and failure, return a native buffer, and do
+/// no file I/O. The core owns neither scheduling nor an adapter's cache policy.
+/// Sources remain usable across threads and after their loader is dropped.
+pub trait DeferredArraySource: core::fmt::Debug + Send + Sync {
+    /// Materializes once and borrows the cached success or error.
+    fn materialize(&self) -> Result<&TypedArray, &ArrayReadError>;
+    /// Scalar storage kind without decoding any elements.
+    fn element_kind(&self) -> Value;
+    /// Optionally retains an affine transform of `TimeCode` elements without
+    /// decoding them: `time * offset.scale + offset.offset` (AOUSD Core
+    /// §12.3.2.1). Other kinds must return `None`. Returning `None` uses the
+    /// core's ordinary eager transform; success and failure still cache.
+    fn retimed(&self, _offset: crate::LayerOffset) -> Option<TypedArray> {
+        None
+    }
+}
+
 macro_rules! array_types {
     ($($variant:ident, $ty:ty, $accessor:ident, $wrap:expr, $read:expr, $same:expr;)*) => {
         /// A homogeneous native buffer with shared, copy-on-write ownership.
@@ -25,17 +70,42 @@ macro_rules! array_types {
         /// with `Arc::make_mut` on a variant's payload.
         ///
         /// Spec: AOUSD Core §6.2–§6.3 (scalar and dimensioned array values).
-        #[derive(Clone, Debug, PartialEq)]
+        #[derive(Clone, Debug)]
         pub enum TypedArray {
             $(#[doc = concat!("Native `", stringify!($variant), "` elements.")]
             $variant(Arc<Vec<$ty>>),)*
+            /// An immutable adapter source; use `try_materialize` for errors.
+            Deferred(Arc<dyn DeferredArraySource>),
+        }
+        impl PartialEq for TypedArray {
+            fn eq(&self, other: &Self) -> bool {
+                let (Ok(a), Ok(b)) = (self.try_materialize(), other.try_materialize()) else { return false; };
+                match (a,b) {
+                    $((Self::$variant(a), Self::$variant(b)) => a == b,)*
+                    _ => false,
+                }
+            }
         }
 
         impl TypedArray {
+            /// Borrows a native buffer, or the source's cached decode error.
+            /// No file I/O occurs. Prefer this before infallible inspection:
+            /// `len`, `capacity` and `element_bytes` report zero on failure;
+            /// element and slice accessors report `None`.
+            pub fn try_materialize(&self) -> Result<&Self, &ArrayReadError> {
+                static RECURSIVE: ArrayReadError = ArrayReadError::RecursiveSource;
+                match self {
+                    Self::Deferred(source) => match source.materialize()? {
+                        Self::Deferred(_) => Err(&RECURSIVE),
+                        native => Ok(native),
+                    },
+                    native => Ok(native),
+                }
+            }
             /// Number of native elements.
             #[must_use]
             pub fn len(&self) -> usize {
-                match self { $(Self::$variant(items) => items.len(),)* }
+                match self { $(Self::$variant(items) => items.len(),)*Self::Deferred(_) => self.try_materialize().map_or(0, Self::len) }
             }
 
             /// Whether the buffer contains no elements.
@@ -46,26 +116,26 @@ macro_rules! array_types {
             /// and the small shared allocation header.
             #[must_use]
             pub fn element_bytes(&self) -> usize {
-                match self { $(Self::$variant(items) => items.len() * size_of::<$ty>(),)* }
+                match self { $(Self::$variant(items) => items.len() * size_of::<$ty>(),)*Self::Deferred(_) => self.try_materialize().map_or(0, Self::element_bytes) }
             }
 
             /// Number of elements that fit in the retained allocation.
             #[must_use]
             pub fn capacity(&self) -> usize {
-                match self { $(Self::$variant(items) => items.capacity(),)* }
+                match self { $(Self::$variant(items) => items.capacity(),)*Self::Deferred(_) => self.try_materialize().map_or(0, Self::capacity) }
             }
 
             /// One element expressed as a scalar value, without expanding the buffer.
             #[must_use]
             pub fn get(&self, index: usize) -> Option<Value> {
-                match self { $(Self::$variant(items) => items.get(index).copied().map($wrap),)* }
+                match self { $(Self::$variant(items) => items.get(index).copied().map($wrap),)*Self::Deferred(_) => self.try_materialize().ok().and_then(|native| native.get(index)) }
             }
 
             /// A scalar value of this buffer's element kind. Values are zero;
             /// this describes the kind, not a property's schema default.
             #[must_use]
             pub fn element_kind(&self) -> Value {
-                match self { $(Self::$variant(_) => ($wrap)(<$ty>::default()),)* }
+                match self { $(Self::$variant(_) => ($wrap)(<$ty>::default()),)*Self::Deferred(source) => source.element_kind() }
             }
 
             /// Iterates scalar values on demand. Prefer native slices in hot loops.
@@ -76,7 +146,7 @@ macro_rules! array_types {
             $(#[doc = concat!("Borrows native `", stringify!($variant), "` elements, or returns `None` for another kind.")]
             #[must_use]
             pub fn $accessor(&self) -> Option<&[$ty]> {
-                match self { Self::$variant(items) => Some(items), _ => None }
+                match self.try_materialize().ok()? { Self::$variant(items) => Some(items), _ => None }
             })*
 
             pub(crate) fn pack_iter(kind: &Value, values: impl Iterator<Item = Value>) -> Value {
@@ -100,7 +170,10 @@ macro_rules! array_types {
             }
 
             pub(crate) fn same(&self, other: &Self) -> bool {
-                match (self, other) {
+                if let (Self::Deferred(a), Self::Deferred(b)) = (self, other)
+                    && Arc::ptr_eq(a,b) { return true; }
+                let (Ok(a), Ok(b)) = (self.try_materialize(), other.try_materialize()) else { return false; };
+                match (a, b) {
                     $((Self::$variant(a), Self::$variant(b)) => {
                         Arc::ptr_eq(a,b) || (a.len() == b.len() && a.iter().zip(b.iter()).all(|(a,b)| ($same)(a,b)))
                     },)*
@@ -109,6 +182,12 @@ macro_rules! array_types {
             }
 
             pub(crate) fn apply_edit(&mut self, edit: &ArrayEdit, fill: Option<&Value>) -> bool {
+                if matches!(self, Self::Deferred(_)) {
+                    // Keep a failed selected source intact: a weaker value must
+                    // never turn a decoding failure into apparently valid data.
+                    let Ok(native) = self.try_materialize() else { return true; };
+                    *self = native.clone();
+                }
                 match self {
                     $(Self::$variant(items) => {
                         let Some(edit) = convert_edit(edit, $read) else { return false; };
@@ -122,6 +201,7 @@ macro_rules! array_types {
                         if !edit.is_identity() { edit.apply_in_place(Arc::make_mut(items), fill); }
                         true
                     },)*
+                    Self::Deferred(_) => unreachable!("materialized above"),
                 }
             }
         }
